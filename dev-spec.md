@@ -40,6 +40,8 @@ Design principles:
 | Deploy | Backend → **Nebius Serverless Endpoint**; jobs → **Nebius Serverless Jobs**; frontend → Vercel or Nebius container | **(verify)** CLI / console steps |
 | Tests | pytest, Playwright | |
 
+> Cost: every component is free or has a free alternative, except the mandatory Nemotron calls on Token Factory, which run on hackathon credits. See §21.
+
 ## 3. Model routing (Nebius Token Factory)
 | Role | Model | Why | Env var |
 |---|---|---|---|
@@ -407,6 +409,7 @@ TAVILY_API_KEY=
 EE_SERVICE_ACCOUNT_JSON=   # or PC_SUBSCRIPTION_KEY
 DATABASE_URL=              S3_ENDPOINT=  S3_BUCKET=  S3_KEY=  S3_SECRET=
 USE_MOCKS=false            LOCAL_JOBS=true            DEMO_MODE=true
+LLM_BUDGET_USD=20          # hard cap per deployment key (§21)
 ```
 Secrets stay server-side only; never commit `.env` (commit `.env.example`).
 
@@ -505,3 +508,39 @@ Implementation: plain pytest + a small runner that writes `evals/results.md` (co
 - [ ] `make eval` results + routing table committed and linked from README
 - [ ] CI green on `main`; `docker compose up` works from a clean clone
 - [ ] MIT license visible; demo video < 3 min on YouTube
+
+## 21. Cost plan: paid items and free alternatives
+Policy: use the planned stack, and switch to the free alternative wherever a paid item isn't covered by hackathon credits. Commercial licensing is out of scope for the hackathon (local development and small demo hosting only).
+
+**Mandatory (hackathon rule), running on credits.** The app must call Token Factory at runtime **or** run on Nebius AI Cloud, and use at least one NVIDIA open model:
+| Item | Covered by | Notes |
+|---|---|---|
+| NVIDIA Nemotron (Ultra, Super, Nano, Nano Omni) via **Nebius Token Factory** | $25 hackathon promo (code `NEBIUS-DEVPOST-GLOBAL26`) + $25 Nebius Builders Program, per account | Credits are per account and can't be pooled. The deployed app uses one key; each member develops with their own. Confirm per-member vs per-team with the organisers. |
+
+**Paid items with free alternatives:**
+| Planned (paid) | Free alternative | Trade-off |
+|---|---|---|
+| Nebius Serverless Endpoint (backend API) | Local `docker compose`; demo on Hugging Face Spaces (Docker) or Render free tier | Cold starts on free tiers; loses a bonus Nebius-usage point (still meets the rule via Token Factory) |
+| Nebius Serverless Jobs (`rerate_all`, `news_sweep`) | In-process run (`LOCAL_JOBS=true`) triggered by the Time Machine; GitHub Actions `schedule` for the daily sweep | Same code entrypoints; only the trigger changes |
+| Nebius Managed PostgreSQL | Supabase free tier (Postgres + pgvector) or local Postgres in Docker | Supabase free projects pause after inactivity |
+| Nebius Object Storage | Supabase Storage free tier or local disk / MinIO in Docker | Small storage limits, fine for the demo |
+| NVIDIA embedding model on Token Factory (uses credits) | Local `bge-small` (sentence-transformers) | Slightly lower retrieval quality |
+| Tavily beyond the free tier | Free tier (~1,000 searches/month) + $25 Builders credit; cache results for 24 h | Keep queries to 2–3 per asset |
+| Mapbox (if used) | Leaflet + OpenStreetMap / Esri basemap tiles | Respect tile usage policies |
+| Frontend on a Nebius container | Vercel Hobby (free) | None for the demo |
+| Nebius AI Cloud compute | Only if credits are unlocked at a Builders & Brews event | Optional upgrade path |
+
+**Already free:**
+- Sentinel-2, Dynamic World, JRC Surface Water, Hansen Forest Change and ESA biomass data.
+- Google Earth Engine (non-commercial registration) or Microsoft Planetary Computer.
+- ESVD (registration and citation).
+- All frameworks and libraries (Next.js, React, Tailwind, shadcn/ui, Leaflet, Recharts, FastAPI, SQLModel, Pydantic, openai SDK, tavily-python), plus NeMo Agent Toolkit and OpenTimestamps.
+- GitHub (public repo), GitHub Actions and YouTube.
+
+**Credit guardrails:**
+- Nano for development and tests; Ultra only in the Auditor (~1 call per rating).
+- Cache LLM outputs by input hash; precompute the 3 demo sites.
+- Run `make eval` manually or nightly, not on every push.
+- Hard budget cap: the LLM wrapper sums tokens in `llm_calls` and refuses calls past `LLM_BUDGET_USD`.
+- Check per-model prices on the Token Factory pricing page before choosing defaults **(verify)**.
+
