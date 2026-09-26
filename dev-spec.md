@@ -537,6 +537,10 @@ Policy: use the planned stack, and switch to the free alternative wherever a pai
 - All frameworks and libraries (Next.js, React, Tailwind, shadcn/ui, Leaflet, Recharts, FastAPI, SQLModel, Pydantic, openai SDK, tavily-python), plus NeMo Agent Toolkit and OpenTimestamps.
 - GitHub (public repo), GitHub Actions and YouTube.
 
+**Judging-period availability (rule: testable free of charge until judging ends, Dec 15, 2026):**
+- Free tiers sleep or pause (Supabase after ~1 week idle, Hugging Face Spaces after ~48 h, Render after ~15 min) **(verify)**. Add a GitHub Actions ping to `/healthz` every few hours and re-check everything before Dec 1.
+- Keep part of `LLM_BUDGET_USD` in reserve for judges' live runs; serve cached ratings for the 3 demo sites so browsing costs nothing.
+
 **Credit guardrails:**
 - Nano for development and tests; Ultra only in the Auditor (~1 call per rating).
 - Cache LLM outputs by input hash; precompute the 3 demo sites.

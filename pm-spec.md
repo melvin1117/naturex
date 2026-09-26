@@ -134,15 +134,19 @@ Each Friday the team must be able to run the gate demo end-to-end. If a gate sli
 | 5 — Polish + submit | Oct 24 – Oct 30 | Feature freeze **Oct 26**; UX polish, README, eval/routing tables, video, Devpost text, feedback | **Submitted Oct 29** (1-day buffer) |
 
 ## 9. Submission checklist (Devpost)
-- [ ] Working app uses ≥ 1 NVIDIA open model via **Token Factory** runtime calls (or Nebius AI Cloud compute)
+- [ ] Working app uses ≥ 1 NVIDIA open model via **Token Factory** runtime calls (or Nebius AI Cloud compute); for our track, **Nemotron via Token Factory**, with Ultra for deep reasoning and Nano/Super for fast calls
+- [ ] The judged demo makes **live** Token Factory calls (never `USE_MOCKS=true`)
 - [ ] Public GitHub repo with **OSS license visible in About** (MIT / Apache-2.0)
 - [ ] README: setup, run steps, **how Nemotron + Token Factory + other Nebius tools are used**
-- [ ] Hosted demo URL + test credentials (if any)
-- [ ] YouTube demo video **< 3 min**, public, no copyrighted music
+- [ ] Hosted demo URL + test credentials (if any), **free to use and kept running until judging ends (Dec 15, 2026)**
+- [ ] Demo keeps working through judging: free hosts woken or kept alive; `LLM_BUDGET_USD` leaves credits for judges
+- [ ] YouTube demo video **< 3 min**, public, shows the app actually running; no copyrighted music and **no third-party trademarks/logos without permission** (don't film the logo-based architecture tab)
 - [ ] Text description of features
 - [ ] Track selected: **Best Apps & Agents**
 - [ ] Feedback on Token Factory / AI Cloud / NVIDIA models (also targets *Most Valuable Feedback*)
 - [ ] Tavily runtime call present (for *Best Use of Tavily*)
+- [ ] Every third-party API/dataset used within its terms (Earth Engine non-commercial, ESVD licence and citation, Tavily); raw ESVD data not redistributed in the repo unless its licence allows **(verify)**
+- [ ] Explanation that the project was created during the submission period (after Aug 26, 2026)
 - [ ] City event association if attending one
 
 ## 10. Risks & mitigations
@@ -154,6 +158,8 @@ Each Friday the team must be able to run the gate demo end-to-end. If a gate sli
 | LLM hallucination in reports | Trust | Auditor only reasons over structured tool outputs; every claim cites a metric or URL; JSON schema validation |
 | Token Factory credits run out | Blocked dev | Nano for dev loops; Ultra only in Auditor; cache responses |
 | Scope creep | Late submission | MoSCoW, freeze Oct 26 |
+| Free host sleeps or pauses during judging (Dec 1–15) | Judges see a broken demo | Health-check pings, a wake-up note in the testing instructions, the backup video; re-check before Dec 1 |
+| Trademarked logos or music in the video | Rule violation | Use only our own UI and footage; no third-party logos or music |
 
 ## 11. Open questions
 1. Team size and who attends a city event (affects City Winner eligibility)?
