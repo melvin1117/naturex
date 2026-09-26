@@ -15,7 +15,7 @@ Nature delivers ~$100T/yr of services — clean water, flood protection, carbon 
 1. **List** – A community draws its land on a map.
 2. **Rate** – A team of Nemotron agents reads satellite data, values ecosystem services ($/yr with ranges), scans local news via Tavily, and writes an auditable **Ecological Performance Report** with a **grade (AAA–D)** and **confidence score**.
 3. **Invest** – The asset "IPOs" on a sandbox exchange; investors buy shares.
-4. **Monitor** – Nebius Serverless Jobs re-rate assets continuously. When nature heals, the grade and price rise; when a factory encroaches, investors get an alert and the price drops.
+4. **Monitor** – Nebius Serverless Jobs re-rate assets (satellite data quarterly, news daily). When nature heals, the grade and price rise; when a factory encroaches, investors get an alert and the price drops.
 
 **Think: Moody's + a stock exchange — for wetlands, forests and reefs.**
 
@@ -32,7 +32,7 @@ Nature delivers ~$100T/yr of services — clean water, flood protection, carbon 
 | Rating Orchestrator | **Nemotron 3 Super** | Plans the rating run, calls tools |
 | Auditor / Rating Analyst | **Nemotron 3 Ultra** | Deep reasoning: cross-checks evidence, flags greenwashing, grades, writes report |
 | News Scout | **Nemotron Nano** + **Tavily** | Finds & classifies real-world events near the asset |
-| Field Evidence | **Nemotron Nano Omni** | Reads community photos / audio |
+| Field Evidence | **Nemotron Nano Omni** | Reads community photos (audio after the hackathon) |
 | Investor Copilot | **Nemotron Nano** + RAG | Fast grounded Q&A |
 
 Background re-rating & news sweeps run on **Nebius Serverless Jobs**; the API runs on **Nebius Serverless Endpoints**.
@@ -46,7 +46,7 @@ Background re-rating & news sweeps run on **Nebius Serverless Jobs**; the API ru
 - **Measured, not claimed** – an eval harness scores news classification, Auditor faithfulness and model routing (Nano vs Super vs Ultra); results published in the repo.
 
 ## Demo (3 min)
-Xochimilco-style wetland near Mexico City → AI rates it (e.g. grade A, ~$12M/yr in services, 84% confidence) → IPO → judges buy shares → *Time Machine: +1 quarter* → restoration detected, price ↑ → *inject encroachment* → alert, grade A→B, price ↓ → Copilot explains why → portfolio shows impact (ha protected, t CO₂).
+Xochimilco-style 500 ha wetland near Mexico City → AI rates it (Health 77.6, grade A, ~$11.7M/yr in services, 87% confidence) → IPO → judges buy shares → *Time Machine: +1 quarter* → restoration detected, price ↑ → *inject encroachment* → alert, grade A → BBB, price ↓ → Copilot explains why → portfolio shows impact (ha protected, t CO₂).
 
 ## Business model (post-hackathon)
 Rating-as-a-service for funds & corporates · listing/verification fee per asset · data feed/API for investors & exchanges · TNFD disclosure add-on.
@@ -62,5 +62,8 @@ Rating-as-a-service for funds & corporates · listing/verification fee per asset
 
 > Rules: a project can win **one Overall OR one Track award, plus one Bonus award**.
 
+## Where to read more
+[diagrams.html](./diagrams.html) (overview, rating engine, architecture, flows) · [pm-spec.md](./pm-spec.md) (scope & plan) · [dev-spec.md](./dev-spec.md) (technical design).
+
 ## Honest limits
-Sandbox with play money — **not** a securities offering. Valuations are screening estimates using published benefit-transfer coefficients (ESVD), not certified appraisals. Real-money trading would require licensed partners and regulation.
+Sandbox with play money — **not** a securities offering. Valuations are screening estimates using published benefit-transfer coefficients (starter values from Costanza et al. 2014, to be replaced by ESVD), not certified appraisals. Real-money trading would require licensed partners and regulation.

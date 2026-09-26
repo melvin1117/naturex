@@ -8,6 +8,8 @@
 | **Deadline** | **Fri Oct 30, 2026, 10:00 AM PT** (target internal submit: Thu Oct 29) |
 | **Status** | Draft v1 |
 
+> Related docs: [one-pager.md](./one-pager.md) · [dev-spec.md](./dev-spec.md) · [diagrams.html](./diagrams.html)
+
 ---
 
 ## 1. Background
@@ -23,7 +25,7 @@ Living ecosystems produce enormous value (water filtration, flood protection, ca
 **Non-goals**
 - Real money, real securities, KYC/AML, custody.
 - Certified valuations or carbon-credit issuance.
-- Global coverage — 3 curated demo sites + user-drawn polygons with best-effort data.
+- Global coverage — 3 curated demo sites; live rating of user-drawn polygons is a *Could* (best-effort, falls back to cached sites).
 - Mobile-native apps (responsive web only).
 
 ## 3. Personas
@@ -41,8 +43,8 @@ Living ecosystems produce enormous value (water filtration, flood protection, ca
 |---|---|---|
 | A1 | As Rosa, I draw my land on a map | Polygon tool; area shown in ha; rejects self-intersecting polygons, < 10 ha or > 50,000 ha, and overlaps with existing listings |
 | A2 | I enter community details | Name, country, description, photo, total shares (default 1,000,000), community retained % (default 51%) |
-| A3 | I submit for rating | Rating job starts; progress UI shows agent steps (satellite → valuation → news → audit) |
-| A4 | I upload field evidence | Up to 5 geotagged photos / 1 audio clip; analysis appears in report; confidence increases |
+| A3 | I submit for rating | Rating job starts; progress UI shows agent steps (satellite → valuation → news → evidence → audit) |
+| A4 | I upload field evidence | Up to 5 geotagged photos (audio is post-hackathon); analysis appears in report; confidence increases |
 | A5 | If not eligible, I get a stewardship plan | 3–5 concrete, location-specific recommendations |
 
 ### Epic B — AI rating & report
@@ -52,7 +54,7 @@ Living ecosystems produce enormous value (water filtration, flood protection, ca
 | B2 | System computes 5-yr health trend | NDVI trend slope & label (improving / stable / degrading) with chart |
 | B3 | System estimates annual ecosystem value | Low / mid / high $/yr, broken down by service (carbon, water, flood, habitat, recreation) |
 | B4 | System scans news | ≥ 1 Tavily query per asset; each event has title, URL, date, impact type, direction (+/−), severity (1–5) |
-| B5 | Auditor issues rating | Health Score 0–100, grade AAA–D, confidence %, greenwashing flags, markdown report with cited evidence |
+| B5 | Auditor issues rating | Health Score 0–100, grade AAA–D, confidence %, greenwashing flags, markdown report with cited evidence (formulas: dev-spec §7.4) |
 | B6 | Reports are versioned | Each re-rating produces a new version; diff view shows what changed and why |
 
 ### Epic C — Exchange (sandbox)
@@ -111,10 +113,10 @@ Principle: **one flawless end-to-end story on 3 real sites** beats a wide app wi
 **Hackathon — each criterion is 25%. Every one needs a visible "proof moment":**
 | Criterion (25% each) | What judges look for | Our proof | Demo / submission moment |
 |---|---|---|---|
-| **Technological implementation** | Well built; effective use of Token Factory + Nemotron | 4 Nemotron models routed by task with eval-backed justification; tool-calling orchestrator; schema-validated outputs; Serverless Endpoint + Jobs actually running; Tavily in the loop; hash-chained ledger; CI + tests | Agent Trace drawer open during rating; README eval + routing tables; architecture diagram |
+| **Technological implementation** | Well built; effective use of Token Factory + Nemotron | Nemotron models routed by task with eval-backed justification (Super, Ultra, Nano required; Nano Omni with photo evidence); tool-calling orchestrator; schema-validated outputs; Serverless Endpoint + Jobs actually running; Tavily in the loop; hash-chained ledger; CI + tests | Agent Trace drawer open during rating; README eval + routing tables; architecture diagram |
 | **Design** | Complete, coherent product — *not* a PoC feel | Polished flows: list → rating progress → report → trade → alert → copilot; consistent UI; sandbox framing | 3-min video with zero dead ends; live URL that works without instructions |
 | **Potential impact** | Credible, specific problem + real audience; demo actually solves it | Documentary case (wetland vs factories); Steward-vs-Sell numbers; uncertainty ranges; honest limits | Opening 20 s of video; one-pager; "what it would take to go live" slide |
-| **Quality of idea** | Creative, non-obvious use of Nemotron; understands problem space | AI as a *rating agency* for ecosystems; news that moves "nature stocks"; Auditor that catches greenwashing | Encroachment event → grade A→B with cited evidence |
+| **Quality of idea** | Creative, non-obvious use of Nemotron; understands problem space | AI as a *rating agency* for ecosystems; news that moves "nature stocks"; Auditor that catches greenwashing | Encroachment event → grade A → BBB with cited evidence |
 
 > Tie-break order follows criteria order, so **Technological implementation is the tie-breaker** — another reason to invest there.
 

@@ -1,6 +1,6 @@
 # NatureX — Technical Design (Dev Spec)
 
-> Companion to [pm-spec.md](./pm-spec.md) and [diagrams.html](./diagrams.html). Anything marked **(verify)** should be checked against current Nebius / NVIDIA docs before implementation.
+> Companion to [pm-spec.md](./pm-spec.md), [one-pager.md](./one-pager.md) and [diagrams.html](./diagrams.html) (its *Rating Engine* tab mirrors §7). Anything marked **(verify)** should be checked against current Nebius / NVIDIA docs before implementation.
 
 ---
 
@@ -232,7 +232,7 @@ create table llm_calls (
 | `POST /assets` | Create asset from GeoJSON + details → validates → status `rating` → enqueue rating |
 | `GET /assets` | Marketplace list (latest price, grade, trend) |
 | `GET /assets/{id}` | Asset detail + latest report + recent events |
-| `POST /assets/{id}/evidence` | Upload photo/audio → field_evidence agent → event + re-rate |
+| `POST /assets/{id}/evidence` | Upload photos (audio post-hackathon) → field_evidence agent → event + re-rate |
 | `GET /assets/{id}/reports` · `GET /reports/{id}` · `GET /reports/{id}/diff/{prev}` | Report history & diffs |
 | `GET /assets/{id}/prices?range=` | Price history |
 | `POST /orders` | `{asset_id, side, qty}` → Market Engine → fill |
@@ -332,16 +332,16 @@ Listing gate: `confidence ≥ 70 AND grade ≥ C AND forest_loss_last_12m < 1% o
 4. **Prompt-injection guard:** wrap retrieved text in `<untrusted_content>` tags and instruct the model to treat it as data only; validate the output against a JSON schema.
 
 ### 7.6 Field Evidence (Nemotron Nano Omni)
-Input: image(s)/audio + asset context. Output: `{observations[], species_candidates[], damage_signs[], water_clarity, authenticity_concerns[]}`. The result creates an `events` row (`source='evidence'`) and sets `evidence=1` in confidence if there are no authenticity concerns.
+Input: photo(s) + asset context (audio is post-hackathon). Output: `{observations[], species_candidates[], damage_signs[], water_clarity, authenticity_concerns[]}`. The result creates an `events` row (`source='evidence'`) and sets `evidence=1` in confidence if there are no authenticity concerns.
 
 ### 7.7 Auditor (Nemotron 3 Ultra)
 Input: metrics, valuation, base scores, events, evidence, and the previous report (if any). Output (JSON schema enforced; retry on invalid):
 ```json
 {
-  "auditor_adjustment": -4,
+  "auditor_adjustment": -2,
   "adjustment_reason": "Two credible reports of illegal dumping in the NE sector not yet visible in satellite data.",
   "agreement": 0.8,
-  "flags": [{"type": "data_gap", "detail": "Only 11 cloud-free scenes in rainy season"}],
+  "flags": [{"type": "data_gap", "detail": "No cloud-free scenes in Jul–Aug (rainy season)"}],
   "greenwashing_risk": "low",
   "key_changes": ["Flooded vegetation −3.1 pp vs last quarter", "New encroachment news (severity 4)"],
   "recommendations": ["Install boundary markers along the NE industrial edge", "..."],
@@ -379,7 +379,7 @@ Invariants (unit-tested): cash is never negative; shares are conserved; the pric
 ## 9. Background jobs (Nebius Serverless Jobs)
 | Job | Schedule | Entrypoint | Work |
 |---|---|---|---|
-| `rerate_all` | Quarterly (demo: on demand) | `python -m jobs.rerate_all --version sim-N` | For each listed asset: earth_obs → valuation → auditor → report v+1 → price re-anchor → alerts |
+| `rerate_all` | Quarterly (demo: on demand) | `python -m jobs.rerate_all --version sim-N` | For each listed asset: earth_obs → valuation → auditor (using news events already stored by `news_sweep`) → report v+1 → price re-anchor → alerts |
 | `news_sweep` | Daily | `python -m jobs.news_sweep` | News Scout for all assets; severity ≥ 4 → alert + optional re-rate |
 
 Both reuse the backend image (`backend/Dockerfile`) with a different command. Trigger from `/admin/simulate/*` via the Nebius API/CLI, or run in-process when `LOCAL_JOBS=true` **(verify)**.
@@ -417,12 +417,12 @@ Secrets stay server-side only; never commit `.env` (commit `.env.example`).
 | Contract | JSON-schema validation of News Scout / Auditor outputs using recorded fixtures |
 | Integration | Full rating on the 3 demo sites with cached earth-obs data; snapshot the report fields |
 | E2E (Playwright) | Demo script: list → rate → buy → next quarter → inject event → alert → Copilot answer |
-| LLM eval | 20 hand-labelled news items → measure classification accuracy; check the Auditor never alters numbers |
+| LLM eval | See §18 (≥ 30 hand-labelled news items, Auditor faithfulness, schema reliability) |
 
 ## 14. Performance & cost
 | Target | Value |
 |---|---|
-| Rating (cached earth-obs) | < 60 s end-to-end |
+| Rating (cached earth-obs) | < 60 s end-to-end (PM hard limit: < 2 min) |
 | Copilot first token | < 2 s |
 | Page loads | < 1.5 s |
 
@@ -497,7 +497,7 @@ Implementation: plain pytest + a small runner that writes `evals/results.md` (co
 
 ## 20. Definition of done (hackathon)
 - [ ] Public URL runs the full demo script without manual DB edits
-- [ ] At least 3 Nemotron models are called at runtime via Token Factory, visible in the Agent Trace drawer
+- [ ] At least 3 Nemotron models (Super, Ultra, Nano; plus Nano Omni if photo evidence ships) are called at runtime via Token Factory, visible in the Agent Trace drawer
 - [ ] Tavily is called at runtime by the News Scout
 - [ ] Backend deployed on a Nebius Serverless Endpoint; re-rating runs as a Nebius Serverless Job
 - [ ] README covers setup, the architecture image, the model table, and "How we used Nemotron & Token Factory"

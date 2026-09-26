@@ -265,7 +265,7 @@ Low / High = same with the low / high coefficient  →  always shown as a range<
       <tr><td><b>Evidence</b></td><td>Verified community photos on the ground?</td><td>1 if verified, else 0.3</td></tr>
       <tr><td><b>Recency</b></td><td>Is the data fresh?</td><td>1 if &lt; 90 days old, else 0.5</td></tr>
     </table>
-    <p style="font-size:14px;color:var(--muted)">An asset can only be listed if <b>confidence ≥ 70%</b>, <b>grade ≥ C</b> and there is <b>no active habitat loss</b>.</p>
+    <p style="font-size:14px;color:var(--muted)">An asset can only be listed if <b>confidence ≥ 70%</b>, <b>grade ≥ C</b> and <b>habitat loss in the last 12 months is below 1% of the area</b>.</p>
 
     <h3>6 · Where the AI (Nemotron) fits and where it doesn’t</h3>
     <div class="grid g2">
@@ -348,7 +348,7 @@ sequenceDiagram
   O->>E: land cover, NDVI trend, carbon, $ value
   E-->>O: metrics + value range (low/mid/high)
   O->>N: scan news & threats near asset
-  N-->>O: events with impact + sentiment
+  N-->>O: events with impact type, direction, severity
   O->>R: metrics + events + field evidence
   R-->>O: health score, grade, confidence, report
   end
@@ -367,8 +367,8 @@ sequenceDiagram
   J->>O: re-rate (every quarter / Time Machine click)
   O->>R: new satellite metrics + new news
   R-->>M: new fair value + alerts
-  M-->>W: price update (WebSocket)
-  W-->>I: 🔔 "Encroachment detected — grade A → B"
+  M-->>W: price update (SSE)
+  W-->>I: 🔔 "Encroachment detected — grade A → BBB"
   I->>A: Copilot: "Why did the price drop?"
   A-->>I: Grounded answer with report citations
   end
@@ -376,15 +376,15 @@ sequenceDiagram
 
 const FLOW = `
 flowchart TD
-  S(["▶ Start"]) --> REG["Community registers<br/>& verifies identity"]
+  S(["▶ Start"]) --> REG["Community registers<br/>(identity check mocked)"]
   REG --> DRAW["Draw land boundary<br/>+ upload ownership docs"]
   DRAW --> V1{"Valid polygon?<br/>no overlap?"}
   V1 -- No --> DRAW
   V1 -- Yes --> RATE["🤖 AI rating pipeline<br/>satellite · valuation · news"]
   RATE --> C1{"Confidence<br/>≥ 70%?"}
-  C1 -- No --> EVID["Request field evidence<br/>photos · bird audio"]
+  C1 -- No --> EVID["Request field evidence<br/>geotagged photos"]
   EVID --> RATE
-  C1 -- Yes --> G1{"Grade ≥ C and<br/>no active habitat loss?"}
+  C1 -- Yes --> G1{"Grade ≥ C and<br/>habitat loss below 1%<br/>(last 12 months)?"}
   G1 -- No --> PLAN["Stewardship plan<br/>AI recommendations"]
   PLAN -. "improve & re-apply" .-> RATE
   G1 -- Yes --> IPO["Set IPO price<br/>from fair value"]
@@ -414,22 +414,22 @@ flowchart TD
 
 // ---------- Details for clickable nodes ----------
 const D = {
-  COM: ["Community / Landowner", "user", "Owns or stewards the land (e.g. the wetland community in Mexico). Lists the asset, uploads field evidence, receives IPO proceeds and quarterly revenue share.", ["Draws boundary on map", "Uploads photos / bird audio", "Sees stewardship recommendations"]],
+  COM: ["Community / Landowner", "user", "Owns or stewards the land (e.g. the wetland community in Mexico). Lists the asset, uploads field evidence, receives IPO proceeds and quarterly revenue share.", ["Draws boundary on map", "Uploads geotagged photos", "Sees stewardship recommendations"]],
   INV: ["Investor", "user", "Impact investor or ordinary person who browses rated nature assets, buys/sells shares in the sandbox, and tracks impact.", ["Starts with $10,000 play money", "Receives alerts on rating changes", "Asks the Copilot questions"]],
   ADM: ["Demo Admin", "user", "Controls the demo narrative for judges.", ["Advance one quarter", "Inject events: fire, encroachment, restoration"]],
   LP: ["Listing Portal", "ours", "Map UI (Leaflet / Mapbox) to draw a polygon, enter community details, shares offered and community retained stake.", ["Validates area & overlap", "Calls POST /assets"]],
-  MK: ["Marketplace & Exchange", "ours", "Cards for each listed asset with price, grade, health trend; buy/sell with instant fills against the market maker.", ["Clearly labelled SANDBOX — play money", "Live price via WebSocket"]],
+  MK: ["Marketplace & Exchange", "ours", "Cards for each listed asset with price, grade, health trend; buy/sell with instant fills against the market maker.", ["Clearly labelled SANDBOX — play money", "Live price via SSE (polling fallback)"]],
   AP: ["Asset Page", "ours", "The ‘stock page’ for nature: map with land-cover overlay, AI Ecological Performance Report, price chart, news & alerts feed.", ["Value range low / mid / high", "Confidence badge"]],
   PF: ["Portfolio & Impact", "ours", "Holdings, P&L and impact metrics: hectares protected, t CO₂ stored, water filtered.", []],
   CP: ["Investor Copilot (UI)", "ours", "Chat box on asset & portfolio pages. Answers grounded in stored reports.", []],
   TM: ["Time Machine", "ours", "Demo control that triggers the re-rating job or injects a synthetic event so judges see the full loop in 3 minutes.", []],
-  API: ["Backend API", "ours", "FastAPI service deployed as a Nebius Serverless Endpoint. REST for CRUD, WebSocket for price ticks & alerts.", ["/assets, /reports, /orders, /copilot, /simulate"]],
-  ORC: ["Rating Orchestrator Agent", "nebius", "Nemotron 3 Super (Token Factory) with tool-calling. Plans the rating run, calls tools in order, handles missing data, and hands a structured bundle to the Auditor.", ["Model: Nemotron 3 Super", "Tools: earth_obs, valuation, news_scout, field_evidence"]],
+  API: ["Backend API", "ours", "FastAPI service deployed as a Nebius Serverless Endpoint. REST for CRUD, SSE for price ticks, alerts & rating progress.", ["/assets, /reports, /orders, /copilot, /simulate"]],
+  ORC: ["Rating Orchestrator Agent", "nebius", "Nemotron 3 Super (Token Factory) with tool-calling. Plans the rating run, calls tools in order, handles missing data, and hands a structured bundle to the Auditor.", ["Model: Nemotron 3 Super", "Tools: earth_obs, valuation, news_scout, field_evidence, auditor"]],
   ME: ["Market Engine", "ours", "Deterministic Python. Anchors price to AI fair value and adds order-flow pressure.", ["price += α(FV − price) + β·flow/liquidity", "Credits community on IPO fills"]],
   EO: ["Earth Observation Tool", "ours", "Pulls Dynamic World land cover, Sentinel-2 NDVI 5-yr trend, JRC surface water, Hansen forest loss, biomass → carbon. Results cached per asset.", ["Google Earth Engine or Microsoft Planetary Computer", "Precompute demo sites"]],
-  VAL: ["Valuation Engine", "ours", "Area of each land-cover class × $/ha/yr coefficients (ESVD) → annual ecosystem-service value with low/mid/high range.", ["Pure Python, deterministic, unit-tested"]],
+  VAL: ["Valuation Engine", "ours", "Area of each land-cover class × $/ha/yr coefficients → annual ecosystem-service value with low/mid/high range. Starter values from Costanza et al. 2014, replaced by ESVD in the build.", ["Pure Python, deterministic, unit-tested"]],
   NS: ["News Scout Agent", "tavily", "Uses Tavily search for news near the asset (new factory permits, fires, drought, restoration projects). Nemotron Nano classifies each item: impact type, direction, severity.", ["Qualifies for Best Use of Tavily bonus", "Runs daily via Serverless Job"]],
-  FEV: ["Field Evidence Agent", "nebius", "Nemotron Nano Omni analyses community-uploaded photos / audio (species, water clarity, signs of damage) to raise confidence.", ["Multimodal NVIDIA model"]],
+  FEV: ["Field Evidence Agent", "nebius", "Nemotron Nano Omni analyses community-uploaded photos (species, water clarity, signs of damage) to raise confidence.", ["Multimodal NVIDIA model", "Audio (e.g. birdsong) after the hackathon"]],
   AUD: ["Auditor / Rating Analyst", "nebius", "Nemotron 3 Ultra does the heavy reasoning: cross-checks satellite vs news vs evidence, flags greenwashing risk, assigns Health Score, grade (AAA–D), confidence, and writes the Ecological Performance Report.", ["Model: Nemotron 3 Ultra", "Structured JSON output + markdown report"]],
   CPA: ["Copilot Agent", "nebius", "Nemotron Nano with RAG over reports & news stored in pgvector. Fast, cheap, cites sources.", []],
   RJ: ["Quarterly Re-rating Job", "nebius", "Nebius Serverless Job that re-runs the rating pipeline for all assets (batch). Triggered on schedule or by the Time Machine.", []],
@@ -447,19 +447,19 @@ const D = {
   DRAW: ["Draw boundary", "step", "Polygon drawn on map; ownership docs uploaded (stored, not verified by AI in MVP).", []],
   V1: ["Polygon validation", "rule", "Checks area limits (e.g. 10 – 50,000 ha), self-intersection, overlap with existing listings.", []],
   RATE: ["AI rating pipeline", "ai", "Orchestrator → Earth Obs → Valuation → News Scout → Field Evidence → Auditor.", []],
-  C1: ["Confidence gate", "rule", "Confidence combines cloud-free observation count, data agreement and field evidence. Below 70% the asset can't list yet.", []],
-  EVID: ["Request evidence", "action", "App asks community for geotagged photos or audio; Nano Omni analyses them.", []],
-  G1: ["Listing eligibility", "rule", "Grade ≥ C and no active habitat loss in last 12 months (Hansen / Dynamic World change).", []],
+  C1: ["Confidence gate", "rule", "Confidence = 40% satellite coverage + 30% satellite–news agreement + 20% field evidence + 10% data recency. Below 70% the asset can't list yet.", []],
+  EVID: ["Request evidence", "action", "App asks the community for up to 5 geotagged photos; Nemotron Nano Omni analyses them.", []],
+  G1: ["Listing eligibility", "rule", "Grade ≥ C and forest/habitat loss in the last 12 months below 1% of the area (Hansen / Dynamic World change).", []],
   PLAN: ["Stewardship plan", "action", "Auditor generates concrete actions to improve the grade (e.g. stop grazing in zone 2, restore buffer strip).", []],
   IPO: ["IPO pricing", "step", "IPO price = fair value per share. Community keeps its retained stake; public float sold to investors.", []],
   LIVE: ["Listed", "step", "Asset appears on marketplace with report and price chart.", []],
   TRADE: ["Trading", "step", "Sandbox trades with play money; instant fills against market maker.", []],
   PRICE: ["Price update", "step", "Market Engine blends fair value + order flow.", []],
   MON: ["Continuous monitoring", "ai", "Serverless Jobs: daily news sweep, quarterly satellite re-rating.", []],
-  CH: ["Significant change?", "rule", "Health score Δ ≥ 5, grade change, or high-severity news event.", []],
+  CH: ["Significant change?", "rule", "Health score Δ ≥ 5, a grade change, or a news event with severity ≥ 4.", []],
   RERATE: ["Re-rate", "ai", "New Ecological Performance Report is published and versioned.", []],
   ALERT: ["Alert", "action", "Push to investors holding the asset and to the community dashboard.", []],
-  PAY: ["Revenue split", "step", "Simulated quarterly revenue (carbon credits, water payments, tourism) split: community fund vs investor dividends.", []],
+  PAY: ["Revenue split", "step", "Simulated revenue = 2% of annual ecosystem value per year, paid quarterly (stands in for carbon credits, water payments, tourism). Split 50% community fund / 50% dividends to all holders.", []],
 };
 
 const SEQ_STEPS = [
@@ -480,8 +480,8 @@ const SEQ_STEPS = [
   ["Re-rate", "A Nebius Serverless Job (or Time Machine click) re-rates the asset."],
   ["New evidence", "Latest satellite metrics and news go to the Auditor."],
   ["New fair value", "Auditor updates fair value and raises alerts."],
-  ["Price update", "Market Engine pushes new price over WebSocket."],
-  ["Alert", "Investor sees: ‘Encroachment detected — grade A → B’."],
+  ["Price update", "Market Engine pushes the new price to the browser over SSE."],
+  ["Alert", "Investor sees: ‘Encroachment detected — grade A → BBB’."],
   ["Ask Copilot", "Investor asks why the price dropped."],
   ["Grounded answer", "Copilot (Nemotron Nano + RAG) answers citing the report and news."],
 ];
