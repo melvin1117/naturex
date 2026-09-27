@@ -297,7 +297,7 @@ Class → biome mapping and **starter coefficients** (USD/ha/yr). These are illu
 | shrub_and_scrub | Shrubland (use grassland × 0.5) | 2,083 | ×0.5 / ×1.5 |
 | crops, built, bare, snow_and_ice | Not valued as natural capital | 0 | 0 |
 
-"Coastal" = centroid within 5 km of coastline. Service breakdown split per biome from a small CSV (e.g. wetland: water 35%, flood 30%, habitat 20%, carbon 10%, recreation 5%).
+"Coastal" = centroid within 5 km of coastline (Natural Earth 1:10m coastline, public domain, bundled in `data/`). Service breakdown split per biome from a small CSV (e.g. wetland: water 35%, flood 30%, habitat 20%, carbon 10%, recreation 5%).
 
 **Carbon (shown separately):** `stock_tCO2 = AGB_t_ha × area_ha × 0.47 × 3.67`; annual sequestration from IPCC Tier-1 default rates per class.
 
@@ -323,7 +323,7 @@ Confidence: `100 × (0.4·coverage + 0.3·agreement + 0.2·evidence + 0.1·recen
 Listing gate: `confidence ≥ 70 AND grade ≥ C AND forest_loss_last_12m < 1% of area`.
 
 ### 7.5 News Scout (Tavily + Nemotron Nano)
-1. Build 2–3 queries from asset name, nearest town (reverse geocode), and keywords: `"<place> wetland factory permit"`, `"<place> fire OR drought OR pollution"`, `"<place> restoration OR protected area"`.
+1. Build 2–3 queries from asset name, nearest town (reverse geocode via OpenStreetMap Nominatim, max 1 request/s with a custom User-Agent, cached per asset), and keywords: `"<place> wetland factory permit"`, `"<place> fire OR drought OR pollution"`, `"<place> restoration OR protected area"`.
 2. `tavily.search(query, topic="news", days=lookback, max_results=5)`.
 3. Deduplicate by URL; for each result, Nemotron Nano returns:
 ```json
@@ -547,6 +547,7 @@ Azure options use the Visual Studio subscriber credit ($150/month, individual de
 - Sentinel-2, Dynamic World, JRC Surface Water, Hansen Forest Change and ESA biomass data.
 - Google Earth Engine (non-commercial registration) or Microsoft Planetary Computer.
 - ESVD (registration and citation).
+- OpenStreetMap Nominatim reverse geocoding (usage policy: ≤ 1 request/s, cache results) and Natural Earth coastline data (public domain).
 - All frameworks and libraries (Next.js, React, Tailwind, shadcn/ui, Leaflet, Recharts, FastAPI, SQLModel, Pydantic, openai SDK, tavily-python), plus NeMo Agent Toolkit and OpenTimestamps.
 - GitHub (public repo), GitHub Actions and YouTube.
 
