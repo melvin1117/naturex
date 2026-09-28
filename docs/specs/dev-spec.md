@@ -1,6 +1,6 @@
 # NatureX — Technical Design (Dev Spec)
 
-> Companion to [pm-spec.md](./pm-spec.md), [one-pager.md](./one-pager.md), [demo-plan.md](./demo-plan.md), [research.md](./research.md) and [diagrams.html](./diagrams.html) (its *Rating Engine* tab mirrors §7). Anything marked **(verify)** should be checked against current Nebius / NVIDIA docs before implementation.
+> Companion to [pm-spec.md](./pm-spec.md), [one-pager.md](../one-pager.md), [demo-plan.md](./demo-plan.md), [research.md](../research.md) and [diagrams.html](../diagrams.html) (its *Rating Engine* tab mirrors §7). Anything marked **(verify)** should be checked against current Nebius / NVIDIA docs before implementation.
 
 ---
 
@@ -72,6 +72,12 @@ Every call goes through a wrapper that logs `model, prompt_tokens, completion_to
 naturex/
 ├── LICENSE                     # MIT (must show in GitHub About)
 ├── README.md                   # setup, run, Nemotron/Token Factory usage, architecture image
+├── AGENTS.md, CLAUDE.md        # shared instructions for all AI coding assistants
+├── docs/
+│   ├── one-pager.md, research.md, ai-setup.md, diagrams.html
+│   ├── specs/                  # pm-spec.md, dev-spec.md, demo-plan.md
+│   └── adr/                    # architecture decision records (MADR)
+├── .agents/skills/             # shared AI skills (mirrored in .claude/skills/; see scripts/sync-skills.sh)
 ├── docker-compose.yml          # postgres+pgvector, backend, frontend (local dev)
 ├── frontend/
 │   ├── app/
@@ -106,7 +112,7 @@ naturex/
 │   ├── rerate_all.py                 # Nebius Serverless Job entrypoint
 │   └── news_sweep.py
 ├── evals/ (news.jsonl, scenarios/, run.py, results.md)
-├── scripts/precompute_sites.py
+├── scripts/ (precompute_sites.py, sync-skills.sh)
 └── .github/workflows/ (ci.yml, eval.yml)
 ```
 
@@ -443,10 +449,12 @@ Secrets stay server-side only; never commit `.env` (commit `.env.example`).
 ## 16. Team split (4 people)
 | Owner | Scope |
 |---|---|
-| Dev 1 — Frontend | Marketplace, asset page, portfolio, trade panel, charts, SSE |
-| Dev 2 — Geo & data | Earth-obs pipeline, demo-site caching, valuation, scoring, map overlays |
-| Dev 3 — AI agents | Token Factory client, orchestrator, News Scout (Tavily), Auditor, field evidence, Copilot RAG, agent trace |
-| Dev 4 — Backend & platform | Schema, API, market engine, jobs, Nebius deployment, tests, Time Machine |
+| PD — Product designer + frontend | UX flows, design system, all screens, judge tour, UI polish, demo video |
+| D1 — Platform & market | Repo/CI, schema, API contract, market engine, ledger, sandbox, SSE, jobs, deploy; ~50% frontend wiring from week 3 |
+| D2 — Geo & rating data | Earth Engine pipeline, demo sites, valuation, scoring, confidence, map overlays, polygon validation, field evidence |
+| D3 — AI agents | Token Factory client, News Scout, Auditor, Orchestrator, Agent Trace, Copilot, evals, README; frontend skeleton in week 1 |
+
+The week-by-week plan and tasks are in [tasks/plan.md](../../tasks/plan.md) and [tasks/todo.md](../../tasks/todo.md).
 
 ## 17. Nature Ledger (tamper-evident history)
 ```python

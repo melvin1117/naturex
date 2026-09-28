@@ -1,7 +1,7 @@
 # NatureX — Open-Source Landscape Research (Sept 2026)
 
 > What already exists that we can reuse instead of building from scratch. Researched Sept 27–28, 2026; star counts and versions are approximate. Verdicts: **ADOPT** (use as-is), **BORROW** (copy ideas/files), **SKIP**.
-> Related: [dev-spec.md](./dev-spec.md) · [pm-spec.md](./pm-spec.md) · [demo-plan.md](./demo-plan.md)
+> Related: [dev-spec.md](./specs/dev-spec.md) · [pm-spec.md](./specs/pm-spec.md) · [demo-plan.md](./specs/demo-plan.md)
 
 ## TL;DR: recommended set
 | Area | Adopt |

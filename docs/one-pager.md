@@ -63,7 +63,7 @@ Rating-as-a-service for funds & corporates · listing/verification fee per asset
 > Rules: a project can win **one Overall OR one Track award, plus one Bonus award**.
 
 ## Where to read more
-[diagrams.html](./diagrams.html) (overview, rating engine, architecture, flows) · [pm-spec.md](./pm-spec.md) (scope & plan) · [dev-spec.md](./dev-spec.md) (technical design) · [demo-plan.md](./demo-plan.md) (judge tour & video).
+[diagrams.html](./diagrams.html) (overview, rating engine, architecture, flows) · [pm-spec.md](./specs/pm-spec.md) (scope & plan) · [dev-spec.md](./specs/dev-spec.md) (technical design) · [demo-plan.md](./specs/demo-plan.md) (judge tour & video).
 
 ## Honest limits
 Sandbox with play money — **not** a securities offering. Valuations are screening estimates using published benefit-transfer coefficients (starter values from Costanza et al. 2014, to be replaced by ESVD), not certified appraisals. Real-money trading would require licensed partners and regulation.

@@ -1,6 +1,6 @@
 # NatureX — Demo & Judge Experience Plan
 
-> Reference notes for later; nothing here is built yet. Related: [pm-spec.md](./pm-spec.md) · [dev-spec.md](./dev-spec.md) · [one-pager.md](./one-pager.md) · [diagrams.html](./diagrams.html)
+> Reference notes for later; nothing here is built yet. Related: [pm-spec.md](./pm-spec.md) · [dev-spec.md](./dev-spec.md) · [one-pager.md](../one-pager.md) · [diagrams.html](../diagrams.html)
 
 **Core idea: build the guided tour once, use it twice.** Judges click through it live, and the YouTube video is a recording of the same tour, so the two never drift apart.
 

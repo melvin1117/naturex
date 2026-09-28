@@ -8,7 +8,7 @@
 | **Deadline** | **Fri Oct 30, 2026, 10:00 AM PT** (target internal submit: Thu Oct 29) |
 | **Status** | Draft v1 |
 
-> Related docs: [one-pager.md](./one-pager.md) · [dev-spec.md](./dev-spec.md) · [demo-plan.md](./demo-plan.md) · [research.md](./research.md) · [diagrams.html](./diagrams.html)
+> Related docs: [one-pager.md](../one-pager.md) · [dev-spec.md](./dev-spec.md) · [demo-plan.md](./demo-plan.md) · [research.md](../research.md) · [diagrams.html](../diagrams.html)
 
 ---
 
@@ -129,9 +129,9 @@ Each Friday the team must be able to run the gate demo end-to-end. If a gate sli
 |---|---|---|---|
 | 1 — Walking skeleton | Sep 26 – Oct 2 | Credits, repo (MIT, CI), docker-compose, schema, Token Factory client + call logging, mock tools, UI shell | **One hard-coded site goes list → (mock) rating → report page, with a real Nemotron call writing the summary** |
 | 2 — Real data | Oct 3 – Oct 9 | Earth-obs pipeline for 3 sites (cached), valuation + scoring (unit-tested), market engine + IPO, marketplace & asset page | **Real satellite metrics + $ ranges + grade on all 3 sites; buy/sell works** |
-| 3 — Real agents | Oct 10 – Oct 16 | Orchestrator tool-calling, News Scout (Tavily), Auditor (Ultra) with schema validation, Nature Ledger, Agent Trace | **Full rating run is 100% live AI; trace drawer shows every step; ledger verifies** |
-| 4 — Loop + deploy | Oct 17 – Oct 23 | Re-rating as Nebius Serverless Job, Time Machine + events, alerts, Copilot RAG, field-evidence photos, deploy to Nebius, eval harness | **Public URL runs the entire 3-min demo script; `make eval` green** |
-| 5 — Polish + submit | Oct 24 – Oct 30 | Feature freeze **Oct 26**; UX polish, README, eval/routing tables, video, Devpost text, feedback | **Submitted Oct 29** (1-day buffer) |
+| 3 — Real agents | Oct 10 – Oct 16 | Orchestrator tool-calling, Auditor (Ultra) with schema validation, Nature Ledger, Agent Trace, field-evidence photos, revenue split | **Full rating run is 100% live AI; trace drawer shows every step; ledger verifies** |
+| 4 — Loop + deploy | Oct 17 – Oct 23 | Time Machine + events, re-rating job, alerts, Copilot RAG, judge tour, UI polish, demo deploy (free tier; Nebius Serverless if credits), eval harness | **Public URL runs the entire 3-min demo script; `make eval` green. Feature freeze Fri Oct 23** |
+| 5 — Demo & presentation | Oct 24 – Oct 30 | **No new features:** demo video, Devpost page and presentation kit, README with eval/routing tables, feedback, judging readiness, bug fixes | **Submitted Oct 29** (1-day buffer) |
 
 ## 9. Submission checklist (Devpost)
 - [ ] Working app uses ≥ 1 NVIDIA open model via **Token Factory** runtime calls (or Nebius AI Cloud compute); for our track, **Nemotron via Token Factory**, with Ultra for deep reasoning and Nano/Super for fast calls
@@ -157,7 +157,7 @@ Each Friday the team must be able to run the gate demo end-to-end. If a gate sli
 | Looks like a securities/crypto scheme | Judge skepticism | Sandbox banner, no tokens, "rating agency first" pitch |
 | LLM hallucination in reports | Trust | Auditor only reasons over structured tool outputs; every claim cites a metric or URL; JSON schema validation |
 | Token Factory credits run out | Blocked dev | Nano for dev loops; Ultra only in Auditor; cache responses |
-| Scope creep | Late submission | MoSCoW, freeze Oct 26 |
+| Scope creep | Late submission | MoSCoW, freeze Fri Oct 23, week 5 demo-only |
 | Free host sleeps or pauses during judging (Dec 1–15) | Judges see a broken demo | Health-check pings, a wake-up note in the testing instructions, the backup video; re-check before Dec 1 |
 | Trademarked logos or music in the video | Rule violation | Use only our own UI and footage; no third-party logos or music |
 
