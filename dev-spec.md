@@ -1,6 +1,6 @@
 # NatureX — Technical Design (Dev Spec)
 
-> Companion to [pm-spec.md](./pm-spec.md), [one-pager.md](./one-pager.md), [demo-plan.md](./demo-plan.md) and [diagrams.html](./diagrams.html) (its *Rating Engine* tab mirrors §7). Anything marked **(verify)** should be checked against current Nebius / NVIDIA docs before implementation.
+> Companion to [pm-spec.md](./pm-spec.md), [one-pager.md](./one-pager.md), [demo-plan.md](./demo-plan.md), [research.md](./research.md) and [diagrams.html](./diagrams.html) (its *Rating Engine* tab mirrors §7). Anything marked **(verify)** should be checked against current Nebius / NVIDIA docs before implementation.
 
 ---
 
