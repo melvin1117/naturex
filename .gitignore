@@ -1,0 +1,28 @@
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+.next/
+out/
+dist/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+
+# AI tool output
+brag-output/
+.playwright-mcp/
+
+# Personal AI tool settings
+.claude/settings.local.json
+CLAUDE.local.md
+
+# OS / editor
+.DS_Store

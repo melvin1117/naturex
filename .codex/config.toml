@@ -1,0 +1,22 @@
+# Project-scoped Codex config (loaded only after you trust this project in Codex).
+# MCP servers for NatureX; secrets come from environment variables, never this file.
+
+[mcp_servers.github]
+url = "https://api.githubcopilot.com/mcp/"
+bearer_token_env_var = "GITHUB_PERSONAL_ACCESS_TOKEN"
+
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp@4.1.1"]
+
+[mcp_servers.shadcn]
+command = "npx"
+args = ["-y", "shadcn@4.21.0", "mcp"]
+
+[mcp_servers.playwright]
+command = "npx"
+args = ["-y", "@playwright/mcp@0.0.82"]
+
+[mcp_servers.chrome-devtools]
+command = "npx"
+args = ["-y", "chrome-devtools-mcp@1.10.1"]
