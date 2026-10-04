@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
@@ -10,8 +10,19 @@ from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import BigInteger, Column, UniqueConstraint, text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
+
+
+def _utcnow() -> datetime:
+    """Timezone-aware now(), required by SQLModel for TIMESTAMPTZ columns."""
+    return datetime.now(timezone.utc)
+
+
+def _enum_column(enum_cls: type[StrEnum]) -> Column[Any]:
+    """Store the enum's .value (matches the DB CHECK constraints), not SQLAlchemy's default .name."""
+    return Column(SAEnum(enum_cls, values_callable=lambda x: [e.value for e in x], native_enum=False))
 
 
 class UserRole(StrEnum):
@@ -54,7 +65,7 @@ class World(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     label: str = Field(index=True)
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utcnow,
         sa_column_kwargs={"server_default": text("now()")},
     )
 
@@ -65,7 +76,7 @@ class User(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     world_id: UUID = Field(foreign_key="worlds.id", index=True)
     name: str
-    role: UserRole
+    role: UserRole = Field(sa_column=_enum_column(UserRole))
     cash_balance: Decimal = Field(default=Decimal("10000.00"), max_digits=14, decimal_places=2)
     persona_key: str | None = Field(default=None, index=True)
 
@@ -88,10 +99,10 @@ class Asset(SQLModel, table=True):
     retained_pct: Decimal = Field(default=Decimal("51.00"), max_digits=5, decimal_places=2)
     primary_shares_remaining: int = Field(sa_column=Column(BigInteger, nullable=False))
     community_wallet: Decimal = Field(default=Decimal("0.00"), max_digits=14, decimal_places=2)
-    status: AssetStatus = Field(default=AssetStatus.DRAFT)
+    status: AssetStatus = Field(default=AssetStatus.DRAFT, sa_column=_enum_column(AssetStatus))
     site_key: str | None = Field(default=None, index=True)
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utcnow,
         sa_column_kwargs={"server_default": text("now()")},
     )
 
@@ -111,7 +122,7 @@ class Metrics(SQLModel, table=True):
     biomass_t_ha: Decimal | None = Field(default=None, max_digits=12, decimal_places=2)
     cloud_free_obs: int | None = None
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utcnow,
         sa_column_kwargs={"server_default": text("now()")},
     )
 
@@ -122,7 +133,7 @@ class Event(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     world_id: UUID = Field(foreign_key="worlds.id", index=True)
     asset_id: UUID = Field(foreign_key="assets.id", index=True)
-    source: EventSource
+    source: EventSource = Field(sa_column=_enum_column(EventSource))
     title: str | None = None
     url: str | None = None
     published_at: date | None = None
@@ -131,7 +142,7 @@ class Event(SQLModel, table=True):
     severity: int | None = Field(default=None, ge=1, le=5)
     summary: str | None = None
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utcnow,
         sa_column_kwargs={"server_default": text("now()")},
     )
 
@@ -158,7 +169,7 @@ class Report(SQLModel, table=True):
     recommendations: list[Any] | None = Field(default=None, sa_column=Column(JSONB))
     auditor_json: dict[str, Any] | None = Field(default=None, sa_column=Column(JSONB))
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utcnow,
         sa_column_kwargs={"server_default": text("now()")},
     )
 
@@ -169,7 +180,7 @@ class Price(SQLModel, table=True):
     world_id: UUID = Field(foreign_key="worlds.id", primary_key=True)
     asset_id: UUID = Field(foreign_key="assets.id", primary_key=True)
     ts: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utcnow,
         primary_key=True,
         sa_column_kwargs={"server_default": text("now()")},
     )
@@ -194,12 +205,12 @@ class Order(SQLModel, table=True):
     world_id: UUID = Field(foreign_key="worlds.id", index=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
     asset_id: UUID = Field(foreign_key="assets.id", index=True)
-    side: OrderSide
+    side: OrderSide = Field(sa_column=_enum_column(OrderSide))
     qty: int = Field(sa_column=Column(BigInteger, nullable=False))
     fill_price: Decimal | None = Field(default=None, max_digits=12, decimal_places=4)
     is_primary: bool = False
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utcnow,
         sa_column_kwargs={"server_default": text("now()")},
     )
 
@@ -214,7 +225,7 @@ class Alert(SQLModel, table=True):
     message: str | None = None
     severity: int | None = None
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utcnow,
         sa_column_kwargs={"server_default": text("now()")},
     )
 
@@ -238,13 +249,13 @@ class LedgerEntry(SQLModel, table=True):
     world_id: UUID = Field(foreign_key="worlds.id", index=True)
     asset_id: UUID = Field(foreign_key="assets.id", index=True)
     seq: int
-    kind: LedgerKind
+    kind: LedgerKind = Field(sa_column=_enum_column(LedgerKind))
     ref_id: UUID | None = None
     payload: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
     prev_hash: str = Field(max_length=64)
     hash: str = Field(max_length=64)
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utcnow,
         sa_column_kwargs={"server_default": text("now()")},
     )
 
@@ -261,6 +272,6 @@ class LlmCall(SQLModel, table=True):
     completion_tokens: int | None = None
     latency_ms: int | None = None
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utcnow,
         sa_column_kwargs={"server_default": text("now()")},
     )
