@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
@@ -17,12 +17,16 @@ from sqlmodel import Field, SQLModel
 
 def _utcnow() -> datetime:
     """Timezone-aware now(), required by SQLModel for TIMESTAMPTZ columns."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
+
+
+def _enum_values(enum_cls: type[StrEnum]) -> list[str]:
+    return [member.value for member in enum_cls]
 
 
 def _enum_column(enum_cls: type[StrEnum]) -> Column[Any]:
-    """Store the enum's .value (matches the DB CHECK constraints), not SQLAlchemy's default .name."""
-    return Column(SAEnum(enum_cls, values_callable=lambda x: [e.value for e in x], native_enum=False))
+    """Store enum .value (matches DB CHECK constraints), not SQLAlchemy's default .name."""
+    return Column(SAEnum(enum_cls, values_callable=_enum_values, native_enum=False))
 
 
 class UserRole(StrEnum):
