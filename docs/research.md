@@ -6,7 +6,7 @@
 ## TL;DR: recommended set
 | Area | Adopt |
 |---|---|
-| Team + AI assistants | Root **`AGENTS.md`** (+ `frontend/`, `backend/` ones), team **Agent Skills** in `.agents/skills/`, **OpenSpec** for spec → tasks, **GitHub MCP**, **Context7**, **shadcn MCP**, Playwright CLI skill |
+| Team + AI assistants | Root **`AGENTS.md`**, team **Agent Skills** in `.agents/skills/` (Addy Osmani / vercel-labs set via `scripts/sync-skills.sh`; **replaces OpenSpec** for this repo), **GitHub MCP**, **Context7**, **shadcn MCP**, Playwright CLI skill |
 | Repo foundation | Plain-folder monorepo; **uv, ruff, mypy strict, pytest**; **ESLint 9 + typescript-eslint, Prettier, tsc strict**; **pre-commit**; **openapi-typescript + openapi-fetch** client with a CI drift check; MADR ADRs; issue forms, PR template, CODEOWNERS, `main` ruleset; GitHub Projects + `gh` bulk import |
 | UI | **shadcn/ui** + blocks, Tailwind v4 tokens, `/dev/ui` showcase page, **Driver.js** tours, **Motion** (sparingly) |
 | AI agents | **PydanticAI** via `OpenAIProvider(base_url=Token Factory)`; **promptfoo** evals; OpenTelemetry spans → own Postgres (Agent Trace drawer) + **Langfuse**; **tavily-python** |
@@ -26,7 +26,7 @@
 | **Agent Skills** spec (agentskills.io, Apache-2.0) + **vercel-labs/skills** (`npx skills`, MIT) | `SKILL.md` folders, loaded on demand; Claude uses `.claude/skills`, others `.agents/skills` | **ADOPT** (symlink `.claude/skills` → `.agents/skills`) |
 | anthropics/skills | Mostly Apache-2.0, but **docx/pdf/pptx/xlsx skills are source-available** | BORROW (don't vendor document skills) |
 | obra/superpowers (MIT) | Brainstorm → plan → subagent TDD workflow | Optional, per person (not in the repo) |
-| **OpenSpec** (~70k★, MIT) | `propose` → `proposal.md` + `tasks.md` per change folder → `apply` → `archive`; one folder per owner, so no collisions | **ADOPT** (primary spec workflow) |
+| **OpenSpec** (~70k★, MIT) | `propose` → `proposal.md` + `tasks.md` per change folder → `apply` → `archive` | **SKIP for NatureX** — replaced by shared Agent Skills + `tasks/todo.md` / GitHub Issues (ADR-0001 session / T06) |
 | GitHub Spec Kit (~139k★, MIT) | constitution → specify → plan → tasks → implement; stricter gates | Alternative to OpenSpec (**don't run both**) |
 | BMAD Method (MIT) | PM/architect/dev personas, epic and story files | BORROW (PRD template, checklists) |
 | Task Master | **MIT + Commons Clause**; team mode needs a paid cloud | **SKIP** |

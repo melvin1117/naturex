@@ -4,7 +4,19 @@
 
 Built for the **Nebius × NVIDIA Global AI Hackathon**, *Best Apps & Agents* track.
 
-> **Status:** planning. Application code, setup and run instructions will be added here as the build starts.
+> **Status:** foundations in progress (backend walking skeleton). Frontend and full setup land in later Week‑1 tasks.
+
+### Quick start (backend)
+```bash
+cp .env.example .env
+cd backend && uv sync
+uv run uvicorn app.main:app --reload --port 8000
+# GET http://localhost:8000/healthz
+
+# from repo root
+make lint && make test
+docker compose up -d   # Postgres + pgvector (requires Docker)
+```
 
 ## Documentation
 | Doc | What's in it |
