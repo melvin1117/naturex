@@ -1,0 +1,1 @@
+"""NatureX backend application package."""
