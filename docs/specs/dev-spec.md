@@ -27,7 +27,7 @@ Design principles:
 ## 2. Tech stack
 | Layer | Choice | Notes |
 |---|---|---|
-| Frontend | Next.js 15 (App Router), TypeScript, Tailwind, shadcn/ui | |
+| Frontend | Next.js **15.5** (App Router), TypeScript strict, Tailwind v4, shadcn/ui | Pin per [ADR-0001](../adr/0001-stack-and-versions.md); not Next 16 for the hackathon |
 | Maps | react-leaflet + leaflet-draw (or MapLibre + terra-draw) | Esri/OSM basemap; land-cover tile overlay |
 | Charts | Recharts | Price chart with event markers |
 | Backend | Python 3.12, FastAPI, SQLModel, Pydantic v2 | |
@@ -36,7 +36,7 @@ Design principles:
 | LLM | **Nebius Token Factory** (OpenAI-compatible) | `openai` Python SDK with custom `base_url` |
 | Search | **Tavily** (`tavily-python`) | News Scout |
 | Earth observation | Google Earth Engine (`earthengine-api`) **or** Microsoft Planetary Computer (`pystac-client`, `stackstac`) | Pick whichever the team can access |
-| Agent loop | Plain OpenAI tool-calling loop | Optional: NVIDIA NeMo Agent Toolkit for tracing/eval **(verify)** |
+| Agent loop | **PydanticAI** via Token Factory `OpenAIProvider` | Plain OpenAI tool-calling loop as fallback; see ADR-0001 |
 | Deploy | Backend → **Nebius Serverless Endpoint**; jobs → **Nebius Serverless Jobs**; frontend → Vercel or Nebius container | **(verify)** CLI / console steps |
 | Tests | pytest, Playwright | |
 
@@ -78,7 +78,7 @@ naturex/
 │   ├── specs/                  # pm-spec.md, dev-spec.md, demo-plan.md
 │   └── adr/                    # architecture decision records (MADR)
 ├── .agents/skills/             # shared AI skills (mirrored in .claude/skills/; see scripts/sync-skills.sh)
-├── docker-compose.yml          # postgres+pgvector, backend, frontend (local dev)
+├── compose.yml                 # postgres+pgvector (local dev); see ADR-0002
 ├── frontend/
 │   ├── app/
 │   │   ├── page.tsx                  # Marketplace
