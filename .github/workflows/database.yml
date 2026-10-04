@@ -1,0 +1,94 @@
+# Database gate: apply Alembic migrations to a disposable Postgres+pgvector.
+# Never uses production credentials. Only revision 0001 exists today, so
+# "upgrade from previous" is modeled as downgrade-to-base then upgrade-to-head.
+name: database
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: database-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    name: database / detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      present: ${{ steps.check.outputs.present }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: check
+        name: Detect migrations
+        run: |
+          if [ -f backend/alembic.ini ] && [ -d backend/migrations/versions ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "Alembic migrations found."
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::backend migrations not present yet — migrate job skipped."
+          fi
+
+  migrate:
+    name: database / migrate
+    needs: detect
+    if: needs.detect.outputs.present == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: naturex
+          POSTGRES_PASSWORD: naturex
+          POSTGRES_DB: naturex
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U naturex -d naturex"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://naturex:naturex@localhost:5432/naturex
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Upgrade to head
+        run: uv run alembic upgrade head
+
+      - name: Current revision
+        run: uv run alembic current
+
+      - name: Downgrade to base (previous schema)
+        run: uv run alembic downgrade base
+
+      - name: Upgrade to head again
+        run: uv run alembic upgrade head
+
+      - name: Seed is idempotent
+        run: |
+          uv run python -m app.seed
+          uv run python -m app.seed

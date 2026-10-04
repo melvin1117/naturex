@@ -16,5 +16,6 @@ Built for the **Nebius × NVIDIA Global AI Hackathon**, *Best Apps & Agents* tra
 | [Demo plan](./docs/specs/demo-plan.md) | Judge tour and demo video |
 | [Research](./docs/research.md) | Open-source tools reviewed and chosen |
 | [AI setup](./docs/ai-setup.md) | Shared skills and MCP servers for AI coding assistants |
+| [CI](./docs/ci.md) | GitHub Actions workflows, local check commands, required status checks |
 
 Contributors using AI assistants: the shared rules are in [AGENTS.md](./AGENTS.md).
