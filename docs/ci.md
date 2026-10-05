@@ -32,12 +32,12 @@ make test                    # DB tests skip without Postgres
 REQUIRE_DB=true make test    # fail if Postgres is down (CI behaviour)
 docker compose up -d && make migrate && make seed
 
-# Frontend (Node >= 20, npm)
-cd frontend && npm ci
-npm run lint
-npm run typecheck
-npm run test
-npm run build
+# Frontend (Node 22, pnpm via Corepack; see ADR-0001/0002)
+cd frontend && corepack enable && pnpm install --frozen-lockfile
+pnpm run lint
+pnpm run typecheck
+pnpm run test
+pnpm run build
 make fe-check                # all of the above
 
 # OpenAPI client drift
@@ -52,9 +52,9 @@ make check-client
 | Runtime | Pin |
 |---|---|
 | Python | 3.12 (`backend/.python-version`) |
-| Node | 20 (CI); `engines.node >= 20` in `frontend/package.json` |
+| Node | 22 LTS (CI); `engines.node >= 22` in `frontend/package.json` (Node 20 reached end-of-life in April 2026) |
 | Postgres | `pgvector/pgvector:pg16` (service container / compose) |
-| Package managers | `uv` + `backend/uv.lock`; `npm` + `frontend/package-lock.json` |
+| Package managers | `uv` + `backend/uv.lock`; `pnpm` + `frontend/pnpm-lock.yaml` (pin via `"packageManager": "pnpm@<version>"`) |
 
 ## Secrets
 
@@ -102,7 +102,7 @@ Settings → Branches → Branch protection rule for `main`:
 9. `frontend / test`
 10. `frontend / build`
 11. `database / detect`
-12. `database / migrate`
+12. `database / migrate` (includes `alembic check`: models must match migrations)
 13. `security / gitleaks`
 
 Do **not** require `security / dependency-review` or `security / codeql` unless the repo is public (or GHAS is enabled); otherwise they are skipped and would block merges if marked required.

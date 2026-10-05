@@ -90,6 +90,21 @@ def test_seed_is_idempotent() -> None:
     }
 
 
+@requires_db
+def test_models_match_migrations() -> None:
+    """Models and Alembic migrations must describe the same schema (no autogenerate drift)."""
+    from alembic.autogenerate import compare_metadata
+    from alembic.migration import MigrationContext
+    from sqlmodel import SQLModel
+
+    command.upgrade(_alembic_cfg(), "head")
+    engine = create_engine(get_settings().database_url)
+    with engine.connect() as conn:
+        diffs = compare_metadata(MigrationContext.configure(conn), SQLModel.metadata)
+    engine.dispose()
+    assert diffs == [], f"models and migrations differ: {diffs}"
+
+
 def test_world_id_present_on_mutable_models() -> None:
     """Sandbox columns required by demo-plan §3.5 / T07."""
     from app import models as m

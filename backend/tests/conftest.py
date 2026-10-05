@@ -24,7 +24,8 @@ def _database_available() -> bool:
         engine.dispose()
 
 
+# Skip DB tests locally when Postgres is down; with REQUIRE_DB=true (CI) they run and fail instead.
 requires_db = pytest.mark.skipif(
-    not _database_available(),
+    not _database_available() and os.environ.get("REQUIRE_DB", "").lower() != "true",
     reason="Postgres not reachable (start with: docker compose up -d)",
 )
