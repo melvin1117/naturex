@@ -7,6 +7,24 @@ Build the NatureX PoC in 5 weeks: a community lists land, Nemotron agents rate i
 
 **Dates:** Mon Sep 28 → submit **Thu Oct 29** (deadline Fri Oct 30, 10:00 PT). **Feature freeze Fri Oct 23**; the last week (Oct 26–29) is **demo and presentation only**.
 
+## Re-plan (Sun Oct 4): one week behind
+Week 1 ended with 3 of 17 tasks done (T04, T06, T07). **The Oct 23 freeze and Oct 29 submission stay fixed.** To recover:
+
+1. **Monday AM, everyone: T01** (accounts, credits, keys). It heads the longest remaining chain (12 tasks), because the Nemotron spike (T02) and the Earth Engine spike (T03) need keys.
+2. **T05 frontend skeleton moves from D3 to D1.** D1 owns the API, T05 blocks T08 (the API contract), and D3 had 5 week-1 tasks.
+3. **Scope:** T37 report diffs and T40 photo evidence drop to *only if ahead* (nothing depends on them). T41 revenue split stays: T38 and T44 need it, and it drives the portfolio "impact" moment in the demo.
+4. **Fri Oct 9 gate = the original week-1 gate, run locally:** one site goes list → rating → report page with a real Nemotron-written summary on a laptop (Docker Compose). No cloud yet; T20 deploy waits until hosting is chosen.
+
+**Week of Oct 5, in order:**
+| Who | Sequence |
+|---|---|
+| D1 | T05 frontend skeleton → T08 API contract + generated client → T16 market engine |
+| D2 | T03 Earth Engine spike → T11 hero-site precompute → T15 scoring |
+| D3 | T02 Token Factory spike → T09 LLM client → T10 live AI summary → T12 bare report page |
+| PD | P01 brief → P02 flows → P03 wireframes + P04 design system → P05 hi-fi key screens |
+
+Pick tasks from [task-map.html](./task-map.html) (🟢 = every dependency done). Weeks 2–4 below keep their content. Anything not done by its Friday gate rolls into the next sprint, and the next *Should* item is cut first.
+
 ## Team and ownership
 | Who | Role | Owns (long-term) | Weeks 1–2 focus | Weeks 3–5 focus |
 |---|---|---|---|---|
@@ -67,7 +85,7 @@ Full details, acceptance criteria and dependencies are in [todo.md](./todo.md).
 ### Week 1 · Foundations and walking skeleton (Sep 28 – Oct 2)
 | PD | D1 | D2 | D3 |
 |---|---|---|---|
-| P01 Product brief & voice · P02 User flows & IA · P03 Wireframes · P04 Design system v1 · P05 Hi-fi key screens | T04 Backend skeleton & CI · T06 ADRs · T07 DB schema v1 · T08 API contract + client | T03 Earth Engine spike · T11 Hero-site precompute | T02 Token Factory spike · T05 Frontend skeleton · T09 LLM client · T10 AI summary · T12 Bare report page |
+| P01 Product brief & voice · P02 User flows & IA · P03 Wireframes · P04 Design system v1 · P05 Hi-fi key screens | T04 Backend skeleton & CI · T06 ADRs · T07 DB schema v1 · T05 Frontend skeleton (moved from D3) · T08 API contract + client | T03 Earth Engine spike · T11 Hero-site precompute | T02 Token Factory spike · T09 LLM client · T10 AI summary · T12 Bare report page |
 
 All: T01 accounts and credits (day 1).
 
