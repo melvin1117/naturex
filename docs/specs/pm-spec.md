@@ -69,7 +69,7 @@ Living ecosystems produce enormous value (water filtration, flood protection, ca
 ### Epic D — Monitoring & alerts
 | ID | Story | Acceptance criteria |
 |---|---|---|
-| D1 | Assets are re-rated periodically | Serverless Job re-rates all assets; demo "Time Machine" triggers it on demand |
+| D1 | Assets are re-rated periodically | A scheduled job re-rates all assets; the demo "Time Machine" triggers it on demand |
 | D2 | Significant changes trigger alerts | Health Δ ≥ 5, grade change, or news severity ≥ 4 → alert to holders + community |
 | D3 | Admin can inject events | Presets: fire, encroachment, drought, restoration success, new protection law |
 | D4 | Quarterly revenue split (simulated) | Revenue = f(annual value); split community fund vs dividends; visible in portfolio |
@@ -86,7 +86,7 @@ Principle: **one flawless end-to-end story on 3 real sites** beats a wide app wi
 
 | Must (PoC core) | Should | Could | Won't |
 |---|---|---|---|
-| A1–A3, B1–B5, C1–C5, D1–D3, E1 · Time Machine · 3 real demo sites (cached satellite data) · **Nature Ledger** (F1–F2) · **Agent Trace** (G1) · **Eval harness** (G2) · deployed on Nebius Serverless Endpoint + Jobs · CI with tests | A4 field evidence (**photos only**), B6 report diffs, D4 revenue split, E3 impact | Live rating of arbitrary user polygons (fallback to cached), A5 stewardship plan, E2 compare, Spanish report, OpenTimestamps anchoring (F3) | Real money, tokens/blockchain trading, full auth/KYC, audio evidence, mobile app, PDF export |
+| A1–A3, B1–B5, C1–C5, D1–D3, E1 · Time Machine · 3 real demo sites (cached satellite data) · **Nature Ledger** (F1–F2) · **Agent Trace** (G1) · **Eval harness** (G2) · **Judge tour + per-visitor sandbox** (J1–J2) · deployed on free tiers (Nebius Serverless if event credits) · CI with tests | A4 field evidence (**photos only**), B6 report diffs, D4 revenue split, E3 impact | Live rating of arbitrary user polygons (fallback to cached), A5 stewardship plan, E2 compare, Spanish report, OpenTimestamps anchoring (F3) | Real money, tokens/blockchain trading, full auth/KYC, audio evidence, mobile app, PDF export |
 
 ### Epic F — Nature Ledger (tamper-evident records)
 | ID | Story | Acceptance criteria |
@@ -94,6 +94,12 @@ Principle: **one flawless end-to-end story on 3 real sites** beats a wide app wi
 | F1 | Every report, rating change, event and payout is appended to a hash-chained ledger | `hash = SHA256(canonical_json(entry) + prev_hash)`; append-only; no UPDATE/DELETE path in code |
 | F2 | Anyone can verify an asset's history | Asset page shows "✅ History verified (n entries)" computed live via `/ledger/{asset_id}/verify`; demo shows a tampered row turning it ❌ |
 | F3 *(could)* | Quarterly anchor to a public chain | Latest head hash timestamped via OpenTimestamps; proof file downloadable |
+
+### Epic J — Judge experience (details in [demo-plan.md](./demo-plan.md))
+| ID | Story | Acceptance criteria |
+|---|---|---|
+| J1 | Each judge gets a private sandbox | First visit creates a private demo world (personas, holdings, demo assets); "Reset my demo" restores it; visitors never affect each other |
+| J2 | A judge can follow a guided tour | No login; persona switcher (community, investor, NatureX AI, Time Machine); 10-chapter tour with spotlight hints, "Do it for me" and Live badges; completes in ~7 minutes |
 
 ### Epic G — Engineering visibility (for Technological Implementation score)
 | ID | Story | Acceptance criteria |
@@ -113,7 +119,7 @@ Principle: **one flawless end-to-end story on 3 real sites** beats a wide app wi
 **Hackathon — each criterion is 25%. Every one needs a visible "proof moment":**
 | Criterion (25% each) | What judges look for | Our proof | Demo / submission moment |
 |---|---|---|---|
-| **Technological implementation** | Well built; effective use of Token Factory + Nemotron | Nemotron models routed by task with eval-backed justification (Super, Ultra, Nano required; Nano Omni with photo evidence); tool-calling orchestrator; schema-validated outputs; Serverless Endpoint + Jobs actually running; Tavily in the loop; hash-chained ledger; CI + tests | Agent Trace drawer open during rating; README eval + routing tables; architecture diagram |
+| **Technological implementation** | Well built; effective use of Token Factory + Nemotron | Nemotron models routed by task with eval-backed justification (Super, Ultra, Nano required; Nano Omni with photo evidence); tool-calling orchestrator; schema-validated outputs; deployed demo with scheduled re-rating (Nebius Serverless if event credits); Tavily in the loop; hash-chained ledger; CI + tests | Agent Trace drawer open during rating; README eval + routing tables; architecture diagram |
 | **Design** | Complete, coherent product — *not* a PoC feel | Polished flows: list → rating progress → report → trade → alert → copilot; consistent UI; sandbox framing | 3-min video with zero dead ends; live URL that works without instructions |
 | **Potential impact** | Credible, specific problem + real audience; demo actually solves it | Documentary case (wetland vs factories); Steward-vs-Sell numbers; uncertainty ranges; honest limits | Opening 20 s of video; one-pager; "what it would take to go live" slide |
 | **Quality of idea** | Creative, non-obvious use of Nemotron; understands problem space | AI as a *rating agency* for ecosystems; news that moves "nature stocks"; Auditor that catches greenwashing | Encroachment event → grade A → BBB with cited evidence |

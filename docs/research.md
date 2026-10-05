@@ -6,7 +6,7 @@
 ## TL;DR: recommended set
 | Area | Adopt |
 |---|---|
-| Team + AI assistants | Root **`AGENTS.md`**, team **Agent Skills** in `.agents/skills/` (Addy Osmani / vercel-labs set via `scripts/sync-skills.sh`; **replaces OpenSpec** for this repo), **GitHub MCP**, **Context7**, **shadcn MCP**, Playwright CLI skill |
+| Team + AI assistants (**final, installed**) | Root **`AGENTS.md`** (+ `CLAUDE.md` → `@AGENTS.md`); skills in `.agents/skills/`: **addyosmani/agent-skills** (spec, plan, build, test, review…), **impeccable** (UI/UX), Vercel **web-design-guidelines** + **react-best-practices**, Supabase **postgres best practices**; MCP: **GitHub, Context7, shadcn, Playwright, Chrome DevTools**. See [ai-setup.md](./ai-setup.md) and ADR-0001 |
 | Repo foundation | Plain-folder monorepo; **uv, ruff, mypy strict, pytest**; **ESLint 9 + typescript-eslint, Prettier, tsc strict**; **pre-commit**; **openapi-typescript + openapi-fetch** client with a CI drift check; MADR ADRs; issue forms, PR template, CODEOWNERS, `main` ruleset; GitHub Projects + `gh` bulk import |
 | UI | **shadcn/ui** + blocks, Tailwind v4 tokens, `/dev/ui` showcase page, **Driver.js** tours, **Motion** (sparingly) |
 | AI agents | **PydanticAI** via `OpenAIProvider(base_url=Token Factory)`; **promptfoo** evals; OpenTelemetry spans → own Postgres (Agent Trace drawer) + **Langfuse**; **tavily-python** |
@@ -25,9 +25,13 @@
 | github/awesome-copilot (~39k★, MIT), PatrickJS/awesome-cursorrules (~41k★, CC0) | Curated Next.js, FastAPI, shadcn rules | BORROW (review quality; some target Next 14) |
 | **Agent Skills** spec (agentskills.io, Apache-2.0) + **vercel-labs/skills** (`npx skills`, MIT) | `SKILL.md` folders, loaded on demand; Claude uses `.claude/skills`, others `.agents/skills` | **ADOPT** (symlink `.claude/skills` → `.agents/skills`) |
 | anthropics/skills | Mostly Apache-2.0, but **docx/pdf/pptx/xlsx skills are source-available** | BORROW (don't vendor document skills) |
-| obra/superpowers (MIT) | Brainstorm → plan → subagent TDD workflow | Optional, per person (not in the repo) |
-| **OpenSpec** (~70k★, MIT) | `propose` → `proposal.md` + `tasks.md` per change folder → `apply` → `archive` | **SKIP for NatureX** — replaced by shared Agent Skills + `tasks/todo.md` / GitHub Issues (ADR-0001 session / T06) |
-| GitHub Spec Kit (~139k★, MIT) | constitution → specify → plan → tasks → implement; stricter gates | Alternative to OpenSpec (**don't run both**) |
+| **addyosmani/agent-skills** (~99k★, MIT) | 25 engineering skills: spec, plan, incremental build, TDD, API design, frontend, review, security, ADRs, CI | **ADOPTED** (covers spec → tasks, so OpenSpec isn't needed) |
+| **pbakaus/impeccable** (~72k★, Apache-2.0) | Design skill with `PRODUCT.md`, critique/audit/polish commands and anti-pattern checks | **ADOPTED** (UI that doesn't look AI-generated) |
+| vercel-labs/agent-skills (MIT), supabase/agent-skills (MIT) | `web-design-guidelines`, `react-best-practices`; Supabase + Postgres best practices | **ADOPTED** (those skills only) |
+| latent-spaces/brag (MIT) | 15–25 s launch-video skill | Optional personal install (not in the repo) |
+| obra/superpowers (MIT) | Brainstorm → plan → subagent TDD workflow | SKIP (overlaps addyosmani/agent-skills) |
+| OpenSpec (~70k★, MIT) | `propose` → `proposal.md` + `tasks.md` per change folder → `apply` → `archive` | **SKIP for NatureX:** replaced by addyosmani's spec and planning skills + `tasks/todo.md` / GitHub Issues (ADR-0001) |
+| GitHub Spec Kit (~139k★, MIT) | constitution → specify → plan → tasks → implement; stricter gates | SKIP (same reason) |
 | BMAD Method (MIT) | PM/architect/dev personas, epic and story files | BORROW (PRD template, checklists) |
 | Task Master | **MIT + Commons Clause**; team mode needs a paid cloud | **SKIP** |
 | Agent OS, Kiro specs, Cline Memory Bank | Standards extraction; 3-file spec format; memory files | BORROW ideas |
@@ -59,7 +63,7 @@
 
 **Version pins to act on (Sept 2026):**
 - **Next.js 16.3** is latest; 15.5.x still gets patches. Our spec says 15, so decide 15.5 vs 16.
-- Pin **TypeScript 6.0.3**, because typescript-eslint supports < 6.1.
+- Pin **TypeScript 6.0.3**, because typescript-eslint supports < 6.1. *(ADR-0001 chose TypeScript 5.x and Next.js 15.5 for stability.)*
 - Pin **ESLint 9.39.x**, because Next's React plugins stop at ESLint 9.
 - Python 3.12 is fine; lower the template's ≥ 3.14 requirement.
 
@@ -146,7 +150,7 @@
 | Nominatim | ≤ 1 req/s, custom User-Agent, cache results, "© OpenStreetMap contributors" (ODbL) |
 | Natural Earth | Public domain (safe to commit) |
 
-## 6. Findings that affect our current specs (to review)
+## 6. Findings that affect our current specs (decided in [ADR-0001](./adr/0001-stack-and-versions.md))
 1. **Inland wetlands:** Dynamic World `flooded_vegetation` → swamps/floodplains ($25,682); `water` → lakes/rivers. Tidal marsh only when the coastal check passes (the spec already does this; keep it).
 2. **Coefficient source:** switch the committed table from ESVD to **Brander 2024 + Costanza 2014** (cited). Don't mix 2007 US$ with 2020 Int$; pick one basis and state it.
 3. **Ranges:** use the median–mean spread for low/high, not fixed multipliers. **Don't add the CO₂ dollar value on top of ESV** (double counting).

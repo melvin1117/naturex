@@ -15,7 +15,7 @@ Nature delivers ~$100T/yr of services — clean water, flood protection, carbon 
 1. **List** – A community draws its land on a map.
 2. **Rate** – A team of Nemotron agents reads satellite data, values ecosystem services ($/yr with ranges), scans local news via Tavily, and writes an auditable **Ecological Performance Report** with a **grade (AAA–D)** and **confidence score**.
 3. **Invest** – The asset "IPOs" on a sandbox exchange; investors buy shares.
-4. **Monitor** – Nebius Serverless Jobs re-rate assets (satellite data quarterly, news daily). When nature heals, the grade and price rise; when a factory encroaches, investors get an alert and the price drops.
+4. **Monitor** – Scheduled jobs re-rate assets (satellite data quarterly, news daily). When nature heals, the grade and price rise; when a factory encroaches, investors get an alert and the price drops.
 
 **Think: Moody's + a stock exchange — for wetlands, forests and reefs.**
 
@@ -35,7 +35,7 @@ Nature delivers ~$100T/yr of services — clean water, flood protection, carbon 
 | Field Evidence | **Nemotron Nano Omni** | Reads community photos (audio after the hackathon) |
 | Investor Copilot | **Nemotron Nano** + RAG | Fast grounded Q&A |
 
-Background re-rating & news sweeps run on **Nebius Serverless Jobs**; the API runs on **Nebius Serverless Endpoints**.
+The app runs on free tiers (Vercel, Hugging Face Spaces or Render, Supabase); re-rating and news sweeps run as scheduled jobs. **Nebius Serverless Endpoints and Jobs** are an optional upgrade if event credits arrive.
 
 ## What makes it different
 - **Honest numbers** – every $ value has a low/mid/high range and a confidence score.

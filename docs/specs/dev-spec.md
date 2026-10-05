@@ -2,22 +2,25 @@
 
 > Companion to [pm-spec.md](./pm-spec.md), [one-pager.md](../one-pager.md), [demo-plan.md](./demo-plan.md), [research.md](../research.md) and [diagrams.html](../diagrams.html) (its *Rating Engine* tab mirrors §7). Anything marked **(verify)** should be checked against current Nebius / NVIDIA docs before implementation.
 
+> **Decisions:** stack, versions and design choices are recorded in [ADR-0001](../adr/0001-stack-and-versions.md) (stack and versions) and [ADR-0002](../adr/0002-repo-layout.md) (repo layout). Where this spec and an ADR disagree, **the ADR wins**; update this spec when you add an ADR.
+
 ---
 
 ## 1. System overview
 ```
-Next.js web app ──HTTP/SSE──► FastAPI backend (Nebius Serverless Endpoint)
+Next.js web app (Vercel) ──HTTP/SSE──► FastAPI backend (Hugging Face Spaces or Render; Nebius Serverless Endpoint optional)
+                                 ├── Sandbox worlds (one private copy of the demo per visitor)
                                  ├── Rating Orchestrator (Nemotron 3 Super, tool-calling)
-                                 │     ├── earth_obs tool ──► Earth Engine / Planetary Computer
-                                 │     ├── valuation tool (pure Python + ESVD CSV)
+                                 │     ├── earth_obs tool ──► Google Earth Engine
+                                 │     ├── valuation tool (pure Python + cited coefficient CSV)
                                  │     ├── news_scout agent ──► Tavily + Nemotron Nano
                                  │     ├── field_evidence agent ──► Nemotron Nano Omni
                                  │     └── auditor agent ──► Nemotron 3 Ultra
                                  ├── Market Engine (pure Python)
                                  ├── Copilot (Nemotron Nano + pgvector RAG)
                                  ├── Nature Ledger (hash-chained, append-only)
-                                 └── Postgres + pgvector, Object Storage
-Nebius Serverless Jobs: rerate_all (quarterly / on demand), news_sweep (daily)
+                                 └── Supabase: Postgres + pgvector, Storage
+Scheduled jobs: rerate_all (quarterly / Time Machine), news_sweep (daily via GitHub Actions); Nebius Serverless Jobs optional
 ```
 Design principles:
 1. **Deterministic core, LLM on top.** Numbers (areas, values, scores, prices) come from tested Python. LLMs orchestrate, classify, reason, explain, and may adjust the score only within a bounded range with justification.
@@ -31,13 +34,14 @@ Design principles:
 | Maps | react-leaflet + leaflet-draw (or MapLibre + terra-draw) | Esri/OSM basemap; land-cover tile overlay |
 | Charts | Recharts | Price chart with event markers |
 | Backend | Python 3.12, FastAPI, SQLModel, Pydantic v2 | |
-| DB | Postgres 16 + pgvector (Supabase or Nebius Managed PostgreSQL) | |
-| Object storage | Nebius Object Storage (S3-compatible) or Supabase storage | Tiles, thumbnails, evidence, report PDFs |
+| DB | Postgres 16 + pgvector on **Supabase** (free tier); local Docker for development | |
+| Object storage | **Supabase Storage** (free tier); local disk in development | Tiles, thumbnails, evidence, report PDFs |
 | LLM | **Nebius Token Factory** (OpenAI-compatible) | `openai` Python SDK with custom `base_url` |
 | Search | **Tavily** (`tavily-python`) | News Scout |
-| Earth observation | Google Earth Engine (`earthengine-api`) **or** Microsoft Planetary Computer (`pystac-client`, `stackstac`) | Pick whichever the team can access |
+| Earth observation | **Google Earth Engine** (`earthengine-api`, `geemap`), non-commercial registration | Required: Planetary Computer lacks Dynamic World, Hansen and GEDI, so it's a fallback only for other datasets |
 | Agent loop | **PydanticAI** via Token Factory `OpenAIProvider` | Plain OpenAI tool-calling loop as fallback; see ADR-0001 |
-| Deploy | Backend → **Nebius Serverless Endpoint**; jobs → **Nebius Serverless Jobs**; frontend → Vercel or Nebius container | **(verify)** CLI / console steps |
+| Deploy | **Free tiers by default:** frontend → Vercel Hobby; backend → Hugging Face Spaces (Docker) or Render; jobs → in-process (Time Machine) + GitHub Actions cron | **Optional upgrade:** Nebius Serverless Endpoint / Jobs if event credits arrive (§21) |
+| AI dev tooling | `AGENTS.md`, shared skills (`.agents/skills`), MCP servers (GitHub, Context7, shadcn, Playwright, Chrome DevTools) | Setup: [docs/ai-setup.md](../ai-setup.md) |
 | Tests | pytest, Playwright | |
 
 > Cost: every component is free or has a free alternative, except the mandatory Nemotron calls on Token Factory, which run on hackathon credits. See §21.
@@ -86,7 +90,8 @@ naturex/
 │   │   ├── asset/[id]/page.tsx       # Asset page (report, chart, trade, alerts)
 │   │   ├── portfolio/page.tsx
 │   │   └── admin/page.tsx            # Time Machine
-│   ├── components/ (MapDraw, PriceChart, ReportView, TradePanel, CopilotChat, AgentTrace, SandboxBanner)
+│   ├── components/ (MapDraw, PriceChart, ReportView, TradePanel, CopilotChat, AgentTrace, SandboxBanner, PersonaSwitcher)
+│   ├── tour/                         # Driver.js judge tour (demo-plan §3)
 │   └── lib/api.ts
 ├── backend/
 │   ├── app/
@@ -105,11 +110,11 @@ naturex/
 │   │   │   └── scoring.py
 │   │   ├── market/engine.py
 │   │   └── rag/ (embed.py, retrieve.py)
-│   ├── data/esvd_coefficients.csv
+│   ├── data/coefficients.csv          # cited published values; never raw ESVD data (licence)
 │   ├── data/demo_sites/*.geojson + cached metrics JSON
 │   └── tests/
 ├── jobs/
-│   ├── rerate_all.py                 # Nebius Serverless Job entrypoint
+│   ├── rerate_all.py                 # job entrypoint (in-process, GitHub Actions, or Nebius Serverless Job)
 │   └── news_sweep.py
 ├── evals/ (news.jsonl, scenarios/, run.py, results.md)
 ├── scripts/ (precompute_sites.py, sync-skills.sh)
@@ -119,6 +124,16 @@ naturex/
 ## 5. Data model (Postgres)
 ```sql
 create extension if not exists vector;
+
+create table worlds (                 -- per-visitor sandbox (demo-plan §3.5)
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz default now(),
+  last_seen_at timestamptz default now()
+);
+-- Every table that changes during the demo carries `world_id uuid not null references worlds(id)`:
+-- users (personas), assets, reports, events, prices, holdings, orders, alerts, ledger_entries, llm_calls.
+-- Cached satellite `metrics` and `doc_chunks` for the seeded demo sites are shared across worlds.
+-- A new world is created on a visitor's first request and seeded with the personas, demo assets and baseline reports.
 
 create table users (
   id uuid primary key default gen_random_uuid(),
@@ -253,10 +268,14 @@ create table llm_calls (
 | `GET /ledger/{asset_id}` | Ledger entries (hashes, kinds, timestamps) |
 | `GET /ledger/{asset_id}/verify` | Recomputes the chain → `{valid, entries, broken_at?}` |
 | `POST /admin/tamper-demo` | *(DEMO_MODE only)* mutates a copy of one entry to show verification failing |
+| `GET /world` | The visitor's sandbox world (created on first request, stored in the `nx_world` cookie) and its personas |
+| `POST /world/reset` | "Reset my demo": re-seeds the visitor's world |
+
+Every route is scoped to the visitor's world through the `nx_world` cookie, so judges never affect each other.
 
 Rating runs asynchronously: the API returns `202` + `run_id`, and progress arrives over SSE (`step: earth_obs → valuation → news → evidence → audit → done`).
 
-> Serverless endpoints may not keep long-lived connections **(verify)**; the frontend should fall back to polling every 3 s.
+> Free hosts and serverless endpoints may drop long-lived connections **(verify)**; the frontend falls back to polling every 3 s.
 
 ## 7. Rating pipeline
 
@@ -291,7 +310,7 @@ value_mid = Σ value_c
 value_low = Σ area_ha × share_c × coeff_low_c
 value_high= Σ area_ha × share_c × coeff_high_c
 ```
-Class → biome mapping and **starter coefficients** (USD/ha/yr). These are illustrative, from Costanza et al. 2014 global unit values (2007 USD). **Replace with ESVD per-service values and verify before use.**
+Class → biome mapping and **starter coefficients** (USD/ha/yr). These are illustrative, from Costanza et al. 2014 global unit values (2007 USD). **Replace with cited, published values before the demo** (e.g. Brander et al. 2024, CC BY, which summarises ESVD; final source decided in T06). **Raw ESVD data can't be committed:** its terms forbid redistribution and derivative works without written consent.
 | Dynamic World class | Biome used | Starter mid $/ha/yr | low / high |
 |---|---|---|---|
 | flooded_vegetation (coastal) | Tidal marsh / mangrove | 193,843 | ×0.3 / ×1.5 |
@@ -375,7 +394,7 @@ fill_price = price × (1 + slippage)  for buy;  price × (1 − slippage)  for s
 
 **Re-rating / ticks:** `price ← price + α × (FV_new − price)`, with α = 0.35 on re-rate and 0.05 per tick, plus small noise σ = 0.3%.
 
-A tick is triggered by `POST /admin/simulate/quarter`, by a Serverless Job, or by the SSE loop while the demo is running (no always-on process is required).
+A tick is triggered by `POST /admin/simulate/quarter`, by a scheduled job, or by the SSE loop while the demo is running (no always-on process is required).
 
 **Quarterly revenue split (simulated):**
 - `revenue_q = value_mid × capture_rate / 4`, with capture_rate = 2%.
@@ -384,13 +403,15 @@ A tick is triggered by `POST /admin/simulate/quarter`, by a Serverless Job, or b
 
 Invariants (unit-tested): cash is never negative; shares are conserved; the price stays > 0; every price change has a `reason`.
 
-## 9. Background jobs (Nebius Serverless Jobs)
+## 9. Background jobs
 | Job | Schedule | Entrypoint | Work |
 |---|---|---|---|
 | `rerate_all` | Quarterly (demo: on demand) | `python -m jobs.rerate_all --version sim-N` | For each listed asset: earth_obs → valuation → auditor (using news events already stored by `news_sweep`) → report v+1 → price re-anchor → alerts |
 | `news_sweep` | Daily | `python -m jobs.news_sweep` | News Scout for all assets; severity ≥ 4 → alert + optional re-rate |
 
-Both reuse the backend image (`backend/Dockerfile`) with a different command. Trigger from `/admin/simulate/*` via the Nebius API/CLI, or run in-process when `LOCAL_JOBS=true` **(verify)**.
+Both reuse the backend code with a different entrypoint:
+- **Default (free):** `rerate_all` runs in-process when the Time Machine calls `/admin/simulate/quarter` (`LOCAL_JOBS=true`); `news_sweep` runs daily from a GitHub Actions cron that calls a protected backend endpoint.
+- **Optional upgrade:** if Nebius AI Cloud credits arrive, run both as Nebius Serverless Jobs from the backend image (`backend/Dockerfile`) **(verify)**.
 
 ## 10. Copilot (RAG)
 - **Indexing:** on each new report, chunk the `summary_md`, key metrics and events (~500 tokens each), embed them and upsert into `doc_chunks`.
@@ -405,6 +426,7 @@ Both reuse the backend image (`backend/Dockerfile`) with a different command. Tr
 | Asset `/asset/[id]` | Map + land-cover overlay, ReportView (grade badge, value range, breakdown chart, NDVI chart, flags, recommendations), PriceChart with event markers, TradePanel, AlertsFeed, CopilotChat, AgentTrace drawer | The hero page |
 | Portfolio `/portfolio` | Holdings table, P&L, ImpactSummary | |
 | Admin `/admin` | Time Machine: "Next quarter", event presets, reset demo | Hidden link for the demo |
+| Judge landing + tour (all pages) | Judge landing, PersonaSwitcher, Driver.js tour with spotlight hints, "Do it for me", Live badges, Under-the-hood drawer | See demo-plan §3; each screen exposes stable anchors for tour steps |
 
 ## 12. Configuration
 ```
@@ -444,7 +466,7 @@ Secrets stay server-side only; never commit `.env` (commit `.env.example`).
 - Rate-limit `/copilot` and `/assets`; validate GeoJSON size.
 - Treat all retrieved web content and uploaded media as untrusted; enforce schema-validated outputs.
 - Show uncertainty (ranges, confidence) everywhere a number appears.
-- Use only licensed data (Earth Engine / Planetary Computer terms, Tavily terms, ESVD citation).
+- Use only licensed data: Earth Engine terms, Tavily terms, cited valuation sources, dataset attributions; no raw ESVD data in the repo.
 
 ## 16. Team split (4 people)
 | Owner | Scope |
@@ -504,13 +526,14 @@ Implementation: plain pytest + a small runner that writes `evals/results.md` (co
 - **Mocks behind interfaces:** `USE_MOCKS=true` lets the frontend team work offline, and CI runs without API keys.
 - **Structured logging:** a `run_id` is carried through orchestrator, tools, LLM calls, the ledger and SSE.
 - **Resilience:** a timeout on every external call (LLM 60 s, Tavily 15 s, Earth Engine 120 s) plus retry with backoff, and graceful degradation flags shown in the report.
-- **Health endpoints:** `/healthz` and `/readyz` for the Nebius Serverless Endpoint.
+- **Health endpoints:** `/healthz` and `/readyz` for the backend host and the keep-alive pings.
 
 ## 20. Definition of done (hackathon)
 - [ ] Public URL runs the full demo script without manual DB edits
 - [ ] At least 3 Nemotron models (Super, Ultra, Nano; plus Nano Omni if photo evidence ships) are called at runtime via Token Factory, visible in the Agent Trace drawer
 - [ ] Tavily is called at runtime by the News Scout
-- [ ] Backend deployed on a Nebius Serverless Endpoint; re-rating runs as a Nebius Serverless Job
+- [ ] Backend deployed on the free host (or a Nebius Serverless Endpoint if credits); re-rating runs as a job (in-process / GitHub Actions, or Nebius Serverless Jobs)
+- [ ] Judge tour and per-visitor sandbox work for concurrent visitors
 - [ ] README covers setup, the architecture image, the model table, and "How we used Nemotron & Token Factory"
 - [ ] Nature Ledger verifies for every demo asset; tamper demo shows ❌
 - [ ] `make eval` results + routing table committed and linked from README
@@ -539,7 +562,7 @@ Azure options use the Visual Studio subscriber credit ($150/month, individual de
 | Mapbox (if used) | Leaflet + OpenStreetMap / Esri basemap tiles | — (Azure Maps not needed) | Respect tile usage policies |
 | Frontend on a Nebius container | Vercel Hobby (free) | Azure Static Web Apps, Free plan ($0) | Next.js SSR support on Static Web Apps is limited; Vercel is simpler |
 | Nebius AI Cloud compute | Only if credits are unlocked at a Builders & Brews event | — | Optional upgrade path |
-| Satellite precompute (`scripts/precompute_sites.py`) | Laptop, or free Earth Engine compute | Short-lived Linux VM (e.g. D4s v5) or Container Apps Job in **West Europe**, next to Planetary Computer data; ~10–20 h total (~$2–5) | Deallocate when done; no egress fees within region |
+| Satellite precompute (`scripts/precompute_sites.py`) | Laptop (Earth Engine computes server-side) | Short-lived small Linux VM or Container Apps Job to run the script unattended (~$1–3 total) | Deallocate when done |
 
 **Azure rules (Visual Studio subscriber credit):**
 - **Dev/test only, individual use.** Microsoft may suspend instances running continuously > 120 h or used for production, so the judged demo stays on the free hosts above.
@@ -553,7 +576,7 @@ Azure options use the Visual Studio subscriber credit ($150/month, individual de
 
 **Already free:**
 - Sentinel-2, Dynamic World, JRC Surface Water, Hansen Forest Change and ESA biomass data.
-- Google Earth Engine (non-commercial registration) or Microsoft Planetary Computer.
+- Google Earth Engine (non-commercial registration); Microsoft Planetary Computer only as a fallback for other datasets.
 - ESVD (registration and citation).
 - OpenStreetMap Nominatim reverse geocoding (usage policy: ≤ 1 request/s, cache results) and Natural Earth coastline data (public domain).
 - All frameworks and libraries (Next.js, React, Tailwind, shadcn/ui, Leaflet, Recharts, FastAPI, SQLModel, Pydantic, openai SDK, tavily-python), plus NeMo Agent Toolkit and OpenTimestamps.

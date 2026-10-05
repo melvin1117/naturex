@@ -187,7 +187,7 @@
     </div>
 
     <h3>Built with</h3>
-    <div class="card"><p style="color:var(--text)"><span class="pill">NVIDIA Nemotron agents</span><span class="pill">Nebius Token Factory</span><span class="pill">Nebius Serverless</span><span class="pill">Tavily live news</span><span class="pill">Sentinel-2 satellite data</span><span class="pill">Tamper-evident Nature Ledger</span></p></div>
+    <div class="card"><p style="color:var(--text)"><span class="pill">NVIDIA Nemotron agents</span><span class="pill">Nebius Token Factory</span><span class="pill">Google Earth Engine</span><span class="pill">Tavily live news</span><span class="pill">Sentinel-2 satellite data</span><span class="pill">Tamper-evident Nature Ledger</span></p></div>
 
     <div class="note" style="margin-top:22px">🧪 Sandbox with play money, not a real securities offering. Values are estimates, always shown with ranges and a confidence score.</div>
 
@@ -254,7 +254,7 @@ Low / High = same with the low / high coefficient  →  always shown as a range<
       <tr><td>Grass / shrub</td><td>Grassland / shrubland</td><td>4,166 / 2,083</td><td>Pollination, soil, grazing</td></tr>
       <tr><td>Crops, built-up, bare</td><td>Not natural capital</td><td>0</td><td>—</td></tr>
     </table>
-    <p style="font-size:13px;color:var(--muted)">*Illustrative starting values (Costanza et al. 2014, global averages). The build replaces them with per-service values from the Ecosystem Services Valuation Database (ESVD). <b>Carbon</b> is reported separately: CO₂ stored = biomass (t/ha) × area × 0.47 × 3.67.</p>
+    <p style="font-size:13px;color:var(--muted)">*Illustrative starting values (Costanza et al. 2014, global averages). The build replaces them with cited, published values (e.g. Brander et al. 2024, which summarises the ESVD database); raw ESVD data isn’t redistributed. <b>Carbon</b> is reported separately: CO₂ stored = biomass (t/ha) × area × 0.47 × 3.67.</p>
 
     <h3>5 · Confidence: how sure are we?</h3>
     <div class="formula">Confidence = 100 × ( 0.4·coverage + 0.3·agreement + 0.2·evidence + 0.1·recency )</div>
@@ -337,7 +337,7 @@ sequenceDiagram
   participant N as 📰 News Scout<br/>(Tavily + Nano)
   participant R as 🧑‍⚖️ Auditor<br/>(Nemotron 3 Ultra)
   participant M as 📈 Market Engine
-  participant J as ⏱️ Serverless Job
+  participant J as ⏱️ Scheduled job
   actor I as 💼 Investor
 
   rect rgba(111,159,126,0.13)
@@ -416,30 +416,32 @@ flowchart TD
 const D = {
   COM: ["Community / Landowner", "user", "Owns or stewards the land (e.g. the wetland community in Mexico). Lists the asset, uploads field evidence, receives IPO proceeds and quarterly revenue share.", ["Draws boundary on map", "Uploads geotagged photos", "Sees stewardship recommendations"]],
   INV: ["Investor", "user", "Impact investor or ordinary person who browses rated nature assets, buys/sells shares in the sandbox, and tracks impact.", ["Starts with $10,000 play money", "Receives alerts on rating changes", "Asks the Copilot questions"]],
-  ADM: ["Demo Admin", "user", "Controls the demo narrative for judges.", ["Advance one quarter", "Inject events: fire, encroachment, restoration"]],
+  ADM: ["Judge / Demo Admin", "user", "Explores the product through the guided tour and drives the story with the Time Machine.", ["Private sandbox per visitor", "Advance one quarter", "Inject events: fire, encroachment, restoration"]],
+  JT: ["Judge Tour", "ours", "Guided, no-login tour (Driver.js) across all personas: spotlight hints, \u201cDo it for me\u201d, Live badges and an Under-the-hood drawer.", ["Persona switcher: community, investor, NatureX AI, Time Machine", "10 chapters, ~7 minutes (demo-plan §3)"]],
+  SB: ["Sandbox Worlds", "ours", "Each visitor gets a private copy of the demo world (personas, holdings, assets), so judges never affect each other.", ["world_id on every changing table", "POST /world/reset = Reset my demo"]],
   LP: ["Listing Portal", "ours", "Map UI (Leaflet / Mapbox) to draw a polygon, enter community details, shares offered and community retained stake.", ["Validates area & overlap", "Calls POST /assets"]],
   MK: ["Marketplace & Exchange", "ours", "Cards for each listed asset with price, grade, health trend; buy/sell with instant fills against the market maker.", ["Clearly labelled SANDBOX — play money", "Live price via SSE (polling fallback)"]],
   AP: ["Asset Page", "ours", "The ‘stock page’ for nature: map with land-cover overlay, AI Ecological Performance Report, price chart, news & alerts feed.", ["Value range low / mid / high", "Confidence badge"]],
   PF: ["Portfolio & Impact", "ours", "Holdings, P&L and impact metrics: hectares protected, t CO₂ stored, water filtered.", []],
   CP: ["Investor Copilot (UI)", "ours", "Chat box on asset & portfolio pages. Answers grounded in stored reports.", []],
   TM: ["Time Machine", "ours", "Demo control that triggers the re-rating job or injects a synthetic event so judges see the full loop in 3 minutes.", []],
-  API: ["Backend API", "ours", "FastAPI service deployed as a Nebius Serverless Endpoint. REST for CRUD, SSE for price ticks, alerts & rating progress.", ["/assets, /reports, /orders, /copilot, /simulate"]],
+  API: ["Backend API", "ours", "FastAPI service on a free host (Hugging Face Spaces or Render); Nebius Serverless Endpoint is an optional upgrade. REST for CRUD, SSE for price ticks, alerts & rating progress.", ["/assets, /reports, /orders, /copilot, /simulate"]],
   ORC: ["Rating Orchestrator Agent", "nebius", "Nemotron 3 Super (Token Factory) with tool-calling. Plans the rating run, calls tools in order, handles missing data, and hands a structured bundle to the Auditor.", ["Model: Nemotron 3 Super", "Tools: earth_obs, valuation, news_scout, field_evidence, auditor"]],
   ME: ["Market Engine", "ours", "Deterministic Python. Anchors price to AI fair value and adds order-flow pressure.", ["price += α(FV − price) + β·flow/liquidity", "Credits community on IPO fills"]],
   EO: ["Earth Observation Tool", "ours", "Pulls Dynamic World land cover, Sentinel-2 NDVI 5-yr trend, JRC surface water, Hansen forest loss, biomass → carbon. Results cached per asset.", ["Google Earth Engine or Microsoft Planetary Computer", "Precompute demo sites"]],
   VAL: ["Valuation Engine", "ours", "Area of each land-cover class × $/ha/yr coefficients → annual ecosystem-service value with low/mid/high range. Starter values from Costanza et al. 2014, replaced by ESVD in the build.", ["Pure Python, deterministic, unit-tested"]],
-  NS: ["News Scout Agent", "tavily", "Uses Tavily search for news near the asset (new factory permits, fires, drought, restoration projects). Nemotron Nano classifies each item: impact type, direction, severity.", ["Qualifies for Best Use of Tavily bonus", "Runs daily via Serverless Job"]],
+  NS: ["News Scout Agent", "tavily", "Uses Tavily search for news near the asset (new factory permits, fires, drought, restoration projects). Nemotron Nano classifies each item: impact type, direction, severity.", ["Qualifies for Best Use of Tavily bonus", "Runs daily via a GitHub Actions cron"]],
   FEV: ["Field Evidence Agent", "nebius", "Nemotron Nano Omni analyses community-uploaded photos (species, water clarity, signs of damage) to raise confidence.", ["Multimodal NVIDIA model", "Audio (e.g. birdsong) after the hackathon"]],
   AUD: ["Auditor / Rating Analyst", "nebius", "Nemotron 3 Ultra does the heavy reasoning: cross-checks satellite vs news vs evidence, flags greenwashing risk, assigns Health Score, grade (AAA–D), confidence, and writes the Ecological Performance Report.", ["Model: Nemotron 3 Ultra", "Structured JSON output + markdown report"]],
   CPA: ["Copilot Agent", "nebius", "Nemotron Nano with RAG over reports & news stored in pgvector. Fast, cheap, cites sources.", []],
-  RJ: ["Quarterly Re-rating Job", "nebius", "Nebius Serverless Job that re-runs the rating pipeline for all assets (batch). Triggered on schedule or by the Time Machine.", []],
-  NJ: ["Daily News Sweep Job", "nebius", "Nebius Serverless Job that runs the News Scout over every listed asset and stores new events.", []],
-  DB: ["Postgres + pgvector", "data", "Assets, reports, events, prices, orders, holdings, users + embeddings for Copilot RAG (e.g. Supabase or Nebius Managed PostgreSQL).", []],
+  RJ: ["Quarterly Re-rating Job", "ours", "Re-runs the rating pipeline for all assets. Runs in-process when the Time Machine is clicked; Nebius Serverless Jobs is an optional upgrade.", []],
+  NJ: ["Daily News Sweep Job", "ours", "Runs the News Scout over every listed asset daily via a GitHub Actions cron and stores new events.", []],
+  DB: ["Supabase Postgres + pgvector", "data", "Sandbox worlds, assets, reports, events, prices, orders, holdings, users + embeddings for Copilot RAG. Supabase free tier; local Docker in development.", []],
   LED: ["Nature Ledger", "data", "Tamper-evident history: every listing, report, event, price re-anchor and payout is appended with hash = SHA256(entry + previous hash). Editing any past record breaks the chain and the ‘✅ History verified’ badge turns ❌. Blockchain-style trust without tokens.", ["Append-only table, same DB transaction", "GET /ledger/{id}/verify", "Stretch: anchor head hash via OpenTimestamps"]],
-  OBJ: ["Object Storage", "data", "Cached satellite tiles / thumbnails, generated report PDFs, uploaded evidence.", []],
+  OBJ: ["Supabase Storage", "data", "Cached satellite tiles / thumbnails, uploaded evidence photos. Supabase free tier.", []],
   TF: ["Nebius Token Factory", "nebius", "OpenAI-compatible inference API serving NVIDIA Nemotron models. Every AI step runs here — a hard hackathon requirement.", ["Ultra → deep reasoning", "Super → orchestration", "Nano / Nano Omni → fast + multimodal"]],
-  GEE: ["Earth Engine / Planetary Computer", "ext", "Free satellite datasets: Sentinel-2, Dynamic World (10 m land cover), JRC water, Hansen forest change.", []],
-  ESVD: ["ESVD value table", "ext", "Ecosystem Services Valuation Database — published $/ha/yr by biome & service. Loaded as a static CSV.", []],
+  GEE: ["Google Earth Engine", "ext", "Free (non-commercial) satellite platform with Sentinel-2, Dynamic World (10 m land cover), JRC surface water, Hansen forest change and ESA biomass. Required: Planetary Computer lacks Dynamic World, Hansen and GEDI.", []],
+  ESVD: ["Valuation sources", "ext", "Published $/ha/yr values by biome and service (e.g. Costanza et al. 2014, Brander et al. 2024), cited in a static CSV. Raw ESVD data isn\u2019t committed (licence).", []],
   TAV: ["Tavily Search API", "tavily", "Real-time web search built for agents. Supplies the ‘news’ that moves nature ‘stocks’.", []],
   // Flowchart
   S: ["Start", "ai", "Community arrives on NatureX.", []],
@@ -455,7 +457,7 @@ const D = {
   LIVE: ["Listed", "step", "Asset appears on marketplace with report and price chart.", []],
   TRADE: ["Trading", "step", "Sandbox trades with play money; instant fills against market maker.", []],
   PRICE: ["Price update", "step", "Market Engine blends fair value + order flow.", []],
-  MON: ["Continuous monitoring", "ai", "Serverless Jobs: daily news sweep, quarterly satellite re-rating.", []],
+  MON: ["Continuous monitoring", "ai", "Scheduled jobs: daily news sweep (GitHub Actions), quarterly satellite re-rating (Time Machine / job).", []],
   CH: ["Significant change?", "rule", "Health score Δ ≥ 5, a grade change, or a news event with severity ≥ 4.", []],
   RERATE: ["Re-rate", "ai", "New Ecological Performance Report is published and versioned.", []],
   ALERT: ["Alert", "action", "Push to investors holding the asset and to the community dashboard.", []],
@@ -477,7 +479,7 @@ const SEQ_STEPS = [
   ["Investor buys", "Investor buys 100 shares with play money."],
   ["Order sent", "Order goes to the Market Engine."],
   ["Filled", "Order filled; price ticks; IPO proceeds credited to the community."],
-  ["Re-rate", "A Nebius Serverless Job (or Time Machine click) re-rates the asset."],
+  ["Re-rate", "A scheduled job (or a Time Machine click) re-rates the asset."],
   ["New evidence", "Latest satellite metrics and news go to the Auditor."],
   ["New fair value", "Auditor updates fair value and raises alerts."],
   ["Price update", "Market Engine pushes the new price to the browser over SSE."],
@@ -524,6 +526,7 @@ const LOGO = {
   nvidia: si("nvidia", "76B900"), next: si("nextdotjs", "111111"), react: si("react", "3aa9c9"), tailwind: si("tailwindcss", "06B6D4"),
   leaflet: si("leaflet", "199900"), fastapi: si("fastapi", "009688"), python: si("python", "3776AB"), postgres: si("postgresql", "4169E1"),
   gearth: si("googleearth", "4285F4"), nebius: fav("nebius.com"), tavily: fav("tavily.com"),
+  supabase: si("supabase", "3FCF8E"), vercel: si("vercel", "000000"), gha: si("githubactions", "2088FF"),
 };
 const img = k => `<img src="${LOGO[k]}" alt="${k}" title="${k}" onerror="this.style.display='none'">`;
 
@@ -532,20 +535,22 @@ const BANDS = [
   { cls: "users", h: "👥 Users", nodes: [
     ["COM", "Community / Landowner", "Lists land, uploads evidence", ["🏘️"], "user"],
     ["INV", "Investor", "Buys, sells, tracks impact", ["💼"], "user"],
-    ["ADM", "Demo Admin", "Time Machine for judges", ["🎛️"], "user"] ] },
+    ["ADM", "Judge", "Guided tour · Time Machine", ["🎛️"], "user"] ] },
   { conn: "HTTPS · browser" },
-  { h: "🖥️ Web App", logos: ["next", "react", "tailwind", "leaflet"], sub: "Next.js · React · Tailwind · Leaflet maps", nodes: [
+  { h: "🖥️ Web App", logos: ["vercel", "next", "react", "tailwind", "leaflet"], sub: "Next.js · React · Tailwind · Leaflet · hosted on Vercel", nodes: [
     ["LP", "Listing Portal", "Draw land on a map", ["leaflet"], "ours"],
     ["MK", "Marketplace", "Sandbox exchange", ["📈"], "ours"],
     ["AP", "Asset Page", "Report · chart · alerts", ["📄"], "ours"],
     ["PF", "Portfolio", "Holdings & impact", ["🌱"], "ours"],
     ["CP", "Copilot Chat", "Ask why prices moved", ["💬"], "ours"],
-    ["TM", "Time Machine", "Simulate quarter / event", ["⏩"], "ours"] ] },
+    ["TM", "Time Machine", "Simulate quarter / event", ["⏩"], "ours"],
+    ["JT", "Judge Tour", "Guided story · personas", ["🧭"], "ours"] ] },
   { conn: "REST + SSE (live prices & alerts)" },
-  { h: "⚙️ Backend", logos: ["nebius", "fastapi", "python"], sub: "FastAPI (Python) deployed on a Nebius Serverless Endpoint", nodes: [
+  { h: "⚙️ Backend", logos: ["fastapi", "python"], sub: "FastAPI (Python) on Hugging Face Spaces / Render · Nebius Serverless optional", nodes: [
     ["API", "REST + SSE API", "Assets · orders · reports", ["fastapi"], "ours"],
     ["ORC", "Rating Orchestrator", "Nemotron 3 Super · tool-calling", ["nvidia"], "nebius"],
-    ["ME", "Market Engine", "IPO · orders · price", ["python"], "ours"] ] },
+    ["ME", "Market Engine", "IPO · orders · price", ["python"], "ours"],
+    ["SB", "Sandbox Worlds", "Private demo per visitor", ["🧪"], "ours"] ] },
   { conn: "tool calls & agent hand-offs" },
   { h: "🤖 AI Agents & Tools", logos: ["nvidia", "nebius"], sub: "NVIDIA Nemotron models served by Nebius Token Factory", nodes: [
     ["EO", "Earth Observation", "Land · vegetation · carbon", ["gearth"], "ours"],
@@ -556,22 +561,22 @@ const BANDS = [
     ["CPA", "Copilot Agent", "Nemotron Nano + RAG", ["nvidia"], "nebius"] ] },
   { conn: "LLM API · SQL · object storage · HTTPS" },
   { row3: [
-    { h: "⏱️ Jobs", logos: ["nebius"], sub: "Nebius Serverless Jobs", layout: "stack", nodes: [
-      ["RJ", "Re-rating Job", "Quarterly / on demand", ["nebius"], "nebius"],
-      ["NJ", "News Sweep Job", "Daily", ["nebius"], "nebius"] ] },
-    { h: "🗄️ Data", logos: ["postgres"], layout: "stack", nodes: [
-      ["DB", "Postgres + pgvector", "Assets · reports · RAG", ["postgres"], "data"],
-      ["OBJ", "Object Storage", "Tiles · evidence · PDFs", ["nebius"], "data"],
+    { h: "⏱️ Jobs", logos: ["gha"], sub: "In-app + GitHub Actions", layout: "stack", nodes: [
+      ["RJ", "Re-rating Job", "Quarterly / Time Machine", ["⏩"], "ours"],
+      ["NJ", "News Sweep Job", "Daily cron", ["gha"], "ours"] ] },
+    { h: "🗄️ Data", logos: ["supabase", "postgres"], sub: "Supabase", layout: "stack", nodes: [
+      ["DB", "Postgres + pgvector", "Worlds · reports · RAG", ["supabase"], "data"],
+      ["OBJ", "Storage", "Tiles · evidence photos", ["supabase"], "data"],
       ["LED", "Nature Ledger", "Hash-chained history", ["🔗"], "data"] ] },
     { h: "🌍 External Services", layout: "two", nodes: [
       ["TF", "Nebius Token Factory", "Serves NVIDIA Nemotron", ["nebius", "nvidia"], "nebius"],
       ["TAV", "Tavily API", "Real-time web search", ["tavily"], "tavily"],
-      ["GEE", "Earth Engine", "Sentinel-2 · Dynamic World", ["gearth"], "ext"],
-      ["ESVD", "ESVD", "Ecosystem value table", ["📊"], "ext"] ] } ] },
+      ["GEE", "Google Earth Engine", "Sentinel-2 · Dynamic World", ["gearth"], "ext"],
+      ["ESVD", "Valuation sources", "Cited $/ha/yr values", ["📊"], "ext"] ] } ] },
 ];
 
 const EDGES = [
-  ["COM","LP"],["INV","MK"],["INV","CP"],["INV","PF"],["ADM","TM"],
+  ["COM","LP"],["INV","MK"],["INV","CP"],["INV","PF"],["ADM","TM"],["ADM","JT"],["JT","API"],["API","SB"],["SB","DB"],
   ["LP","API"],["MK","API"],["AP","API"],["PF","API"],["CP","API"],["TM","API"],
   ["API","ORC"],["API","ME"],["API","CPA"],["API","DB"],
   ["ORC","EO"],["ORC","VAL"],["ORC","NS"],["ORC","FEV"],["ORC","AUD"],

@@ -27,7 +27,7 @@ Build the NatureX PoC in 5 weeks: a community lists land, Nemotron agents rate i
 - **Spare capacity:** D3 is lighter in week 2 (start T26 Auditor early, once T15 lands). D2 picks up photo evidence and revenue in week 3, and the E2E test and tour support in week 4.
 - **AI assistants:** every task follows [AGENTS.md](../AGENTS.md) and the matching skill (e.g. `incremental-implementation`, `test-driven-development`, `impeccable`).
 
-## Architecture decisions (to confirm in T06, ADR session on day 1)
+## Architecture decisions (decided in T06: see [ADR-0001](../docs/adr/0001-stack-and-versions.md) and [ADR-0002](../docs/adr/0002-repo-layout.md))
 Open items from [research.md](../docs/research.md) §6:
 - Next.js 15.5 or 16 (pin TypeScript 6, ESLint 9)
 - **PydanticAI** vs a plain SDK loop
