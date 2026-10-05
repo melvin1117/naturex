@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05 06:48 UTC",
+  "generated_at": "2026-10-05 07:00 UTC",
   "tasks": [
     {
       "id": "P01",
@@ -218,9 +218,9 @@
       "id": "T05",
       "title": "Frontend skeleton",
       "issue": 11,
-      "owner": "D3",
+      "owner": "D1",
       "roles": [
-        "D3"
+        "D1"
       ],
       "size": "M",
       "priority": "Must",
@@ -1037,7 +1037,7 @@
         "D2"
       ],
       "size": "S",
-      "priority": "Should",
+      "priority": "Could",
       "week": 3,
       "deps": [
         "T09",
@@ -1209,7 +1209,7 @@
         "D2"
       ],
       "size": "S",
-      "priority": "Should",
+      "priority": "Could",
       "week": 3,
       "deps": [
         "T27"
@@ -1683,16 +1683,15 @@
     ],
     "D1": [
       "T01",
-      "T16",
-      "T30"
+      "T05",
+      "T16"
     ],
     "D2": [
       "T01",
       "T36"
     ],
     "D3": [
-      "T01",
-      "T05"
+      "T01"
     ],
     "any": [
       "T01",
@@ -1709,5 +1708,5 @@
     "ready": 5,
     "blocked": 47
   },
-  "data_hash": "9c19a32f0d40350e"
+  "data_hash": "8a4bc939ebd7bcff"
 }
