@@ -10,7 +10,6 @@ from decimal import Decimal
 
 import pytest
 from alembic import command
-from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlmodel import Session
@@ -30,7 +29,7 @@ from app.ledger import (
 from app.main import app
 from app.models import LedgerKind
 from app.seed import DEMO_SITES, WORLD_ID, seed
-from tests.conftest import requires_db
+from tests.conftest import alembic_cfg, requires_db
 
 # --- Hashing --------------------------------------------------------------------------------
 
@@ -182,16 +181,10 @@ def test_tamper_rejects_an_unknown_seq() -> None:
 ASSET_ID = DEMO_SITES[0].id
 
 
-def _alembic_cfg() -> Config:
-    cfg = Config("alembic.ini")
-    cfg.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
-    return cfg
-
-
 @pytest.fixture
 def session() -> Iterator[Session]:
     """A session inside a transaction that is rolled back, so append-only rows never persist."""
-    command.upgrade(_alembic_cfg(), "head")
+    command.upgrade(alembic_cfg(), "head")
     engine = create_engine(get_settings().database_url)
     with engine.connect() as conn:
         outer = conn.begin()

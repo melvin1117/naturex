@@ -10,7 +10,7 @@ from sqlmodel import Session
 
 from app.config import Settings, get_settings
 from app.db import get_session
-from app.ledger import entries_for, tamper, verify
+from app.ledger import VerifyResult, entries_for, tamper, verify
 from app.models import Asset
 from app.schemas import LedgerEntryOut, LedgerVerifyOut, TamperDemoIn, TamperDemoOut
 
@@ -18,6 +18,12 @@ router = APIRouter(tags=["ledger"])
 
 SessionDep = Annotated[Session, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+
+
+def _verify_out(result: VerifyResult) -> LedgerVerifyOut:
+    return LedgerVerifyOut(
+        valid=result.valid, entries=result.entries, head=result.head, broken_at=result.broken_at
+    )
 
 
 def _require_asset(session: Session, asset_id: UUID) -> None:
@@ -34,10 +40,7 @@ def list_ledger(asset_id: UUID, session: SessionDep) -> list[LedgerEntryOut]:
 @router.get("/ledger/{asset_id}/verify", response_model=LedgerVerifyOut)
 def verify_ledger(asset_id: UUID, session: SessionDep) -> LedgerVerifyOut:
     _require_asset(session, asset_id)
-    result = verify(entries_for(session, asset_id))
-    return LedgerVerifyOut(
-        valid=result.valid, entries=result.entries, head=result.head, broken_at=result.broken_at
-    )
+    return _verify_out(verify(entries_for(session, asset_id)))
 
 
 @router.post("/admin/tamper-demo", response_model=TamperDemoOut)
@@ -54,13 +57,10 @@ def tamper_demo(body: TamperDemoIn, settings: SettingsDep, session: SessionDep) 
         result = tamper(entries, seq)
     except LookupError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
-    check = verify(result.entries)
     return TamperDemoOut(
         seq=result.seq,
         field=result.field,
         before=result.before,
         after=result.after,
-        verify=LedgerVerifyOut(
-            valid=check.valid, entries=check.entries, head=check.head, broken_at=check.broken_at
-        ),
+        verify=_verify_out(verify(result.entries)),
     )

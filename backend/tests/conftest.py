@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 
 import pytest
+from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
@@ -72,3 +73,10 @@ requires_db = pytest.mark.skipif(
     not _ensure_test_database() and os.environ.get("REQUIRE_DB", "").lower() != "true",
     reason="Postgres not reachable (start with: docker compose up -d)",
 )
+
+
+def alembic_cfg() -> Config:
+    """Alembic config pointed at the test database (`%` escaped for configparser)."""
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
+    return cfg
