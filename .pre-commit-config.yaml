@@ -1,12 +1,21 @@
+# Ruff runs from the project's uv lockfile, so local hooks and CI always use the same version.
+# Vendored skills change only via scripts/sync-skills.sh, so hooks never rewrite them.
+exclude: ^\.(agents|claude)/
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+  - repo: local
     hooks:
       - id: ruff
-        args: [--fix]
-        files: ^backend/
+        name: ruff check (backend)
+        entry: bash -c 'cd backend && uv run ruff check --fix app tests migrations'
+        language: system
+        files: ^backend/.*\.py$
+        pass_filenames: false
       - id: ruff-format
-        files: ^backend/
+        name: ruff format (backend)
+        entry: bash -c 'cd backend && uv run ruff format app tests migrations'
+        language: system
+        files: ^backend/.*\.py$
+        pass_filenames: false
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

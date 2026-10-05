@@ -31,7 +31,7 @@ EXPECTED_TABLES = {
 
 def _alembic_cfg() -> Config:
     cfg = Config("alembic.ini")
-    cfg.set_main_option("sqlalchemy.url", get_settings().database_url)
+    cfg.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
     return cfg
 
 

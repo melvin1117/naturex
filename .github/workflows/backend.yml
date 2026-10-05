@@ -60,10 +60,10 @@ jobs:
         run: uv sync --frozen
 
       - name: Ruff check
-        run: uv run ruff check app tests
+        run: uv run ruff check app tests migrations
 
       - name: Ruff format
-        run: uv run ruff format --check app tests
+        run: uv run ruff format --check app tests migrations
 
       - name: Mypy
         run: uv run mypy app

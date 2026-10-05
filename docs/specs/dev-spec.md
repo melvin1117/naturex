@@ -592,4 +592,3 @@ Azure options use the Visual Studio subscriber credit ($150/month, individual de
 - Run `make eval` manually or nightly, not on every push.
 - Hard budget cap: the LLM wrapper sums tokens in `llm_calls` and refuses calls past `LLM_BUDGET_USD`.
 - Check per-model prices on the Token Factory pricing page before choosing defaults **(verify)**.
-
