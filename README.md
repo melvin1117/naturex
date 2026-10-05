@@ -8,7 +8,7 @@ Built for the **Nebius × NVIDIA Global AI Hackathon**, *Best Apps & Agents* tra
 
 ### Quick start (backend)
 ```bash
-cp .env.example .env
+cp .env.example .env    # add your keys, then: make check-keys
 cd backend && uv sync
 uv run uvicorn app.main:app --reload --port 8000
 # GET http://localhost:8000/healthz

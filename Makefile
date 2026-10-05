@@ -1,4 +1,4 @@
-.PHONY: ci lint test migrate seed fe-check check-client eval e2e task-map
+.PHONY: ci lint test migrate seed fe-check check-client eval e2e task-map check-keys
 
 # Run before every PR: the same checks GitHub CI runs. Start Postgres first: docker compose up -d
 ci:
@@ -21,6 +21,10 @@ migrate:
 
 seed:
 	cd backend && uv run python -m app.seed
+
+# T01: check your .env keys work (Token Factory, Tavily, Earth Engine); spends no credits
+check-keys:
+	cd backend && uv run python -m app.check_keys
 
 fe-check:
 	@echo "fe-check: frontend scaffold lands in T05"
