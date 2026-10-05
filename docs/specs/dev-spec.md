@@ -395,8 +395,13 @@ fill_price = price × (1 + slippage)  for buy;  price × (1 − slippage)  for s
 ```
 - Buys consume `primary_shares_remaining` first → proceeds credited to `community_wallet` (`is_primary=true`); afterwards the platform market maker takes the other side.
 - After each fill: `price ← price + β × price × (signed_qty / liquidity)`, with β = 0.5.
+- **Order size cap:** slippage ≤ 10% per order, i.e. `qty ≤ 0.10 × liquidity / k` (10,000 of 1M shares). This keeps every sell fill and post-trade price above zero; a $10,000 balance never reaches it.
+- **Market-maker inventory:** sells go to the market maker; buys after the float sells out come from that inventory and are rejected if it's empty. Shares are conserved as `total_shares = primary_shares_remaining + market_maker_shares + Σ holdings` (the community's retained stake is a holding). The inventory isn't a column; the trade API (T17) derives it from that identity.
+- Prices are rounded to 4 decimals with a floor of 0.0001; cash to cents.
 
-**Re-rating / ticks:** `price ← price + α × (FV_new − price)`, with α = 0.35 on re-rate and 0.05 per tick, plus small noise σ = 0.3%.
+**Re-rating / ticks:** `price ← price + α × (FV_new − price)`, with α = 0.35 on re-rate and 0.05 per tick, plus small noise σ = 0.3% (clamped to ±3σ).
+
+Implemented as pure functions in `backend/app/market/engine.py` (`ipo`, `quote`, `execute`, `reanchor`); tests in `backend/tests/test_market.py`.
 
 A tick is triggered by `POST /admin/simulate/quarter`, by a scheduled job, or by the SSE loop while the demo is running (no always-on process is required).
 
