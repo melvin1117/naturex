@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import DBAPIError
 from sqlmodel import Session, select
 
 from app.config import get_settings
-from app.models import Asset, User, World
-from app.seed import WORLD_ID, seed
+from app.models import Asset, LedgerEntry, LedgerKind, User, World
+from app.seed import DEMO_SITES, WORLD_ID, seed
 from tests.conftest import requires_db
 
 EXPECTED_TABLES = {
@@ -103,6 +105,44 @@ def test_models_match_migrations() -> None:
         diffs = compare_metadata(MigrationContext.configure(conn), SQLModel.metadata)
     engine.dispose()
     assert diffs == [], f"models and migrations differ: {diffs}"
+
+
+@requires_db
+def test_ledger_is_append_only() -> None:
+    """dev-spec §5/§17: no UPDATE, DELETE or TRUNCATE unless a sandbox reset opts in."""
+    cfg = _alembic_cfg()
+    command.downgrade(cfg, "base")
+    command.upgrade(cfg, "head")
+
+    engine = create_engine(get_settings().database_url)
+    with Session(engine) as session:
+        seed(session)
+        session.add(
+            LedgerEntry(
+                world_id=WORLD_ID,
+                asset_id=DEMO_SITES[0].id,
+                seq=0,
+                kind=LedgerKind.LISTING,
+                payload={"area_ha": "500.00"},
+                prev_hash="0" * 64,
+                hash="a" * 64,
+            )
+        )
+        session.commit()
+
+    for statement in (
+        "UPDATE ledger_entries SET hash = repeat('b', 64)",
+        "DELETE FROM ledger_entries",
+        "TRUNCATE ledger_entries",
+    ):
+        with engine.connect() as conn, pytest.raises(DBAPIError, match="append-only"):
+            conn.execute(text(statement))
+
+    with engine.begin() as conn:
+        conn.execute(text("SET LOCAL naturex.allow_ledger_delete = 'on'"))
+        deleted = conn.execute(text("DELETE FROM ledger_entries")).rowcount
+    engine.dispose()
+    assert deleted == 1
 
 
 def test_world_id_present_on_mutable_models() -> None:

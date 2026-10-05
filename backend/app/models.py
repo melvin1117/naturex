@@ -81,6 +81,7 @@ class World(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     label: str = Field(index=True)
     created_at: datetime = _created_at()
+    last_seen_at: datetime = _created_at()  # bumped on each visit; stale sandboxes are pruned (T31)
 
 
 class User(SQLModel, table=True):

@@ -1,7 +1,8 @@
-"""Store timestamps as timestamptz (dev-spec §5).
+"""Align schema with dev-spec §5: timestamptz columns and worlds.last_seen_at.
 
 Revision 0001 created these columns as TIMESTAMP WITHOUT TIME ZONE while the models
 write timezone-aware UTC datetimes. Existing values are interpreted as UTC.
+worlds.last_seen_at lets the sandbox (T31) prune stale visitor worlds.
 
 Revision ID: 0002
 Revises: 0001
@@ -33,6 +34,15 @@ TIMESTAMP_COLUMNS: list[tuple[str, str]] = [
 
 
 def upgrade() -> None:
+    op.add_column(
+        "worlds",
+        sa.Column(
+            "last_seen_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+    )
     for table, column in TIMESTAMP_COLUMNS:
         op.alter_column(
             table,
@@ -46,6 +56,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_column("worlds", "last_seen_at")
     for table, column in TIMESTAMP_COLUMNS:
         op.alter_column(
             table,
