@@ -5,8 +5,8 @@
 <!-- Link the GitHub issue, e.g. Closes #10 -->
 
 ## Test plan
-- [ ] `make lint`
-- [ ] `make test`
+- [ ] `make ci` passes locally (`docker compose up -d` first)
+- [ ] 1 teammate approval; merge with **Squash and merge** only after CI is green
 - [ ] Manual check (if UI/API): …
 
 ## Notes
