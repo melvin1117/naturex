@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 from alembic import command
-from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import DBAPIError
 from sqlmodel import Session, select
@@ -12,7 +11,7 @@ from sqlmodel import Session, select
 from app.config import get_settings
 from app.models import Asset, LedgerEntry, LedgerKind, User, World
 from app.seed import DEMO_SITES, WORLD_ID, seed
-from tests.conftest import requires_db
+from tests.conftest import alembic_cfg, requires_db
 
 EXPECTED_TABLES = {
     "worlds",
@@ -31,15 +30,9 @@ EXPECTED_TABLES = {
 }
 
 
-def _alembic_cfg() -> Config:
-    cfg = Config("alembic.ini")
-    cfg.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
-    return cfg
-
-
 @requires_db
 def test_migration_up_creates_tables() -> None:
-    cfg = _alembic_cfg()
+    cfg = alembic_cfg()
     command.downgrade(cfg, "base")
     command.upgrade(cfg, "head")
 
@@ -51,7 +44,7 @@ def test_migration_up_creates_tables() -> None:
 
 @requires_db
 def test_migration_down_and_up() -> None:
-    cfg = _alembic_cfg()
+    cfg = alembic_cfg()
     command.upgrade(cfg, "head")
     command.downgrade(cfg, "base")
     command.upgrade(cfg, "head")
@@ -68,7 +61,7 @@ def test_migration_down_and_up() -> None:
 
 @requires_db
 def test_seed_is_idempotent() -> None:
-    cfg = _alembic_cfg()
+    cfg = alembic_cfg()
     command.upgrade(cfg, "head")
 
     engine = create_engine(get_settings().database_url)
@@ -99,7 +92,7 @@ def test_models_match_migrations() -> None:
     from alembic.migration import MigrationContext
     from sqlmodel import SQLModel
 
-    command.upgrade(_alembic_cfg(), "head")
+    command.upgrade(alembic_cfg(), "head")
     engine = create_engine(get_settings().database_url)
     with engine.connect() as conn:
         diffs = compare_metadata(MigrationContext.configure(conn), SQLModel.metadata)
@@ -110,7 +103,7 @@ def test_models_match_migrations() -> None:
 @requires_db
 def test_ledger_is_append_only() -> None:
     """dev-spec §5/§17: no UPDATE, DELETE or TRUNCATE unless a sandbox reset opts in."""
-    cfg = _alembic_cfg()
+    cfg = alembic_cfg()
     command.downgrade(cfg, "base")
     command.upgrade(cfg, "head")
 
