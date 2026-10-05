@@ -39,10 +39,15 @@ If code and docs disagree, stop and ask; don't silently pick one.
 - **Mocks behind interfaces** (`USE_MOCKS=true`) so work can proceed in parallel and CI runs without keys.
 
 ## Picking a task
-No Project board is needed. `tasks/task-map.html` (people) and `tasks/task-map.json` (agents) show what's done, picked, ready or blocked. A workflow regenerates them from the GitHub issues, so pull `main` first; `make task-map` refreshes them locally (needs `gh auth login`).
+`tasks/task-map.html` (people) and `tasks/task-map.json` (agents) show what's done, picked, ready or blocked; the Project board mirrors the same status. The `task-map` workflow re-commits the map to `main` on every issue change, so pull `main` first. Commands need `gh auth login -s project`.
 - Only pick a 🟢 **ready** task (every dependency closed). Never start a ⏳ **blocked** one.
 - When asked "what should I pick?", answer from `suggestions[<role>]` in the JSON (critical path first), then show that task's `waiting_on`/`unlocks`.
-- Claim it by assigning yourself on the issue. Closing the issue (PR merged with `Closes #N`) marks it done.
+- **Every task, in this order:**
+  1. **Claim:** `make board ISSUE=<n> STATUS="In progress"` (sets the board Status and assigns you).
+  2. **Branch and build:** `git checkout -b <type>/<tNN>-<slug>`, implement with tests, `make ci`.
+  3. **Check the map:** the workflow updates it on `main` within a minute of step 1. **Never commit `tasks/task-map.*` in a PR**: it conflicts with the workflow's commits and blocks CI. (`make task-map` is only for a local look; discard the result.)
+  4. **PR:** Conventional Commit title, `Closes #<n>` in the body, then `make board ISSUE=<n> STATUS="In review"`.
+  5. Merging closes the issue, which marks it done on the map and the board.
 
 ## Skills (in `.agents/skills`, mirrored in `.claude/skills`)
 Load the matching skill before starting; `using-agent-skills` picks one if unsure.
@@ -63,7 +68,7 @@ Load the matching skill before starting; `using-agent-skills` picks one if unsur
 Update skills only with `scripts/sync-skills.sh`; never edit them in place.
 
 ## MCP servers
-GitHub (issues, PRs), Context7 (current library docs; use it before writing framework code), shadcn (components), Playwright (E2E and demo recording), Chrome DevTools (debugging and performance). Setup is in `docs/ai-setup.md`.
+GitHub (issues, PRs, board), Context7 (current library docs; use it before writing framework code), shadcn (components), Playwright (E2E and demo recording), Chrome DevTools (debugging and performance). Setup is in `docs/ai-setup.md`.
 
 ## Definition of done
 - [ ] Meets the story's acceptance criteria in `docs/specs/pm-spec.md`

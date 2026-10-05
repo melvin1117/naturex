@@ -1,4 +1,4 @@
-.PHONY: ci lint test migrate seed fe-check check-client eval e2e task-map
+.PHONY: ci lint test migrate seed fe-check check-client eval e2e task-map board
 
 # Run before every PR: the same checks GitHub CI runs. Start Postgres first: docker compose up -d
 ci:
@@ -37,3 +37,7 @@ e2e:
 # Refresh tasks/task-map.html and .json from GitHub issues (needs `gh auth login`)
 task-map:
 	python3 scripts/task_map.py
+
+# Set a task's board Status, e.g. make board ISSUE=27 STATUS="In progress" (needs gh auth login -s project)
+board:
+	scripts/board_status.sh "$(ISSUE)" "$(STATUS)"

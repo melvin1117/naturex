@@ -141,4 +141,4 @@ A slip on T26/T27 (week 3) threatens everything. **Fallback:** the fixed Python 
 1. GitHub handles for each role (for CODEOWNERS and assignment)?
 2. Which design tool: Figma (free Starter plan) or Penpot (open source)?
 3. Does anyone attend a Builders & Brews city event (City Winner prize, extra credits)?
-4. ~~Where to track tasks~~ Decided: GitHub Issues + the generated task map (`tasks/task-map.html`); no Project board needed.
+4. ~~Where to track tasks~~ Decided: GitHub Issues + the generated task map (`tasks/task-map.html`), with the Project board mirroring status (`make board`).
