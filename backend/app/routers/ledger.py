@@ -1,0 +1,66 @@
+"""Nature Ledger endpoints (dev-spec §6, §17)."""
+
+from __future__ import annotations
+
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlmodel import Session
+
+from app.config import Settings, get_settings
+from app.db import get_session
+from app.ledger import entries_for, tamper, verify
+from app.models import Asset
+from app.schemas import LedgerEntryOut, LedgerVerifyOut, TamperDemoIn, TamperDemoOut
+
+router = APIRouter(tags=["ledger"])
+
+SessionDep = Annotated[Session, Depends(get_session)]
+SettingsDep = Annotated[Settings, Depends(get_settings)]
+
+
+def _require_asset(session: Session, asset_id: UUID) -> None:
+    if session.get(Asset, asset_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found")
+
+
+@router.get("/ledger/{asset_id}", response_model=list[LedgerEntryOut])
+def list_ledger(asset_id: UUID, session: SessionDep) -> list[LedgerEntryOut]:
+    _require_asset(session, asset_id)
+    return [LedgerEntryOut.model_validate(e) for e in entries_for(session, asset_id)]
+
+
+@router.get("/ledger/{asset_id}/verify", response_model=LedgerVerifyOut)
+def verify_ledger(asset_id: UUID, session: SessionDep) -> LedgerVerifyOut:
+    _require_asset(session, asset_id)
+    result = verify(entries_for(session, asset_id))
+    return LedgerVerifyOut(
+        valid=result.valid, entries=result.entries, head=result.head, broken_at=result.broken_at
+    )
+
+
+@router.post("/admin/tamper-demo", response_model=TamperDemoOut)
+def tamper_demo(body: TamperDemoIn, settings: SettingsDep, session: SessionDep) -> TamperDemoOut:
+    """DEMO_MODE only: edit a copy of one entry and show verification failing. Writes nothing."""
+    if not settings.demo_mode:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    _require_asset(session, body.asset_id)
+    entries = entries_for(session, body.asset_id)
+    if not entries:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This asset has no ledger entries yet")
+    seq = entries[-1].seq if body.seq is None else body.seq
+    try:
+        result = tamper(entries, seq)
+    except LookupError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    check = verify(result.entries)
+    return TamperDemoOut(
+        seq=result.seq,
+        field=result.field,
+        before=result.before,
+        after=result.after,
+        verify=LedgerVerifyOut(
+            valid=check.valid, entries=check.entries, head=check.head, broken_at=check.broken_at
+        ),
+    )

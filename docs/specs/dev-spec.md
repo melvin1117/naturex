@@ -508,6 +508,14 @@ def verify(entries) -> dict:
 - **What gets appended:** listing (polygon + details), each report (scores, values, fair value, report text hash), each event, each IPO / price re-anchor, and each payout.
 - **Append happens in the same DB transaction** as the record it covers.
 - **Payload rule:** the payload must contain the business values themselves, not just an ID, so that editing the source row is detectable by comparing it with the payload.
+- **As built (T30):** `backend/app/ledger.py` keeps the formula above, with these additions:
+  - `canonical` rejects NaN.
+  - `append` locks the asset row (`SELECT … FOR UPDATE`) so concurrent appends can't race for a `seq`, and it stores the payload exactly as hashed.
+  - `verify` also checks that `seq` runs 0, 1, 2… with no gaps, and returns `head: null` when the chain is broken.
+- **Tamper demo:** `POST /admin/tamper-demo {asset_id, seq?}` (DEMO_MODE only; 404 otherwise).
+  - It copies the chain and multiplies the first numeric payload field of one entry (default: the latest) by 10. If the payload has no number, it adds `"tampered": true`.
+  - It returns the field, the before and after values, and the failing verification. Nothing is written; the DB trigger would reject an UPDATE anyway.
+  - World scoping (`nx_world`) is added to these routes with T31.
 - **UI:** a "✅ History verified" badge, plus a ledger tab listing each entry's seq, kind, time and a short hash, with a "verify" button.
 - **Stretch (F3):** a quarterly job timestamps each asset's head hash with OpenTimestamps (`opentimestamps-client`) and stores the `.ots` proof in object storage.
 

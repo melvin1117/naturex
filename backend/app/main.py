@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 
 from app.config import get_settings
+from app.routers import ledger
 
 settings = get_settings()
 
@@ -11,6 +12,7 @@ app = FastAPI(
     version="0.1.0",
     description="AI rating agency and sandbox exchange for living nature",
 )
+app.include_router(ledger.router)
 
 
 @app.get("/healthz")
