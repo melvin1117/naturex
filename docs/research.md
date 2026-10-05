@@ -117,7 +117,7 @@
 | **earthengine-api** (Apache-2.0) + **geemap** (MIT) | Server-side `reduceRegion`; notebooks `114_dynamic_world`, `116_land_cover_timeseries`, `12_zonal_statistics`, `146_chart_image_collection` | **ADOPT** |
 | Xee (xarray for EE) | NDVI stack into xarray | Optional |
 | pystac-client + odc-stac | Planetary Computer fallback (stackstac is stale) | BORROW |
-| shapely / geopandas | Validation; area in an equal-area CRS | **ADOPT** |
+| shapely + pyproj (geopandas not needed) | Validation; area in an equal-area CRS (`app/tools/geometry.py`, T36) | **ADOPT** |
 | **InVEST** (Apache-2.0) | Carbon-pool-table × area method; Habitat Quality as a stretch goal | BORROW |
 | **SEEA-EA** (UN standard) | Structure the report as **Extent → Condition → Services** accounts | **BORROW** (credibility) |
 | ARIES / k.LAB | **AGPL-3.0**, heavy | SKIP |

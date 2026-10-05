@@ -105,6 +105,7 @@ naturex/
 │   │   │   ├── auditor.py
 │   │   │   └── prompts/*.md
 │   │   ├── tools/
+│   │   │   ├── geometry.py           # listing polygon checks: shape, 10–50,000 ha, overlap (T36)
 │   │   │   ├── earth_obs.py          # GEE / PC implementation + mock
 │   │   │   ├── valuation.py
 │   │   │   └── scoring.py
