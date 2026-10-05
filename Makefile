@@ -19,6 +19,11 @@ test:
 migrate:
 	cd backend && uv run alembic upgrade head
 
+# T01: check your .env keys work (Token Factory, Tavily, Earth Engine); spends no credits
+.PHONY: check-keys
+check-keys:
+	cd backend && uv run python -m app.check_keys
+
 seed:
 	cd backend && uv run python -m app.seed
 

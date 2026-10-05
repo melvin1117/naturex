@@ -15,7 +15,7 @@
 - [ ] D2 registers an Earth Engine non-commercial project; D1 creates the Supabase project; one person owns the shared deployment keys
 - [ ] Keys live only in personal `.env` files; `.env.example` lists the variable names
 
-**Verify:** each dev makes one successful API call with their own key · **Deps:** none
+**Verify:** `make check-keys` passes for each dev with their own key (it also lists the Nemotron model IDs for `MODEL_*`) · **Deps:** none
 
 ### T02 · Token Factory spike (risk) (#8) — D3 · S · Must
 Confirm how Nemotron actually behaves on Token Factory before building on it.
