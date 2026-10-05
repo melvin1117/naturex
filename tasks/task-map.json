@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05 07:42 UTC",
+  "generated_at": "2026-10-05 07:48 UTC",
   "tasks": [
     {
       "id": "P01",
@@ -498,8 +498,10 @@
       "deps": [
         "T07"
       ],
-      "status": "ready",
-      "assignees": [],
+      "status": "in_progress",
+      "assignees": [
+        "melvin1117"
+      ],
       "waiting_on": [],
       "unlocks": [
         "T34"
@@ -1686,8 +1688,7 @@
       "T01"
     ],
     "D1": [
-      "T01",
-      "T30"
+      "T01"
     ],
     "D2": [
       "T01",
@@ -1698,16 +1699,15 @@
     ],
     "any": [
       "T01",
-      "T30",
       "T36"
     ]
   },
   "counts": {
     "done": 3,
-    "in_progress": 3,
+    "in_progress": 4,
     "picked_early": 3,
-    "ready": 3,
+    "ready": 2,
     "blocked": 47
   },
-  "data_hash": "9a9fc328a1aa2272"
+  "data_hash": "0dd0abe77d3da3f0"
 }
