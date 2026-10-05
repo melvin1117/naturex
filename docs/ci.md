@@ -28,7 +28,7 @@ No path filters on triggers (every PR runs every workflow). Heavy jobs are gated
 # Backend (Python 3.12, uv)
 cd backend && uv sync
 make lint
-make test                    # DB tests skip without Postgres
+make test                    # DB tests use a separate <db>_test database (created on demand); skip without Postgres
 REQUIRE_DB=true make test    # fail if Postgres is down (CI behaviour)
 docker compose up -d && make migrate && make seed
 
