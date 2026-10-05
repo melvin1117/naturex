@@ -213,7 +213,7 @@
       <div class="kpi"><div class="v">77.6</div><div class="l">Health Score (0–100)</div></div>
       <div class="kpi"><div class="v">$11.7M</div><div class="l">Annual ecosystem value (range $4.7M – $17.5M)</div></div>
       <div class="kpi"><div class="v">87%</div><div class="l">Confidence</div></div>
-      <div class="kpi"><div class="v">38.8k t</div><div class="l">CO₂ stored</div></div>
+      <div class="kpi"><div class="v">38.8k t</div><div class="l">CO₂ in above-ground biomass (roots and soil carbon added in the build)</div></div>
       <div class="kpi"><div class="v">$99.7</div><div class="l">Fair value / share (sandbox)</div></div>
     </div>
     <p style="font-size:14.5px;color:var(--muted);margin-top:10px">Plus: value breakdown by service (water, flood, habitat, carbon, recreation) · 5-year vegetation trend chart · risk &amp; greenwashing flags · what changed since last quarter · stewardship recommendations · every claim linked to a satellite metric or news source.</p>
@@ -254,7 +254,7 @@ Low / High = same with the low / high coefficient  →  always shown as a range<
       <tr><td>Grass / shrub</td><td>Grassland / shrubland</td><td>4,166 / 2,083</td><td>Pollination, soil, grazing</td></tr>
       <tr><td>Crops, built-up, bare</td><td>Not natural capital</td><td>0</td><td>—</td></tr>
     </table>
-    <p style="font-size:13px;color:var(--muted)">*Illustrative starting values (Costanza et al. 2014, global averages). The build replaces them with cited, published values (e.g. Brander et al. 2024, which summarises the ESVD database); raw ESVD data isn’t redistributed. <b>Carbon</b> is reported separately: CO₂ stored = biomass (t/ha) × area × 0.47 × 3.67.</p>
+    <p style="font-size:13px;color:var(--muted)">*Illustrative starting values (Costanza et al. 2014, global averages). The build replaces them with cited, published values (e.g. Brander et al. 2024, which summarises the ESVD database); raw ESVD data isn’t redistributed. <b>Carbon</b> is reported separately: CO₂ stored = above-ground biomass × (1 + root-to-shoot ratio) × area × 0.47 × 44/12, plus soil carbon for wetlands (SoilGrids).</p>
 
     <h3>5 · Confidence: how sure are we?</h3>
     <div class="formula">Confidence = 100 × ( 0.4·coverage + 0.3·agreement + 0.2·evidence + 0.1·recency )</div>
