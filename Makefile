@@ -32,14 +32,15 @@ fe-check:
 	cd frontend && pnpm install --frozen-lockfile
 	cd frontend && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build
 
-eval:
-	@echo "eval: harness lands in T47"
-
 check-client:
-	@echo "check-client: OpenAPI client drift check lands in T08"
+	./scripts/generate-client.sh
+	cd frontend && git diff --exit-code -- src/lib/api/openapi.json src/lib/api/schema.d.ts
+
+eval:
+	@echo "eval: harness lands in T47" >&2; exit 1
 
 e2e:
-	@echo "e2e: Playwright suite lands in T46"
+	@echo "e2e: Playwright suite lands in T46" >&2; exit 1
 
 # Refresh tasks/task-map.html and .json from GitHub issues (needs `gh auth login`)
 task-map:
