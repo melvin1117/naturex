@@ -1,0 +1,55 @@
+# Keeps tasks/task-map.html and tasks/task-map.json in sync with GitHub issues,
+# so `git pull` always shows which tasks are done, picked, ready or blocked.
+# Status comes from issues (closed = done, assignee = picked); see scripts/task_map.py.
+# The commit is pushed straight to main by the workflow token. That works while
+# the repo is private (rulesets aren't enforced); add a bypass if that changes.
+name: task-map
+
+on:
+  issues:
+    types: [opened, edited, closed, reopened, assigned, unassigned]
+  push:
+    branches: [main]
+    paths:
+      - tasks/todo.md
+      - scripts/task_map.py
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: task-map
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: read
+
+jobs:
+  sync:
+    name: task-map / sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+
+      - name: Regenerate the task map
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/task_map.py
+
+      - name: Commit if changed
+        run: |
+          if [ -z "$(git status --porcelain -- tasks/task-map.html tasks/task-map.json)" ]; then
+            echo "No change."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898900+github-actions[bot]@users.noreply.github.com"
+          git add tasks/task-map.html tasks/task-map.json
+          git commit -m "chore(tasks): sync task map [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main

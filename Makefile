@@ -1,4 +1,4 @@
-.PHONY: ci lint test migrate seed fe-check check-client eval e2e
+.PHONY: ci lint test migrate seed fe-check check-client eval e2e task-map
 
 # Run before every PR: the same checks GitHub CI runs. Start Postgres first: docker compose up -d
 ci:
@@ -33,3 +33,7 @@ check-client:
 
 e2e:
 	@echo "e2e: Playwright suite lands in T46"
+
+# Refresh tasks/task-map.html and .json from GitHub issues (needs `gh auth login`)
+task-map:
+	python3 scripts/task_map.py
