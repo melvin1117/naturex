@@ -6,15 +6,16 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
-from app.config import get_settings
 from app import models as _models  # noqa: F401 — register metadata
+from app.config import get_settings
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = SQLModel.metadata
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+# Escape % for configparser: URL-encoded passwords (e.g. %40 for "@") would otherwise crash.
+config.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
 
 
 def run_migrations_offline() -> None:

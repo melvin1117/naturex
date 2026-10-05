@@ -1,8 +1,8 @@
-.PHONY: lint test migrate seed fe-check eval e2e
+.PHONY: lint test migrate seed fe-check check-client eval e2e
 
 lint:
-	cd backend && uv run ruff check app tests
-	cd backend && uv run ruff format --check app tests
+	cd backend && uv run ruff check app tests migrations
+	cd backend && uv run ruff format --check app tests migrations
 	cd backend && uv run mypy app
 
 test:
@@ -19,6 +19,9 @@ fe-check:
 
 eval:
 	@echo "eval: harness lands in T47"
+
+check-client:
+	@echo "check-client: OpenAPI client drift check lands in T08"
 
 e2e:
 	@echo "e2e: Playwright suite lands in T46"

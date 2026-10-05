@@ -88,6 +88,9 @@ jobs:
       - name: Upgrade to head again
         run: uv run alembic upgrade head
 
+      - name: Models match migrations (no drift)
+        run: uv run alembic check
+
       - name: Seed is idempotent
         run: |
           uv run python -m app.seed

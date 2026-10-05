@@ -127,13 +127,16 @@ create extension if not exists vector;
 
 create table worlds (                 -- per-visitor sandbox (demo-plan §3.5)
   id uuid primary key default gen_random_uuid(),
+  label text not null,                 -- e.g. 'template' for the seed world
   created_at timestamptz default now(),
   last_seen_at timestamptz default now()
 );
--- Every table that changes during the demo carries `world_id uuid not null references worlds(id)`:
--- users (personas), assets, reports, events, prices, holdings, orders, alerts, ledger_entries, llm_calls.
--- Cached satellite `metrics` and `doc_chunks` for the seeded demo sites are shared across worlds.
--- A new world is created on a visitor's first request and seeded with the personas, demo assets and baseline reports.
+-- Every table except `worlds` carries `world_id uuid references worlds(id)` (not null, except
+-- llm_calls.world_id): users (personas), assets, metrics, events, reports, prices, holdings,
+-- orders, alerts, doc_chunks, ledger_entries, llm_calls. Metrics and doc_chunks are per world too,
+-- because they reference per-world assets and reports.
+-- Precomputed demo-site data lives in backend/data/demo_sites/ and is copied into a world when
+-- it's created on a visitor's first request, with the personas, demo assets and baseline reports.
 
 create table users (
   id uuid primary key default gen_random_uuid(),
@@ -240,8 +243,9 @@ create table ledger_entries (         -- Nature Ledger: append-only, hash-chaine
   created_at timestamptz default now(),
   unique (asset_id, seq)
 );
--- enforce append-only at DB level
-revoke update, delete on ledger_entries from app_user;
+-- Append-only at DB level (migration 0003): a trigger rejects UPDATE, DELETE and TRUNCATE.
+-- Only a sandbox reset (T31) may delete, by opting in for its own transaction:
+--   SET LOCAL naturex.allow_ledger_delete = 'on';
 
 create table llm_calls (
   id bigserial primary key, agent text, model text, asset_id uuid,
@@ -295,7 +299,7 @@ For polygon *P* and period *T* (default: last 12 months; trend: 5 years):
 | Metric | Dataset | Computation |
 |---|---|---|
 | Land cover fractions | Dynamic World V1 (10 m) | Mode of `label` over T; pixel-count share per class |
-| NDVI series & trend | Sentinel-2 SR Harmonized, cloud-masked | Monthly median NDVI in P; OLS slope per year over 5 yrs |
+| NDVI series & trend | Sentinel-2 SR Harmonized, Cloud Score+ masked, water pixels excluded | Monthly median NDVI in P; **Sen's slope** per year over 5 yrs with a Mann-Kendall significance test (`ee.Reducer.sensSlope`), per ADR-0001 |
 | Water change | JRC Global Surface Water | Occurrence change intensity mean in P |
 | Forest loss | Hansen Global Forest Change | Loss area (ha) in last 5 yrs |
 | Biomass | ESA CCI Biomass or GEDI L4B | Mean AGB t/ha |
@@ -324,7 +328,7 @@ Class → biome mapping and **starter coefficients** (USD/ha/yr). These are illu
 
 "Coastal" = centroid within 5 km of coastline (Natural Earth 1:10m coastline, public domain, bundled in `data/`). Service breakdown split per biome from a small CSV (e.g. wetland: water 35%, flood 30%, habitat 20%, carbon 10%, recreation 5%).
 
-**Carbon (shown separately):** `stock_tCO2 = AGB_t_ha × area_ha × 0.47 × 3.67`; annual sequestration from IPCC Tier-1 default rates per class.
+**Carbon (shown separately; never added to the $ value, which already includes climate regulation):** `stock_tCO2 = AGB_t_ha × (1 + R) × area_ha × 0.47 × 44/12 + SOC_tC_ha × area_ha × 44/12`, where R is the IPCC Tier-1 root-to-shoot ratio for the class and SOC is SoilGrids soil organic carbon (0–30 cm), included for wetlands, where most carbon is in the soil (ADR-0001; exact factors set in T14). Annual sequestration uses IPCC Tier-1 default rates per class.
 
 ### 7.4 Scoring (deterministic base + bounded LLM adjustment)
 ```
@@ -592,4 +596,3 @@ Azure options use the Visual Studio subscriber credit ($150/month, individual de
 - Run `make eval` manually or nightly, not on every push.
 - Hard budget cap: the LLM wrapper sums tokens in `llm_calls` and refuses calls past `LLM_BUDGET_USD`.
 - Check per-model prices on the Token Factory pricing page before choosing defaults **(verify)**.
-

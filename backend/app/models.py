@@ -9,7 +9,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import BigInteger, Column, UniqueConstraint, text
+from sqlalchemy import BigInteger, Column, DateTime, SmallInteger, UniqueConstraint, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
@@ -26,7 +26,19 @@ def _enum_values(enum_cls: type[StrEnum]) -> list[str]:
 
 def _enum_column(enum_cls: type[StrEnum]) -> Column[Any]:
     """Store enum .value (matches DB CHECK constraints), not SQLAlchemy's default .name."""
-    return Column(SAEnum(enum_cls, values_callable=_enum_values, native_enum=False))
+    return Column(
+        SAEnum(enum_cls, values_callable=_enum_values, native_enum=False),
+        nullable=False,
+    )
+
+
+def _created_at() -> Any:
+    """TIMESTAMPTZ column defaulting to now() (dev-spec §5)."""
+    return Field(
+        default_factory=_utcnow,
+        sa_type=DateTime(timezone=True),
+        sa_column_kwargs={"server_default": text("now()")},
+    )
 
 
 class UserRole(StrEnum):
@@ -68,10 +80,8 @@ class World(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     label: str = Field(index=True)
-    created_at: datetime = Field(
-        default_factory=_utcnow,
-        sa_column_kwargs={"server_default": text("now()")},
-    )
+    created_at: datetime = _created_at()
+    last_seen_at: datetime = _created_at()  # bumped on each visit; stale sandboxes are pruned (T31)
 
 
 class User(SQLModel, table=True):
@@ -105,10 +115,7 @@ class Asset(SQLModel, table=True):
     community_wallet: Decimal = Field(default=Decimal("0.00"), max_digits=14, decimal_places=2)
     status: AssetStatus = Field(default=AssetStatus.DRAFT, sa_column=_enum_column(AssetStatus))
     site_key: str | None = Field(default=None, index=True)
-    created_at: datetime = Field(
-        default_factory=_utcnow,
-        sa_column_kwargs={"server_default": text("now()")},
-    )
+    created_at: datetime = _created_at()
 
 
 class Metrics(SQLModel, table=True):
@@ -125,10 +132,7 @@ class Metrics(SQLModel, table=True):
     forest_loss_ha: Decimal | None = Field(default=None, max_digits=12, decimal_places=2)
     biomass_t_ha: Decimal | None = Field(default=None, max_digits=12, decimal_places=2)
     cloud_free_obs: int | None = None
-    created_at: datetime = Field(
-        default_factory=_utcnow,
-        sa_column_kwargs={"server_default": text("now()")},
-    )
+    created_at: datetime = _created_at()
 
 
 class Event(SQLModel, table=True):
@@ -142,13 +146,10 @@ class Event(SQLModel, table=True):
     url: str | None = None
     published_at: date | None = None
     impact_type: str | None = None
-    direction: int | None = Field(default=None, ge=-1, le=1)
-    severity: int | None = Field(default=None, ge=1, le=5)
+    direction: int | None = Field(default=None, ge=-1, le=1, sa_type=SmallInteger)
+    severity: int | None = Field(default=None, ge=1, le=5, sa_type=SmallInteger)
     summary: str | None = None
-    created_at: datetime = Field(
-        default_factory=_utcnow,
-        sa_column_kwargs={"server_default": text("now()")},
-    )
+    created_at: datetime = _created_at()
 
 
 class Report(SQLModel, table=True):
@@ -172,10 +173,7 @@ class Report(SQLModel, table=True):
     summary_md: str | None = None
     recommendations: list[Any] | None = Field(default=None, sa_column=Column(JSONB))
     auditor_json: dict[str, Any] | None = Field(default=None, sa_column=Column(JSONB))
-    created_at: datetime = Field(
-        default_factory=_utcnow,
-        sa_column_kwargs={"server_default": text("now()")},
-    )
+    created_at: datetime = _created_at()
 
 
 class Price(SQLModel, table=True):
@@ -186,6 +184,7 @@ class Price(SQLModel, table=True):
     ts: datetime = Field(
         default_factory=_utcnow,
         primary_key=True,
+        sa_type=DateTime(timezone=True),
         sa_column_kwargs={"server_default": text("now()")},
     )
     price: Decimal = Field(max_digits=12, decimal_places=4)
@@ -213,10 +212,7 @@ class Order(SQLModel, table=True):
     qty: int = Field(sa_column=Column(BigInteger, nullable=False))
     fill_price: Decimal | None = Field(default=None, max_digits=12, decimal_places=4)
     is_primary: bool = False
-    created_at: datetime = Field(
-        default_factory=_utcnow,
-        sa_column_kwargs={"server_default": text("now()")},
-    )
+    created_at: datetime = _created_at()
 
 
 class Alert(SQLModel, table=True):
@@ -228,10 +224,7 @@ class Alert(SQLModel, table=True):
     kind: str | None = None
     message: str | None = None
     severity: int | None = None
-    created_at: datetime = Field(
-        default_factory=_utcnow,
-        sa_column_kwargs={"server_default": text("now()")},
-    )
+    created_at: datetime = _created_at()
 
 
 class DocChunk(SQLModel, table=True):
@@ -249,7 +242,7 @@ class LedgerEntry(SQLModel, table=True):
     __tablename__ = "ledger_entries"
     __table_args__ = (UniqueConstraint("asset_id", "seq", name="uq_ledger_asset_seq"),)
 
-    id: int | None = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True, sa_type=BigInteger)
     world_id: UUID = Field(foreign_key="worlds.id", index=True)
     asset_id: UUID = Field(foreign_key="assets.id", index=True)
     seq: int
@@ -258,16 +251,13 @@ class LedgerEntry(SQLModel, table=True):
     payload: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
     prev_hash: str = Field(max_length=64)
     hash: str = Field(max_length=64)
-    created_at: datetime = Field(
-        default_factory=_utcnow,
-        sa_column_kwargs={"server_default": text("now()")},
-    )
+    created_at: datetime = _created_at()
 
 
 class LlmCall(SQLModel, table=True):
     __tablename__ = "llm_calls"
 
-    id: int | None = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True, sa_type=BigInteger)
     world_id: UUID | None = Field(default=None, foreign_key="worlds.id", index=True)
     agent: str | None = None
     model: str | None = None
@@ -275,7 +265,4 @@ class LlmCall(SQLModel, table=True):
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     latency_ms: int | None = None
-    created_at: datetime = Field(
-        default_factory=_utcnow,
-        sa_column_kwargs={"server_default": text("now()")},
-    )
+    created_at: datetime = _created_at()

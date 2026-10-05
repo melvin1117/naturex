@@ -9,7 +9,9 @@ class Settings(BaseSettings):
     """Runtime configuration. Secrets come from the environment, never the repo."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Commands run from backend/, but the README puts .env at the repo root.
+        # Both are read; backend/.env wins if present.
+        env_file=("../.env", ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )

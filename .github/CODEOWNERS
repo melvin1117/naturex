@@ -1,6 +1,3 @@
-# Default owners — update GitHub handles when the team is confirmed (plan.md open Q1).
-*       @melvin1117
-
-/backend/               @melvin1117
-/docs/specs/            @melvin1117
-/.github/               @melvin1117
+# Any one listed owner can approve. Add the 4th teammate's handle when they join the repo,
+# and narrow paths to role owners (PD, D1-D3) once roles are assigned (tasks/plan.md).
+*       @melvin1117 @uddesh04 @adi095

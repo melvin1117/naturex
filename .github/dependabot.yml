@@ -6,13 +6,20 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      # init, autobuild and analyze must always run the same CodeQL version.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
 
-  - package-ecosystem: pip
+  # Backend uses uv; the uv ecosystem keeps backend/uv.lock in sync.
+  - package-ecosystem: uv
     directory: /backend
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
 
+  # pnpm projects use the npm ecosystem. Runs fail harmlessly until frontend/ exists (T05).
   - package-ecosystem: npm
     directory: /frontend
     schedule:
