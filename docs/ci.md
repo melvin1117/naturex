@@ -18,6 +18,7 @@ Until the app dirs exist, each component workflow runs a `*/ detect` job and **s
 | `frontend` | detect · lint · typecheck · test · build | every PR, push to `main`, manual |
 | `database` | detect · migrate (upgrade / downgrade / upgrade + seed) | every PR, push to `main`, manual |
 | `security` | gitleaks (always); dependency-review + CodeQL **public repos only** | every PR, push to `main`, manual |
+| `task-map` | regenerate `tasks/task-map.{html,json}` from issues; commits to `main` only if changed (`[skip ci]`) | issue opened/closed/assigned/edited, push to `main` touching `tasks/todo.md`, daily, manual |
 | AI / evals | **not yet** — deferred until T09 (LLM client) | — |
 
 No path filters on triggers (every PR runs every workflow). Heavy jobs are gated on whether the component is present in the commit. Superseded runs are cancelled via `concurrency`.

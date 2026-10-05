@@ -38,6 +38,12 @@ If code and docs disagree, stop and ask; don't silently pick one.
 - **Local development uses no cloud:** Docker Compose for Postgres; cloud hosting is chosen later (T20).
 - **Mocks behind interfaces** (`USE_MOCKS=true`) so work can proceed in parallel and CI runs without keys.
 
+## Picking a task
+No Project board is needed. `tasks/task-map.html` (people) and `tasks/task-map.json` (agents) show what's done, picked, ready or blocked. A workflow regenerates them from the GitHub issues, so pull `main` first; `make task-map` refreshes them locally (needs `gh auth login`).
+- Only pick a 🟢 **ready** task (every dependency closed). Never start a ⏳ **blocked** one.
+- When asked "what should I pick?", answer from `suggestions[<role>]` in the JSON (critical path first), then show that task's `waiting_on`/`unlocks`.
+- Claim it by assigning yourself on the issue. Closing the issue (PR merged with `Closes #N`) marks it done.
+
 ## Skills (in `.agents/skills`, mirrored in `.claude/skills`)
 Load the matching skill before starting; `using-agent-skills` picks one if unsure.
 | Task | Skill |
@@ -57,7 +63,7 @@ Load the matching skill before starting; `using-agent-skills` picks one if unsur
 Update skills only with `scripts/sync-skills.sh`; never edit them in place.
 
 ## MCP servers
-GitHub (issues, PRs, board), Context7 (current library docs; use it before writing framework code), shadcn (components), Playwright (E2E and demo recording), Chrome DevTools (debugging and performance). Setup is in `docs/ai-setup.md`.
+GitHub (issues, PRs), Context7 (current library docs; use it before writing framework code), shadcn (components), Playwright (E2E and demo recording), Chrome DevTools (debugging and performance). Setup is in `docs/ai-setup.md`.
 
 ## Definition of done
 - [ ] Meets the story's acceptance criteria in `docs/specs/pm-spec.md`

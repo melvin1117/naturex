@@ -7,7 +7,7 @@
 | Area | Adopt |
 |---|---|
 | Team + AI assistants (**final, installed**) | Root **`AGENTS.md`** (+ `CLAUDE.md` → `@AGENTS.md`); skills in `.agents/skills/`: **addyosmani/agent-skills** (spec, plan, build, test, review…), **impeccable** (UI/UX), Vercel **web-design-guidelines** + **react-best-practices**, Supabase **postgres best practices**; MCP: **GitHub, Context7, shadcn, Playwright, Chrome DevTools**. See [ai-setup.md](./ai-setup.md) and ADR-0001 |
-| Repo foundation | Plain-folder monorepo; **uv, ruff, mypy strict, pytest**; **ESLint 9 + typescript-eslint, Prettier, tsc strict**; **pre-commit**; **openapi-typescript + openapi-fetch** client with a CI drift check; MADR ADRs; issue forms, PR template, CODEOWNERS, `main` ruleset; GitHub Projects + `gh` bulk import |
+| Repo foundation | Plain-folder monorepo; **uv, ruff, mypy strict, pytest**; **ESLint 9 + typescript-eslint, Prettier, tsc strict**; **pre-commit**; **openapi-typescript + openapi-fetch** client with a CI drift check; MADR ADRs; issue forms, PR template, CODEOWNERS, `main` ruleset; GitHub Issues + generated task map |
 | UI | **shadcn/ui** + blocks, Tailwind v4 tokens, `/dev/ui` showcase page, **Driver.js** tours, **Motion** (sparingly) |
 | AI agents | **PydanticAI** via `OpenAIProvider(base_url=Token Factory)`; **promptfoo** evals; OpenTelemetry spans → own Postgres (Agent Trace drawer) + **Langfuse**; **tavily-python** |
 | Geo + valuation | **earthengine-api** + **geemap** (Xee optional); shapely/geopandas; coefficients from **Brander et al. 2024 (CC BY) + Costanza 2014**, **not raw ESVD**; InVEST carbon-pool method; SEEA-EA report structure |
@@ -59,7 +59,7 @@
 | Issue forms, PR template, **CODEOWNERS**, `main` **ruleset** (PR + 1 approval + green CI, squash-only, no force-push) | Free for public repos | **ADOPT** |
 | Conventional Commits via **PR-title check** (`amannn/action-semantic-pull-request`) | Less friction than commitlint + husky | ADOPT |
 | **MADR 4** ADR templates (MIT/CC0) | adr-tools (GPL, stale), log4brains (stale) | ADOPT MADR |
-| GitHub Projects (Board/Table/Roadmap; Status, Priority, Size, Area, weekly Iteration) + **`gh` CLI** loop over `backlog.csv` | Built-in auto-add; actions/labeler for path labels | **ADOPT** |
+| GitHub **Issues** for status (assignee = picked, closed = done) + generated **task map** (`tasks/task-map.html` / `.json`, `scripts/task_map.py`) | GitHub Projects board (optional; nothing depends on it) | **ADOPT** issues + task map |
 
 **Version pins to act on (Sept 2026):**
 - **Next.js 16.3** is latest; 15.5.x still gets patches. Our spec says 15, so decide 15.5 vs 16.
