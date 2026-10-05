@@ -83,16 +83,17 @@ naturex/
 │   └── adr/                    # architecture decision records (MADR)
 ├── .agents/skills/             # shared AI skills (mirrored in .claude/skills/; see scripts/sync-skills.sh)
 ├── compose.yml                 # postgres+pgvector (local dev); see ADR-0002
-├── frontend/
+├── frontend/src/               # ADR-0002: code lives under src/
 │   ├── app/
 │   │   ├── page.tsx                  # Marketplace
 │   │   ├── list/page.tsx             # Listing portal
 │   │   ├── asset/[id]/page.tsx       # Asset page (report, chart, trade, alerts)
 │   │   ├── portfolio/page.tsx
-│   │   └── admin/page.tsx            # Time Machine
-│   ├── components/ (MapDraw, PriceChart, ReportView, TradePanel, CopilotChat, AgentTrace, SandboxBanner, PersonaSwitcher)
+│   │   ├── admin/page.tsx            # Time Machine
+│   │   └── dev/ui/page.tsx           # component showcase (T21)
+│   ├── components/ (ui/ = shadcn; MapDraw, PriceChart, ReportView, TradePanel, CopilotChat, AgentTrace, SandboxBanner, PersonaSwitcher)
 │   ├── tour/                         # Driver.js judge tour (demo-plan §3)
-│   └── lib/api.ts
+│   └── lib/api/                      # generated OpenAPI client (T08)
 ├── backend/
 │   ├── app/
 │   │   ├── main.py                   # FastAPI app, routers

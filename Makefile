@@ -22,8 +22,10 @@ migrate:
 seed:
 	cd backend && uv run python -m app.seed
 
+# Frontend lint (ESLint + Prettier), types, unit tests and build. Needs Node 22 + Corepack.
 fe-check:
-	@echo "fe-check: frontend scaffold lands in T05"
+	cd frontend && pnpm install --frozen-lockfile
+	cd frontend && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build
 
 eval:
 	@echo "eval: harness lands in T47"

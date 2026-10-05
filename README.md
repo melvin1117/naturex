@@ -4,7 +4,7 @@
 
 Built for the **Nebius × NVIDIA Global AI Hackathon**, *Best Apps & Agents* track.
 
-> **Status:** foundations in progress (backend walking skeleton). Frontend and full setup land in later Week‑1 tasks.
+> **Status:** foundations in progress: backend walking skeleton, market engine and frontend skeleton (route stubs).
 
 ### Quick start (backend)
 ```bash
@@ -16,6 +16,16 @@ uv run uvicorn app.main:app --reload --port 8000
 # from repo root
 make lint && make test
 docker compose up -d   # Postgres + pgvector (requires Docker)
+```
+
+### Quick start (frontend)
+Needs Node 22 and Corepack (`corepack enable`), which installs the pinned pnpm.
+```bash
+cd frontend && pnpm install
+pnpm dev               # http://localhost:3000 (/, /list, /asset/[id], /portfolio, /admin, /dev/ui)
+
+# from repo root: lint (ESLint + Prettier), types, unit tests, build
+make fe-check
 ```
 
 ## Documentation

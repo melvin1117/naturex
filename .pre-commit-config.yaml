@@ -23,5 +23,6 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        args: [--allow-multiple-documents]  # pnpm 12 lockfiles are multi-document
       - id: check-added-large-files
         args: [--maxkb=500]
