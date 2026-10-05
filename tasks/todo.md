@@ -38,7 +38,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 **Verify:** `make lint && make test`; CI green on the first PR · **Deps:** none · **Files:** `LICENSE`, `backend/pyproject.toml`, `backend/app/main.py`, `compose.yml`, `.pre-commit-config.yaml`, `.github/workflows/backend.yml`, `Makefile`
 
-### T05 · Frontend skeleton (#11) — D3 · M · Must
+### T05 · Frontend skeleton (#11) — D1 · M · Must
 - [ ] Next.js (version per T06) App Router, TypeScript strict, Tailwind v4, shadcn/ui init, ESLint 9 + Prettier
 - [ ] Route stubs for `/`, `/list`, `/asset/[id]`, `/portfolio`, `/admin`, `/dev/ui`; persistent sandbox banner (C5)
 - [ ] `make fe-check` and a GitHub Actions frontend job
@@ -271,12 +271,12 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 **Verify:** `make test` · **Deps:** T07 · **Files:** `backend/app/tools/geometry.py`, `backend/tests/test_geometry.py`
 
-### T37 · Report versions and diffs (#49) — D2 · S · Should · B6
+### T37 · Report versions and diffs (#49) — D2 · S · Could (only if ahead; re-plan Oct 4) · B6
 - [ ] Each re-rating stores a new version; the diff endpoint lists changed metrics and the reasons
 
 **Verify:** `make test` · **Deps:** T27 · **Files:** `backend/app/routers/reports.py`, `backend/app/services/diff.py`
 
-### T40 · Field evidence (photos) (#50) — D2 · S · Should · A4
+### T40 · Field evidence (photos) (#50) — D2 · S · Could (only if ahead; re-plan Oct 4) · A4
 - [ ] Up to 5 geotagged photos → Nemotron Nano Omni analysis → evidence event → confidence updated
 - [ ] Exposed as the `field_evidence` tool so the Orchestrator (T27) calls it when evidence exists
 
