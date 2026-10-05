@@ -19,13 +19,13 @@ test:
 migrate:
 	cd backend && uv run alembic upgrade head
 
-seed:
-	cd backend && uv run python -m app.seed
-
 # T01: check your .env keys work (Token Factory, Tavily, Earth Engine); spends no credits
 .PHONY: check-keys
 check-keys:
 	cd backend && uv run python -m app.check_keys
+
+seed:
+	cd backend && uv run python -m app.seed
 
 fe-check:
 	@echo "fe-check: frontend scaffold lands in T05"
