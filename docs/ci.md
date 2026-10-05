@@ -22,9 +22,21 @@ Until the app dirs exist, each component workflow runs a `*/ detect` job and **s
 
 No path filters on triggers (every PR runs every workflow). Heavy jobs are gated on whether the component is present in the commit. Superseded runs are cancelled via `concurrency`.
 
+## Team rule: every change goes through a PR
+
+While the repo is private, GitHub **doesn't enforce** the `protect-main` ruleset (that needs a paid GitHub Team plan; it becomes enforced automatically if the repo goes public). So the team follows it by agreement:
+
+1. **Never push to `main`.** Work on a branch (`feat/…`, `fix/…`, `docs/…`).
+2. **Run `make ci` locally** and get it green before opening the PR (start Postgres first: `docker compose up -d`).
+3. **Open a PR** using the template, with `Closes #NN` for the task.
+4. **Get 1 approval from a teammate.** Don't approve or merge your own PR.
+5. **Merge only when GitHub CI is green**, using **Squash and merge**. Never click merge before the checks have finished.
+
 ## Local commands
 
 ```bash
+# Everything CI checks, in one command (run before every PR)
+docker compose up -d && make ci
 # Backend (Python 3.12, uv)
 cd backend && uv sync
 make lint
@@ -65,6 +77,7 @@ Do not add Token Factory / Tavily keys to PR workflows. Live AI evals will be a 
 ## GitHub plan / visibility limits
 
 | Feature | Public repo | Private repo without Advanced Security |
+| Branch rulesets (`protect-main`) | Enforced (free) | **Not enforced** on the free plan; see the team rule above |
 |---|---|---|
 | Actions (these workflows) | Free minutes (subject to quotas) | Free minutes (subject to quotas) |
 | Dependabot alerts + PRs | Yes | Yes |

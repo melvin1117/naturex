@@ -1,4 +1,12 @@
-.PHONY: lint test migrate seed fe-check check-client eval e2e
+.PHONY: ci lint test migrate seed fe-check check-client eval e2e
+
+# Run before every PR: the same checks GitHub CI runs. Start Postgres first: docker compose up -d
+ci:
+	$(MAKE) lint
+	cd backend && REQUIRE_DB=true uv run pytest -q
+	$(MAKE) fe-check
+	@if command -v actionlint >/dev/null; then actionlint; else echo "actionlint not installed (brew install actionlint): workflow check skipped"; fi
+	@if command -v gitleaks >/dev/null; then gitleaks detect --source . --redact; else echo "gitleaks not installed (brew install gitleaks): secret scan skipped"; fi
 
 lint:
 	cd backend && uv run ruff check app tests migrations

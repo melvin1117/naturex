@@ -553,29 +553,20 @@ Policy: use the planned stack, and switch to the free alternative wherever a pai
 | NVIDIA Nemotron (Ultra, Super, Nano, Nano Omni) via **Nebius Token Factory** | $25 hackathon promo (code `NEBIUS-DEVPOST-GLOBAL26`) + $25 Nebius Builders Program, per account | Credits are per account and can't be pooled. The deployed app uses one key; each member develops with their own. Confirm per-member vs per-team with the organisers. |
 
 **Paid items with free alternatives:**
-The optional Azure column is for team members who have personal Azure dev/test credits. Use it for development, testing and precomputation only, **not** for hosting the judged demo (see the Azure rules below).
+**Development is local-only:** Docker Compose (Postgres + pgvector) on each laptop, with no cloud accounts needed beyond the AI and data APIs. Hosting for the demo is chosen later from free tiers (T20).
 
-| Planned (paid) | Free alternative | Optional Azure dev/test alternative (approx. cost/month) | Trade-off |
-|---|---|---|---|
-| Nebius Serverless Endpoint (backend API) | Local `docker compose`; demo on Hugging Face Spaces (Docker) or Render free tier | Azure Container Apps, Consumption plan, scale to zero (~$0 within the monthly free grant) | Cold starts on free tiers; loses a bonus Nebius-usage point (still meets the rule via Token Factory) |
-| Nebius Serverless Jobs (`rerate_all`, `news_sweep`) | In-process run (`LOCAL_JOBS=true`) triggered by the Time Machine; GitHub Actions `schedule` for the daily sweep | Azure Container Apps Jobs, manual or cron trigger (~$0 within the free grant) | Same code entrypoints; only the trigger changes |
-| Nebius Managed PostgreSQL | Supabase free tier (Postgres + pgvector) or local Postgres in Docker | Azure Database for PostgreSQL Flexible Server, Burstable B1ms, 32 GB, pgvector enabled (~$15–20; stop when idle) | Supabase free projects pause after inactivity; Azure server auto-restarts after 7 days stopped |
-| Nebius Object Storage | Supabase Storage free tier or local disk / MinIO in Docker | Azure Blob Storage, Standard LRS, Hot tier, a few GB (< $1) | Small storage limits, fine for the demo |
-| NVIDIA embedding model on Token Factory (uses credits) | Local `bge-small` (sentence-transformers) | — (keep AI on Token Factory) | Slightly lower retrieval quality |
-| Tavily beyond the free tier | Free tier (~1,000 searches/month) + $25 Builders credit; cache results for 24 h | — | Keep queries to 2–3 per asset |
-| Mapbox (if used) | Leaflet + OpenStreetMap / Esri basemap tiles | — (Azure Maps not needed) | Respect tile usage policies |
-| Frontend on a Nebius container | Vercel Hobby (free) | Azure Static Web Apps, Free plan ($0) | Next.js SSR support on Static Web Apps is limited; Vercel is simpler |
-| Nebius AI Cloud compute | Only if credits are unlocked at a Builders & Brews event | — | Optional upgrade path |
-| Satellite precompute (`scripts/precompute_sites.py`) | Laptop (Earth Engine computes server-side) | Short-lived small Linux VM or Container Apps Job to run the script unattended (~$1–3 total) | Deallocate when done |
-
-**Azure rules (only if someone uses personal dev/test credits):**
-- **Dev/test only.** Dev/test credit offers usually forbid production use and may suspend long-running instances, so the judged demo stays on the free hosts above.
-- **Never use Azure for AI models** (Azure OpenAI, Foundry-hosted Nemotron). The hackathon scores Nemotron **via Nebius Token Factory**.
-- **Keep the spending limit on**, so services stop when the credit runs out instead of charging a card.
-- **Budget alert** at $50/month in Cost Management; put everything in one resource group (`rg-naturex-dev`) so it can be deleted in one step.
-- **Avoid by default** (easy to overspend): GPU VMs, AKS, App Service Premium, Azure AI Search, Cosmos DB provisioned throughput, Application Gateway, NAT Gateway.
-- **Hidden costs to cap:** Log Analytics ingestion (set a daily cap of ~0.1 GB, or disable Container Apps logs); container registry (pull images from GitHub Container Registry, free for public images, instead of Azure Container Registry at ~$5/month).
-- **Expected total:** ~$20–30/month with Postgres running, ~$5/month with it stopped. Prices are approximate list prices and vary by region **(verify in the Azure Pricing Calculator)**.
+| Planned (paid) | Free alternative | Trade-off |
+|---|---|---|
+| Nebius Serverless Endpoint (backend API) | Local `docker compose`; demo on Hugging Face Spaces (Docker) or Render free tier | Cold starts on free tiers; loses a bonus Nebius-usage point (still meets the rule via Token Factory) |
+| Nebius Serverless Jobs (`rerate_all`, `news_sweep`) | In-process run (`LOCAL_JOBS=true`) triggered by the Time Machine; GitHub Actions `schedule` for the daily sweep | Same code entrypoints; only the trigger changes |
+| Nebius Managed PostgreSQL | Supabase free tier (Postgres + pgvector) or local Postgres in Docker | Supabase free projects pause after inactivity |
+| Nebius Object Storage | Supabase Storage free tier or local disk / MinIO in Docker | Small storage limits, fine for the demo |
+| NVIDIA embedding model on Token Factory (uses credits) | Local `bge-small` (sentence-transformers) | Slightly lower retrieval quality |
+| Tavily beyond the free tier | Free tier (~1,000 searches/month) + $25 Builders credit; cache results for 24 h | Keep queries to 2–3 per asset |
+| Mapbox (if used) | Leaflet + OpenStreetMap / Esri basemap tiles | Respect tile usage policies |
+| Frontend on a Nebius container | Vercel Hobby (free) | None for the demo |
+| Nebius AI Cloud compute | Only if credits are unlocked at a Builders & Brews event | Optional upgrade path |
+| Satellite precompute (`scripts/precompute_sites.py`) | Laptop (Earth Engine computes server-side) | None; results are cached in the repo |
 
 **Already free:**
 - Sentinel-2, Dynamic World, JRC Surface Water, Hansen Forest Change and ESA biomass data.
