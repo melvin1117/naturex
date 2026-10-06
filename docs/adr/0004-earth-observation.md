@@ -47,6 +47,68 @@ The rating needs per-polygon land cover, an NDVI series with a trend, water chan
 3. Cloud Score+ masking leaves clear data in **every** month of 5 years here, so the confidence coverage term (`cloud_free_obs / 24`) will be high for this site.
 4. Dynamic World's mode can include **`snow_and_ice`** at 0.0x% on mixed urban pixels. Dropping classes under 0.5% keeps reports clean.
 
+## As built (T11, 2026-10-06)
+
+T11 replaced the seed placeholder with a committed hero boundary at `backend/data/demo_sites/wetland_mx.geojson`. The polygon is hand-digitised over the Xochimilco Ecological Park wetland area identified above, guided by Dynamic World natural/water pixels and our own visual judgement. It does **not** copy OpenStreetMap or other share-alike boundaries.
+
+Hero polygon stats from `backend/data/demo_sites/wetland_mx.json`:
+
+| Stat | Value |
+|---|---:|
+| Area | 206.6995 ha |
+| Vertices | 16 |
+| Centroid | 19.2873, −99.0976 |
+| Natural fraction | 83.89% |
+| Water | 24.84% |
+| Trees | 35.74% |
+| Grass | 10.24% |
+| Flooded vegetation | 2.96% |
+| Shrub and scrub | 10.11% |
+| Crops | 3.23% |
+| Built | 12.88% |
+| Bare / snow and ice | 0.00% |
+
+The cached metrics are written by `scripts/precompute_sites.py` to `backend/data/demo_sites/<site_key>.json`. The runtime app does not import Earth Engine; it loads the JSON through `app.tools.earth_obs.load_site_metrics(site_key)`, which returns frozen Pydantic models and raises a clear error for unknown site keys.
+
+T11 stores the following output fields:
+- `area_ha` and `centroid` from the same local equal-area calculation used by listing validation;
+- `land_cover_fractions` and `natural_fraction`;
+- 60 monthly `ndvi_series` rows, `mean_last_12_months`, Sen's slope per year, Mann-Kendall tau and p-value;
+- `water_change_mean_abs`;
+- `forest_loss_last_5y_ha`;
+- `biomass_mean_t_ha`;
+- `cloud_free_observations_last_12m` and `cloud_free_months_5y`;
+- `data_version`, exact date windows, thresholds, dataset IDs/versions/bands/catalog URLs, computation timestamp and attributions.
+
+Dataset choices as built:
+
+| Metric | Dataset ID and bands | Version / window | Reason |
+|---|---|---|---|
+| Land cover | `GOOGLE/DYNAMICWORLD/V1` · `label` | V1; 2025-10-01 to 2026-10-01 | Required by §7.2; 10 m classes map directly into T14/T15 natural fraction and valuation inputs. |
+| NDVI and coverage | `COPERNICUS/S2_SR_HARMONIZED` · `B8`, `B4` joined with `GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED` · `cs_cdf` | 2021-10-01 to 2026-10-01; `cs_cdf >= 0.60` | Same method as the T03 notebook; Cloud Score+ is the catalog-recommended QA companion for Sentinel-2 surface analysis. |
+| Water change | `JRC/GSW1_4/GlobalSurfaceWater` · `change_abs` | v1.4; source observations 1984-03-16 to 2021-12-31 | Official JRC global surface-water occurrence change layer; stored as mean absolute occurrence change intensity over the polygon with never-water pixels treated as 0. |
+| Forest loss | `UMD/hansen/global_forest_change_2025_v1_13` · `lossyear` | 2025 v1.13; latest five complete Hansen years, 2021-2025 (`lossyear` 21-25) | Current official catalog version. The loss layer is tied to Hansen's tree-cover definition: vegetation taller than 5 m in 2000. |
+| Biomass | `LARSE/GEDI/GEDI04_B_002` · `MU` | GEDI L4B Version 2; 2019-04-18 to 2021-08-04 | Official gridded above-ground biomass density in Mg/ha with coverage over the Mexico City site. ESA CCI Biomass was not used because the checked EE catalog URL was unavailable; GEDI L4B is documented and returned coverage for the hero polygon. |
+
+Hero metrics produced by T11:
+- NDVI last-12-month mean: 0.6004.
+- Sen's slope: +0.0096 NDVI/year.
+- Mann-Kendall: τ = +0.1458, p = 0.1012 (not significant at 5%).
+- Cloud-free Sentinel-2 observations in the last 12 months: 79; all 60 months have clear data.
+- JRC water change mean (`change_abs`): −6.6021.
+- Hansen forest loss in the latest five complete dataset years: 0.0 ha.
+- GEDI L4B mean above-ground biomass: 9.4681 t/ha.
+
+Re-run and check:
+
+```bash
+cd backend
+PATH=$HOME/.local/bin:$PATH uv run --with earthengine-api python ../scripts/precompute_sites.py
+PATH=$HOME/.local/bin:$PATH uv run --with earthengine-api python ../scripts/precompute_sites.py --check
+```
+
+`--check` recomputes every committed demo-site GeoJSON and compares the result with the committed JSON using a small numeric tolerance. Existing `computed_at_utc` values are preserved during recompute so the cache stays stable to diff.
+
 ## Licence and terms
 - **Earth Engine use appears noncommercial**, subject to the unverified prize-money point below: an individual using it for noncommercial purposes, an open-source project, play money only, no fees, no monetisation. That appears consistent with the "Individual using Earth Engine for noncommercial purposes" category (https://earthengine.google.com/noncommercial/). This is the team's reading, not legal clearance.
 - **What counts as commercial:** the commercial examples are "monetization of services built on top of Earth Engine" and material made "to influence current and prospective customers' or investors' decisions". NatureX does neither: the exchange is a sandbox and nothing is a real security.

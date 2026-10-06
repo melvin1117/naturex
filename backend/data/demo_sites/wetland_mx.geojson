@@ -1,0 +1,83 @@
+{
+  "type": "Feature",
+  "properties": {
+    "created_date": "2026-10-06",
+    "method": "Hand-digitised from Dynamic World natural and water pixels in the Xochimilco Ecological Park wetland area identified by ADR-0004; no OpenStreetMap or share-alike boundary data copied.",
+    "name": "Xochimilco Wetland"
+  },
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          -99.1048,
+          19.2811
+        ],
+        [
+          -99.1028,
+          19.2802
+        ],
+        [
+          -99.0995,
+          19.2805
+        ],
+        [
+          -99.0964,
+          19.2812
+        ],
+        [
+          -99.0935,
+          19.282
+        ],
+        [
+          -99.0912,
+          19.2838
+        ],
+        [
+          -99.0896,
+          19.2865
+        ],
+        [
+          -99.0892,
+          19.2891
+        ],
+        [
+          -99.0901,
+          19.2916
+        ],
+        [
+          -99.0925,
+          19.2934
+        ],
+        [
+          -99.0957,
+          19.2945
+        ],
+        [
+          -99.0991,
+          19.2941
+        ],
+        [
+          -99.1022,
+          19.2928
+        ],
+        [
+          -99.104,
+          19.2904
+        ],
+        [
+          -99.105,
+          19.2874
+        ],
+        [
+          -99.1056,
+          19.2842
+        ],
+        [
+          -99.1048,
+          19.2811
+        ]
+      ]
+    ]
+  }
+}
