@@ -86,7 +86,7 @@ Principle: **one flawless end-to-end story on 3 real sites** beats a wide app wi
 
 | Must (PoC core) | Should | Could | Won't |
 |---|---|---|---|
-| A1–A3, B1–B5, C1–C5, D1–D3, E1 · Time Machine · 3 real demo sites (cached satellite data) · **Nature Ledger** (F1–F2) · **Agent Trace** (G1) · **Eval harness** (G2) · **Judge tour + per-visitor sandbox** (J1–J2) · deployed on free tiers (Nebius Serverless if event credits) · CI with tests | A4 field evidence (**photos only**), B6 report diffs, D4 revenue split, E3 impact | Live rating of arbitrary user polygons (fallback to cached), A5 stewardship plan, E2 compare, Spanish report, OpenTimestamps anchoring (F3) | Real money, tokens/blockchain trading, full auth/KYC, audio evidence, mobile app, PDF export |
+| A1–A3, B1–B5, C1–C5, D1–D3, E1 · Time Machine · 3 real demo sites (cached satellite data) · **Nature Ledger** (F1–F2) · **Agent Trace** (G1) · **Eval harness** (G2) · **Judge tour + per-visitor sandbox** (J1–J2) · deployed (host per dev-spec §21) · CI with tests | A4 field evidence (**photos only**), B6 report diffs, D4 revenue split, E3 impact | Live rating of arbitrary user polygons (fallback to cached), A5 stewardship plan, E2 compare, Spanish report, OpenTimestamps anchoring (F3) | Real money, tokens/blockchain trading, full auth/KYC, audio evidence, mobile app, PDF export |
 
 ### Epic F — Nature Ledger (tamper-evident records)
 | ID | Story | Acceptance criteria |
@@ -136,7 +136,7 @@ Each Friday the team must be able to run the gate demo end-to-end. If a gate sli
 | 1 — Walking skeleton | Sep 26 – Oct 2 | Credits, repo (MIT, CI), docker-compose, schema, Token Factory client + call logging, mock tools, UI shell | **One hard-coded site goes list → (mock) rating → report page, with a real Nemotron call writing the summary** |
 | 2 — Real data | Oct 3 – Oct 9 | Earth-obs pipeline for 3 sites (cached), valuation + scoring (unit-tested), market engine + IPO, marketplace & asset page | **Real satellite metrics + $ ranges + grade on all 3 sites; buy/sell works** |
 | 3 — Real agents | Oct 10 – Oct 16 | Orchestrator tool-calling, Auditor (Ultra) with schema validation, Nature Ledger, Agent Trace, field-evidence photos, revenue split | **Full rating run is 100% live AI; trace drawer shows every step; ledger verifies** |
-| 4 — Loop + deploy | Oct 17 – Oct 23 | Time Machine + events, re-rating job, alerts, Copilot RAG, judge tour, UI polish, demo deploy (free tier; Nebius Serverless if credits), eval harness | **Public URL runs the entire 3-min demo script; `make eval` green. Feature freeze Fri Oct 23** |
+| 4 — Loop + deploy | Oct 17 – Oct 23 | Time Machine + events, re-rating job, alerts, Copilot RAG, judge tour, UI polish, demo deploy (host per dev-spec §21), eval harness | **Public URL runs the entire 3-min demo script; `make eval` green. Feature freeze Fri Oct 23** |
 | 5 — Demo & presentation | Oct 24 – Oct 30 | **No new features:** demo video, Devpost page and presentation kit, README with eval/routing tables, feedback, judging readiness, bug fixes | **Submitted Oct 29** (1-day buffer) |
 
 ## 9. Submission checklist (Devpost)

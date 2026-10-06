@@ -12,7 +12,7 @@
 
 ### T01 · Accounts, credits and keys (#7) — All · XS · Must
 - [ ] Each member claims the Token Factory promo ($25, code `NEBIUS-DEVPOST-GLOBAL26`) and joins the Nebius Builders Program ($25 Token Factory + $25 Tavily)
-- [ ] D2 registers an Earth Engine non-commercial project; D1 creates the Supabase project; one person owns the shared deployment keys
+- [ ] D2 registers an Earth Engine non-commercial project; hosting accounts are set up in T20; one person owns the shared deployment keys
 - [ ] Keys live only in personal `.env` files; `.env.example` lists the variable names
 
 **Verify:** `make check-keys` passes for each dev with their own key (it also lists the Nemotron model IDs for `MODEL_*`) · **Deps:** none
@@ -167,7 +167,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`; asset page shows real numbers · **Deps:** T14, T15, T08 · **Files:** `backend/app/services/rating.py`, `backend/app/routers/reports.py`
 
 ### T20 · Deploy skeleton (risk) (#31) — D1 · S · Must
-- [ ] Frontend on Vercel, backend on a free host (Hugging Face Spaces or Render), database on Supabase; secrets in host settings
+- [ ] Pick the host from dev-spec §21 (Nebius Serverless if credits → Azure Container Apps + Azure Postgres if the team approves the credits and they last to Dec 15 and allow a public demo → HF Spaces/Render + Supabase); record the choice in the README
+- [ ] Frontend on Vercel; backend container + Postgres (with `vector`) on the chosen host; secrets in host settings, never in the repo
 - [ ] `/healthz` reachable; README notes the URLs
 
 **Verify:** public URL loads the marketplace · **Deps:** T04, T05 · **Files:** `backend/Dockerfile`, deploy config
@@ -311,7 +312,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`; "Why did the price drop?" cites the encroachment event · **Deps:** T27 · **Files:** `backend/app/rag/*.py`, `backend/app/routers/copilot.py`
 
 ### T42 · Demo deploy (#54) — D1 · S · Must
-- [ ] Full app deployed on the free stack with live keys, `LLM_BUDGET_USD` set and a keep-alive ping workflow
+- [ ] Full app deployed on the T20 host with live keys and `LLM_BUDGET_USD` set; keep-alive ping workflow if the host sleeps (free tiers)
 
 **Verify:** the demo script runs on the public URL · **Deps:** T20, T38 · **Files:** deploy config, `.github/workflows/keepalive.yml`
 

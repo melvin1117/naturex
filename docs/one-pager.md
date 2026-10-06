@@ -35,7 +35,7 @@ Nature delivers ~$100T/yr of services — clean water, flood protection, carbon 
 | Field Evidence | **MiniCPM-V** (perception) + **Nemotron 3 Ultra** (judgement) | Reads community photos (audio after the hackathon) |
 | Investor Copilot | **Nemotron Nano** + RAG | Fast grounded Q&A |
 
-The app runs on free tiers (Vercel, Hugging Face Spaces or Render, Supabase); re-rating and news sweeps run as scheduled jobs. **Nebius Serverless Endpoints and Jobs** are an optional upgrade if event credits arrive.
+The frontend runs on Vercel; the backend and database run on **Nebius Serverless** if event credits arrive, otherwise on team-approved Azure credits or free tiers (Hugging Face Spaces / Render + Supabase). All AI runs on Token Factory; re-rating and news sweeps run as scheduled jobs.
 
 ## What makes it different
 - **Honest numbers** – every $ value has a low/mid/high range and a confidence score.
@@ -66,4 +66,4 @@ Rating-as-a-service for funds & corporates · listing/verification fee per asset
 [diagrams.html](./diagrams.html) (overview, rating engine, architecture, flows) · [pm-spec.md](./specs/pm-spec.md) (scope & plan) · [dev-spec.md](./specs/dev-spec.md) (technical design) · [demo-plan.md](./specs/demo-plan.md) (judge tour & video).
 
 ## Honest limits
-Sandbox with play money — **not** a securities offering. Valuations are screening estimates using published benefit-transfer coefficients (starter values from Costanza et al. 2014, to be replaced by ESVD), not certified appraisals. Real-money trading would require licensed partners and regulation.
+Sandbox with play money — **not** a securities offering. Valuations are screening estimates using published benefit-transfer coefficients (starter values from Costanza et al. 2014, to be replaced by cited published values such as Brander et al. 2024; never raw ESVD data), not certified appraisals. Real-money trading would require licensed partners and regulation.

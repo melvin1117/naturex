@@ -8,7 +8,7 @@
 
 ## 1. System overview
 ```
-Next.js web app (Vercel) ──HTTP/SSE──► FastAPI backend (Hugging Face Spaces or Render; Nebius Serverless Endpoint optional)
+Next.js web app (Vercel) ──HTTP/SSE──► FastAPI backend (host chosen in T20, see §21: Nebius Serverless · Azure Container Apps · HF Spaces/Render)
                                  ├── Sandbox worlds (one private copy of the demo per visitor)
                                  ├── Rating Orchestrator (Nemotron 3 Super, tool-calling)
                                  │     ├── earth_obs tool ──► Google Earth Engine
@@ -19,7 +19,7 @@ Next.js web app (Vercel) ──HTTP/SSE──► FastAPI backend (Hugging Face S
                                  ├── Market Engine (pure Python)
                                  ├── Copilot (Nemotron Nano + pgvector RAG, Qwen3 embeddings)
                                  ├── Nature Ledger (hash-chained, append-only)
-                                 └── Supabase: Postgres + pgvector, Storage
+                                 └── Postgres + pgvector, object storage (Docker/disk locally; hosted per §21)
 Scheduled jobs: rerate_all (quarterly / Time Machine), news_sweep (daily via GitHub Actions); Nebius Serverless Jobs optional
 ```
 Design principles:
@@ -34,13 +34,13 @@ Design principles:
 | Maps | react-leaflet + leaflet-draw (or MapLibre + terra-draw) | Esri/OSM basemap; land-cover tile overlay |
 | Charts | Recharts | Price chart with event markers |
 | Backend | Python 3.12, FastAPI, SQLModel, Pydantic v2 | |
-| DB | Postgres 16 + pgvector on **Supabase** (free tier); local Docker for development | |
-| Object storage | **Supabase Storage** (free tier); local disk in development | Tiles, thumbnails, evidence, report PDFs |
+| DB | Postgres 16 + pgvector; local Docker for development | Hosted DB per §21 (Supabase free tier or Azure Database for PostgreSQL) |
+| Object storage | Local disk in development; hosted per §21 (Supabase Storage or Azure Blob) | Tiles, thumbnails, evidence, report PDFs |
 | LLM | **Nebius Token Factory** (OpenAI-compatible) | `openai` Python SDK with custom `base_url` |
 | Search | **Tavily** (`tavily-python`) | News Scout |
 | Earth observation | **Google Earth Engine** (`earthengine-api`, `geemap`), non-commercial registration | Required: Planetary Computer lacks Dynamic World, Hansen and GEDI, so it's a fallback only for other datasets |
 | Agent loop | **PydanticAI** via Token Factory `OpenAIProvider` | Plain OpenAI tool-calling loop as fallback; see ADR-0001 |
-| Deploy | **Free tiers by default:** frontend → Vercel Hobby; backend → Hugging Face Spaces (Docker) or Render; jobs → in-process (Time Machine) + GitHub Actions cron | **Optional upgrade:** Nebius Serverless Endpoint / Jobs if event credits arrive (§21) |
+| Deploy | Frontend → Vercel Hobby; backend + DB → **chosen in T20** from the ranked options in §21 (Nebius Serverless if credits → Azure with team-approved credits → free tiers); jobs → in-process (Time Machine) + GitHub Actions cron | AI always via Token Factory |
 | AI dev tooling | `AGENTS.md`, shared skills (`.agents/skills`), MCP servers (GitHub, Context7, shadcn, Playwright, Chrome DevTools) | Setup: [docs/ai-setup.md](../ai-setup.md) |
 | Tests | pytest, Playwright | |
 
@@ -551,7 +551,7 @@ Implementation: plain pytest + a small runner that writes `evals/results.md` (co
 - [ ] Public URL runs the full demo script without manual DB edits
 - [ ] At least 3 Nemotron models (Super, Ultra, Nano) are called at runtime via Token Factory, visible in the Agent Trace drawer with the non-NVIDIA helpers (MiniCPM-V, Qwen3 embeddings) labelled
 - [ ] Tavily is called at runtime by the News Scout
-- [ ] Backend deployed on the free host (or a Nebius Serverless Endpoint if credits); re-rating runs as a job (in-process / GitHub Actions, or Nebius Serverless Jobs)
+- [ ] Backend deployed on the host chosen in T20 (§21); re-rating runs as a job (in-process / GitHub Actions, or Nebius Serverless Jobs)
 - [ ] Judge tour and per-visitor sandbox work for concurrent visitors
 - [ ] README covers setup, the architecture image, the model table, and "How we used Nemotron & Token Factory"
 - [ ] Nature Ledger verifies for every demo asset; tamper demo shows ❌
@@ -560,16 +560,25 @@ Implementation: plain pytest + a small runner that writes `evals/results.md` (co
 - [ ] MIT license visible; demo video < 3 min on YouTube
 
 ## 21. Cost plan: paid items and free alternatives
-Policy: use the planned stack, and switch to the free alternative wherever a paid item isn't covered by hackathon credits. Commercial licensing is out of scope for the hackathon (local development and small demo hosting only).
+Policy: use the planned stack, and switch to the free alternative wherever a paid item isn't covered by hackathon credits or team-approved credits (hosting, see below). Commercial licensing is out of scope for the hackathon (local development and small demo hosting only).
 
 **Mandatory (hackathon rule), running on credits.** The app must call Token Factory at runtime **or** run on Nebius AI Cloud, and use at least one NVIDIA open model:
 | Item | Covered by | Notes |
 |---|---|---|
 | NVIDIA Nemotron (Ultra, Super, Nano) via **Nebius Token Factory** | $25 hackathon promo (code `NEBIUS-DEVPOST-GLOBAL26`) + $25 Nebius Builders Program, per account | Credits are per account and can't be pooled. The deployed app uses one key; each member develops with their own. Confirm per-member vs per-team with the organisers. |
 
-**Paid items with free alternatives:**
-**Development is local-only:** Docker Compose (Postgres + pgvector) on each laptop, with no cloud accounts needed beyond the AI and data APIs. Hosting for the demo is chosen later from free tiers (T20).
+**Development is local-only:** Docker Compose (Postgres + pgvector) on each laptop, with no cloud accounts needed beyond the AI and data APIs.
 
+**Hosting for the demo is decided in T20**, in this order:
+| Rank | Backend + DB | When | Notes |
+|---|---|---|---|
+| 1 | **Nebius Serverless Endpoint** (+ Serverless Jobs) | If Nebius AI Cloud credits are unlocked (e.g. a Builders & Brews event) | Encouraged by the track; Postgres on Supabase or Azure |
+| 2 | **Azure Container Apps** (1 always-on replica, ~0.5 vCPU / 1 GB) + **Azure Database for PostgreSQL Flexible** (B1ms, `vector` extension allow-listed) + Blob Storage | If the team approves using personal Azure credits **and** (a) the credits last until **Dec 15, 2026** and (b) their terms allow a public demo (some credits are dev/test only) | ~$50/month estimate (≈ $100 for Oct 23 – Dec 15); no sleeping during judging |
+| 3 | **Hugging Face Spaces (Docker) or Render** + **Supabase** free tiers | Default if neither above applies | Free; sleeps when idle, so keep-alive pings + a "Waking up" state |
+
+All options: frontend on **Vercel Hobby**; **AI only via Token Factory** (never Azure OpenAI); no local models, so the backend is a small CPU-only container (ADR-0003).
+
+**Paid items with free alternatives:**
 | Planned (paid) | Free alternative | Trade-off |
 |---|---|---|
 | Nebius Serverless Endpoint (backend API) | Local `docker compose`; demo on Hugging Face Spaces (Docker) or Render free tier | Cold starts on free tiers; loses a bonus Nebius-usage point (still meets the rule via Token Factory) |
@@ -592,7 +601,7 @@ Policy: use the planned stack, and switch to the free alternative wherever a pai
 - GitHub (public repo), GitHub Actions and YouTube.
 
 **Judging-period availability (rule: testable free of charge until judging ends, Dec 15, 2026):**
-- Free tiers sleep or pause (Supabase after ~1 week idle, Hugging Face Spaces after ~48 h, Render after ~15 min) **(verify)**. Add a GitHub Actions ping to `/healthz` every few hours and re-check everything before Dec 1.
+- If hosted on free tiers (§21 rank 3): they sleep or pause (Supabase after ~1 week idle, Hugging Face Spaces after ~48 h, Render after ~15 min) **(verify)**. Add a GitHub Actions ping to `/healthz` every few hours and re-check everything before Dec 1.
 - Keep part of `LLM_BUDGET_USD` in reserve for judges' live runs; serve cached ratings for the 3 demo sites so browsing costs nothing.
 
 **Credit guardrails:**

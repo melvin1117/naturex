@@ -43,7 +43,7 @@ Estimated cost: ≈ $0.035 per full rating, ≈ $0.0002 per photo, ≈ $0.0003 p
 - Per-call latency and token counts, to replace the estimates above.
 
 ## Consequences
-- The backend stays a small CPU-only container. Free hosts (Hugging Face Spaces, Render) work with no GPU and no model weights.
+- The backend stays a small CPU-only container with no GPU and no model weights, so every hosting option ranked in [dev-spec §21](../specs/dev-spec.md) works: Nebius Serverless, Azure Container Apps (team-approved credits), or Hugging Face Spaces / Render.
 - Model IDs live in `.env` (`MODEL_*`), so swapping a model is a config change. `make check-keys` warns if a configured ID isn't served.
 - The Agent Trace drawer and the README must show which model handled each step, including the two non-NVIDIA ones.
 - Photo evidence (T40) is now cheap and feasible, but stays "only if ahead".

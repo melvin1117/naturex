@@ -39,7 +39,7 @@ Built for the Nebius × NVIDIA Global AI Hackathon (Best Apps & Agents track); s
 - **Guided tour:** 10 chapters with a progress bar, spotlight hints, two hint layers (*Why this matters* / *Tech behind it*), "Do it for me", skip/back/resume, and **Live** badges on steps that really call Nemotron or Tavily. Every screen needs stable anchor points for tour steps.
 - **Explore freely:** all personas unlocked with hints available.
 - **Video:** the tour's autoplay path is scripted with Playwright and recorded at ~125% browser zoom, 1080p+. Screens must read well in a recording.
-- **Free hosting:** the backend may be asleep; a "Waking up… ~30 s" state is part of the experience. When the LLM budget or Earth Engine is unavailable, live steps fall back to cached results with a clear notice, never an error.
+- **Free hosting (if used, dev-spec §21):** the backend may be asleep; a "Waking up… ~30 s" state is part of the experience. When the LLM budget or Earth Engine is unavailable, live steps fall back to cached results with a clear notice, never an error.
 - **Local run** for technical judges: without keys the app runs in clearly labelled mock mode.
 
 ## Capabilities and Constraints
