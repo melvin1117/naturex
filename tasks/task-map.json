@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-06 06:45 UTC",
+  "generated_at": "2026-10-06 07:45 UTC",
   "tasks": [
     {
       "id": "P01",
@@ -174,7 +174,7 @@
       "deps": [
         "T01"
       ],
-      "status": "in_progress",
+      "status": "done",
       "assignees": [
         "melvin1117"
       ],
@@ -183,8 +183,8 @@
         "T09"
       ],
       "step": 1,
-      "chain": 11,
-      "critical": true
+      "chain": 0,
+      "critical": false
     },
     {
       "id": "T03",
@@ -210,7 +210,7 @@
       ],
       "step": 1,
       "chain": 11,
-      "critical": false
+      "critical": true
     },
     {
       "id": "T05",
@@ -351,11 +351,9 @@
         "T02",
         "T07"
       ],
-      "status": "blocked",
+      "status": "ready",
       "assignees": [],
-      "waiting_on": [
-        "T02"
-      ],
+      "waiting_on": [],
       "unlocks": [
         "T10",
         "T24",
@@ -365,7 +363,7 @@
       ],
       "step": 2,
       "chain": 10,
-      "critical": true
+      "critical": false
     },
     {
       "id": "T11",
@@ -394,7 +392,7 @@
       ],
       "step": 2,
       "chain": 10,
-      "critical": false
+      "critical": true
     },
     {
       "id": "T16",
@@ -664,7 +662,7 @@
       ],
       "step": 3,
       "chain": 9,
-      "critical": false
+      "critical": true
     },
     {
       "id": "T15",
@@ -771,7 +769,7 @@
       ],
       "step": 3,
       "chain": 9,
-      "critical": true
+      "critical": false
     },
     {
       "id": "T31",
@@ -911,7 +909,7 @@
       ],
       "step": 4,
       "chain": 8,
-      "critical": false
+      "critical": true
     },
     {
       "id": "T25",
@@ -968,7 +966,7 @@
       ],
       "step": 4,
       "chain": 8,
-      "critical": true
+      "critical": false
     },
     {
       "id": "T29",
@@ -1655,10 +1653,10 @@
     }
   ],
   "critical_path": [
-    "T02",
-    "T09",
-    "T24",
-    "T26",
+    "T03",
+    "T11",
+    "T14",
+    "T19",
     "T27",
     "T28",
     "T34",
@@ -1675,18 +1673,21 @@
     "D2": [
       "T41"
     ],
-    "D3": [],
+    "D3": [
+      "T09"
+    ],
     "any": [
+      "T09",
       "T41",
       "T20"
     ]
   },
   "counts": {
-    "done": 10,
-    "in_progress": 6,
+    "done": 11,
+    "in_progress": 5,
     "picked_early": 1,
-    "ready": 2,
-    "blocked": 40
+    "ready": 3,
+    "blocked": 39
   },
-  "data_hash": "dc875a2aa27764b3"
+  "data_hash": "3c2290e8bb731a60"
 }
