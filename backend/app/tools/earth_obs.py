@@ -35,13 +35,12 @@ class NdviPoint(BaseModel):
 
     month: str
     ndvi: float
-    cloud_free_observations: int
+    cloud_free_obs: int
 
 
-class NdviTrend(BaseModel):
+class NdviTrendDetails(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    mean_last_12_months: float
     sens_slope_per_year: float
     mann_kendall_tau: float
     mann_kendall_p_value: float
@@ -63,14 +62,16 @@ class EarthObsMetrics(BaseModel):
     computed_at_utc: str
     area_ha: float
     centroid: Centroid
-    land_cover_fractions: dict[str, float]
+    landcover: dict[str, float]
     natural_fraction: float
     ndvi_series: tuple[NdviPoint, ...]
-    ndvi_trend: NdviTrend
-    water_change_mean_abs: float
-    forest_loss_last_5y_ha: float
-    biomass_mean_t_ha: float
-    cloud_free_observations_last_12m: int
+    ndvi_mean: float
+    ndvi_trend: float
+    ndvi_trend_details: NdviTrendDetails
+    water_change: float
+    forest_loss_ha: float
+    biomass_t_ha: float
+    cloud_free_obs: int
     cloud_free_months_5y: int
     date_windows: dict[str, DateWindow]
     thresholds: dict[str, float | int | str]

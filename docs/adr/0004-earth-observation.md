@@ -72,12 +72,12 @@ The cached metrics are written by `scripts/precompute_sites.py` to `backend/data
 
 T11 stores the following output fields:
 - `area_ha` and `centroid` from the same local equal-area calculation used by listing validation;
-- `land_cover_fractions` and `natural_fraction`;
-- 60 monthly `ndvi_series` rows, `mean_last_12_months`, Sen's slope per year, Mann-Kendall tau and p-value;
-- `water_change_mean_abs`;
-- `forest_loss_last_5y_ha`;
-- `biomass_mean_t_ha`;
-- `cloud_free_observations_last_12m` and `cloud_free_months_5y`;
+- `landcover` and `natural_fraction`;
+- 60 monthly `ndvi_series` rows, `ndvi_mean`, canonical `ndvi_trend` (Sen's slope per year), and `ndvi_trend_details` with Mann-Kendall tau and p-value;
+- `water_change`;
+- `forest_loss_ha`;
+- `biomass_t_ha`;
+- `cloud_free_obs` and `cloud_free_months_5y`;
 - `data_version`, exact date windows, thresholds, dataset IDs/versions/bands/catalog URLs, computation timestamp and attributions.
 
 Dataset choices as built:
@@ -85,18 +85,18 @@ Dataset choices as built:
 | Metric | Dataset ID and bands | Version / window | Reason |
 |---|---|---|---|
 | Land cover | `GOOGLE/DYNAMICWORLD/V1` · `label` | V1; 2025-10-01 to 2026-10-01 | Required by §7.2; 10 m classes map directly into T14/T15 natural fraction and valuation inputs. |
-| NDVI and coverage | `COPERNICUS/S2_SR_HARMONIZED` · `B8`, `B4` joined with `GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED` · `cs_cdf` | 2021-10-01 to 2026-10-01; `cs_cdf >= 0.60` | Same method as the T03 notebook; Cloud Score+ is the catalog-recommended QA companion for Sentinel-2 surface analysis. |
+| NDVI and coverage | `COPERNICUS/S2_SR_HARMONIZED` · `B8`, `B4` joined with `GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED` · `cs_cdf` | 2021-10-01 to 2026-10-01; `cs_cdf >= 0.60`; a scene counts as cloud-free only when at least 50% of non-water pixels in the polygon are clear | Same method as the T03 notebook, with the stricter T11 scene-level coverage definition so a single clear pixel cannot inflate confidence. Cloud Score+ is the catalog-recommended QA companion for Sentinel-2 surface analysis. |
 | Water change | `JRC/GSW1_4/GlobalSurfaceWater` · `change_abs` | v1.4; source observations 1984-03-16 to 2021-12-31 | Official JRC global surface-water occurrence change layer; stored as mean absolute occurrence change intensity over the polygon with never-water pixels treated as 0. |
-| Forest loss | `UMD/hansen/global_forest_change_2025_v1_13` · `lossyear` | 2025 v1.13; latest five complete Hansen years, 2021-2025 (`lossyear` 21-25) | Current official catalog version. The loss layer is tied to Hansen's tree-cover definition: vegetation taller than 5 m in 2000. |
+| Forest loss | `UMD/hansen/global_forest_change_2025_v1_13` · `lossyear`, masked by `treecover2000 >= 30` | 2025 v1.13; latest five complete Hansen years, 2021-2025 (`lossyear` 21-25) | Current official catalog version. The project definition is Hansen loss only where 2000 canopy cover was at least 30%, a common conservative forest threshold that avoids counting sparse trees, orchards or urban vegetation as forest loss. The Hansen tree-cover definition is vegetation taller than 5 m in 2000. |
 | Biomass | `LARSE/GEDI/GEDI04_B_002` · `MU` | GEDI L4B Version 2; 2019-04-18 to 2021-08-04 | Official gridded above-ground biomass density in Mg/ha with coverage over the Mexico City site. ESA CCI Biomass was not used because the checked EE catalog URL was unavailable; GEDI L4B is documented and returned coverage for the hero polygon. |
 
 Hero metrics produced by T11:
-- NDVI last-12-month mean: 0.6004.
-- Sen's slope: +0.0096 NDVI/year.
-- Mann-Kendall: τ = +0.1458, p = 0.1012 (not significant at 5%).
-- Cloud-free Sentinel-2 observations in the last 12 months: 79; all 60 months have clear data.
+- NDVI last-12-month mean: 0.6008.
+- Sen's slope: +0.0097 NDVI/year.
+- Mann-Kendall: τ = +0.1469, p = 0.0986 (not significant at 5%).
+- Cloud-free Sentinel-2 observations in the last 12 months: 73; all 60 months have clear data. A scene counts only if `cs_cdf >= 0.60` for at least 50% of the polygon's non-water pixels.
 - JRC water change mean (`change_abs`): −6.6021.
-- Hansen forest loss in the latest five complete dataset years: 0.0 ha.
+- Hansen forest loss in the latest five complete dataset years, masked to `treecover2000 >= 30%`: 0.0 ha.
 - GEDI L4B mean above-ground biomass: 9.4681 t/ha.
 
 Re-run and check:

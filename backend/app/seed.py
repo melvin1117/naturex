@@ -163,6 +163,11 @@ def seed(session: Session) -> None:
                     site_key=site.key,
                 )
             )
+        elif site.key == "wetland_mx":
+            existing_asset.geojson = _WETLAND_GEOJSON
+            existing_asset.area_ha = site.area_ha
+            existing_asset.centroid_lat = site.centroid_lat
+            existing_asset.centroid_lon = site.centroid_lon
     session.commit()
 
     # The community keeps its retained stake as a holding, so shares are conserved:

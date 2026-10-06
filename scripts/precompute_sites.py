@@ -22,10 +22,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import ee
-
 from app.config import get_settings
 from app.tools.geometry import validate_polygon
+
+ee: Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "backend" / "data" / "demo_sites"
@@ -36,6 +36,8 @@ START_12M = "2025-10-01"
 START_5Y = "2021-10-01"
 FOREST_LOSS_YEARS = "2021-2025"
 CLOUD_SCORE_THRESHOLD = 0.60
+CLOUD_FREE_MIN_CLEAR_FRACTION = 0.50
+HANSEN_TREE_COVER_MIN_PERCENT = 30
 
 CLASSES = [
     "water",
@@ -113,7 +115,7 @@ DATASETS = [
         "dataset_id": "UMD/hansen/global_forest_change_2025_v1_13",
         "version": "2025 v1.13",
         "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/UMD_hansen_global_forest_change_2025_v1_13",
-        "bands": ["lossyear"],
+        "bands": ["lossyear", "treecover2000"],
         "attribution": ATTRIBUTIONS["hansen"],
     },
     {
@@ -128,6 +130,10 @@ DATASETS = [
 
 
 def _init_ee() -> None:
+    global ee
+    import ee as earth_engine
+
+    ee = earth_engine
     settings = get_settings()
     key_path = Path(settings.ee_service_account_json).expanduser()
     key = json.loads(key_path.read_text())
@@ -202,7 +208,9 @@ def _mann_kendall(tau: float, n: int) -> dict[str, float]:
     return {"mann_kendall_tau": tau, "mann_kendall_p_value": math.erfc(abs(z) / math.sqrt(2))}
 
 
-def _usable_s2_collection(aoi: ee.Geometry, start_5y: ee.Date, end: ee.Date) -> ee.ImageCollection:
+def _usable_s2_collection(
+    aoi: ee.Geometry, start_5y: ee.Date, end: ee.Date, non_water: ee.Image
+) -> ee.ImageCollection:
     # Cloud Score+ official catalog documents cs_cdf as a 0..1 clear-pixel likelihood:
     # https://developers.google.com/earth-engine/datasets/catalog/GOOGLE_CLOUD_SCORE_PLUS_V1_S2_HARMONIZED
     cs_plus = ee.ImageCollection("GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED")
@@ -213,21 +221,36 @@ def _usable_s2_collection(aoi: ee.Geometry, start_5y: ee.Date, end: ee.Date) -> 
         .linkCollection(cs_plus, ["cs_cdf"])
     )
 
-    def with_usable_pixels(image: ee.Image) -> ee.Image:
-        usable = image.select("cs_cdf").gte(CLOUD_SCORE_THRESHOLD)
-        count = usable.reduceRegion(ee.Reducer.sum(), aoi, scale=60, maxPixels=1e9).get("cs_cdf")
-        return image.set("usable_pixels", count)
+    total_non_water = (
+        ee.Image.constant(1)
+        .updateMask(non_water)
+        .reduceRegion(ee.Reducer.sum(), aoi, scale=60, maxPixels=1e9)
+        .get("constant")
+    )
 
-    return raw.map(with_usable_pixels).filter(ee.Filter.gt("usable_pixels", 0))
+    def with_clear_fraction(image: ee.Image) -> ee.Image:
+        clear_non_water = image.select("cs_cdf").gte(CLOUD_SCORE_THRESHOLD).And(non_water)
+        clear_pixels = (
+            ee.Image.constant(1)
+            .updateMask(clear_non_water)
+            .reduceRegion(ee.Reducer.sum(), aoi, scale=60, maxPixels=1e9)
+            .get("constant")
+        )
+        clear_fraction = ee.Number(clear_pixels).divide(ee.Number(total_non_water))
+        return image.set("clear_fraction", clear_fraction)
+
+    return raw.map(with_clear_fraction).filter(
+        ee.Filter.gte("clear_fraction", CLOUD_FREE_MIN_CLEAR_FRACTION)
+    )
 
 
 def _ndvi(aoi: ee.Geometry, start_12m: ee.Date, start_5y: ee.Date, end: ee.Date) -> dict[str, Any]:
-    water = _dw_mode(aoi, start_12m, end).eq(0)
-    usable = _usable_s2_collection(aoi, start_5y, end)
+    non_water = _dw_mode(aoi, start_12m, end).eq(0).Not()
+    usable = _usable_s2_collection(aoi, start_5y, end, non_water)
 
     def to_ndvi(image: ee.Image) -> ee.Image:
         masked = image.updateMask(image.select("cs_cdf").gte(CLOUD_SCORE_THRESHOLD))
-        masked = masked.updateMask(water.Not())
+        masked = masked.updateMask(non_water)
         return (
             masked.normalizedDifference(["B8", "B4"])
             .rename("ndvi")
@@ -252,8 +275,10 @@ def _ndvi(aoi: ee.Geometry, start_12m: ee.Date, start_5y: ee.Date, end: ee.Date)
             },
         )
 
-    series = ee.FeatureCollection(ee.List.sequence(0, 59).map(monthly)).filter(
-        ee.Filter.notNull(["ndvi"])
+    series = (
+        ee.FeatureCollection(ee.List.sequence(0, 59).map(monthly))
+        .filter(ee.Filter.notNull(["ndvi"]))
+        .sort("t")
     )
     out = ee.Dictionary(
         {
@@ -264,7 +289,7 @@ def _ndvi(aoi: ee.Geometry, start_12m: ee.Date, start_5y: ee.Date, end: ee.Date)
         }
     ).getInfo()
 
-    rows = [feature["properties"] for feature in out["rows"]]
+    rows = sorted((feature["properties"] for feature in out["rows"]), key=lambda row: row["t"])
     if len(rows) < 12:
         raise RuntimeError(f"Only {len(rows)} NDVI months returned; need at least 12.")
     last12 = rows[-12:]
@@ -281,12 +306,14 @@ def _ndvi(aoi: ee.Geometry, start_12m: ee.Date, start_5y: ee.Date, end: ee.Date)
             {
                 "month": str(row["month"]),
                 "ndvi": float(row["ndvi"]),
-                "cloud_free_observations": int(row["cloud_free_observations"]),
+                "cloud_free_obs": int(row["cloud_free_observations"]),
             }
             for row in rows
         ],
-        "ndvi_trend": trend,
-        "cloud_free_observations_last_12m": int(out["cloud_free_observations_last_12m"]),
+        "ndvi_mean": mean_last_12,
+        "ndvi_trend": trend["sens_slope_per_year"],
+        "ndvi_trend_details": trend,
+        "cloud_free_obs": int(out["cloud_free_observations_last_12m"]),
         "cloud_free_months_5y": len(rows),
     }
 
@@ -307,9 +334,11 @@ def _water_change(aoi: ee.Geometry) -> float:
 def _forest_loss(aoi: ee.Geometry) -> float:
     # Hansen v1.13 lossyear encodes 1..25 for 2001..2025. We use the latest five complete
     # years available in the dataset: 2021..2025 -> lossyear 21..25.
-    loss_year = ee.Image("UMD/hansen/global_forest_change_2025_v1_13").select("lossyear")
+    hansen = ee.Image("UMD/hansen/global_forest_change_2025_v1_13")
+    loss_year = hansen.select("lossyear")
+    forest_2000 = hansen.select("treecover2000").gte(HANSEN_TREE_COVER_MIN_PERCENT)
     latest_five_years = loss_year.gte(21).And(loss_year.lte(25))
-    area = ee.Image.pixelArea().updateMask(latest_five_years)
+    area = ee.Image.pixelArea().updateMask(latest_five_years.And(forest_2000))
     value = area.reduceRegion(ee.Reducer.sum(), aoi, scale=30, maxPixels=1e9).getInfo().get("area")
     return 0.0 if value is None else float(value) / 10_000
 
@@ -354,27 +383,29 @@ def compute_site(site_key: str, computed_at_utc: str | None = None) -> dict[str,
         or datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "area_ha": check.area_ha,
         "centroid": {"lat": check.centroid_lat, "lon": check.centroid_lon},
-        "land_cover_fractions": land_cover,
+        "landcover": land_cover,
         "natural_fraction": natural_fraction,
         **ndvi,
-        "water_change_mean_abs": _water_change(aoi),
-        "forest_loss_last_5y_ha": _forest_loss(aoi),
-        "biomass_mean_t_ha": _biomass(aoi),
+        "water_change": _water_change(aoi),
+        "forest_loss_ha": _forest_loss(aoi),
+        "biomass_t_ha": _biomass(aoi),
         "date_windows": {
             "land_cover": {"start": START_12M, "end": END_DATE},
             "ndvi": {"start": START_5Y, "end": END_DATE},
-            "cloud_free_observations": {"start": START_12M, "end": END_DATE},
+            "cloud_free_obs": {"start": START_12M, "end": END_DATE},
             "jrc_water_change": {"start": "1984-03-16", "end": "2021-12-31"},
             "hansen_forest_loss": {"start": "2021-01-01", "end": "2025-12-31"},
             "gedi_l4b_biomass": {"start": "2019-04-18", "end": "2021-08-04"},
         },
         "thresholds": {
             "cloud_score_plus_cs_cdf": CLOUD_SCORE_THRESHOLD,
+            "cloud_free_scene_min_clear_fraction": CLOUD_FREE_MIN_CLEAR_FRACTION,
             "dynamic_world_mode_scale_m": 10,
             "sentinel2_ndvi_scale_m": 10,
             "jrc_water_change_scale_m": 30,
             "hansen_forest_loss_scale_m": 30,
             "hansen_forest_loss_years": FOREST_LOSS_YEARS,
+            "hansen_treecover2000_min_percent": HANSEN_TREE_COVER_MIN_PERCENT,
             "gedi_biomass_scale_m": 1000,
         },
         "datasets": DATASETS,
@@ -387,20 +418,20 @@ def _json_text(data: Mapping[str, Any]) -> str:
     return json.dumps(data, indent=2, sort_keys=True) + "\n"
 
 
-def _matches(expected: Any, actual: Any, path: str = "$") -> list[str]:
+def compare_cached_metrics(expected: Any, actual: Any, path: str = "$") -> list[str]:
     if isinstance(expected, dict) and isinstance(actual, dict):
         messages: list[str] = []
         if set(expected) != set(actual):
             return [f"{path}: keys differ {sorted(expected)} != {sorted(actual)}"]
         for key in sorted(expected):
-            messages.extend(_matches(expected[key], actual[key], f"{path}.{key}"))
+            messages.extend(compare_cached_metrics(expected[key], actual[key], f"{path}.{key}"))
         return messages
     if isinstance(expected, list) and isinstance(actual, list):
         if len(expected) != len(actual):
             return [f"{path}: lengths differ {len(expected)} != {len(actual)}"]
         messages = []
         for index, (left, right) in enumerate(zip(expected, actual, strict=True)):
-            messages.extend(_matches(left, right, f"{path}[{index}]"))
+            messages.extend(compare_cached_metrics(left, right, f"{path}[{index}]"))
         return messages
     if isinstance(expected, float | int) and isinstance(actual, float | int):
         if math.isclose(float(expected), float(actual), rel_tol=1e-4, abs_tol=1e-4):
@@ -436,7 +467,7 @@ def main() -> int:
                 failures.append(f"{output_path} does not exist.")
                 continue
             existing = json.loads(output_path.read_text())
-            failures.extend(_matches(existing, data, path=site_key))
+            failures.extend(compare_cached_metrics(existing, data, path=site_key))
         else:
             output_path.write_text(_json_text(data))
             print(f"Wrote {output_path.relative_to(ROOT)}")
