@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-06 00:52 UTC",
+  "generated_at": "2026-10-06 05:09 UTC",
   "tasks": [
     {
       "id": "P01",
@@ -13,7 +13,7 @@
       "priority": "Must",
       "week": 1,
       "deps": [],
-      "status": "in_progress",
+      "status": "done",
       "assignees": [
         "Aatisha"
       ],
@@ -23,7 +23,7 @@
         "P04"
       ],
       "step": 0,
-      "chain": 9,
+      "chain": 0,
       "critical": false
     },
     {
@@ -120,13 +120,11 @@
       "deps": [
         "P01"
       ],
-      "status": "picked_early",
+      "status": "in_progress",
       "assignees": [
         "Aatisha"
       ],
-      "waiting_on": [
-        "P01"
-      ],
+      "waiting_on": [],
       "unlocks": [
         "P03"
       ],
@@ -148,13 +146,11 @@
       "deps": [
         "P01"
       ],
-      "status": "picked_early",
+      "status": "in_progress",
       "assignees": [
         "Aatisha"
       ],
-      "waiting_on": [
-        "P01"
-      ],
+      "waiting_on": [],
       "unlocks": [
         "P05",
         "P06",
@@ -1687,11 +1683,11 @@
     ]
   },
   "counts": {
-    "done": 8,
-    "in_progress": 3,
-    "picked_early": 3,
+    "done": 9,
+    "in_progress": 4,
+    "picked_early": 1,
     "ready": 3,
     "blocked": 42
   },
-  "data_hash": "e54c001ed533b6b3"
+  "data_hash": "99e2401ff15c498c"
 }
