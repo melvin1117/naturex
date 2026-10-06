@@ -82,7 +82,8 @@ DEMO_SITES: tuple[DemoSite, ...] = (
     ),
 )
 
-# Placeholder polygon, replaced by real GeoJSON in T11/T13.
+# Placeholder polygon, replaced by real GeoJSON in T11/T13. It's mostly built-up town;
+# the real wetland is ~3 km north-east (ADR-0004).
 _PLACEHOLDER_POLY: dict[str, Any] = {
     "type": "Polygon",
     "coordinates": [

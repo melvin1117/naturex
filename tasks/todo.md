@@ -26,9 +26,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** spike script reproduces each result · **Deps:** T01 · **Files:** `scripts/spikes/token_factory.py`, `docs/adr/0003-*.md`
 
 ### T03 · Earth Engine spike (risk) (#9) — D2 · S · Must
-- [ ] EE auth works from Python (service account or user auth) for the team project
-- [ ] Notebook computes Dynamic World fractions and a monthly NDVI series for the hero wetland polygon
-- [ ] Earth Engine terms for a prize-bearing hackathon checked; result noted in the ADR
+- [x] EE auth works from Python (service account or user auth) for the team project
+- [x] Notebook computes Dynamic World fractions and a monthly NDVI series for the hero wetland polygon
+- [x] Earth Engine terms for a prize-bearing hackathon checked; result noted in the ADR
 
 **Verify:** notebook runs top to bottom · **Deps:** T01 · **Files:** `notebooks/ee_spike.ipynb`, `docs/adr/0004-earth-observation.md`
 
@@ -79,7 +79,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `curl` the endpoint; a row appears in `llm_calls` · **Deps:** T08, T09 · **Files:** `backend/app/agents/summary.py`, `backend/app/routers/reports.py`
 
 ### T11 · Hero-site precompute (#17) — D2 · M · Must · B1 B2
-- [ ] Hero wetland polygon (GeoJSON) and `scripts/precompute_sites.py` producing cached metrics JSON: land-cover fractions, NDVI series + trend, water change, forest loss, biomass, cloud-free coverage (methods per T06)
+- [ ] Hero wetland polygon (GeoJSON) drawn on the real wetland: the seed placeholder is 93% built-up town; the wetland is ~3 km north-east, near Xochimilco Ecological Park (ADR-0004), and `scripts/precompute_sites.py` producing cached metrics JSON: land-cover fractions, NDVI series + trend, water change, forest loss, biomass, cloud-free coverage (methods per T06)
 - [ ] Dataset versions and attributions stored in the output
 
 **Verify:** script reproduces the committed JSON · **Deps:** T03, T06 · **Files:** `backend/data/demo_sites/*.geojson|json`, `scripts/precompute_sites.py`, `backend/app/tools/earth_obs.py`
