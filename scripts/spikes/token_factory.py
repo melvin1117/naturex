@@ -89,6 +89,7 @@ SYSTEM_TOOLS = (
     "metrics_id that earth_obs returns. Call one tool at a time. Never invent numbers."
 )
 ASSET_ID = "wetland-mx-01"
+DATA_VERSION = "2026Q3"
 METRICS_ID = "m-2026q3-001"
 
 
@@ -105,6 +106,9 @@ class Call:
     reasoning_tokens: int | None
     has_reasoning_text: bool
     cost_usd: float
+    toggle_ok: bool = True
+    """With reasoning off: no reasoning text and no reasoning tokens. Not checked when on,
+    because a model may legitimately skip reasoning for a trivial step."""
 
 
 @dataclass
@@ -120,13 +124,13 @@ def load_prices(base_url: str, key: str) -> Prices:
     """Per-token prices from the live catalogue (`GET /models?verbose=true`)."""
     url = base_url.rstrip("/") + "/models?verbose=true"
     response = http_get(url, {"Authorization": f"Bearer {key}"})
+    if response.status != 200:
+        raise SystemExit(f"Price catalogue returned HTTP {response.status}; run `make check-keys`.")
     prices = Prices()
     for model in (response.body or {}).get("data", []):
         pricing = model.get("pricing") or {}
-        prices.by_model[model["id"]] = (
-            float(pricing.get("prompt") or 0),
-            float(pricing.get("completion") or 0),
-        )
+        if pricing.get("prompt") is not None and pricing.get("completion") is not None:
+            prices.by_model[model["id"]] = (float(pricing["prompt"]), float(pricing["completion"]))
     return prices
 
 
@@ -169,6 +173,19 @@ def check_news_item(content: str | None) -> tuple[bool, str]:
     return True, f"fire, -1, severity {item.severity}"
 
 
+def _check_tool_call(message: Any, name: str, expected: dict[str, str]) -> tuple[bool, str]:
+    """Exactly the expected tool, with every required argument equal to the expected value."""
+    calls = message.tool_calls or []
+    if not calls:
+        return False, f"no tool call: {(message.content or '')[:80]!r}"
+    try:
+        args = json.loads(calls[0].function.arguments or "{}")
+    except json.JSONDecodeError:
+        return False, f"{calls[0].function.name}: arguments are not JSON"
+    ok = calls[0].function.name == name and all(args.get(k) == v for k, v in expected.items())
+    return ok, f"{calls[0].function.name}({args})"
+
+
 def _short(model: str) -> str:
     return model.split("/")[-1]
 
@@ -208,6 +225,8 @@ class Spike:
         prompt, completion_tokens, reasoning = _usage(completion)
         message = completion.choices[0].message
         ok, detail = check(message)
+        has_reasoning = _reasoning_text(message)
+        toggle_ok = thinking or (not has_reasoning and not reasoning)
         self.calls.append(
             Call(
                 model,
@@ -219,8 +238,9 @@ class Spike:
                 prompt,
                 completion_tokens,
                 reasoning,
-                _reasoning_text(message),
+                has_reasoning,
                 self.prices.cost(model, prompt, completion_tokens),
+                toggle_ok,
             )
         )
         return completion
@@ -252,16 +272,13 @@ class Spike:
     def tools(self, model: str, thinking: bool) -> None:
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": SYSTEM_TOOLS},
-            {"role": "user", "content": f"Rate asset {ASSET_ID} for data_version 2026Q3."},
+            {"role": "user", "content": f"Rate asset {ASSET_ID} for data_version {DATA_VERSION}."},
         ]
 
         def first_call(message: Any) -> tuple[bool, str]:
-            calls = message.tool_calls or []
-            if not calls:
-                return False, f"no tool call: {(message.content or '')[:80]!r}"
-            args = json.loads(calls[0].function.arguments or "{}")
-            ok = calls[0].function.name == "earth_obs" and args.get("asset_id") == ASSET_ID
-            return ok, f"{calls[0].function.name}({args})"
+            return _check_tool_call(
+                message, "earth_obs", {"asset_id": ASSET_ID, "data_version": DATA_VERSION}
+            )
 
         completion = self._run(
             model,
@@ -272,7 +289,22 @@ class Spike:
             tools=TOOLS,
             tool_choice="auto",
         )
-        if completion is None or not completion.choices[0].message.tool_calls:
+        if completion is None or not self.calls[-1].ok:
+            self.calls.append(
+                Call(
+                    model,
+                    "tools step 2: valuation",
+                    thinking,
+                    False,
+                    "skipped: step 1 failed",
+                    0,
+                    0,
+                    0,
+                    None,
+                    False,
+                    0.0,
+                )
+            )
             return
         call = completion.choices[0].message.tool_calls[0]
         messages.append({"role": "assistant", "content": None, "tool_calls": [call.model_dump()]})
@@ -286,12 +318,9 @@ class Spike:
         )
 
         def second_call(message: Any) -> tuple[bool, str]:
-            calls = message.tool_calls or []
-            if not calls:
-                return False, f"no tool call: {(message.content or '')[:80]!r}"
-            args = json.loads(calls[0].function.arguments or "{}")
-            ok = calls[0].function.name == "valuation" and args.get("metrics_id") == METRICS_ID
-            return ok, f"{calls[0].function.name}({args})"
+            return _check_tool_call(
+                message, "valuation", {"asset_id": ASSET_ID, "metrics_id": METRICS_ID}
+            )
 
         self._run(
             model,
@@ -307,8 +336,8 @@ class Spike:
 def summarise(calls: list[Call]) -> str:
     rows = [
         "| Model | Test | Reasoning | OK | p50 ms | Tokens in/out (median) "
-        "| Reasoning text | $ per call (median) |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Reasoning text | Off respected | $ per call (median) |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     keys = sorted({(c.model, c.test, c.thinking) for c in calls}, key=lambda k: (k[0], k[1], k[2]))
     for model, test, thinking in keys:
@@ -321,6 +350,7 @@ def summarise(calls: list[Call]) -> str:
             f"| {int(statistics.median(c.latency_ms for c in group))} "
             f"| {tokens_in}/{tokens_out} "
             f"| {sum(c.has_reasoning_text for c in group)}/{len(group)} "
+            f"| {'n/a' if thinking else f'{sum(c.toggle_ok for c in group)}/{len(group)}'} "
             f"| {statistics.median(c.cost_usd for c in group):.5f} |"
         )
     return "\n".join(rows)
@@ -346,10 +376,13 @@ def main() -> None:
 
     client = OpenAI(base_url=settings.token_factory_base_url, api_key=settings.nebius_api_key)
     spike = Spike(client, load_prices(settings.token_factory_base_url, settings.nebius_api_key))
-    for name in args.models.split(","):
-        model = models[name.strip()]
+    selected = [models[name.strip()] for name in args.models.split(",")]
+    for name, model in zip(args.models.split(","), selected, strict=True):
         if not model:
             raise SystemExit(f"MODEL_* for {name} is empty in .env")
+        if model not in spike.prices.by_model:
+            raise SystemExit(f"No price for {model} in the live catalogue; costs would be wrong.")
+    for model in selected:
         for _ in range(args.runs):
             for thinking in (False, True):
                 spike.structured(model, thinking)
@@ -359,6 +392,13 @@ def main() -> None:
     print()
     print(summarise(spike.calls))
     print(f"\nTotal: {len(spike.calls)} calls, ${sum(c.cost_usd for c in spike.calls):.4f}")
+    toggle_failures = [c for c in spike.calls if not c.toggle_ok]
+    print(
+        f"Reasoning off respected: {sum(not c.thinking and c.toggle_ok for c in spike.calls)}"
+        f"/{sum(not c.thinking for c in spike.calls)} calls"
+    )
+    for c in toggle_failures[:10]:
+        print(f"  reasoning NOT off: {_short(c.model)} | {c.test} | tokens {c.reasoning_tokens}")
     failures = [c for c in spike.calls if not c.ok]
     if failures:
         print("\nFailures (first 20):")

@@ -38,17 +38,18 @@ Estimated cost: ≈ $0.035 per full rating, ≈ $0.0002 per photo, ≈ $0.0003 p
 
 ## T02 spike results (2026-10-06)
 `scripts/spikes/token_factory.py` reproduces everything below (run from `backend/`: `uv run --with openai python ../scripts/spikes/token_factory.py`).
-- **Setup:** 120 calls in total: 4 Nemotron models × 3 runs × reasoning on/off.
+- **Setup:** 120 calls in total: 4 Nemotron models × 3 runs × reasoning on/off. Run twice (the second time with stricter checks); the numbers below are from the second run.
 - **What it tests:**
   - structured output against our real `NewsScoutItem` contract (a fire article must come back as `fire` with `direction -1`);
-  - a two-step Orchestrator tool loop (`earth_obs`, then `valuation` with the returned `metrics_id`).
-- **Cost:** $0.039 for the whole run.
+  - a two-step Orchestrator tool loop (`earth_obs`, then `valuation` with the returned `metrics_id`). Every argument must match, and step 2 only runs if step 1 was correct;
+  - whether reasoning really switched off (no reasoning text and no reasoning tokens).
+- **Cost:** $0.039 per run.
 
 **Correct results, out of 3 each** (p50 latency in brackets):
 | Model | `json_schema`, reasoning off | `json_schema`, reasoning on | `json_object`, reasoning off | Tool loop (2 steps), reasoning off | $ per call, JSON off / on |
 |---|---|---|---|---|---|
 | Nano 30B | 3/3 (1.8 s) | 3/3 (5.7 s) | 3/3 | 6/6 (1.2 s each) | 0.00006 / 0.00015 |
-| 3.5 Lightning | 3/3 (1.0 s) | **2/3** (8.7 s, ~1,550 tokens out) | **0/3** (missing fields) | 6/6 (0.5 s each) | 0.00006 / 0.00040 |
+| 3.5 Lightning | 3/3 (1.0 s) | **1/3** (2/3 in the first run; ~8.7 s, ~1,550 tokens out) | **0/3** (missing fields) | 6/6 (0.5 s each) | 0.00006 / 0.00040 |
 | Super 120B | 3/3 (0.9 s) | 3/3 (2.6 s) | 3/3 | 6/6 (0.9 s each) | 0.00024 / 0.00053 |
 | Ultra 550B | 3/3 (0.8 s) | 3/3 (1.5 s) | 3/3 | 6/6 (0.7 s each) | 0.00086 / 0.00177 |
 
@@ -58,16 +59,16 @@ Estimated cost: ≈ $0.035 per full rating, ≈ $0.0002 per photo, ≈ $0.0003 p
    - The raw-schema shape shown in the Token Factory docs' Python and cURL examples **fails on every model with HTTP 422** (`json_schema.name` is required). That's a docs bug to report in our feedback.
    - `json_object` with the schema only in the prompt is weaker: Lightning dropped required fields.
 2. **Define every label's meaning.** With an undocumented `direction` field, Nano (reasoning off) labelled a fire `+1` in the first smoke run. Once the prompt defined `-1`, `0` and `1`, every model was correct. T13 should add `Field(description=…)` to `NewsScoutItem`.
-3. **Reasoning toggle:** `extra_body={"chat_template_kwargs": {"enable_thinking": False}}` works on all four models (source: the NVIDIA Nemotron 3 Nano model card).
+3. **Reasoning toggle:** `extra_body={"chat_template_kwargs": {"enable_thinking": False}}` was honoured in **60/60** reasoning-off calls across all four models: no reasoning text and no reasoning tokens (source: the NVIDIA Nemotron 3 Nano model card).
    - Reasoning is **on by default.**
    - Turning it off cut Nano's latency about 3× and its cost about 2.5× with no loss of correctness on these tasks.
    - The reasoning text comes back in a separate `message.reasoning` field. `content` stays clean, so T09 can log the reasoning for the Agent Trace drawer.
-4. **Tool calling** worked on every model (24/24 two-step loops), with reasoning on or off.
+4. **Tool calling** worked on every model (24/24 two-step loops, every argument correct), with reasoning on or off.
    - **Lightning** was the fastest (~0.5 s per step) at Nano's price. It's a strong, cheap candidate for the Orchestrator.
    - Its structured JSON is less reliable with reasoning on or with `json_object`. Keep it as the fallback for `MODEL_FAST`, not the default.
 5. **Ultra was faster than Nano** on the shared endpoints (0.8 s vs 1.8 s for the same JSON task). Latency depends on load as much as on size, so the eval harness (T47) should measure p50 at demo time.
 
-**Routing settled by these results:** reasoning **off** for News Scout, Copilot and the Orchestrator; **on** for the Auditor (Ultra), where it costs under $0.002 per call. `MODEL_FAST` stays Nano. Super stays the Orchestrator for now, and T47 compares it with Lightning on the full rating loop. All results are from N=3 runs; the T47 evals (≥30 labelled news items) decide anything close.
+**Interim routing to build against** (T09, T13): reasoning **off** for News Scout, Copilot and the Orchestrator; **on** for the Auditor (Ultra), where it costs under $0.002 per call. `MODEL_FAST` stays Nano; Super stays the Orchestrator. These results come from N=3 runs of one news item and one toy tool loop, so **the T47 evals (≥30 labelled news items, full rating loop) are the decision point**, including Super vs Lightning for the Orchestrator.
 
 ## Consequences
 - The backend stays a small CPU-only container with no GPU and no model weights, so every hosting option ranked in [dev-spec §21](../specs/dev-spec.md) works: Nebius Serverless, Azure Container Apps (team-approved credits), or Hugging Face Spaces / Render.
