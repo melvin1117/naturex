@@ -434,6 +434,13 @@ A tick is triggered by `POST /admin/simulate/quarter`, by a scheduled job, or by
 - `revenue_q = value_mid × capture_rate / 4`, with capture_rate = 2%.
 - 50% goes to `community_wallet`.
 - 50% is paid as dividends pro-rata to holders (including the community's retained stake).
+- **As built (T41):** `backend/app/market/revenue.py` uses Decimal cents and a
+  largest-remainder allocation so payout cents sum exactly to revenue. Dividend ties are
+  broken by stable holder key; primary float / market-maker shares are unheld and receive
+  no dividends. If no positive holder can receive the dividend pool, those unallocated
+  dividends are retained in the asset's community wallet. `pay_quarter` is a thin
+  transaction-scoped helper for T38/T44 and is not wired to `routers/market.py` while T17
+  rewrites that router.
 
 Invariants (unit-tested): cash is never negative; shares are conserved; the price stays > 0; every price change has a `reason`.
 
