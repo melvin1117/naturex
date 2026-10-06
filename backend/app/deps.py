@@ -38,6 +38,8 @@ def current_world(
         world.last_seen_at = datetime.now(UTC)
         session.add(world)
         session.commit()
+    # SameSite=Lax assumes the browser sees one site: the frontend proxies /api/* to this
+    # backend (T20). Don't switch to SameSite=None; browsers increasingly block it.
     response.set_cookie(
         COOKIE_NAME,
         str(world.id),
