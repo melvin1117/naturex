@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-06 00:00 UTC",
+  "generated_at": "2026-10-06 00:43 UTC",
   "tasks": [
     {
       "id": "P01",
@@ -323,7 +323,7 @@
         "T05",
         "T07"
       ],
-      "status": "in_progress",
+      "status": "done",
       "assignees": [
         "uddesh04"
       ],
@@ -337,7 +337,7 @@
         "T29"
       ],
       "step": 2,
-      "chain": 9,
+      "chain": 0,
       "critical": false
     },
     {
@@ -608,7 +608,6 @@
       "status": "blocked",
       "assignees": [],
       "waiting_on": [
-        "T08",
         "T09"
       ],
       "unlocks": [
@@ -714,11 +713,9 @@
         "T08",
         "T16"
       ],
-      "status": "blocked",
+      "status": "ready",
       "assignees": [],
-      "waiting_on": [
-        "T08"
-      ],
+      "waiting_on": [],
       "unlocks": [
         "T18"
       ],
@@ -744,8 +741,7 @@
       "status": "blocked",
       "assignees": [],
       "waiting_on": [
-        "T21",
-        "T08"
+        "T21"
       ],
       "unlocks": [],
       "step": 3,
@@ -851,7 +847,6 @@
         "Aatisha"
       ],
       "waiting_on": [
-        "T08",
         "T10"
       ],
       "unlocks": [],
@@ -908,8 +903,7 @@
       "assignees": [],
       "waiting_on": [
         "T14",
-        "T15",
-        "T08"
+        "T15"
       ],
       "unlocks": [
         "T23",
@@ -994,7 +988,6 @@
       "status": "blocked",
       "assignees": [],
       "waiting_on": [
-        "T08",
         "T31"
       ],
       "unlocks": [
@@ -1679,7 +1672,8 @@
     "PD": [],
     "D1": [
       "T31",
-      "T20"
+      "T20",
+      "T17"
     ],
     "D2": [
       "T41"
@@ -1688,15 +1682,16 @@
     "any": [
       "T31",
       "T41",
-      "T20"
+      "T20",
+      "T17"
     ]
   },
   "counts": {
-    "done": 7,
-    "in_progress": 3,
+    "done": 8,
+    "in_progress": 2,
     "picked_early": 3,
-    "ready": 3,
-    "blocked": 43
+    "ready": 4,
+    "blocked": 42
   },
-  "data_hash": "ceaa769909ff2782"
+  "data_hash": "26fad6d38b46a642"
 }
