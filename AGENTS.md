@@ -33,7 +33,7 @@ If code and docs disagree, stop and ask; don't silently pick one.
 - **TypeScript (frontend):** Next.js App Router, `strict` mode, Tailwind, **shadcn/ui components only** (no ad-hoc styled clones), shared design tokens; follow `PRODUCT.md` once it exists (created by `impeccable`).
 - **API contract first:** FastAPI's OpenAPI schema is the source of truth; the frontend client is **generated**, never hand-edited.
 - **Tests with every change:** unit tests for formulas, market invariants and the ledger; contract tests for agent outputs.
-- **Never push to `main`.** Branch, run `make ci` (with `docker compose up -d`), open a PR, get 1 teammate approval, squash-merge only when CI is green. GitHub doesn't enforce this on the private repo, so it's on us (`docs/ci.md`).
+- **Never push to `main`.** Branch, run `make ci` (with `docker compose up -d`), get an independent agent review, open a PR, get 1 teammate approval, squash-merge only when CI is green. GitHub doesn't enforce this on the private repo, so it's on us (`docs/ci.md`).
 - **Small PRs** (~100–300 lines), one concern each, **Conventional Commit** titles (`feat:`, `fix:`, `docs:`…). Update the docs when behaviour changes.
 - **Local development uses no cloud:** Docker Compose for Postgres; cloud hosting is chosen later (T20).
 - **Mocks behind interfaces** (`USE_MOCKS=true`) so work can proceed in parallel and CI runs without keys.
@@ -46,8 +46,9 @@ If code and docs disagree, stop and ask; don't silently pick one.
   1. **Claim:** `make board ISSUE=<n> STATUS="In progress"` (sets the board Status and assigns you).
   2. **Branch and build:** `git checkout -b <type>/<tNN>-<slug>`, implement with tests, `make ci`.
   3. **Check the map:** the workflow updates it on `main` within a minute of step 1. **Never commit `tasks/task-map.*` in a PR**: it conflicts with the workflow's commits and blocks CI. (`make task-map` is only for a local look; discard the result.)
-  4. **PR:** Conventional Commit title, `Closes #<n>` in the body, then `make board ISSUE=<n> STATUS="In review"`.
-  5. Merging closes the issue, which marks it done on the map and the board.
+  4. **Independent review before the PR:** commit, `git fetch origin`, then have a **separate agent with fresh context** (a sub-agent or a new session, never the one that wrote the code) review `git diff origin/main...HEAD` with the `code-review-and-quality` skill (plus `security-and-hardening` for auth, cookies, sessions, user input or text sent to an LLM). Fresh context means it gets only the standard prompt in `docs/ai-setup.md` (task, acceptance criteria, specs), not your explanation of the design. Fix every **Critical** and **Required** finding, or write down why you're rejecting it, then re-run `make ci`. Repeat the review if the teammate's comments lead to large changes. Skip it only for trivial changes (typo, link or comment, no behaviour change) and Dependabot PRs.
+  5. **PR:** use the PR template, Conventional Commit title, `Closes #<n>` in the body, a short summary of the review (findings fixed or rejected), then `make board ISSUE=<n> STATUS="In review"`.
+  6. Merging closes the issue, which marks it done on the map and the board.
 
 ## Skills (in `.agents/skills`, mirrored in `.claude/skills`)
 Load the matching skill before starting; `using-agent-skills` picks one if unsure.
@@ -73,6 +74,7 @@ GitHub (issues, PRs, board), Context7 (current library docs; use it before writi
 ## Definition of done
 - [ ] Meets the story's acceptance criteria in `docs/specs/pm-spec.md`
 - [ ] Lint, type-check and tests pass locally and in CI
+- [ ] Reviewed by a separate agent with `code-review-and-quality` before the PR; Critical and Required findings fixed or rejected with a reason
 - [ ] No secrets, no new paid services, licences respected
 - [ ] Docs and generated API client updated if behaviour or contracts changed
 - [ ] UI changes checked with `web-design-guidelines`; screenshots in the PR
