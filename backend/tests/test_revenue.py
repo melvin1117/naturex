@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
+import threading
 import uuid
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 
 import pytest
 from alembic import command
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlmodel import Session, select
 
 from app.config import get_settings
 from app.ledger import entries_for, verify
 from app.market.revenue import (
     CAPTURE_RATE,
+    CommunityStakeMissing,
     HolderShares,
     ImpactInput,
     PayoutAlreadyApplied,
@@ -33,6 +36,8 @@ D = Decimal
 ASSET_ID = DEMO_SITES[0].id
 ARJUN_ID = PERSONAS[1].id
 MIA_ID = PERSONAS[2].id
+ARJUN_SHARES = 300_000
+MIA_SHARES = 190_000
 
 
 def test_quarterly_revenue_is_two_percent_of_annual_value_divided_by_four() -> None:
@@ -125,6 +130,25 @@ def test_impact_for_holding_is_pro_rata_to_total_shares() -> None:
     assert result.services_usd_year == D("50000.00")
 
 
+def test_impact_rejects_negative_inputs() -> None:
+    with pytest.raises(ValueError, match="area_ha"):
+        ImpactInput(area_ha=D("-0.01"), carbon_stock_tco2=D("1"), services_usd_year=D("1"))
+    with pytest.raises(ValueError, match="carbon_stock_tco2"):
+        ImpactInput(area_ha=D("1"), carbon_stock_tco2=D("-0.01"), services_usd_year=D("1"))
+    with pytest.raises(ValueError, match="services_usd_year"):
+        ImpactInput(area_ha=D("1"), carbon_stock_tco2=D("1"), services_usd_year=D("-0.01"))
+
+
+def test_impact_rejects_more_shares_than_total_shares() -> None:
+    with pytest.raises(ValueError, match="must not exceed"):
+        impact_for_holding(
+            "arjun",
+            shares=1001,
+            total_shares=1000,
+            impact=ImpactInput(D("100.00"), D("1000.00"), D("200000.00")),
+        )
+
+
 def test_portfolio_impact_aggregates_positions() -> None:
     wetland = impact_for_holding(
         "wetland",
@@ -146,6 +170,24 @@ def test_portfolio_impact_aggregates_positions() -> None:
     )
 
 
+def test_portfolio_impact_quantizes_after_summing_equal_thirds() -> None:
+    asset_impact = ImpactInput(
+        area_ha=D("100.00"),
+        carbon_stock_tco2=D("1000.00"),
+        services_usd_year=D("200000.00"),
+    )
+    allocations = tuple(
+        impact_for_holding(key, shares=1, total_shares=3, impact=asset_impact)
+        for key in ("a", "b", "c")
+    )
+
+    assert portfolio_impact(allocations) == ImpactInput(
+        area_ha=D("100.0000"),
+        carbon_stock_tco2=D("1000.0000"),
+        services_usd_year=D("200000.00"),
+    )
+
+
 @pytest.fixture
 def session() -> Iterator[Session]:
     """A session inside a transaction that rolls back every payout test."""
@@ -162,27 +204,54 @@ def session() -> Iterator[Session]:
 
 
 def _add_holdings(session: Session) -> None:
+    asset = session.get_one(Asset, ASSET_ID)
+    retained_shares = asset.total_shares - asset.primary_shares_remaining
+    asset.primary_shares_remaining -= ARJUN_SHARES + MIA_SHARES
     session.add_all(
         [
             Holding(
                 world_id=WORLD_ID,
                 user_id=COMMUNITY_PERSONA.id,
                 asset_id=ASSET_ID,
-                shares=500,
+                shares=retained_shares,
                 avg_cost=D("0.0001"),
             ),
             Holding(
                 world_id=WORLD_ID,
                 user_id=ARJUN_ID,
                 asset_id=ASSET_ID,
-                shares=300,
+                shares=ARJUN_SHARES,
                 avg_cost=D("10.0000"),
             ),
             Holding(
                 world_id=WORLD_ID,
                 user_id=MIA_ID,
                 asset_id=ASSET_ID,
-                shares=200,
+                shares=MIA_SHARES,
+                avg_cost=D("10.0000"),
+            ),
+        ]
+    )
+    session.flush()
+
+
+def _add_investor_holdings_without_community(session: Session) -> None:
+    asset = session.get_one(Asset, ASSET_ID)
+    asset.primary_shares_remaining -= ARJUN_SHARES + MIA_SHARES
+    session.add_all(
+        [
+            Holding(
+                world_id=WORLD_ID,
+                user_id=ARJUN_ID,
+                asset_id=ASSET_ID,
+                shares=ARJUN_SHARES,
+                avg_cost=D("10.0000"),
+            ),
+            Holding(
+                world_id=WORLD_ID,
+                user_id=MIA_ID,
+                asset_id=ASSET_ID,
+                shares=MIA_SHARES,
                 avg_cost=D("10.0000"),
             ),
         ]
@@ -221,9 +290,9 @@ def test_pay_quarter_credits_wallets_users_and_appends_a_verifiable_ledger_entry
     entries = entries_for(session, ASSET_ID)
 
     assert asset.community_wallet == D("250.00")
-    assert community.cash_balance == D("10125.00")
+    assert community.cash_balance == D("10127.50")
     assert arjun.cash_balance == D("10075.00")
-    assert mia.cash_balance == D("10050.00")
+    assert mia.cash_balance == D("10047.50")
     assert result.payout.revenue == D("500.00")
     assert len(entries) == 1
     assert entries[0].kind is LedgerKind.PAYOUT
@@ -233,6 +302,30 @@ def test_pay_quarter_credits_wallets_users_and_appends_a_verifiable_ledger_entry
     assert entries[0].payload["dividends_total"] == "250.00"
     assert entries[0].payload["holder_count"] == 3
     assert verify(entries).valid
+
+
+@requires_db
+def test_pay_quarter_rejects_missing_community_retained_holding_without_changes(
+    session: Session,
+) -> None:
+    _add_investor_holdings_without_community(session)
+    before = _world_cash_and_wallets(session)
+
+    with pytest.raises(
+        CommunityStakeMissing,
+        match=r"community retained stake is not recorded as a holding; seed it \(T31\)",
+    ):
+        pay_quarter(
+            session,
+            world_id=WORLD_ID,
+            asset_id=ASSET_ID,
+            value_mid=D("100000.00"),
+            quarter_label="2026-Q4",
+        )
+    session.flush()
+
+    assert _world_cash_and_wallets(session) == before
+    assert entries_for(session, ASSET_ID) == []
 
 
 @requires_db
@@ -334,3 +427,119 @@ def test_pay_quarter_rejects_an_asset_outside_the_world(session: Session) -> Non
             value_mid=D("100000.00"),
             quarter_label="2026-Q4",
         )
+
+
+@requires_db
+def test_concurrent_pay_quarter_applies_once_for_one_asset_quarter() -> None:
+    command.upgrade(alembic_cfg(), "head")
+    engine = create_engine(get_settings().database_url)
+    world_id = uuid.uuid4()
+    community_id = uuid.uuid4()
+    investor_id = uuid.uuid4()
+    asset_id = uuid.uuid4()
+    barrier = threading.Barrier(2)
+
+    try:
+        with Session(engine) as setup:
+            setup.add(World(id=world_id, label="concurrent-payout"))
+            setup.flush()
+            setup.add_all(
+                [
+                    User(
+                        id=community_id,
+                        world_id=world_id,
+                        name="Community",
+                        role=UserRole.COMMUNITY,
+                        cash_balance=D("10000.00"),
+                    ),
+                    User(
+                        id=investor_id,
+                        world_id=world_id,
+                        name="Investor",
+                        role=UserRole.INVESTOR,
+                        cash_balance=D("10000.00"),
+                    ),
+                ]
+            )
+            setup.flush()
+            setup.add(
+                Asset(
+                    id=asset_id,
+                    world_id=world_id,
+                    name="Concurrent Reserve",
+                    community_user_id=community_id,
+                    country="MX",
+                    description="Concurrency test asset",
+                    geojson={"type": "Point", "coordinates": [0, 0]},
+                    area_ha=D("10.00"),
+                    total_shares=1_000,
+                    retained_pct=D("50.00"),
+                    primary_shares_remaining=0,
+                    community_wallet=D("0.00"),
+                )
+            )
+            setup.flush()
+            setup.add_all(
+                [
+                    Holding(
+                        world_id=world_id,
+                        user_id=community_id,
+                        asset_id=asset_id,
+                        shares=500,
+                        avg_cost=D("0.0001"),
+                    ),
+                    Holding(
+                        world_id=world_id,
+                        user_id=investor_id,
+                        asset_id=asset_id,
+                        shares=500,
+                        avg_cost=D("1.0000"),
+                    ),
+                ]
+            )
+            setup.commit()
+
+        def apply_once() -> str:
+            with Session(engine) as db:
+                barrier.wait(timeout=5)
+                try:
+                    pay_quarter(
+                        db,
+                        world_id=world_id,
+                        asset_id=asset_id,
+                        value_mid=D("400.00"),
+                        quarter_label="2026-Q4",
+                    )
+                    db.commit()
+                    return "ok"
+                except PayoutAlreadyApplied:
+                    db.rollback()
+                    return "duplicate"
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(apply_once) for _ in range(2)]
+            results = [future.result(timeout=10) for future in futures]
+
+        assert sorted(results) == ["duplicate", "ok"]
+        with Session(engine) as check:
+            asset = check.get_one(Asset, asset_id)
+            community = check.get_one(User, community_id)
+            investor = check.get_one(User, investor_id)
+            entries = entries_for(check, asset_id)
+
+            assert asset.community_wallet == D("1.00")
+            assert community.cash_balance == D("10000.50")
+            assert investor.cash_balance == D("10000.50")
+            assert len(entries) == 1
+            assert entries[0].kind is LedgerKind.PAYOUT
+            assert verify(entries).valid
+    finally:
+        with engine.begin() as conn:
+            conn.execute(text("SET LOCAL naturex.allow_ledger_delete = 'on'"))
+            params = {"world_id": world_id, "asset_id": asset_id}
+            conn.execute(text("DELETE FROM ledger_entries WHERE asset_id = :asset_id"), params)
+            conn.execute(text("DELETE FROM holdings WHERE world_id = :world_id"), params)
+            conn.execute(text("DELETE FROM assets WHERE id = :asset_id"), params)
+            conn.execute(text("DELETE FROM users WHERE world_id = :world_id"), params)
+            conn.execute(text("DELETE FROM worlds WHERE id = :world_id"), params)
+        engine.dispose()

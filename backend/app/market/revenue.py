@@ -9,8 +9,14 @@ cents.
 
 Only actual positive holdings receive dividends. Primary float and market-maker inventory
 are unheld shares, so they receive no dividend share; the holder pool is allocated pro-rata
-among held shares. If there are no positive holdings, the dividend pool is retained in the
-asset's community wallet as unallocated dividends so an applied payout still conserves cash.
+among held shares. The pure calculator still reports a no-holders case by assigning the
+dividend pool to unallocated dividends, but `pay_quarter` rejects database payouts unless the
+asset's community retained stake is recorded as a positive holding for `Asset.community_user_id`.
+
+Market mutation lock contract for T17/T38: lock the `Asset` row first, then affected `User`
+rows in ascending ID order, then `Holding` rows in ascending user ID order, before computing
+or writing the mutation. `pay_quarter` follows that order. Its ledger payload keeps per-holder
+payouts for the demo; this is bounded by the small sandbox holder count.
 """
 
 from __future__ import annotations
@@ -32,6 +38,10 @@ _IMPACT = Decimal("0.0001")
 
 class PayoutAlreadyApplied(ValueError):
     """Raised when a payout ledger entry already exists for an asset quarter."""
+
+
+class CommunityStakeMissing(ValueError):
+    """Raised when the community retained stake has not been seeded as a holding."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +90,18 @@ class ImpactInput:
     area_ha: Decimal
     carbon_stock_tco2: Decimal
     services_usd_year: Decimal
+
+    def __post_init__(self) -> None:
+        if self.area_ha < 0:
+            raise ValueError(f"area_ha must not be negative, got {self.area_ha}")
+        if self.carbon_stock_tco2 < 0:
+            raise ValueError(
+                f"carbon_stock_tco2 must not be negative, got {self.carbon_stock_tco2}"
+            )
+        if self.services_usd_year < 0:
+            raise ValueError(
+                f"services_usd_year must not be negative, got {self.services_usd_year}"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,8 +199,9 @@ def calculate_quarterly_payout(
     """Calculate one simulated quarterly payout without touching the database.
 
     Dividends are allocated only among positive holdings. Unheld primary-float or
-    market-maker shares do not receive dividends; if no holder can receive the pool,
-    it is reported as unallocated and retained in the community wallet by `pay_quarter`.
+    market-maker shares do not receive dividends. If no holder can receive the pool, this
+    pure function reports the pool as unallocated; `pay_quarter` rejects that database state
+    before applying a payout because the community retained stake must be present.
     """
     revenue = quarterly_revenue(value_mid)
     split = split_revenue(revenue)
@@ -206,25 +229,29 @@ def impact_for_holding(
         raise ValueError(f"shares must not be negative, got {shares}")
     if total_shares <= 0:
         raise ValueError(f"total_shares must be positive, got {total_shares}")
+    if shares > total_shares:
+        raise ValueError(f"shares must not exceed total_shares, got {shares} > {total_shares}")
     fraction = Decimal(shares) / Decimal(total_shares)
     return ImpactAllocation(
         key=key,
         shares=shares,
-        area_ha=_impact(impact.area_ha * fraction),
-        carbon_stock_tco2=_impact(impact.carbon_stock_tco2 * fraction),
-        services_usd_year=_cash(impact.services_usd_year * fraction),
+        area_ha=impact.area_ha * fraction,
+        carbon_stock_tco2=impact.carbon_stock_tco2 * fraction,
+        services_usd_year=impact.services_usd_year * fraction,
     )
 
 
 def portfolio_impact(allocations: tuple[ImpactAllocation, ...]) -> ImpactInput:
-    """Aggregate pro-rata impact metrics across a portfolio."""
+    """Aggregate pro-rata impact metrics across a portfolio, then quantize once."""
     return ImpactInput(
-        area_ha=sum((allocation.area_ha for allocation in allocations), start=Decimal("0.0000")),
-        carbon_stock_tco2=sum(
-            (allocation.carbon_stock_tco2 for allocation in allocations), start=Decimal("0.0000")
+        area_ha=_impact(
+            sum((allocation.area_ha for allocation in allocations), start=Decimal("0"))
         ),
-        services_usd_year=sum(
-            (allocation.services_usd_year for allocation in allocations), start=Decimal("0.00")
+        carbon_stock_tco2=_impact(
+            sum((allocation.carbon_stock_tco2 for allocation in allocations), start=Decimal("0"))
+        ),
+        services_usd_year=_cash(
+            sum((allocation.services_usd_year for allocation in allocations), start=Decimal("0"))
         ),
     )
 
@@ -253,6 +280,48 @@ def _locked_asset(session: Session, *, world_id: UUID, asset_id: UUID) -> Asset:
     return asset
 
 
+def _positive_holder_user_ids(session: Session, *, world_id: UUID, asset_id: UUID) -> list[UUID]:
+    return list(
+        session.exec(
+            select(Holding.user_id)
+            .where(Holding.world_id == world_id, Holding.asset_id == asset_id, Holding.shares > 0)
+            .order_by(col(Holding.user_id))
+        ).all()
+    )
+
+
+def _lock_users(session: Session, *, world_id: UUID, user_ids: list[UUID]) -> dict[UUID, User]:
+    if not user_ids:
+        return {}
+    users = session.exec(
+        select(User)
+        .where(User.world_id == world_id, col(User.id).in_(user_ids))
+        .order_by(col(User.id))
+        .with_for_update()
+    ).all()
+    return {user.id: user for user in users}
+
+
+def _lock_holdings(session: Session, *, world_id: UUID, asset_id: UUID) -> list[Holding]:
+    return list(
+        session.exec(
+            select(Holding)
+            .where(Holding.world_id == world_id, Holding.asset_id == asset_id)
+            .order_by(col(Holding.user_id))
+            .with_for_update()
+        ).all()
+    )
+
+
+def _require_community_holding(asset: Asset, holdings: list[Holding]) -> None:
+    if asset.community_user_id is None or not any(
+        holding.user_id == asset.community_user_id and holding.shares > 0 for holding in holdings
+    ):
+        raise CommunityStakeMissing(
+            "community retained stake is not recorded as a holding; seed it (T31)"
+        )
+
+
 def pay_quarter(
     session: Session,
     *,
@@ -278,25 +347,14 @@ def pay_quarter(
     if existing is not None:
         raise PayoutAlreadyApplied(f"payout already applied for {asset_id} {quarter_label}")
 
-    holdings = session.exec(
-        select(Holding)
-        .where(Holding.world_id == world_id, Holding.asset_id == asset_id)
-        .order_by(col(Holding.user_id))
-    ).all()
+    holder_user_ids = _positive_holder_user_ids(session, world_id=world_id, asset_id=asset_id)
+    users_by_id = _lock_users(session, world_id=world_id, user_ids=holder_user_ids)
+    holdings = _lock_holdings(session, world_id=world_id, asset_id=asset_id)
+    _require_community_holding(asset, holdings)
     payout = calculate_quarterly_payout(
         value_mid=value_mid,
         holders=tuple(HolderShares(str(holding.user_id), holding.shares) for holding in holdings),
     )
-
-    user_ids = [UUID(holder_payout.key) for holder_payout in payout.holder_payouts]
-    users_by_id: dict[UUID, User] = {}
-    if user_ids:
-        locked_users = session.exec(
-            select(User)
-            .where(User.world_id == world_id, col(User.id).in_(user_ids))
-            .with_for_update()
-        ).all()
-        users_by_id = {user.id: user for user in locked_users}
 
     for holder_payout in payout.holder_payouts:
         user_id = UUID(holder_payout.key)
