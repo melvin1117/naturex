@@ -200,7 +200,7 @@
       "deps": [
         "T01"
       ],
-      "status": "in_progress",
+      "status": "done",
       "assignees": [
         "melvin1117"
       ],
@@ -209,8 +209,8 @@
         "T11"
       ],
       "step": 1,
-      "chain": 11,
-      "critical": true
+      "chain": 0,
+      "critical": false
     },
     {
       "id": "T05",
@@ -363,7 +363,7 @@
       ],
       "step": 2,
       "chain": 10,
-      "critical": false
+      "critical": true
     },
     {
       "id": "T11",
@@ -380,11 +380,9 @@
         "T03",
         "T06"
       ],
-      "status": "blocked",
+      "status": "ready",
       "assignees": [],
-      "waiting_on": [
-        "T03"
-      ],
+      "waiting_on": [],
       "unlocks": [
         "T13",
         "T14",
@@ -392,7 +390,7 @@
       ],
       "step": 2,
       "chain": 10,
-      "critical": true
+      "critical": false
     },
     {
       "id": "T16",
@@ -662,7 +660,7 @@
       ],
       "step": 3,
       "chain": 9,
-      "critical": true
+      "critical": false
     },
     {
       "id": "T15",
@@ -769,7 +767,7 @@
       ],
       "step": 3,
       "chain": 9,
-      "critical": false
+      "critical": true
     },
     {
       "id": "T31",
@@ -909,7 +907,7 @@
       ],
       "step": 4,
       "chain": 8,
-      "critical": true
+      "critical": false
     },
     {
       "id": "T25",
@@ -966,7 +964,7 @@
       ],
       "step": 4,
       "chain": 8,
-      "critical": false
+      "critical": true
     },
     {
       "id": "T29",
@@ -1653,10 +1651,9 @@
     }
   ],
   "critical_path": [
-    "T03",
-    "T11",
-    "T14",
-    "T19",
+    "T09",
+    "T24",
+    "T26",
     "T27",
     "T28",
     "T34",
@@ -1671,6 +1668,7 @@
       "T20"
     ],
     "D2": [
+      "T11",
       "T41"
     ],
     "D3": [
@@ -1678,16 +1676,17 @@
     ],
     "any": [
       "T09",
+      "T11",
       "T41",
       "T20"
     ]
   },
   "counts": {
-    "done": 11,
-    "in_progress": 5,
+    "done": 12,
+    "in_progress": 4,
     "picked_early": 1,
-    "ready": 3,
-    "blocked": 39
+    "ready": 4,
+    "blocked": 38
   },
-  "data_hash": "3c2290e8bb731a60"
+  "data_hash": "a7edcf1e096b3fcf"
 }
