@@ -776,6 +776,50 @@
         }
       }
     },
+    "/world": {
+      "get": {
+        "tags": [
+          "world"
+        ],
+        "summary": "Get World",
+        "description": "The visitor's world; the first request creates it and sets the `nx_world` cookie.",
+        "operationId": "get_world_world_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/world/reset": {
+      "post": {
+        "tags": [
+          "world"
+        ],
+        "summary": "Reset",
+        "description": "\"Reset my demo\": restore the visitor's world to the template, keeping its ID.",
+        "operationId": "reset_world_reset_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/healthz": {
       "get": {
         "summary": "Healthz",
@@ -1167,6 +1211,18 @@
           "community_wallet"
         ],
         "title": "AssetDetail"
+      },
+      "AssetStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "rating",
+          "needs_evidence",
+          "ineligible",
+          "listed",
+          "suspended"
+        ],
+        "title": "AssetStatus"
       },
       "AssetStatusOut": {
         "type": "string",
@@ -1756,6 +1812,47 @@
         ],
         "title": "OrderOut"
       },
+      "PersonaOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
+          },
+          "cash_balance": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cash Balance"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "name",
+          "role",
+          "cash_balance"
+        ],
+        "title": "PersonaOut"
+      },
       "PortfolioOut": {
         "properties": {
           "cash_balance": {
@@ -2235,6 +2332,15 @@
         ],
         "title": "TraceStep"
       },
+      "UserRole": {
+        "type": "string",
+        "enum": [
+          "community",
+          "investor",
+          "admin"
+        ],
+        "title": "UserRole"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -2274,6 +2380,82 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WorldAssetOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "site_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AssetStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "site_key",
+          "name",
+          "status"
+        ],
+        "title": "WorldAssetOut"
+      },
+      "WorldOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "personas": {
+            "items": {
+              "$ref": "#/components/schemas/PersonaOut"
+            },
+            "type": "array",
+            "title": "Personas"
+          },
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/WorldAssetOut"
+            },
+            "type": "array",
+            "title": "Assets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "created_at",
+          "personas",
+          "assets"
+        ],
+        "title": "WorldOut"
       }
     }
   }

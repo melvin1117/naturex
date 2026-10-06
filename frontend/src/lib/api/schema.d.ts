@@ -314,6 +314,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/world": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get World
+         * @description The visitor's world; the first request creates it and sets the `nx_world` cookie.
+         */
+        get: operations["get_world_world_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/world/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset
+         * @description "Reset my demo": restore the visitor's world to the template, keeping its ID.
+         */
+        post: operations["reset_world_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -465,6 +505,11 @@ export interface components {
             /** Price */
             price?: string | null;
         };
+        /**
+         * AssetStatus
+         * @enum {string}
+         */
+        AssetStatus: "draft" | "rating" | "needs_evidence" | "ineligible" | "listed" | "suspended";
         /**
          * AssetStatusOut
          * @enum {string}
@@ -689,6 +734,21 @@ export interface components {
              */
             created_at: string;
         };
+        /** PersonaOut */
+        PersonaOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string | null;
+            /** Name */
+            name: string;
+            role: components["schemas"]["UserRole"];
+            /** Cash Balance */
+            cash_balance: string;
+        };
         /** PortfolioOut */
         PortfolioOut: {
             /** Cash Balance */
@@ -864,6 +924,11 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * UserRole
+         * @enum {string}
+         */
+        UserRole: "community" | "investor" | "admin";
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -876,6 +941,38 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WorldAssetOut */
+        WorldAssetOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Site Key */
+            site_key: string | null;
+            /** Name */
+            name: string;
+            status: components["schemas"]["AssetStatus"];
+        };
+        /** WorldOut */
+        WorldOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Personas */
+            personas: components["schemas"]["PersonaOut"][];
+            /** Assets */
+            assets: components["schemas"]["WorldAssetOut"][];
         };
     };
     responses: never;
@@ -1440,6 +1537,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_world_world_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldOut"];
+                };
+            };
+        };
+    };
+    reset_world_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldOut"];
                 };
             };
         };

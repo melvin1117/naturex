@@ -279,6 +279,12 @@ create table llm_calls (
 
 Every route is scoped to the visitor's world through the `nx_world` cookie, so judges never affect each other.
 
+**As built (T31):**
+- Routers depend on `CurrentWorld` (`app/deps.py`). It reads the `nx_world` cookie (`HttpOnly`, `SameSite=Lax`, `Secure` outside development, 30 days); a missing, malformed or unknown cookie, or one naming the **template** world, gets a fresh world.
+- A new world is a copy of the template (`app/sandbox.py`) with fresh IDs and every reference remapped. Ledger chains still verify, because hashes don't include IDs.
+- `POST /world/reset` deletes the world's rows (opting in to ledger deletes for that transaction only) and re-copies the template, keeping the same ID and cookie.
+- Worlds unseen for 7 days are pruned when new visitors arrive. The template is never served, reset or pruned.
+
 Rating runs asynchronously: the API returns `202` + `run_id`, and progress arrives over SSE (`step: earth_obs → valuation → news → evidence → audit → done`).
 
 > Free hosts and serverless endpoints may drop long-lived connections **(verify)**; the frontend falls back to polling every 3 s.
