@@ -59,7 +59,7 @@ Design principles:
 Exact IDs, prices and test evidence: [ADR-0003](../adr/0003-model-routing-on-token-factory.md) (`make check-keys` lists what your key can call). Auditor: `nvidia/Nemotron-3-Ultra-550b-a55b`; Nano: `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`. `nvidia/Nemotron-3_5-Lightning` (Nano price, 1M context) is compared against Nano in T02.
 
 **Routing rules (and how we prove them):**
-- Use reasoning / "thinking" mode only where it pays off (Auditor). Keep it off for classification and chat, if the model exposes a toggle **(verify)**.
+- Use reasoning / "thinking" mode only where it pays off (Auditor). Keep it off for classification, chat and orchestration with `extra_body={"chat_template_kwargs": {"enable_thinking": False}}` (verified in T02; Nemotron reasons by default). Structured output uses `response_format` `json_schema` in the OpenAI shape (`name`, `schema`, `strict`); see [ADR-0003](../adr/0003-model-routing-on-token-factory.md) for the measured results.
 - The eval harness (§18) runs each task on Nano, Super and Ultra and records accuracy, p50 latency and cost per call. That produces the README routing table, turning the choice of model into evidence rather than opinion.
 - On timeout or invalid JSON, retry once on the same model, then fall back one tier (Ultra → Super → Nano) and flag the report `degraded_model=true`.
 

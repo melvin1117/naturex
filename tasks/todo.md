@@ -20,8 +20,8 @@
 ### T02 · Token Factory spike (risk) (#8) — D3 · S · Must
 Confirm how Nemotron actually behaves on Token Factory before building on it.
 - [x] Exact model IDs, prices, embeddings and one image input checked (ADR-0003, Oct 5)
-- [ ] Tested: `response_format` JSON schema (both shapes), tool calling, thinking on/off (`chat_template_kwargs`) on each Nemotron model; Nano vs 3.5 Lightning
-- [ ] Findings added to `docs/adr/0003-model-routing-on-token-factory.md` (what works, latency, token counts)
+- [x] Tested: `response_format` JSON schema (both shapes), tool calling, thinking on/off (`chat_template_kwargs`) on each Nemotron model; Nano vs 3.5 Lightning
+- [x] Findings added to `docs/adr/0003-model-routing-on-token-factory.md` (what works, latency, token counts)
 
 **Verify:** spike script reproduces each result · **Deps:** T01 · **Files:** `scripts/spikes/token_factory.py`, `docs/adr/0003-*.md`
 
