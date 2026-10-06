@@ -20,11 +20,11 @@ NatureX is an AI rating agency and sandbox exchange for living nature, built for
 If code and docs disagree, stop and ask; don't silently pick one.
 
 ## Non-negotiables
-1. **AI calls use NVIDIA Nemotron via Nebius Token Factory only** (OpenAI-compatible `base_url`). Never Azure OpenAI or other hosted LLMs for product features; this is a hackathon requirement.
+1. **All AI calls go through Nebius Token Factory** (OpenAI-compatible `base_url`); never Azure OpenAI or other providers. **Nemotron does all reasoning and text.** A non-NVIDIA Token Factory model is allowed only where no Nemotron model can do the job (today: photo perception, embeddings); see [ADR-0003](./docs/adr/0003-model-routing-on-token-factory.md). No local models.
 2. **Numbers come from deterministic, tested code.** LLMs orchestrate, classify, explain and may adjust the health score only within ±10 with cited evidence. Never let a model invent a metric, value or price.
 3. **Every LLM output is schema-validated** (Pydantic) with retry; every call is logged (model, tokens, latency) and counts against `LLM_BUDGET_USD`.
 4. **No secrets in the repo.** Use `.env` (git-ignored) and `.env.example`.
-5. **Free tiers only** unless covered by hackathon credits; see `docs/specs/dev-spec.md` §21.
+5. **Free tiers only** unless covered by credits: hackathon credits, or personal credits the team approves for hosting (e.g. Azure in T20). Ranked hosting options in `docs/specs/dev-spec.md` §21.
 6. **Licences:** the repo is MIT. Don't add GPL/AGPL code or non-open data (e.g. raw ESVD data). No third-party logos or unlicensed music in demo assets. Keep data attributions (Dynamic World, Copernicus, JRC, Hansen, OpenStreetMap).
 7. **Sandbox framing:** play money only; never present anything as a real security.
 

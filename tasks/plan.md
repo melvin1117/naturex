@@ -53,10 +53,10 @@ Open items from [research.md](../docs/research.md) §6:
 - Carbon formula (roots + SoilGrids soil carbon)
 - NDVI method (Cloud Score+, Sen's slope)
 - Satellite platform: Earth Engine primary
-- Embeddings: NVIDIA on Token Factory vs local `bge-small`
+- Embeddings: decided in ADR-0003 (`Qwen3-Embedding-8B` on Token Factory, no local models)
 - Tracing: OpenTelemetry → Postgres + Langfuse
 - Evals: promptfoo
-- Hosting: free tiers per dev-spec §21
+- Hosting: decided in T20 from the ranked options in dev-spec §21 (Nebius Serverless → Azure with approved credits → free tiers)
 
 ## Modules at a glance
 ```

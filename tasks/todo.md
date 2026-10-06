@@ -12,16 +12,16 @@
 
 ### T01 · Accounts, credits and keys (#7) — All · XS · Must
 - [ ] Each member claims the Token Factory promo ($25, code `NEBIUS-DEVPOST-GLOBAL26`) and joins the Nebius Builders Program ($25 Token Factory + $25 Tavily)
-- [ ] D2 registers an Earth Engine non-commercial project; D1 creates the Supabase project; one person owns the shared deployment keys
+- [ ] D2 registers an Earth Engine non-commercial project; hosting accounts are set up in T20; one person owns the shared deployment keys
 - [ ] Keys live only in personal `.env` files; `.env.example` lists the variable names
 
 **Verify:** `make check-keys` passes for each dev with their own key (it also lists the Nemotron model IDs for `MODEL_*`) · **Deps:** none
 
 ### T02 · Token Factory spike (risk) (#8) — D3 · S · Must
 Confirm how Nemotron actually behaves on Token Factory before building on it.
-- [ ] Exact model IDs from `/v1/models` for Super, Ultra, Nano and Nano Omni
-- [ ] Tested: `response_format` JSON schema (both shapes), tool calling, thinking on/off (`chat_template_kwargs`), and one image input for Nano Omni
-- [ ] Findings recorded in `docs/adr/0003-nemotron-on-token-factory.md` (IDs, what works, per-model price)
+- [x] Exact model IDs, prices, embeddings and one image input checked (ADR-0003, Oct 5)
+- [ ] Tested: `response_format` JSON schema (both shapes), tool calling, thinking on/off (`chat_template_kwargs`) on each Nemotron model; Nano vs 3.5 Lightning
+- [ ] Findings added to `docs/adr/0003-model-routing-on-token-factory.md` (what works, latency, token counts)
 
 **Verify:** spike script reproduces each result · **Deps:** T01 · **Files:** `scripts/spikes/token_factory.py`, `docs/adr/0003-*.md`
 
@@ -167,7 +167,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`; asset page shows real numbers · **Deps:** T14, T15, T08 · **Files:** `backend/app/services/rating.py`, `backend/app/routers/reports.py`
 
 ### T20 · Deploy skeleton (risk) (#31) — D1 · S · Must
-- [ ] Frontend on Vercel, backend on a free host (Hugging Face Spaces or Render), database on Supabase; secrets in host settings
+- [ ] Pick the host from dev-spec §21 (Nebius Serverless if credits → Azure Container Apps + Azure Postgres if the team approves the credits and they last to Dec 15 and allow a public demo → HF Spaces/Render + Supabase); record the choice in the README
+- [ ] Frontend on Vercel; backend container + Postgres (with `vector`) on the chosen host; secrets in host settings, never in the repo
 - [ ] `/healthz` reachable; README notes the URLs
 
 **Verify:** public URL loads the marketplace · **Deps:** T04, T05 · **Files:** `backend/Dockerfile`, deploy config
@@ -278,7 +279,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` · **Deps:** T27 · **Files:** `backend/app/routers/reports.py`, `backend/app/services/diff.py`
 
 ### T40 · Field evidence (photos) (#50) — D2 · S · Could (only if ahead; re-plan Oct 4) · A4
-- [ ] Up to 5 geotagged photos → Nemotron Nano Omni analysis → evidence event → confidence updated
+- [ ] Up to 5 geotagged photos → EXIF GPS/date check → MiniCPM-V description → evidence event → Auditor weighs it → confidence updated (ADR-0003)
 - [ ] Exposed as the `field_evidence` tool so the Orchestrator (T27) calls it when evidence exists
 
 **Verify:** `make test`; manual upload raises confidence · **Deps:** T09, T15 · **Files:** `backend/app/agents/field_evidence.py`, `backend/app/routers/assets.py`
@@ -311,7 +312,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`; "Why did the price drop?" cites the encroachment event · **Deps:** T27 · **Files:** `backend/app/rag/*.py`, `backend/app/routers/copilot.py`
 
 ### T42 · Demo deploy (#54) — D1 · S · Must
-- [ ] Full app deployed on the free stack with live keys, `LLM_BUDGET_USD` set and a keep-alive ping workflow
+- [ ] Full app deployed on the T20 host with live keys and `LLM_BUDGET_USD` set; keep-alive ping workflow if the host sleeps (free tiers)
 
 **Verify:** the demo script runs on the public URL · **Deps:** T20, T38 · **Files:** deploy config, `.github/workflows/keepalive.yml`
 
