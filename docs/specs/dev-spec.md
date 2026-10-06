@@ -71,6 +71,18 @@ client = OpenAI(base_url=settings.TOKEN_FACTORY_BASE_URL, api_key=settings.NEBIU
 ```
 Every call goes through a wrapper that logs `model, prompt_tokens, completion_tokens, latency_ms, agent, asset_id` to `llm_calls`. Surface this in an **"Agent trace" drawer** in the UI: it shows judges exactly how Nemotron is used.
 
+**As built (T09), `backend/app/llm.py`:**
+- `LLMClient.structured()` (Pydantic-validated JSON), `.text()` and `.tool_step()` (one step of a tool loop; the caller runs the tools). All three take an `agent` name and a `Tier`: `fast`, `orchestrator` or `auditor`, which map to `MODEL_FAST`, `MODEL_ORCHESTRATOR` and `MODEL_AUDITOR`.
+- **Reasoning is off unless `reasoning=True`.** The reasoning text is returned on the result.
+- **Fallback:** the requested tier gets one retry, then each lower tier gets one attempt. So the Auditor tries Ultra, Ultra, Super, Nano. An answer from a lower tier sets `degraded=True`.
+- **Errors:** timeouts, connection errors, response-validation errors, 429s and 5xx are retried. Any other 4xx fails fast and isn't charged.
+- **Logging:** every attempt is written to `llm_calls`, including failed ones, with `tier`, `status` (`reserved`/`ok`/`invalid_output`/`error`) and `cost_usd`. It's committed in its own session, so it survives a caller rollback.
+- **Budget (hard cap):**
+  - Before each attempt, the client **reserves** the worst-case cost: a generous prompt estimate (2 chars/token) plus `max_tokens`.
+  - The reservation is an `llm_calls` row written under a Postgres advisory lock, so concurrent workers can't overshoot. It raises `BudgetExceeded` if spent + reserve > `LLM_BUDGET_USD`; callers then serve cached results.
+  - After the call, the row is settled to the real cost. Timeouts, unknown usage and crashes keep the worst-case charge (fail closed).
+- Prices are a fixed table from ADR-0003, and a model without a price is refused. Strict `json_schema` was verified live with the real `AuditorOutput` and `NewsScoutOutput` contracts.
+
 ## 4. Repository layout
 ```
 naturex/
@@ -251,7 +263,9 @@ create table ledger_entries (         -- Nature Ledger: append-only, hash-chaine
 
 create table llm_calls (
   id bigserial primary key, agent text, model text, asset_id uuid,
-  prompt_tokens int, completion_tokens int, latency_ms int, created_at timestamptz default now()
+  prompt_tokens int, completion_tokens int, latency_ms int,
+  cost_usd numeric(12,6) not null default 0, tier text, status text not null default 'ok',  -- T09
+  created_at timestamptz default now()
 );
 ```
 
