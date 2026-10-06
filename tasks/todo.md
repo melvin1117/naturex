@@ -79,7 +79,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `curl` the endpoint; a row appears in `llm_calls` · **Deps:** T08, T09 · **Files:** `backend/app/agents/summary.py`, `backend/app/routers/reports.py`
 
 ### T11 · Hero-site precompute (#17) — D2 · M · Must · B1 B2
-- [ ] Hero wetland polygon (GeoJSON) drawn on the real wetland: the seed placeholder is 93% built-up town; the wetland is ~3 km north-east, near Xochimilco Ecological Park (ADR-0004), and `scripts/precompute_sites.py` producing cached metrics JSON: land-cover fractions, NDVI series + trend, water change, forest loss, biomass, cloud-free coverage (methods per T06)
+- [ ] Hero wetland polygon (GeoJSON) drawn on the real wetland: the seed placeholder is 93% built-up town; the wetland is ~3 km north, near Xochimilco Ecological Park (box SW corner −99.105, 19.28; ADR-0004), and `scripts/precompute_sites.py` producing cached metrics JSON: land-cover fractions, NDVI series + trend, water change, forest loss, biomass, cloud-free coverage (methods per T06)
 - [ ] Dataset versions and attributions stored in the output
 
 **Verify:** script reproduces the committed JSON · **Deps:** T03, T06 · **Files:** `backend/data/demo_sites/*.geojson|json`, `scripts/precompute_sites.py`, `backend/app/tools/earth_obs.py`

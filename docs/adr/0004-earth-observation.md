@@ -23,31 +23,32 @@ The rating needs per-polygon land cover, an NDVI series with a trend, water chan
   - Sentinel-2 SR Harmonized (`COPERNICUS/S2_SR_HARMONIZED`), joined with Cloud Score+ (`GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED`) via `linkCollection` and masked at **`cs_cdf` ≥ 0.60** (the catalog page says 0.50–0.65 generally works).
   - Water pixels are excluded using the Dynamic World mode.
   - For each month, the median composite, then its mean over the polygon.
-  - Trend: `ee.Reducer.sensSlope()` over 5 years of monthly means, in NDVI per year.
-- **One `getInfo()` per metric** (the whole 60-month series is built server-side), so a site costs a few seconds.
+  - Trend: `ee.Reducer.sensSlope()` over 5 years of monthly means, in NDVI per year, plus a **Mann-Kendall significance test** (dev-spec §7.2): `ee.Reducer.kendallsCorrelation(2)` gives Kendall's tau against time. Earth Engine returns `p-value: NaN` for table inputs, so the p-value is computed from tau with the standard normal approximation (S = τ·n(n−1)/2, Var(S) = n(n−1)(2n+5)/18).
+- **One `getInfo()` round trip per metric:** land cover is one call; the 60-month NDVI series, slope and trend test come back together in one `ee.Dictionary`. Area is a separate call.
 - **Demo sites are precomputed and cached** (T11). Earth Engine isn't called on the judging path.
 
 ## Evidence (T03 run, 2026-10-06)
 `notebooks/ee_spike.ipynb` runs top to bottom in about 40 s (`nbconvert --execute`):
 
-| Polygon | Area: our equal-area calculation vs Earth Engine | Land cover (top classes) | Natural fraction N | NDVI mean, last 12 months | Sen's slope | Clear months |
-|---|---|---|---|---|---|---|
-| Seed placeholder (`app/seed.py`) | 465.5 vs 466.9 ha (0.30%) | **built 93%**, trees 3%, grass 2% | 5.5% | 0.358 | +0.006/yr | 60/60 (392 scenes) |
-| Wetland candidate (Xochimilco Ecological Park area, 1.5 km box) | 261.8 vs 262.6 ha (0.30%) | trees 34%, **water 22%**, built 16%, grass 10%, shrub 10%, crops 6%, flooded vegetation 2% | 78.2% | 0.581 | +0.010/yr | 60/60 (392 scenes) |
+| Polygon | Area: our equal-area calculation vs Earth Engine | Land cover (top classes) | Natural fraction N | NDVI mean, last 12 months | Sen's slope | Mann-Kendall | Clear months |
+|---|---|---|---|---|---|---|---|
+| Seed placeholder (`app/seed.py`) | 465.5 vs 466.9 ha (0.30%) | **built 93%**, trees 3%, grass 2% | 5.5% | 0.358 | +0.006/yr | τ +0.26, p 0.004 (significant) | 60/60 (392 scenes) |
+| Wetland candidate (Xochimilco Ecological Park area, 1.5 km box) | 261.8 vs 262.6 ha (0.30%) | trees 34%, **water 22%**, built 16%, grass 10%, shrub 10%, crops 6%, flooded vegetation 2% | 78.2% | 0.581 | +0.010/yr | τ +0.16, p 0.067 (**not** significant) | 60/60 (392 scenes) |
 
-- **Run time:** land cover takes 0.3–1.5 s per site; the 5-year NDVI series plus trend takes 8–30 s. Usage is far inside the Community tier's 150 EECU-hours per month.
+- **Run time varies a lot with Earth Engine's load:** across the T03 runs, land cover took 0.3–31 s per site, and the 5-year NDVI series with slope and trend test took 4–5 s once fetched in one round trip (8–30 s as separate calls). Usage is far inside the Community tier's 150 EECU-hours per month. Precompute, don't call it live.
 - **Area check:** our T36 equal-area calculation agrees with Earth Engine's geodesic area to 0.3%.
 
 ## Findings
 1. **The seed's hero polygon is the wrong place.**
    - The placeholder box is 93% built-up Xochimilco town, so the demo would rate a city as the "wetland".
-   - A scan of nearby 1.5 km boxes finds the wetland about 3 km north-east: near Xochimilco Ecological Park (78% natural, 25% water or flooded vegetation) and around San Gregorio Atlapulco (42% water or flooded vegetation).
+   - A scan of nearby 1.5 km boxes finds the wetland **about 3 km north** of it, near Xochimilco Ecological Park (box with south-west corner −99.105, 19.28: 78% natural, 25% water or flooded vegetation), and **about 3 km east**, around San Gregorio Atlapulco (−99.06, 19.265: 42% water or flooded vegetation).
    - **T11 must draw the hero boundary there.** The seed's `area_ha` (500) also doesn't match its placeholder polygon (466 ha); T11 should derive the area from the real boundary.
-2. Cloud Score+ masking leaves clear data in **every** month of 5 years here, so the confidence coverage term (`cloud_free_obs / 24`) will be high for this site.
-3. Dynamic World's mode can include **`snow_and_ice`** at 0.0x% on mixed urban pixels. Dropping classes under 0.5% keeps reports clean.
+2. **A slope alone isn't a trend.** The wetland candidate's Sen's slope is positive (+0.010/yr) but **not significant** (p = 0.067), while the urban placeholder's smaller slope is. T13/T15 should store the p-value and only feed the slope into vegetation vigour `V` when p < 0.05 (otherwise treat the trend as 0); the report should say "no significant change".
+3. Cloud Score+ masking leaves clear data in **every** month of 5 years here, so the confidence coverage term (`cloud_free_obs / 24`) will be high for this site.
+4. Dynamic World's mode can include **`snow_and_ice`** at 0.0x% on mixed urban pixels. Dropping classes under 0.5% keeps reports clean.
 
 ## Licence and terms
-- **Earth Engine use is noncommercial:** an individual using it for noncommercial purposes, an open-source project, play money only, no fees, no monetisation. That matches the "Individual using Earth Engine for noncommercial purposes" category (https://earthengine.google.com/noncommercial/).
+- **Earth Engine use appears noncommercial**, subject to the unverified prize-money point below: an individual using it for noncommercial purposes, an open-source project, play money only, no fees, no monetisation. That appears consistent with the "Individual using Earth Engine for noncommercial purposes" category (https://earthengine.google.com/noncommercial/). This is the team's reading, not legal clearance.
 - **What counts as commercial:** the commercial examples are "monetization of services built on top of Earth Engine" and material made "to influence current and prospective customers' or investors' decisions". NatureX does neither: the exchange is a sandbox and nothing is a real security.
 - **Not addressed by the terms:** hackathon **prize money** isn't mentioned (https://earthengine.google.com/terms/). We treat a prize for an open-source prototype as compatible with noncommercial use, but this is **unverified**. If the team wants certainty, ask the organisers or Earth Engine support. Any real commercial use of NatureX would need an Earth Engine commercial licence.
 - **Attribution (CC-BY 4.0):**
