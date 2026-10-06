@@ -19,8 +19,11 @@ const eslintConfig = [
       ".next/**",
       "out/**",
       "build/**",
+      "dist/**",
       "coverage/**",
       "next-env.d.ts",
+      "src/lib/api/openapi.json",
+      "src/lib/api/schema.d.ts",
     ],
   },
 ];
