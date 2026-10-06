@@ -46,6 +46,32 @@ How each team member connects their AI assistant to the shared skills and MCP se
 ### Known quirk
 VS Code scans both `.agents/skills` and `.claude/skills`, so older VS Code versions may **list each skill twice**. It's harmless; update VS Code to get the fix (reported fixed from 1.125).
 
+## Independent review before every PR
+The *Independent review* step in [AGENTS.md](../AGENTS.md): before opening a PR, a **separate agent with fresh context** (not the one that wrote the code) reviews the diff with the `code-review-and-quality` skill. A reviewer without the author's reasoning catches what the author can't see. On T31 (#84) it found that "Reset my demo" deleted the LLM call log, which would let spend escape `LLM_BUDGET_USD`, while all 138 tests passed.
+
+How to start one (commit your work and run `git fetch origin` first):
+| Tool | Fresh-context reviewer |
+|---|---|
+| GitHub Copilot CLI | Ask it to run the prompt below in a **general-purpose sub-agent** (the `task` tool). The built-in `code-review` agent only reports bugs, so it drops readability and architecture findings |
+| GitHub Copilot in VS Code | Turn on **Run Subagent** (`runSubagent`) under *Configure Tools*, then write "Use a subagent to…" followed by the prompt below |
+| Claude Code | Ask it to use a **subagent** with the prompt below |
+| Cursor / Codex | Open a **new chat or session** on the same branch and paste the prompt. Codex's built-in `/review` can run as well, but doesn't replace it |
+
+Prompt to paste (fill in the task; don't add your own explanation of the design):
+```text
+Use the code-review-and-quality skill to review ONLY the changes in `git diff origin/main...HEAD`
+for task T<NN> (issue #<n>). Don't review the rest of the codebase; read surrounding code only
+where you need it to judge a changed line. Acceptance criteria: <copy from tasks/todo.md and the
+story in docs/specs/pm-spec.md>. Relevant specs: <dev-spec §…>. If the diff touches auth,
+cookies, sessions, request input or text passed into an LLM prompt, also use the
+security-and-hardening skill.
+Review correctness, readability, architecture, security and performance of the changes; run
+only the tests that cover them. Don't change, commit or push anything.
+Label every finding Critical / Required / Consider / Nit / FYI with file:line, a concrete
+failure scenario and a fix, and list missing tests. Be concise: no praise, no restating the diff.
+```
+Then **show the findings to the user, who decides** which to fix and which to reject (with a reason). Apply only the agreed fixes, don't commit or push them without the user's go-ahead, re-run `make ci`, and summarise the review in the PR's "Independent review" section (write "None" if there were no Critical or Required findings). A teammate still approves the PR; the agent review doesn't replace that.
+
 ## Optional: Context7 API key
 Context7 works without a key but is rate-limited. For higher limits, get a free key at context7.com/dashboard and add `"--api-key", "<key>"` to the Context7 `args` **in your personal (user-level) config only**. Never commit it.
 
