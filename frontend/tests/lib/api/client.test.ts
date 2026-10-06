@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createApi } from "@/lib/api/client";
+import { createApi, defaultBaseUrl } from "@/lib/api/client";
 
 describe("api client", () => {
   it("creates a client with the default base URL", () => {
@@ -13,5 +13,10 @@ describe("api client", () => {
   it("accepts a custom base URL", () => {
     const client = createApi("http://example.test");
     expect(client).toBeDefined();
+  });
+
+  it("uses the same-origin /api proxy in the browser, so the sandbox cookie is sent", () => {
+    expect(typeof window).toBe("object");
+    expect(defaultBaseUrl()).toBe("/api");
   });
 });

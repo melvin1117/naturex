@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models import LedgerKind
+from app.models import AssetStatus, LedgerKind, UserRole
 
 # ----- Agent outputs (contract-tested later) -----
 
@@ -296,3 +296,33 @@ class TamperDemoOut(BaseModel):
     before: Any
     after: Any
     verify: LedgerVerifyOut
+
+
+# ----- Sandbox worlds (T31) -----
+
+
+class PersonaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    key: str | None = Field(validation_alias="persona_key")
+    name: str
+    role: UserRole
+    cash_balance: Decimal
+
+
+class WorldAssetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    site_key: str | None
+    name: str
+    status: AssetStatus
+
+
+class WorldOut(BaseModel):
+    id: UUID
+    label: str
+    created_at: datetime
+    personas: list[PersonaOut]
+    assets: list[WorldAssetOut]

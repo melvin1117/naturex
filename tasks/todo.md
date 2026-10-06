@@ -169,6 +169,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ### T20 · Deploy skeleton (risk) (#31) — D1 · S · Must
 - [ ] Pick the host from dev-spec §21 (Nebius Serverless if credits → Azure Container Apps + Azure Postgres if the team approves the credits and they last to Dec 15 and allow a public demo → HF Spaces/Render + Supabase); record the choice in the README
 - [ ] Frontend on Vercel; backend container + Postgres (with `vector`) on the chosen host; secrets in host settings, never in the repo
+- [ ] Browser traffic goes through the frontend's `/api/*` rewrite to the backend (`BACKEND_URL`, next.config.ts), so the `nx_world` sandbox cookie stays first-party; backend `ENVIRONMENT=production` so the cookie is `Secure`
 - [ ] `/healthz` reachable; README notes the URLs
 
 **Verify:** public URL loads the marketplace · **Deps:** T04, T05 · **Files:** `backend/Dockerfile`, deploy config
@@ -250,6 +251,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 ### T32 · Frontend data layer (#44) — D1 · S · Must
 - [ ] Shared hooks for the API client, SSE subscription with polling fallback, sandbox cookie and error/loading states, so PD's screens stay presentational
+- [ ] On load, call `GET /world` once and wait for it before any other request; on a 401 `world_required`, call `GET /world` again and retry. Server-side fetches forward the visitor's `nx_world` cookie
 
 **Verify:** `make fe-check` · **Deps:** T29, T31 · **Files:** `frontend/src/lib/*.ts`
 

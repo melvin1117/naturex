@@ -16,6 +16,7 @@ from sqlmodel import Session
 
 from app.config import Settings, get_settings
 from app.db import get_session
+from app.deps import current_world
 from app.ledger import (
     GENESIS_HASH,
     ChainEntry,
@@ -27,7 +28,7 @@ from app.ledger import (
     verify,
 )
 from app.main import app
-from app.models import LedgerKind
+from app.models import LedgerKind, World
 from app.seed import DEMO_SITES, WORLD_ID, seed
 from tests.conftest import alembic_cfg, requires_db
 
@@ -271,7 +272,9 @@ def test_append_rejects_an_unknown_asset(session: Session) -> None:
 
 @pytest.fixture
 def client(session: Session) -> Iterator[TestClient]:
+    """These tests use the seeded template assets, so the visitor's world is the template."""
     app.dependency_overrides[get_session] = lambda: session
+    app.dependency_overrides[current_world] = lambda: session.get(World, WORLD_ID)
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -363,6 +366,7 @@ def test_tamper_demo_needs_entries(client: TestClient) -> None:
 
 def test_tamper_demo_is_hidden_outside_demo_mode() -> None:
     app.dependency_overrides[get_settings] = lambda: Settings(demo_mode=False)
+    app.dependency_overrides[current_world] = lambda: World(label="visitor")
     try:
         response = TestClient(app).post("/admin/tamper-demo", json={"asset_id": str(uuid.uuid4())})
     finally:

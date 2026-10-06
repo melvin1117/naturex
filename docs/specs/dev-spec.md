@@ -293,6 +293,15 @@ create table llm_calls (
 
 Every route is scoped to the visitor's world through the `nx_world` cookie, so judges never affect each other.
 
+**As built (T31):**
+- **Only `GET /world` creates a world.** It reads the `nx_world` cookie (`HttpOnly`, `SameSite=Lax`, `Secure` unless `ENVIRONMENT` is development/test, 30 days, `Cache-Control: no-store`); a missing, malformed or unknown cookie, or one naming the **template** world, gets a fresh world.
+- New worlds are capped at `SANDBOX_MAX_NEW_WORLDS_PER_HOUR` (default 300) → 503 with `Retry-After`.
+- World-scoped routes use `CurrentWorld` (`app/deps.py`) and return **401 `world_required`** without a valid cookie; they never create worlds. The frontend calls `GET /world` first (T32). Today the ledger and world routes are scoped; the other routers adopt `CurrentWorld` as they move off mocks.
+- A new world is a copy of the template (`app/sandbox.py`, including the community's retained holdings) with fresh IDs and every reference remapped. Ledger chains still verify, because hashes don't include IDs.
+- `POST /world/reset` deletes the world's rows (the ledger-delete opt-in is switched on only around those deletes) and re-copies the template, keeping the same ID and cookie. `llm_calls` rows are kept (detached) so the spend cap still counts them.
+- Stale worlds (7 days unseen) are pruned at most every 10 minutes, with locked rows skipped; a failed prune never fails the request. The template is never served, reset or pruned.
+- The cookie is first-party only because the browser calls the frontend's `/api/*` rewrite (next.config.ts → `BACKEND_URL`), not the backend host directly (T20).
+
 Rating runs asynchronously: the API returns `202` + `run_id`, and progress arrives over SSE (`step: earth_obs → valuation → news → evidence → audit → done`).
 
 > Free hosts and serverless endpoints may drop long-lived connections **(verify)**; the frontend falls back to polling every 3 s.

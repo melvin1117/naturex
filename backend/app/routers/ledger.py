@@ -2,22 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from sqlmodel import Session
 
-from app.config import Settings, get_settings
-from app.db import get_session
+from app.deps import CurrentWorld, SessionDep, SettingsDep
 from app.ledger import VerifyResult, entries_for, tamper, verify
-from app.models import Asset
+from app.models import Asset, World
 from app.schemas import LedgerEntryOut, LedgerVerifyOut, TamperDemoIn, TamperDemoOut
 
 router = APIRouter(tags=["ledger"])
-
-SessionDep = Annotated[Session, Depends(get_session)]
-SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
 def _verify_out(result: VerifyResult) -> LedgerVerifyOut:
@@ -26,29 +21,33 @@ def _verify_out(result: VerifyResult) -> LedgerVerifyOut:
     )
 
 
-def _require_asset(session: Session, asset_id: UUID) -> None:
-    if session.get(Asset, asset_id) is None:
+def _require_asset(session: Session, world: World, asset_id: UUID) -> None:
+    """404 unless the asset exists in the visitor's own world."""
+    asset = session.get(Asset, asset_id)
+    if asset is None or asset.world_id != world.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found")
 
 
 @router.get("/ledger/{asset_id}", response_model=list[LedgerEntryOut])
-def list_ledger(asset_id: UUID, session: SessionDep) -> list[LedgerEntryOut]:
-    _require_asset(session, asset_id)
+def list_ledger(asset_id: UUID, world: CurrentWorld, session: SessionDep) -> list[LedgerEntryOut]:
+    _require_asset(session, world, asset_id)
     return [LedgerEntryOut.model_validate(e) for e in entries_for(session, asset_id)]
 
 
 @router.get("/ledger/{asset_id}/verify", response_model=LedgerVerifyOut)
-def verify_ledger(asset_id: UUID, session: SessionDep) -> LedgerVerifyOut:
-    _require_asset(session, asset_id)
+def verify_ledger(asset_id: UUID, world: CurrentWorld, session: SessionDep) -> LedgerVerifyOut:
+    _require_asset(session, world, asset_id)
     return _verify_out(verify(entries_for(session, asset_id)))
 
 
 @router.post("/admin/tamper-demo", response_model=TamperDemoOut)
-def tamper_demo(body: TamperDemoIn, settings: SettingsDep, session: SessionDep) -> TamperDemoOut:
+def tamper_demo(
+    body: TamperDemoIn, settings: SettingsDep, world: CurrentWorld, session: SessionDep
+) -> TamperDemoOut:
     """DEMO_MODE only: edit a copy of one entry and show verification failing. Writes nothing."""
     if not settings.demo_mode:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
-    _require_asset(session, body.asset_id)
+    _require_asset(session, world, body.asset_id)
     entries = entries_for(session, body.asset_id)
     if not entries:
         raise HTTPException(status.HTTP_409_CONFLICT, "This asset has no ledger entries yet")
