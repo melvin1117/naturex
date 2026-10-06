@@ -14,10 +14,10 @@ Next.js web app (Vercel) ──HTTP/SSE──► FastAPI backend (Hugging Face S
                                  │     ├── earth_obs tool ──► Google Earth Engine
                                  │     ├── valuation tool (pure Python + cited coefficient CSV)
                                  │     ├── news_scout agent ──► Tavily + Nemotron Nano
-                                 │     ├── field_evidence agent ──► Nemotron Nano Omni
+                                 │     ├── field_evidence agent ──► MiniCPM-V (perception) + EXIF checks
                                  │     └── auditor agent ──► Nemotron 3 Ultra
                                  ├── Market Engine (pure Python)
-                                 ├── Copilot (Nemotron Nano + pgvector RAG)
+                                 ├── Copilot (Nemotron Nano + pgvector RAG, Qwen3 embeddings)
                                  ├── Nature Ledger (hash-chained, append-only)
                                  └── Supabase: Postgres + pgvector, Storage
 Scheduled jobs: rerate_all (quarterly / Time Machine), news_sweep (daily via GitHub Actions); Nebius Serverless Jobs optional
@@ -49,14 +49,14 @@ Design principles:
 ## 3. Model routing (Nebius Token Factory)
 | Role | Model | Why | Env var |
 |---|---|---|---|
-| Orchestrator | Nemotron 3 Super (e.g. `nvidia/nemotron-3-super-120b-a12b`) | Reliable tool-calling, good cost/quality | `MODEL_ORCHESTRATOR` |
+| Orchestrator | Nemotron 3 Super `nvidia/nemotron-3-super-120b-a12b` | Reliable tool-calling, good cost/quality | `MODEL_ORCHESTRATOR` |
 | Auditor / Rating Analyst | Nemotron 3 Ultra | Deep cross-evidence reasoning, long context | `MODEL_AUDITOR` |
 | News classification | Nemotron 3 Nano | High volume, cheap, fast | `MODEL_FAST` |
-| Field evidence (photos in PoC; audio later) | Nemotron 3 Nano Omni | Multimodal | `MODEL_MULTIMODAL` |
+| Field evidence: perception only (photos) | `openbmb/MiniCPM-V-4_5` (no Nemotron vision model on Token Factory) | Valid JSON in ~1 s; Nemotron Ultra still judges the evidence | `MODEL_MULTIMODAL` |
 | Copilot | Nemotron 3 Nano | Low latency chat | `MODEL_FAST` |
-| Embeddings | NVIDIA embedding model on Token Factory **(verify)**; fallback local `bge-small` | RAG over reports | `MODEL_EMBED` |
+| Embeddings | `Qwen/Qwen3-Embedding-8B` with `dimensions=1024` (no NVIDIA embedding model on Token Factory) | RAG over reports; matches `vector(1024)`; no local model | `MODEL_EMBED` |
 
-Exact model IDs: copy from the Token Factory model catalog **(verify)**.
+Exact IDs, prices and test evidence: [ADR-0003](../adr/0003-model-routing-on-token-factory.md) (`make check-keys` lists what your key can call). Auditor: `nvidia/Nemotron-3-Ultra-550b-a55b`; Nano: `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`. `nvidia/Nemotron-3_5-Lightning` (Nano price, 1M context) is compared against Nano in T02.
 
 **Routing rules (and how we prove them):**
 - Use reasoning / "thinking" mode only where it pays off (Auditor). Keep it off for classification and chat, if the model exposes a toggle **(verify)**.
@@ -364,8 +364,8 @@ Listing gate: `confidence ≥ 70 AND grade ≥ C AND forest_loss_last_12m < 1% o
 ```
 4. **Prompt-injection guard:** wrap retrieved text in `<untrusted_content>` tags and instruct the model to treat it as data only; validate the output against a JSON schema.
 
-### 7.6 Field Evidence (Nemotron Nano Omni)
-Input: photo(s) + asset context (audio is post-hackathon). Output: `{observations[], species_candidates[], damage_signs[], water_clarity, authenticity_concerns[]}`. The result creates an `events` row (`source='evidence'`) and sets `evidence=1` in confidence if there are no authenticity concerns.
+### 7.6 Field Evidence (MiniCPM-V perception + Nemotron judgement)
+Code first checks each photo's EXIF GPS and date (inside the polygon, recent); MiniCPM-V then describes it; the Nemotron Ultra Auditor decides what it means for the rating. Input: photo(s) + asset context (audio is post-hackathon). Output: `{observations[], species_candidates[], damage_signs[], water_clarity, authenticity_concerns[]}`. The result creates an `events` row (`source='evidence'`) and sets `evidence=1` in confidence if there are no authenticity concerns.
 
 ### 7.7 Auditor (Nemotron 3 Ultra)
 Input: metrics, valuation, base scores, events, evidence, and the previous report (if any). Output (JSON schema enforced; retry on invalid):
@@ -549,7 +549,7 @@ Implementation: plain pytest + a small runner that writes `evals/results.md` (co
 
 ## 20. Definition of done (hackathon)
 - [ ] Public URL runs the full demo script without manual DB edits
-- [ ] At least 3 Nemotron models (Super, Ultra, Nano; plus Nano Omni if photo evidence ships) are called at runtime via Token Factory, visible in the Agent Trace drawer
+- [ ] At least 3 Nemotron models (Super, Ultra, Nano) are called at runtime via Token Factory, visible in the Agent Trace drawer with the non-NVIDIA helpers (MiniCPM-V, Qwen3 embeddings) labelled
 - [ ] Tavily is called at runtime by the News Scout
 - [ ] Backend deployed on the free host (or a Nebius Serverless Endpoint if credits); re-rating runs as a job (in-process / GitHub Actions, or Nebius Serverless Jobs)
 - [ ] Judge tour and per-visitor sandbox work for concurrent visitors
@@ -565,7 +565,7 @@ Policy: use the planned stack, and switch to the free alternative wherever a pai
 **Mandatory (hackathon rule), running on credits.** The app must call Token Factory at runtime **or** run on Nebius AI Cloud, and use at least one NVIDIA open model:
 | Item | Covered by | Notes |
 |---|---|---|
-| NVIDIA Nemotron (Ultra, Super, Nano, Nano Omni) via **Nebius Token Factory** | $25 hackathon promo (code `NEBIUS-DEVPOST-GLOBAL26`) + $25 Nebius Builders Program, per account | Credits are per account and can't be pooled. The deployed app uses one key; each member develops with their own. Confirm per-member vs per-team with the organisers. |
+| NVIDIA Nemotron (Ultra, Super, Nano) via **Nebius Token Factory** | $25 hackathon promo (code `NEBIUS-DEVPOST-GLOBAL26`) + $25 Nebius Builders Program, per account | Credits are per account and can't be pooled. The deployed app uses one key; each member develops with their own. Confirm per-member vs per-team with the organisers. |
 
 **Paid items with free alternatives:**
 **Development is local-only:** Docker Compose (Postgres + pgvector) on each laptop, with no cloud accounts needed beyond the AI and data APIs. Hosting for the demo is chosen later from free tiers (T20).
@@ -576,7 +576,7 @@ Policy: use the planned stack, and switch to the free alternative wherever a pai
 | Nebius Serverless Jobs (`rerate_all`, `news_sweep`) | In-process run (`LOCAL_JOBS=true`) triggered by the Time Machine; GitHub Actions `schedule` for the daily sweep | Same code entrypoints; only the trigger changes |
 | Nebius Managed PostgreSQL | Supabase free tier (Postgres + pgvector) or local Postgres in Docker | Supabase free projects pause after inactivity |
 | Nebius Object Storage | Supabase Storage free tier or local disk / MinIO in Docker | Small storage limits, fine for the demo |
-| NVIDIA embedding model on Token Factory (uses credits) | Local `bge-small` (sentence-transformers) | Slightly lower retrieval quality |
+| Local embedding model (e.g. `bge-m3`, ~2.3 GB) | `Qwen3-Embedding-8B` on Token Factory at ~$0.01 per 1M tokens (ADR-0003) | None; avoids model weights on free hosts |
 | Tavily beyond the free tier | Free tier (~1,000 searches/month) + $25 Builders credit; cache results for 24 h | Keep queries to 2–3 per asset |
 | Mapbox (if used) | Leaflet + OpenStreetMap / Esri basemap tiles | Respect tile usage policies |
 | Frontend on a Nebius container | Vercel Hobby (free) | None for the demo |

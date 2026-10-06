@@ -223,7 +223,7 @@
       <div class="st"><b>🛰️ Measure</b><span>Land cover, vegetation, water, forest loss, biomass</span><br><span class="who">Earth-obs tool</span></div><div class="ar">→</div>
       <div class="st"><b>💲 Value</b><span>$/yr per ecosystem service, low–mid–high</span><br><span class="who">Valuation engine</span></div><div class="ar">→</div>
       <div class="st"><b>📰 Scan news</b><span>Threats &amp; good news near the site</span><br><span class="who">Tavily + Nemotron Nano</span></div><div class="ar">→</div>
-      <div class="st"><b>📸 Evidence</b><span>Community photos checked</span><br><span class="who">Nemotron Nano Omni</span></div><div class="ar">→</div>
+      <div class="st"><b>📸 Evidence</b><span>Community photos checked</span><br><span class="who">MiniCPM-V + Nemotron Ultra</span></div><div class="ar">→</div>
       <div class="st"><b>🧑‍⚖️ Audit &amp; grade</b><span>Cross-check, adjust, write report</span><br><span class="who">Nemotron 3 Ultra</span></div><div class="ar">→</div>
       <div class="st"><b>🔗 Seal</b><span>Hash-chained into the Nature Ledger</span><br><span class="who">Ledger</span></div>
     </div>
@@ -272,7 +272,7 @@ Low / High = same with the low / high coefficient  →  always shown as a range<
       <div class="card"><h4>🤖 AI does</h4><ul class="ai-roles" style="margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:14.5px">
         <li><b>Plans</b> the rating run and calls tools (Nemotron 3 Super)</li>
         <li><b>Classifies news</b>: relevance, impact type, +/− direction, severity 1–5 (Nemotron Nano)</li>
-        <li><b>Reads photos</b>: species, water clarity, signs of damage (Nemotron Nano Omni)</li>
+        <li><b>Reads photos</b>: species, water clarity, signs of damage (MiniCPM-V sees, Nemotron Ultra judges; GPS/date checked in code)</li>
         <li><b>Audits</b>: cross-checks all evidence, flags greenwashing, adjusts score within ±10, writes the report (Nemotron 3 Ultra)</li></ul></div>
       <div class="card"><h4>🛡️ Guardrails</h4><ul class="ai-roles" style="margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:14.5px">
         <li>All numbers come from deterministic, unit-tested code, <b>never invented by the LLM</b></li>
@@ -431,15 +431,15 @@ const D = {
   EO: ["Earth Observation Tool", "ours", "Pulls Dynamic World land cover, Sentinel-2 NDVI 5-yr trend, JRC surface water, Hansen forest loss, biomass → carbon. Results cached per asset.", ["Google Earth Engine or Microsoft Planetary Computer", "Precompute demo sites"]],
   VAL: ["Valuation Engine", "ours", "Area of each land-cover class × $/ha/yr coefficients → annual ecosystem-service value with low/mid/high range. Starter values from Costanza et al. 2014, replaced by ESVD in the build.", ["Pure Python, deterministic, unit-tested"]],
   NS: ["News Scout Agent", "tavily", "Uses Tavily search for news near the asset (new factory permits, fires, drought, restoration projects). Nemotron Nano classifies each item: impact type, direction, severity.", ["Qualifies for Best Use of Tavily bonus", "Runs daily via a GitHub Actions cron"]],
-  FEV: ["Field Evidence Agent", "nebius", "Nemotron Nano Omni analyses community-uploaded photos (species, water clarity, signs of damage) to raise confidence.", ["Multimodal NVIDIA model", "Audio (e.g. birdsong) after the hackathon"]],
+  FEV: ["Field Evidence Agent", "nebius", "Code checks each photo's GPS and date against the boundary; MiniCPM-V (vision model on Token Factory) describes species, water clarity and signs of damage; the Nemotron Ultra Auditor decides what it means. Raises confidence.", ["No Nemotron vision model on Token Factory (ADR-0003)", "Audio (e.g. birdsong) after the hackathon"]],
   AUD: ["Auditor / Rating Analyst", "nebius", "Nemotron 3 Ultra does the heavy reasoning: cross-checks satellite vs news vs evidence, flags greenwashing risk, assigns Health Score, grade (AAA–D), confidence, and writes the Ecological Performance Report.", ["Model: Nemotron 3 Ultra", "Structured JSON output + markdown report"]],
-  CPA: ["Copilot Agent", "nebius", "Nemotron Nano with RAG over reports & news stored in pgvector. Fast, cheap, cites sources.", []],
+  CPA: ["Copilot Agent", "nebius", "Nemotron Nano with RAG over reports & news stored in pgvector (Qwen3 embeddings on Token Factory). Fast, cheap, cites sources.", []],
   RJ: ["Quarterly Re-rating Job", "ours", "Re-runs the rating pipeline for all assets. Runs in-process when the Time Machine is clicked; Nebius Serverless Jobs is an optional upgrade.", []],
   NJ: ["Daily News Sweep Job", "ours", "Runs the News Scout over every listed asset daily via a GitHub Actions cron and stores new events.", []],
   DB: ["Supabase Postgres + pgvector", "data", "Sandbox worlds, assets, reports, events, prices, orders, holdings, users + embeddings for Copilot RAG. Supabase free tier; local Docker in development.", []],
   LED: ["Nature Ledger", "data", "Tamper-evident history: every listing, report, event, price re-anchor and payout is appended with hash = SHA256(entry + previous hash). Editing any past record breaks the chain and the ‘✅ History verified’ badge turns ❌. Blockchain-style trust without tokens.", ["Append-only table, same DB transaction", "GET /ledger/{id}/verify", "Stretch: anchor head hash via OpenTimestamps"]],
   OBJ: ["Supabase Storage", "data", "Cached satellite tiles / thumbnails, uploaded evidence photos. Supabase free tier.", []],
-  TF: ["Nebius Token Factory", "nebius", "OpenAI-compatible inference API serving NVIDIA Nemotron models. Every AI step runs here — a hard hackathon requirement.", ["Ultra → deep reasoning", "Super → orchestration", "Nano / Nano Omni → fast + multimodal"]],
+  TF: ["Nebius Token Factory", "nebius", "OpenAI-compatible inference API serving NVIDIA Nemotron models. Every AI step runs here (hackathon requirement: Token Factory calls + an NVIDIA open model).", ["Ultra → deep reasoning", "Super → orchestration", "Nano → fast classification + chat", "MiniCPM-V / Qwen3 embeddings → vision + search (no Nemotron equivalent)"]],
   GEE: ["Google Earth Engine", "ext", "Free (non-commercial) satellite platform with Sentinel-2, Dynamic World (10 m land cover), JRC surface water, Hansen forest change and ESA biomass. Required: Planetary Computer lacks Dynamic World, Hansen and GEDI.", []],
   ESVD: ["Valuation sources", "ext", "Published $/ha/yr values by biome and service (e.g. Costanza et al. 2014, Brander et al. 2024), cited in a static CSV. Raw ESVD data isn\u2019t committed (licence).", []],
   TAV: ["Tavily Search API", "tavily", "Real-time web search built for agents. Supplies the ‘news’ that moves nature ‘stocks’.", []],
@@ -450,7 +450,7 @@ const D = {
   V1: ["Polygon validation", "rule", "Checks area limits (e.g. 10 – 50,000 ha), self-intersection, overlap with existing listings.", []],
   RATE: ["AI rating pipeline", "ai", "Orchestrator → Earth Obs → Valuation → News Scout → Field Evidence → Auditor.", []],
   C1: ["Confidence gate", "rule", "Confidence = 40% satellite coverage + 30% satellite–news agreement + 20% field evidence + 10% data recency. Below 70% the asset can't list yet.", []],
-  EVID: ["Request evidence", "action", "App asks the community for up to 5 geotagged photos; Nemotron Nano Omni analyses them.", []],
+  EVID: ["Request evidence", "action", "App asks the community for up to 5 geotagged photos; GPS/date checked in code, MiniCPM-V describes them, Nemotron Ultra weighs them.", []],
   G1: ["Listing eligibility", "rule", "Grade ≥ C and forest/habitat loss in the last 12 months below 1% of the area (Hansen / Dynamic World change).", []],
   PLAN: ["Stewardship plan", "action", "Auditor generates concrete actions to improve the grade (e.g. stop grazing in zone 2, restore buffer strip).", []],
   IPO: ["IPO pricing", "step", "IPO price = fair value per share. Community keeps its retained stake; public float sold to investors.", []],
@@ -556,7 +556,7 @@ const BANDS = [
     ["EO", "Earth Observation", "Land · vegetation · carbon", ["gearth"], "ours"],
     ["VAL", "Valuation", "$/yr · low–mid–high", ["python"], "ours"],
     ["NS", "News Scout", "Tavily + Nemotron Nano", ["tavily", "nvidia"], "tavily"],
-    ["FEV", "Field Evidence", "Nemotron Nano Omni", ["nvidia"], "nebius"],
+    ["FEV", "Field Evidence", "MiniCPM-V + Nemotron", ["nvidia"], "nebius"],
     ["AUD", "Auditor", "Nemotron 3 Ultra · grades", ["nvidia"], "nebius"],
     ["CPA", "Copilot Agent", "Nemotron Nano + RAG", ["nvidia"], "nebius"] ] },
   { conn: "LLM API · SQL · object storage · HTTPS" },

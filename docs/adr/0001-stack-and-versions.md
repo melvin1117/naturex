@@ -32,7 +32,7 @@ Constraints from [AGENTS.md](../../AGENTS.md): Python 3.12 + FastAPI + SQLModel;
 | Valuation coefficients | **Brander 2024 (CC BY) + Costanza 2014**, cited | **Do not** commit raw ESVD data |
 | Carbon | AGB × (1 + R) × 0.47 × 44/12 + SoilGrids SOC for wetlands | Formula refined in T14; see research §6 |
 | NDVI trend | Cloud Score+ masking + **Sen's slope** | Confirmed in T03/T11 |
-| Embeddings | Token Factory NVIDIA embed if available; else local **bge-small** | |
+| Embeddings | ~~Token Factory NVIDIA embed if available; else local bge-small~~ | Superseded by [ADR-0003](./0003-model-routing-on-token-factory.md): `Qwen3-Embedding-8B` on Token Factory |
 | Tracing | OpenTelemetry spans → Postgres (`llm_calls` + Agent Trace); optional Langfuse | |
 | Evals | **promptfoo** + pytest runner (`make eval`) | |
 | Hosting (demo) | Frontend **Vercel Hobby**; backend HF Spaces or Render; DB Supabase | Nebius Serverless if credits unlock |

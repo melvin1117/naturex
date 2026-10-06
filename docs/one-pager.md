@@ -32,7 +32,7 @@ Nature delivers ~$100T/yr of services — clean water, flood protection, carbon 
 | Rating Orchestrator | **Nemotron 3 Super** | Plans the rating run, calls tools |
 | Auditor / Rating Analyst | **Nemotron 3 Ultra** | Deep reasoning: cross-checks evidence, flags greenwashing, grades, writes report |
 | News Scout | **Nemotron Nano** + **Tavily** | Finds & classifies real-world events near the asset |
-| Field Evidence | **Nemotron Nano Omni** | Reads community photos (audio after the hackathon) |
+| Field Evidence | **MiniCPM-V** (perception) + **Nemotron 3 Ultra** (judgement) | Reads community photos (audio after the hackathon) |
 | Investor Copilot | **Nemotron Nano** + RAG | Fast grounded Q&A |
 
 The app runs on free tiers (Vercel, Hugging Face Spaces or Render, Supabase); re-rating and news sweeps run as scheduled jobs. **Nebius Serverless Endpoints and Jobs** are an optional upgrade if event credits arrive.

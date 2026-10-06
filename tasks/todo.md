@@ -19,9 +19,9 @@
 
 ### T02 · Token Factory spike (risk) (#8) — D3 · S · Must
 Confirm how Nemotron actually behaves on Token Factory before building on it.
-- [ ] Exact model IDs from `/v1/models` for Super, Ultra, Nano and Nano Omni
-- [ ] Tested: `response_format` JSON schema (both shapes), tool calling, thinking on/off (`chat_template_kwargs`), and one image input for Nano Omni
-- [ ] Findings recorded in `docs/adr/0003-nemotron-on-token-factory.md` (IDs, what works, per-model price)
+- [x] Exact model IDs, prices, embeddings and one image input checked (ADR-0003, Oct 5)
+- [ ] Tested: `response_format` JSON schema (both shapes), tool calling, thinking on/off (`chat_template_kwargs`) on each Nemotron model; Nano vs 3.5 Lightning
+- [ ] Findings added to `docs/adr/0003-model-routing-on-token-factory.md` (what works, latency, token counts)
 
 **Verify:** spike script reproduces each result · **Deps:** T01 · **Files:** `scripts/spikes/token_factory.py`, `docs/adr/0003-*.md`
 
@@ -278,7 +278,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` · **Deps:** T27 · **Files:** `backend/app/routers/reports.py`, `backend/app/services/diff.py`
 
 ### T40 · Field evidence (photos) (#50) — D2 · S · Could (only if ahead; re-plan Oct 4) · A4
-- [ ] Up to 5 geotagged photos → Nemotron Nano Omni analysis → evidence event → confidence updated
+- [ ] Up to 5 geotagged photos → EXIF GPS/date check → MiniCPM-V description → evidence event → Auditor weighs it → confidence updated (ADR-0003)
 - [ ] Exposed as the `field_evidence` tool so the Orchestrator (T27) calls it when evidence exists
 
 **Verify:** `make test`; manual upload raises confidence · **Deps:** T09, T15 · **Files:** `backend/app/agents/field_evidence.py`, `backend/app/routers/assets.py`
