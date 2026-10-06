@@ -265,4 +265,13 @@ class LlmCall(SQLModel, table=True):
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     latency_ms: int | None = None
+    cost_usd: Decimal = Field(
+        default=Decimal("0"),
+        max_digits=12,
+        decimal_places=6,
+        sa_column_kwargs={"server_default": "0"},
+    )
+    tier: str | None = None
+    status: str = Field(default="ok", sa_column_kwargs={"server_default": "ok"})
+    """ok | invalid_output | error (one row per attempt, including failed ones)."""
     created_at: datetime = _created_at()

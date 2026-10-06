@@ -66,9 +66,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`; `make fe-check`; client drift check in CI · **Deps:** T04, T05, T07 · **Files:** `backend/app/routers/*.py`, `backend/app/schemas.py`, `scripts/generate-client.sh`, `frontend/src/lib/api/*`
 
 ### T09 · Token Factory LLM client (#15) — D3 · S · Must
-- [ ] One wrapper for all model calls: model routing from env, retries, schema validation, fallback tier, `LLM_BUDGET_USD` cap
-- [ ] Every call logged to `llm_calls` (agent, model, tokens, latency, cost)
-- [ ] Unit tests with mocked HTTP (budget cap refuses calls, invalid JSON retries)
+- [x] One wrapper for all model calls: model routing from env, retries, schema validation, fallback tier, `LLM_BUDGET_USD` cap
+- [x] Every call logged to `llm_calls` (agent, model, tokens, latency, cost)
+- [x] Unit tests with mocked HTTP (budget cap refuses calls, invalid JSON retries)
 
 **Verify:** `make test` · **Deps:** T02, T07 · **Files:** `backend/app/llm.py`, `backend/tests/test_llm.py`
 

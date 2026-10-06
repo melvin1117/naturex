@@ -71,6 +71,15 @@ client = OpenAI(base_url=settings.TOKEN_FACTORY_BASE_URL, api_key=settings.NEBIU
 ```
 Every call goes through a wrapper that logs `model, prompt_tokens, completion_tokens, latency_ms, agent, asset_id` to `llm_calls`. Surface this in an **"Agent trace" drawer** in the UI: it shows judges exactly how Nemotron is used.
 
+**As built (T09), `backend/app/llm.py`:**
+- `LLMClient.structured()` (Pydantic-validated JSON), `.text()` and `.tool_step()` (one step of a tool loop; the caller runs the tools). All three take an `agent` name and a `Tier`: `fast`, `orchestrator` or `auditor`, which map to `MODEL_FAST`, `MODEL_ORCHESTRATOR` and `MODEL_AUDITOR`.
+- **Reasoning is off unless `reasoning=True`.** The reasoning text is returned on the result.
+- **Fallback:** the requested tier gets one retry, then each lower tier gets one attempt. So the Auditor tries Ultra, Ultra, Super, Nano. An answer from a lower tier sets `degraded=True`.
+- **Errors:** timeouts, connection errors, 429s and 5xx are retried. A 4xx fails fast.
+- **Logging:** every attempt is written to `llm_calls`, including failed ones, with `tier`, `status` (`ok`/`invalid_output`/`error`) and `cost_usd`. It's committed in its own session, so it survives a caller rollback.
+- **Budget:** before each attempt the client reserves the worst-case cost (prompt estimate + `max_tokens`). It raises `BudgetExceeded` if spent + reserve > `LLM_BUDGET_USD`; callers then serve cached results.
+- Prices are a fixed table from ADR-0003, and a model without a price is refused. Concurrent calls can overshoot the cap by at most one call each, which is acceptable for a demo budget.
+
 ## 4. Repository layout
 ```
 naturex/
@@ -251,7 +260,9 @@ create table ledger_entries (         -- Nature Ledger: append-only, hash-chaine
 
 create table llm_calls (
   id bigserial primary key, agent text, model text, asset_id uuid,
-  prompt_tokens int, completion_tokens int, latency_ms int, created_at timestamptz default now()
+  prompt_tokens int, completion_tokens int, latency_ms int,
+  cost_usd numeric(12,6) not null default 0, tier text, status text not null default 'ok',  -- T09
+  created_at timestamptz default now()
 );
 ```
 
