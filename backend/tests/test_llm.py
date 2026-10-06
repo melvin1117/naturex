@@ -15,7 +15,7 @@ import pytest
 from alembic import command
 from pydantic import BaseModel
 from sqlalchemy import create_engine, delete
-from sqlmodel import Session
+from sqlmodel import Session, col, select
 
 from app.config import Settings, get_settings
 from app.llm import (
@@ -90,15 +90,27 @@ class FakeTransport:
 
 
 class MemoryCallLog:
+    """In-memory CallLog: reservations count as spend until settled."""
+
     def __init__(self, spent: str = "0") -> None:
         self.spent = Decimal(spent)
-        self.records: list[CallRecord] = []
+        self.rows: list[CallRecord] = []
+
+    @property
+    def records(self) -> list[CallRecord]:
+        return list(self.rows)
 
     def spent_usd(self) -> Decimal:
-        return self.spent + sum((r.cost_usd for r in self.records), Decimal(0))
+        return self.spent + sum((r.cost_usd for r in self.rows), Decimal(0))
 
-    def record(self, call: CallRecord) -> None:
-        self.records.append(call)
+    def reserve(self, call: CallRecord, budget: Decimal) -> int:
+        if self.spent_usd() + call.cost_usd > budget:
+            raise BudgetExceeded("over budget")
+        self.rows.append(call)
+        return len(self.rows) - 1
+
+    def settle(self, handle: int, call: CallRecord) -> None:
+        self.rows[handle] = call
 
 
 def client(
@@ -257,7 +269,9 @@ def test_timeouts_are_retried_and_logged_as_errors() -> None:
     )
 
     assert result.attempts == 2
-    assert [(r.status, r.cost_usd) for r in log.records][0] == ("error", Decimal(0))
+    timeout = log.records[0]
+    assert timeout.status == "error"
+    assert timeout.cost_usd > 0, "a timeout may still be billed, so it keeps the worst-case charge"
 
 
 def test_a_rejected_request_fails_fast_without_falling_back() -> None:
@@ -275,7 +289,7 @@ def test_a_rejected_request_fails_fast_without_falling_back() -> None:
         )
 
     assert len(transport.requests) == 1
-    assert [r.status for r in log.records] == ["error"]
+    assert [(r.status, r.cost_usd) for r in log.records] == [("error", Decimal(0))]
 
 
 # --- Budget cap ------------------------------------------------------------------------------
@@ -394,7 +408,9 @@ def test_db_call_log_records_every_attempt_and_sums_spend(db_log: tuple[DbCallLo
 
     engine = create_engine(get_settings().database_url)
     with Session(engine) as session:
-        rows = session.query(LlmCall).filter(LlmCall.agent == agent).order_by(LlmCall.id).all()
+        rows = session.exec(
+            select(LlmCall).where(LlmCall.agent == agent).order_by(col(LlmCall.id))
+        ).all()
     engine.dispose()
     assert [(r.model, r.tier, r.status) for r in rows] == [
         (ULTRA, "auditor", "invalid_output"),
@@ -402,3 +418,138 @@ def test_db_call_log_records_every_attempt_and_sums_spend(db_log: tuple[DbCallLo
     ]
     assert all(r.latency_ms is not None for r in rows)
     assert log.spent_usd() - before == 2 * cost_usd(ULTRA, 1000, 100)
+
+
+# --- Review follow-ups: every paid path is logged and counted --------------------------------
+
+
+def status_error(code: int) -> openai.APIStatusError:
+    response = httpx.Response(code, request=REQUEST)
+    return openai.APIStatusError(f"HTTP {code}", response=response, body=None)
+
+
+@pytest.mark.parametrize("code", [429, 500, 503])
+def test_rate_limits_and_server_errors_are_retried(code: int) -> None:
+    log = MemoryCallLog()
+    transport = FakeTransport(status_error(code), reply(GOOD))
+
+    result = client(transport, log).structured(
+        agent="news_scout", tier=Tier.FAST, messages=MESSAGES, schema=Event
+    )
+
+    assert result.attempts == 2
+    assert log.records[0].status == "error"
+
+
+@pytest.mark.parametrize("code", [400, 401, 404, 422])
+def test_other_client_errors_fail_fast(code: int) -> None:
+    transport = FakeTransport(status_error(code))
+
+    with pytest.raises(LLMError, match=f"HTTP {code}"):
+        client(transport).structured(
+            agent="auditor", tier=Tier.AUDITOR, messages=MESSAGES, schema=Event
+        )
+
+    assert len(transport.requests) == 1
+
+
+def test_a_response_validation_error_is_logged_and_retried() -> None:
+    log = MemoryCallLog()
+    bad = openai.APIResponseValidationError(
+        response=httpx.Response(200, request=REQUEST), body=None
+    )
+    transport = FakeTransport(bad, reply(GOOD))
+
+    result = client(transport, log).structured(
+        agent="news_scout", tier=Tier.FAST, messages=MESSAGES, schema=Event
+    )
+
+    assert result.attempts == 2
+    assert log.records[0].status == "error"
+
+
+def test_empty_choices_count_as_invalid_output() -> None:
+    log = MemoryCallLog()
+    empty = SimpleNamespace(
+        choices=[], usage=SimpleNamespace(prompt_tokens=50, completion_tokens=0)
+    )
+    transport = FakeTransport(empty, reply(GOOD))
+
+    result = client(transport, log).structured(
+        agent="news_scout", tier=Tier.FAST, messages=MESSAGES, schema=Event
+    )
+
+    assert result.attempts == 2
+    assert log.records[0].status == "invalid_output"
+
+
+def test_missing_usage_is_charged_the_worst_case_reserve() -> None:
+    log = MemoryCallLog()
+    no_usage = SimpleNamespace(choices=reply(GOOD).choices, usage=None)
+
+    client(FakeTransport(no_usage), log).structured(
+        agent="news_scout", tier=Tier.FAST, messages=MESSAGES, schema=Event
+    )
+
+    [record] = log.records
+    assert record.status == "ok"
+    assert record.cost_usd > cost_usd(NANO, 0, 0), "unknown usage is never counted as free"
+
+
+def test_an_unexpected_error_is_settled_then_raised() -> None:
+    log = MemoryCallLog()
+
+    with pytest.raises(RuntimeError):
+        client(FakeTransport(RuntimeError("bug")), log).structured(
+            agent="news_scout", tier=Tier.FAST, messages=MESSAGES, schema=Event
+        )
+
+    [record] = log.records
+    assert record.status == "error"
+    assert record.cost_usd > 0
+
+
+@pytest.mark.parametrize("budget", [0.0, -1.0])
+def test_zero_or_negative_budget_refuses_every_call(budget: float) -> None:
+    transport = FakeTransport(reply(GOOD))
+
+    with pytest.raises(BudgetExceeded):
+        client(transport, llm_budget_usd=budget).structured(
+            agent="news_scout", tier=Tier.FAST, messages=MESSAGES, schema=Event
+        )
+
+    assert transport.requests == []
+
+
+@requires_db
+def test_concurrent_reservations_never_overshoot_the_budget(
+    db_log: tuple[DbCallLog, str],
+) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    log, agent = db_log
+    amount = Decimal("0.010000")
+    budget = log.spent_usd() + 5 * amount
+    call = CallRecord(
+        agent=agent,
+        tier=Tier.FAST,
+        model=NANO,
+        status="reserved",
+        prompt_tokens=0,
+        completion_tokens=0,
+        latency_ms=0,
+        cost_usd=amount,
+    )
+
+    def try_reserve(_: int) -> bool:
+        try:
+            log.reserve(call, budget)
+        except BudgetExceeded:
+            return False
+        return True
+
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        granted = sum(pool.map(try_reserve, range(10)))
+
+    assert granted == 5
+    assert log.spent_usd() <= budget

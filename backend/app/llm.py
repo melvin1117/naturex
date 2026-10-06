@@ -24,7 +24,7 @@ import json
 import logging
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Protocol
@@ -32,7 +32,7 @@ from uuid import UUID
 
 import openai
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlmodel import Session, select
 
 from app.config import Settings
@@ -51,8 +51,10 @@ PRICES_PER_M: dict[str, tuple[Decimal, Decimal]] = {
     "openbmb/MiniCPM-V-4_5": (Decimal("0.658"), Decimal("1.11")),
     "Qwen/Qwen3-Embedding-8B": (Decimal("0.01"), Decimal("0")),
 }
-# Rough upper bound for prompt tokens when reserving budget before a call.
-CHARS_PER_TOKEN = 3
+# Conservative lower bound on characters per token, so the prompt reserve overestimates.
+CHARS_PER_TOKEN = 2
+# Postgres advisory-lock key that serialises budget reservations across processes.
+BUDGET_LOCK_KEY = 0x4E584C4C
 REQUEST_TIMEOUT_S = 60.0
 THINKING_OFF: dict[str, Any] = {"chat_template_kwargs": {"enable_thinking": False}}
 
@@ -104,14 +106,25 @@ class CallRecord:
 
 
 class CallLog(Protocol):
+    """Spend ledger. `reserve` must be atomic across processes so the cap is hard."""
+
     def spent_usd(self) -> Decimal: ...
 
-    def record(self, call: CallRecord) -> None: ...
+    def reserve(self, call: CallRecord, budget: Decimal) -> int:
+        """Record `call` (status `reserved`, cost = worst case) unless that would push total
+        spend past `budget`; then raise BudgetExceeded. Returns a handle for `settle`."""
+        ...
+
+    def settle(self, handle: int, call: CallRecord) -> None:
+        """Replace the reservation with what the attempt actually cost."""
+        ...
 
 
 class DbCallLog:
-    """`llm_calls` in Postgres. Each record commits in its own session, so spend is logged
-    even if the caller's transaction later rolls back."""
+    """`llm_calls` in Postgres, in its own short transactions, so spend is recorded even if
+    the caller's transaction later rolls back. A transaction-scoped advisory lock makes
+    check-and-reserve atomic across workers. A reservation left behind by a crash keeps
+    counting at its worst-case cost (fail closed)."""
 
     def __init__(self, session_factory: Callable[[], Session]) -> None:
         self._session_factory = session_factory
@@ -121,23 +134,51 @@ class DbCallLog:
             total = session.exec(select(func.coalesce(func.sum(LlmCall.cost_usd), 0))).one()
         return Decimal(total)
 
-    def record(self, call: CallRecord) -> None:
+    def reserve(self, call: CallRecord, budget: Decimal) -> int:
         with self._session_factory() as session:
-            session.add(
-                LlmCall(
-                    world_id=call.world_id,
-                    asset_id=call.asset_id,
-                    agent=call.agent,
-                    model=call.model,
-                    tier=call.tier.value,
-                    status=call.status,
-                    prompt_tokens=call.prompt_tokens,
-                    completion_tokens=call.completion_tokens,
-                    latency_ms=call.latency_ms,
-                    cost_usd=call.cost_usd,
-                )
+            session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": BUDGET_LOCK_KEY})
+            spent = Decimal(
+                session.exec(select(func.coalesce(func.sum(LlmCall.cost_usd), 0))).one()
             )
+            if spent + call.cost_usd > budget:
+                raise BudgetExceeded(_over_budget(budget, spent, call.cost_usd))
+            row = _row(call)
+            session.add(row)
             session.commit()
+            assert row.id is not None
+            return row.id
+
+    def settle(self, handle: int, call: CallRecord) -> None:
+        with self._session_factory() as session:
+            row = session.get(LlmCall, handle)
+            if row is None:
+                raise LLMError(f"llm_calls row {handle} vanished before settling")
+            for key, value in _row(call).model_dump(exclude={"id", "created_at"}).items():
+                setattr(row, key, value)
+            session.add(row)
+            session.commit()
+
+
+def _row(call: CallRecord) -> LlmCall:
+    return LlmCall(
+        world_id=call.world_id,
+        asset_id=call.asset_id,
+        agent=call.agent,
+        model=call.model,
+        tier=call.tier.value,
+        status=call.status,
+        prompt_tokens=call.prompt_tokens,
+        completion_tokens=call.completion_tokens,
+        latency_ms=call.latency_ms,
+        cost_usd=call.cost_usd,
+    )
+
+
+def _over_budget(budget: Decimal, spent: Decimal, reserve: Decimal) -> str:
+    return (
+        f"LLM budget ${budget} would be exceeded "
+        f"(spent ${spent:.4f}, this call may cost up to ${reserve:.4f})"
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +191,11 @@ class LLMResult[T]:
     attempts: int
     reasoning: str | None
     """Nemotron's reasoning text when reasoning was on (returned in `message.reasoning`)."""
+
+
+def _describe(exc: Exception) -> str:
+    status = getattr(exc, "status_code", None)
+    return f"HTTP {status}" if status else type(exc).__name__
 
 
 def cost_usd(model: str, prompt_tokens: int, completion_tokens: int) -> Decimal:
@@ -186,12 +232,11 @@ def _reasoning(message: Any) -> str | None:
     return str(text) if text else None
 
 
-_RETRYABLE = (
-    openai.APITimeoutError,
-    openai.APIConnectionError,
-    openai.RateLimitError,
-    openai.InternalServerError,
-)
+def _classify(exc: openai.APIError) -> str:
+    """`retry` (transient or malformed response) or `fail` (our request is wrong)."""
+    if isinstance(exc, openai.APIStatusError):
+        return "retry" if exc.status_code == 429 or exc.status_code >= 500 else "fail"
+    return "retry"  # timeouts, connection errors, response validation errors
 
 
 class LLMClient:
@@ -345,17 +390,25 @@ class LLMClient:
         **request: Any,
     ) -> LLMResult[T]:
         failures: list[str] = []
+        budget = Decimal(str(self._settings.llm_budget_usd))
         for attempt, attempt_tier in enumerate(self._attempts(tier), start=1):
             model = self.model_for(attempt_tier)
             reserve = _reserve_usd(model, messages, max_tokens)
-            spent = self._log.spent_usd()
-            if spent + reserve > Decimal(str(self._settings.llm_budget_usd)):
-                raise BudgetExceeded(
-                    f"LLM budget ${self._settings.llm_budget_usd} would be exceeded "
-                    f"(spent ${spent:.4f}, this call may cost up to ${reserve:.4f})"
-                )
-
+            planned = CallRecord(
+                agent=agent,
+                tier=attempt_tier,
+                model=model,
+                status="reserved",
+                prompt_tokens=0,
+                completion_tokens=0,
+                latency_ms=0,
+                cost_usd=reserve,
+                world_id=world_id,
+                asset_id=asset_id,
+            )
+            handle = self._log.reserve(planned, budget)
             start = self._clock()
+
             try:
                 completion = self._transport.create(
                     model=model,
@@ -366,47 +419,33 @@ class LLMClient:
                     extra_body=None if reasoning else THINKING_OFF,
                     **request,
                 )
-            except _RETRYABLE as exc:
-                self._record(agent, attempt_tier, model, "error", 0, 0, start, world_id, asset_id)
-                failures.append(f"{model}: {type(exc).__name__}")
+            except openai.APIError as exc:
+                if _classify(exc) == "fail":
+                    # Rejected requests aren't billed.
+                    self._settle(handle, planned, start, "error", 0, 0, Decimal(0))
+                    raise LLMError(f"{model} rejected the request: {_describe(exc)}") from exc
+                # Unknown whether tokens were billed, so keep the worst-case charge.
+                self._settle(handle, planned, start, "error", 0, 0, reserve)
+                failures.append(f"{model}: {_describe(exc)}")
                 continue
-            except openai.APIStatusError as exc:
-                # A 4xx is a bug in our request; another tier would fail the same way.
-                self._record(agent, attempt_tier, model, "error", 0, 0, start, world_id, asset_id)
-                raise LLMError(f"{model} rejected the request: HTTP {exc.status_code}") from exc
+            except Exception:
+                # Not an API error (a bug on our side): keep the worst-case charge and surface it.
+                self._settle(handle, planned, start, "error", 0, 0, reserve)
+                raise
 
-            usage = completion.usage
-            prompt = usage.prompt_tokens if usage else 0
-            completion_tokens = usage.completion_tokens if usage else 0
-            message = completion.choices[0].message
+            usage = getattr(completion, "usage", None)
+            prompt = int(getattr(usage, "prompt_tokens", 0) or 0)
+            output = int(getattr(usage, "completion_tokens", 0) or 0)
+            spent = cost_usd(model, prompt, output) if usage else reserve
             try:
+                message = completion.choices[0].message
                 value = parse(message)
-            except (ValidationError, ValueError) as exc:
-                self._record(
-                    agent,
-                    attempt_tier,
-                    model,
-                    "invalid_output",
-                    prompt,
-                    completion_tokens,
-                    start,
-                    world_id,
-                    asset_id,
-                )
+            except (ValidationError, ValueError, LookupError, AttributeError, TypeError) as exc:
+                self._settle(handle, planned, start, "invalid_output", prompt, output, spent)
                 failures.append(f"{model}: invalid output ({str(exc)[:80]})")
                 continue
 
-            self._record(
-                agent,
-                attempt_tier,
-                model,
-                "ok",
-                prompt,
-                completion_tokens,
-                start,
-                world_id,
-                asset_id,
-            )
+            self._settle(handle, planned, start, "ok", prompt, output, spent)
             return LLMResult(
                 value=value,
                 model=model,
@@ -417,31 +456,26 @@ class LLMClient:
             )
         raise LLMError(f"{agent}: no usable answer after {len(failures)} attempts: {failures}")
 
-    def _record(
+    def _settle(
         self,
-        agent: str,
-        tier: Tier,
-        model: str,
+        handle: int,
+        planned: CallRecord,
+        start: float,
         status: str,
         prompt_tokens: int,
         completion_tokens: int,
-        start: float,
-        world_id: UUID | None,
-        asset_id: UUID | None,
+        cost: Decimal,
     ) -> None:
-        self._log.record(
-            CallRecord(
-                agent=agent,
-                tier=tier,
-                model=model,
+        self._log.settle(
+            handle,
+            replace(
+                planned,
                 status=status,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 latency_ms=int((self._clock() - start) * 1000),
-                cost_usd=cost_usd(model, prompt_tokens, completion_tokens),
-                world_id=world_id,
-                asset_id=asset_id,
-            )
+                cost_usd=cost,
+            ),
         )
 
 
