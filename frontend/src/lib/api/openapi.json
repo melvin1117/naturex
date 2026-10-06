@@ -782,7 +782,7 @@
           "world"
         ],
         "summary": "Get World",
-        "description": "The visitor's world; the first request creates it and sets the `nx_world` cookie.",
+        "description": "The visitor's world. The first call creates it and sets the `nx_world` cookie.\n\nCall this once before any other route; they return 401 `world_required` without it.",
         "operationId": "get_world_world_get",
         "responses": {
           "200": {
@@ -794,6 +794,9 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Too many new demo worlds; retry later"
           }
         }
       }
@@ -816,6 +819,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "No world yet: call GET /world first"
           }
         }
       }

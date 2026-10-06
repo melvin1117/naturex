@@ -323,7 +323,9 @@ export interface paths {
         };
         /**
          * Get World
-         * @description The visitor's world; the first request creates it and sets the `nx_world` cookie.
+         * @description The visitor's world. The first call creates it and sets the `nx_world` cookie.
+         *
+         *     Call this once before any other route; they return 401 `world_required` without it.
          */
         get: operations["get_world_world_get"];
         put?: never;
@@ -1559,6 +1561,13 @@ export interface operations {
                     "application/json": components["schemas"]["WorldOut"];
                 };
             };
+            /** @description Too many new demo worlds; retry later */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     reset_world_reset_post: {
@@ -1578,6 +1587,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WorldOut"];
                 };
+            };
+            /** @description No world yet: call GET /world first */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

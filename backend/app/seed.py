@@ -1,4 +1,4 @@
-"""Idempotent seed: one template world, 4 personas, 3 demo assets."""
+"""Idempotent seed: one template world, 4 personas, 3 demo assets and the community's stake."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from uuid import UUID
 from sqlmodel import Session, select
 
 from app.db import engine
-from app.models import Asset, AssetStatus, User, UserRole, World
+from app.models import Asset, AssetStatus, Holding, User, UserRole, World
 
 # Stable IDs so re-running seed is a no-op.
 WORLD_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -148,11 +148,30 @@ def seed(session: Session) -> None:
             )
     session.commit()
 
+    # The community keeps its retained stake as a holding, so shares are conserved:
+    # total_shares = primary_shares_remaining + market_maker_shares + sum(holdings) (dev-spec §8).
+    retained = TOTAL_SHARES - primary_shares
+    for site in DEMO_SITES:
+        asset = session.exec(
+            select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == site.key)
+        ).one()
+        holding = session.get(Holding, (WORLD_ID, COMMUNITY_PERSONA.id, asset.id))
+        if holding is None:
+            session.add(
+                Holding(
+                    world_id=WORLD_ID,
+                    user_id=COMMUNITY_PERSONA.id,
+                    asset_id=asset.id,
+                    shares=retained,
+                )
+            )
+    session.commit()
+
 
 def main() -> None:
     with Session(engine) as session:
         seed(session)
-    print("Seed complete: template world, 4 personas, 3 demo assets.")
+    print("Seed complete: template world, 4 personas, 3 demo assets, community holdings.")
 
 
 if __name__ == "__main__":
