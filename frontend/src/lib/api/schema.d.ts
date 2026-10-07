@@ -822,6 +822,11 @@ export interface components {
             flags?: unknown[] | null;
             /** Summary Md */
             summary_md?: string | null;
+            /**
+             * @description Whether summary_md came from a live Nemotron call or deterministic fallback.
+             * @default fallback
+             */
+            summary_source: components["schemas"]["ReportSummarySource"];
             /** Recommendations */
             recommendations?: string[] | null;
             auditor?: components["schemas"]["AuditorOutput"] | null;
@@ -831,6 +836,11 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * ReportSummarySource
+         * @enum {string}
+         */
+        ReportSummarySource: "live" | "fallback";
         /** SimulateEventRequest */
         SimulateEventRequest: {
             /**

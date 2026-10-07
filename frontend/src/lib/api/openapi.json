@@ -2152,6 +2152,11 @@
             ],
             "title": "Summary Md"
           },
+          "summary_source": {
+            "$ref": "#/components/schemas/ReportSummarySource",
+            "description": "Whether summary_md came from a live Nemotron call or deterministic fallback.",
+            "default": "fallback"
+          },
           "recommendations": {
             "anyOf": [
               {
@@ -2190,6 +2195,14 @@
           "created_at"
         ],
         "title": "ReportOut"
+      },
+      "ReportSummarySource": {
+        "type": "string",
+        "enum": [
+          "live",
+          "fallback"
+        ],
+        "title": "ReportSummarySource"
       },
       "SimulateEventRequest": {
         "properties": {
