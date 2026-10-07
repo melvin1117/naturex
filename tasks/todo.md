@@ -288,7 +288,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 
 ### T41 · Revenue split and impact (#51) — D2 · S · Should · D4 E3
-- [ ] Pure functions for simulated quarterly revenue (2% of annual value / 4) split 50/50 community / dividends; portfolio impact metrics (ha, t CO₂, $ services) pro-rata; the Time Machine (T38) triggers the payout
+- [x] Pure functions for simulated quarterly revenue (2% of annual value / 4) split 50/50 community / dividends; portfolio impact metrics (ha, t CO₂, $ services) pro-rata; `pay_quarter` applies one quarter's payout transactionally for T38/T44
+- Handoff: Time Machine triggering remains in T38, whose task calls the T41 payout helper each quarter.
 
 **Verify:** `make test` · **Deps:** T16 · **Files:** `backend/app/market/revenue.py`, `backend/app/routers/market.py`
 
