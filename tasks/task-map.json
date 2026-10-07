@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-07 05:02 UTC",
+  "generated_at": "2026-10-07 08:01 UTC",
   "tasks": [
     {
       "id": "P01",
@@ -157,7 +157,7 @@
         "T21"
       ],
       "step": 1,
-      "chain": 7,
+      "chain": 9,
       "critical": false
     },
     {
@@ -361,7 +361,8 @@
         "T24",
         "T26",
         "T28",
-        "T40"
+        "T40",
+        "T71"
       ],
       "step": 2,
       "chain": 0,
@@ -419,7 +420,8 @@
         "T17",
         "T31",
         "T38",
-        "T41"
+        "T41",
+        "T59"
       ],
       "step": 2,
       "chain": 0,
@@ -473,10 +475,12 @@
       "unlocks": [
         "T18",
         "T22",
-        "T23"
+        "T23",
+        "T61",
+        "T62"
       ],
       "step": 2,
-      "chain": 2,
+      "chain": 8,
       "critical": false
     },
     {
@@ -499,7 +503,11 @@
       ],
       "waiting_on": [],
       "unlocks": [
-        "T34"
+        "T34",
+        "T58",
+        "T59",
+        "T67",
+        "T69"
       ],
       "step": 2,
       "chain": 0,
@@ -525,7 +533,8 @@
       ],
       "waiting_on": [],
       "unlocks": [
-        "T33"
+        "T33",
+        "T58"
       ],
       "step": 2,
       "chain": 0,
@@ -554,7 +563,9 @@
       ],
       "unlocks": [
         "T18",
-        "T33"
+        "T33",
+        "T63",
+        "T70"
       ],
       "step": 3,
       "chain": 6,
@@ -633,7 +644,8 @@
       ],
       "waiting_on": [],
       "unlocks": [
-        "T35"
+        "T35",
+        "T60"
       ],
       "step": 3,
       "chain": 2,
@@ -664,7 +676,7 @@
       ],
       "step": 3,
       "chain": 9,
-      "critical": true
+      "critical": false
     },
     {
       "id": "T15",
@@ -715,10 +727,12 @@
       ],
       "waiting_on": [],
       "unlocks": [
-        "T18"
+        "T18",
+        "T57",
+        "T59"
       ],
       "step": 3,
-      "chain": 2,
+      "chain": 7,
       "critical": false
     },
     {
@@ -795,7 +809,8 @@
       "waiting_on": [],
       "unlocks": [
         "T29",
-        "T32"
+        "T32",
+        "T54"
       ],
       "step": 3,
       "chain": 0,
@@ -810,7 +825,7 @@
         "D2"
       ],
       "size": "S",
-      "priority": "Should",
+      "priority": "Must",
       "week": 3,
       "deps": [
         "T16"
@@ -822,7 +837,9 @@
       "waiting_on": [],
       "unlocks": [
         "T38",
-        "T44"
+        "T44",
+        "T63",
+        "T67"
       ],
       "step": 3,
       "chain": 0,
@@ -857,35 +874,6 @@
       "critical": false
     },
     {
-      "id": "T18",
-      "title": "Trade panel and portfolio UI",
-      "issue": 29,
-      "owner": "D1 (with PD designs)",
-      "roles": [
-        "PD",
-        "D1"
-      ],
-      "size": "M",
-      "priority": "Must",
-      "week": 2,
-      "deps": [
-        "T17",
-        "T21",
-        "P05"
-      ],
-      "status": "blocked",
-      "assignees": [],
-      "waiting_on": [
-        "T17",
-        "T21",
-        "P05"
-      ],
-      "unlocks": [],
-      "step": 4,
-      "chain": 1,
-      "critical": false
-    },
-    {
       "id": "T19",
       "title": "Deterministic rating into the reports API",
       "issue": 30,
@@ -909,11 +897,13 @@
       ],
       "unlocks": [
         "T23",
-        "T27"
+        "T27",
+        "T58",
+        "T60"
       ],
       "step": 4,
       "chain": 8,
-      "critical": true
+      "critical": false
     },
     {
       "id": "T25",
@@ -993,10 +983,12 @@
       "waiting_on": [],
       "unlocks": [
         "T32",
-        "T38"
+        "T38",
+        "T57",
+        "T58"
       ],
       "step": 4,
-      "chain": 7,
+      "chain": 8,
       "critical": false
     },
     {
@@ -1043,6 +1035,56 @@
       "waiting_on": [
         "T15"
       ],
+      "unlocks": [],
+      "step": 4,
+      "chain": 1,
+      "critical": false
+    },
+    {
+      "id": "T54",
+      "title": "Accounts and sessions",
+      "issue": 97,
+      "owner": "D1",
+      "roles": [
+        "D1"
+      ],
+      "size": "M",
+      "priority": "Must",
+      "week": 2,
+      "deps": [
+        "T31"
+      ],
+      "status": "ready",
+      "assignees": [],
+      "waiting_on": [],
+      "unlocks": [
+        "T55",
+        "T56",
+        "T61",
+        "T66"
+      ],
+      "step": 4,
+      "chain": 10,
+      "critical": true
+    },
+    {
+      "id": "T67",
+      "title": "Ledger privacy",
+      "issue": 111,
+      "owner": "D2",
+      "roles": [
+        "D2"
+      ],
+      "size": "S",
+      "priority": "Must",
+      "week": 3,
+      "deps": [
+        "T30",
+        "T41"
+      ],
+      "status": "ready",
+      "assignees": [],
+      "waiting_on": [],
       "unlocks": [],
       "step": 4,
       "chain": 1,
@@ -1099,11 +1141,12 @@
         "T28",
         "T37",
         "T38",
-        "T39"
+        "T39",
+        "T60"
       ],
       "step": 5,
       "chain": 7,
-      "critical": true
+      "critical": false
     },
     {
       "id": "T32",
@@ -1135,6 +1178,120 @@
       "critical": false
     },
     {
+      "id": "T56",
+      "title": "Communities, treasury and tenant invariants",
+      "issue": 99,
+      "owner": "D1",
+      "roles": [
+        "D1"
+      ],
+      "size": "M",
+      "priority": "Must",
+      "week": 3,
+      "deps": [
+        "T54"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T54"
+      ],
+      "unlocks": [
+        "T55",
+        "T68"
+      ],
+      "step": 5,
+      "chain": 9,
+      "critical": true
+    },
+    {
+      "id": "T61",
+      "title": "Sign-in screens and session handling",
+      "issue": 104,
+      "owner": "PD + D1",
+      "roles": [
+        "PD",
+        "D1"
+      ],
+      "size": "S",
+      "priority": "Must",
+      "week": 3,
+      "deps": [
+        "T54",
+        "T21"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T54",
+        "T21"
+      ],
+      "unlocks": [
+        "T18",
+        "T62"
+      ],
+      "step": 5,
+      "chain": 7,
+      "critical": false
+    },
+    {
+      "id": "T66",
+      "title": "Auth hardening: CSRF, rate limits and pruning",
+      "issue": 109,
+      "owner": "D3",
+      "roles": [
+        "D3"
+      ],
+      "size": "S",
+      "priority": "Must",
+      "week": 3,
+      "deps": [
+        "T54"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T54"
+      ],
+      "unlocks": [
+        "T69"
+      ],
+      "step": 5,
+      "chain": 6,
+      "critical": false
+    },
+    {
+      "id": "T18",
+      "title": "Trade panel and portfolio UI",
+      "issue": 29,
+      "owner": "D1 (with PD designs)",
+      "roles": [
+        "PD",
+        "D1"
+      ],
+      "size": "M",
+      "priority": "Must",
+      "week": 2,
+      "deps": [
+        "T17",
+        "T21",
+        "P05",
+        "T61"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T17",
+        "T21",
+        "P05",
+        "T61"
+      ],
+      "unlocks": [],
+      "step": 6,
+      "chain": 1,
+      "critical": false
+    },
+    {
       "id": "T28",
       "title": "Agent Trace API",
       "issue": 40,
@@ -1159,36 +1316,6 @@
       ],
       "step": 6,
       "chain": 6,
-      "critical": true
-    },
-    {
-      "id": "T33",
-      "title": "Listing flow and rating progress",
-      "issue": 45,
-      "owner": "PD",
-      "roles": [
-        "PD"
-      ],
-      "size": "M",
-      "priority": "Must",
-      "week": 3,
-      "deps": [
-        "T32",
-        "T36",
-        "P05"
-      ],
-      "status": "blocked",
-      "assignees": [],
-      "waiting_on": [
-        "T32",
-        "P05"
-      ],
-      "unlocks": [
-        "T45",
-        "T48"
-      ],
-      "step": 6,
-      "chain": 5,
       "critical": false
     },
     {
@@ -1213,37 +1340,6 @@
       "unlocks": [],
       "step": 6,
       "chain": 1,
-      "critical": false
-    },
-    {
-      "id": "T38",
-      "title": "Time Machine, re-rating and alerts",
-      "issue": 52,
-      "owner": "D1",
-      "roles": [
-        "D1"
-      ],
-      "size": "M",
-      "priority": "Must",
-      "week": 4,
-      "deps": [
-        "T27",
-        "T16",
-        "T29",
-        "T41"
-      ],
-      "status": "blocked",
-      "assignees": [],
-      "waiting_on": [
-        "T27",
-        "T29"
-      ],
-      "unlocks": [
-        "T42",
-        "T43"
-      ],
-      "step": 6,
-      "chain": 6,
       "critical": false
     },
     {
@@ -1274,6 +1370,98 @@
       "critical": false
     },
     {
+      "id": "T55",
+      "title": "Demo sessions and persona switch",
+      "issue": 98,
+      "owner": "D3",
+      "roles": [
+        "D3"
+      ],
+      "size": "S",
+      "priority": "Must",
+      "week": 3,
+      "deps": [
+        "T54",
+        "T56"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T54",
+        "T56"
+      ],
+      "unlocks": [
+        "T57",
+        "T65"
+      ],
+      "step": 6,
+      "chain": 7,
+      "critical": false
+    },
+    {
+      "id": "T62",
+      "title": "Two app shells and app switcher",
+      "issue": 105,
+      "owner": "PD",
+      "roles": [
+        "PD"
+      ],
+      "size": "S",
+      "priority": "Must",
+      "week": 3,
+      "deps": [
+        "T21",
+        "T61"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T21",
+        "T61"
+      ],
+      "unlocks": [
+        "T33",
+        "T43",
+        "T63",
+        "T64",
+        "T65",
+        "T70"
+      ],
+      "step": 6,
+      "chain": 6,
+      "critical": false
+    },
+    {
+      "id": "T68",
+      "title": "Authorization policy and community routes",
+      "issue": 110,
+      "owner": "D1",
+      "roles": [
+        "D1"
+      ],
+      "size": "M",
+      "priority": "Must",
+      "week": 3,
+      "deps": [
+        "T56"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T56"
+      ],
+      "unlocks": [
+        "T38",
+        "T57",
+        "T58",
+        "T63",
+        "T69"
+      ],
+      "step": 6,
+      "chain": 8,
+      "critical": true
+    },
+    {
       "id": "T34",
       "title": "Agent Trace drawer and ledger tab",
       "issue": 46,
@@ -1301,64 +1489,40 @@
       ],
       "step": 7,
       "chain": 5,
-      "critical": true
-    },
-    {
-      "id": "T42",
-      "title": "Demo deploy",
-      "issue": 54,
-      "owner": "D1",
-      "roles": [
-        "D1"
-      ],
-      "size": "S",
-      "priority": "Must",
-      "week": 4,
-      "deps": [
-        "T20",
-        "T38"
-      ],
-      "status": "blocked",
-      "assignees": [],
-      "waiting_on": [
-        "T20",
-        "T38"
-      ],
-      "unlocks": [
-        "T49",
-        "T51"
-      ],
-      "step": 7,
-      "chain": 3,
       "critical": false
     },
     {
-      "id": "T43",
-      "title": "Time Machine and alerts UI",
-      "issue": 55,
-      "owner": "D1 (with PD designs)",
+      "id": "T38",
+      "title": "Time Machine, re-rating and alerts",
+      "issue": 52,
+      "owner": "D1",
       "roles": [
-        "PD",
         "D1"
       ],
       "size": "M",
       "priority": "Must",
       "week": 4,
       "deps": [
-        "T38",
-        "T32"
+        "T27",
+        "T16",
+        "T29",
+        "T41",
+        "T68"
       ],
       "status": "blocked",
       "assignees": [],
       "waiting_on": [
-        "T38",
-        "T32"
+        "T27",
+        "T29",
+        "T68"
       ],
       "unlocks": [
-        "T45"
+        "T42",
+        "T43",
+        "T63"
       ],
       "step": 7,
-      "chain": 5,
+      "chain": 6,
       "critical": false
     },
     {
@@ -1419,6 +1583,260 @@
       "critical": false
     },
     {
+      "id": "T57",
+      "title": "Enforce authorization on every route",
+      "issue": 100,
+      "owner": "D1",
+      "roles": [
+        "D1"
+      ],
+      "size": "M",
+      "priority": "Must",
+      "week": 3,
+      "deps": [
+        "T68",
+        "T55",
+        "T17",
+        "T29"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T68",
+        "T55",
+        "T17",
+        "T29"
+      ],
+      "unlocks": [
+        "T46",
+        "T69"
+      ],
+      "step": 7,
+      "chain": 6,
+      "critical": false
+    },
+    {
+      "id": "T58",
+      "title": "Listing lifecycle",
+      "issue": 101,
+      "owner": "D2",
+      "roles": [
+        "D2"
+      ],
+      "size": "M",
+      "priority": "Must",
+      "week": 3,
+      "deps": [
+        "T19",
+        "T68",
+        "T36",
+        "T29",
+        "T30"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T19",
+        "T68",
+        "T29"
+      ],
+      "unlocks": [
+        "T33",
+        "T59",
+        "T60",
+        "T63",
+        "T69"
+      ],
+      "step": 7,
+      "chain": 7,
+      "critical": true
+    },
+    {
+      "id": "T65",
+      "title": "Judge access",
+      "issue": 108,
+      "owner": "PD",
+      "roles": [
+        "PD"
+      ],
+      "size": "S",
+      "priority": "Must",
+      "week": 3,
+      "deps": [
+        "T55",
+        "T62"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T55",
+        "T62"
+      ],
+      "unlocks": [
+        "T45",
+        "T46"
+      ],
+      "step": 7,
+      "chain": 5,
+      "critical": false
+    },
+    {
+      "id": "T33",
+      "title": "Listing flow and rating progress",
+      "issue": 45,
+      "owner": "PD",
+      "roles": [
+        "PD"
+      ],
+      "size": "M",
+      "priority": "Must",
+      "week": 3,
+      "deps": [
+        "T32",
+        "T36",
+        "P05",
+        "T58",
+        "T62"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T32",
+        "P05",
+        "T58",
+        "T62"
+      ],
+      "unlocks": [
+        "T45",
+        "T48"
+      ],
+      "step": 8,
+      "chain": 5,
+      "critical": false
+    },
+    {
+      "id": "T42",
+      "title": "Demo deploy",
+      "issue": 54,
+      "owner": "D1",
+      "roles": [
+        "D1"
+      ],
+      "size": "S",
+      "priority": "Must",
+      "week": 4,
+      "deps": [
+        "T20",
+        "T38"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T20",
+        "T38"
+      ],
+      "unlocks": [
+        "T49",
+        "T51"
+      ],
+      "step": 8,
+      "chain": 3,
+      "critical": false
+    },
+    {
+      "id": "T43",
+      "title": "Time Machine and alerts UI",
+      "issue": 55,
+      "owner": "D1 (with PD designs)",
+      "roles": [
+        "PD",
+        "D1"
+      ],
+      "size": "M",
+      "priority": "Must",
+      "week": 4,
+      "deps": [
+        "T38",
+        "T32",
+        "T62"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T38",
+        "T32",
+        "T62"
+      ],
+      "unlocks": [
+        "T45"
+      ],
+      "step": 8,
+      "chain": 5,
+      "critical": false
+    },
+    {
+      "id": "T59",
+      "title": "IPO launch",
+      "issue": 102,
+      "owner": "D2",
+      "roles": [
+        "D2"
+      ],
+      "size": "S",
+      "priority": "Must",
+      "week": 3,
+      "deps": [
+        "T16",
+        "T17",
+        "T30",
+        "T58"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T17",
+        "T58"
+      ],
+      "unlocks": [
+        "T63",
+        "T64",
+        "T69"
+      ],
+      "step": 8,
+      "chain": 6,
+      "critical": true
+    },
+    {
+      "id": "T60",
+      "title": "Live rating for new listings",
+      "issue": 103,
+      "owner": "D2",
+      "roles": [
+        "D2"
+      ],
+      "size": "M",
+      "priority": "Must",
+      "week": 4,
+      "deps": [
+        "T13",
+        "T19",
+        "T27",
+        "T58"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T13",
+        "T19",
+        "T27",
+        "T58"
+      ],
+      "unlocks": [],
+      "step": 8,
+      "chain": 1,
+      "critical": false
+    },
+    {
       "id": "T45",
       "title": "Judge tour",
       "issue": 57,
@@ -1434,7 +1852,8 @@
         "T33",
         "T34",
         "T43",
-        "T44"
+        "T44",
+        "T65"
       ],
       "status": "blocked",
       "assignees": [],
@@ -1442,14 +1861,15 @@
         "T33",
         "T34",
         "T43",
-        "T44"
+        "T44",
+        "T65"
       ],
       "unlocks": [
         "T46"
       ],
-      "step": 8,
+      "step": 9,
       "chain": 4,
-      "critical": true
+      "critical": false
     },
     {
       "id": "T48",
@@ -1476,7 +1896,7 @@
         "T50",
         "T53"
       ],
-      "step": 8,
+      "step": 9,
       "chain": 3,
       "critical": false
     },
@@ -1505,7 +1925,7 @@
       "unlocks": [
         "T52"
       ],
-      "step": 8,
+      "step": 9,
       "chain": 2,
       "critical": false
     },
@@ -1531,8 +1951,166 @@
       "unlocks": [
         "T52"
       ],
-      "step": 8,
+      "step": 9,
       "chain": 2,
+      "critical": false
+    },
+    {
+      "id": "T63",
+      "title": "Steward home and community management",
+      "issue": 106,
+      "owner": "PD + D1",
+      "roles": [
+        "PD",
+        "D1"
+      ],
+      "size": "M",
+      "priority": "Must",
+      "week": 4,
+      "deps": [
+        "T68",
+        "T58",
+        "T59",
+        "T41",
+        "T38",
+        "T62",
+        "P05"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T68",
+        "T58",
+        "T59",
+        "T38",
+        "T62",
+        "P05"
+      ],
+      "unlocks": [
+        "T46"
+      ],
+      "step": 9,
+      "chain": 4,
+      "critical": false
+    },
+    {
+      "id": "T64",
+      "title": "IPO launch screen",
+      "issue": 107,
+      "owner": "PD",
+      "roles": [
+        "PD"
+      ],
+      "size": "S",
+      "priority": "Must",
+      "week": 4,
+      "deps": [
+        "T59",
+        "T62"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T59",
+        "T62"
+      ],
+      "unlocks": [
+        "T46"
+      ],
+      "step": 9,
+      "chain": 4,
+      "critical": false
+    },
+    {
+      "id": "T69",
+      "title": "Listing verification core (deterministic checks, review, revoke)",
+      "issue": 113,
+      "owner": "D3",
+      "roles": [
+        "D3"
+      ],
+      "size": "M",
+      "priority": "Must",
+      "week": 4,
+      "deps": [
+        "T58",
+        "T59",
+        "T68",
+        "T57",
+        "T66",
+        "T30"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T58",
+        "T59",
+        "T68",
+        "T57",
+        "T66"
+      ],
+      "unlocks": [
+        "T70",
+        "T71"
+      ],
+      "step": 9,
+      "chain": 5,
+      "critical": true
+    },
+    {
+      "id": "T70",
+      "title": "Verification screens and transparency panel",
+      "issue": 114,
+      "owner": "PD + D1",
+      "roles": [
+        "PD",
+        "D1"
+      ],
+      "size": "S",
+      "priority": "Must",
+      "week": 4,
+      "deps": [
+        "T69",
+        "T62",
+        "P05"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T69",
+        "T62",
+        "P05"
+      ],
+      "unlocks": [
+        "T46"
+      ],
+      "step": 10,
+      "chain": 4,
+      "critical": true
+    },
+    {
+      "id": "T71",
+      "title": "AI document extraction for verification (heuristic)",
+      "issue": 115,
+      "owner": "D3",
+      "roles": [
+        "D3"
+      ],
+      "size": "S",
+      "priority": "Should",
+      "week": 4,
+      "deps": [
+        "T69",
+        "T09"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T69"
+      ],
+      "unlocks": [],
+      "step": 10,
+      "chain": 1,
       "critical": false
     },
     {
@@ -1547,18 +2125,28 @@
       "priority": "Must",
       "week": 4,
       "deps": [
-        "T45"
+        "T45",
+        "T57",
+        "T63",
+        "T64",
+        "T65",
+        "T70"
       ],
       "status": "blocked",
       "assignees": [],
       "waiting_on": [
-        "T45"
+        "T45",
+        "T57",
+        "T63",
+        "T64",
+        "T65",
+        "T70"
       ],
       "unlocks": [
         "T50",
         "T53"
       ],
-      "step": 9,
+      "step": 11,
       "chain": 3,
       "critical": true
     },
@@ -1586,7 +2174,7 @@
       "unlocks": [
         "T52"
       ],
-      "step": 10,
+      "step": 12,
       "chain": 2,
       "critical": true
     },
@@ -1615,7 +2203,7 @@
       "unlocks": [
         "T52"
       ],
-      "step": 10,
+      "step": 12,
       "chain": 2,
       "critical": false
     },
@@ -1645,18 +2233,19 @@
         "T53"
       ],
       "unlocks": [],
-      "step": 11,
+      "step": 13,
       "chain": 1,
       "critical": true
     }
   ],
   "critical_path": [
-    "T14",
-    "T19",
-    "T27",
-    "T28",
-    "T34",
-    "T45",
+    "T54",
+    "T56",
+    "T68",
+    "T58",
+    "T59",
+    "T69",
+    "T70",
     "T46",
     "T50",
     "T52"
@@ -1664,20 +2253,25 @@
   "suggestions": {
     "PD": [],
     "D1": [
+      "T54",
       "T20"
     ],
-    "D2": [],
+    "D2": [
+      "T67"
+    ],
     "D3": [],
     "any": [
-      "T20"
+      "T54",
+      "T20",
+      "T67"
     ]
   },
   "counts": {
     "done": 16,
     "in_progress": 9,
     "picked_early": 1,
-    "ready": 1,
-    "blocked": 32
+    "ready": 3,
+    "blocked": 48
   },
-  "data_hash": "5d705cd3580ab0a5"
+  "data_hash": "2745219458f909de"
 }
