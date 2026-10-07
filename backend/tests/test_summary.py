@@ -12,6 +12,7 @@ import pytest
 from alembic import command
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, delete
+from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, col, select
 
 from app.agents.summary import clear_summary_cache, generate_report_summary
@@ -20,6 +21,7 @@ from app.llm import BudgetExceeded, CallRecord, DbCallLog, LLMClient, Tier
 from app.main import app
 from app.mocks import REPORT_WETLAND, wetland_report
 from app.models import LlmCall
+from app.routers import reports as reports_router
 from app.schemas import ReportSummarySource
 from app.seed import seed
 from tests.conftest import alembic_cfg, requires_db
@@ -81,11 +83,24 @@ class MemoryCallLog:
         self.rows[handle] = call
 
 
+class BrokenCallLog(MemoryCallLog):
+    def reserve(self, call: CallRecord, budget: Decimal) -> int:
+        _ = call, budget
+        raise SQLAlchemyError("db unavailable")
+
+
 @pytest.fixture(autouse=True)
 def empty_cache() -> Iterator[None]:
     clear_summary_cache()
     yield
     clear_summary_cache()
+
+
+@pytest.fixture(autouse=True)
+def override_app_settings() -> Iterator[None]:
+    app.dependency_overrides[get_settings] = lambda: settings(use_mocks=True)
+    yield
+    app.dependency_overrides.pop(get_settings, None)
 
 
 def llm(
@@ -99,7 +114,9 @@ def llm(
 def test_mock_mode_uses_deterministic_fallback_and_never_calls_llm() -> None:
     transport = FakeTransport()
 
-    result = generate_report_summary(wetland_report(), settings(use_mocks=True), llm(transport))
+    result = generate_report_summary(
+        wetland_report(), settings(use_mocks=True), lambda: llm(transport)
+    )
 
     assert result.source is ReportSummarySource.FALLBACK
     assert "Health 77.6 / 100" in result.summary_md
@@ -133,8 +150,8 @@ def test_live_summary_is_schema_validated_and_logged_to_llm_calls() -> None:
     result = generate_report_summary(
         report,
         settings(),
-        LLMClient(settings(), transport, DbCallLog(lambda: Session(engine))),
-        log_asset_id=report.asset_id,
+        lambda: LLMClient(settings(), transport, DbCallLog(lambda: Session(engine))),
+        log_asset_id_factory=lambda: report.asset_id,
     )
 
     with Session(engine) as session:
@@ -155,15 +172,58 @@ def test_live_summary_is_schema_validated_and_logged_to_llm_calls() -> None:
     )
     prompt = transport.requests[0]["messages"][0]["content"]
     assert "Do not introduce any number" in prompt
+    assert "event_id" not in prompt
 
 
 def test_invented_numbers_trigger_fallback() -> None:
     transport = FakeTransport(reply(json.dumps({"summary_md": "Health is 999 / 100."})))
 
-    result = generate_report_summary(wetland_report(), settings(), llm(transport))
+    result = generate_report_summary(wetland_report(), settings(), lambda: llm(transport))
 
     assert result.source is ReportSummarySource.FALLBACK
     assert "999" not in result.summary_md
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        "Health is 77.6 / 100, with USD999M value.",
+        "Health is 77.6 / 100, with EUR50M value.",
+        "Health is 77.6 / 100, with $11.7B value.",
+        "Health is 77.6 / 100, with 11.7 billion value.",
+        "Q4 2026 health is 77.6 / 100.",
+    ],
+)
+def test_number_guard_rejects_unprovided_units_scales_and_periods(summary: str) -> None:
+    transport = FakeTransport(reply(json.dumps({"summary_md": summary})))
+
+    result = generate_report_summary(wetland_report(), settings(), lambda: llm(transport))
+
+    assert result.source is ReportSummarySource.FALLBACK
+    assert result.summary_md != summary
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        ("Q3 2026 health is 77.6/100 with 87% confidence and $4.7M–$17.5M /yr value, mid $11.7M."),
+        (
+            "Q3 2026 health is 77.6/100 with 87% confidence and "
+            "$4.7M–$17.5M /yr value, mid $11,700,000."
+        ),
+        (
+            "Q3 2026 health is 77.6/100 with 87% confidence and "
+            "$4.7M–$17.5M /yr value, mid 11.7 million."
+        ),
+    ],
+)
+def test_number_guard_accepts_legitimate_report_number_forms(summary: str) -> None:
+    transport = FakeTransport(reply(json.dumps({"summary_md": summary})))
+
+    result = generate_report_summary(wetland_report(), settings(), lambda: llm(transport))
+
+    assert result.source is ReportSummarySource.LIVE
+    assert result.summary_md == summary
 
 
 def test_live_summary_is_cached_per_report_id() -> None:
@@ -180,12 +240,29 @@ def test_live_summary_is_cached_per_report_id() -> None:
         )
     )
 
-    first = generate_report_summary(wetland_report(), settings(), llm(transport))
-    second = generate_report_summary(wetland_report(), settings(), llm(transport))
+    first = generate_report_summary(wetland_report(), settings(), lambda: llm(transport))
+    second = generate_report_summary(wetland_report(), settings(), lambda: llm(transport))
 
     assert (first.source, second.source) == (
         ReportSummarySource.LIVE,
         ReportSummarySource.LIVE,
+    )
+    assert first.summary_md == second.summary_md
+    assert len(transport.requests) == 1
+
+
+def test_fallback_summary_is_briefly_cached_per_report_id() -> None:
+    transport = FakeTransport(
+        reply(json.dumps({"summary_md": "Health is 999 / 100."})),
+        reply(json.dumps({"summary_md": "Health is 77.6 / 100."})),
+    )
+
+    first = generate_report_summary(wetland_report(), settings(), lambda: llm(transport))
+    second = generate_report_summary(wetland_report(), settings(), lambda: llm(transport))
+
+    assert (first.source, second.source) == (
+        ReportSummarySource.FALLBACK,
+        ReportSummarySource.FALLBACK,
     )
     assert first.summary_md == second.summary_md
     assert len(transport.requests) == 1
@@ -198,11 +275,23 @@ def test_llm_budget_exhaustion_triggers_fallback() -> None:
     result = generate_report_summary(
         wetland_report(),
         config,
-        llm(transport, config, MemoryCallLog(budget_exhausted=True)),
+        lambda: llm(transport, config, MemoryCallLog(budget_exhausted=True)),
     )
 
     assert result.source is ReportSummarySource.FALLBACK
     assert transport.requests == []
+
+
+def test_call_log_database_errors_trigger_fallback() -> None:
+    transport = FakeTransport(reply(json.dumps({"summary_md": "Health is 77.6 / 100."})))
+
+    result = generate_report_summary(
+        wetland_report(),
+        settings(),
+        lambda: llm(transport, call_log=BrokenCallLog()),
+    )
+
+    assert result.source is ReportSummarySource.FALLBACK
 
 
 def test_report_endpoint_returns_summary_source_for_generated_client() -> None:
@@ -214,3 +303,61 @@ def test_report_endpoint_returns_summary_source_for_generated_client() -> None:
     body = res.json()
     assert body["summary_source"] == ReportSummarySource.FALLBACK.value
     assert "summary_md" in body
+
+
+@requires_db
+def test_report_endpoint_live_mode_uses_fake_client_and_logs_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    command.upgrade(alembic_cfg(), "head")
+    engine = create_engine(get_settings().database_url)
+    agent = "report_summary"
+    with Session(engine) as session:
+        seed(session)
+        session.execute(delete(LlmCall).where(LlmCall.agent == agent))
+        session.commit()
+    transport = FakeTransport(
+        reply(
+            json.dumps(
+                {
+                    "summary_md": (
+                        "Q3 2026 health is 77.6/100 with 87% confidence and "
+                        "$4.7M–$17.5M /yr value, mid $11.7M."
+                    )
+                }
+            )
+        )
+    )
+
+    def fake_summary_client(config: Settings) -> LLMClient:
+        return LLMClient(config, transport, DbCallLog(lambda: Session(engine)))
+
+    app.dependency_overrides[get_settings] = lambda: settings(use_mocks=False)
+    monkeypatch.setattr(reports_router, "_summary_client", fake_summary_client)
+    client = TestClient(app)
+
+    res = client.get(f"/reports/{REPORT_WETLAND}")
+
+    with Session(engine) as session:
+        rows = session.exec(select(LlmCall).where(LlmCall.agent == agent)).all()
+        session.execute(delete(LlmCall).where(LlmCall.agent == agent))
+        session.commit()
+    engine.dispose()
+    assert res.status_code == 200
+    assert res.json()["summary_source"] == ReportSummarySource.LIVE.value
+    [row] = rows
+    assert (row.agent, row.status, row.asset_id) == (
+        agent,
+        "ok",
+        wetland_report().asset_id,
+    )
+
+
+def test_asset_detail_uses_the_same_summary_as_report_endpoint() -> None:
+    client = TestClient(app)
+
+    report = client.get(f"/reports/{REPORT_WETLAND}").json()
+    asset = client.get(f"/assets/{wetland_report().asset_id}").json()
+
+    assert asset["latest_report"]["summary_md"] == report["summary_md"]
+    assert asset["latest_report"]["summary_source"] == report["summary_source"]

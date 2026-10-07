@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import re
+import time
+from calendar import month_abbr
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 
 from app import mocks
 from app.config import Settings
@@ -16,8 +21,23 @@ from app.schemas import ReportOut, ReportSummarySource
 
 AGENT_NAME = "report_summary"
 _REPORT_PERIOD = "Q3 2026"
-_CACHE: dict[UUID, str] = {}
-_NUMBER = re.compile(r"(?<![A-Za-z0-9_])-?\d+(?:,\d{3})*(?:\.\d+)?")
+_FALLBACK_CACHE_SECONDS = 300.0
+_NUMERIC_TOKEN = re.compile(
+    r"(?<![\d.,])"
+    r"(?P<prefix>\$|USD|EUR|[Qq])?"
+    r"(?P<number>\d+(?:,\d{3})*(?:\.\d+)?)"
+    r"(?P<ordinal>st|nd|rd|th)?"
+    r"(?P<suffix>[KkMmBb%]| ?(?:thousand|million|billion))?",
+    re.IGNORECASE,
+)
+_SCALES = {
+    "k": Decimal("1000"),
+    "thousand": Decimal("1000"),
+    "m": Decimal("1000000"),
+    "million": Decimal("1000000"),
+    "b": Decimal("1000000000"),
+    "billion": Decimal("1000000000"),
+}
 
 
 class ReportSummaryDraft(BaseModel):
@@ -33,6 +53,15 @@ class SummaryResult:
     source: ReportSummarySource
 
 
+@dataclass(frozen=True, slots=True)
+class CachedSummary:
+    result: SummaryResult
+    expires_at: float | None
+
+
+_CACHE: dict[UUID, CachedSummary] = {}
+
+
 def clear_summary_cache() -> None:
     _CACHE.clear()
 
@@ -40,32 +69,64 @@ def clear_summary_cache() -> None:
 def generate_report_summary(
     report: ReportOut,
     settings: Settings,
-    llm_client: LLMClient | None,
-    log_asset_id: UUID | None = None,
+    llm_client_factory: Callable[[], LLMClient | None] | None,
+    log_asset_id_factory: Callable[[], UUID | None] | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> SummaryResult:
+    cached = _cached(report.id, clock())
+    if cached is not None:
+        return cached
+
     facts = _facts(report)
-    if settings.use_mocks or llm_client is None:
-        return SummaryResult(_fallback_summary(facts), ReportSummarySource.FALLBACK)
-    if report.id in _CACHE:
-        return SummaryResult(_CACHE[report.id], ReportSummarySource.LIVE)
+    if settings.use_mocks or llm_client_factory is None:
+        return _cache_result(
+            report.id, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock()
+        )
 
     try:
+        llm_client = llm_client_factory()
+        if llm_client is None:
+            return _cache_result(
+                report.id, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock()
+            )
         result = llm_client.structured(
             agent=AGENT_NAME,
             tier=Tier.FAST,
             messages=[{"role": "user", "content": _prompt(facts)}],
             schema=ReportSummaryDraft,
-            max_tokens=260,
-            asset_id=log_asset_id,
+            max_tokens=400,
+            asset_id=log_asset_id_factory() if log_asset_id_factory else None,
         )
-    except LLMError:
-        return SummaryResult(_fallback_summary(facts), ReportSummarySource.FALLBACK)
+    except (LLMError, SQLAlchemyError):
+        return _cache_result(
+            report.id, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock()
+        )
 
     summary = result.value.summary_md.strip()
     if not _uses_only_fact_numbers(summary, facts):
-        return SummaryResult(_fallback_summary(facts), ReportSummarySource.FALLBACK)
-    _CACHE[report.id] = summary
-    return SummaryResult(summary, ReportSummarySource.LIVE)
+        return _cache_result(
+            report.id, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock()
+        )
+    return _cache_result(report.id, summary, ReportSummarySource.LIVE, clock())
+
+
+def _cached(report_id: UUID, now: float) -> SummaryResult | None:
+    cached = _CACHE.get(report_id)
+    if cached is None:
+        return None
+    if cached.expires_at is not None and cached.expires_at <= now:
+        _CACHE.pop(report_id, None)
+        return None
+    return cached.result
+
+
+def _cache_result(
+    report_id: UUID, summary_md: str, source: ReportSummarySource, now: float
+) -> SummaryResult:
+    result = SummaryResult(summary_md, source)
+    expires_at = None if source is ReportSummarySource.LIVE else now + _FALLBACK_CACHE_SECONDS
+    _CACHE[report_id] = CachedSummary(result, expires_at)
+    return result
 
 
 def _facts(report: ReportOut) -> list[str]:
@@ -99,11 +160,11 @@ def _facts(report: ReportOut) -> list[str]:
         for key, value in sorted(report.value_breakdown.items()):
             lines.append(f"value_breakdown_{key}: {_compact_money(Decimal(str(value)))}")
     if event is not None:
+        event_date = _display_date(event.published_at) if event.published_at else "unknown"
         lines.extend(
             [
-                f"event_id: {event.id}",
                 f"event_title: {event.title or 'Untitled event'}",
-                "event_date: 12 Sep 2026",
+                f"event_date: {event_date}",
                 f"event_impact_type: {event.impact_type or 'other'}",
                 f"event_direction: {event.direction}",
                 f"event_severity: {event.severity}",
@@ -128,17 +189,23 @@ def _prompt(facts: list[str]) -> str:
 
 def _uses_only_fact_numbers(summary: str, facts: list[str]) -> bool:
     allowed = {
-        _normalise_number(match.group(0)) for fact in facts for match in _NUMBER.finditer(fact)
+        _normalise_number(match) for fact in facts for match in _NUMERIC_TOKEN.finditer(fact)
     }
-    used = {_normalise_number(match.group(0)) for match in _NUMBER.finditer(summary)}
+    used = {_normalise_number(match) for match in _NUMERIC_TOKEN.finditer(summary)}
     return used <= allowed
 
 
-def _normalise_number(value: str) -> str:
-    text = value.replace(",", "")
-    if "." not in text:
-        return str(int(text))
-    return str(Decimal(text).normalize())
+def _normalise_number(match: re.Match[str]) -> str:
+    prefix = (match.group("prefix") or "").upper()
+    number = Decimal(match.group("number").replace(",", ""))
+    suffix = (match.group("suffix") or "").strip().lower()
+    if prefix == "Q":
+        return f"quarter:{format(number.normalize(), 'f')}"
+    if suffix == "%":
+        return f"percent:{format(number.normalize(), 'f')}"
+    scale = _SCALES.get(suffix, Decimal("1"))
+    scaled = number * scale
+    return f"number:{format(scaled.normalize(), 'f')}"
 
 
 def _fallback_summary(facts: list[str]) -> str:
@@ -171,6 +238,10 @@ def _decimal(value: Decimal | None, *, places: int) -> str:
 
 def _whole(value: Decimal | None) -> str:
     return _decimal(value, places=0)
+
+
+def _display_date(value: date) -> str:
+    return f"{value.day} {month_abbr[value.month]} {value.year}"
 
 
 def _compact_money(value: Decimal | None) -> str:

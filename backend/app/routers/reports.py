@@ -5,7 +5,6 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
 
@@ -25,10 +24,8 @@ def _summary_client(settings: Settings) -> LLMClient | None:
     if settings.use_mocks:
         return None
     try:
-        with Session(engine) as session:
-            session.execute(text("SELECT 1"))
         return get_llm_client(settings, lambda: Session(engine))
-    except (LLMError, SQLAlchemyError):
+    except LLMError:
         return None
 
 
@@ -42,21 +39,25 @@ def _log_asset_id(report: ReportOut, settings: Settings) -> UUID | None:
         return None
 
 
+def summarize_report(report: ReportOut, settings: Settings) -> ReportOut:
+    summary = generate_report_summary(
+        report,
+        settings,
+        lambda: _summary_client(settings),
+        log_asset_id_factory=lambda: _log_asset_id(report, settings),
+    )
+    return report.model_copy(
+        update={"summary_md": summary.summary_md, "summary_source": summary.source}
+    )
+
+
 @router.get("/reports/{report_id}", response_model=ReportOut)
 def get_report(report_id: UUID, settings: SettingsDep) -> ReportOut:
     report = mocks.get_report(report_id)
     if report is None:
         # Fall back: any asset's latest report matching id is uncommon in mocks
         raise HTTPException(status_code=404, detail="Report not found")
-    summary = generate_report_summary(
-        report,
-        settings,
-        _summary_client(settings),
-        log_asset_id=_log_asset_id(report, settings),
-    )
-    return report.model_copy(
-        update={"summary_md": summary.summary_md, "summary_source": summary.source}
-    )
+    return summarize_report(report, settings)
 
 
 @router.get("/reports/{report_id}/diff/{prev}", response_model=ReportDiff)
