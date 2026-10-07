@@ -8,7 +8,7 @@ import {
 import { useState } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { WorldProvider } from "@/components/world-provider";
+import { WorldGate, WorldProvider } from "@/components/world-provider";
 import { createDataLayer } from "@/lib/data-layer";
 import {
   useAsset,
@@ -79,9 +79,10 @@ function Asset({ id }: { id: string }) {
 beforeEach(() => FakeEventSource.reset());
 
 describe("WorldProvider", () => {
-  it("shows a loading state, then renders screens once the world exists", async () => {
+  it("renders pages straight away and bootstraps the world once, first", async () => {
     const { backend } = renderWithWorld(
       <>
+        <h1>Marketplace</h1>
         <Portfolio />
         <Assets />
       </>,
@@ -91,32 +92,78 @@ describe("WorldProvider", () => {
       },
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Opening your demo world",
-    );
+    expect(
+      screen.getByRole("heading", { name: "Marketplace" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(await screen.findByText("Cash 100.00")).toBeInTheDocument();
     expect(await screen.findByText("1 assets")).toBeInTheDocument();
     expect(backend.calls("GET /world")).toBe(1);
     expect(new URL(backend.requests[0]!.url).pathname).toBe("/api/world");
   });
 
-  it("shows an accessible error with a retry when the world can't be opened", async () => {
-    renderWithWorld(<p>Marketplace</p>, {
-      "GET /world": sequence(
-        () =>
-          json(
-            { detail: "The demo is busy; try again in a few minutes" },
-            { status: 503, headers: { "Retry-After": "300" } },
-          ),
-        () => json(WORLD),
-      ),
+  it("keeps ungated content visible when the world can't be opened", async () => {
+    const { backend, layer } = renderWithWorld(<h1>Page not found</h1>, {
+      "GET /world": () => json({ detail: "boom" }, { status: 500 }),
     });
+
+    await waitFor(() =>
+      expect(layer.session.getSnapshot().status).toBe("error"),
+    );
+    expect(backend.calls("GET /world")).toBe(1);
+    expect(
+      screen.getByRole("heading", { name: "Page not found" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+describe("WorldGate", () => {
+  it("shows a loading state, then the gated section once the world exists", async () => {
+    renderWithWorld(
+      <>
+        <h1>Marketplace</h1>
+        <WorldGate>
+          <p>Gated</p>
+        </WorldGate>
+      </>,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Opening your demo world",
+    );
+    expect(screen.getByRole("heading", { name: "Marketplace" })).toBeVisible();
+    expect(await screen.findByText("Gated")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("shows an accessible error with a retry when the world can't be opened", async () => {
+    const { backend } = renderWithWorld(
+      <>
+        <h1>Marketplace</h1>
+        <WorldGate>
+          <p>Gated</p>
+        </WorldGate>
+      </>,
+      {
+        "GET /world": sequence(
+          () =>
+            json(
+              { detail: "The demo is busy; try again in a few minutes" },
+              { status: 503, headers: { "Retry-After": "300" } },
+            ),
+          () => json(WORLD),
+        ),
+      },
+    );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "The demo is busy; try again in a few minutes",
     );
+    expect(screen.getByRole("heading", { name: "Marketplace" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByText("Marketplace")).toBeInTheDocument();
+    expect(await screen.findByText("Gated")).toBeInTheDocument();
+    expect(backend.calls("GET /world")).toBe(2);
   });
 });
 
@@ -170,7 +217,10 @@ describe("live updates", () => {
         <Portfolio />
       </>,
       {
-        [`GET /assets/${ASSET_ID}`]: () => json(ASSET),
+        [`GET /assets/${ASSET_ID}`]: sequence(
+          () => json(ASSET),
+          () => json({ ...ASSET, price: "10.40" }),
+        ),
         "GET /portfolio": sequence(
           () => json(portfolio("100.00")),
           () => json(portfolio("90.00")),
@@ -194,6 +244,53 @@ describe("live updates", () => {
     expect(await screen.findByText("Price 10.40")).toBeInTheDocument();
     expect(await screen.findByText("Cash 90.00")).toBeInTheDocument();
     expect(backend.calls("GET /portfolio")).toBe(2);
+    await waitFor(() =>
+      expect(backend.calls(`GET /assets/${ASSET_ID}`)).toBe(2),
+    );
+  });
+
+  it("refetch the asset after a tick, so a stale in-flight fetch can't win", async () => {
+    let releaseStale: (() => void) | undefined;
+    function RefetchableAsset() {
+      const { data, refetch } = useAsset(ASSET_ID);
+      return (
+        <>
+          {data && <p>Price {data.price}</p>}
+          <button onClick={() => void refetch()}>Refresh</button>
+        </>
+      );
+    }
+    const { backend } = renderWithWorld(<RefetchableAsset />, {
+      [`GET /assets/${ASSET_ID}`]: sequence(
+        () => json(ASSET),
+        () =>
+          new Promise<Response>((resolve) => {
+            releaseStale = () => resolve(json(ASSET)); // read before the trade
+          }),
+        () => json({ ...ASSET, price: "10.40" }),
+      ),
+    });
+    expect(await screen.findByText("Price 10.00")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(releaseStale).toBeDefined());
+
+    act(() => {
+      FakeEventSource.latest().emit("price_tick", 9, {
+        asset_id: ASSET_ID,
+        price: "10.40",
+        reason: "trade",
+      });
+    });
+    expect(await screen.findByText("Price 10.40")).toBeInTheDocument();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      releaseStale!();
+    });
+
+    await waitFor(() =>
+      expect(backend.calls(`GET /assets/${ASSET_ID}`)).toBe(3),
+    );
+    expect(await screen.findByText("Price 10.40")).toBeInTheDocument();
   });
 
   it("useLiveEvent and useEvents hide the transport", async () => {

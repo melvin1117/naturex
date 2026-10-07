@@ -88,9 +88,10 @@ export function getBrowserDataLayer(): DataLayer {
 }
 
 /**
- * Keep caches in step with live events. Prices come only from the event payload (the
- * backend's number); anything derived from it (P&L, % change, history) is refetched,
- * coalesced so a burst of ticks costs one request per query.
+ * Keep caches in step with live events. The asset's price is patched at once from the event
+ * payload (the backend's number); the asset and everything derived from the price (P&L,
+ * % change, history) are then refetched, coalesced so a burst of ticks costs one request
+ * per query.
  */
 export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
   const queued = new Map<string, QueryKey>();
@@ -110,6 +111,9 @@ export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
       cache.setData<AssetDetail>(queryKeys.asset(payload.asset_id), (asset) =>
         asset ? { ...asset, price: payload.price } : asset,
       );
+      // Also refetch the asset itself: derived fields (primary float, wallet) move with the
+      // trade, and a fetch already in flight may otherwise overwrite the patched price.
+      queue(queryKeys.asset(payload.asset_id));
       queue(queryKeys.assets());
       queue(queryKeys.portfolio());
       queue(queryKeys.prices(payload.asset_id));

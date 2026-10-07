@@ -4,7 +4,18 @@ Screens stay presentational: they call a hook and render `data`, `isLoading` or 
 
 ## Setup you get for free
 
-`app/layout.tsx` wraps every page in `<WorldProvider>` (`components/world-provider.tsx`). It calls `GET /world` **once**, shows a loading or error state while it does, and renders the page only when the world exists. So no screen can fire a request before the `nx_world` cookie is set, and screens never handle "no world yet".
+`app/layout.tsx` wraps every page in `<WorldProvider>` (`components/world-provider.tsx`). It calls `GET /world` **once** when the app loads and always renders the page, so server HTML, static pages and the 404 page don't depend on the backend. Requests never go out before the `nx_world` cookie exists: the API client and live events wait for the world first. Screens never handle "no world yet".
+
+For a section that shows world data, wrap it in `<WorldGate>`. It shows an accessible loading state until the world is ready, or an error with "Try again" if it can't be opened (e.g. 503 busy). Keep the gate around the data, not the whole page:
+
+```tsx
+import { WorldGate } from "@/components/world-provider";
+
+<h1>Portfolio</h1>
+<WorldGate>
+  <Holdings /> {/* uses usePortfolio() */}
+</WorldGate>
+```
 
 ## Hooks (client components only)
 
@@ -28,17 +39,17 @@ export function TradePanel({ id }: { id: string }) {
 }
 ```
 
-| Hook                                               | Returns                                                                              | Notes                                                                                                |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `useWorld()`                                       | `world`, `personas`, `assets`, `status`, `resetWorld()`, `isResetting`, `resetError` | "Reset my demo" refetches every query. Persona cash is a snapshot; use `usePortfolio` for live cash. |
-| `useAssets()`                                      | `AssetCard[]`                                                                        | Live: refetches on `price_tick`.                                                                     |
-| `useAsset(id)`                                     | `AssetDetail`                                                                        | Skips while `id` is undefined. Live: `price` updates from `price_tick`.                              |
-| `useReport(id)`                                    | `ReportOut`                                                                          |                                                                                                      |
-| `usePortfolio()`                                   | `PortfolioOut`                                                                       | Live: refetches on `price_tick`.                                                                     |
-| `usePlaceOrder()`                                  | `mutate(order)`, `data` (`OrderOut`), `error`, `isPending`                           | Refetches the portfolio, the asset, its prices and the market list.                                  |
-| `useLiveEvent(type, handler)`                      |                                                                                      | Runs `handler` for each new `rating_progress`, `price_tick` or `alert`.                              |
-| `useEvents()`                                      | `subscribe(type, handler)`, `transport`                                              | `transport` is diagnostics only.                                                                     |
-| `useApiQuery(key, fetcher)` / `useApiMutation(fn)` |                                                                                      | For any other endpoint; see below.                                                                   |
+| Hook                                               | Returns                                                                              | Notes                                                                                                     |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `useWorld()`                                       | `world`, `personas`, `assets`, `status`, `resetWorld()`, `isResetting`, `resetError` | "Reset my demo" refetches every query. Persona cash is a snapshot; use `usePortfolio` for live cash.      |
+| `useAssets()`                                      | `AssetCard[]`                                                                        | Live: refetches on `price_tick`.                                                                          |
+| `useAsset(id)`                                     | `AssetDetail`                                                                        | Skips while `id` is undefined. Live: `price` updates at once from `price_tick`, then the asset refetches. |
+| `useReport(id)`                                    | `ReportOut`                                                                          |                                                                                                           |
+| `usePortfolio()`                                   | `PortfolioOut`                                                                       | Live: refetches on `price_tick`.                                                                          |
+| `usePlaceOrder()`                                  | `mutate(order)`, `data` (`OrderOut`), `error`, `isPending`                           | Refetches the portfolio, the asset, its prices and the market list.                                       |
+| `useLiveEvent(type, handler)`                      |                                                                                      | Runs `handler` for each new `rating_progress`, `price_tick` or `alert`.                                   |
+| `useEvents()`                                      | `subscribe(type, handler)`, `transport`                                              | `transport` is diagnostics only.                                                                          |
+| `useApiQuery(key, fetcher)` / `useApiMutation(fn)` |                                                                                      | For any other endpoint; see below.                                                                        |
 
 Query results: `{ data, error, status: "idle" | "loading" | "success" | "error", isLoading, isFetching, refetch }`. While refetching, the old `data` stays and `isFetching` is true. Requests are deduped per key and aborted when the last screen using them unmounts.
 

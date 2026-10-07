@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { WorldGate } from "@/components/world-provider";
 import {
   useEvents,
   useLiveEvent,
@@ -21,6 +22,14 @@ import {
 
 /** Developer view of the data layer (T32): world, live transport, portfolio, last tick. */
 export function DataLayerPanel() {
+  return (
+    <WorldGate>
+      <PanelBody />
+    </WorldGate>
+  );
+}
+
+function PanelBody() {
   const { world, personas, assets } = useWorld();
   const { transport } = useEvents();
   const portfolio = usePortfolio();

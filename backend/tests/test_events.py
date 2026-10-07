@@ -200,7 +200,7 @@ def test_sse_stream_replays_from_last_event_id(
     res = client.get("/events/stream", headers={"Last-Event-ID": str(first.id)})
 
     assert res.status_code == 200
-    assert res.headers["cache-control"] == "no-cache"
+    assert res.headers["cache-control"] == "no-cache, no-transform"
     assert res.headers["x-accel-buffering"] == "no"
     assert "retry:" in res.text
     assert f"id: {second.id}" in res.text
