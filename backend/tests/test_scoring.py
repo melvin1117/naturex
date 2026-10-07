@@ -36,6 +36,7 @@ from app.tools.scoring import (
     threat_pressure,
     vegetation_vigor,
     water_stability,
+    weighted_health,
 )
 
 D = Decimal
@@ -84,16 +85,20 @@ def test_worked_example_hero_wetland_without_events() -> None:
     metrics = load_site_metrics("wetland_mx")
     age = metrics_data_age_days(metrics, as_of=RATED_ON)
 
-    result = score_metrics(metrics, data_age_days=age)
+    is_wetland = is_wetland_from_landcover(metrics.landcover)  # baseline: 0.2484 + 0.0296
+
+    result = score_metrics(metrics, is_wetland=is_wetland, data_age_days=age)
 
     assert age == 6
     assert result.components == HealthComponents(
         vegetation_vigor=D("0.6255"),
         natural_cover=D("0.8389"),
-        habitat_loss=D("1.0000"),
-        water_stability=D("0.4340"),
-        threat_pressure=D("1.0000"),
+        habitat_loss=D("1"),
+        water_stability=D("0.433979"),
+        threat_pressure=D("1"),
     )
+    assert result.components.rounded().water_stability == D("0.4340")
+    assert weighted_health(result.components) == D("76.247185")
     assert result.ndvi_trend_used == 0  # p = 0.0986: not significant, so the slope isn't used
     assert result.is_wetland is True
     assert result.base_health == D("76.2")
@@ -115,10 +120,12 @@ def test_worked_example_hero_wetland_without_events() -> None:
 def test_worked_example_hero_wetland_with_mock_encroachment_event() -> None:
     metrics = load_site_metrics("wetland_mx")
 
-    result = score_metrics(metrics, data_age_days=6, events=news_scout_fixture())
+    result = score_metrics(metrics, is_wetland=True, data_age_days=6, events=news_scout_fixture())
 
     assert result.negative_severity_sum == 4
-    assert result.components.threat_pressure == D("0.7333")
+    assert result.components.threat_pressure == 1 - D(4) / D(15)
+    assert result.components.rounded().threat_pressure == D("0.7333")
+    assert weighted_health(result.components).quantize(D("0.000001")) == D("73.580518")
     assert result.base_health == D("73.6")
     assert result.health == D("73.6")
     assert result.grade is Grade.A
@@ -127,7 +134,7 @@ def test_worked_example_hero_wetland_with_mock_encroachment_event() -> None:
 
 
 def test_score_metrics_matches_explicit_inputs() -> None:
-    from_metrics = score_metrics(load_site_metrics("wetland_mx"), data_age_days=6)
+    from_metrics = score_metrics(load_site_metrics("wetland_mx"), is_wetland=True, data_age_days=6)
 
     assert from_metrics == score(**hero_inputs())
 
@@ -135,8 +142,8 @@ def test_score_metrics_matches_explicit_inputs() -> None:
 def test_gate_example_low_coverage_fails_confidence_only() -> None:
     result = score(**hero_inputs(cloud_free_obs=10))
 
-    assert result.confidence_components.coverage == D("0.4167")
-    assert result.confidence == D("47.7")
+    assert result.confidence_components.rounded().coverage == D("0.4167")
+    assert result.confidence == D("47.7")  # exactly 47.6666…
     assert result.gate.reasons == (GATE_CONFIDENCE_BELOW_70,)
 
 
@@ -164,9 +171,7 @@ def test_gate_example_degraded_site_fails_grade_only() -> None:
         data_age_days=6,
     )
 
-    assert result.components == HealthComponents(
-        D("0.3750"), D("0.0500"), D("0.0000"), D("1.0000"), D("0.0000")
-    )
+    assert result.components == HealthComponents(D("0.375"), D("0.05"), D(0), D(1), D(0))
     assert result.base_health == D("27.5")
     assert result.grade is Grade.D
     assert result.gate.reasons == (GATE_GRADE_BELOW_C,)
@@ -211,7 +216,7 @@ def test_vegetation_vigor_ignores_a_non_significant_trend() -> None:
     significant = vegetation_vigor(ndvi_mean=0.6008, ndvi_trend=0.0097, trend_significant=True)
     ignored = vegetation_vigor(ndvi_mean=0.6008, ndvi_trend=0.0097, trend_significant=False)
 
-    assert significant == D("0.8680")  # 0.985 × 0.5 + 0.751 × 0.5
+    assert significant == D("0.868")  # 0.985 × 0.5 + 0.751 × 0.5
     assert ignored == D("0.6255")  # 0.5 × 0.5 + 0.751 × 0.5
 
 
@@ -250,7 +255,7 @@ def test_habitat_loss_rejects_negative_loss_and_non_positive_area() -> None:
 
 @pytest.mark.parametrize(
     ("change", "expected"),
-    [(-100.0, "0.0000"), (-50.0, "0.0000"), (-6.6021, "0.4340"), (0.0, "0.5000"), (100.0, "1")],
+    [(-100.0, "0"), (-50.0, "0"), (-6.6021, "0.433979"), (0.0, "0.5"), (100.0, "1")],
 )
 def test_water_stability_for_wetlands(change: float, expected: str) -> None:
     assert water_stability(water_change=change, is_wetland=True) == D(expected)
@@ -293,7 +298,14 @@ def test_threat_pressure_rejects_invalid_events(event: Ev) -> None:
 
 
 def test_threat_pressure_accepts_news_scout_items() -> None:
-    assert threat_pressure(news_scout_fixture()) == D("0.7333")
+    assert threat_pressure(news_scout_fixture()) == 1 - D(4) / D(15)
+
+
+def test_threat_pressure_ignores_irrelevant_news() -> None:
+    irrelevant = news_scout_fixture()[0].model_copy(update={"relevant": False})
+
+    assert threat_pressure([irrelevant]) == 1
+    assert threat_pressure([*news_scout_fixture(), irrelevant]) == 1 - D(4) / D(15)
 
 
 def test_all_components_stay_in_unit_interval_for_extreme_inputs() -> None:
@@ -325,6 +337,17 @@ def test_all_components_stay_in_unit_interval_for_extreme_inputs() -> None:
 def test_score_rejects_nan_and_infinity(field: str, bad: float) -> None:
     with pytest.raises(ValueError, match=field):
         score(**hero_inputs(**{field: bad}))
+
+
+def test_numpy_floats_are_accepted_and_numpy_nan_raises_value_error() -> None:
+    np = pytest.importorskip("numpy")
+
+    assert natural_cover(np.float64(0.8389)) == D("0.8389")
+    assert score(**hero_inputs(ndvi_mean=np.float64(0.6008))) == score(**hero_inputs())
+    with pytest.raises(ValueError, match="ndvi_mean"):
+        score(**hero_inputs(ndvi_mean=np.float64("nan")))
+    with pytest.raises(ValueError, match="water_change"):
+        score(**hero_inputs(water_change=np.float32("inf")))
 
 
 def test_score_rejects_nan_agreement_and_recent_loss() -> None:
@@ -402,6 +425,17 @@ def test_grade_extremes() -> None:
         grade_for(D("100.1"))
     with pytest.raises(ValueError, match="health"):
         grade_for(D("NaN"))
+
+
+def test_health_uses_full_precision_components_before_rounding() -> None:
+    # Rounding components first would give 69.95 → 70.0 (A); the exact sum is 69.949685.
+    result = score(**hero_inputs(natural_fraction=0.587))
+
+    assert weighted_health(result.components) == D("69.949685")
+    assert weighted_health(result.components.rounded()) == D("69.95")
+    assert result.base_health == D("69.9")
+    assert result.health == D("69.9")
+    assert result.grade is Grade.BBB
 
 
 def test_displayed_health_and_grade_never_disagree() -> None:
@@ -573,6 +607,52 @@ def test_gate_combination() -> None:
     result = gate(confidence=D("50"), grade=Grade.D, forest_loss_last_12m_ha=50.0)
 
     assert result.reasons == (GATE_CONFIDENCE_BELOW_70, GATE_GRADE_BELOW_C, GATE_FOREST_LOSS)
+
+
+# ----- wetland status is fixed per asset -----
+
+
+def test_draining_a_wetland_never_raises_health() -> None:
+    baseline = load_site_metrics("wetland_mx")
+    is_wetland = is_wetland_from_landcover(baseline.landcover)
+    drained_cover = baseline.landcover | {"water": 0.17, "built": 0.2072}
+    drained = baseline.model_copy(
+        update={"landcover": drained_cover, "natural_fraction": 0.7605, "data_version": "sim-1"}
+    )
+
+    before = score_metrics(baseline, is_wetland=is_wetland, data_age_days=6)
+    after = score_metrics(drained, is_wetland=is_wetland, data_age_days=6)
+
+    assert is_wetland_from_landcover(drained.landcover) is False  # why it isn't re-derived
+    assert after.is_wetland is True
+    assert after.components.water_stability == before.components.water_stability
+    assert after.health <= before.health
+
+
+# ----- hero confidence margin (T26/T38: the hero only just clears the gate) -----
+
+
+def test_hero_confidence_margin_at_default_agreement() -> None:
+    assert score(**hero_inputs()).confidence == D("71.0")
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected", "passes"),
+    [
+        ({"agreement": D("0.465")}, "70.0", True),  # exactly 69.95, rounds up
+        ({"agreement": D("0.4649")}, "69.9", False),
+        ({"cloud_free_obs": 24}, "71.0", True),
+        ({"cloud_free_obs": 23}, "69.3", False),
+        ({"data_age_days": 89}, "71.0", True),
+        ({"data_age_days": 90}, "66.0", False),
+    ],
+)
+def test_hero_confidence_gate_edges(overrides: dict[str, Any], expected: str, passes: bool) -> None:
+    result = score(**hero_inputs(**overrides))
+
+    assert result.confidence == D(expected)
+    assert result.gate.passed is passes
+    assert result.gate.reasons == (() if passes else (GATE_CONFIDENCE_BELOW_70,))
 
 
 # ----- monotonicity and determinism -----

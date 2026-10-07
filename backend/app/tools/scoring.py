@@ -6,12 +6,12 @@ and reproducible:
 
 - Float inputs are converted through their shortest repr (``0.6008`` → ``Decimal("0.6008")``);
   NaN, ±inf and out-of-domain values raise ``ValueError``.
-- Each component (V, N, L, W, T) and confidence term is rounded to 4 decimal places, half-up.
-- ``base_health`` and ``confidence`` are rounded to 1 decimal place, half-up, and the grade and
-  listing gate are decided on those rounded values. The number shown is the number graded, so a
-  displayed 90.0 is always AAA and never AA.
-- ``health = clamp(base_health + auditor_adjustment, 0, 100)``; with an integer adjustment it
-  stays at 1 decimal place.
+- Components (V, N, L, W, T) and confidence terms keep full precision; weighted sums use them
+  unrounded. Only the stored/displayed snapshot rounds them to 4 decimal places.
+- ``base_health``, ``health`` and ``confidence`` are rounded once, at the end, to 1 decimal place
+  half-up, and the grade and listing gate are decided on those rounded values. The number shown is
+  the number graded, so a displayed 90.0 is always AAA and never AA.
+- ``health = clamp(weighted_health + auditor_adjustment, 0, 100)``, then rounded.
 """
 
 from __future__ import annotations
@@ -99,6 +99,9 @@ class ThreatEvent(Protocol):
     def severity(self) -> int: ...
 
 
+# Events may also carry `relevant` (as `NewsScoutItem` does); `relevant=False` ones are ignored.
+
+
 @dataclass(frozen=True, slots=True)
 class HealthComponents:
     """The five health components, each in [0, 1] where 1 is best. Names are stable keys."""
@@ -108,6 +111,10 @@ class HealthComponents:
     habitat_loss: Decimal  # L: 1 = no forest loss
     water_stability: Decimal  # W
     threat_pressure: Decimal  # T: 1 = no negative events
+
+    def rounded(self) -> HealthComponents:
+        """Copy rounded to 4 decimal places, half-up, for display and storage."""
+        return HealthComponents(*(_round4(getattr(self, f.name)) for f in fields(self)))
 
 
 HEALTH_WEIGHTS = HealthComponents(
@@ -125,6 +132,10 @@ class ConfidenceComponents:
     agreement: Decimal
     evidence: Decimal
     recency: Decimal
+
+    def rounded(self) -> ConfidenceComponents:
+        """Copy rounded to 4 decimal places, half-up, for display and storage."""
+        return ConfidenceComponents(*(_round4(getattr(self, f.name)) for f in fields(self)))
 
 
 CONFIDENCE_WEIGHTS = ConfidenceComponents(
@@ -156,6 +167,7 @@ class ListingGate:
 class ScoreResult:
     method_version: str
     components: HealthComponents
+    """Full precision; `to_json_dict` stores them rounded to 4 decimal places."""
     weights: HealthComponents
     ndvi_trend_used: Decimal
     """The trend fed into V: the Sen's slope when significant, else 0."""
@@ -176,7 +188,7 @@ class ScoreResult:
         """JSON-safe snapshot (Decimals as strings) for storing with the report."""
         return {
             "method_version": self.method_version,
-            "components": _decimals_to_str(self.components),
+            "components": _decimals_to_str(self.components.rounded()),
             "weights": _decimals_to_str(self.weights),
             "ndvi_trend_used": str(self.ndvi_trend_used),
             "is_wetland": self.is_wetland,
@@ -187,7 +199,7 @@ class ScoreResult:
             "health": str(self.health),
             "grade": self.grade.value,
             "confidence": str(self.confidence),
-            "confidence_components": _decimals_to_str(self.confidence_components),
+            "confidence_components": _decimals_to_str(self.confidence_components.rounded()),
             "confidence_weights": _decimals_to_str(self.confidence_weights),
             "agreement_source": self.agreement_source,
             "gate": {
@@ -210,7 +222,13 @@ def _decimals_to_str(obj: HealthComponents | ConfidenceComponents) -> dict[str, 
 def _dec(name: str, value: Number) -> Decimal:
     if isinstance(value, bool) or not isinstance(value, int | float | Decimal):
         raise ValueError(f"{name} must be a number, got {value!r}")
-    result = value if isinstance(value, Decimal) else Decimal(repr(value))
+    if isinstance(value, Decimal):
+        result = value
+    elif isinstance(value, int):
+        result = Decimal(int(value))
+    else:
+        # float() first: subclasses such as numpy.float64 have a non-numeric repr.
+        result = Decimal(repr(float(value)))
     if not result.is_finite():
         raise ValueError(f"{name} must be finite, got {value!r}")
     return result
@@ -233,8 +251,8 @@ def _clamp(value: Decimal, low: Decimal = _ZERO, high: Decimal = _ONE) -> Decima
     return min(max(value, low), high)
 
 
-def _component(value: Decimal) -> Decimal:
-    return _clamp(value).quantize(COMPONENT_PLACES, rounding=ROUND_HALF_UP)
+def _round4(value: Decimal) -> Decimal:
+    return value.quantize(COMPONENT_PLACES, rounding=ROUND_HALF_UP)
 
 
 def _score(value: Decimal) -> Decimal:
@@ -254,7 +272,7 @@ def vegetation_vigor(*, ndvi_mean: Number, ndvi_trend: Number, trend_significant
     trend = ndvi_trend_used(ndvi_trend, trend_significant=trend_significant)
     trend_term = _clamp(_HALF + trend / NDVI_TREND_FULL_SCALE)
     vigor_term = _clamp(mean / NDVI_MEAN_FULL_SCALE)
-    return _component(trend_term * _HALF + vigor_term * _HALF)
+    return _clamp(trend_term * _HALF + vigor_term * _HALF)
 
 
 def ndvi_trend_used(ndvi_trend: Number, *, trend_significant: bool) -> Decimal:
@@ -264,26 +282,30 @@ def ndvi_trend_used(ndvi_trend: Number, *, trend_significant: bool) -> Decimal:
 
 def natural_cover(natural_fraction: Number) -> Decimal:
     """N = natural_fraction (trees + water + flooded_vegetation + grass + shrub_and_scrub)."""
-    return _component(_in_range("natural_fraction", natural_fraction, _ZERO, _ONE))
+    return _in_range("natural_fraction", natural_fraction, _ZERO, _ONE)
 
 
 def habitat_loss(*, forest_loss_ha: Number, area_ha: Number) -> Decimal:
     """L = 1 − clamp(forest_loss_ha / (0.1 × area_ha)); forest_loss_ha is the 5-year loss."""
     loss = _non_negative("forest_loss_ha", forest_loss_ha)
     area = _positive("area_ha", area_ha)
-    return _component(_ONE - _clamp(loss / (HABITAT_LOSS_FULL_SCALE * area)))
+    return _ONE - _clamp(loss / (HABITAT_LOSS_FULL_SCALE * area))
 
 
 def water_stability(*, water_change: Number, is_wetland: bool) -> Decimal:
     """W = clamp(0.5 + water_change/100) for wetlands, else 1. water_change is in [−100, 100]."""
     change = _in_range("water_change", water_change, -_HUNDRED, _HUNDRED)
     if not is_wetland:
-        return _component(_ONE)
-    return _component(_HALF + change / _HUNDRED)
+        return _ONE
+    return _clamp(_HALF + change / _HUNDRED)
 
 
 def is_wetland_from_landcover(landcover: Mapping[str, float]) -> bool:
-    """A site is a wetland when water + flooded_vegetation ≥ 20% of its land cover."""
+    """A site is a wetland when water + flooded_vegetation ≥ 20% of its land cover.
+
+    Apply this once, to the asset's **baseline** metrics, and keep the result with the asset.
+    Re-deriving it per data version would let a drained wetland drop out of W and gain health.
+    """
     water = _in_range("landcover.water", landcover.get("water", 0.0), _ZERO, _ONE)
     flooded = _in_range(
         "landcover.flooded_vegetation", landcover.get("flooded_vegetation", 0.0), _ZERO, _ONE
@@ -292,8 +314,11 @@ def is_wetland_from_landcover(landcover: Mapping[str, float]) -> bool:
 
 
 def negative_severity_sum(events: Iterable[ThreatEvent]) -> int:
+    """Σ severity of events with direction −1, skipping any with `relevant=False`."""
     total = 0
     for event in events:
+        if not getattr(event, "relevant", True):
+            continue
         severity = event.severity
         direction = event.direction
         if isinstance(severity, bool) or not isinstance(severity, int) or not 1 <= severity <= 5:
@@ -308,7 +333,7 @@ def negative_severity_sum(events: Iterable[ThreatEvent]) -> int:
 def threat_pressure(events: Iterable[ThreatEvent]) -> Decimal:
     """T = 1 − clamp(Σ severity of negative events / 15); other directions don't count."""
     total = Decimal(negative_severity_sum(events))
-    return _component(_ONE - _clamp(total / THREAT_SEVERITY_FULL_SCALE))
+    return _ONE - _clamp(total / THREAT_SEVERITY_FULL_SCALE)
 
 
 def _non_negative(name: str, value: Number) -> Decimal:
@@ -328,15 +353,20 @@ def _positive(name: str, value: Number) -> Decimal:
 # ----- health and grade -----
 
 
-def base_health(components: HealthComponents) -> Decimal:
-    """100 × (0.30V + 0.25N + 0.20L + 0.15W + 0.10T), rounded to 1 decimal place, half-up."""
+def weighted_health(components: HealthComponents) -> Decimal:
+    """100 × (0.30V + 0.25N + 0.20L + 0.15W + 0.10T) at full precision."""
     total = _ZERO
     for f in fields(HealthComponents):
         value = getattr(components, f.name)
         if not isinstance(value, Decimal) or not _ZERO <= value <= _ONE:
             raise ValueError(f"component {f.name} must be a Decimal in [0, 1], got {value!r}")
         total += getattr(HEALTH_WEIGHTS, f.name) * value
-    return _score(_HUNDRED * total)
+    return _HUNDRED * total
+
+
+def base_health(components: HealthComponents) -> Decimal:
+    """`weighted_health` rounded to 1 decimal place, half-up (health before the Auditor)."""
+    return _score(weighted_health(components))
 
 
 def check_auditor_adjustment(adjustment: int, reason: str | None) -> None:
@@ -353,7 +383,11 @@ def check_auditor_adjustment(adjustment: int, reason: str | None) -> None:
 
 
 def adjusted_health(base: Decimal, adjustment: int, reason: str | None) -> Decimal:
-    """health = clamp(base_health + auditor_adjustment, 0, 100), at 1 decimal place."""
+    """health = clamp(base + auditor_adjustment, 0, 100), rounded to 1 decimal place, half-up.
+
+    Pass the full-precision `weighted_health`; with an integer adjustment the result equals
+    rounding first, so health − base_health is exactly the adjustment unless health is clamped.
+    """
     check_auditor_adjustment(adjustment, reason)
     base = _in_range("base_health", base, _ZERO, _HUNDRED)
     return _score(_clamp(base + adjustment, _ZERO, _HUNDRED))
@@ -403,8 +437,8 @@ def confidence(
         agreement_value = _in_range("agreement", agreement, _ZERO, _ONE)
         source = "auditor"
     components = ConfidenceComponents(
-        coverage=_component(Decimal(obs) / COVERAGE_FULL_OBS),
-        agreement=_component(agreement_value),
+        coverage=_clamp(Decimal(obs) / COVERAGE_FULL_OBS),
+        agreement=agreement_value,
         evidence=EVIDENCE_VALIDATED if has_validated_field_evidence else EVIDENCE_NONE,
         recency=RECENCY_FRESH if age < RECENCY_FRESH_MAX_DAYS else RECENCY_STALE,
     )
@@ -497,8 +531,9 @@ def score(
         water_stability=water_stability(water_change=water_change, is_wetland=is_wetland),
         threat_pressure=threat_pressure(event_list),
     )
-    base = base_health(components)
-    health = adjusted_health(base, auditor_adjustment, adjustment_reason)
+    exact = weighted_health(components)
+    base = _score(exact)
+    health = adjusted_health(exact, auditor_adjustment, adjustment_reason)
     grade = grade_for(health)
     conf = confidence(
         cloud_free_obs=cloud_free_obs,
@@ -536,6 +571,7 @@ def score(
 def score_metrics(
     metrics: EarthObsMetrics,
     *,
+    is_wetland: bool,
     data_age_days: int,
     events: Iterable[ThreatEvent] = (),
     agreement: Number | None = None,
@@ -543,12 +579,12 @@ def score_metrics(
     auditor_adjustment: int = 0,
     adjustment_reason: str | None = None,
     forest_loss_last_12m_ha: Number | None = None,
-    is_wetland: bool | None = None,
 ) -> ScoreResult:
     """`score` fed from cached Earth observation metrics.
 
-    ``is_wetland=None`` derives it from land cover (`is_wetland_from_landcover`); pass a bool
-    to use the asset's declared ecosystem type instead.
+    ``is_wetland`` is the asset's fixed wetland status: its declared ecosystem type, or
+    `is_wetland_from_landcover` applied once to its baseline metrics. It is never re-derived
+    from the version being scored.
     """
     return score(
         ndvi_mean=metrics.ndvi_mean,
@@ -558,9 +594,7 @@ def score_metrics(
         forest_loss_ha=metrics.forest_loss_ha,
         area_ha=metrics.area_ha,
         water_change=metrics.water_change,
-        is_wetland=(
-            is_wetland_from_landcover(metrics.landcover) if is_wetland is None else is_wetland
-        ),
+        is_wetland=is_wetland,
         events=events,
         cloud_free_obs=metrics.cloud_free_obs,
         data_age_days=data_age_days,
