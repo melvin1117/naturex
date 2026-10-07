@@ -5,6 +5,11 @@ Usage (repo root): backend/.venv/bin/python evals/summarize.py [evals/output/new
 Reads promptfoo's JSON output (`outputPath` in promptfooconfig.yaml) and prints Markdown, one
 table row per provider (nano / super / ultra), so T47 can paste it into the G3 routing table.
 Stdlib only.
+
+Errored rows (provider error, e.g. budget stop or timeout) have no assertion results, so they
+would silently drop out of every denominator. Instead each one counts as a failure in every
+metric its test would have asserted (rebuilt from `vars.id` via news_eval.build_test), and the
+`errors` column shows how many there were.
 """
 
 from __future__ import annotations
@@ -16,19 +21,26 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import news_eval  # noqa: E402
+
 DEFAULT_RESULTS = Path(__file__).resolve().parent / "output" / "news-results.json"
-METRICS = (
-    "schema_valid",
-    "schema_first_try",
-    "relevance",
-    "impact_type",
-    "direction",
-    "severity",
-    "injection_resistance",
-)
+METRICS = news_eval.METRICS
+# promptfoo's ResultFailureReason.ERROR
+FAILURE_REASON_ERROR = 2
 
 
-def summarise(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _expected_metrics(item_id: str, items: dict[str, dict[str, Any]]) -> list[str]:
+    item = items.get(item_id)
+    if item is None:
+        return ["schema_valid", "schema_first_try", "relevance"]
+    return [a["metric"] for a in news_eval.build_test(item)["assert"]]
+
+
+def summarise(
+    data: dict[str, Any], items: list[dict[str, Any]] | None = None
+) -> dict[str, dict[str, Any]]:
+    by_id = {item["id"]: item for item in (news_eval.load_items() if items is None else items)}
     by_provider: dict[str, dict[str, Any]] = defaultdict(
         lambda: {
             "tests": 0,
@@ -52,9 +64,15 @@ def summarise(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
         stats["passed"] += 1 if row.get("success") else 0
         item_id = (row.get("vars") or {}).get("id", f"test-{row.get('testIdx')}")
         response = row.get("response") or {}
-        if response.get("error"):
+        components = (row.get("gradingResult") or {}).get("componentResults") or []
+        errored = bool(response.get("error")) or row.get("failureReason") == FAILURE_REASON_ERROR
+        if errored:
             stats["errors"] += 1
-            stats["failures"].append((item_id, "provider error", response["error"]))
+            reason = response.get("error") or row.get("error") or "provider error"
+            stats["failures"].append((item_id, "provider error", reason))
+            if not components:
+                for expected_metric in _expected_metrics(str(item_id), by_id):
+                    stats["metrics"][expected_metric][1] += 1
         # The provider keeps the original call's tokens, cost and latency in metadata, so
         # cached re-runs still report what the model costs (needed for the routing table).
         meta = response.get("metadata") or {}
@@ -69,7 +87,7 @@ def summarise(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
         stats["cost_uncached"] += float(meta.get("cost_usd", row.get("cost")) or 0)
         if meta.get("latency_ms") is not None:
             stats["latencies"].append(int(meta["latency_ms"]))
-        for component in (row.get("gradingResult") or {}).get("componentResults") or []:
+        for component in components:
             metric = (component.get("assertion") or {}).get("metric")
             if not metric:
                 continue
@@ -86,6 +104,7 @@ def render(summary: dict[str, dict[str, Any]]) -> str:
     header = [
         "provider",
         "tests passed",
+        "errors",
         *METRICS,
         "tokens in/out",
         "USD uncached",
@@ -94,7 +113,7 @@ def render(summary: dict[str, dict[str, Any]]) -> str:
     ]
     lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
     for provider, stats in summary.items():
-        cells = [provider, f"{stats['passed']}/{stats['tests']}"]
+        cells = [provider, f"{stats['passed']}/{stats['tests']}", str(stats["errors"])]
         for metric in METRICS:
             passed, total = stats["metrics"].get(metric, (0, 0))
             cells.append(f"{passed}/{total} ({passed / total:.0%})" if total else "n/a")

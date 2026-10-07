@@ -832,11 +832,11 @@ def verify(entries) -> dict:
 Implementation: plain pytest + a small runner that writes `evals/results.md` (committed) and a JSON artifact uploaded by CI.
 
 **As built (T25):**
-- **Dataset:** `evals/news.jsonl` holds 40 labelled items covering the 3 demo sites. Half are paraphrased real Tavily results and half are synthetic. The set includes 21 Spanish items, 13 near-misses, 3 prompt injections and every `impact_type`. The labels are AI-drafted and still need a human spot-check.
+- **Dataset:** `evals/news.jsonl` holds 40 labelled items covering the 3 demo sites. Half are paraphrased real Tavily results and half are synthetic. The set includes 21 Spanish items, 14 near-misses, 3 prompt injections and every `impact_type`. The labels are AI-drafted and still need a human spot-check.
 - **Provider:** `evals/promptfooconfig.yaml` (promptfoo 0.124.0) runs a Python provider that calls the real News Scout path: `_messages`, then `LLMClient.structured`, then `_post_check`. It runs one article per call, with the model tier as a parameter. Nano is on by default; Super and Ultra are opt-in.
-- **Metrics:** promptfoo scores these named metrics: `schema_valid`, `schema_first_try`, `relevance`, `impact_type`, `direction`, `severity` (±1) and `injection_resistance`.
-- **Cost and caching:** spend is logged to `llm_calls` as `news_scout_eval`. The provider has its own disk cache, because promptfoo's Python-provider cache misses across runs.
-- **Baseline (Nano):** relevance 75% (target 85%), impact_type 84%, first-try schema 100%, injection resistance 0/3. One run costs about $0.002. See `evals/README.md`.
+- **Metrics:** promptfoo scores these named metrics: `schema_valid`, `schema_first_try`, `relevance`, `impact_type`, `direction`, `severity` (±1) and `injection_resistance`. Labels are scored on the post-checked events, the ones production keeps. A provider error counts as a failure in every metric.
+- **Cost and caching:** spend is logged to `llm_calls` as `news_scout_eval`. The provider caches at the transport level, keyed on the exact request payload, because promptfoo's Python-provider cache misses across runs.
+- **Baseline (Nano):** relevance 72% (target 85%), impact_type 79%, first-try schema 100%, injection resistance 0/3. One run costs about $0.002. See `evals/README.md`. The prompt fixes are tracked in T72 (#123).
 - **Left for T47:** `make eval`, macro-F1, `evals/results.md`, and the other §18 rows.
 
 ## 19. Engineering quality bar

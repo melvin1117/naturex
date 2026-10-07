@@ -13,10 +13,15 @@ Provider config (promptfooconfig.yaml):
   cache:     true (default) | false. NEWS_EVAL_CACHE=0 also disables it.
 
 Caching: promptfoo 0.124's own Python-provider cache never hits across runs, because its key
-includes per-run vars (`__evalId`). So this provider keeps its own disk cache under
-evals/output/cache/news_scout/, keyed by model ID + the exact messages + schema + max_tokens:
-a prompt, article or model change misses, an unchanged re-run costs nothing. Cached answers
-report cost 0 and keep the original call's tokens, cost and latency in `metadata`.
+includes per-run vars (`__evalId`). So this provider caches at the transport level instead:
+`CachingTransport` wraps the Token Factory transport and keys each answer on the exact
+`chat.completions.create` payload (model, messages including LLMClient's schema instruction,
+response_format, temperature, max_tokens, extra_body), minus `timeout`. Any change to the
+News Scout prompt, the article, the model or llm.py's request misses; an unchanged re-run makes
+no API call. Only the attempt LLMClient accepted is stored, so an invalid answer is never
+replayed into a retry. A cached answer still goes through LLMClient (validation, `llm_calls`
+row with 0 tokens and $0) and reports cost 0 to promptfoo; the original call's tokens, cost and
+latency stay in `metadata`. Files live in evals/output/cache/news_scout/ (git-ignored).
 
 Docs: https://www.promptfoo.dev/docs/providers/python/ (call_api signature, tokenUsage, cost,
 metadata in the response, persistent workers).
@@ -34,6 +39,7 @@ from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 REPO_DIR = Path(__file__).resolve().parents[2]
@@ -58,17 +64,19 @@ from app.llm import (  # noqa: E402
     BudgetExceeded,
     CallLog,
     CallRecord,
+    ChatTransport,
     DbCallLog,
     LLMClient,
     LLMError,
     OpenAITransport,
     Tier,
+    cost_usd,
 )
 from app.seed import DEMO_SITES  # noqa: E402
 
 AGENT = "news_scout_eval"
-# Bump to invalidate every cached answer (e.g. after changing what the response contains).
-CACHE_VERSION = 1
+# Bump to invalidate every cached answer (e.g. after changing what a cache file holds).
+CACHE_VERSION = 2
 DEFAULT_CACHE_DIR = REPO_DIR / "evals" / "output" / "cache" / "news_scout"
 DEFAULT_MEMORY_BUDGET_USD = "0.50"
 
@@ -119,13 +127,123 @@ class RecordingCallLog:
         self.settled.append(call)
 
 
+class TransportCall:
+    """One `create()` seen by CachingTransport, with the original call's usage and latency."""
+
+    def __init__(
+        self,
+        *,
+        model: str,
+        cached: bool,
+        prompt_tokens: int,
+        completion_tokens: int,
+        latency_ms: int,
+    ) -> None:
+        self.model = model
+        self.cached = cached
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self.latency_ms = latency_ms
+
+
+def transport_cache_key(request: dict[str, Any]) -> str:
+    payload = {key: value for key, value in request.items() if key != "timeout"}
+    blob = json.dumps({"v": CACHE_VERSION, "request": payload}, sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode()).hexdigest()
+
+
+class CachingTransport:
+    """Disk cache in front of a ChatTransport, keyed on the exact request payload."""
+
+    def __init__(self, inner: ChatTransport, cache_dir: Path | None = None) -> None:
+        self._inner = inner
+        self.cache_dir = cache_dir
+        self.calls: list[TransportCall] = []
+        self._pending: list[tuple[str, dict[str, Any]]] = []
+
+    def create(self, **kwargs: Any) -> Any:
+        key = transport_cache_key(kwargs)
+        model = str(kwargs.get("model", ""))
+        path = self.cache_dir / f"{key}.json" if self.cache_dir else None
+        if path is not None and path.is_file():
+            record = json.loads(path.read_text(encoding="utf-8"))
+            self.calls.append(
+                TransportCall(
+                    model=model,
+                    cached=True,
+                    prompt_tokens=int(record["prompt_tokens"]),
+                    completion_tokens=int(record["completion_tokens"]),
+                    latency_ms=int(record["latency_ms"]),
+                )
+            )
+            message = SimpleNamespace(content=record["content"], tool_calls=None, model_extra={})
+            # Zero usage: LLMClient logs the replay at $0 instead of charging the budget again.
+            no_usage = SimpleNamespace(prompt_tokens=0, completion_tokens=0)
+            return SimpleNamespace(choices=[SimpleNamespace(message=message)], usage=no_usage)
+
+        started = time.perf_counter()
+        completion = self._inner.create(**kwargs)
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        usage = getattr(completion, "usage", None)
+        prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+        completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+        self.calls.append(
+            TransportCall(
+                model=model,
+                cached=False,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                latency_ms=latency_ms,
+            )
+        )
+        try:
+            content = completion.choices[0].message.content
+        except (AttributeError, IndexError):
+            content = None
+        if isinstance(content, str):
+            self._pending.append(
+                (
+                    key,
+                    {
+                        "model": model,
+                        "content": content,
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "latency_ms": latency_ms,
+                    },
+                )
+            )
+        return completion
+
+    def commit_last(self) -> None:
+        """Store only the attempt LLMClient accepted (the last one), then forget the rest."""
+        pending, self._pending = self._pending, []
+        if self.cache_dir is None or not pending:
+            return
+        key, record = pending[-1]
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        tmp = self.cache_dir / f"{key}.{os.getpid()}.tmp"
+        tmp.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(self.cache_dir / f"{key}.json")
+
+    def discard(self) -> None:
+        self._pending = []
+
+
 # A plain class, not a dataclass: promptfoo loads this file without registering it in
 # sys.modules, which breaks @dataclass's annotation lookup.
 class _Runtime:
-    def __init__(self, client: LLMClient, log: RecordingCallLog) -> None:
+    def __init__(self, client: LLMClient, log: RecordingCallLog, transport: CachingTransport):
         self.client = client
         self.log = log
+        self.transport = transport
         self.lock = threading.Lock()
+
+
+def make_runtime(settings: Settings, transport: ChatTransport, call_log: CallLog) -> _Runtime:
+    caching = CachingTransport(transport)
+    log = RecordingCallLog(call_log)
+    return _Runtime(LLMClient(settings, caching, log), log, caching)
 
 
 _RUNTIMES: dict[str, _Runtime] = {}
@@ -160,8 +278,7 @@ def _runtime(call_log: str) -> _Runtime:
             api_key=settings.nebius_api_key,
             max_retries=0,
         )
-        log = RecordingCallLog(inner)
-        runtime = _Runtime(LLMClient(settings, OpenAITransport(sdk), log), log)
+        runtime = make_runtime(settings, OpenAITransport(sdk), inner)
         _RUNTIMES[call_log] = runtime
         return runtime
 
@@ -191,41 +308,6 @@ def _article(variables: dict[str, Any]) -> NewsArticle:
     )
 
 
-def _cache_key(model: str, messages: list[dict[str, Any]], max_tokens: int) -> str:
-    payload = {
-        "v": CACHE_VERSION,
-        "model": model,
-        "messages": messages,
-        "schema": NewsScoutClassificationOutput.model_json_schema(),
-        "max_tokens": max_tokens,
-    }
-    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
-
-
-def _cache_read(cache_dir: Path | None, key: str) -> dict[str, Any] | None:
-    if cache_dir is None:
-        return None
-    path = cache_dir / f"{key}.json"
-    if not path.is_file():
-        return None
-    response: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-    usage = response.get("tokenUsage") or {}
-    response["cached"] = True
-    response["tokenUsage"] = {"cached": usage.get("total", 0), "total": usage.get("total", 0)}
-    response["cost"] = 0.0
-    response.setdefault("metadata", {})["cached"] = True
-    return response
-
-
-def _cache_write(cache_dir: Path | None, key: str, response: dict[str, Any]) -> None:
-    if cache_dir is None:
-        return
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    tmp = cache_dir / f"{key}.{os.getpid()}.tmp"
-    tmp.write_text(json.dumps(response, ensure_ascii=False), encoding="utf-8")
-    tmp.replace(cache_dir / f"{key}.json")
-
-
 def classify(
     variables: dict[str, Any],
     *,
@@ -238,61 +320,73 @@ def classify(
     asset = _asset(str(variables["site"]))
     article = _article(variables)
     messages = _messages(asset, str(variables["place"]), [article])
-    max_tokens = _max_tokens_for_articles(1)
-    key = _cache_key(runtime.client.model_for(tier), messages, max_tokens)
-    cached = _cache_read(cache_dir, key)
-    if cached is not None:
-        return cached
-
     with runtime.lock:
-        first = len(runtime.log.settled)
-        started = time.perf_counter()
+        transport = runtime.transport
+        transport.cache_dir = cache_dir
+        first_settled = len(runtime.log.settled)
+        first_call = len(transport.calls)
         try:
             result = runtime.client.structured(
                 agent=AGENT,
                 tier=tier,
                 messages=messages,
                 schema=NewsScoutClassificationOutput,
-                max_tokens=max_tokens,
+                max_tokens=_max_tokens_for_articles(1),
                 asset_id=asset.id,
             )
             error: str | None = None
+            transport.commit_last()
         except LLMError as exc:
             error = str(exc)
-        latency_ms = int((time.perf_counter() - started) * 1000)
-        attempts = runtime.log.settled[first:]
+            transport.discard()
+        settled = runtime.log.settled[first_settled:]
+        calls = transport.calls[first_call:]
 
-    prompt_tokens = sum(a.prompt_tokens for a in attempts)
-    completion_tokens = sum(a.completion_tokens for a in attempts)
-    usage = {
-        "total": prompt_tokens + completion_tokens,
-        "prompt": prompt_tokens,
-        "completion": completion_tokens,
-        "numRequests": len(attempts),
-    }
-    cost = float(sum((a.cost_usd for a in attempts), Decimal(0)))
+    # What this run spent (0 for replays) vs. what the answer cost when it was first made.
+    live_prompt = sum(a.prompt_tokens for a in settled)
+    live_completion = sum(a.completion_tokens for a in settled)
+    live_cost = float(sum((a.cost_usd for a in settled), Decimal(0)))
+    orig_prompt = sum(c.prompt_tokens for c in calls)
+    orig_completion = sum(c.completion_tokens for c in calls)
+    orig_cost = float(
+        sum(
+            (cost_usd(c.model, c.prompt_tokens, c.completion_tokens) for c in calls),
+            Decimal(0),
+        )
+    )
+    all_cached = bool(calls) and all(c.cached for c in calls)
+    usage: dict[str, int] = (
+        {"cached": orig_prompt + orig_completion, "total": orig_prompt + orig_completion}
+        if all_cached
+        else {
+            "total": live_prompt + live_completion,
+            "prompt": live_prompt,
+            "completion": live_completion,
+            "numRequests": sum(1 for c in calls if not c.cached),
+        }
+    )
     if error is not None:
-        return {"error": error, "tokenUsage": usage, "cost": cost}
+        return {"error": error, "tokenUsage": usage, "cost": live_cost}
 
     kept = _post_check(result.value.events, [article], today=date.today)
-    response: dict[str, Any] = {
+    return {
         "output": result.value.model_dump_json(),
         "tokenUsage": usage,
-        "cost": cost,
+        "cost": live_cost,
+        "cached": all_cached,
         "metadata": {
             "model": result.model,
             "tier": result.tier.value,
             "degraded": result.degraded,
             "attempts": result.attempts,
-            "latency_ms": latency_ms,
-            "cost_usd": cost,
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
+            "cached": all_cached,
+            "latency_ms": sum(c.latency_ms for c in calls),
+            "cost_usd": orig_cost,
+            "prompt_tokens": orig_prompt,
+            "completion_tokens": orig_completion,
             "post_checked": [item.model_dump(mode="json") for item in kept],
         },
     }
-    _cache_write(cache_dir, key, response)
-    return response
 
 
 def call_api(prompt: str, options: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
