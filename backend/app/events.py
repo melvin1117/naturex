@@ -1,0 +1,171 @@
+"""Persisted, world-scoped event bus for polling and Server-Sent Events (T29)."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import time
+from collections.abc import AsyncIterator, Iterator, Mapping
+from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
+from typing import Any, cast
+from uuid import UUID
+
+from fastapi.encoders import jsonable_encoder
+from sqlalchemy import Connection, delete, insert
+from sqlalchemy.engine import CursorResult
+from sqlmodel import Session, col, select
+from starlette.requests import Request
+
+from app.db import engine
+from app.models import StreamEventType, WorldEvent
+from app.schemas import StreamEvent
+
+REPLAY_BATCH_LIMIT = 100
+STREAM_REPLAY_BATCH_LIMIT = 100
+STREAM_POLL_INTERVAL_SECONDS = 0.5
+HEARTBEAT_INTERVAL_SECONDS = 15.0
+STREAM_MAX_SECONDS = 300.0
+SSE_RETRY_MS = 3000
+EVENT_RETENTION = timedelta(hours=24)
+
+
+@contextmanager
+def session_scope() -> Iterator[Session]:
+    """Open a short-lived DB session for stream polling."""
+    with Session(engine) as session:
+        yield session
+
+
+def _event_type(value: StreamEventType | str) -> StreamEventType:
+    try:
+        return StreamEventType(value)
+    except ValueError as exc:
+        allowed = ", ".join(item.value for item in StreamEventType)
+        raise ValueError(
+            f"unsupported stream event type {value!r}; expected one of {allowed}"
+        ) from exc
+
+
+def _payload(value: Mapping[str, Any]) -> dict[str, Any]:
+    encoded = jsonable_encoder(dict(value))
+    if not isinstance(encoded, dict):
+        raise TypeError("event payload must encode to a JSON object")
+    return encoded
+
+
+def _to_stream_event(row: WorldEvent) -> StreamEvent:
+    if row.id is None:
+        raise ValueError("world event has no id; flush before serializing")
+    return StreamEvent(id=row.id, type=row.type, payload=row.payload, ts=row.created_at)
+
+
+def publish(
+    session_or_conn: Session | Connection,
+    world_id: UUID,
+    type: StreamEventType | str,
+    payload: Mapping[str, Any],
+) -> StreamEvent:
+    """Persist an event in the caller's transaction and return its stream contract shape."""
+    event_type = _event_type(type)
+    event_payload = _payload(payload)
+    if isinstance(session_or_conn, Session):
+        row = WorldEvent(world_id=world_id, type=event_type, payload=event_payload)
+        session_or_conn.add(row)
+        session_or_conn.flush()
+        return _to_stream_event(row)
+
+    table = cast(Any, WorldEvent).__table__
+    result = session_or_conn.execute(
+        insert(table)
+        .values(world_id=world_id, type=event_type.value, payload=event_payload)
+        .returning(table.c.id, table.c.created_at)
+    ).one()
+    return StreamEvent(
+        id=cast(int, result.id),
+        type=event_type,
+        payload=event_payload,
+        ts=cast(datetime, result.created_at),
+    )
+
+
+def replay(
+    session: Session,
+    world_id: UUID,
+    *,
+    since_id: int | None = None,
+    since: datetime | None = None,
+    limit: int = REPLAY_BATCH_LIMIT,
+) -> list[StreamEvent]:
+    """Return persisted events for one world, ordered by monotonic event id."""
+    capped_limit = max(0, min(limit, REPLAY_BATCH_LIMIT))
+    if capped_limit == 0:
+        return []
+
+    stmt = select(WorldEvent).where(WorldEvent.world_id == world_id)
+    if since_id is not None:
+        stmt = stmt.where(col(WorldEvent.id) > since_id)
+    elif since is not None:
+        stmt = stmt.where(col(WorldEvent.created_at) > since)
+    stmt = stmt.order_by(col(WorldEvent.id)).limit(capped_limit)
+    return [_to_stream_event(row) for row in session.exec(stmt).all()]
+
+
+def prune_old_events(session: Session, older_than: timedelta = EVENT_RETENTION) -> int:
+    """Drop retained live events older than the retention window."""
+    cutoff = datetime.now(UTC) - older_than
+    result = cast(
+        CursorResult[Any],
+        session.execute(delete(WorldEvent).where(col(WorldEvent.created_at) < cutoff)),
+    )
+    return int(result.rowcount or 0)
+
+
+def format_sse(event: StreamEvent) -> str:
+    """Format one event according to the HTML event-stream field syntax."""
+    lines: list[str] = []
+    if event.id is not None:
+        lines.append(f"id: {event.id}")
+    lines.append(f"event: {event.type}")
+    data = json.dumps(event.model_dump(mode="json"), separators=(",", ":"))
+    lines.append(f"data: {data}")
+    return "\n".join(lines) + "\n\n"
+
+
+def heartbeat() -> StreamEvent:
+    return StreamEvent(id=None, type=StreamEventType.HEARTBEAT, payload={}, ts=datetime.now(UTC))
+
+
+async def stream(
+    world_id: UUID, request: Request, since_id: int | None = None
+) -> AsyncIterator[str]:
+    """Yield a finite SSE stream with replay, DB polling and heartbeat keep-alives."""
+    cursor = since_id
+    deadline = time.monotonic() + STREAM_MAX_SECONDS
+    last_heartbeat = time.monotonic()
+    yield f"retry: {SSE_RETRY_MS}\n\n"
+
+    while time.monotonic() < deadline:
+        if await request.is_disconnected():
+            break
+
+        with session_scope() as session:
+            batch = replay(
+                session,
+                world_id,
+                since_id=cursor,
+                limit=STREAM_REPLAY_BATCH_LIMIT,
+            )
+
+        if batch:
+            for event in batch:
+                yield format_sse(event)
+                cursor = event.id
+            continue
+
+        now = time.monotonic()
+        if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+            yield format_sse(heartbeat())
+            last_heartbeat = now
+
+        await asyncio.sleep(STREAM_POLL_INTERVAL_SECONDS)

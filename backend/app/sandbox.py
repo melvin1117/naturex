@@ -34,6 +34,7 @@ from app.models import (
     Report,
     User,
     World,
+    WorldEvent,
 )
 from app.seed import WORLD_ID as TEMPLATE_WORLD_ID
 from app.seed import seed
@@ -50,6 +51,7 @@ _DELETE_ORDER: tuple[type[SQLModel], ...] = (
     LedgerEntry,
     DocChunk,
     Alert,
+    WorldEvent,
     Order,
     Holding,
     Price,
@@ -246,6 +248,9 @@ def prune_stale_worlds(
     Rows are locked in a fixed order and locked ones are skipped, so concurrent prunes
     can't deadlock and a world busy with a request is left for next time.
     """
+    from app.events import prune_old_events
+
+    prune_old_events(session)
     stale = session.exec(
         select(World.id)
         .where(World.id != TEMPLATE_WORLD_ID, col(World.last_seen_at) < _now() - older_than)

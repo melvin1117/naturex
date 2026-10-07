@@ -1,55 +1,58 @@
-"""SSE live events + polling fallback."""
+"""World-scoped live events over SSE plus polling fallback."""
 
 from __future__ import annotations
 
-import asyncio
-import json
-from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Header, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
+from app import events as event_bus
+from app.deps import CurrentWorld, SessionDep
 from app.schemas import StreamEvent
 
 router = APIRouter(tags=["events"])
 
 
-def _sample_events(since: datetime | None = None) -> list[StreamEvent]:
-    _ = since
-    now = datetime.now(UTC)
-    return [
-        StreamEvent(
-            type="rating_progress",
-            payload={"run_id": "mock-run", "step": "earth_obs"},
-            ts=now,
-        ),
-        StreamEvent(
-            type="rating_progress",
-            payload={"run_id": "mock-run", "step": "done"},
-            ts=now,
-        ),
-        StreamEvent(
-            type="heartbeat",
-            payload={},
-            ts=now,
-        ),
-    ]
+def _parse_last_event_id(value: str | None) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        event_id = int(value)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "invalid Last-Event-ID") from exc
+    if event_id < 0:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "invalid Last-Event-ID")
+    return event_id
 
 
 @router.get("/events", response_model=list[StreamEvent])
-def poll_events(since: Annotated[datetime | None, Query()] = None) -> list[StreamEvent]:
-    return _sample_events(since)
+def poll_events(
+    world: CurrentWorld,
+    session: SessionDep,
+    since: Annotated[datetime | None, Query()] = None,
+    since_id: Annotated[int | None, Query(ge=0)] = None,
+    limit: Annotated[int, Query(ge=1, le=event_bus.REPLAY_BATCH_LIMIT)] = (
+        event_bus.REPLAY_BATCH_LIMIT
+    ),
+) -> list[StreamEvent]:
+    return event_bus.replay(session, world.id, since_id=since_id, since=since, limit=limit)
 
 
 @router.get("/events/stream")
-async def stream_events() -> StreamingResponse:
-    async def gen() -> AsyncIterator[str]:
-        for event in _sample_events():
-            data = json.dumps(event.model_dump(mode="json"))
-            yield f"event: {event.type}\ndata: {data}\n\n"
-            await asyncio.sleep(0.05)
-        # end stream after mock burst
-
-    return StreamingResponse(gen(), media_type="text/event-stream")
+async def stream_events(
+    request: Request,
+    world: CurrentWorld,
+    last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
+    since_id: Annotated[int | None, Query(ge=0)] = None,
+) -> StreamingResponse:
+    cursor = _parse_last_event_id(last_event_id) if last_event_id is not None else since_id
+    return StreamingResponse(
+        event_bus.stream(world.id, request, cursor),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )

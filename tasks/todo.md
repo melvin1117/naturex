@@ -234,7 +234,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`; trace for a live run · **Deps:** T09, T27 · **Files:** `backend/app/routers/admin.py`, `backend/app/tracing.py`
 
 ### T29 · Live events (SSE) (#41) — D1 · M · Must
-- [ ] `GET /events/stream` sends rating progress, price ticks and alerts for the visitor's world; polling fallback `GET /events?since=`
+- [x] `GET /events/stream` sends rating progress, price ticks and alerts for the visitor's world; polling fallback `GET /events?since=`
 
 **Verify:** `make test`; events arrive in the browser · **Deps:** T08, T31 · **Files:** `backend/app/routers/events.py`, `backend/app/events.py`
 
