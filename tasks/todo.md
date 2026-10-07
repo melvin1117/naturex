@@ -98,11 +98,13 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ### P02 · User flows and information architecture (#20) — PD · M · Must
 - [ ] Flows for Rosa (community), Arjun (investor), NatureX AI (under the hood), Time Machine, and the judge tour chapters (demo-plan §3.3)
 - [ ] Sitemap and navigation; persona switcher behaviour
+- [ ] *(ADR-0005)* Two apps (Exchange at `/`, Steward at `/steward`) plus `/admin`; sign-in and sign-up; the `/judge` one-click demo; which role sees what
 
 **Verify:** team walkthrough · **Deps:** P01 · **Files:** `docs/design/flows.md` (links to the design file)
 
 ### P03 · Wireframes for all screens (#21) — PD · M · Must
 - [ ] Marketplace, listing (map + form), rating progress, asset page, portfolio, admin/Time Machine, Copilot, Agent Trace drawer, ledger tab, judge landing
+- [ ] *(ADR-0005)* Sign-in and sign-up, Steward home (wallet, holders, payouts, listing status), community and members, IPO launch, app switcher, demo bar
 
 **Verify:** each wireframe maps to user stories in `pm-spec.md` · **Deps:** P02 · **Files:** design file, `docs/design/`
 
@@ -114,6 +116,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 ### P05 · Hi-fi key screens (#23) — PD · M · Must
 - [ ] Asset page (hero screen), marketplace and listing flow in high fidelity, using P04 tokens
+- [ ] *(ADR-0005)* Steward home and IPO launch in high fidelity
 
 **Verify:** Friday review; `/impeccable critique` pass · **Deps:** P03, P04 · **Files:** design file
 
@@ -159,7 +162,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ### T18 · Trade panel and portfolio UI (#29) — D1 (with PD designs) · M · Must · C2
 - [ ] Buy/sell panel on the asset page with validation and play-money balance; portfolio page with holdings and P&L
 
-**Verify:** `make fe-check`; manual buy then sell · **Deps:** T17, T21, P05 · **Files:** `frontend/src/components/TradePanel.tsx`, `frontend/src/app/portfolio/page.tsx`
+**Verify:** `make fe-check`; manual buy then sell (signed in, in the Exchange app) · **Deps:** T17, T21, P05, T61 · **Files:** `frontend/src/components/TradePanel.tsx`, `frontend/src/app/portfolio/page.tsx`
 
 ### T19 · Deterministic rating into the reports API (#30) — D2 · S · Must · B1–B3 B5
 - [ ] Rating service runs earth_obs (cached) → valuation → scoring for each demo site and stores report v1 (no agents yet); the reports API serves real data instead of mocks
@@ -175,7 +178,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** public URL loads the marketplace · **Deps:** T04, T05 · **Files:** `backend/Dockerfile`, deploy config
 
 ### T21 · Design system in code (#32) — PD · M · Must
-- [ ] P04 tokens as Tailwind v4 theme + shadcn theme; app shell, navigation, persona switcher shell; `/dev/ui` shows every component and state
+- [ ] P04 tokens as Tailwind v4 theme + shadcn theme; app shell and navigation primitives (the two app shells are T62; the persona switcher moves to the demo bar, T65); `/dev/ui` shows every component and state
 
 **Verify:** `make fe-check`; `/dev/ui` reviewed · **Deps:** P04, T05 · **Files:** `frontend/src/app/globals.css`, `frontend/src/components/ui/*`, `frontend/src/app/dev/ui/page.tsx`
 
@@ -204,6 +207,14 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 - [ ] Portfolio, admin/Time Machine, Copilot, Agent Trace drawer, ledger tab, alerts, judge landing and tour hint style
 
 **Verify:** Friday review · **Deps:** P03, P04 · **Files:** design file
+
+### T54 · Accounts and sessions (#97) — D1 · M · Must · K1 K2
+- [ ] `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /me`; argon2id via `pwdlib`, with a dummy-hash verify for unknown emails; emails normalised and unique per world
+- [ ] Server-side sessions: a 256-bit token whose SHA-256 hash is stored; `nx_session` cookie `HttpOnly`, `Secure` (outside dev/test), `SameSite=Lax`; 7 d idle / 30 d absolute; new ID on login; deleted on logout. `Origin` check on state-changing requests; Postgres-backed rate limits (login 10 per 15 min, register 5 per hour)
+- [ ] Live world seeded (3 curated sites under password-less demo communities); admins only via `ADMIN_EMAILS`; no email, password or token in logs, ledger payloads or LLM prompts
+
+**Verify:** `make test`, including abuse cases (wrong password, unknown email, expired and revoked sessions, cross-origin POST, rate limit); manual register → login → `/me` → logout with `curl` · **Deps:** T31 · **Files:** `backend/app/auth.py`, `backend/app/routers/auth.py`, `backend/app/models.py`, `backend/migrations/versions/*_accounts.py`, `backend/tests/test_auth.py`
+
 
 ### ✅ Checkpoint W2 (Fri Oct 9)
 - [ ] Real satellite metrics, $ ranges and a grade for all 3 sites visible in the UI
@@ -258,7 +269,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ### T33 · Listing flow and rating progress (#45) — PD · M · Must · A1–A3
 - [ ] Map drawing, area display and validation messages, community form, submit; live progress through the agent steps
 
-**Verify:** `make fe-check`; list a new polygon end to end · **Deps:** T32, T36, P05 · **Files:** `frontend/src/app/list/page.tsx`, `frontend/src/components/MapDraw.tsx`, `RatingProgress.tsx`
+**Verify:** `make fe-check`; a signed-in steward lists a new polygon end to end in the Steward app (`/steward/list`, lifecycle endpoints from T58) · **Deps:** T32, T36, P05, T58, T62 · **Files:** `frontend/src/app/(steward)/steward/list/page.tsx`, `frontend/src/components/MapDraw.tsx`, `RatingProgress.tsx`
 
 ### T34 · Agent Trace drawer and ledger tab (#46) — PD · M · Must · G1 F2
 - [ ] Drawer lists each step (model, tokens, latency, output); ledger tab shows entries and the verify/tamper badge
@@ -294,10 +305,66 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` · **Deps:** T16 · **Files:** `backend/app/market/revenue.py`, `backend/app/routers/market.py`
 
 
+### T55 · Demo sessions and persona switch (#98) — D1 · S · Must · J1 J2
+- [ ] `POST /demo/start {persona}` creates a sandbox world and a demo session (hourly world cap kept); `POST /demo/persona` switches persona inside the same world only, with a new session ID; `POST /world/reset` keeps the session
+- [ ] The `nx_world` cookie is retired: `CurrentWorld` comes from the session, `GET /world` returns the session's world, and anonymous requests read the live world
+
+**Verify:** `make test` (two demo sessions isolated; a demo session can't reach the live world; a password session can't switch persona) · **Deps:** T54 · **Files:** `backend/app/sandbox.py`, `backend/app/deps.py`, `backend/app/routers/world.py`, `backend/tests/test_sandbox.py`
+
+### T56 · Communities and authorization policy (#99) — D1 · M · Must · K3 A0
+- [ ] `communities` and `community_members` (owner | steward), `assets.community_id` with a seed backfill; `POST /communities`, `GET`/`PATCH /communities/{id}`, add and remove members (owner only)
+- [ ] Pure `authorize(principal, action, resource)` implementing the ADR-0005 matrix, including world scoping and the insider-trading rule; a `require(action)` dependency; 401 `auth_required` / 403 with a reason / 404 across worlds
+- [ ] A matrix test covers every role × action, allowed and denied
+
+**Verify:** `make test` · **Deps:** T54 · **Files:** `backend/app/authz.py`, `backend/app/routers/communities.py`, `backend/app/models.py`, `backend/migrations/versions/*_communities.py`, `backend/tests/test_authz.py`
+
+### T57 · Enforce authorization on every route (#100) — D1 · M · Must · K3 C6
+- [ ] Every state-changing route uses `require(...)`; orders and portfolio use the principal's user (never a client-supplied user ID); admin routes are admin-only; the tamper demo runs in sandbox worlds only
+- [ ] A test walks `app.routes` and fails if any state-changing route lacks an authorization dependency
+- [ ] `alert` events over SSE and `GET /events` reach only their target users
+
+**Verify:** `make test` · **Deps:** T56, T17, T29 · **Files:** `backend/app/routers/*.py`, `backend/app/events.py`, `backend/tests/test_route_authz.py`
+
+### T58 · Listing lifecycle (#101) — D2 · M · Must · A3 A5 A6
+- [ ] Pure state machine: draft → rating → listed | needs_evidence | ineligible; needs_evidence → rating after evidence; listed ↔ suspended (admin). The listing gate applies at listing time only; invalid transitions are rejected
+- [ ] `POST /assets` creates a draft in the principal's community (attestation required, polygon validated by T36, no overlap within the world); `POST /assets/{id}/submit` starts a rating, whose result sets the status
+- [ ] Every transition appends a ledger entry and publishes an event
+
+**Verify:** `make test` · **Deps:** T19, T56, T36 · **Files:** `backend/app/services/lifecycle.py`, `backend/app/routers/assets.py`, `backend/tests/test_lifecycle.py`
+
+### T59 · IPO launch (#102) — D1 · S · Must · A7 C4
+- [ ] `GET /assets/{id}/ipo/preview` returns the IPO price with every term of the dev-spec §8 formula
+- [ ] `POST /assets/{id}/ipo` (owner only, listed, once): validates shares offered and retained % (10–90), writes the first `prices` row (`reason='ipo'`) and a ledger entry, and opens the primary float
+- [ ] Orders on an asset without an IPO return 409 `not_trading`
+
+**Verify:** `make test` · **Deps:** T16, T58 · **Files:** `backend/app/routers/ipo.py`, `backend/app/services/ipo.py`, `backend/tests/test_ipo.py`
+
+### T61 · Sign-in screens and session handling (#104) — PD + D1 · S · Must · K1 K2
+- [ ] `/login`, `/register`, and an account menu with sign out; clear error states; no tokens in JS-readable storage
+- [ ] Protected routes (`/steward/*`, `/portfolio`, `/admin`) redirect to sign-in and back; the client handles 401 and 403 with clear messages
+
+**Verify:** `make fe-check`; manual register → sign out → sign in · **Deps:** T54, T21 · **Files:** `frontend/src/app/(auth)/login/page.tsx`, `frontend/src/app/(auth)/register/page.tsx`, `frontend/src/middleware.ts`, `frontend/src/lib/session.ts`
+
+### T62 · Two app shells and app switcher (#105) — PD · S · Must · K4
+- [ ] Route groups `(exchange)` at `/` and `(steward)` at `/steward`, each with its own shell and navigation, plus an `/admin` shell; the sandbox banner on every page
+- [ ] An app switcher for community members; navigation follows the signed-in user's roles; a slot for the demo bar (T65)
+
+**Verify:** `make fe-check`; `web-design-guidelines` review · **Deps:** T21, T61 · **Files:** `frontend/src/app/(exchange)/layout.tsx`, `frontend/src/app/(steward)/steward/layout.tsx`, `frontend/src/app/admin/layout.tsx`, `frontend/src/components/AppSwitcher.tsx`
+
+### T65 · Judge access (#108) — PD · S · Must · J1 J2
+- [ ] `/judge`: one click on "Explore as a community steward / an investor / the platform admin" starts a demo session and opens the matching app; a "Create a real account" link
+- [ ] In demo sessions, a demo bar on every page: persona switcher, Reset my demo, "private sandbox" label
+
+**Verify:** `make fe-check`; manual: each button lands in the right app within 2 s · **Deps:** T55, T62 · **Files:** `frontend/src/app/judge/page.tsx`, `frontend/src/components/DemoBar.tsx`
+
+
 ### ✅ Checkpoint W3 (Fri Oct 16)
 - [ ] A full rating run is **100% live AI** (Super → tools → Nano → Ultra), started from the UI
 - [ ] Trace drawer shows every step; ledger verifies and the tamper demo fails as expected
 - [ ] Listing a new polygon works; two browsers have separate sandboxes
+- [ ] *(ADR-0005)* Register, sign in and sign out work; every state-changing route enforces authorization (route test green)
+- [ ] *(ADR-0005)* A real account creates a community, lists the hero polygon, gets it rated and launches the IPO; a second account buys and the community wallet rises
+- [ ] *(ADR-0005)* `/judge` opens a demo session as any persona in one click
 
 ---
 
@@ -305,7 +372,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 ### T38 · Time Machine, re-rating and alerts (#52) — D1 · M · Must · D1–D4
 - [ ] "Next quarter" re-rates each asset with the next scenario version; event presets (fire, encroachment, drought, restoration, protection); prices re-anchor
-- [ ] Alerts on health Δ ≥ 5, a grade change or news severity ≥ 4; each quarter pays out revenue via T41; same entrypoints usable as jobs (`jobs/rerate_all.py`, `jobs/news_sweep.py`; daily sweep via GitHub Actions)
+- [ ] Alerts on health Δ ≥ 5, a grade change or news severity ≥ 4, sent to the asset's holders and its community's members; each quarter pays out revenue via T41; same entrypoints usable as jobs (`jobs/rerate_all.py`, `jobs/news_sweep.py`; daily sweep via GitHub Actions)
 
 **Verify:** `make test`; manual encroachment gives grade A → BBB and an alert · **Deps:** T27, T16, T29, T41 · **Files:** `backend/app/routers/admin.py`, `jobs/*.py`, `.github/workflows/news-sweep.yml`
 
@@ -322,7 +389,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ### T43 · Time Machine and alerts UI (#55) — D1 (with PD designs) · M · Must · D2 D3 C3
 - [ ] Admin panel (next quarter, event presets, reset), phone-style alerts, price chart with event markers
 
-**Verify:** `make fe-check`; encroachment flow in the browser · **Deps:** T38, T32 · **Files:** `frontend/src/app/admin/page.tsx`, `PriceChart.tsx`, `AlertsFeed.tsx`
+**Verify:** `make fe-check`; encroachment flow in the browser, as an admin in `/admin` · **Deps:** T38, T32, T62 · **Files:** `frontend/src/app/admin/page.tsx`, `PriceChart.tsx`, `AlertsFeed.tsx`
 
 ### T44 · Copilot and impact UI (#56) — PD · M · Must · E1 E3
 - [ ] Chat on asset and portfolio pages (streaming, citations link to sources); impact summary on the portfolio
@@ -330,12 +397,13 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make fe-check` · **Deps:** T39, T41 · **Files:** `frontend/src/components/CopilotChat.tsx`, `ImpactSummary.tsx`
 
 ### T45 · Judge tour (#57) — PD (lead) + D2 · M · Must · J
-- [ ] Driver.js tour: judge landing, persona switcher, 10 chapters (demo-plan §3.3), "Do it for me", Live badges, two-layer hints
+- [ ] Driver.js tour as an optional overlay on demo mode (ADR-0005; `/judge` and the demo bar are T65): 10 chapters (demo-plan §3.3), "Do it for me", Live badges, two-layer hints
 
-**Verify:** `make fe-check`; a newcomer completes the tour unaided · **Deps:** T33, T34, T43, T44 · **Files:** `frontend/src/tour/*`, `frontend/src/app/page.tsx`
+**Verify:** `make fe-check`; a newcomer completes the tour unaided · **Deps:** T33, T34, T43, T44, T65 · **Files:** `frontend/src/tour/*`, `frontend/src/app/judge/page.tsx`
 
 ### T46 · E2E demo test (#58) — D2 · S · Must
 - [ ] Playwright runs the tour's autoplay path end to end; runs in CI; reused to record the video
+- [ ] *(ADR-0005)* Real-account path: register → create a community → list → rate → launch the IPO; a second account buys; the community wallet rises; an investor gets 403 on Steward actions
 
 **Verify:** `make e2e` green locally and in CI · **Deps:** T45 · **Files:** `frontend/e2e/demo.spec.ts`, `.github/workflows/e2e.yml`
 
@@ -351,8 +419,28 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** audit score recorded; no blocking issues · **Deps:** T33, T34
 
 
+### T60 · Live rating for new listings (#103) — D2 · M · Must · A3
+- [ ] `earth_obs` computes metrics for any validated polygon live on Earth Engine, using the T11/T13 methods, with a timeout and a cache keyed by geometry hash
+- [ ] Quotas: 2 live ratings per user per day plus the global `LLM_BUDGET_USD`. On failure the listing stays in `rating` with a retry; it never shows another site's data
+- [ ] In demo worlds only, a failed live run may show the nearest cached site with an explicit "cached example" notice
+
+**Verify:** `make test` (Earth Engine mocked); manual live rating of a new polygon · **Deps:** T13, T19, T58 · **Files:** `backend/app/tools/earth_obs.py`, `backend/app/services/rating.py`, `backend/tests/test_earth_obs_live.py`
+
+### T63 · Steward home and community management (#106) — PD + D1 · M · Must · A0 A8
+- [ ] Create or edit a community (A0) and manage its members (owner only)
+- [ ] Home: listings with status and next action, community wallet, IPO proceeds, holders, payouts, alerts and stewardship recommendations (`GET /communities/{id}/summary`)
+
+**Verify:** `make fe-check`; manual: a new account creates a community and sees an empty home with "List your land" · **Deps:** T56, T58, T62, P05 · **Files:** `frontend/src/app/(steward)/steward/page.tsx`, `frontend/src/app/(steward)/steward/community/page.tsx`, `frontend/src/components/WalletCard.tsx`, `backend/app/routers/communities.py`
+
+### T64 · IPO launch screen (#107) — PD · S · Must · A7
+- [ ] The owner sets shares offered and retained %; a preview shows the IPO price formula step by step; confirming launches the IPO and the asset becomes tradable in the Exchange
+
+**Verify:** `make fe-check`; manual launch, then a second account buys · **Deps:** T59, T62 · **Files:** `frontend/src/app/(steward)/steward/assets/[id]/ipo/page.tsx`, `frontend/src/components/IpoPreview.tsx`
+
+
 ### ✅ Checkpoint W4 (Fri Oct 23) = FEATURE FREEZE
 - [ ] The public URL runs the whole 3-minute demo script, including the judge tour
+- [ ] *(ADR-0005)* Both apps work for real accounts: Steward (community, listing, live rating, IPO, wallet) and Exchange (browse, trade, portfolio, alerts)
 - [ ] `make eval` and `make e2e` green; UI polish pass done
 - [ ] **No new features after this point**
 

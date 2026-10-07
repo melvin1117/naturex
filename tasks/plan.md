@@ -25,7 +25,26 @@ Week 1 ended with 3 of 17 tasks done (T04, T06, T07). **The Oct 23 freeze and Oc
 
 Pick tasks from [task-map.html](./task-map.html) (🟢 = every dependency done). Weeks 2–4 below keep their content. Anything not done by its Friday gate rolls into the next sprint, and the next *Should* item is cut first.
 
-## Team and ownership
+## Re-plan (Tue Oct 6): real accounts, roles and two apps ([ADR-0005](../docs/adr/0005-accounts-roles-and-two-apps.md))
+The judge tour is a showcase; the product needs real flows. New tasks **T54–T65** (#97–#108):
+- **Backend:**
+  - D1: accounts and sessions (T54); demo sessions (T55); communities and the authorization policy (T56); enforcement on every route (T57); IPO launch (T59).
+  - D2: listing lifecycle (T58); live rating of new listings (T60).
+- **Frontend:**
+  - PD (+D1): sign-in screens (T61); the two app shells (T62); Steward home (T63); IPO launch screen (T64); `/judge` one-click demo (T65).
+
+**Sequence:**
+
+| Week | D1 | D2 | PD |
+|---|---|---|---|
+| 2 (now) | **T54** (only new task ready; unblocks T55, T56, T61) | T19 once T14/T15 merge | P02/P03 updated for two apps, sign-in, Steward home, judge landing |
+| 3 | T56 → T57 → T55 → T59 | T58 | T21 → T61 → T62 → T65; T33 moves into Steward |
+| 4 | Wire T63/T64 with PD | T60 | T63, T64; T45 tour on top of T65 |
+
+- **Critical path** (from the task map): P04 → T21 → T61 → T62 → T33 → T45 → T46 → T50 → T52. **T21 is now the biggest risk;** pair on it if it slips.
+- **Cut order if behind:** K5 delete account → multi-member management (owner only) → T60 live rating (fall back to curated sites; flag new listings "awaiting satellite data").
+
+
 | Who | Role | Owns (long-term) | Weeks 1–2 focus | Weeks 3–5 focus |
 |---|---|---|---|---|
 | **PD** | Product designer + frontend | UX, visual design, frontend quality, judge tour, video | Flows, wireframes, design system; then builds UI | UI build, tour, polish; week 5 video and presentation lead |

@@ -8,8 +8,9 @@
 
 ## 1. System overview
 ```
-Next.js web app (Vercel) ──HTTP/SSE──► FastAPI backend (host chosen in T20, see §21: Nebius Serverless · Azure Container Apps · HF Spaces/Render)
-                                 ├── Sandbox worlds (one private copy of the demo per visitor)
+Next.js web app: Exchange `/` + Steward `/steward` (Vercel) ──HTTP/SSE──► FastAPI backend (host chosen in T20, see §21: Nebius Serverless · Azure Container Apps · HF Spaces/Render)
+                                 ├── Accounts, sessions and authorization (ADR-0005; server-side sessions, policy in app/authz.py)
+                                 ├── Worlds: one live world for real accounts + sandbox worlds for demo sessions
                                  ├── Rating Orchestrator (Nemotron 3 Super, tool-calling)
                                  │     ├── earth_obs tool ──► Google Earth Engine
                                  │     ├── valuation tool (pure Python + cited coefficient CSV)
@@ -139,7 +140,7 @@ naturex/
 ```sql
 create extension if not exists vector;
 
-create table worlds (                 -- per-visitor sandbox (demo-plan §3.5)
+create table worlds (                 -- 'live' (real accounts, ADR-0005), 'template', and one sandbox per demo session
   id uuid primary key default gen_random_uuid(),
   label text not null,                 -- e.g. 'template' for the seed world
   created_at timestamptz default now(),
@@ -155,14 +156,42 @@ create table worlds (                 -- per-visitor sandbox (demo-plan §3.5)
 create table users (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  role text not null check (role in ('community','investor','admin')),
-  cash_balance numeric(14,2) not null default 10000
+  role text not null check (role in ('community','investor','admin')),  -- persona label only; not used for authorization (ADR-0005)
+  cash_balance numeric(14,2) not null default 10000,
+  email text,                          -- ADR-0005: lower-cased; unique per world; null for personas
+  password_hash text,                  -- argon2id (pwdlib); null for personas and seeded demo communities
+  is_admin boolean not null default false  -- granted via ADMIN_EMAILS or CLI only
+);
+
+-- ADR-0005: accounts, communities and authorization (tasks T54, T56)
+create table sessions (
+  id uuid primary key default gen_random_uuid(),
+  token_hash char(64) not null unique,  -- sha256 of the cookie token; the token itself is never stored
+  user_id uuid not null references users(id),
+  kind text not null check (kind in ('password','demo')),
+  created_at timestamptz default now(), last_seen_at timestamptz default now(),
+  expires_at timestamptz not null      -- 30 d absolute; 7 d idle enforced from last_seen_at
+);
+create table auth_attempts (           -- Postgres-backed rate limits (shared across instances)
+  id bigserial primary key, key_hash char(64) not null,  -- sha256(ip + lower(email)); no raw email
+  kind text not null check (kind in ('login','register')), created_at timestamptz default now()
+);
+create table communities (
+  id uuid primary key default gen_random_uuid(),
+  name text not null, country text, description text,
+  created_by uuid references users(id), created_at timestamptz default now()
+);
+create table community_members (
+  community_id uuid references communities(id), user_id uuid references users(id),
+  role text not null check (role in ('owner','steward')),
+  primary key (community_id, user_id)
 );
 
 create table assets (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  community_user_id uuid references users(id),
+  community_id uuid references communities(id),       -- ADR-0005: the community that manages the listing
+  community_user_id uuid references users(id),        -- the community's treasury account: retained stake + its dividends (T41)
   country text, description text, cover_image_url text,
   geojson jsonb not null,
   area_ha numeric(12,2) not null,
@@ -272,7 +301,13 @@ create table llm_calls (
 ## 6. API (FastAPI)
 | Method & path | Purpose |
 |---|---|
-| `POST /assets` | Create asset from GeoJSON + details → validates → status `rating` → enqueue rating |
+| `POST /auth/register` · `POST /auth/login` · `POST /auth/logout` · `GET /me` | Accounts and sessions (ADR-0005, T54) |
+| `POST /demo/start` · `POST /demo/persona` | One-click demo session in a new sandbox world; switch persona (demo sessions only; T55) |
+| `POST /communities` · `GET`/`PATCH /communities/{id}` · `…/members` · `GET /communities/{id}/summary` | Communities, members (owner only), Steward home data (T56, T63) |
+| `POST /assets` | Create a **draft** listing in the caller's community from GeoJSON + details (steward or owner; T58) |
+| `POST /assets/{id}/submit` | Start a rating run; the result sets `listed` / `needs_evidence` / `ineligible` (T58) |
+| `GET /assets/{id}/ipo/preview` · `POST /assets/{id}/ipo` | IPO price with every formula term; launch (owner only, once; T59) |
+| `POST /admin/assets/{id}/suspend` · `…/resume` | Moderation (admin; T58) |
 | `GET /assets` | Marketplace list (latest price, grade, trend) |
 | `GET /assets/{id}` | Asset detail + latest report + recent events |
 | `POST /assets/{id}/evidence` | Upload photos (audio post-hackathon) → field_evidence agent → event + re-rate |
@@ -291,7 +326,14 @@ create table llm_calls (
 | `GET /world` | The visitor's sandbox world (created on first request, stored in the `nx_world` cookie) and its personas |
 | `POST /world/reset` | "Reset my demo": re-seeds the visitor's world |
 
-Every route is scoped to the visitor's world through the `nx_world` cookie, so judges never affect each other.
+Every route is scoped to the caller's world, which comes from the session: anonymous requests read the live world, password sessions use the live world, and demo sessions use their sandbox (ADR-0005). Judges never affect each other or the live world. *(T31 below describes the `nx_world` cookie, which T55 retires.)*
+
+### 6.1 Authorization (ADR-0005)
+- `app/authz.py`: pure `authorize(principal, action, resource) -> Allow | Deny(reason)`, tested over every role × action; routes use a `require(action)` dependency, and a test fails if any state-changing route has none.
+- **Roles:** any signed-in user can trade; community **owner** / **steward** via `community_members`; **admin** via `users.is_admin`, scoped to its world. The full matrix is in ADR-0005 §3.
+- **Errors:** 401 `auth_required`; 403 with a reason (`owner_only`, `insider_trading_blocked`, …); 404 for anything in another world.
+- **Rules:** orders always use the principal's user; community members can't trade their own asset; the ledger tamper demo runs only in sandbox worlds.
+- **CSRF:** `SameSite=Lax` cookies plus an `Origin`/`Referer` allowlist (`ALLOWED_ORIGINS`) on POST, PUT, PATCH and DELETE.
 
 **As built (T31):**
 - **Only `GET /world` creates a world.** It reads the `nx_world` cookie (`HttpOnly`, `SameSite=Lax`, `Secure` unless `ENVIRONMENT` is development/test, 30 days, `Cache-Control: no-store`); a missing, malformed or unknown cookie, or one naming the **template** world, gets a fresh world.
@@ -464,12 +506,18 @@ Both reuse the backend code with a different entrypoint:
 ## 11. Frontend pages & key components
 | Page | Components | Notes |
 |---|---|---|
-| Marketplace `/` | AssetCard grid, filters, SandboxBanner | Sort by grade / change / value |
-| List `/list` | MapDraw, AssetForm, RatingProgress (SSE) | Area and validation shown live |
-| Asset `/asset/[id]` | Map + land-cover overlay, ReportView (grade badge, value range, breakdown chart, NDVI chart, flags, recommendations), PriceChart with event markers, TradePanel, AlertsFeed, CopilotChat, AgentTrace drawer | The hero page |
-| Portfolio `/portfolio` | Holdings table, P&L, ImpactSummary | |
-| Admin `/admin` | Time Machine: "Next quarter", event presets, reset demo | Hidden link for the demo |
-| Judge landing + tour (all pages) | Judge landing, PersonaSwitcher, Driver.js tour with spotlight hints, "Do it for me", Live badges, Under-the-hood drawer | See demo-plan §3; each screen exposes stable anchors for tour steps |
+| **Two apps in one Next.js app** (ADR-0005) | Route groups `(exchange)` at `/` and `(steward)` at `/steward`, each with its own shell and nav; AppSwitcher for community members; DemoBar in demo sessions | Shared design system, generated client and session |
+| Sign in `/login`, `/register` | AuthForm, AccountMenu | Protected routes redirect here and back |
+| Judge `/judge` | Three one-click demo entries, "Create a real account" | Starts `POST /demo/start` |
+| Exchange · Marketplace `/` | AssetCard grid, filters, SandboxBanner | Sort by grade / change / value |
+| Steward · Home `/steward` | Listings with status and next action, WalletCard, holders, payouts, alerts, stewardship actions | Owner and stewards |
+| Steward · Community `/steward/community` | Community form, members (owner) | A0 |
+| Steward · List `/steward/list` | MapDraw, AssetForm, RatingProgress (SSE) | Area and validation shown live |
+| Steward · IPO `/steward/assets/[id]/ipo` | IpoPreview (formula step by step), confirm | Owner only |
+| Exchange · Asset `/asset/[id]` | Map + land-cover overlay, ReportView (grade badge, value range, breakdown chart, NDVI chart, flags, recommendations), PriceChart with event markers, TradePanel, AlertsFeed, CopilotChat, AgentTrace drawer | The hero page |
+| Exchange · Portfolio `/portfolio` | Holdings table, P&L, ImpactSummary | |
+| Admin `/admin` | Time Machine: "Next quarter", event presets, reset demo, suspend/resume | Admins only (own world) |
+| Tour (all pages, optional) | DemoBar persona switcher, Driver.js tour with spotlight hints, "Do it for me", Live badges, Under-the-hood drawer | See demo-plan §3; each screen exposes stable anchors for tour steps |
 
 ## 12. Configuration
 ```
@@ -507,6 +555,9 @@ Secrets stay server-side only; never commit `.env` (commit `.env.example`).
 ## 15. Security & responsible AI
 - Sandbox banner on every page; no real payments; no tokens or crypto.
 - Rate-limit `/copilot` and `/assets`; validate GeoJSON size.
+- **Accounts (ADR-0005):** argon2id via `pwdlib` with a dummy-hash verify for unknown emails; server-side sessions (hashed token, `HttpOnly`/`Secure`/`SameSite=Lax`, 7 d idle / 30 d absolute, rotated on login and persona switch); `Origin` allowlist on writes; login 10 per 15 min and register 5 per hour, counted in Postgres; generic errors; admins only via `ADMIN_EMAILS`/CLI.
+- **Authorization on every request** (§6.1), including object-level checks and the 404-across-worlds rule. Every PR touching auth, cookies, sessions or authorization gets a `security-and-hardening` review.
+- **Personal data:** only email, display name and password hash; never in ledger payloads, LLM prompts or logs; sessions and `auth_attempts` pruned; demo worlds pruned after 7 days.
 - Treat all retrieved web content and uploaded media as untrusted; enforce schema-validated outputs.
 - Show uncertainty (ranges, confidence) everywhere a number appears.
 - Use only licensed data: Earth Engine terms, Tavily terms, cited valuation sources, dataset attributions; no raw ESVD data in the repo.
