@@ -544,15 +544,16 @@ Each gate failure on its own (all asserted in `tests/test_scoring.py`):
 - A degraded non-wetland parcel (NDVI 0.2, natural fraction 0.05, 30 ha of loss over 5 years but none in the last 12 months, three severity-5 threats): V 0.375, N 0.05, L 0, W 1, T 0 → health 27.5, grade D → `grade_below_c`.
 
 ### 7.5 News Scout (Tavily + Nemotron Nano)
-1. Build 2–3 queries from asset name, nearest town (reverse geocode via OpenStreetMap Nominatim, max 1 request/s with a custom User-Agent, cached per asset), and keywords: `"<place> wetland factory permit"`, `"<place> fire OR drought OR pollution"`, `"<place> restoration OR protected area"`.
-2. `tavily.search(query, topic="news", days=lookback, max_results=5)`.
-3. Deduplicate by URL; for each result, Nemotron Nano returns:
+1. Build 2–3 queries from the nearest locality (reverse geocode via OpenStreetMap Nominatim, max 1 request/s with a custom User-Agent, cached per asset), and keywords: `"<locality> wetland factory permit"`, `"<locality> fire OR drought OR pollution"`, `"<locality> wetland restoration OR protected area OR conservation"`.
+2. Tavily Search API `POST /search` with `topic="news"`, `time_range` derived from the lookback window, `max_results=5`, `include_raw_content="text"` and no generated answer.
+3. Deduplicate by URL and send at most 8 top-scoring articles to Nemotron. The LLM binds classifications only by article index:
 ```json
-{"relevant": true, "impact_type": "encroachment", "direction": -1, "severity": 4,
- "summary": "State approved a 40-ha industrial park expansion bordering the wetland.",
- "published_at": "2026-09-12"}
+{"article_index": 1, "relevant": true, "impact_type": "encroachment", "direction": -1, "severity": 4,
+ "summary": "State approved an industrial park expansion bordering the wetland."}
 ```
-4. **Prompt-injection guard:** wrap retrieved text in `<untrusted_content>` tags and instruct the model to treat it as data only; validate the output against a JSON schema.
+4. **Prompt-injection guard:** wrap retrieved text in `<untrusted_content>` tags and instruct the model to treat it as data only; validate the output against a JSON schema; post-check that each index is in range and unique, URL/title/date come from the fetched article, dates are not in the future, and unsupported currency amounts are stripped from summaries.
+
+T24 returns URL-bound events with stable URL-derived IDs for downstream citation. Full results cache for 24 h; empty non-degraded results cache for 1 h. Persistence into `events` and Nature Ledger `kind='event'` is left to the Orchestrator/Auditor integration so the append happens in the same transaction as the asset re-rate.
 
 ### 7.6 Field Evidence (MiniCPM-V perception + Nemotron judgement)
 Code first checks each photo's EXIF GPS and date (inside the polygon, recent); MiniCPM-V then describes it; the Nemotron Ultra Auditor decides what it means for the rating. Input: photo(s) + asset context (audio is post-hackathon). Output: `{observations[], species_candidates[], damage_signs[], water_clarity, authenticity_concerns[]}`. The result creates an `events` row (`source='evidence'`) and sets `evidence=1` in confidence if there are no authenticity concerns.
@@ -650,6 +651,7 @@ NEBIUS_API_KEY=            TOKEN_FACTORY_BASE_URL=
 MODEL_ORCHESTRATOR=        MODEL_AUDITOR=        MODEL_FAST=
 MODEL_MULTIMODAL=          MODEL_EMBED=
 TAVILY_API_KEY=
+NOMINATIM_USER_AGENT=      # identifying app User-Agent for OSM Nominatim
 EE_SERVICE_ACCOUNT_JSON=   # or PC_SUBSCRIPTION_KEY
 DATABASE_URL=              S3_ENDPOINT=  S3_BUCKET=  S3_KEY=  S3_SECRET=
 USE_MOCKS=false            LOCAL_JOBS=true            DEMO_MODE=true
