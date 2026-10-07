@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 from alembic import command
 from sqlalchemy import create_engine, inspect, text
@@ -10,7 +12,7 @@ from sqlmodel import Session, select
 
 from app.config import get_settings
 from app.models import Asset, LedgerEntry, LedgerKind, User, World
-from app.seed import DEMO_SITES, WORLD_ID, seed
+from app.seed import _PLACEHOLDER_POLY, DEMO_SITES, WORLD_ID, seed
 from tests.conftest import alembic_cfg, requires_db
 
 EXPECTED_TABLES = {
@@ -83,6 +85,41 @@ def test_seed_is_idempotent() -> None:
         "mangrove_mx",
         "restoration_forest",
     }
+
+
+@requires_db
+def test_seed_upgrades_existing_wetland_geometry_without_touching_accounting() -> None:
+    cfg = alembic_cfg()
+    command.downgrade(cfg, "base")
+    command.upgrade(cfg, "head")
+
+    engine = create_engine(get_settings().database_url)
+    with Session(engine) as session:
+        seed(session)
+        wetland = session.exec(
+            select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == "wetland_mx")
+        ).one()
+        wetland.geojson = _PLACEHOLDER_POLY
+        wetland.area_ha = Decimal("500.00")
+        wetland.centroid_lat = 19.26
+        wetland.centroid_lon = -99.09
+        wetland.primary_shares_remaining = 123
+        wetland.community_wallet = Decimal("42.00")
+        session.add(wetland)
+        session.commit()
+
+        seed(session)
+        upgraded = session.exec(
+            select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == "wetland_mx")
+        ).one()
+
+    engine.dispose()
+    assert upgraded.geojson != _PLACEHOLDER_POLY
+    assert upgraded.area_ha == DEMO_SITES[0].area_ha
+    assert upgraded.centroid_lat == DEMO_SITES[0].centroid_lat
+    assert upgraded.centroid_lon == DEMO_SITES[0].centroid_lon
+    assert upgraded.primary_shares_remaining == 123
+    assert upgraded.community_wallet == Decimal("42.00")
 
 
 @requires_db

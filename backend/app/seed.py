@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from sqlmodel import Session, select
 
 from app.db import engine
 from app.models import Asset, AssetStatus, Holding, User, UserRole, World
+from app.tools.earth_obs import DATA_DIR, load_site_metrics
 
 # Stable IDs so re-running seed is a no-op.
 WORLD_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -49,6 +51,18 @@ PERSONAS: tuple[Persona, ...] = (
 )
 COMMUNITY_PERSONA = PERSONAS[0]
 
+_WETLAND_METRICS = load_site_metrics("wetland_mx")
+
+
+def _decimal_ha(value: float) -> Decimal:
+    return Decimal(str(value)).quantize(Decimal("0.01"))
+
+
+def _load_demo_geojson(site_key: str) -> dict[str, Any]:
+    path = DATA_DIR / f"{site_key}.geojson"
+    return cast(dict[str, Any], json.loads(path.read_text()))
+
+
 DEMO_SITES: tuple[DemoSite, ...] = (
     DemoSite(
         id=UUID("33333333-3333-3333-3333-333333333301"),
@@ -56,9 +70,9 @@ DEMO_SITES: tuple[DemoSite, ...] = (
         name="Xochimilco Wetland",
         country="MX",
         description="Hero inland wetland near Mexico City (demo).",
-        area_ha=Decimal("500.00"),
-        centroid_lat=19.26,
-        centroid_lon=-99.09,
+        area_ha=_decimal_ha(_WETLAND_METRICS.area_ha),
+        centroid_lat=_WETLAND_METRICS.centroid.lat,
+        centroid_lon=_WETLAND_METRICS.centroid.lon,
     ),
     DemoSite(
         id=UUID("33333333-3333-3333-3333-333333333302"),
@@ -81,6 +95,8 @@ DEMO_SITES: tuple[DemoSite, ...] = (
         centroid_lon=-93.10,
     ),
 )
+
+_WETLAND_GEOJSON = _load_demo_geojson("wetland_mx")
 
 # Placeholder polygon, replaced by real GeoJSON in T11/T13. It's mostly built-up town;
 # the real wetland is ~3 km north, near Xochimilco Ecological Park (ADR-0004).
@@ -135,7 +151,7 @@ def seed(session: Session) -> None:
                     community_user_id=COMMUNITY_PERSONA.id,
                     country=site.country,
                     description=site.description,
-                    geojson=_PLACEHOLDER_POLY,
+                    geojson=_WETLAND_GEOJSON if site.key == "wetland_mx" else _PLACEHOLDER_POLY,
                     area_ha=site.area_ha,
                     centroid_lat=site.centroid_lat,
                     centroid_lon=site.centroid_lon,
@@ -147,6 +163,11 @@ def seed(session: Session) -> None:
                     site_key=site.key,
                 )
             )
+        elif site.key == "wetland_mx":
+            existing_asset.geojson = _WETLAND_GEOJSON
+            existing_asset.area_ha = site.area_ha
+            existing_asset.centroid_lat = site.centroid_lat
+            existing_asset.centroid_lon = site.centroid_lon
     session.commit()
 
     # The community keeps its retained stake as a holding, so shares are conserved:
