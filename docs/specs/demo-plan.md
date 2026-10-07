@@ -65,7 +65,7 @@
 ### 3.5 Reliability and cost safeguards
 | Problem | Solution |
 |---|---|
-| Judges affect each other | Per-visitor sandbox: `world_id` on every table that changes during the demo (holdings, orders, prices, events, reports, alerts, ledger), plus Reset my demo. **Design this in week 1.** |
+| Judges affect each other or the live world | Each demo session gets its own sandbox world: `world_id` on every tenant table (users, communities, members, sessions, assets, holdings, orders, prices, events, reports, alerts, ledger), composite foreign keys so rows can't link across worlds (ADR-0005), plus Reset my demo |
 | Credit costs | Demo sites use **cached real ratings** (browsing is free); Time Machine uses a short live Auditor call; "Rate your own land" limited to **2 live runs per visitor**; global `LLM_BUDGET_USD` cap |
 | Free host asleep | GitHub Actions `/healthz` pings every few hours; "Waking up… ~30 s" screen; re-check everything before Dec 1 |
 | Credits run out during judging | Reserve ~40% of the budget for Dec 1–15; at the cap, live steps fall back to cached results with a clear notice |

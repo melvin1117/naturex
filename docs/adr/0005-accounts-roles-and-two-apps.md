@@ -29,25 +29,31 @@ Proposed (2026-10-06). Changes [pm-spec](../specs/pm-spec.md) §2–§5 and Epic
 - **Sign-in:** email and password, handled by FastAPI. Passwords are hashed with **argon2id via `pwdlib`**, as the FastAPI security tutorial recommends (https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/#password-hashing). An unknown email still runs a dummy-hash verify, so response time doesn't reveal which emails exist.
 - **Sessions are server-side**, not JWTs:
   - a random 256-bit token (`secrets.token_urlsafe(32)`) is set in the `nx_session` cookie;
-  - only its SHA-256 hash is stored, in `sessions`;
-  - logout and admin revocation delete the row, so they take effect immediately.
+  - only its SHA-256 hash is stored, in `sessions`, with the session's `world_id` and `user_id`;
+  - logout deletes the row and clears the cookie; logout and admin revocation take effect immediately, including on open SSE streams, which recheck the session on every poll and heartbeat.
 - **Cookie:** `HttpOnly`, `Secure` outside development and test, `SameSite=Lax`, `Path=/`.
 - **Session lifetime:**
   - Expiry: 7 days idle, 30 days absolute.
   - Demo sessions end with their sandbox world (7 days unseen).
-  - A new session ID is issued on login and on persona switch.
-- **CSRF:** `SameSite=Lax`, plus a check on state-changing requests (POST, PUT, PATCH, DELETE): the request must have an `Origin` (or, failing that, `Referer`) in `ALLOWED_ORIGINS`, and JSON routes reject anything that isn't `application/json`.
+  - A new session ID is issued on login; a persona switch revokes the old token and issues a new one.
+- **CSRF:** `SameSite=Lax`, plus a check on every state-changing request (POST, PUT, PATCH, DELETE, multipart uploads included):
+  - `Origin`, or failing that `Referer`, must match `ALLOWED_ORIGINS` exactly (scheme, host and port);
+  - requests where both are absent, malformed or `null` are rejected;
+  - JSON routes reject anything that isn't a JSON media type.
 - **Rate limits:** stored in Postgres (`auth_attempts`), so they hold across instances and serverless.
-  - Login: 10 attempts per 15 minutes per IP plus email hash.
-  - Registration: 5 per hour per IP.
-  - Errors are generic, e.g. "Email or password is incorrect".
-- **Admins:** granted only through `ADMIN_EMAILS` (environment) or a CLI command, never through the API.
+  - **Two independent buckets:** per IP, and per account. The account key is an HMAC of the normalised email with `AUTH_RATE_LIMIT_SECRET`, so a guessed email can't be matched against the table.
+  - **Client IP:** taken only through the configured trusted-proxy chain (`TRUSTED_PROXY_HOPS`); `X-Forwarded-For` is otherwise ignored.
+  - **Atomic counting:** under an advisory lock; rows older than 24 h are pruned with expired sessions.
+  - **Limits:** login 10 per 15 minutes per bucket; registration 5 per hour per IP.
+  - Login errors are generic: "Email or password is incorrect".
+- **Accepted risk, registration enumeration:** without email verification, registering an email that already exists reveals that it exists, however generic the error. For a play-money hackathon we accept this and say so. Email is therefore **never a claim of identity**: no permission depends on which email someone registered with.
+- **Admins:** live-world admins are created only by a CLI command run by an operator (`python -m app.cli create-admin`, password read with `getpass`, never on the command line), before the public launch. Never through the API, and never by matching a registered email, because emails aren't verified. Demo admin personas exist only inside sandbox worlds.
 - **Out of scope for the hackathon:** email verification, password reset by email (an admin CLI reset instead), MFA, OAuth sign-in (a *Could*) and KYC.
 
 ### 2. Worlds: one live world plus demo sandboxes
 - **The live world** is one persistent world, labelled `live`. Real accounts, communities, listings, orders and payouts live there.
   - Anonymous visitors browse it read-only.
-  - It's seeded with the 3 curated sites, owned by seeded demo communities whose accounts have no password, so they can't sign in. That way the market isn't empty on day one.
+  - It's seeded with the 3 curated sites, owned by seeded demo communities whose accounts are personas with no password, so nobody can sign in as them. That way the market isn't empty on day one.
 - **Sandbox worlds** (T31) stay for demos: a private copy of the template per demo session, with personas, holdings and assets.
 - **`world_id` comes from the session**, never from a client-supplied value:
   - an anonymous request reads the live world;
@@ -57,22 +63,27 @@ Proposed (2026-10-06). Changes [pm-spec](../specs/pm-spec.md) §2–§5 and Epic
 
 ### 3. Roles and authorization
 - **Any signed-in user can invest.** No role is needed to trade.
+- **Account kinds:** `users.kind` is `person` (signs in with a password), `persona` (demo or seeded, no password) or `treasury` (never signs in, never trades).
 - **Community roles come from membership:** `communities` and `community_members(role: owner | steward)`. An asset belongs to one community (`assets.community_id`).
+- **Tenant isolation is enforced by the database, not only by code:**
+  - `communities`, `community_members` and `sessions` carry `world_id NOT NULL`;
+  - their references are composite foreign keys `(world_id, …_id)`, backed by unique `(world_id, id)` on users, assets and communities, so a row can't link across worlds;
+  - email is unique per world (a partial unique index on lower(email)).
   - **Owner:** the user who registers the community. They manage members and launch the IPO.
   - **Stewards:** members who manage listings and evidence.
-  - `assets.community_user_id` stays as the community's treasury account: it holds the retained stake and receives its dividends (T41).
+  - **Treasury:** each community gets one `treasury` account when it's created. `assets.community_user_id` points to it. The IPO launch seeds its retained-stake holding in the same transaction, so quarterly payouts (T41) work for every real community. The Steward home shows IPO proceeds and community-fund payouts (`community_wallet`) and the treasury's retained-stake dividends as separate totals.
 - **Admins:** `users.is_admin`, scoped to their world. A demo persona with admin rights is admin only inside its own sandbox, so the Time Machine can't touch the live world.
 - **The policy is pure and tested.** `app/authz.py` has `authorize(principal, action, resource) -> Allow | Deny(reason)`, covered by a test of every role × action, and routes call it through a `require(action)` dependency. Every mutating route must declare one; a test walks `app.routes` and fails if any route doesn't.
-- **Errors:** 401 `auth_required` without a session; 403 with a reason code (e.g. `owner_only`, `insider_trading_blocked`) when the resource is visible but the action isn't allowed; 404 for anything in another world, so nothing reveals that it exists.
+- **Errors:** 401 `auth_required` without a session; 403 with a reason code (e.g. `owner_only`, `insider_trading_blocked`) when the resource is visible but the action isn't allowed; 404 for anything in another world, so nothing reveals that it exists. **Reads count too:** every route, GET included, loads resources by `(world_id, id)` before authorizing, and a route-inventory test plus a cross-world test per object endpoint keep it that way.
 - **Rules that aren't just roles:**
-  - **No insider trading:** members of a community can't trade its asset's shares. The retained stake earns dividends.
+  - **No insider trading:** members of a community can't trade its asset's shares; the retained stake earns dividends. Adding a member who already holds that asset's shares is refused (409 `member_has_holdings`), so nobody gets trapped in a position. Admins and treasury accounts can't trade at all; an operator who wants to invest uses a separate account.
   - Orders always use the principal's user and ignore any user ID from the client.
   - The ledger tamper demo runs only in sandbox worlds with `DEMO_MODE`, never in the live world.
 
 | Action | Anonymous | Signed-in user | Community steward (own community) | Community owner (own community) | Admin (own world) |
 |---|---|---|---|---|---|
 | Browse marketplace, asset, reports, prices, ledger, verify, agent trace | ✅ (live world) | ✅ | ✅ | ✅ | ✅ |
-| Buy or sell shares | ❌ | ✅ (asset trading) | ❌ own asset | ❌ own asset | ✅ |
+| Buy or sell shares | ❌ | ✅ (asset trading) | ❌ own asset | ❌ own asset | ❌ |
 | Portfolio, alerts, Copilot | ❌ | ✅ (own) | ✅ | ✅ | ✅ |
 | Create a community | ❌ | ✅ (becomes owner) | ✅ | ✅ | ✅ |
 | Draft or edit a listing, submit for rating, upload evidence | ❌ | ❌ | ✅ | ✅ | ❌ (suspend only) |
@@ -84,6 +95,7 @@ Proposed (2026-10-06). Changes [pm-spec](../specs/pm-spec.md) §2–§5 and Epic
 
 ### 4. Judges get one-click demo sessions
 - **`/judge` is the landing page**, linked from Devpost, the README and the "Try the demo" button. One click on *Explore as a community steward*, *Explore as an investor* or *Explore as the platform admin* calls `POST /demo/start {persona}`. That creates a sandbox world and a demo session, and opens the matching app.
+- **Reset keeps you signed in:** "Reset my demo" keeps persona user IDs (mapped by `persona_key`) and recreates everything else, so the session stays valid. Pruning a stale world deletes its sessions first.
 - **Demo bar:** a persistent bar reads "Demo mode · private sandbox", with a persona switcher (`POST /demo/persona`, demo sessions only) and "Reset my demo".
 - **The guided tour (T45) is an optional overlay** on demo mode. It isn't the product.
 - **Real accounts are still available:** judges can choose "Create a real account" to try real sign-up in the live world. No shared passwords are published.
@@ -104,8 +116,8 @@ Proposed (2026-10-06). Changes [pm-spec](../specs/pm-spec.md) §2–§5 and Epic
 - **What we collect:** email, display name and a password hash, for sign-in only.
 - **Where it never goes:**
   - emails never go into ledger payloads, LLM prompts or logs;
-  - `auth_attempts` stores a hash of the email;
-  - the ledger references user IDs only.
+  - `auth_attempts` stores only an HMAC of the email;
+  - **the public ledger contains no account identifiers at all.** User UUIDs are pseudonymous personal data, and the ledger is public and append-only. Payout entries record aggregates (revenue, community fund, dividends total, holder count) plus a hash commitment of the per-holder lines, which live in a private, erasable `payout_lines` table (T67). Today's T41 entries list per-holder payouts, which is fine in sandboxes but not for real accounts.
 - **Retention:**
   - demo worlds are pruned after 7 days;
   - expired sessions and old `auth_attempts` rows are pruned;
@@ -115,7 +127,8 @@ Proposed (2026-10-06). Changes [pm-spec](../specs/pm-spec.md) §2–§5 and Epic
 - **T31:** the `nx_world` cookie is retired. `CurrentWorld` is derived from the session, and `GET /world` returns the session's world.
 - **Schema:** `users` gains `email`, `password_hash` and `is_admin`. `users.role` stays as a persona label but is no longer used for authorization. New tables: `communities`, `community_members`, `sessions`, `auth_attempts`, plus `assets.community_id`.
 - **T17 (#81)** keeps its persona placeholder until T54/T56 land; T57 then moves every route onto the principal.
-- **New tasks:** T54–T65 (`tasks/todo.md`). The listing lifecycle, IPO launch and live rating of new listings become *Must*, because real listings can't work without them.
+- **New tasks:** T54–T68 (`tasks/todo.md`, issues #97–#111). The listing lifecycle, IPO launch, live rating of new listings and the quarterly revenue split (D4) become *Must*, because real listings and the Steward home can't work without them.
+- **Scope kept small:** communities are owner-only for the *Must*; adding and removing stewards is a *Should*.
 - **Existing tasks that move:**
   - T18, T22 and T23 move into the Exchange app.
   - T33 moves into the Steward app.

@@ -158,40 +158,56 @@ create table users (
   name text not null,
   role text not null check (role in ('community','investor','admin')),  -- persona label only; not used for authorization (ADR-0005)
   cash_balance numeric(14,2) not null default 10000,
-  email text,                          -- ADR-0005: lower-cased; unique per world; null for personas
-  password_hash text,                  -- argon2id (pwdlib); null for personas and seeded demo communities
-  is_admin boolean not null default false  -- granted via ADMIN_EMAILS or CLI only
+  kind text not null default 'persona' check (kind in ('person','persona','treasury')),  -- ADR-0005
+  email text,                          -- lower-cased; null for personas and treasuries
+  password_hash text,                  -- argon2id (pwdlib); only for kind = 'person'
+  is_admin boolean not null default false,  -- live world: set only by the operator CLI
+  unique (world_id, id)                -- target of composite foreign keys
 );
+create unique index users_world_email on users (world_id, lower(email)) where email is not null;
 
 -- ADR-0005: accounts, communities and authorization (tasks T54, T56)
 create table sessions (
   id uuid primary key default gen_random_uuid(),
   token_hash char(64) not null unique,  -- sha256 of the cookie token; the token itself is never stored
-  user_id uuid not null references users(id),
+  world_id uuid not null, user_id uuid not null,
+  foreign key (world_id, user_id) references users (world_id, id),  -- pruning a world deletes its sessions first
   kind text not null check (kind in ('password','demo')),
   created_at timestamptz default now(), last_seen_at timestamptz default now(),
   expires_at timestamptz not null      -- 30 d absolute; 7 d idle enforced from last_seen_at
 );
-create table auth_attempts (           -- Postgres-backed rate limits (shared across instances)
-  id bigserial primary key, key_hash char(64) not null,  -- sha256(ip + lower(email)); no raw email
+create table auth_attempts (           -- Postgres-backed rate limits (shared across instances; T66)
+  id bigserial primary key,
+  bucket text not null check (bucket in ('ip','account')),  -- independent buckets
+  key_hmac char(64) not null,          -- HMAC(AUTH_RATE_LIMIT_SECRET, ip | lower(email)); no raw email
   kind text not null check (kind in ('login','register')), created_at timestamptz default now()
 );
+create index on auth_attempts (bucket, key_hmac, created_at);  -- rows older than 24 h are pruned
 create table communities (
-  id uuid primary key default gen_random_uuid(),
+  id uuid primary key default gen_random_uuid(), world_id uuid not null references worlds(id),
   name text not null, country text, description text,
-  created_by uuid references users(id), created_at timestamptz default now()
+  treasury_user_id uuid not null,      -- kind = 'treasury'; never signs in or trades
+  created_at timestamptz default now(),
+  unique (world_id, id),
+  foreign key (world_id, treasury_user_id) references users (world_id, id)
 );
-create table community_members (
-  community_id uuid references communities(id), user_id uuid references users(id),
+create table community_members (       -- owner-only for the Must; stewards are a Should
+  world_id uuid not null, community_id uuid not null, user_id uuid not null,
   role text not null check (role in ('owner','steward')),
-  primary key (community_id, user_id)
+  primary key (community_id, user_id),
+  foreign key (world_id, community_id) references communities (world_id, id),
+  foreign key (world_id, user_id) references users (world_id, id)
+);
+create table payout_lines (            -- private and erasable; the public ledger holds only a hash commitment (T67)
+  id bigserial primary key, world_id uuid not null, asset_id uuid not null, quarter_label text not null,
+  user_id uuid not null, shares bigint not null, amount numeric(14,2) not null
 );
 
 create table assets (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  community_id uuid references communities(id),       -- ADR-0005: the community that manages the listing
-  community_user_id uuid references users(id),        -- the community's treasury account: retained stake + its dividends (T41)
+  community_id uuid,                                  -- ADR-0005: (world_id, community_id) → communities; the community that manages the listing
+  community_user_id uuid references users(id),        -- the community's treasury (kind = 'treasury'): retained stake, seeded at IPO, + its dividends (T41)
   country text, description text, cover_image_url text,
   geojson jsonb not null,
   area_ha numeric(12,2) not null,
@@ -323,19 +339,21 @@ create table llm_calls (
 | `GET /ledger/{asset_id}` | Ledger entries (hashes, kinds, timestamps) |
 | `GET /ledger/{asset_id}/verify` | Recomputes the chain → `{valid, entries, broken_at?}` |
 | `POST /admin/tamper-demo` | *(DEMO_MODE only)* mutates a copy of one entry to show verification failing |
-| `GET /world` | The visitor's sandbox world (created on first request, stored in the `nx_world` cookie) and its personas |
-| `POST /world/reset` | "Reset my demo": re-seeds the visitor's world |
+| `GET /world` | The caller's world (from the session; anonymous = the live world) and, in demo sessions, its personas |
+| `POST /world/reset` | "Reset my demo" (demo sessions only): re-seeds the world, keeping persona user IDs so the session stays valid |
 
 Every route is scoped to the caller's world, which comes from the session: anonymous requests read the live world, password sessions use the live world, and demo sessions use their sandbox (ADR-0005). Judges never affect each other or the live world. *(T31 below describes the `nx_world` cookie, which T55 retires.)*
 
 ### 6.1 Authorization (ADR-0005)
-- `app/authz.py`: pure `authorize(principal, action, resource) -> Allow | Deny(reason)`, tested over every role × action; routes use a `require(action)` dependency, and a test fails if any state-changing route has none.
+- `app/authz.py`: pure `authorize(principal, action, resource) -> Allow | Deny(reason)`, tested over every role × action; routes use a `require(action)` dependency.
+- **Every route, reads included,** loads resources by `(world_id, id)` before authorizing; a route-inventory test fails if any route has no authorization dependency, and a cross-world test returns 404 for every object endpoint.
+- **SSE and polling** take the principal and world from the session, recheck the session on every poll and heartbeat, and close after logout, expiry or revocation.
 - **Roles:** any signed-in user can trade; community **owner** / **steward** via `community_members`; **admin** via `users.is_admin`, scoped to its world. The full matrix is in ADR-0005 §3.
 - **Errors:** 401 `auth_required`; 403 with a reason (`owner_only`, `insider_trading_blocked`, …); 404 for anything in another world.
-- **Rules:** orders always use the principal's user; community members can't trade their own asset; the ledger tamper demo runs only in sandbox worlds.
-- **CSRF:** `SameSite=Lax` cookies plus an `Origin`/`Referer` allowlist (`ALLOWED_ORIGINS`) on POST, PUT, PATCH and DELETE.
+- **Rules:** orders always use the principal's user; community members can't trade their own asset, and a holder of its shares can't be added as a member (409 `member_has_holdings`); admins and treasury accounts never trade; the ledger tamper demo runs only in sandbox worlds.
+- **CSRF:** `SameSite=Lax` cookies plus an exact `Origin` (else `Referer`) allowlist (`ALLOWED_ORIGINS`) on every POST, PUT, PATCH and DELETE, uploads included; both missing, malformed or `null` → rejected; JSON routes require a JSON media type.
 
-**As built (T31):**
+**As built (T31)** *(T55 replaces the `nx_world` cookie with the session; the world copy, reset and prune mechanics below stay)*:
 - **Only `GET /world` creates a world.** It reads the `nx_world` cookie (`HttpOnly`, `SameSite=Lax`, `Secure` unless `ENVIRONMENT` is development/test, 30 days, `Cache-Control: no-store`); a missing, malformed or unknown cookie, or one naming the **template** world, gets a fresh world.
 - New worlds are capped at `SANDBOX_MAX_NEW_WORLDS_PER_HOUR` (default 300) → 503 with `Retry-After`.
 - World-scoped routes use `CurrentWorld` (`app/deps.py`) and return **401 `world_required`** without a valid cookie; they never create worlds. The frontend calls `GET /world` first (T32). Today the ledger and world routes are scoped; the other routers adopt `CurrentWorld` as they move off mocks.
@@ -555,9 +573,10 @@ Secrets stay server-side only; never commit `.env` (commit `.env.example`).
 ## 15. Security & responsible AI
 - Sandbox banner on every page; no real payments; no tokens or crypto.
 - Rate-limit `/copilot` and `/assets`; validate GeoJSON size.
-- **Accounts (ADR-0005):** argon2id via `pwdlib` with a dummy-hash verify for unknown emails; server-side sessions (hashed token, `HttpOnly`/`Secure`/`SameSite=Lax`, 7 d idle / 30 d absolute, rotated on login and persona switch); `Origin` allowlist on writes; login 10 per 15 min and register 5 per hour, counted in Postgres; generic errors; admins only via `ADMIN_EMAILS`/CLI.
+- **Accounts (ADR-0005):** argon2id via `pwdlib` with a dummy-hash verify for unknown emails; server-side sessions (hashed token, `HttpOnly`/`Secure`/`SameSite=Lax`, 7 d idle / 30 d absolute, rotated on login and persona switch); the §6.1 CSRF rule; login 10 per 15 min and register 5 per hour in independent per-IP and per-account buckets, counted in Postgres, client IP only through `TRUSTED_PROXY_HOPS`; generic login errors.
+- **Admins:** live-world admins are created only by the operator CLI (`python -m app.cli create-admin`, password via `getpass`), never through the API or by email match. **Accepted risk:** without email verification, registration reveals whether an email exists; no permission depends on email.
 - **Authorization on every request** (§6.1), including object-level checks and the 404-across-worlds rule. Every PR touching auth, cookies, sessions or authorization gets a `security-and-hardening` review.
-- **Personal data:** only email, display name and password hash; never in ledger payloads, LLM prompts or logs; sessions and `auth_attempts` pruned; demo worlds pruned after 7 days.
+- **Personal data:** only email, display name and password hash; never in LLM prompts or logs. The public ledger holds no account identifiers (payout details live in `payout_lines`, T67). Sessions and `auth_attempts` are pruned; demo worlds are pruned after 7 days.
 - Treat all retrieved web content and uploaded media as untrusted; enforce schema-validated outputs.
 - Show uncertainty (ranges, confidence) everywhere a number appears.
 - Use only licensed data: Earth Engine terms, Tavily terms, cited valuation sources, dataset attributions; no raw ESVD data in the repo.

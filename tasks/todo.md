@@ -209,11 +209,11 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** Friday review · **Deps:** P03, P04 · **Files:** design file
 
 ### T54 · Accounts and sessions (#97) — D1 · M · Must · K1 K2
-- [ ] `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /me`; argon2id via `pwdlib`, with a dummy-hash verify for unknown emails; emails normalised and unique per world
-- [ ] Server-side sessions: a 256-bit token whose SHA-256 hash is stored; `nx_session` cookie `HttpOnly`, `Secure` (outside dev/test), `SameSite=Lax`; 7 d idle / 30 d absolute; new ID on login; deleted on logout. `Origin` check on state-changing requests; Postgres-backed rate limits (login 10 per 15 min, register 5 per hour)
-- [ ] Live world seeded (3 curated sites under password-less demo communities); admins only via `ADMIN_EMAILS`; no email, password or token in logs, ledger payloads or LLM prompts
+- [ ] `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /me`; argon2id via `pwdlib`, with a dummy-hash verify for unknown emails; `users.kind` (person | persona | treasury) and a partial unique index on lower(email) per world
+- [ ] Server-side `sessions` (with `world_id`): a 256-bit token whose SHA-256 hash is stored; `nx_session` cookie `HttpOnly`, `Secure` (outside dev/test), `SameSite=Lax`; 7 d idle / 30 d absolute; new ID on login; logout deletes the row and clears the cookie
+- [ ] Live world seeded (3 curated sites under non-login demo communities); live admins are created only with a CLI command that reads the password via `getpass` (never via the API, never by matching an email); no password or token in logs
 
-**Verify:** `make test`, including abuse cases (wrong password, unknown email, expired and revoked sessions, cross-origin POST, rate limit); manual register → login → `/me` → logout with `curl` · **Deps:** T31 · **Files:** `backend/app/auth.py`, `backend/app/routers/auth.py`, `backend/app/models.py`, `backend/migrations/versions/*_accounts.py`, `backend/tests/test_auth.py`
+**Verify:** `make test`, including wrong password, unknown email, expired and revoked sessions, and logout; manual register → login → `/me` → logout with `curl` · **Deps:** T31 · **Files:** `backend/app/auth.py`, `backend/app/routers/auth.py`, `backend/app/cli.py`, `backend/app/models.py`, `backend/migrations/versions/*_accounts.py`, `backend/tests/test_auth.py`
 
 
 ### ✅ Checkpoint W2 (Fri Oct 9)
@@ -298,46 +298,66 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`; manual upload raises confidence · **Deps:** T09, T15 · **Files:** `backend/app/agents/field_evidence.py`, `backend/app/routers/assets.py`
 
 
-### T41 · Revenue split and impact (#51) — D2 · S · Should · D4 E3
+### T41 · Revenue split and impact (#51) — D2 · S · Must · D4 E3
 - [x] Pure functions for simulated quarterly revenue (2% of annual value / 4) split 50/50 community / dividends; portfolio impact metrics (ha, t CO₂, $ services) pro-rata; `pay_quarter` applies one quarter's payout transactionally for T38/T44
 - Handoff: Time Machine triggering remains in T38, whose task calls the T41 payout helper each quarter.
 
 **Verify:** `make test` · **Deps:** T16 · **Files:** `backend/app/market/revenue.py`, `backend/app/routers/market.py`
 
 
+### T66 · Auth hardening: CSRF, rate limits and pruning (#109) — D3 · S · Must · K2
+- [ ] CSRF on every unsafe method (POST, PUT, PATCH, DELETE, including multipart uploads): exact scheme/host/port allowlist (`ALLOWED_ORIGINS`) on `Origin`, falling back to `Referer`; reject when both are absent, malformed or `null`; JSON routes require a JSON media type
+- [ ] Rate limits with independent per-IP and per-account buckets (account key = HMAC of the normalised email with `AUTH_RATE_LIMIT_SECRET`); client IP taken only through `TRUSTED_PROXY_HOPS`; atomic counting under an advisory lock; login 10 per 15 min, register 5 per hour
+- [ ] Expired sessions and `auth_attempts` older than 24 h are pruned; registration enumeration is an accepted, documented risk (no email verification), and duplicate registration returns the same status and body shape
+
+**Verify:** `make test`: forged-prefix origins, missing and `null` headers, concurrent attempts, both bucket dimensions · **Deps:** T54 · **Files:** `backend/app/auth.py`, `backend/app/middleware.py`, `backend/app/config.py`, `backend/tests/test_auth_hardening.py`
+
+### T56 · Communities, treasury and tenant invariants (#99) — D1 · M · Must · A0 K3
+- [ ] `communities` and `community_members` (owner | steward) carry `world_id NOT NULL`; composite foreign keys `(world_id, …_id)` (unique `(world_id, id)` on users, assets, communities); a DB test shows cross-world inserts fail
+- [ ] One non-login, non-trading treasury user per community; `assets.community_id` set and `assets.community_user_id` = the treasury
+- [ ] Backfill the template and the live world; discard pre-migration visitor sandboxes; `sandbox.py` clone, reset and prune cover the new tables; reset keeps persona user IDs (mapped by `persona_key`) so sessions survive; pruning deletes a world's sessions first
+
+**Verify:** `make test` · **Deps:** T54 · **Files:** `backend/app/models.py`, `backend/migrations/versions/*_communities.py`, `backend/app/sandbox.py`, `backend/app/seed.py`, `backend/tests/test_tenancy.py`
+
+### T68 · Authorization policy and community routes (#110) — D1 · M · Must · K3 C6
+- [ ] Pure `authorize(principal, action, resource)` implementing the ADR-0005 matrix: world scoping; members can't trade their community's asset; adding a member who holds its shares returns 409 `member_has_holdings`; admins and treasury accounts can't trade
+- [ ] A `require(action)` dependency; 401 `auth_required` / 403 with a reason / 404 across worlds; a matrix test covers every role × action, allowed and denied
+- [ ] `POST /communities` (creator becomes owner; treasury created), `GET`/`PATCH /communities/{id}` (owner). *Should:* add and remove stewards
+
+**Verify:** `make test` · **Deps:** T56 · **Files:** `backend/app/authz.py`, `backend/app/routers/communities.py`, `backend/tests/test_authz.py`
+
 ### T55 · Demo sessions and persona switch (#98) — D1 · S · Must · J1 J2
-- [ ] `POST /demo/start {persona}` creates a sandbox world and a demo session (hourly world cap kept); `POST /demo/persona` switches persona inside the same world only, with a new session ID; `POST /world/reset` keeps the session
-- [ ] The `nx_world` cookie is retired: `CurrentWorld` comes from the session, `GET /world` returns the session's world, and anonymous requests read the live world
+- [ ] `POST /demo/start {persona}` creates a sandbox world and a demo session (hourly world cap kept); `POST /demo/persona` switches persona inside the same world only, revoking the old token and issuing a new one; `POST /world/reset` keeps the session
+- [ ] The `nx_world` cookie is retired: the world comes from the session, `GET /world` returns the session's world, and anonymous requests read the live world
 
-**Verify:** `make test` (two demo sessions isolated; a demo session can't reach the live world; a password session can't switch persona) · **Deps:** T54 · **Files:** `backend/app/sandbox.py`, `backend/app/deps.py`, `backend/app/routers/world.py`, `backend/tests/test_sandbox.py`
-
-### T56 · Communities and authorization policy (#99) — D1 · M · Must · K3 A0
-- [ ] `communities` and `community_members` (owner | steward), `assets.community_id` with a seed backfill; `POST /communities`, `GET`/`PATCH /communities/{id}`, add and remove members (owner only)
-- [ ] Pure `authorize(principal, action, resource)` implementing the ADR-0005 matrix, including world scoping and the insider-trading rule; a `require(action)` dependency; 401 `auth_required` / 403 with a reason / 404 across worlds
-- [ ] A matrix test covers every role × action, allowed and denied
-
-**Verify:** `make test` · **Deps:** T54 · **Files:** `backend/app/authz.py`, `backend/app/routers/communities.py`, `backend/app/models.py`, `backend/migrations/versions/*_communities.py`, `backend/tests/test_authz.py`
+**Verify:** `make test` (two demo sessions isolated; a demo session can't reach the live world; a password session can't switch persona; reset keeps the active persona) · **Deps:** T54, T56 · **Files:** `backend/app/sandbox.py`, `backend/app/deps.py`, `backend/app/routers/world.py`, `backend/tests/test_sandbox.py`
 
 ### T57 · Enforce authorization on every route (#100) — D1 · M · Must · K3 C6
-- [ ] Every state-changing route uses `require(...)`; orders and portfolio use the principal's user (never a client-supplied user ID); admin routes are admin-only; the tamper demo runs in sandbox worlds only
-- [ ] A test walks `app.routes` and fails if any state-changing route lacks an authorization dependency
-- [ ] `alert` events over SSE and `GET /events` reach only their target users
+- [ ] Every route, GET included, loads resources by `(world_id, id)` before authorizing; state-changing routes use `require(...)`; orders and portfolio use the principal's user; admin routes are admin-only; the tamper demo runs in sandbox worlds only
+- [ ] A route-inventory test fails if any route lacks an authorization dependency, and a cross-world test returns 404 for every object endpoint
+- [ ] SSE and `GET /events` derive the principal and world from the session, revalidate it on every poll and heartbeat, close after logout, expiry or revocation, and deliver `alert` events only to their targets
 
-**Verify:** `make test` · **Deps:** T56, T17, T29 · **Files:** `backend/app/routers/*.py`, `backend/app/events.py`, `backend/tests/test_route_authz.py`
+**Verify:** `make test` · **Deps:** T68, T55, T17, T29 · **Files:** `backend/app/routers/*.py`, `backend/app/events.py`, `backend/tests/test_route_authz.py`
+
+### T67 · Ledger privacy (#111) — D2 · S · Must · F1 K5
+- [ ] Public ledger payloads never contain user IDs, emails or names: payout entries record aggregates (revenue, community fund, dividends total, holder count) plus a hash commitment of the per-holder lines
+- [ ] Per-holder payout lines move to a private, erasable `payout_lines` table; a test scans every ledger payload kind for account identifiers
+
+**Verify:** `make test`; ledger verify still passes · **Deps:** T30, T41 · **Files:** `backend/app/market/revenue.py`, `backend/app/models.py`, `backend/migrations/versions/*_payout_lines.py`, `backend/tests/test_revenue.py`
 
 ### T58 · Listing lifecycle (#101) — D2 · M · Must · A3 A5 A6
 - [ ] Pure state machine: draft → rating → listed | needs_evidence | ineligible; needs_evidence → rating after evidence; listed ↔ suspended (admin). The listing gate applies at listing time only; invalid transitions are rejected
-- [ ] `POST /assets` creates a draft in the principal's community (attestation required, polygon validated by T36, no overlap within the world); `POST /assets/{id}/submit` starts a rating, whose result sets the status
+- [ ] `POST /assets` creates a draft in the principal's community (attestation required, polygon validated by T36, no overlap within the world); `POST /assets/{id}/submit` starts a rating through the rating service, whose result sets the status
 - [ ] Every transition appends a ledger entry and publishes an event
 
-**Verify:** `make test` · **Deps:** T19, T56, T36 · **Files:** `backend/app/services/lifecycle.py`, `backend/app/routers/assets.py`, `backend/tests/test_lifecycle.py`
+**Verify:** `make test` · **Deps:** T19, T68, T36, T29, T30 · **Files:** `backend/app/services/lifecycle.py`, `backend/app/routers/assets.py`, `backend/tests/test_lifecycle.py`
 
-### T59 · IPO launch (#102) — D1 · S · Must · A7 C4
+### T59 · IPO launch (#102) — D2 · S · Must · A7 C4
 - [ ] `GET /assets/{id}/ipo/preview` returns the IPO price with every term of the dev-spec §8 formula
-- [ ] `POST /assets/{id}/ipo` (owner only, listed, once): validates shares offered and retained % (10–90), writes the first `prices` row (`reason='ipo'`) and a ledger entry, and opens the primary float
+- [ ] `POST /assets/{id}/ipo` (owner only, listed, once): validates shares offered and retained % (10–90); in one transaction writes the first `prices` row (`reason='ipo'`), seeds the treasury's retained holding, appends a ledger entry and opens the primary float
 - [ ] Orders on an asset without an IPO return 409 `not_trading`
 
-**Verify:** `make test` · **Deps:** T16, T58 · **Files:** `backend/app/routers/ipo.py`, `backend/app/services/ipo.py`, `backend/tests/test_ipo.py`
+**Verify:** `make test` · **Deps:** T16, T17, T30, T58 · **Files:** `backend/app/routers/ipo.py`, `backend/app/services/ipo.py`, `backend/tests/test_ipo.py`
 
 ### T61 · Sign-in screens and session handling (#104) — PD + D1 · S · Must · K1 K2
 - [ ] `/login`, `/register`, and an account menu with sign out; clear error states; no tokens in JS-readable storage
@@ -374,7 +394,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 - [ ] "Next quarter" re-rates each asset with the next scenario version; event presets (fire, encroachment, drought, restoration, protection); prices re-anchor
 - [ ] Alerts on health Δ ≥ 5, a grade change or news severity ≥ 4, sent to the asset's holders and its community's members; each quarter pays out revenue via T41; same entrypoints usable as jobs (`jobs/rerate_all.py`, `jobs/news_sweep.py`; daily sweep via GitHub Actions)
 
-**Verify:** `make test`; manual encroachment gives grade A → BBB and an alert · **Deps:** T27, T16, T29, T41 · **Files:** `backend/app/routers/admin.py`, `jobs/*.py`, `.github/workflows/news-sweep.yml`
+**Verify:** `make test`; manual encroachment gives grade A → BBB and an alert · **Deps:** T27, T16, T29, T41, T68 · **Files:** `backend/app/routers/admin.py`, `jobs/*.py`, `.github/workflows/news-sweep.yml`
 
 ### T39 · Copilot (RAG) (#53) — D3 · M · Must · E1
 - [ ] Reports and events chunked and embedded (per T06) into pgvector; Nemotron Nano answers only from context with `[R…]`/`[E…]` citations; streamed
@@ -403,9 +423,10 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 ### T46 · E2E demo test (#58) — D2 · S · Must
 - [ ] Playwright runs the tour's autoplay path end to end; runs in CI; reused to record the video
-- [ ] *(ADR-0005)* Real-account path: register → create a community → list → rate → launch the IPO; a second account buys; the community wallet rises; an investor gets 403 on Steward actions
+- [ ] *(ADR-0005)* Real-account path: owner registers → creates a community → lists → rating → IPO → a second account signs up, buys and sells → a quarter passes → alert, owner payout and dividends show → sign out; an investor gets 403 on Steward actions
+- [ ] *(ADR-0005)* Demo path: `/judge` → each persona; two demo sessions stay isolated from each other and from the live world
 
-**Verify:** `make e2e` green locally and in CI · **Deps:** T45 · **Files:** `frontend/e2e/demo.spec.ts`, `.github/workflows/e2e.yml`
+**Verify:** `make e2e` green locally and in CI · **Deps:** T45, T57, T63, T64, T65 · **Files:** `frontend/e2e/demo.spec.ts`, `.github/workflows/e2e.yml`
 
 ### T47 · Eval harness (#59) — D3 · M · Must · G2 G3
 - [ ] `make eval`: news classification, Auditor faithfulness and direction, schema reliability, Copilot grounding, and the Nano/Super/Ultra routing comparison (dev-spec §18)
@@ -420,17 +441,17 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 
 ### T60 · Live rating for new listings (#103) — D2 · M · Must · A3
-- [ ] `earth_obs` computes metrics for any validated polygon live on Earth Engine, using the T11/T13 methods, with a timeout and a cache keyed by geometry hash
+- [ ] `earth_obs` computes metrics for any validated polygon live on Earth Engine, using the T11/T13 methods, with a timeout and a cache keyed by geometry hash; the orchestrator (T27) uses it for new listings
 - [ ] Quotas: 2 live ratings per user per day plus the global `LLM_BUDGET_USD`. On failure the listing stays in `rating` with a retry; it never shows another site's data
 - [ ] In demo worlds only, a failed live run may show the nearest cached site with an explicit "cached example" notice
 
-**Verify:** `make test` (Earth Engine mocked); manual live rating of a new polygon · **Deps:** T13, T19, T58 · **Files:** `backend/app/tools/earth_obs.py`, `backend/app/services/rating.py`, `backend/tests/test_earth_obs_live.py`
+**Verify:** `make test` (Earth Engine mocked); manual live rating of a new polygon · **Deps:** T13, T19, T27, T58 · **Files:** `backend/app/tools/earth_obs.py`, `backend/app/services/rating.py`, `backend/tests/test_earth_obs_live.py`
 
-### T63 · Steward home and community management (#106) — PD + D1 · M · Must · A0 A8
-- [ ] Create or edit a community (A0) and manage its members (owner only)
-- [ ] Home: listings with status and next action, community wallet, IPO proceeds, holders, payouts, alerts and stewardship recommendations (`GET /communities/{id}/summary`)
+### T63 · Steward home and community management (#106) — PD + D1 · M · Must · A0 A8 D4
+- [ ] Create or edit a community (A0); owner sees members
+- [ ] Home (`GET /communities/{id}/summary`): listings with status and next action; IPO proceeds, community-fund payouts and retained-stake dividends with clear totals; holders; alerts and stewardship recommendations
 
-**Verify:** `make fe-check`; manual: a new account creates a community and sees an empty home with "List your land" · **Deps:** T56, T58, T62, P05 · **Files:** `frontend/src/app/(steward)/steward/page.tsx`, `frontend/src/app/(steward)/steward/community/page.tsx`, `frontend/src/components/WalletCard.tsx`, `backend/app/routers/communities.py`
+**Verify:** `make fe-check`; manual: a new account creates a community and sees an empty home with "List your land" · **Deps:** T68, T58, T59, T41, T38, T62, P05 · **Files:** `frontend/src/app/(steward)/steward/page.tsx`, `frontend/src/app/(steward)/steward/community/page.tsx`, `frontend/src/components/WalletCard.tsx`, `backend/app/routers/communities.py`
 
 ### T64 · IPO launch screen (#107) — PD · S · Must · A7
 - [ ] The owner sets shares offered and retained %; a preview shows the IPO price formula step by step; confirming launches the IPO and the asset becomes tradable in the Exchange

@@ -79,7 +79,7 @@ Living ecosystems produce enormous value (water filtration, flood protection, ca
 | C3 | I see a live price chart | Price history with markers on report/news events |
 | C4 | IPO proceeds go to community | Community wallet balance increases with each primary-share sale |
 | C5 | Everything is labelled sandbox | Persistent "Sandbox — play money, not a real security" banner |
-| C6 | Insiders can't trade | Members of an asset's community get 403 `insider_trading_blocked` on that asset's orders |
+| C6 | Insiders can't trade | Members of an asset's community get 403 `insider_trading_blocked` on that asset's orders; a holder can't be added as a member (409); admins and treasury accounts never trade |
 | C7 | Browsing is open, trading needs an account | Anonymous visitors browse; buy/sell, portfolio and alerts ask them to sign in |
 
 ### Epic D — Monitoring & alerts
@@ -102,7 +102,7 @@ Principle: **one flawless end-to-end story on 3 real sites** beats a wide app wi
 
 | Must (PoC core) | Should | Could | Won't |
 |---|---|---|---|
-| A0–A3, A6–A8, B1–B5, C1–C7, D1–D3, E1, **K1–K4** · Steward and Exchange apps · live rating of new listings (quota) · Time Machine · 3 real demo sites (cached satellite data) · **Nature Ledger** (F1–F2) · **Agent Trace** (G1) · **Eval harness** (G2) · **Judge tour + per-visitor sandbox** (J1–J2) · deployed (host per dev-spec §21) · CI with tests | A4 field evidence (**photos only**), B6 report diffs, D4 revenue split, E3 impact, K5 delete account | OAuth sign-in, A5 stewardship plan, E2 compare, Spanish report, OpenTimestamps anchoring (F3) | Real money, tokens/blockchain trading, KYC, email verification and password reset by email, audio evidence, mobile app, PDF export |
+| A0–A3, A6–A8, B1–B5, C1–C7, D1–D4, E1, **K1–K4** · Steward and Exchange apps · live rating of new listings (quota) · Time Machine · 3 real demo sites (cached satellite data) · **Nature Ledger** (F1–F2) · **Agent Trace** (G1) · **Eval harness** (G2) · **One-click judge demo sessions + optional tour** (J1–J2) · deployed (host per dev-spec §21) · CI with tests | A4 field evidence (**photos only**), B6 report diffs, E3 impact, K5 delete account, community stewards (more members than the owner) | OAuth sign-in, A5 stewardship plan, E2 compare, Spanish report, OpenTimestamps anchoring (F3) | Real money, tokens/blockchain trading, KYC, email verification and password reset by email, audio evidence, mobile app, PDF export |
 
 ### Epic F — Nature Ledger (tamper-evident records)
 | ID | Story | Acceptance criteria |
@@ -120,9 +120,9 @@ Principle: **one flawless end-to-end story on 3 real sites** beats a wide app wi
 ### Epic K — Accounts and access ([ADR-0005](../adr/0005-accounts-roles-and-two-apps.md))
 | ID | Story | Acceptance criteria |
 |---|---|---|
-| K1 | I sign up, sign in and sign out | Email + password; generic errors; rate-limited; signing out ends the session immediately |
+| K1 | I sign up, sign in and sign out | Email + password; generic login errors; rate-limited; signing out ends the session immediately, open live streams included (registration enumeration is an accepted risk without email verification) |
 | K2 | My session is safe | Server-side session in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie; no tokens in browser storage; cross-site writes rejected |
-| K3 | I can only do what my role allows | Every state-changing API route checks the ADR-0005 matrix; 401 / 403 with a reason / 404 across worlds; a test fails if a route has no check |
+| K3 | I can only do what my role allows | Every API route, reads included, checks the ADR-0005 matrix; 401 / 403 with a reason / 404 across worlds; a test fails if a route has no check; the database rejects rows that link across worlds |
 | K4 | Each audience has its own app | Exchange at `/` and Steward at `/steward`, each with its own navigation; an app switcher for community members |
 | K5 *(should)* | I can delete my account | Credentials and sessions deleted, name pseudonymised; market history stays consistent |
 
