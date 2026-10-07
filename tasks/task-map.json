@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-07 03:03 UTC",
+  "generated_at": "2026-10-07 04:20 UTC",
   "tasks": [
     {
       "id": "P01",
@@ -382,7 +382,7 @@
         "T03",
         "T06"
       ],
-      "status": "in_progress",
+      "status": "done",
       "assignees": [
         "melvin1117"
       ],
@@ -393,8 +393,8 @@
         "T15"
       ],
       "step": 2,
-      "chain": 10,
-      "critical": true
+      "chain": 0,
+      "critical": false
     },
     {
       "id": "T16",
@@ -627,11 +627,9 @@
       "deps": [
         "T11"
       ],
-      "status": "blocked",
+      "status": "ready",
       "assignees": [],
-      "waiting_on": [
-        "T11"
-      ],
+      "waiting_on": [],
       "unlocks": [
         "T35"
       ],
@@ -654,11 +652,9 @@
         "T06",
         "T11"
       ],
-      "status": "blocked",
+      "status": "ready",
       "assignees": [],
-      "waiting_on": [
-        "T11"
-      ],
+      "waiting_on": [],
       "unlocks": [
         "T19"
       ],
@@ -680,11 +676,9 @@
       "deps": [
         "T11"
       ],
-      "status": "blocked",
+      "status": "ready",
       "assignees": [],
-      "waiting_on": [
-        "T11"
-      ],
+      "waiting_on": [],
       "unlocks": [
         "T19",
         "T26",
@@ -1653,7 +1647,6 @@
     }
   ],
   "critical_path": [
-    "T11",
     "T14",
     "T19",
     "T27",
@@ -1669,18 +1662,25 @@
     "D1": [
       "T20"
     ],
-    "D2": [],
+    "D2": [
+      "T14",
+      "T15",
+      "T13"
+    ],
     "D3": [],
     "any": [
-      "T20"
+      "T14",
+      "T15",
+      "T20",
+      "T13"
     ]
   },
   "counts": {
-    "done": 14,
-    "in_progress": 8,
+    "done": 15,
+    "in_progress": 7,
     "picked_early": 1,
-    "ready": 1,
-    "blocked": 35
+    "ready": 4,
+    "blocked": 32
   },
-  "data_hash": "2e74bc32eabeca9d"
+  "data_hash": "b62f40104711ed05"
 }
