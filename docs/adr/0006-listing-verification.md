@@ -125,17 +125,17 @@ Nobody can upload real land papers to a hackathon deployment or a test run, so t
   - The default is `review`, the real process: a person decides.
   - The hackathon deployment, sandbox worlds and E2E tests set `demo`.
   - There's no per-listing switch.
-- **Evidence kind is separate from the mode.** Each run records:
+- **Evidence kind is separate from the mode, and derived from the documents, never supplied.** Each run records:
   - `mode`: the deployment mode when the run was created;
   - `evidence_kind`: `sample` or `real`.
 
-  Both are part of the input fingerprint and are write-once.
+  Both are part of the input fingerprint and are write-once. When a run is submitted, a database trigger sets `evidence_kind` from **all** its linked documents: `sample` only if every document has `is_sample = true`, otherwise `real`. After submission, documents can't be linked to or unlinked from the run.
 - **Sample documents:** in demo mode the Steward app offers **"Use sample documents (demo)"**.
   - It generates fictional documents for that listing: an agrarian certificate and assembly minutes.
-  - They're filled only with **non-personal listing fields**: the asset name, the municipality and state from the reverse geocode of the centroid, and the area. These are allow-listed and escaped.
+  - They're filled only with **non-personal fields**: a listing reference ("Listing NX-" plus the first 8 characters of the asset ID, never the user-written name), the municipality and state from the reverse geocode of the centroid, and the area. These are allow-listed and escaped. In sample runs the name comparison shows "n/a (sample)".
   - Holder and member names are **fixed synthetic identities** ("Comunidad Ejemplo (ficticia)").
   - Each page is watermarked **"SAMPLE: FICTIONAL DOCUMENT, NOT A REAL TITLE"**, and the files are stored with `is_sample = true`.
-  - We still don't assume `is_sample` means "no personal data": the asset name is user-written, so the T71 AI rules apply unchanged.
+  - So sample documents carry no user-written text; the T71 AI rules still apply unchanged.
 - **The checklist still runs for real:** format, not reused (each sample is generated per listing), overlap, consent-labelled document; in sandboxes, the T71 AI comparison too. That keeps the whole flow exercised end to end.
 - **The demo auto-reviewer** (`reviewer_role = demo_auto`) approves a run only if all of these hold:
   - the mode is `demo`;
@@ -145,7 +145,10 @@ Nobody can upload real land papers to a hackathon deployment or a test run, so t
 
   Otherwise the run waits for a human admin. A database constraint enforces `demo_auto → mode = demo AND evidence_kind = sample`.
 - **Real documents in demo mode** are accepted and reviewed by a human admin. Such a run is `evidence_kind = real`, and its badge is the review-mode one, not the sample one.
-- **Revocation can't be undone by regenerating samples.** While a revocation is active, only an admin can approve a new run.
+- **Revocation can't be undone by regenerating samples.**
+  - A revoke sets `assets.verification_revoked_at`.
+  - While it's set, `demo_auto` can't approve, and only a human admin can approve a new run.
+  - That admin approval clears it, and both events go into the ledger.
 - **The IPO gate is mode-aware.**
   - In review mode, a sample run never satisfies it: the current run must be `mode = review` and `evidence_kind = real`.
   - **Switching a deployment from demo to review** (a real launch) makes every demo or sample run count as unverified, and suspends trading on assets whose current run is demo or sample until a review-mode approval. The switch is recorded in each affected asset's ledger.

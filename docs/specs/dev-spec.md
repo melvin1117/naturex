@@ -203,6 +203,7 @@ create table assets (
   name text not null,
   community_id uuid,                                  -- ADR-0005: the community that manages the listing
   community_user_id uuid,                             -- the community's treasury (kind = 'treasury'): retained stake, seeded at IPO, + its dividends (T41)
+  verification_revoked_at timestamptz,                -- ADR-0006: set on revoke; while set, demo_auto can't approve; cleared only by a human admin approval
   -- ADR-0005 (T56): unique (world_id, id); foreign key (world_id, community_id) → communities (world_id, id);
   --                 foreign key (world_id, community_user_id) → users (world_id, id)
   country text, description text, cover_image_url text,
@@ -228,7 +229,7 @@ create table verification_runs (       -- one row per run; one current run per a
   ai_suggestion text check (ai_suggestion in ('consistent','inconsistent','unreadable')), ai_reasons jsonb,  -- T71; untrusted heuristic
   reviewer_role text check (reviewer_role in ('platform_admin','partner_reviewer','demo_auto')), reviewer_user_id uuid, reason text,
   mode text not null check (mode in ('review','demo')),  -- deployment mode at creation (ADR-0006 §6)
-  evidence_kind text not null check (evidence_kind in ('sample','real')),
+  evidence_kind text not null check (evidence_kind in ('sample','real')),  -- set by trigger at submission from ALL linked documents' is_sample
   check (reviewer_role is distinct from 'demo_auto' or (mode = 'demo' and evidence_kind = 'sample')),
   method_version text not null, created_at timestamptz default now(),
   unique (world_id, id), unique (world_id, asset_id, id),
@@ -236,7 +237,8 @@ create table verification_runs (       -- one row per run; one current run per a
   foreign key (world_id, reviewer_user_id) references users (world_id, id)
 );
 -- Write-once: a trigger rejects changes to input_fingerprint, checklist, ai_*, method_version, mode and evidence_kind, and
--- rewrites of reviewer_role/reviewer_user_id/reason once set; level may move only
+-- rewrites of reviewer_role/reviewer_user_id/reason once set; a second trigger derives evidence_kind at submission and rejects
+-- listing_documents.run_id changes once the run is submitted; level may move only
 -- documents_submitted → verified | rejected, or verified → revoked; is_current only true → false (superseded). Every
 -- decision is also appended to the ledger, which is append-only (migration 0003).
 create unique index verification_runs_current on verification_runs (world_id, asset_id) where is_current;
@@ -371,7 +373,7 @@ create table llm_calls (
 | `POST /assets/{id}/submit` | Start a rating run; the result sets `listed` / `needs_evidence` / `ineligible` (T58) |
 | `GET /assets/{id}/ipo/preview` · `POST /assets/{id}/ipo` | IPO price with every formula term; launch (owner only, once; T59) |
 | `POST /admin/assets/{id}/suspend` · `…/resume` | Moderation (admin; T58) |
-| `POST /assets/{id}/documents/sample` | Demo mode only (404 in review mode, nothing created): generate watermarked fictional documents from non-personal listing fields + synthetic identities and run the checklist; the `demo_auto` reviewer approves only if every document is a sample, every check passes and no revocation is active (ADR-0006 §6) |
+| `POST /assets/{id}/documents/sample` | Demo mode only (404 in review mode, nothing created): generate watermarked fictional documents from non-personal fields (listing reference, place from reverse geocode, area) + synthetic identities and run the checklist; the `demo_auto` reviewer approves only if every document is a sample, every check passes and no revocation is active (ADR-0006 §6) |
 | `POST /assets/{id}/documents` · `GET /assets/{id}/documents/{doc_id}` | Upload evidence (steward/owner) → checklist; download a document (community members + same-world admins only; 404 otherwise; attachment, `nosniff`, `no-store`) (ADR-0006, T69) |
 | `GET /assets/{id}/verification` · `POST /admin/assets/{id}/verification` · `POST /admin/assets/{id}/verification/revoke` | Public verification summary (check names + results + not-checked list); reviewer approve/reject with a reason; revoke (suspends trading) (T69) |
 | `GET /assets` | Marketplace list (latest price, grade, trend) |
