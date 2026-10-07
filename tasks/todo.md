@@ -199,7 +199,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`; manual run for the hero site · **Deps:** T09 · **Files:** `backend/app/agents/news_scout.py`, `backend/tests/fixtures/news/*`, `backend/tests/test_news_scout.py`
 
 ### T25 · News eval dataset (#36) — D3 · S · Must · G2
-- [ ] ≥ 30 hand-labelled news items in `evals/news.jsonl`; promptfoo config skeleton
+- [x] ≥ 30 hand-labelled news items in `evals/news.jsonl`; promptfoo config skeleton
 
 **Verify:** promptfoo runs against the dataset · **Deps:** T24 · **Files:** `evals/news.jsonl`, `evals/promptfooconfig.yaml`
 

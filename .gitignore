@@ -27,3 +27,6 @@ CLAUDE.local.md
 
 # OS / editor
 .DS_Store
+
+# promptfoo eval output (evals/README.md)
+evals/output/
