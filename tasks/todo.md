@@ -309,6 +309,11 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 **Verify:** `make test`; manual encroachment gives grade A → BBB and an alert · **Deps:** T27, T16, T29, T41 · **Files:** `backend/app/routers/admin.py`, `jobs/*.py`, `.github/workflows/news-sweep.yml`
 
+> **Notes from T13 (decided in its review):**
+> - **Listing gate:** applies only at listing time. Re-rating a listed asset doesn't suspend it, even when a scenario (e.g. mangrove or forest encroachment) puts `forest_loss_last_12m_ha` over 1% of the area.
+> - **Versions per site:** each asset moves through its own versions (`load_site_metrics(site_key, scenario)`: `baseline` 2026Q3 → `restoration` `sim-1` → `encroachment` `sim-2`; ADR-0004 T13 section). "Inject encroachment" moves only the targeted asset to its `encroachment` version; there's no shared timeline across sites.
+> - **Simulated label:** for `simulated` versions, show a "Simulated" label and the `provenance_note`; never show `date_windows` as observation periods (they describe the observed data the deltas start from).
+
 ### T39 · Copilot (RAG) (#53) — D3 · M · Must · E1
 - [ ] Reports and events chunked and embedded (per T06) into pgvector; Nemotron Nano answers only from context with `[R…]`/`[E…]` citations; streamed
 
@@ -323,6 +328,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 - [ ] Admin panel (next quarter, event presets, reset), phone-style alerts, price chart with event markers
 
 **Verify:** `make fe-check`; encroachment flow in the browser · **Deps:** T38, T32 · **Files:** `frontend/src/app/admin/page.tsx`, `PriceChart.tsx`, `AlertsFeed.tsx`
+
+> **Note from T13:** reports and charts built on a simulated version (`simulated: true`, `data_version` `sim-N`) must show a visible "Simulated" label and must not render `date_windows` as observation periods.
 
 ### T44 · Copilot and impact UI (#56) — PD · M · Must · E1 E3
 - [ ] Chat on asset and portfolio pages (streaming, citations link to sources); impact summary on the portfolio

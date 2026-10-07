@@ -8,7 +8,8 @@ from decimal import Decimal
 from typing import Any, cast
 from uuid import UUID
 
-from sqlmodel import Session, select
+from sqlalchemy import update
+from sqlmodel import Session, col, select
 
 from app.db import engine
 from app.models import Asset, AssetStatus, Holding, User, UserRole, World
@@ -103,6 +104,29 @@ DEMO_GEOJSON: dict[str, dict[str, Any]] = {
 }
 
 
+def _upgrade_demo_site_content(session: Session) -> None:
+    """Refresh demo-site content in every world, visitor copies included.
+
+    Name, description and boundary are template content, not visitor state, so databases
+    seeded with the old placeholder squares (before T11/T13) get the real boundaries on the
+    next ``make seed``. Shares, cash, the community wallet and status are never touched.
+    """
+    for site in DEMO_SITES:
+        session.execute(
+            update(Asset)
+            .where(col(Asset.site_key) == site.key)
+            .values(
+                name=site.name,
+                description=site.description,
+                geojson=DEMO_GEOJSON[site.key],
+                area_ha=site.area_ha,
+                centroid_lat=site.centroid_lat,
+                centroid_lon=site.centroid_lon,
+            )
+        )
+    session.commit()
+
+
 def seed(session: Session) -> None:
     """Insert template world, personas and demo assets if missing."""
     if session.get(World, WORLD_ID) is None:
@@ -152,16 +176,8 @@ def seed(session: Session) -> None:
                     site_key=site.key,
                 )
             )
-        else:
-            # Upgrade databases seeded with the old placeholder boundaries; never touches
-            # shares, cash or the community wallet.
-            existing_asset.name = site.name
-            existing_asset.description = site.description
-            existing_asset.geojson = DEMO_GEOJSON[site.key]
-            existing_asset.area_ha = site.area_ha
-            existing_asset.centroid_lat = site.centroid_lat
-            existing_asset.centroid_lon = site.centroid_lon
     session.commit()
+    _upgrade_demo_site_content(session)
 
     # The community keeps its retained stake as a holding, so shares are conserved:
     # total_shares = primary_shares_remaining + market_maker_shares + sum(holdings) (dev-spec §8).

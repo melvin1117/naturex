@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class DateWindow(BaseModel):
@@ -118,9 +118,14 @@ class EarthObsMetrics(BaseModel):
     water_change: float
     forest_loss_ha: float
     biomass_t_ha: float
+    """Mean above-ground biomass (t/ha); ESA CCI Biomass v6.0, 2022 map, since T13 review."""
     biomass_source: str | None = None
-    """Dataset key of ``biomass_t_ha``: ``gedi_l4b``, or ``esa_cci_biomass`` where GEDI
-    L4B has no 1 km cell inside the polygon."""
+    """Dataset key of ``biomass_t_ha`` (``esa_cci_biomass``; T11 files said ``gedi_l4b``)."""
+    biomass_gedi_t_ha: float | None = None
+    """GEDI L4B mean AGB cross-check (t/ha); ``None`` where GEDI has no 1 km cell."""
+    mangrove_fraction: float | None = None
+    """Area share of the polygon mapped as mangrove by Global Mangrove Watch v3 (2020).
+    T14 values ``min(mangrove_fraction, trees + flooded_vegetation)`` as mangrove."""
     soc_t_c_ha: float | None = None
     """SoilGrids 2.0 soil organic carbon stock, 0-30 cm, polygon mean (t C/ha)."""
     forest_loss_last_12m_ha: float | None = None
@@ -139,6 +144,32 @@ class EarthObsMetrics(BaseModel):
     period: str | None = None
     """Quarter the Time Machine shows this version as (e.g. ``2026Q4``)."""
     scenario_deltas: ScenarioDeltas | None = None
+    observed_data_version: str | None = None
+    """For simulated versions: the observed ``data_version`` the delta chain starts from."""
+    provenance_note: str | None = None
+    """For simulated versions: ``date_windows``, ``datasets`` and ``thresholds`` describe
+    that observed data, not this version; never show them as observation periods."""
+
+    @model_validator(mode="after")
+    def _check_simulation_labels(self) -> EarthObsMetrics:
+        if self.simulated != (self.scenario != "baseline"):
+            raise ValueError("simulated must be true exactly when scenario is not 'baseline'.")
+        sim_fields = {
+            "based_on": self.based_on,
+            "period": self.period,
+            "scenario_deltas": self.scenario_deltas,
+            "observed_data_version": self.observed_data_version,
+            "provenance_note": self.provenance_note,
+        }
+        if self.simulated:
+            missing = [name for name, value in sim_fields.items() if value is None]
+            if missing:
+                raise ValueError(f"Simulated metrics need {missing}.")
+        else:
+            present = [name for name, value in sim_fields.items() if value is not None]
+            if present:
+                raise ValueError(f"Observed metrics can't carry simulation fields {present}.")
+        return self
 
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "demo_sites"
@@ -162,4 +193,10 @@ def load_site_metrics(site_key: str, scenario: ScenarioName = "baseline") -> Ear
         raise ValueError(
             f"No cached Earth observation metrics for site {site_key!r} (scenario {scenario!r})."
         )
-    return EarthObsMetrics.model_validate_json(path.read_text())
+    metrics = EarthObsMetrics.model_validate_json(path.read_text())
+    if metrics.scenario != scenario or metrics.site_key != site_key:
+        raise ValueError(
+            f"{path.name} holds {metrics.site_key!r}/{metrics.scenario!r}, "
+            f"not {site_key!r}/{scenario!r}."
+        )
+    return metrics

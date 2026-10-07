@@ -44,7 +44,7 @@ from app.sandbox import (
     prune_stale_worlds,
     reset_world,
 )
-from app.seed import COMMUNITY_PERSONA, DEMO_SITES, PERSONAS, WORLD_ID, seed
+from app.seed import COMMUNITY_PERSONA, DEMO_GEOJSON, DEMO_SITES, PERSONAS, WORLD_ID, seed
 from tests.conftest import alembic_cfg, requires_db
 
 TEMPLATE_ASSET = DEMO_SITES[0].id
@@ -93,6 +93,37 @@ def test_new_world_copies_every_persona_and_demo_asset_with_fresh_ids(session: S
     assert not {u.id for u in copied_users} & {p.id for p in PERSONAS}
     assert not {a.id for a in copied_assets} & {s.id for s in DEMO_SITES}
     assert all(u.cash_balance == Decimal("10000.00") for u in copied_users)
+
+
+@requires_db
+def test_seed_upgrades_demo_site_boundaries_in_visitor_worlds(session: Session) -> None:
+    world = create_world(session)
+    site = next(s for s in DEMO_SITES if s.key == "mangrove_mx")
+    copy = session.exec(
+        select(Asset).where(Asset.world_id == world.id, Asset.site_key == site.key)
+    ).one()
+    # A visitor world cloned before T13, still holding the placeholder square.
+    copy.name = "Coastal Mangrove Reserve"
+    copy.geojson = {
+        "type": "Polygon",
+        "coordinates": [[[-87.52, 21.48], [-87.48, 21.48], [-87.48, 21.52], [-87.52, 21.48]]],
+    }
+    copy.area_ha = Decimal("320.00")
+    copy.centroid_lat, copy.centroid_lon = 21.50, -87.50
+    copy.primary_shares_remaining = 123
+    copy.community_wallet = Decimal("42.00")
+    session.add(copy)
+    session.commit()
+
+    seed(session)
+    session.refresh(copy)
+
+    assert copy.name == site.name
+    assert copy.geojson == DEMO_GEOJSON[site.key]
+    assert copy.area_ha == site.area_ha
+    assert (copy.centroid_lat, copy.centroid_lon) == (site.centroid_lat, site.centroid_lon)
+    assert copy.primary_shares_remaining == 123
+    assert copy.community_wallet == Decimal("42.00")
 
 
 @requires_db

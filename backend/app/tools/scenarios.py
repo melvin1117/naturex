@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from statistics import median
 from typing import Any, get_args
@@ -171,16 +172,30 @@ def round_fractions(fractions: Mapping[str, float]) -> dict[str, float]:
     return {key: units[key] / _UNIT for key in sorted(units)}
 
 
+MANGROVE_HOST_CLASSES = ("trees", "flooded_vegetation")
+
+
+@dataclass(frozen=True, slots=True)
+class TransferResult:
+    landcover: dict[str, float]
+    """New shares, rounded to 4 dp and summing to exactly 1."""
+    trees_removed: float
+    """Tree share moved to other classes (becomes forest loss)."""
+    mangrove_retained: float
+    """Share of the trees + flooded vegetation that survived every transfer (0..1)."""
+
+
 def apply_landcover_transfers(
     landcover: Mapping[str, float], deltas: ScenarioDeltas
-) -> tuple[dict[str, float], float]:
-    """Apply the transfers in order; return the new shares and the tree share removed.
+) -> TransferResult:
+    """Apply the transfers in order.
 
     Raises ``ValueError`` if a transfer asks for more than its source classes hold, so a
     spec can never produce negative land cover.
     """
     shares = {name: float(landcover.get(name, 0.0)) for name in LANDCOVER_CLASSES}
     trees_removed = 0.0
+    mangrove_retained = 1.0
     for transfer in deltas.landcover_transfers:
         sources = [name for name in transfer.from_classes if name != transfer.to]
         available = sum(shares[name] for name in sources)
@@ -190,13 +205,34 @@ def apply_landcover_transfers(
                 f"Transfer of {transfer.pp} pp to {transfer.to!r} exceeds the "
                 f"{available * 100:.2f} pp held by {sources}."
             )
+        host_before = sum(shares[name] for name in MANGROVE_HOST_CLASSES)
+        host_removed = 0.0
         for name in sources:
             taken = amount * shares[name] / available
             shares[name] = max(shares[name] - taken, 0.0)
             if name == "trees":
                 trees_removed += taken
+            if name in MANGROVE_HOST_CLASSES and transfer.to not in MANGROVE_HOST_CLASSES:
+                host_removed += taken
         shares[transfer.to] += amount
-    return round_fractions(shares), trees_removed
+        if host_before > 0:
+            mangrove_retained *= max(1.0 - host_removed / host_before, 0.0)
+    return TransferResult(round_fractions(shares), trees_removed, mangrove_retained)
+
+
+def scale_mangrove_fraction(
+    mangrove_fraction: float | None, retained: float, landcover: Mapping[str, float]
+) -> float | None:
+    """Mangrove lost in proportion to the trees + flooded vegetation cleared.
+
+    Assumes mapped mangrove is spread evenly over those host classes; gains don't add
+    mangrove (replanted seedlings aren't mapped yet). Never exceeds trees + flooded
+    vegetation in the new land cover.
+    """
+    if mangrove_fraction is None:
+        return None
+    host = sum(landcover.get(name, 0.0) for name in MANGROVE_HOST_CLASSES)
+    return min(mangrove_fraction * retained, host)
 
 
 def natural_fraction(landcover: Mapping[str, float]) -> float:
@@ -234,8 +270,11 @@ def apply_scenario(
     """Return ``parent`` with ``deltas`` applied, labelled as a simulated version."""
     if version.data_version is None or version.scenario == "baseline":
         raise ValueError("Only simulated versions can be produced from deltas.")
-    landcover, trees_removed = apply_landcover_transfers(parent.landcover, deltas)
-    added_loss = trees_removed * parent.area_ha + deltas.extra_forest_loss_ha
+    transfers = apply_landcover_transfers(parent.landcover, deltas)
+    landcover = transfers.landcover
+    added_loss = transfers.trees_removed * parent.area_ha + deltas.extra_forest_loss_ha
+    observed = parent.observed_data_version or parent.data_version
+    biomass_factor = 1 + deltas.biomass_pct_change / 100
     series = _shift_ndvi(parent.ndvi_series, deltas.ndvi_step_last_12m)
     trend = ndvi_trend(series)
     assert trend.mean_last_12_months is not None
@@ -246,7 +285,16 @@ def apply_scenario(
         "based_on": parent.data_version,
         "period": version.period,
         "scenario_deltas": deltas,
+        "observed_data_version": observed,
+        "provenance_note": (
+            f"Simulated '{version.scenario}' version for the Time Machine: scripted deltas "
+            f"applied to {parent.data_version}, starting from observed data {observed}. Not an "
+            "observation; date_windows, datasets and thresholds describe the observed data."
+        ),
         "landcover": landcover,
+        "mangrove_fraction": scale_mangrove_fraction(
+            parent.mangrove_fraction, transfers.mangrove_retained, landcover
+        ),
         "natural_fraction": natural_fraction(landcover),
         "ndvi_series": series,
         "ndvi_mean": trend.mean_last_12_months,
@@ -255,7 +303,10 @@ def apply_scenario(
         "water_change": parent.water_change + deltas.water_change_delta,
         "forest_loss_ha": parent.forest_loss_ha + added_loss,
         "forest_loss_last_12m_ha": (parent.forest_loss_last_12m_ha or 0.0) + added_loss,
-        "biomass_t_ha": parent.biomass_t_ha * (1 + deltas.biomass_pct_change / 100),
+        "biomass_t_ha": parent.biomass_t_ha * biomass_factor,
+        "biomass_gedi_t_ha": (
+            None if parent.biomass_gedi_t_ha is None else parent.biomass_gedi_t_ha * biomass_factor
+        ),
     }
     # Round like the precompute output so a regenerated file is byte-identical.
     data = round_floats(parent.model_copy(update=update).model_dump(mode="json"))

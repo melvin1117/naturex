@@ -45,14 +45,8 @@ FOREST_LOSS_YEARS = "2021-2025"
 FOREST_LOSS_LAST_12M_YEAR = "2025"
 ESA_CCI_BIOMASS_YEAR_START = "2022-01-01"
 ESA_CCI_BIOMASS_YEAR_END = "2023-01-01"
-BIOMASS_WINDOWS = {
-    "gedi_l4b": ("gedi_l4b_biomass", {"start": "2019-04-18", "end": "2021-08-04"}),
-    "esa_cci_biomass": ("esa_cci_biomass", {"start": "2022-01-01", "end": "2022-12-31"}),
-}
-BIOMASS_SCALES = {
-    "gedi_l4b": ("gedi_biomass_scale_m", 1000),
-    "esa_cci_biomass": ("esa_cci_biomass_scale_m", 100),
-}
+GMW_EPOCH = "2020"
+GMW_SCALE_M = 10
 CLOUD_SCORE_THRESHOLD = 0.60
 CLOUD_FREE_MIN_CLEAR_FRACTION = 0.50
 HANSEN_TREE_COVER_MIN_PERCENT = 30
@@ -98,6 +92,11 @@ ATTRIBUTIONS = {
         "Initiative (Biomass_cci): Global datasets of forest above-ground biomass, v6.0, "
         "NERC EDS Centre for Environmental Data Analysis, "
         "doi:10.5285/95913ffb6467447ca72c4e9d8cf30501."
+    ),
+    "gmw": (
+        "Global Mangrove Watch v3.0 (CC BY 4.0): Bunting et al. (2022), Global Mangrove "
+        "Extent Change 1996-2020: Global Mangrove Watch Version 3.0, Remote Sensing 14(15), "
+        "3657; dataset doi:10.5281/zenodo.6894273."
     ),
     "soilgrids": (
         "SoilGrids 2.0 (CC BY 4.0): ISRIC - World Soil Information; Poggio et al. (2021), "
@@ -162,6 +161,14 @@ DATASETS = [
         "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/ESA_CCI_Above_Ground_Biomass_V6_0",
         "bands": ["agb"],
         "attribution": ATTRIBUTIONS["esa_cci_biomass"],
+    },
+    {
+        "key": "global_mangrove_watch",
+        "dataset_id": "projects/sat-io/open-datasets/GMW/extent/GMW_V3",
+        "version": "v3.0 (2020 epoch)",
+        "catalog_url": "https://gee-community-catalog.org/projects/mangrove/",
+        "bands": ["b1"],
+        "attribution": ATTRIBUTIONS["gmw"],
     },
     {
         "key": "soilgrids_ocs",
@@ -407,28 +414,51 @@ def _forest_loss(aoi: ee.Geometry) -> tuple[float, float]:
     )
 
 
-def _biomass(aoi: ee.Geometry) -> tuple[float, str]:
-    """Mean above-ground biomass (t/ha) and the dataset key it came from."""
-    # GEDI L4B v2 is gridded mean above-ground biomass density; MU is mean AGBD in Mg/ha.
-    image = ee.Image("LARSE/GEDI/GEDI04_B_002").select("MU")
-    value = (
-        image.reduceRegion(ee.Reducer.mean(), aoi, scale=1000, maxPixels=1e9).getInfo().get("MU")
-    )
-    if value is not None:
-        return float(value), "gedi_l4b"
-    # GEDI L4B leaves 1 km cells empty where too few quality footprints pass (e.g. the steep
-    # Sumidero Canyon slopes). Fall back to the ESA CCI Biomass v6.0 map for the latest year
-    # (2022, 100 m, band agb in Mg/ha; EE catalog record ESA_CCI_Above_Ground_Biomass_V6_0).
+def _biomass(aoi: ee.Geometry) -> tuple[float, float | None]:
+    """Mean above-ground biomass (t/ha): ESA CCI (primary) and GEDI L4B (cross-check)."""
+    # ESA CCI Biomass v6.0, latest map (2022), 100 m, band agb in Mg/ha; EE catalog record
+    # ESA_CCI_Above_Ground_Biomass_V6_0. Primary per docs/research.md: finer than GEDI L4B.
     cci = (
         ee.ImageCollection("ESA/CCI/Above_Ground_Biomass/V6_0")
         .filterDate(ESA_CCI_BIOMASS_YEAR_START, ESA_CCI_BIOMASS_YEAR_END)
         .first()
         .select("agb")
     )
-    value = cci.reduceRegion(ee.Reducer.mean(), aoi, scale=100, maxPixels=1e9).getInfo().get("agb")
-    if value is None:
-        raise RuntimeError("Neither GEDI L4B nor ESA CCI Biomass covers this polygon.")
-    return float(value), "esa_cci_biomass"
+    # GEDI L4B v2 is gridded mean AGBD (MU, Mg/ha) at 1 km; cells are empty where too few
+    # quality footprints pass (e.g. the steep Sumidero Canyon slopes), hence optional.
+    gedi = ee.Image("LARSE/GEDI/GEDI04_B_002").select("MU")
+    values = ee.Dictionary(
+        {
+            "cci": cci.reduceRegion(ee.Reducer.mean(), aoi, scale=100, maxPixels=1e9).get("agb"),
+            "gedi": gedi.reduceRegion(ee.Reducer.mean(), aoi, scale=1000, maxPixels=1e9).get("MU"),
+        }
+    ).getInfo()
+    if values.get("cci") is None:
+        raise RuntimeError("ESA CCI Biomass returned no agb value for this polygon.")
+    gedi_value = values.get("gedi")
+    return float(values["cci"]), None if gedi_value is None else float(gedi_value)
+
+
+def _mangrove_fraction(aoi: ee.Geometry) -> float:
+    """Area-weighted share of the polygon in Global Mangrove Watch v3.0 (2020 epoch)."""
+    # GMW v3 extent rasters (~25 m) hold 1 for mangrove and are masked elsewhere.
+    gmw = (
+        ee.ImageCollection("projects/sat-io/open-datasets/GMW/extent/GMW_V3")
+        .filterDate(f"{GMW_EPOCH}-01-01", f"{int(GMW_EPOCH) + 1}-01-01")
+        .first()
+        .select("b1")
+    )
+    mangrove = gmw.eq(1).unmask(0)
+    pixel_area = ee.Image.pixelArea()
+    sums = (
+        ee.Image.cat([pixel_area.multiply(mangrove).rename("mangrove"), pixel_area.rename("all")])
+        .reduceRegion(ee.Reducer.sum(), aoi, scale=GMW_SCALE_M, maxPixels=1e9)
+        .getInfo()
+    )
+    total = sums.get("all")
+    if not total:
+        raise RuntimeError("Polygon has no area at the GMW sampling scale.")
+    return float(sums.get("mangrove") or 0.0) / float(total)
 
 
 def _soil_organic_carbon(aoi: ee.Geometry) -> float:
@@ -468,11 +498,13 @@ def compute_site(site_key: str, computed_at_utc: str | None = None) -> dict[str,
     natural_fraction = sum(land_cover[class_name] for class_name in NATURAL_CLASSES)
     ndvi = _ndvi(aoi, start_12m, start_5y, end)
     forest_loss_5y, forest_loss_12m = _forest_loss(aoi)
-    biomass, biomass_source = _biomass(aoi)
-    unused_biomass = {"gedi_l4b", "esa_cci_biomass"} - {biomass_source}
-    datasets = [dataset for dataset in DATASETS if dataset["key"] not in unused_biomass]
-    biomass_window_key, biomass_window = BIOMASS_WINDOWS[biomass_source]
-    biomass_scale_key, biomass_scale = BIOMASS_SCALES[biomass_source]
+    biomass, biomass_gedi = _biomass(aoi)
+    # List only datasets that contributed a value, each with its attribution.
+    datasets = [
+        dataset for dataset in DATASETS if biomass_gedi is not None or dataset["key"] != "gedi_l4b"
+    ]
+    gedi_window = {"gedi_l4b_biomass": {"start": "2019-04-18", "end": "2021-08-04"}}
+    gedi_scale = {"gedi_biomass_scale_m": 1000}
 
     out: dict[str, Any] = {
         "site_key": site_key,
@@ -488,7 +520,9 @@ def compute_site(site_key: str, computed_at_utc: str | None = None) -> dict[str,
         "forest_loss_ha": forest_loss_5y,
         "forest_loss_last_12m_ha": forest_loss_12m,
         "biomass_t_ha": biomass,
-        "biomass_source": biomass_source,
+        "biomass_source": "esa_cci_biomass",
+        "biomass_gedi_t_ha": biomass_gedi,
+        "mangrove_fraction": _mangrove_fraction(aoi),
         "soc_t_c_ha": _soil_organic_carbon(aoi),
         "date_windows": {
             "land_cover": {"start": START_12M, "end": END_DATE},
@@ -497,7 +531,9 @@ def compute_site(site_key: str, computed_at_utc: str | None = None) -> dict[str,
             "jrc_water_change": {"start": "1984-03-16", "end": "2021-12-31"},
             "hansen_forest_loss": {"start": "2021-01-01", "end": "2025-12-31"},
             "hansen_forest_loss_last_12m": {"start": "2025-01-01", "end": "2025-12-31"},
-            biomass_window_key: biomass_window,
+            "esa_cci_biomass": {"start": "2022-01-01", "end": "2022-12-31"},
+            **(gedi_window if biomass_gedi is not None else {}),
+            "gmw_mangrove_extent": {"start": f"{GMW_EPOCH}-01-01", "end": f"{GMW_EPOCH}-12-31"},
         },
         "thresholds": {
             "cloud_score_plus_cs_cdf": CLOUD_SCORE_THRESHOLD,
@@ -509,7 +545,10 @@ def compute_site(site_key: str, computed_at_utc: str | None = None) -> dict[str,
             "hansen_forest_loss_years": FOREST_LOSS_YEARS,
             "hansen_forest_loss_last_12m_year": FOREST_LOSS_LAST_12M_YEAR,
             "hansen_treecover2000_min_percent": HANSEN_TREE_COVER_MIN_PERCENT,
-            biomass_scale_key: biomass_scale,
+            "esa_cci_biomass_scale_m": 100,
+            **(gedi_scale if biomass_gedi is not None else {}),
+            "gmw_mangrove_epoch": GMW_EPOCH,
+            "gmw_mangrove_scale_m": GMW_SCALE_M,
             "soilgrids_soc_scale_m": 250,
             "soilgrids_soc_depth_cm": "0-30",
         },

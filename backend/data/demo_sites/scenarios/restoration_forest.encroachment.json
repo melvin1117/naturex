@@ -7,9 +7,11 @@
     "JRC Global Surface Water: EC JRC/Google; Pekel et al. (2016), High-resolution mapping of global surface water and its long-term changes, Nature.",
     "Hansen Global Forest Change: Hansen et al. (2013), High-Resolution Global Maps of 21st-Century Forest Cover Change, Science.",
     "ESA CCI Biomass: Santoro, M.; Cartus, O. (2025), ESA Biomass Climate Change Initiative (Biomass_cci): Global datasets of forest above-ground biomass, v6.0, NERC EDS Centre for Environmental Data Analysis, doi:10.5285/95913ffb6467447ca72c4e9d8cf30501.",
+    "Global Mangrove Watch v3.0 (CC BY 4.0): Bunting et al. (2022), Global Mangrove Extent Change 1996-2020: Global Mangrove Watch Version 3.0, Remote Sensing 14(15), 3657; dataset doi:10.5281/zenodo.6894273.",
     "SoilGrids 2.0 (CC BY 4.0): ISRIC - World Soil Information; Poggio et al. (2021), SoilGrids 2.0: producing soil information for the globe with quantified spatial uncertainty, SOIL 7, 217-240."
   ],
   "based_on": "sim-1",
+  "biomass_gedi_t_ha": null,
   "biomass_source": "esa_cci_biomass",
   "biomass_t_ha": 60.1249,
   "centroid": {
@@ -84,6 +86,16 @@
       "version": "v6.0 (2022 map)"
     },
     {
+      "attribution": "Global Mangrove Watch v3.0 (CC BY 4.0): Bunting et al. (2022), Global Mangrove Extent Change 1996-2020: Global Mangrove Watch Version 3.0, Remote Sensing 14(15), 3657; dataset doi:10.5281/zenodo.6894273.",
+      "bands": [
+        "b1"
+      ],
+      "catalog_url": "https://gee-community-catalog.org/projects/mangrove/",
+      "dataset_id": "projects/sat-io/open-datasets/GMW/extent/GMW_V3",
+      "key": "global_mangrove_watch",
+      "version": "v3.0 (2020 epoch)"
+    },
+    {
       "attribution": "SoilGrids 2.0 (CC BY 4.0): ISRIC - World Soil Information; Poggio et al. (2021), SoilGrids 2.0: producing soil information for the globe with quantified spatial uncertainty, SOIL 7, 217-240.",
       "bands": [
         "ocs_0-30cm_mean"
@@ -102,6 +114,10 @@
     "esa_cci_biomass": {
       "end": "2022-12-31",
       "start": "2022-01-01"
+    },
+    "gmw_mangrove_extent": {
+      "end": "2020-12-31",
+      "start": "2020-01-01"
     },
     "hansen_forest_loss": {
       "end": "2025-12-31",
@@ -137,6 +153,7 @@
     "trees": 0.6344,
     "water": 0.0244
   },
+  "mangrove_fraction": 0.0,
   "natural_fraction": 0.9,
   "ndvi_mean": 0.6552,
   "ndvi_series": [
@@ -444,7 +461,9 @@
     "sens_slope_per_year": -0.003,
     "significant_05": false
   },
+  "observed_data_version": "2026Q3",
   "period": "2027Q1",
+  "provenance_note": "Simulated 'encroachment' version for the Time Machine: scripted deltas applied to sim-1, starting from observed data 2026Q3. Not an observation; date_windows, datasets and thresholds describe the observed data.",
   "scenario": "encroachment",
   "scenario_deltas": {
     "biomass_pct_change": -10.0,
@@ -479,6 +498,8 @@
     "cloud_score_plus_cs_cdf": 0.6,
     "dynamic_world_mode_scale_m": 10,
     "esa_cci_biomass_scale_m": 100,
+    "gmw_mangrove_epoch": "2020",
+    "gmw_mangrove_scale_m": 10,
     "hansen_forest_loss_last_12m_year": "2025",
     "hansen_forest_loss_scale_m": 30,
     "hansen_forest_loss_years": "2021-2025",

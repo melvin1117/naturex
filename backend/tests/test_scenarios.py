@@ -6,7 +6,9 @@ import json
 
 import pytest
 
+from app.tools import earth_obs
 from app.tools.earth_obs import (
+    EarthObsMetrics,
     LandcoverTransfer,
     ScenarioDeltas,
     load_site_metrics,
@@ -23,6 +25,7 @@ from app.tools.scenarios import (
     load_scenario_spec,
     ndvi_trend,
     round_fractions,
+    scale_mangrove_fraction,
     scenario_document,
 )
 
@@ -101,6 +104,9 @@ def test_scenarios_are_labelled_simulated_with_provenance(site_key: str) -> None
         assert version.datasets == baseline.datasets
         assert version.attributions == baseline.attributions
         assert version.date_windows == baseline.date_windows
+        assert version.observed_data_version == baseline.data_version
+        assert version.provenance_note is not None
+        assert "Not an observation" in version.provenance_note
         assert version.area_ha == baseline.area_ha
         assert version.soc_t_c_ha == baseline.soc_t_c_ha
         assert version.cloud_free_obs == baseline.cloud_free_obs
@@ -158,12 +164,13 @@ def test_transfers_take_proportionally_and_count_tree_loss() -> None:
         ),
     )
 
-    shares, trees_removed = apply_landcover_transfers(cover, deltas)
+    result = apply_landcover_transfers(cover, deltas)
 
-    assert shares["trees"] == pytest.approx(0.54)
-    assert shares["grass"] == pytest.approx(0.18)
-    assert shares["crops"] == pytest.approx(0.08)
-    assert trees_removed == pytest.approx(0.06)
+    assert result.landcover["trees"] == pytest.approx(0.54)
+    assert result.landcover["grass"] == pytest.approx(0.18)
+    assert result.landcover["crops"] == pytest.approx(0.08)
+    assert result.trees_removed == pytest.approx(0.06)
+    assert result.mangrove_retained == pytest.approx(0.9)  # 6 of 60 pp of host cover cleared
 
 
 def test_transfer_larger_than_its_sources_is_rejected() -> None:
@@ -232,3 +239,106 @@ def test_unknown_scenario_file_raises_clear_error() -> None:
         load_site_metrics("missing_site", "restoration")
     with pytest.raises(ValueError, match="Invalid site key"):
         load_site_metrics("../wetland_mx")
+
+
+# --- Mangrove fraction (GMW) ---
+
+
+@pytest.mark.parametrize("site_key", SITE_KEYS)
+@pytest.mark.parametrize("scenario", SIMULATED)
+def test_scenario_mangrove_never_exceeds_trees_plus_flooded_vegetation(
+    site_key: str, scenario: str
+) -> None:
+    metrics = load_site_metrics(site_key, scenario)  # type: ignore[arg-type]
+
+    host = metrics.landcover["trees"] + metrics.landcover["flooded_vegetation"]
+    assert metrics.mangrove_fraction is not None
+    assert 0 <= metrics.mangrove_fraction <= host + 1e-9
+
+
+def test_mangrove_encroachment_scales_the_mangrove_fraction() -> None:
+    restoration = load_site_metrics("mangrove_mx", "restoration")
+    encroachment = load_site_metrics("mangrove_mx", "encroachment")
+
+    def host(cover: dict[str, float]) -> float:
+        return cover["trees"] + cover["flooded_vegetation"]
+
+    assert restoration.mangrove_fraction is not None
+    assert encroachment.mangrove_fraction is not None
+    expected = (
+        restoration.mangrove_fraction * host(encroachment.landcover) / host(restoration.landcover)
+    )
+    assert encroachment.mangrove_fraction == pytest.approx(expected, abs=2e-4)
+    assert encroachment.mangrove_fraction < restoration.mangrove_fraction
+
+
+def test_mangrove_fraction_is_capped_and_never_grows() -> None:
+    cover = {name: 0.0 for name in LANDCOVER_CLASSES} | {
+        "trees": 0.5,
+        "flooded_vegetation": 0.3,
+        "grass": 0.2,
+    }
+
+    gain = apply_landcover_transfers(
+        cover,
+        ScenarioDeltas(
+            description="replanting",
+            landcover_transfers=(
+                LandcoverTransfer.model_validate(
+                    {"from": ["grass"], "to": "flooded_vegetation", "pp": 10}
+                ),
+            ),
+        ),
+    )
+    loss = apply_landcover_transfers(
+        cover,
+        ScenarioDeltas(
+            description="clearing",
+            landcover_transfers=(
+                LandcoverTransfer.model_validate(
+                    {"from": ["trees", "flooded_vegetation"], "to": "bare", "pp": 40}
+                ),
+            ),
+        ),
+    )
+
+    assert gain.mangrove_retained == 1.0
+    assert scale_mangrove_fraction(0.8, gain.mangrove_retained, gain.landcover) == 0.8
+    assert loss.mangrove_retained == pytest.approx(0.5)
+    assert scale_mangrove_fraction(0.8, loss.mangrove_retained, loss.landcover) == (
+        pytest.approx(0.4)
+    )
+    # An observed GMW share above the Dynamic World host cover is capped once deltas apply.
+    assert scale_mangrove_fraction(0.95, 1.0, cover) == pytest.approx(0.8)
+    assert scale_mangrove_fraction(None, 0.5, cover) is None
+
+
+# --- Simulated-label guards ---
+
+
+def test_simulated_flag_must_match_the_scenario() -> None:
+    data = load_site_metrics("wetland_mx", "restoration").model_dump(mode="json", by_alias=True)
+
+    with pytest.raises(ValueError, match="simulated must be true"):
+        EarthObsMetrics.model_validate(data | {"simulated": False})
+    with pytest.raises(ValueError, match="based_on"):
+        EarthObsMetrics.model_validate(data | {"based_on": None})
+
+
+def test_observed_metrics_cannot_carry_simulation_fields() -> None:
+    data = load_site_metrics("wetland_mx").model_dump(mode="json")
+
+    with pytest.raises(ValueError, match="simulated must be true"):
+        EarthObsMetrics.model_validate(data | {"simulated": True})
+    with pytest.raises(ValueError, match="can't carry simulation fields"):
+        EarthObsMetrics.model_validate(data | {"based_on": "2026Q2"})
+
+
+def test_loader_rejects_a_file_for_another_scenario(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_path = earth_obs.scenario_path
+    monkeypatch.setattr(
+        earth_obs, "scenario_path", lambda site_key, _scenario: real_path(site_key, "restoration")
+    )
+
+    with pytest.raises(ValueError, match="not 'wetland_mx'/'encroachment'"):
+        earth_obs.load_site_metrics("wetland_mx", "encroachment")

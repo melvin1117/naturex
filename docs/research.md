@@ -124,8 +124,9 @@
 | **Brander et al. 2024** (Ecosystem Services 66:101606, **CC BY**) | ESVD biome means, Int$/ha/yr 2020 prices | **ADOPT** as the coefficient source |
 | **ESVD** | **Non-commercial; no redistribution or derivative works without written consent** | **Don't commit raw data** (email esvd@fsd.nl if needed); cite it |
 | Costanza 2014 (2007 US$) | Confirmed: tidal marsh/mangrove **193,843**, swamps/floodplains **25,682**. Lakes/rivers 12,512, tropical 5,382, temperate 3,137, grassland 4,166 are **unverified** against the primary table. Distributions are very skewed (coastal wetland median 12,163 vs mean 193,845). | ADOPT with a citation; show median–mean ranges |
-| **ESA CCI Biomass v6** (`ESA/CCI/Above_Ground_Biomass/V6_0`, CC-BY 4.0, 100 m, has `agb_sd`) | Weak for wetlands and grass | **ADOPT** (primary biomass) |
-| GEDI L4B | 1 km, single 2019–21 mean; too coarse for 500 ha | Cross-check only |
+| **ESA CCI Biomass v6** (`ESA/CCI/Above_Ground_Biomass/V6_0`, CC-BY 4.0, 100 m, has `agb_sd`) | Weak for wetlands and grass | **ADOPT** (primary biomass; in use since the T13 review, 2022 map) |
+| GEDI L4B | 1 km, single 2019–21 mean; too coarse for 500 ha | Cross-check only (T13: `biomass_gedi_t_ha`) |
+| **Global Mangrove Watch v3.0** (`projects/sat-io/open-datasets/GMW/extent/GMW_V3`, CC BY 4.0, 1996–2020) | Dynamic World labels mangrove canopy as trees | **ADOPT** (T13: `mangrove_fraction`, 2020 epoch) |
 | Chloris biomass | **CC-BY-NC-SA** | SKIP |
 | **SoilGrids SOC** (ISRIC, CC BY 4.0, verified in T13; `projects/soilgrids-isric/ocs_mean`, 0–30 cm stock in t/ha) | Wetland carbon is mostly in soil | ADOPT (T13: `soc_t_c_ha`) |
 | Impact Observatory Biodiversity Intactness (CC-BY 4.0) | Optional biodiversity input | Optional |
@@ -138,6 +139,7 @@
 - `LARSE/GEDI/GEDI04_B_002`
 - `ESA/CCI/Above_Ground_Biomass/V6_0`
 - `projects/soilgrids-isric/ocs_mean` (community catalog, ISRIC)
+- `projects/sat-io/open-datasets/GMW/extent/GMW_V3` (community catalog, Global Mangrove Watch)
 
 **Data terms and attribution:**
 | Source | Obligation |
@@ -149,6 +151,7 @@
 | Hansen GFC | CC-BY 4.0; cite Hansen et al. 2013 |
 | GEDI | Public domain; cite doi:10.3334/ORNLDAAC/2056 |
 | ESA CCI Biomass | Public; cite Santoro & Cartus (2025), doi:10.5285/95913ffb6467447ca72c4e9d8cf30501 |
+| Global Mangrove Watch v3.0 | CC BY 4.0 (Zenodo 6894273); cite Bunting et al. 2022, Remote Sensing 14(15):3657 |
 | SoilGrids 2.0 | CC BY 4.0 (ISRIC data README, files.isric.org/soilgrids/latest/data); cite Poggio et al. 2021 and credit ISRIC |
 | Nominatim | ≤ 1 req/s, custom User-Agent, cache results, "© OpenStreetMap contributors" (ODbL) |
 | Natural Earth | Public domain (safe to commit) |
@@ -169,6 +172,6 @@
 
 ## 7. Open items to verify
 - Nemotron model IDs, JSON-mode support, and `chat_template_kwargs` passthrough on Token Factory (needs an API key).
-- The four unverified Costanza rows and GEDI L4B v2.1 coverage (v2 has no 1 km cell over the Sumidero forest site; T13 falls back to ESA CCI there). The SoilGrids licence was verified as CC BY 4.0 in T13.
+- The four unverified Costanza rows and GEDI L4B v2.1 coverage (v2 has no 1 km cell over the Sumidero forest site, so its `biomass_gedi_t_ha` cross-check is null). The SoilGrids licence was verified as CC BY 4.0 in T13.
 - Earth Engine terms for a prize-bearing hackathon.
 - ESVD written consent if we want ESVD-derived coefficients.

@@ -88,7 +88,7 @@ Dataset choices as built:
 | NDVI and coverage | `COPERNICUS/S2_SR_HARMONIZED` · `B8`, `B4` joined with `GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED` · `cs_cdf` | 2021-10-01 to 2026-10-01; `cs_cdf >= 0.60`; a scene counts as cloud-free only when at least 50% of non-water pixels in the polygon are clear | Same method as the T03 notebook, with the stricter T11 scene-level coverage definition so a single clear pixel cannot inflate confidence. Cloud Score+ is the catalog-recommended QA companion for Sentinel-2 surface analysis. |
 | Water change | `JRC/GSW1_4/GlobalSurfaceWater` · `change_abs` | v1.4; source observations 1984-03-16 to 2021-12-31 | Official JRC global surface-water occurrence change layer; stored as mean absolute occurrence change intensity over the polygon with never-water pixels treated as 0. |
 | Forest loss | `UMD/hansen/global_forest_change_2025_v1_13` · `lossyear`, masked by `treecover2000 >= 30` | 2025 v1.13; latest five complete Hansen years, 2021-2025 (`lossyear` 21-25) | Current official catalog version. The project definition is Hansen loss only where 2000 canopy cover was at least 30%, a common conservative forest threshold that avoids counting sparse trees, orchards or urban vegetation as forest loss. The Hansen tree-cover definition is vegetation taller than 5 m in 2000. |
-| Biomass | `LARSE/GEDI/GEDI04_B_002` · `MU` | GEDI L4B Version 2; 2019-04-18 to 2021-08-04 | Official gridded above-ground biomass density in Mg/ha with coverage over the Mexico City site. ESA CCI Biomass was not used because the checked EE catalog URL was unavailable; GEDI L4B is documented and returned coverage for the hero polygon. |
+| Biomass | `LARSE/GEDI/GEDI04_B_002` · `MU` | GEDI L4B Version 2; 2019-04-18 to 2021-08-04 | Official gridded above-ground biomass density in Mg/ha with coverage over the Mexico City site. ESA CCI Biomass was not used because the checked EE catalog URL was unavailable; GEDI L4B is documented and returned coverage for the hero polygon. **Superseded in the T13 review:** ESA CCI Biomass v6.0 (`ESA/CCI/Above_Ground_Biomass/V6_0`, 2022, 100 m) is now primary and GEDI L4B a cross-check (see below). |
 
 Hero metrics produced by T11:
 - NDVI last-12-month mean: 0.6008.
@@ -97,7 +97,8 @@ Hero metrics produced by T11:
 - Cloud-free Sentinel-2 observations in the last 12 months: 73; all 60 months have clear data. A scene counts only if `cs_cdf >= 0.60` for at least 50% of the polygon's non-water pixels.
 - JRC water change mean (`change_abs`): −6.6021.
 - Hansen forest loss in the latest five complete dataset years, masked to `treecover2000 >= 30%`: 0.0 ha.
-- GEDI L4B mean above-ground biomass: 9.4681 t/ha.
+- Above-ground biomass: 17.7435 t/ha (ESA CCI v6.0, 2022; primary since the T13 review). GEDI L4B cross-check: 9.4681 t/ha (T11's original value).
+- Soil organic carbon 0–30 cm (T13): 55.4083 t C/ha. Global Mangrove Watch share (T13): 0.
 
 Re-run and check:
 
@@ -126,19 +127,21 @@ Both boundaries are hand-digitised over Dynamic World pixels and checked with th
 | Sen's slope, Mann-Kendall | −0.0083/yr; τ −0.16, p 0.071 (not significant) | −0.0013/yr; τ −0.01, p 0.90 (not significant) |
 | Cloud-free obs (12 months), months with data | 64; 59/60 | 63; 59/60 |
 | Hansen loss 2021–2025 / 2025 only | 0 / 0 ha | 26.81 / 0.86 ha (6.7% / 0.21% of area: listable) |
-| Biomass | 10.72 t/ha (GEDI L4B) | 63.62 t/ha (ESA CCI v6.0, 2022; GEDI has no cell) |
+| Biomass (ESA CCI v6.0, 2022) | 18.51 t/ha (GEDI cross-check 10.72) | 63.62 t/ha (GEDI has no cell: null) |
+| Mangrove share (GMW v3, 2020) | 94.84% | 0% |
 | SOC 0–30 cm | 69.41 t C/ha | 56.71 t C/ha |
 | JRC water change | −1.16 | +0.09 |
 
 Notes:
-- Dynamic World labels most closed mangrove canopy as **trees**, not flooded vegetation. T14's coastal rule maps only `flooded_vegetation` to mangrove/tidal marsh, so 73% of this mangrove will be valued as tropical forest unless T14 also treats coastal trees in a mangrove site as mangrove (open question for T14).
+- Dynamic World labels most closed mangrove canopy as **trees**, not flooded vegetation, so land cover alone can't say how much of a site is mangrove. **Decision (T13 review):** `mangrove_fraction` from Global Mangrove Watch v3 says it, and T14 values `min(mangrove_fraction, trees + flooded_vegetation)` as mangrove, taken from flooded vegetation first, then trees. Here GMW maps 94.8% of the polygon as mangrove against 93.6% trees + flooded vegetation, so 93.6% is valued as mangrove.
 - The forest boundary was first drawn further north; it included 6.0 ha of 2025 loss (1.24% of the area), which fails the listing gate (`forest_loss_last_12m < 1% of area`). It was redrawn south to keep the 2021–2024 loss scars and exclude the 2025 clearing.
 - The forest's NDVI series swings strongly with the dry season, so its trend isn't significant even with plausible restoration deltas (see the scenario table).
 
 ### New metrics (all three sites, wetland values otherwise unchanged)
 - **`soc_t_c_ha`:** SoilGrids 2.0 organic carbon stock 0–30 cm, `projects/soilgrids-isric/ocs_mean`, band `ocs_0-30cm_mean`, polygon mean at its native 250 m. The mapped unit is t/ha (conversion factor 10 to kg/m², [ISRIC FAQ](https://docs.isric.org/globaldata/soilgrids/SoilGrids_faqs_01.html)), so the mean is already t C/ha. **Licence verified: CC BY 4.0** (ISRIC data README at files.isric.org/soilgrids/latest/data and the [community catalog](https://gee-community-catalog.org/projects/isric/)); attribution: ISRIC, Poggio et al. (2021). Wetland: 55.41 t C/ha.
 - **`forest_loss_last_12m_ha`:** Hansen v1.13 loss in the latest complete year only (`lossyear` 25 = 2025) with the same `treecover2000 ≥ 30` mask, computed in the same `reduceRegion` call as the 5-year loss. It's the calendar year 2025, the closest Hansen gets to "last 12 months". Wetland: 0 ha.
-- **`biomass_source`:** GEDI L4B stays the primary biomass so the wetland is unchanged. Where GEDI L4B has no 1 km cell inside the polygon (the forest: none within 3 km), the script falls back to **ESA CCI Biomass v6.0** (`ESA/CCI/Above_Ground_Biomass/V6_0`, band `agb`, 2022 map, 100 m; cite Santoro & Cartus 2025). Each JSON lists only the datasets it used, with their attributions.
+- **Biomass (decision in the T13 review):** **ESA CCI Biomass v6.0** (`ESA/CCI/Above_Ground_Biomass/V6_0`, band `agb`, 2022 map, 100 m, Mg/ha; cite Santoro & Cartus 2025) is now the primary `biomass_t_ha` for every site (`biomass_source: "esa_cci_biomass"`), matching `docs/research.md`. GEDI L4B (1 km, 2019–2021) is kept as the cross-check `biomass_gedi_t_ha`, which is null where GEDI has no 1 km cell inside the polygon (the forest has none within 3 km). Both come back in one `getInfo()` call. The wetland's biomass changes from 9.47 (GEDI) to 17.74 t/ha (ESA CCI). Each JSON lists only the datasets that returned a value, with their attributions.
+- **`mangrove_fraction`:** area-weighted share of the polygon in **Global Mangrove Watch v3.0** (`projects/sat-io/open-datasets/GMW/extent/GMW_V3`, an ImageCollection of 11 epochs from 1996 to 2020; the latest, `gmw_v3_2020`, is used). Band `b1` is 1 for mangrove and masked elsewhere, at ~25 m; pixel area is summed at 10 m. Licence **CC BY 4.0** (Zenodo record 6894273, v3.0); cite Bunting et al. (2022), Remote Sensing 14(15):3657. Wetland 0, mangrove 0.9484, forest 0.
 - Fix: a month with no usable Sentinel-2 scene used to fail the NDVI call (`Dictionary does not contain key: 'ndvi'`); it now returns null and the month is dropped, as intended. The wetland has data in all 60 months, so its series is unchanged.
 
 All new fields are optional in `EarthObsMetrics`, so older JSON still loads.
@@ -148,8 +151,10 @@ All new fields are optional in `EarthObsMetrics`, so older JSON still loads.
   - Land-cover transfers move percentage points between classes, taken from the source classes in proportion to their shares. A transfer larger than its sources is rejected, shares are re-rounded to sum to exactly 1, and `natural_fraction` is recomputed.
   - Tree cover removed by a transfer becomes forest loss (share × area) in both `forest_loss_ha` and `forest_loss_last_12m_ha`; gains never reduce past loss.
   - `ndvi_step_last_12m` shifts the latest 12 monthly values; the 12-month mean, Sen's slope, Kendall's τ and the Mann-Kendall p-value are then recomputed in Python with the same definitions as the Earth Engine reducers (verified against the observed baselines in `tests/test_scenarios.py`). The month labels stay the same.
-  - `water_change_delta` and `biomass_pct_change` adjust those metrics; SOC, area, cloud-free observations, datasets and attributions carry over.
-  - Each version stores `simulated: true`, `scenario`, `based_on`, `period`, `data_version` and its `scenario_deltas`. `computed_at_utc` is the observed baseline's, so regeneration is byte-stable.
+  - `water_change_delta` and `biomass_pct_change` adjust those metrics (the GEDI cross-check scales with the primary biomass). SOC, area, cloud-free observations, datasets and attributions carry over.
+  - `mangrove_fraction` shrinks in proportion to the trees + flooded vegetation that transfers clear (mangrove is assumed spread evenly over those classes). Gains never add mangrove, since replanted seedlings aren't mapped yet, and the result never exceeds trees + flooded vegetation.
+  - Each version stores `simulated: true`, `scenario`, `based_on`, `period`, `data_version`, `observed_data_version`, its `scenario_deltas` and a `provenance_note`. The note says that `date_windows`, `datasets` and `thresholds` describe the observed data the chain starts from, not the simulated version. `date_windows` stays in place because T15 reads `date_windows["ndvi"]` for recency; the UI must not show it as an observation period (T38/T43 note in `tasks/todo.md`). `EarthObsMetrics` rejects files where `simulated` disagrees with `scenario` or a simulated version lacks these fields, and `load_site_metrics` rejects a file whose site or scenario isn't the one requested.
+  - `computed_at_utc` is the observed baseline's, so regeneration is byte-stable.
 - **Timeline for T38/T43** (chained, so each step's diff shows only that quarter's change):
 
 | Step | `scenario` | `data_version` | Shown as | Based on |
@@ -174,9 +179,12 @@ All new fields are optional in `EarthObsMetrics`, so older JSON still loads.
 | restoration_forest | encroachment | forest/scrub → crops 8 pp, → built 2 pp (29.1 ha loss); NDVI −0.06; biomass −10% | 0.659 | 0.900 | 0.000 | 1 | 67.3 | BBB |
 
 - The hero wetland moves one grade up and two down (A → AA → BBB), matching the tour's "A → BBB" against the starting grade. Its encroachment clears only 0.8 pp of trees, so its 2025-equivalent loss stays under the 1% listing-gate limit.
-- The mangrove is the stable blue chip: restoration can't lift it past AA, because N, L and the NDVI-mean term are already at 1 and its trend isn't significant. Its gain shows in value (more flooded vegetation, T14) rather than grade.
+- The mangrove is the stable blue chip: restoration can't lift it past AA, because N, L and the NDVI-mean term are already at 1 and its trend isn't significant. Its gain shows in value rather than grade: trees + flooded vegetation rise to 96.6%, so the mangrove T14 values rises from 93.6% to the full GMW 94.8%.
 - The forest's restoration gain stays inside A under T15's significance rule. With the raw slope it would be A → AA.
-- **Encroachment fails the listing gate for the mangrove and the forest** (27.5 and 30.0 ha of loss in the last 12 months, over 1% of area). That's deliberate, since cleared trees are forest loss, but T38 must decide whether a re-rated, listed asset that fails the gate is suspended.
+- **Encroachment fails the listing gate for the mangrove and the forest** (27.5 and 30.0 ha of loss in the last 12 months, over 1% of area). That's deliberate, since cleared trees are forest loss. **Decision (T13 review):** the gate applies only at listing time; re-rating a listed asset doesn't suspend it (recorded under T38 in `tasks/todo.md`).
+
+### Existing databases
+`app/seed.py` refreshes each demo site's name, description, boundary, area and centroid on **every** asset with that `site_key`, in the template and in visitor worlds, because these are template content, not visitor state. Shares, cash, the community wallet and status are never touched. The API seeds only an empty database, so **databases seeded before T13 need `make seed` once** to replace the old placeholder squares.
 
 ### Re-run and check
 ```bash
@@ -195,13 +203,13 @@ PATH=$HOME/.local/bin:$PATH uv run python ../scripts/precompute_sites.py --scena
   - **Dynamic World:** "This dataset is produced for the Dynamic World Project by Google in partnership with National Geographic Society and the World Resources Institute."
   - **Cloud Score+:** cite Pasquarella et al. (2023).
   - **Sentinel-2:** "Contains modified Copernicus Sentinel data [year]".
-  - **SoilGrids (CC BY 4.0):** credit ISRIC and cite Poggio et al. (2021). **ESA CCI Biomass:** cite Santoro & Cartus (2025).
+  - **SoilGrids (CC BY 4.0):** credit ISRIC and cite Poggio et al. (2021). **ESA CCI Biomass:** cite Santoro & Cartus (2025). **Global Mangrove Watch (CC BY 4.0):** cite Bunting et al. (2022).
   - T11/T13 store these in the precomputed output; the report page and README show them.
 
 ## Consequences
 - T11 uses these exact methods in `scripts/precompute_sites.py`, with a hand-drawn hero boundary in the wetland area above, and stores dataset versions and attributions with the cached metrics.
 - T13's `earth_obs` tool wraps the same functions behind the mock interface (`USE_MOCKS=true` in CI).
-- Water change (JRC), forest loss (Hansen, 5-year and latest year), biomass (GEDI L4B with an ESA CCI fallback) and SoilGrids SOC are in place (T11/T13), one call per metric.
+- Water change (JRC), forest loss (Hansen, 5-year and latest year), biomass (ESA CCI primary, GEDI L4B cross-check), Global Mangrove Watch share and SoilGrids SOC are in place (T11/T13), one call per metric.
 
 ## Alternatives considered
 - **Microsoft Planetary Computer:** lacks Dynamic World, Hansen and GEDI (ADR-0001), so it's a fallback only.

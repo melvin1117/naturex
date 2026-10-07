@@ -67,7 +67,13 @@ def test_attributions_cover_every_dataset_used(site_key: str) -> None:
         assert dataset.attribution
         assert dataset.attribution in metrics.attributions
     keys = {dataset.key for dataset in metrics.datasets}
-    assert metrics.biomass_source in keys
+    assert metrics.biomass_source == "esa_cci_biomass"
+    assert "esa_cci_biomass" in keys
+    # GEDI is a cross-check, listed only where it returned a value.
+    assert ("gedi_l4b" in keys) == (metrics.biomass_gedi_t_ha is not None)
+    assert any(
+        "Global Mangrove Watch" in text and "Bunting" in text for text in metrics.attributions
+    )
     assert {"dynamic_world", "hansen_global_forest_change", "soilgrids_ocs"} <= keys
     assert any("CC BY 4.0" in text and "ISRIC" in text for text in metrics.attributions)
 
@@ -95,6 +101,9 @@ def test_demo_sites_tell_their_stories() -> None:
     assert mangrove_cover["trees"] + mangrove_cover["flooded_vegetation"] >= 0.85
     assert mangrove_cover["water"] + mangrove_cover["flooded_vegetation"] >= 0.20
     assert mangrove.natural_fraction >= 0.95
+    assert mangrove.mangrove_fraction is not None and mangrove.mangrove_fraction >= 0.85
+    assert forest.mangrove_fraction == 0.0
+    assert load_site_metrics("wetland_mx").mangrove_fraction == 0.0
     # Forest: tree-dominated, damaged in 2021-2025, and still listable (< 1% loss last year).
     assert max(forest.landcover, key=lambda name: forest.landcover[name]) == "trees"
     assert forest.forest_loss_ha >= 0.05 * forest.area_ha
@@ -104,7 +113,13 @@ def test_demo_sites_tell_their_stories() -> None:
 
 def test_old_json_without_t13_fields_still_loads() -> None:
     data = json.loads((DATA_DIR / "wetland_mx.json").read_text())
-    for key in ("soc_t_c_ha", "forest_loss_last_12m_ha", "biomass_source"):
+    for key in (
+        "soc_t_c_ha",
+        "forest_loss_last_12m_ha",
+        "biomass_source",
+        "biomass_gedi_t_ha",
+        "mangrove_fraction",
+    ):
         data.pop(key)
 
     metrics = EarthObsMetrics.model_validate(data)
@@ -112,6 +127,7 @@ def test_old_json_without_t13_fields_still_loads() -> None:
     assert metrics.soc_t_c_ha is None
     assert metrics.forest_loss_last_12m_ha is None
     assert metrics.biomass_source is None
+    assert metrics.mangrove_fraction is None
 
 
 def test_unknown_site_raises_clear_error() -> None:
