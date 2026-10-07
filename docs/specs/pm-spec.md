@@ -59,6 +59,7 @@ Living ecosystems produce enormous value (water filtration, flood protection, ca
 | A5 | If not eligible, I get a stewardship plan | 3–5 concrete, location-specific recommendations |
 | A6 | My listing moves through clear states | draft → rating → listed / needs evidence / ineligible; each state shows the next action; admins can suspend and resume; every change is in the ledger |
 | A7 | I launch the IPO | Owner only, once the asset is listed: choose shares offered and % retained, see the price formula step by step, confirm; trading opens in the Exchange |
+| A9 | My listing is verified, visibly | I upload documents (title or agrarian certificate, assembly minutes); an automated checklist shows each result; an admin approves or rejects with a reason; the decision is in the ledger; in the live world the IPO needs `verified`. Investors see a precise badge and a public "How this listing was verified" panel, including what was **not** checked ([ADR-0006](../adr/0006-listing-verification.md)) |
 | A8 | I see what the community earns | Steward home shows the wallet, IPO proceeds, holders, quarterly payouts, alerts and stewardship actions |
 
 ### Epic B — AI rating & report
@@ -102,7 +103,7 @@ Principle: **one flawless end-to-end story on 3 real sites** beats a wide app wi
 
 | Must (PoC core) | Should | Could | Won't |
 |---|---|---|---|
-| A0–A3, A6–A8, B1–B5, C1–C7, D1–D4, E1, **K1–K4** · Steward and Exchange apps · live rating of new listings (quota) · Time Machine · 3 real demo sites (cached satellite data) · **Nature Ledger** (F1–F2) · **Agent Trace** (G1) · **Eval harness** (G2) · **One-click judge demo sessions + optional tour** (J1–J2) · deployed (host per dev-spec §21) · CI with tests | A4 field evidence (**photos only**), B6 report diffs, E3 impact, K5 delete account, community stewards (more members than the owner) | OAuth sign-in, A5 stewardship plan, E2 compare, Spanish report, OpenTimestamps anchoring (F3) | Real money, tokens/blockchain trading, KYC, email verification and password reset by email, audio evidence, mobile app, PDF export |
+| A0–A3, A6–A9, B1–B5, C1–C7, D1–D4, E1, **K1–K4** · Steward and Exchange apps · live rating of new listings (quota) · Time Machine · 3 real demo sites (cached satellite data) · **Nature Ledger** (F1–F2) · **Agent Trace** (G1) · **Eval harness** (G2) · **One-click judge demo sessions + optional tour** (J1–J2) · deployed (host per dev-spec §21) · CI with tests | A4 field evidence (**photos only**), B6 report diffs, E3 impact, K5 delete account, community stewards (more members than the owner) | OAuth sign-in, A5 stewardship plan, E2 compare, Spanish report, OpenTimestamps anchoring (F3) | Real money, tokens/blockchain trading, KYC, email verification and password reset by email, audio evidence, mobile app, PDF export |
 
 ### Epic F — Nature Ledger (tamper-evident records)
 | ID | Story | Acceptance criteria |

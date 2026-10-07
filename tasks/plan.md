@@ -1,6 +1,6 @@
 # Implementation Plan: NatureX (hackathon build)
 
-> Task list: [todo.md](./todo.md). Specs: [pm-spec](../docs/specs/pm-spec.md) · [dev-spec](../docs/specs/dev-spec.md) · [demo-plan](../docs/specs/demo-plan.md). **Tasks are tracked in [GitHub Issues](https://github.com/melvin1117/naturex/issues):** 6 module epics (#1–#6) with 74 task sub-issues (#7–#65, plus #97–#111 from ADR-0005), labelled `week:N`, `owner:X`, `size:X`, `priority:X`, `module:X`.
+> Task list: [todo.md](./todo.md). Specs: [pm-spec](../docs/specs/pm-spec.md) · [dev-spec](../docs/specs/dev-spec.md) · [demo-plan](../docs/specs/demo-plan.md). **Tasks are tracked in [GitHub Issues](https://github.com/melvin1117/naturex/issues):** 6 module epics (#1–#6) with 76 task sub-issues (#7–#65, plus #97–#111 from ADR-0005 and #113–#114 from ADR-0006), labelled `week:N`, `owner:X`, `size:X`, `priority:X`, `module:X`.
 
 ## Overview
 Build the NatureX PoC in 5 weeks: a community lists land, Nemotron agents rate it from satellite data and news, investors trade play-money shares in a per-visitor sandbox, and ratings update as nature changes. Every Friday has a demo gate from `pm-spec.md` §8. Only the money is simulated; every AI step is real.
@@ -32,20 +32,20 @@ The judge tour is a showcase; the product needs real flows. New tasks **T54–T6
 |---|---|
 | D1 | T54 accounts and sessions → T56 communities, treasury and tenant invariants → T68 authorization policy → T57 enforcement on every route |
 | D2 | T67 ledger privacy (ready now) → T58 listing lifecycle → T59 IPO launch → T60 live rating for new listings |
-| D3 | T66 auth hardening (CSRF, rate limits, pruning); T55 demo sessions |
-| PD (+D1) | T61 sign-in → T62 two app shells → T65 `/judge` → T63 Steward home, T64 IPO screen |
+| D3 | T66 auth hardening (CSRF, rate limits, pruning); T55 demo sessions; T69 listing verification ([ADR-0006](../docs/adr/0006-listing-verification.md)) |
+| PD (+D1) | T61 sign-in → T62 two app shells → T65 `/judge` → T63 Steward home, T64 IPO screen, T70 verification screens |
 
 **Two chains converge on T46 (E2E):**
-- **Backend:** T54 → T56 → T68 → T58 → T59 → T63/T64. T58 also needs T19, so T14/T15 → T19 matter here too.
+- **Backend (now the longest chain):** T54 → T56 → T68 → T58 → T59 → T69 → T70 → T46. T58 also needs T19, so T14/T15 → T19 matter here too.
 - **Frontend:** P04 → T21 → T61 → T62 → T33 → T45. **T21 is now the biggest single risk;** pair on it if it slips.
 
 | Week | D1 | D2 | D3 | PD |
 |---|---|---|---|---|
 | 2 (now) | **T54** | T67, then T19 once #94/#95 merge | (agent work) | P02/P03 updated for two apps, sign-in, Steward home, judge landing |
 | 3 | T56 → T68 → T57 | T58 → T59 | T66, T55, plus agent work | T21 → T61 → T62 → T65; T33 moves into Steward |
-| 4 | Wire T63/T64 with PD | T60 | agent work | T63, T64; T45 tour on top of T65 |
+| 4 | Wire T63/T64/T70 with PD | T60 | T69, agent work | T63, T64, T70; T45 tour on top of T65 |
 
-**Cut order if behind:** K5 delete account → community stewards (owner-only stays) → T60 live rating (fall back to the curated sites and mark new listings "awaiting satellite data").
+**Cut order if behind:** K5 delete account → community stewards (owner-only stays) → the AI document extraction in T69 (keep the deterministic checks, reviewer decision, ledger entry and public panel) → T60 live rating (fall back to the curated sites and mark new listings "awaiting satellite data").
 
 ## Team and ownership
 | Who | Role | Owns (long-term) | Weeks 1–2 focus | Weeks 3–5 focus |

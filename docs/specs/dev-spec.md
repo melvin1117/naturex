@@ -198,6 +198,24 @@ create table community_members (       -- owner-only for the Must; stewards are 
   foreign key (world_id, community_id) references communities (world_id, id),
   foreign key (world_id, user_id) references users (world_id, id)
 );
+-- ADR-0006: listing verification (T69). Documents are private; the ledger keeps only their hashes.
+create table listing_verifications (
+  id uuid primary key default gen_random_uuid(), world_id uuid not null, asset_id uuid not null,
+  level text not null check (level in ('unverified','documents_submitted','verified','rejected','revoked')),
+  checklist jsonb not null,            -- [{check, result: pass|warn|fail, found, source}], shown to steward, reviewer and (results only) the public
+  ai_suggestion text check (ai_suggestion in ('consistent','inconsistent','unreadable')), ai_reasons jsonb,
+  reviewer_role text check (reviewer_role in ('platform_admin','partner_reviewer')), reviewer_user_id uuid, reason text,
+  method_version text not null, created_at timestamptz default now(),
+  foreign key (world_id, asset_id) references assets (world_id, id)
+);
+create table listing_documents (       -- private object storage; deleted with the listing or account
+  id uuid primary key default gen_random_uuid(), world_id uuid not null, asset_id uuid not null,
+  doc_type text not null check (doc_type in ('title','agrarian_certificate','assembly_minutes','entity_registration','other')),
+  storage_key text not null, mime text not null, size_bytes int not null, sha256 char(64) not null,
+  extracted jsonb,                     -- MiniCPM-V fields (may hold names: members and reviewers only)
+  uploaded_by uuid not null, created_at timestamptz default now(),
+  foreign key (world_id, asset_id) references assets (world_id, id)
+);
 create table payout_lines (            -- private and erasable; the public ledger holds only a hash commitment (T67)
   id bigserial primary key, world_id uuid not null, asset_id uuid not null, quarter_label text not null,
   user_id uuid not null, shares bigint not null, amount numeric(14,2) not null,
@@ -298,7 +316,7 @@ create table ledger_entries (         -- Nature Ledger: append-only, hash-chaine
   id bigserial primary key,
   asset_id uuid references assets(id),
   seq int not null,                    -- 0,1,2… per asset
-  kind text not null check (kind in ('listing','report','event','price_anchor','payout')),
+  kind text not null check (kind in ('listing','report','event','price_anchor','payout','verification')),  -- 'verification': ADR-0006 (T69)
   ref_id uuid,                         -- id of report/event/etc.
   payload jsonb not null,              -- canonical snapshot of what was recorded
   prev_hash char(64) not null,         -- '0'*64 for seq 0
@@ -328,6 +346,7 @@ create table llm_calls (
 | `POST /assets/{id}/submit` | Start a rating run; the result sets `listed` / `needs_evidence` / `ineligible` (T58) |
 | `GET /assets/{id}/ipo/preview` · `POST /assets/{id}/ipo` | IPO price with every formula term; launch (owner only, once; T59) |
 | `POST /admin/assets/{id}/suspend` · `…/resume` | Moderation (admin; T58) |
+| `POST /assets/{id}/documents` · `GET /assets/{id}/verification` · `POST /admin/assets/{id}/verification` | Upload evidence (steward/owner) → automated checklist; public verification summary (results only); reviewer decision (admin) (ADR-0006, T69) |
 | `GET /assets` | Marketplace list (latest price, grade, trend) |
 | `GET /assets/{id}` | Asset detail + latest report + recent events |
 | `POST /assets/{id}/evidence` | Upload photos (audio post-hackathon) → field_evidence agent → event + re-rate |
@@ -580,6 +599,7 @@ Secrets stay server-side only; never commit `.env` (commit `.env.example`).
 - **Accounts (ADR-0005):** argon2id via `pwdlib` with a dummy-hash verify for unknown emails; server-side sessions (hashed token, `HttpOnly`/`Secure`/`SameSite=Lax`, 7 d idle / 30 d absolute, rotated on login and persona switch); the §6.1 CSRF rule; login 10 per 15 min and register 5 per hour in independent per-IP and per-account buckets, counted in Postgres, client IP only through `TRUSTED_PROXY_HOPS`; generic login errors.
 - **Admins:** live-world admins are created only by the operator CLI (`python -m app.cli create-admin`, password via `getpass`), never through the API or by email match. **Accepted risk:** without email verification, registration reveals whether an email exists; no permission depends on email.
 - **Authorization on every request** (§6.1), including object-level checks and the 404-across-worlds rule. Every PR touching auth, cookies, sessions or authorization gets a `security-and-hardening` review.
+- **Listing verification (ADR-0006):** uploads are allow-listed (PDF/JPEG/PNG, ≤ 5 MB, magic-byte check), stored privately under generated names and hashed; document text is untrusted LLM input; the AI only suggests and a human reviewer decides; the public sees results and what was not checked, never the documents.
 - **Personal data:** only email, display name and password hash; never in LLM prompts or logs. The public ledger holds no account identifiers (payout details live in `payout_lines`, T67). Sessions and `auth_attempts` are pruned; demo worlds are pruned after 7 days.
 - Treat all retrieved web content and uploaded media as untrusted; enforce schema-validated outputs.
 - Show uncertainty (ranges, confidence) everywhere a number appears.

@@ -44,7 +44,7 @@
 | 1. Register | Rosa | Fills a prefilled community form (editable) in the Steward app | Community registered in 10 seconds |
 | 2. List the land | Rosa | Watches the boundary draw itself, or draws their own | Map zooms to the Xochimilco wetland |
 | 3. AI rates it | 🛰️ | Clicks **Rate** | Agent pipeline lights up live: Super plans → satellite → valuation → Tavily news → Ultra audits; report card revealed, grade stamps in |
-| 4. IPO | Rosa | Sets shares offered and % retained on the Steward IPO screen | IPO price formula shown step by step |
+| 4. IPO | Rosa | Sees the listing's verification checklist (documents reviewed), then sets shares offered and % retained on the Steward IPO screen | "How this listing was verified" is visible, not a black box; IPO price formula shown step by step |
 | 5. Invest | Arjun | Switches to the Exchange, browses, compares, buys 100 shares | **Split screen:** Arjun's cash goes down, Rosa's community wallet (Steward home) goes up |
 | 6. Time passes | 🎛️ | "Next quarter" | Restoration detected → new report → price rises |
 | 7. Bad news | 🎛️ | "Inject: factory encroachment" | 🔔 Phone-style alert for Arjun, grade A → BBB, price drops; Rosa gets stewardship actions |

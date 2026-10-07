@@ -434,7 +434,28 @@ Low / High = same with the low / high coefficient  →  always shown as a range<
       <p style="font-size:13.5px;color:var(--muted);margin-top:10px">Every status change is written to the Nature Ledger.</p>
     </div>
 
-    <h3>5 · Real accounts and the judge demo</h3>
+    <h3>5 · How a listing is verified (no black box)</h3>
+    <div class="card">
+      <div class="chips">
+        <span class="chip x">✍️ Self-attested</span><span class="ar">→</span>
+        <span class="chip b">📄 Documents submitted</span><span class="ar">→</span>
+        <span class="chip p">🔎 Checklist runs</span><span class="ar">→</span>
+        <span class="chip g">🧑‍⚖️ Reviewer decides</span><span class="ar">→</span>
+        <span class="chip y">🔗 Ledger + public panel</span>
+      </div>
+      <div class="branch">
+        <div>📄 Title or agrarian certificate, assembly minutes (consent), community registration</div>
+        <div>🔎 Each check shows pass / warn / fail and what it found: file integrity, not reused, no boundary overlap, consent present, <b>AI reads the document and compares</b> name, place and area with the listing (it only suggests)</div>
+        <div>🧑‍⚖️ An admin approves or rejects with a reason; in the live world the IPO needs “verified”</div>
+        <div>🔗 The ledger records the decision, the reviewer role and document hashes (never the documents); investors see <i>“How this listing was verified”</i>, including what was <b>not</b> checked</div>
+      </div>
+    </div>
+    <div class="grid g2" style="margin-top:12px">
+      <div class="card"><div class="ic">🏁</div><h4>Hackathon</h4><p>Documents + visible checklist + AI consistency check + admin decision. The badge says “Documents reviewed by NatureX (hackathon process)”, never “ownership proven”.</p></div>
+      <div class="card"><div class="ic">🏛️</div><h4>Real world (same model, more checks)</h4><p>Land-registry match (in Mexico: RAN for communal and ejido land, the public property registry for private land) · legal entity · community consent (FPIC) · accredited local verifiers · 30-day public objection period · yearly re-verification and disputes.</p></div>
+    </div>
+
+    <h3>6 · Real accounts and the judge demo</h3>
     <div class="grid g2">
       <div class="card"><div class="ic">🌍</div><h4>Live world</h4><p>Real sign-up at /register. One shared market: real communities list real land, real investors trade play money. Starts with the 3 curated sites.</p></div>
       <div class="card"><div class="ic">🧪</div><h4>Demo sandbox</h4><p>/judge → <b>Explore as community</b>, <b>investor</b> or <b>admin</b>. A private copy with Rosa, Arjun and an admin ready; switch persona, “Reset my demo”, optional guided tour. Never touches the live world.</p></div>
@@ -535,7 +556,9 @@ flowchart TD
   G1 -- No --> PLAN["Stewardship plan<br/>AI recommendations"]
   PLAN -. "improve & re-apply" .-> RATE
   G1 -- Yes --> LIVE["✅ Listed<br/>report public"]
-  LIVE --> IPO["Owner launches IPO<br/>price from fair value"]
+  LIVE --> VER{"Verified?<br/>docs + checklist<br/>+ reviewer"}
+  VER -- "No · upload docs" --> VER
+  VER -- Yes --> IPO["Owner launches IPO<br/>price from fair value"]
   IPO --> TRADE["Investors buy / sell<br/>(Exchange · play money)"]
   LIVE -. "admin" .-> SUSP["⏸ Suspended<br/>(trading paused)"]
   SUSP -. "resume" .-> LIVE
@@ -557,7 +580,7 @@ flowchart TD
   class S start
   class REG,DRAW,IPO,LIVE,TRADE,PRICE,PAY step
   class RATE,RERATE,MON ai
-  class V1,C1,G1,CH dec
+  class V1,C1,G1,CH,VER dec
   class EVID,PLAN,ALERT,SUSP warn
 `;
 
@@ -606,6 +629,7 @@ const D = {
   PLAN: ["Stewardship plan", "action", "Auditor generates concrete actions to improve the grade (e.g. stop grazing in zone 2, restore buffer strip).", []],
   IPO: ["IPO launch", "step", "The owner chooses shares offered and % retained and confirms. IPO price = fair value per share; the community's retained stake is held by its treasury; the public float is sold to investors.", []],
   LIVE: ["Listed", "step", "The listing passed the gate; its report is public on the Exchange. Trading starts once the owner launches the IPO.", []],
+  VER: ["Listing verification", "rule", "Before a live-world IPO: the steward uploads documents (title or agrarian certificate, assembly minutes), an automated checklist runs (integrity, reuse, overlap, consent, and an AI comparison of name, place and area that only suggests), and a reviewer approves or rejects with a reason. The decision goes into the ledger and the public 'How this listing was verified' panel, including what was not checked (ADR-0006).", ["Real world: registry match, legal entity, FPIC consent, accredited verifiers, objection period"]],
   SUSP: ["Suspended", "action", "An admin can pause a listed asset (e.g. abuse or a disputed boundary) and resume it later. Every change is in the Nature Ledger.", []],
   TRADE: ["Trading", "step", "Sandbox trades with play money; instant fills against market maker.", []],
   PRICE: ["Price update", "step", "Market Engine blends fair value + order flow.", []],
@@ -674,7 +698,7 @@ function bindSteps() {
 }
 
 function addClicks(src, ids) { return src + "\n" + ids.map(id => `  click ${id} call showDetails("${id}")`).join("\n"); }
-const FLOW_IDS = ["S","REG","DRAW","V1","RATE","C1","EVID","G1","PLAN","IPO","LIVE","SUSP","TRADE","PRICE","MON","CH","RERATE","ALERT","PAY"];
+const FLOW_IDS = ["S","REG","DRAW","V1","RATE","C1","EVID","G1","PLAN","IPO","LIVE","VER","SUSP","TRADE","PRICE","MON","CH","RERATE","ALERT","PAY"];
 
 
 // ---------- Custom architecture (HTML + logos) ----------

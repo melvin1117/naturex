@@ -129,6 +129,7 @@ Proposed (2026-10-06). Changes [pm-spec](../specs/pm-spec.md) §2–§5 and Epic
 - **T17 (#81)** keeps its persona placeholder until T54/T56 land; T57 then moves every route onto the principal.
 - **New tasks:** T54–T68 (`tasks/todo.md`, issues #97–#111). The listing lifecycle, IPO launch, live rating of new listings and the quarterly revenue split (D4) become *Must*, because real listings and the Steward home can't work without them.
 - **Scope kept small:** communities are owner-only for the *Must*; adding and removing stewards is a *Should*.
+- **Who may list which land** is handled by [ADR-0006](./0006-listing-verification.md): a visible verification checklist and reviewer decision, required before a live-world IPO.
 - **Existing tasks that move:**
   - T18, T22 and T23 move into the Exchange app.
   - T33 moves into the Steward app.

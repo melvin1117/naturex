@@ -423,10 +423,10 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 ### T46 · E2E demo test (#58) — D2 · S · Must
 - [ ] Playwright runs the tour's autoplay path end to end; runs in CI; reused to record the video
-- [ ] *(ADR-0005)* Real-account path: owner registers → creates a community → lists → rating → IPO → a second account signs up, buys and sells → a quarter passes → alert, owner payout and dividends show → sign out; an investor gets 403 on Steward actions
+- [ ] *(ADR-0005)* Real-account path: owner registers → creates a community → lists → rating → uploads documents → admin verifies (ADR-0006) → IPO → a second account signs up, buys and sells → a quarter passes → alert, owner payout and dividends show → sign out; an investor gets 403 on Steward actions
 - [ ] *(ADR-0005)* Demo path: `/judge` → each persona; two demo sessions stay isolated from each other and from the live world
 
-**Verify:** `make e2e` green locally and in CI · **Deps:** T45, T57, T63, T64, T65 · **Files:** `frontend/e2e/demo.spec.ts`, `.github/workflows/e2e.yml`
+**Verify:** `make e2e` green locally and in CI · **Deps:** T45, T57, T63, T64, T65, T70 · **Files:** `frontend/e2e/demo.spec.ts`, `.github/workflows/e2e.yml`
 
 ### T47 · Eval harness (#59) — D3 · M · Must · G2 G3
 - [ ] `make eval`: news classification, Auditor faithfulness and direction, schema reliability, Copilot grounding, and the Nano/Super/Ultra routing comparison (dev-spec §18)
@@ -458,10 +458,25 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 **Verify:** `make fe-check`; manual launch, then a second account buys · **Deps:** T59, T62 · **Files:** `frontend/src/app/(steward)/steward/assets/[id]/ipo/page.tsx`, `frontend/src/components/IpoPreview.tsx`
 
+### T69 · Listing verification checks and review (#113) — D3 · M · Must · A9
+- [ ] Stewards upload up to 3 documents (PDF/JPEG/PNG, ≤ 5 MB, magic-byte check, SHA-256, private storage, generated names); an automated checklist runs: file integrity, hash not reused, no boundary overlap, consent document present, MiniCPM-V field extraction, and a Nemotron comparison with the listing (name, place via reverse geocode, area ±20%). Every check stores pass/warn/fail with the values found; the AI only suggests (consistent | inconsistent | unreadable), and document text is treated as untrusted data
+- [ ] A reviewer (admin) approves or rejects with a reason; levels unverified → documents_submitted → verified | rejected, plus revoked; each decision appends a `verification` ledger entry (level, reviewer role, method version, checklist result, document hashes; no documents or names)
+- [ ] In the live world, `POST /assets/{id}/ipo` requires `verified` (409 `not_verified`); sandbox seeds have the curated sites verified by a demo reviewer plus one unverified listing
+
+**Verify:** `make test` (upload abuse cases, checklist with a fake LLM, gate, ledger payload has no PII); manual: upload → review → IPO · **Deps:** T58, T59, T68, T30, T09 · **Files:** `backend/app/services/verification.py`, `backend/app/routers/verification.py`, `backend/app/models.py`, `backend/migrations/versions/*_verification.py`, `backend/tests/test_verification.py`
+
+### T70 · Verification screens and transparency panel (#114) — PD + D1 · S · Must · A9
+- [ ] Steward: upload documents, see the checklist and the reviewer's decision; the IPO screen explains why launch is blocked until verified
+- [ ] Exchange: a verification badge with precise wording ("Documents reviewed by NatureX (hackathon process)" / "Self-attested by the community") and a public "How this listing was verified" panel: level, date, reviewer role, each check's result, what was not checked, link to the ledger entry
+- [ ] Admin: a review queue with documents, checklist, AI reasons and the map; approve or reject with a reason
+
+**Verify:** `make fe-check`; `web-design-guidelines` review; manual upload → approve → badge · **Deps:** T69, T62, P05 · **Files:** `frontend/src/app/(steward)/steward/assets/[id]/verify/page.tsx`, `frontend/src/components/VerificationPanel.tsx`, `frontend/src/app/admin/verifications/page.tsx`
+
 
 ### ✅ Checkpoint W4 (Fri Oct 23) = FEATURE FREEZE
 - [ ] The public URL runs the whole 3-minute demo script, including the judge tour
 - [ ] *(ADR-0005)* Both apps work for real accounts: Steward (community, listing, live rating, IPO, wallet) and Exchange (browse, trade, portfolio, alerts)
+- [ ] *(ADR-0006)* Listing verification: documents → visible checklist → admin decision in the ledger → "How this listing was verified" panel; the live-world IPO needs `verified`
 - [ ] `make eval` and `make e2e` green; UI polish pass done
 - [ ] **No new features after this point**
 
