@@ -169,12 +169,12 @@ def test_ledger_is_append_only() -> None:
 
     engine = create_engine(get_settings().database_url)
     with Session(engine) as session:
-        seed(session)
+        seed(session)  # stores each demo site's report v1 entry at seq 0 (T19)
         session.add(
             LedgerEntry(
                 world_id=WORLD_ID,
                 asset_id=DEMO_SITES[0].id,
-                seq=0,
+                seq=1,
                 kind=LedgerKind.LISTING,
                 payload={"area_ha": "500.00"},
                 prev_hash="0" * 64,
@@ -195,7 +195,10 @@ def test_ledger_is_append_only() -> None:
         conn.execute(text("SET LOCAL naturex.allow_ledger_delete = 'on'"))
         deleted = conn.execute(text("DELETE FROM ledger_entries")).rowcount
     engine.dispose()
-    assert deleted == 1
+    assert deleted == len(DEMO_SITES) + 1
+    # The template's report v1 entries are gone now; start later tests from an empty schema.
+    command.downgrade(cfg, "base")
+    command.upgrade(cfg, "head")
 
 
 def test_world_id_present_on_mutable_models() -> None:

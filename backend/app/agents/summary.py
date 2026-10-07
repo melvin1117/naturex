@@ -14,13 +14,13 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 
-from app import mocks
 from app.config import Settings
 from app.llm import LLMClient, LLMError, Tier
-from app.schemas import ReportOut, ReportSummarySource
+from app.schemas import EventOut, ReportOut, ReportSummarySource
 
 AGENT_NAME = "report_summary"
 _REPORT_PERIOD = "Q3 2026"
+_QUARTER = re.compile(r"^(?P<year>\d{4})Q(?P<quarter>[1-4])$")
 _FALLBACK_CACHE_SECONDS = 300.0
 _NUMERIC_TOKEN = re.compile(
     r"(?<![\d.,])"
@@ -54,6 +54,17 @@ class SummaryResult:
 
 
 @dataclass(frozen=True, slots=True)
+class SummaryContext:
+    """Facts about the rated asset that aren't on the report itself."""
+
+    asset_name: str
+    area_ha: Decimal
+    country: str | None = None
+    event: EventOut | None = None
+    """The asset's most recent event, if any."""
+
+
+@dataclass(frozen=True, slots=True)
 class CachedSummary:
     result: SummaryResult
     expires_at: float | None
@@ -72,12 +83,13 @@ def generate_report_summary(
     llm_client_factory: Callable[[], LLMClient | None] | None,
     log_asset_id_factory: Callable[[], UUID | None] | None = None,
     clock: Callable[[], float] = time.monotonic,
+    context: SummaryContext | None = None,
 ) -> SummaryResult:
     cached = _cached(report.id, clock())
     if cached is not None:
         return cached
 
-    facts = _facts(report)
+    facts = _facts(report, context)
     if settings.use_mocks or llm_client_factory is None:
         return _cache_result(
             report.id, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock()
@@ -129,11 +141,23 @@ def _cache_result(
     return result
 
 
-def _facts(report: ReportOut) -> list[str]:
-    asset = mocks.get_asset(report.asset_id)
-    event = asset.recent_events[0] if asset and asset.recent_events else None
+def _report_period(report: ReportOut) -> str:
+    match = _QUARTER.match(report.period or "")
+    if match is None:
+        return _REPORT_PERIOD
+    return f"Q{match['quarter']} {match['year']}"
+
+
+def _facts(report: ReportOut, context: SummaryContext | None) -> list[str]:
+    event = context.event if context else None
+    data_status = (
+        "simulated Time Machine scenario (scripted changes to observed data), not an observation"
+        if report.simulated
+        else "observed satellite data"
+    )
     lines = [
-        f"report_period: {_REPORT_PERIOD}",
+        f"report_period: {_report_period(report)}",
+        f"data_status: {data_status}",
         "health_score_scale: 100",
         f"health_score: {_decimal(report.health_score, places=1)}",
         f"grade: {report.grade or 'unknown'}",
@@ -148,12 +172,12 @@ def _facts(report: ReportOut) -> list[str]:
         f"value_high_usd: {_decimal(report.value_high, places=2)}",
         f"sandbox_price_per_unit: {_decimal(report.fair_value_per_share, places=4)}",
     ]
-    if asset is not None:
+    if context is not None:
         lines.extend(
             [
-                f"asset_name: {asset.name}",
-                f"asset_area: {_whole(asset.area_ha)} ha",
-                f"asset_country: {asset.country or 'unknown'}",
+                f"asset_name: {context.asset_name}",
+                f"asset_area: {_whole(context.area_ha)} ha",
+                f"asset_country: {context.country or 'unknown'}",
             ]
         )
     if report.value_breakdown:
@@ -181,6 +205,8 @@ def _prompt(facts: list[str]) -> str:
         "Write a sober NatureX rating-agency summary for the report below.\n"
         "Use Markdown. Keep it under 160 words. Say the value as a range, midpoint, "
         "and confidence. State that sandbox prices are play money only if you mention price. "
+        "If data_status says simulated, say clearly that the figures come from a simulated "
+        "scenario, not observations. "
         "Do not introduce any number that is not present verbatim in the facts. "
         "Do not present this as a real security or investment.\n\n"
         "Facts:\n- " + "\n- ".join(facts)
@@ -217,10 +243,15 @@ def _fallback_summary(facts: list[str]) -> str:
         if event
         else ""
     )
+    basis = (
+        "a simulated Time Machine scenario (scripted changes to observed data, not an observation)"
+        if values["data_status"].startswith("simulated")
+        else "deterministic satellite metrics"
+    )
     return (
         f"## Ecological Performance Report — {values['report_period']}\n\n"
         f"Health {values['health_score']} / {values['health_score_scale']} "
-        f"(grade {values['grade']}) is based on deterministic mock metrics for "
+        f"(grade {values['grade']}) is based on {basis} for "
         f"{values.get('asset_area', 'the demo site')}. The annual value range is "
         f"{values['value_range']} · mid {values['value_mid']} · "
         f"{values['confidence']} confidence.{pressure} Sandbox pricing is play money only; "

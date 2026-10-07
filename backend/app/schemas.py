@@ -99,11 +99,21 @@ class AssetCard(BaseModel):
     country: str | None = None
     status: AssetStatusOut
     area_ha: Decimal
-    price: Decimal | None = None
-    price_change_pct: float | None = None
+    price: Decimal | None = Field(default=None, description="Latest sandbox price (play money).")
+    price_change_pct: float | None = Field(
+        default=None, description="Latest price vs the IPO price, in percent (2 dp)."
+    )
     grade: str | None = None
-    trend: str | None = None
+    trend: str | None = Field(
+        default=None,
+        description="Health vs the previous report: improving, declining or stable; "
+        "null with a single report.",
+    )
     confidence: Decimal | None = None
+    health_score: Decimal | None = None
+    value_low: Decimal | None = Field(default=None, description="Int$2020/yr, latest report.")
+    value_mid: Decimal | None = None
+    value_high: Decimal | None = None
     cover_image_url: str | None = None
     site_key: str | None = None
 
@@ -142,6 +152,21 @@ class ReportOut(BaseModel):
     )
     recommendations: list[str] | None = None
     auditor: AuditorOutput | None = None
+    data_version: str | None = Field(
+        default=None, description="Earth observation data version, e.g. 2026Q3 or sim-1."
+    )
+    period: str | None = Field(
+        default=None, description="Quarter the report stands for (a simulated version's quarter)."
+    )
+    simulated: bool = Field(
+        default=False,
+        description="True for Time Machine scenarios: scripted changes, never observed data.",
+    )
+    rating: dict[str, Any] | None = Field(
+        default=None,
+        description="Deterministic rating snapshot: metrics provenance, valuation, score and "
+        "fair-value inputs (T19).",
+    )
     created_at: datetime
 
 

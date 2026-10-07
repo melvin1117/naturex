@@ -1,35 +1,16 @@
-"""Contract smoke tests for mock API routes (T08). Ledger coverage is in test_ledger.py;
-orders/portfolio coverage is in test_market_api.py."""
+"""Contract smoke tests for the routes that are still stubs (T08). Assets and reports are real
+since T19 (test_reports_api.py); ledger coverage is in test_ledger.py; orders/portfolio
+coverage is in test_market_api.py."""
 
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.mocks import REPORT_WETLAND, WETLAND_ID, news_scout_fixture
+from app.mocks import REPORT_WETLAND, WETLAND_ID, news_scout_fixture, wetland_report
 from app.schemas import AuditorOutput, NewsScoutItem, NewsScoutOutput
 
 client = TestClient(app)
-
-
-def test_list_assets() -> None:
-    res = client.get("/assets")
-    assert res.status_code == 200
-    data = res.json()
-    assert len(data) == 3
-    assert {a["site_key"] for a in data} == {
-        "wetland_mx",
-        "mangrove_mx",
-        "restoration_forest",
-    }
-
-
-def test_get_asset_with_report() -> None:
-    res = client.get(f"/assets/{WETLAND_ID}")
-    assert res.status_code == 200
-    body = res.json()
-    assert body["latest_report"]["grade"] == "A"
-    assert body["latest_report"]["auditor"]["auditor_adjustment"] == -2
 
 
 def test_create_asset_accepted() -> None:
@@ -57,10 +38,10 @@ def test_admin_and_copilot() -> None:
     assert client.post("/copilot", json={"question": "Why did it drop?"}).status_code == 200
 
 
-def test_events_require_world_cookie_and_report_still_works() -> None:
-    event_res = client.get("/events")
-    assert (event_res.status_code, event_res.json()["detail"]) == (401, "world_required")
-    assert client.get(f"/reports/{REPORT_WETLAND}").status_code == 200
+def test_world_scoped_routes_require_a_world_cookie() -> None:
+    for path in ("/events", "/assets", f"/assets/{WETLAND_ID}", f"/reports/{REPORT_WETLAND}"):
+        res = client.get(path)
+        assert (res.status_code, res.json()["detail"]) == (401, "world_required"), path
 
 
 def test_agent_schemas_validate_fixtures() -> None:
@@ -68,8 +49,9 @@ def test_agent_schemas_validate_fixtures() -> None:
     for item in items:
         NewsScoutItem.model_validate(item.model_dump())
     NewsScoutOutput(events=items)
-    report = client.get(f"/assets/{WETLAND_ID}").json()["latest_report"]
-    AuditorOutput.model_validate(report["auditor"])
+    auditor = wetland_report().auditor
+    assert auditor is not None
+    AuditorOutput.model_validate(auditor.model_dump())
 
 
 def test_openapi_contains_core_paths() -> None:

@@ -12,6 +12,7 @@
           "assets"
         ],
         "summary": "List Assets",
+        "description": "Marketplace cards for every asset in the world except drafts.",
         "operationId": "list_assets_assets_get",
         "responses": {
           "200": {
@@ -162,6 +163,7 @@
           "assets"
         ],
         "summary": "List Reports",
+        "description": "Every report of the asset, newest first.",
         "operationId": "list_reports_assets__asset_id__reports_get",
         "parameters": [
           {
@@ -209,6 +211,7 @@
           "assets"
         ],
         "summary": "List Prices",
+        "description": "Price history, oldest first. `range` is accepted but not applied yet.",
         "operationId": "list_prices_assets__asset_id__prices_get",
         "parameters": [
           {
@@ -309,6 +312,7 @@
           "reports"
         ],
         "summary": "Diff Reports",
+        "description": "Headline changes between two reports of one asset (deterministic; T37 extends it).",
         "operationId": "diff_reports_reports__report_id__diff__prev__get",
         "parameters": [
           {
@@ -990,7 +994,8 @@
                 "type": "null"
               }
             ],
-            "title": "Price"
+            "title": "Price",
+            "description": "Latest sandbox price (play money)."
           },
           "price_change_pct": {
             "anyOf": [
@@ -1001,7 +1006,8 @@
                 "type": "null"
               }
             ],
-            "title": "Price Change Pct"
+            "title": "Price Change Pct",
+            "description": "Latest price vs the IPO price, in percent (2 dp)."
           },
           "grade": {
             "anyOf": [
@@ -1023,7 +1029,8 @@
                 "type": "null"
               }
             ],
-            "title": "Trend"
+            "title": "Trend",
+            "description": "Health vs the previous report: improving, declining or stable; null with a single report."
           },
           "confidence": {
             "anyOf": [
@@ -1036,6 +1043,55 @@
               }
             ],
             "title": "Confidence"
+          },
+          "health_score": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Score"
+          },
+          "value_low": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Low",
+            "description": "Int$2020/yr, latest report."
+          },
+          "value_mid": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Mid"
+          },
+          "value_high": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value High"
           },
           "cover_image_url": {
             "anyOf": [
@@ -2181,6 +2237,49 @@
                 "type": "null"
               }
             ]
+          },
+          "data_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Version",
+            "description": "Earth observation data version, e.g. 2026Q3 or sim-1."
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period",
+            "description": "Quarter the report stands for (a simulated version's quarter)."
+          },
+          "simulated": {
+            "type": "boolean",
+            "title": "Simulated",
+            "description": "True for Time Machine scenarios: scripted changes, never observed data.",
+            "default": false
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating",
+            "description": "Deterministic rating snapshot: metrics provenance, valuation, score and fair-value inputs (T19)."
           },
           "created_at": {
             "type": "string",

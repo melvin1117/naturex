@@ -193,7 +193,7 @@ class Report(SQLModel, table=True):
     value_high: Decimal | None = Field(default=None, max_digits=16, decimal_places=2)
     value_breakdown: dict[str, Any] | None = Field(default=None, sa_column=Column(JSONB))
     fair_value_per_share: Decimal | None = Field(default=None, max_digits=12, decimal_places=4)
-    flags: dict[str, Any] | None = Field(default=None, sa_column=Column(JSONB))
+    flags: list[dict[str, Any]] | None = Field(default=None, sa_column=Column(JSONB))
     summary_md: str | None = None
     recommendations: list[Any] | None = Field(default=None, sa_column=Column(JSONB))
     auditor_json: dict[str, Any] | None = Field(default=None, sa_column=Column(JSONB))

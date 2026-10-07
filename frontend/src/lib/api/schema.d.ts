@@ -11,7 +11,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Assets */
+        /**
+         * List Assets
+         * @description Marketplace cards for every asset in the world except drafts.
+         */
         get: operations["list_assets_assets_get"];
         put?: never;
         /** Create Asset */
@@ -63,7 +66,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Reports */
+        /**
+         * List Reports
+         * @description Every report of the asset, newest first.
+         */
         get: operations["list_reports_assets__asset_id__reports_get"];
         put?: never;
         post?: never;
@@ -80,7 +86,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Prices */
+        /**
+         * List Prices
+         * @description Price history, oldest first. `range` is accepted but not applied yet.
+         */
         get: operations["list_prices_assets__asset_id__prices_get"];
         put?: never;
         post?: never;
@@ -114,7 +123,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Diff Reports */
+        /**
+         * Diff Reports
+         * @description Headline changes between two reports of one asset (deterministic; T37 extends it).
+         */
         get: operations["diff_reports_reports__report_id__diff__prev__get"];
         put?: never;
         post?: never;
@@ -417,16 +429,36 @@ export interface components {
             status: components["schemas"]["AssetStatusOut"];
             /** Area Ha */
             area_ha: string;
-            /** Price */
+            /**
+             * Price
+             * @description Latest sandbox price (play money).
+             */
             price?: string | null;
-            /** Price Change Pct */
+            /**
+             * Price Change Pct
+             * @description Latest price vs the IPO price, in percent (2 dp).
+             */
             price_change_pct?: number | null;
             /** Grade */
             grade?: string | null;
-            /** Trend */
+            /**
+             * Trend
+             * @description Health vs the previous report: improving, declining or stable; null with a single report.
+             */
             trend?: string | null;
             /** Confidence */
             confidence?: string | null;
+            /** Health Score */
+            health_score?: string | null;
+            /**
+             * Value Low
+             * @description Int$2020/yr, latest report.
+             */
+            value_low?: string | null;
+            /** Value Mid */
+            value_mid?: string | null;
+            /** Value High */
+            value_high?: string | null;
             /** Cover Image Url */
             cover_image_url?: string | null;
             /** Site Key */
@@ -833,6 +865,29 @@ export interface components {
             /** Recommendations */
             recommendations?: string[] | null;
             auditor?: components["schemas"]["AuditorOutput"] | null;
+            /**
+             * Data Version
+             * @description Earth observation data version, e.g. 2026Q3 or sim-1.
+             */
+            data_version?: string | null;
+            /**
+             * Period
+             * @description Quarter the report stands for (a simulated version's quarter).
+             */
+            period?: string | null;
+            /**
+             * Simulated
+             * @description True for Time Machine scenarios: scripted changes, never observed data.
+             * @default false
+             */
+            simulated: boolean;
+            /**
+             * Rating
+             * @description Deterministic rating snapshot: metrics provenance, valuation, score and fair-value inputs (T19).
+             */
+            rating?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Created At
              * Format: date-time

@@ -1,0 +1,266 @@
+"""Real reports and assets API, scoped to the caller's world (T19)."""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from datetime import date
+from decimal import Decimal
+from typing import Any
+from uuid import UUID
+
+import pytest
+from alembic import command
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlmodel import Session, select
+
+from app.agents.summary import clear_summary_cache
+from app.config import Settings, get_settings
+from app.db import get_session
+from app.main import app
+from app.models import Asset, Report
+from app.sandbox import create_world
+from app.schemas import ReportSummarySource
+from app.seed import DEMO_SITES, WORLD_ID, seed
+from app.services.rating import latest_report, rate_asset
+from app.tools.earth_obs import load_site_metrics
+from tests.conftest import alembic_cfg, requires_db
+
+HERO = "wetland_mx"
+D = Decimal
+
+
+@pytest.fixture
+def session() -> Iterator[Session]:
+    """A session inside a transaction that is rolled back, so test worlds never persist."""
+    command.upgrade(alembic_cfg(), "head")
+    engine = create_engine(get_settings().database_url)
+    with engine.connect() as conn:
+        outer = conn.begin()
+        db = Session(bind=conn, join_transaction_mode="create_savepoint")
+        seed(db)
+        yield db
+        db.close()
+        outer.rollback()
+    engine.dispose()
+
+
+@pytest.fixture
+def client(session: Session) -> Iterator[TestClient]:
+    app.dependency_overrides[get_session] = lambda: session
+    # USE_MOCKS=true (the default): no live LLM call, but every number comes from the DB.
+    app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None, use_mocks=True)
+    clear_summary_cache()
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+    clear_summary_cache()
+
+
+def _world(client: TestClient) -> dict[str, Any]:
+    res = client.get("/world")
+    assert res.status_code == 200
+    body: dict[str, Any] = res.json()
+    return body
+
+
+def _asset_id(world: dict[str, Any], site_key: str = HERO) -> str:
+    return str(next(a["id"] for a in world["assets"] if a["site_key"] == site_key))
+
+
+def _world_asset(session: Session, world_id: UUID, site_key: str = HERO) -> Asset:
+    return session.exec(
+        select(Asset).where(Asset.world_id == world_id, Asset.site_key == site_key)
+    ).one()
+
+
+def _rate_restoration(session: Session, world_id: UUID) -> Report:
+    asset = _world_asset(session, world_id)
+    metrics = load_site_metrics(HERO, "restoration")
+    report = rate_asset(session, world_id, asset, metrics=metrics, as_of=date(2026, 10, 1))
+    session.commit()
+    return report
+
+
+@requires_db
+def test_marketplace_cards_carry_real_report_and_price_numbers(client: TestClient) -> None:
+    world = _world(client)
+
+    res = client.get("/assets")
+
+    assert res.status_code == 200
+    cards = {card["site_key"]: card for card in res.json()}
+    assert set(cards) == {site.key for site in DEMO_SITES}
+    hero = cards[HERO]
+    assert hero["id"] == _asset_id(world)
+    assert hero["name"] == "Xochimilco Wetland"
+    assert hero["status"] == "listed"
+    assert (D(hero["health_score"]), hero["grade"], D(hero["confidence"])) == (
+        D("76.2"),
+        "A",
+        D("71.0"),
+    )
+    assert (D(hero["value_low"]), D(hero["value_mid"]), D(hero["value_high"])) == (
+        D("2121067"),
+        D("2669511"),
+        D("2669511"),
+    )
+    assert D(hero["price"]) == D("21.4723")
+    assert hero["price_change_pct"] == 0.0
+    assert hero["trend"] is None
+    assert (cards["mangrove_mx"]["grade"], D(cards["mangrove_mx"]["price"])) == (
+        "AA",
+        D("285.1519"),
+    )
+    assert (cards["restoration_forest"]["grade"], D(cards["restoration_forest"]["price"])) == (
+        "A",
+        D("19.5456"),
+    )
+
+
+@requires_db
+def test_marketplace_price_change_and_trend_follow_trades_and_new_reports(
+    client: TestClient, session: Session
+) -> None:
+    world = _world(client)
+    assert client.post(
+        "/orders", json={"asset_id": _asset_id(world), "side": "buy", "qty": 100}
+    ).is_success
+    _rate_restoration(session, UUID(world["id"]))
+
+    hero = next(c for c in client.get("/assets").json() if c["site_key"] == HERO)
+
+    assert hero["price_change_pct"] > 0
+    assert (hero["grade"], hero["trend"]) == ("AA", "improving")
+
+
+@requires_db
+def test_asset_detail_serves_the_stored_report(client: TestClient) -> None:
+    world = _world(client)
+
+    res = client.get(f"/assets/{_asset_id(world)}")
+
+    assert res.status_code == 200
+    body = res.json()
+    assert D(body["price"]) == D("21.4723")
+    assert body["recent_events"] == []
+    report = body["latest_report"]
+    assert report["version"] == 1
+    assert (D(report["health_score"]), report["grade"], D(report["confidence"])) == (
+        D("76.2"),
+        "A",
+        D("71.0"),
+    )
+    assert D(report["fair_value_per_share"]) == D("21.4723")
+    assert sum(report["value_breakdown"].values()) == 2_669_511
+    assert [f["type"] for f in report["flags"]] == [
+        "low_bound_fallback:shrubland",
+        "auditor_pending",
+    ]
+    assert (report["data_version"], report["period"], report["simulated"]) == (
+        "2026Q3",
+        "2026Q3",
+        False,
+    )
+    assert report["rating"]["score"]["health"] == "76.2"
+    assert report["auditor"] is None
+    assert report["recommendations"] == []
+    assert report["summary_source"] == ReportSummarySource.FALLBACK.value
+    assert "Health 76.2 / 100 (grade A)" in report["summary_md"]
+
+
+@requires_db
+def test_report_history_lists_every_version_newest_first(
+    client: TestClient, session: Session
+) -> None:
+    world = _world(client)
+    second = _rate_restoration(session, UUID(world["id"]))
+
+    res = client.get(f"/assets/{_asset_id(world)}/reports")
+
+    assert res.status_code == 200
+    reports = res.json()
+    assert [r["version"] for r in reports] == [2, 1]
+    assert reports[0]["id"] == str(second.id)
+    assert (reports[0]["simulated"], reports[0]["data_version"], reports[0]["period"]) == (
+        True,
+        "sim-1",
+        "2026Q4",
+    )
+    assert reports[0]["flags"][0]["type"] == "simulated"
+    assert "simulated Time Machine scenario" in reports[0]["summary_md"]
+    latest = client.get(f"/assets/{_asset_id(world)}").json()["latest_report"]
+    assert latest["id"] == str(second.id)
+
+
+@requires_db
+def test_get_report_and_diff(client: TestClient, session: Session) -> None:
+    world = _world(client)
+    first = client.get(f"/assets/{_asset_id(world)}").json()["latest_report"]
+    second = _rate_restoration(session, UUID(world["id"]))
+
+    res = client.get(f"/reports/{first['id']}")
+    diff = client.get(f"/reports/{second.id}/diff/{first['id']}")
+
+    assert res.status_code == 200
+    assert res.json() == first
+    assert diff.status_code == 200
+    changes = diff.json()["changes"]
+    assert changes[0] == "health_score: 76.20 → 87.10"
+    assert changes[1] == "grade: A → AA"
+
+
+@requires_db
+def test_diff_rejects_reports_of_different_assets(client: TestClient, session: Session) -> None:
+    world = _world(client)
+    world_id = UUID(world["id"])
+    hero = latest_report(session, world_id, _world_asset(session, world_id).id)
+    mangrove = latest_report(session, world_id, _world_asset(session, world_id, "mangrove_mx").id)
+    assert hero is not None and mangrove is not None
+
+    assert client.get(f"/reports/{hero.id}/diff/{mangrove.id}").status_code == 400
+
+
+@requires_db
+def test_price_history_is_the_worlds_price_rows(client: TestClient) -> None:
+    world = _world(client)
+    asset_id = _asset_id(world)
+    assert client.post("/orders", json={"asset_id": asset_id, "side": "buy", "qty": 10}).is_success
+
+    res = client.get(f"/assets/{asset_id}/prices")
+
+    assert res.status_code == 200
+    points = res.json()
+    assert [p["reason"] for p in points] == ["ipo", "order"]
+    assert D(points[0]["price"]) == D("21.4723")
+
+
+@requires_db
+def test_reports_and_assets_of_other_worlds_are_not_found(
+    client: TestClient, session: Session
+) -> None:
+    _world(client)
+    other = create_world(session)
+    other_asset = _world_asset(session, other.id)
+    other_report = latest_report(session, other.id, other_asset.id)
+    template_asset = _world_asset(session, WORLD_ID)
+    template_report = latest_report(session, WORLD_ID, template_asset.id)
+    assert other_report is not None and template_report is not None
+
+    for asset_id in (other_asset.id, template_asset.id):
+        for path in ("", "/reports", "/prices"):
+            assert client.get(f"/assets/{asset_id}{path}").status_code == 404, path
+    for report_id in (other_report.id, template_report.id):
+        assert client.get(f"/reports/{report_id}").status_code == 404
+    listed = {card["id"] for card in client.get("/assets").json()}
+    assert str(other_asset.id) not in listed and str(template_asset.id) not in listed
+
+
+@requires_db
+def test_world_scoped_routes_need_a_world(client: TestClient, session: Session) -> None:
+    report = latest_report(session, WORLD_ID, _world_asset(session, WORLD_ID).id)
+    assert report is not None
+
+    for path in ("/assets", f"/assets/{report.asset_id}", f"/reports/{report.id}"):
+        res = client.get(path)
+        assert (res.status_code, res.json()["detail"]) == (401, "world_required"), path
