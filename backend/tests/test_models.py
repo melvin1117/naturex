@@ -31,6 +31,8 @@ EXPECTED_TABLES = {
     "ledger_entries",
     "llm_calls",
     "sessions",
+    "payout_lines",
+    "payout_salts",
 }
 
 
@@ -219,3 +221,49 @@ def test_world_id_present_on_mutable_models() -> None:
     ):
         cls = getattr(m, name)
         assert "world_id" in cls.model_fields, f"{name} missing world_id"
+
+
+@requires_db
+def test_payout_lines_migration_downgrades_and_upgrades() -> None:
+    """T67 (0007): private payout tables and the assets (world_id, id) key come and go."""
+    cfg = alembic_cfg()
+    command.upgrade(cfg, "head")
+    command.downgrade(cfg, "0006")
+    engine = create_engine(get_settings().database_url)
+    try:
+        inspector = inspect(engine)
+        assert not {"payout_lines", "payout_salts"} & set(inspector.get_table_names())
+        assert "uq_assets_world_id_id" not in {
+            c["name"] for c in inspector.get_unique_constraints("assets")
+        }
+        command.upgrade(cfg, "head")
+        inspector = inspect(engine)
+        assert {"payout_lines", "payout_salts"} <= set(inspector.get_table_names())
+        assert "uq_assets_world_id_id" in {
+            c["name"] for c in inspector.get_unique_constraints("assets")
+        }
+        assert {fk["name"] for fk in inspector.get_foreign_keys("payout_lines")} == {
+            "fk_payout_lines_asset",
+            "fk_payout_lines_user",
+        }
+    finally:
+        engine.dispose()
+
+
+@requires_db
+def test_payout_salts_must_be_32_bytes() -> None:
+    command.upgrade(alembic_cfg(), "head")
+    engine = create_engine(get_settings().database_url)
+    with (
+        engine.connect() as conn,
+        conn.begin(),
+        pytest.raises(DBAPIError, match="ck_payout_salts_salt_len"),
+    ):
+        conn.execute(
+            text(
+                "INSERT INTO payout_salts (world_id, asset_id, quarter_label, salt) "
+                "VALUES (:w, :a, 'q', :s)"
+            ),
+            {"w": WORLD_ID, "a": DEMO_SITES[0].id, "s": b"short"},
+        )
+    engine.dispose()

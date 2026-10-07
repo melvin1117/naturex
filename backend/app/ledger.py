@@ -10,12 +10,20 @@ so editing, removing or reordering any entry breaks verification from that point
 
 Payload rule: store the business values themselves (scores, prices, areas), not just IDs, so
 an edited source row can be caught by comparing it with its ledger payload.
+
+Privacy rule (ADR-0005 §6, T67): the ledger is public and can't be edited, so payloads never
+hold account identifiers, emails or person names. `append` enforces a cheap guard as defence in
+depth: it rejects any key on a deny-list (`user_id`, `holder_id`, `email`, `password`…, at any
+depth, plus `*_user_id` and `*_email`) and any email-shaped string. It can't tell a user UUID
+from an asset UUID, so producers stay responsible for what they put in, and
+`tests/test_ledger_privacy.py` scans one payload of every kind against the real accounts.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
@@ -28,6 +36,43 @@ from app.models import Asset, LedgerEntry, LedgerKind
 
 GENESIS_HASH = "0" * 64
 TAMPER_FACTOR = 10
+
+# Keys that name an account or hold personal data. `name` alone isn't here: a listing's asset
+# name is public. Person names use the explicit keys below.
+DENIED_PAYLOAD_KEYS: frozenset[str] = frozenset(
+    {
+        "user_id",
+        "user_ids",
+        "holder",
+        "holders",
+        "holder_id",
+        "holder_ids",
+        "holder_name",
+        "holder_payouts",
+        "community_user_id",
+        "uploaded_by",
+        "reviewer_id",
+        "persona_key",
+        "email",
+        "emails",
+        "password",
+        "password_hash",
+        "display_name",
+        "person_name",
+        "full_name",
+        "owner_name",
+        "session_id",
+        "token",
+        "token_hash",
+    }
+)
+_DENIED_KEY_SUFFIXES = ("_user_id", "_user_ids", "_email", "_password")
+# The local part can't contain "/", so URLs like medium.com/@author/post don't match.
+_EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+
+
+class LedgerPrivacyError(ValueError):
+    """A ledger payload holds an account identifier or personal data (ADR-0005 §6)."""
 
 
 class HashedEntry(Protocol):
@@ -78,6 +123,21 @@ def canonical(payload: Mapping[str, Any]) -> bytes:
     return json.dumps(
         payload, sort_keys=True, separators=(",", ":"), default=str, allow_nan=False
     ).encode()
+
+
+def check_public_payload(payload: Any, path: str = "$") -> None:
+    """Raise LedgerPrivacyError if a payload has a denied key or an email-shaped string."""
+    if isinstance(payload, Mapping):
+        for key, value in payload.items():
+            lowered = str(key).lower()
+            if lowered in DENIED_PAYLOAD_KEYS or lowered.endswith(_DENIED_KEY_SUFFIXES):
+                raise LedgerPrivacyError(f"ledger payloads must not hold {path}.{key}")
+            check_public_payload(value, f"{path}.{key}")
+    elif isinstance(payload, list | tuple):
+        for index, value in enumerate(payload):
+            check_public_payload(value, f"{path}[{index}]")
+    elif isinstance(payload, str) and _EMAIL.search(payload):
+        raise LedgerPrivacyError(f"ledger payloads must not hold an email address ({path})")
 
 
 def entry_hash(payload: Mapping[str, Any], kind: LedgerKind, seq: int, prev_hash: str) -> str:
@@ -159,8 +219,11 @@ def append(
     """Add the next entry for an asset in the caller's transaction (the caller commits).
 
     Locks the asset row first, so concurrent appends for one asset queue instead of
-    racing for the same `seq`. The payload is stored exactly as it was hashed.
+    racing for the same `seq`. The payload is stored exactly as it was hashed. Raises
+    LedgerPrivacyError, before touching the DB, if the payload fails `check_public_payload`.
     """
+    stored: dict[str, Any] = json.loads(canonical(payload))
+    check_public_payload(stored)
     locked = session.exec(
         select(Asset.id).where(Asset.id == asset_id).with_for_update()
     ).one_or_none()
@@ -174,7 +237,6 @@ def append(
         .limit(1)
     ).first()
     seq, prev = (last.seq + 1, last.hash) if last else (0, GENESIS_HASH)
-    stored: dict[str, Any] = json.loads(canonical(payload))
     entry = LedgerEntry(
         world_id=world_id,
         asset_id=asset_id,

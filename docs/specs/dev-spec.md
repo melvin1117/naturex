@@ -204,7 +204,7 @@ create table assets (
   community_id uuid,                                  -- ADR-0005: the community that manages the listing
   community_user_id uuid,                             -- the community's treasury (kind = 'treasury'): retained stake, seeded at IPO, + its dividends (T41)
   verification_revoked_at timestamptz,                -- ADR-0006: set on revoke; while set, demo_auto can't approve; cleared only by a human admin approval
-  -- ADR-0005 (T56): unique (world_id, id); foreign key (world_id, community_id) → communities (world_id, id);
+  -- unique (world_id, id) (added by T67 for payout_lines); ADR-0005 (T56): foreign key (world_id, community_id) → communities (world_id, id);
   --                 foreign key (world_id, community_user_id) → users (world_id, id)
   country text, description text, cover_image_url text,
   geojson jsonb not null,
@@ -267,7 +267,16 @@ create table payout_lines (            -- private and erasable; the public ledge
   id bigserial primary key, world_id uuid not null, asset_id uuid not null, quarter_label text not null,
   user_id uuid not null, shares bigint not null, amount numeric(14,2) not null,
   foreign key (world_id, asset_id) references assets (world_id, id),
-  foreign key (world_id, user_id) references users (world_id, id)
+  foreign key (world_id, user_id) references users (world_id, id),
+  unique (world_id, asset_id, quarter_label, user_id),  -- one line per holder per payout
+  check (shares > 0), check (amount > 0)
+);
+create index on payout_lines (world_id, user_id);       -- erasure (K5)
+create table payout_salts (            -- private random salt of each payout's line commitment (T67)
+  world_id uuid, asset_id uuid, quarter_label text,
+  salt bytea not null check (octet_length(salt) = 32),
+  primary key (world_id, asset_id, quarter_label),     -- one payout per asset quarter
+  foreign key (world_id, asset_id) references assets (world_id, id)
 );
 
 create table metrics (                -- raw earth-obs output per rating run
@@ -702,6 +711,25 @@ A tick is triggered by `POST /admin/simulate/quarter`, by a scheduled job, or by
   can report a no-holders case, but `pay_quarter` refuses to apply one to the DB. `pay_quarter`
   is a thin transaction-scoped helper for T38/T44 and is not wired to `routers/market.py` while
   T17 rewrites that router.
+- **As built (T67), ledger privacy (ADR-0005 §6):** `pay_quarter` writes one private
+  `payout_lines` row per paid holder (user, shares, amount), a random 32-byte salt in
+  `payout_salts`, and a public `payout` ledger entry with aggregates only: `quarter_label`,
+  `value_mid`, `capture_rate`, `revenue`, `community_fund`, `dividend_pool`, `dividends_total`,
+  `unallocated_dividends`, `community_wallet_credit`, `holder_count`, plus
+  `lines_commitment = sha256(salt ‖ canonical({"lines": [...]}))` over the lines sorted by user
+  ID, and `commitment_method`. The salt never reaches the ledger, so nobody can confirm a
+  guessed holder line from public data.
+  - `verify_payout_commitment(session, entry)` audits the private lines against the public
+    entry: `ok`, `mismatch` (a line or the salt changed), `salt_missing` (erased) or
+    `no_commitment` (a pre-T67 entry, which still lists holders in its payload; sandbox only).
+  - `erase_payout_lines_for_user(session, world_id=, user_id=)` deletes that user's lines and
+    the salts of every payout they were in (for K5 delete-account). The ledger stays valid and
+    its aggregates stay true, but those commitments can no longer be verified, by design.
+  - Idempotency per asset quarter: the ledger check under the asset lock, plus the
+    `payout_salts` primary key.
+  - Sandboxes: reset and prune delete a world's lines and salts. Payouts are visitor activity
+    and aren't copied; a source world that holds payouts can't be copied at all, because the
+    copy remaps user IDs and its lines could never verify against the copied commitment.
 
 Invariants (unit-tested): cash is never negative; shares are conserved; the price stays > 0; every price change has a `reason`.
 
@@ -825,6 +853,14 @@ def verify(entries) -> dict:
   - `canonical` rejects NaN.
   - `append` locks the asset row (`SELECT … FOR UPDATE`) so concurrent appends can't race for a `seq`, and it stores the payload exactly as hashed.
   - `verify` also checks that `seq` runs 0, 1, 2… with no gaps, and returns `head: null` when the chain is broken.
+- **As built (T67), privacy:** payloads never hold account identifiers, emails or person names
+  (ADR-0005 §6). Payouts record aggregates plus a salted commitment of the private
+  `payout_lines` (§8). As defence in depth, `append` calls `check_public_payload` and raises
+  `LedgerPrivacyError` for a deny-listed key at any depth (`user_id`, `holder_id`,
+  `holder_payouts`, `email`, `password`, `display_name`… and any `*_user_id` or `*_email`) or an
+  email-shaped string. A listing's `name` is the public site name and is allowed. The guard
+  can't tell a user UUID from an asset UUID, so `tests/test_ledger_privacy.py` also builds one
+  entry of every kind and scans it against every account's ID, email and name.
 - **Tamper demo:** `POST /admin/tamper-demo {asset_id, seq?}` (DEMO_MODE only; 404 otherwise).
   - It copies the chain and multiplies the first numeric payload field of one entry (default: the latest) by 10. If the payload has no number, it adds `"tampered": true`.
   - It returns the field, the before and after values, and the failing verification. Nothing is written; the DB trigger would reject an UPDATE anyway.

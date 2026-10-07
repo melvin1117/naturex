@@ -15,6 +15,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKeyConstraint,
     Index,
+    LargeBinary,
     SmallInteger,
     String,
     UniqueConstraint,
@@ -169,6 +170,8 @@ class UserSession(SQLModel, table=True):
 
 class Asset(SQLModel, table=True):
     __tablename__ = "assets"
+    # Target of composite foreign keys, so private rows can't link across worlds (T67).
+    __table_args__ = (UniqueConstraint("world_id", "id", name="uq_assets_world_id_id"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     world_id: UUID = Field(foreign_key="worlds.id", index=True)
@@ -341,6 +344,50 @@ class LedgerEntry(SQLModel, table=True):
     prev_hash: str = Field(max_length=64)
     hash: str = Field(max_length=64)
     created_at: datetime = _created_at()
+
+
+class PayoutLine(SQLModel, table=True):
+    """One holder's share of a quarterly payout (T67). Private and erasable: the public ledger
+    holds only aggregates and a salted commitment of these lines (`app.market.revenue`)."""
+
+    __tablename__ = "payout_lines"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["world_id", "asset_id"], ["assets.world_id", "assets.id"], name="fk_payout_lines_asset"
+        ),
+        ForeignKeyConstraint(
+            ["world_id", "user_id"], ["users.world_id", "users.id"], name="fk_payout_lines_user"
+        ),
+        UniqueConstraint(
+            "world_id", "asset_id", "quarter_label", "user_id", name="uq_payout_lines_holder"
+        ),
+        Index("ix_payout_lines_world_id_user_id", "world_id", "user_id"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True, sa_type=BigInteger)
+    world_id: UUID
+    asset_id: UUID
+    quarter_label: str
+    user_id: UUID
+    shares: int = Field(sa_column=Column(BigInteger, nullable=False))
+    amount: Decimal = Field(max_digits=14, decimal_places=2)
+
+
+class PayoutSalt(SQLModel, table=True):
+    """The private random salt of one payout's line commitment (T67). Deleting it makes the
+    public commitment unlinkable to any copy of the lines."""
+
+    __tablename__ = "payout_salts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["world_id", "asset_id"], ["assets.world_id", "assets.id"], name="fk_payout_salts_asset"
+        ),
+    )
+
+    world_id: UUID = Field(primary_key=True)
+    asset_id: UUID = Field(primary_key=True)
+    quarter_label: str = Field(primary_key=True)
+    salt: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
 
 
 class LlmCall(SQLModel, table=True):

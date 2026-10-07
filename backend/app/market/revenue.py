@@ -15,22 +15,38 @@ asset's community retained stake is recorded as a positive holding for `Asset.co
 
 Market mutation lock contract for T17/T38: lock the `Asset` row first, then affected `User`
 rows in ascending ID order, then `Holding` rows in ascending user ID order, before computing
-or writing the mutation. `pay_quarter` follows that order. Its ledger payload keeps per-holder
-payouts for the demo; this is bounded by the small sandbox holder count.
+or writing the mutation. `pay_quarter` follows that order.
+
+Ledger privacy (ADR-0005 §6, T67): the public `payout` ledger entry holds only aggregates
+(revenue, community fund, dividends total, holder count…) and a commitment of the per-holder
+lines. The lines live in the private, erasable `payout_lines` table. The commitment is
+`sha256(salt ‖ canonical(sorted lines))` with a random 32-byte salt per payout, kept privately
+in `payout_salts`: without the salt nobody can confirm a guessed holder line against the public
+ledger, and deleting the salt makes the commitment unlinkable for good.
+`verify_payout_commitment` audits the private lines against the public entry;
+`erase_payout_lines_for_user` erases one user's lines (K5).
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import secrets
+from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Any, Literal, cast
 from uuid import UUID
 
+from sqlalchemy import CursorResult, delete, tuple_
 from sqlmodel import Session, col, select
 
-from app.ledger import append
-from app.models import Asset, Holding, LedgerEntry, LedgerKind, User
+from app.ledger import append, canonical
+from app.models import Asset, Holding, LedgerEntry, LedgerKind, PayoutLine, PayoutSalt, User
 
 CAPTURE_RATE = Decimal("0.02")
+PAYOUT_COMMITMENT_METHOD = "sha256(salt||canonical(lines))/v1"
+SALT_BYTES = 32
 _QUARTERS_PER_YEAR = Decimal("4")
 _CENT = Decimal("0.01")
 _IMPACT = Decimal("0.0001")
@@ -117,6 +133,25 @@ class ImpactAllocation:
 class AppliedPayout:
     payout: QuarterlyPayout
     ledger_entry: LedgerEntry
+
+
+CommitmentStatus = Literal["ok", "mismatch", "salt_missing", "no_commitment"]
+
+
+@dataclass(frozen=True, slots=True)
+class CommitmentCheck:
+    """`ok` when the private lines and salt reproduce the public commitment.
+
+    `mismatch`: a line, the salt or the commitment changed (or a line was erased without its
+    salt). `salt_missing`: the salt was erased, so the commitment is unlinkable by design.
+    `no_commitment`: a pre-T67 entry that lists its holder payouts in the payload instead.
+    """
+
+    status: CommitmentStatus
+
+    @property
+    def valid(self) -> bool:
+        return self.status == "ok"
 
 
 def _cash(value: Decimal) -> Decimal:
@@ -322,6 +357,45 @@ def _require_community_holding(asset: Asset, holdings: list[Holding]) -> None:
         )
 
 
+def payout_lines_commitment(salt: bytes, lines: Iterable[tuple[UUID, int, Decimal]]) -> str:
+    """`sha256(salt ‖ canonical({"lines": [...]}))` over (user_id, shares, amount) lines.
+
+    Lines are sorted by user ID and amounts normalised to cents, so the order rows come back
+    from the DB in doesn't matter.
+    """
+    if len(salt) != SALT_BYTES:
+        raise ValueError(f"salt must be {SALT_BYTES} bytes, got {len(salt)}")
+    body = canonical(
+        {
+            "lines": [
+                {"user_id": str(user_id), "shares": shares, "amount": str(_cash(amount))}
+                for user_id, shares, amount in sorted(lines, key=lambda line: str(line[0]))
+            ]
+        }
+    )
+    return hashlib.sha256(salt + body).hexdigest()
+
+
+def _payout_ledger_payload(
+    payout: QuarterlyPayout, *, quarter_label: str, commitment: str
+) -> dict[str, object]:
+    """Aggregates and the line commitment only: never a holder ID, name or email."""
+    return {
+        "quarter_label": quarter_label,
+        "value_mid": payout.value_mid,
+        "capture_rate": payout.capture_rate,
+        "revenue": payout.revenue,
+        "community_fund": payout.split.community_fund,
+        "dividend_pool": payout.split.dividend_pool,
+        "dividends_total": payout.dividends_total,
+        "unallocated_dividends": payout.unallocated_dividends,
+        "community_wallet_credit": payout.community_wallet_credit,
+        "holder_count": len(payout.holder_payouts),
+        "lines_commitment": commitment,
+        "commitment_method": PAYOUT_COMMITMENT_METHOD,
+    }
+
+
 def pay_quarter(
     session: Session,
     *,
@@ -336,6 +410,9 @@ def pay_quarter(
     the same asset queue behind the same `SELECT … FOR UPDATE` and the second transaction
     sees the first transaction's payout entry. The function is intentionally not wired to
     routers while T17 rewrites `routers/market.py`; T38/T44 will call it from jobs/UI flows.
+
+    Writes one private `payout_lines` row per paid holder, the payout's private salt, and a
+    public ledger entry with aggregates and the salted line commitment.
     """
     if not quarter_label:
         raise ValueError("quarter_label must not be empty")
@@ -356,34 +433,105 @@ def pay_quarter(
         holders=tuple(HolderShares(str(holding.user_id), holding.shares) for holding in holdings),
     )
 
+    lines: list[PayoutLine] = []
     for holder_payout in payout.holder_payouts:
         user_id = UUID(holder_payout.key)
         user = users_by_id.get(user_id)
         if user is None:
             raise LookupError(f"holder user {user_id} not found in world {world_id}")
         user.cash_balance = _cash(user.cash_balance + holder_payout.amount)
+        lines.append(
+            PayoutLine(
+                world_id=world_id,
+                asset_id=asset_id,
+                quarter_label=quarter_label,
+                user_id=user_id,
+                shares=holder_payout.shares,
+                amount=holder_payout.amount,
+            )
+        )
 
     asset.community_wallet = _cash(asset.community_wallet + payout.community_wallet_credit)
+    salt = secrets.token_bytes(SALT_BYTES)
+    session.add_all(lines)
+    session.add(
+        PayoutSalt(world_id=world_id, asset_id=asset_id, quarter_label=quarter_label, salt=salt)
+    )
+    commitment = payout_lines_commitment(
+        salt, ((line.user_id, line.shares, line.amount) for line in lines)
+    )
     ledger_entry = append(
         session,
         world_id=world_id,
         asset_id=asset_id,
         kind=LedgerKind.PAYOUT,
-        payload={
-            "quarter_label": quarter_label,
-            "value_mid": payout.value_mid,
-            "capture_rate": payout.capture_rate,
-            "revenue": payout.revenue,
-            "community_fund": payout.split.community_fund,
-            "dividend_pool": payout.split.dividend_pool,
-            "dividends_total": payout.dividends_total,
-            "unallocated_dividends": payout.unallocated_dividends,
-            "community_wallet_credit": payout.community_wallet_credit,
-            "holder_count": len(payout.holder_payouts),
-            "holder_payouts": [
-                {"user_id": p.key, "shares": p.shares, "amount": p.amount}
-                for p in payout.holder_payouts
-            ],
-        },
+        payload=_payout_ledger_payload(payout, quarter_label=quarter_label, commitment=commitment),
     )
     return AppliedPayout(payout=payout, ledger_entry=ledger_entry)
+
+
+def verify_payout_commitment(session: Session, ledger_entry: LedgerEntry) -> CommitmentCheck:
+    """Recompute a payout entry's commitment from the private lines and salt.
+
+    Audits `payout_lines` against the public ledger: any edited, added or removed line, or a
+    changed salt, gives `mismatch`. After `erase_payout_lines_for_user` it gives `salt_missing`,
+    by design.
+    """
+    if ledger_entry.kind != LedgerKind.PAYOUT:
+        raise ValueError(f"ledger entry {ledger_entry.seq} is a {ledger_entry.kind}, not a payout")
+    commitment = ledger_entry.payload.get("lines_commitment")
+    if not isinstance(commitment, str):
+        return CommitmentCheck("no_commitment")
+    quarter_label = ledger_entry.payload["quarter_label"]
+    salt = session.get(PayoutSalt, (ledger_entry.world_id, ledger_entry.asset_id, quarter_label))
+    if salt is None:
+        return CommitmentCheck("salt_missing")
+    lines = session.exec(
+        select(PayoutLine).where(
+            PayoutLine.world_id == ledger_entry.world_id,
+            PayoutLine.asset_id == ledger_entry.asset_id,
+            PayoutLine.quarter_label == quarter_label,
+        )
+    ).all()
+    try:
+        recomputed = payout_lines_commitment(
+            salt.salt, ((line.user_id, line.shares, line.amount) for line in lines)
+        )
+    except ValueError:
+        return CommitmentCheck("mismatch")
+    return CommitmentCheck("ok" if hmac.compare_digest(recomputed, commitment) else "mismatch")
+
+
+def erase_payout_lines_for_user(session: Session, *, world_id: UUID, user_id: UUID) -> int:
+    """Delete one user's payout lines, and the salts of every payout they were in (K5).
+
+    Runs in the caller's transaction and returns the number of lines deleted. The public ledger
+    entries are untouched: their aggregates stay true, but their commitments can no longer be
+    verified (`salt_missing`), by design. Deleting the salt as well means nobody holding an old
+    copy of the erased line can confirm it against the public commitment. The other holders'
+    lines stay, as their own private payout history.
+    """
+    payouts = session.exec(
+        select(PayoutLine.asset_id, PayoutLine.quarter_label)
+        .where(PayoutLine.world_id == world_id, PayoutLine.user_id == user_id)
+        .distinct()
+    ).all()
+    if not payouts:
+        return 0
+    session.execute(
+        delete(PayoutSalt).where(
+            col(PayoutSalt.world_id) == world_id,
+            tuple_(col(PayoutSalt.asset_id), col(PayoutSalt.quarter_label)).in_(
+                [(asset_id, quarter_label) for asset_id, quarter_label in payouts]
+            ),
+        )
+    )
+    deleted = cast(
+        CursorResult[Any],
+        session.execute(
+            delete(PayoutLine).where(
+                col(PayoutLine.world_id) == world_id, col(PayoutLine.user_id) == user_id
+            )
+        ),
+    )
+    return int(deleted.rowcount or 0)
