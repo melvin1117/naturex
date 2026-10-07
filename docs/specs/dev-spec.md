@@ -223,17 +223,20 @@ create table verification_runs (       -- one row per run; one current run per a
   id uuid primary key default gen_random_uuid(), world_id uuid not null, asset_id uuid not null,
   level text not null check (level in ('unverified','documents_submitted','verified','rejected','revoked')),
   is_current boolean not null default true,
-  input_fingerprint char(64) not null, -- sha256(community, name, geometry, area, document commitments, method_version); any change → unverified
+  input_fingerprint char(64) not null, -- sha256(community, name, geometry, area, document commitments, method_version, mode, evidence_kind); any change → unverified
   checklist jsonb not null,            -- [{check, result: pass|warn|fail, found, source}]; public panel shows names + results only
   ai_suggestion text check (ai_suggestion in ('consistent','inconsistent','unreadable')), ai_reasons jsonb,  -- T71; untrusted heuristic
   reviewer_role text check (reviewer_role in ('platform_admin','partner_reviewer','demo_auto')), reviewer_user_id uuid, reason text,
-  mode text not null check (mode in ('review','demo')),  -- demo: sample documents + auto-reviewer, always disclosed (ADR-0006 §6)
+  mode text not null check (mode in ('review','demo')),  -- deployment mode at creation (ADR-0006 §6)
+  evidence_kind text not null check (evidence_kind in ('sample','real')),
+  check (reviewer_role is distinct from 'demo_auto' or (mode = 'demo' and evidence_kind = 'sample')),
   method_version text not null, created_at timestamptz default now(),
   unique (world_id, id), unique (world_id, asset_id, id),
   foreign key (world_id, asset_id) references assets (world_id, id),
   foreign key (world_id, reviewer_user_id) references users (world_id, id)
 );
--- Write-once: a trigger rejects changes to input_fingerprint, checklist, ai_* and method_version; level may move only
+-- Write-once: a trigger rejects changes to input_fingerprint, checklist, ai_*, method_version, mode and evidence_kind, and
+-- rewrites of reviewer_role/reviewer_user_id/reason once set; level may move only
 -- documents_submitted → verified | rejected, or verified → revoked; is_current only true → false (superseded). Every
 -- decision is also appended to the ledger, which is append-only (migration 0003).
 create unique index verification_runs_current on verification_runs (world_id, asset_id) where is_current;
@@ -368,7 +371,7 @@ create table llm_calls (
 | `POST /assets/{id}/submit` | Start a rating run; the result sets `listed` / `needs_evidence` / `ineligible` (T58) |
 | `GET /assets/{id}/ipo/preview` · `POST /assets/{id}/ipo` | IPO price with every formula term; launch (owner only, once; T59) |
 | `POST /admin/assets/{id}/suspend` · `…/resume` | Moderation (admin; T58) |
-| `POST /assets/{id}/documents/sample` | Demo mode only: generate watermarked fictional documents for this listing and run the checklist; the `demo_auto` reviewer approves if every check passes (ADR-0006 §6) |
+| `POST /assets/{id}/documents/sample` | Demo mode only (404 in review mode, nothing created): generate watermarked fictional documents from non-personal listing fields + synthetic identities and run the checklist; the `demo_auto` reviewer approves only if every document is a sample, every check passes and no revocation is active (ADR-0006 §6) |
 | `POST /assets/{id}/documents` · `GET /assets/{id}/documents/{doc_id}` | Upload evidence (steward/owner) → checklist; download a document (community members + same-world admins only; 404 otherwise; attachment, `nosniff`, `no-store`) (ADR-0006, T69) |
 | `GET /assets/{id}/verification` · `POST /admin/assets/{id}/verification` · `POST /admin/assets/{id}/verification/revoke` | Public verification summary (check names + results + not-checked list); reviewer approve/reject with a reason; revoke (suspends trading) (T69) |
 | `GET /assets` | Marketplace list (latest price, grade, trend) |

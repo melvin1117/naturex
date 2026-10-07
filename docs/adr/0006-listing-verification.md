@@ -33,7 +33,7 @@ Proposed (2026-10-07). Builds on [ADR-0005](./0005-accounts-roles-and-two-apps.m
 | `rejected` | The reviewer found a problem; the reasons are shown to the steward | Reviewer rejects with reasons |
 | `revoked` | An approved listing was later found wrong (dispute, new evidence) | Admin revokes with reasons; **trading is suspended at once** |
 
-- **Verification runs are write-once records.** The checklist, fingerprint, document links and method version never change. A decision is written once (`documents_submitted` → `verified` or `rejected`; `verified` → `revoked`), and `is_current` only flips when a newer run supersedes it. A database trigger enforces this, and the ledger keeps every decision append-only. Each run stores an **input fingerprint**: a hash of the community, the listing name, the geometry, the area, the document commitments and the method version.
+- **Verification runs are write-once records.** The checklist, fingerprint, document links, method version, `mode` and `evidence_kind` never change; the decision fields (level, reviewer role and reason) are written once. A decision is written once (`documents_submitted` → `verified` or `rejected`; `verified` → `revoked`), and `is_current` only flips when a newer run supersedes it. A database trigger enforces this, and the ledger keeps every decision append-only. Each run stores an **input fingerprint**: a hash of the community, the listing name, the geometry, the area, the document commitments, the method version, the `mode` and the `evidence_kind`.
 - **One run is current per asset**, enforced with a partial unique index.
 - **Changes reset verification:** if the polygon, area, name, community or documents change afterwards, the fingerprint no longer matches and the listing counts as `unverified` until a new run is approved.
 - **The IPO is gated:** in the live world, the IPO transaction locks the asset and needs the current run to be `verified` with a matching fingerprint.
@@ -121,28 +121,39 @@ It never says "Ownership proven".
 
 ### 6. Demo verification mode (deployment, judging and E2E tests)
 Nobody can upload real land papers to a hackathon deployment or a test run, so there is a **labelled demo mode**, not a hidden bypass.
-- **The setting:** `VERIFICATION_MODE=review | demo`.
+- **The setting:** `VERIFICATION_MODE=review | demo` is the deployment mode.
   - The default is `review`, the real process: a person decides.
   - The hackathon deployment, sandbox worlds and E2E tests set `demo`.
-  - A real launch sets `review`, and demo mode can't be switched on for a single listing.
-- **Sample documents:** in demo mode the Steward app offers **"Use sample documents (demo)"**.
-  - It generates fictional documents for that listing: an agrarian certificate and assembly minutes, filled with the listing's own name, place and area.
-  - Each page is watermarked **"SAMPLE: FICTIONAL DOCUMENT, NOT A REAL TITLE"**.
-  - Each document is stored with `is_sample = true`.
-  - No real person's data is involved.
-- **The checklist still runs for real:**
-  - format, not reused (each sample is generated per listing, so its fingerprint is unique), overlap and consent-labelled document;
-  - in sandboxes, the T71 AI comparison too.
+  - There's no per-listing switch.
+- **Evidence kind is separate from the mode.** Each run records:
+  - `mode`: the deployment mode when the run was created;
+  - `evidence_kind`: `sample` or `real`.
 
-  That keeps the whole flow exercised end to end.
-- **The demo auto-reviewer:** if every deterministic check passes, a reviewer with role `demo_auto` approves at once, with the reason "Demo mode: sample documents, all checks passed". If a check fails, the run is rejected, as in review mode. An admin can still reject or revoke.
+  Both are part of the input fingerprint and are write-once.
+- **Sample documents:** in demo mode the Steward app offers **"Use sample documents (demo)"**.
+  - It generates fictional documents for that listing: an agrarian certificate and assembly minutes.
+  - They're filled only with **non-personal listing fields**: the asset name, the municipality and state from the reverse geocode of the centroid, and the area. These are allow-listed and escaped.
+  - Holder and member names are **fixed synthetic identities** ("Comunidad Ejemplo (ficticia)").
+  - Each page is watermarked **"SAMPLE: FICTIONAL DOCUMENT, NOT A REAL TITLE"**, and the files are stored with `is_sample = true`.
+  - We still don't assume `is_sample` means "no personal data": the asset name is user-written, so the T71 AI rules apply unchanged.
+- **The checklist still runs for real:** format, not reused (each sample is generated per listing), overlap, consent-labelled document; in sandboxes, the T71 AI comparison too. That keeps the whole flow exercised end to end.
+- **The demo auto-reviewer** (`reviewer_role = demo_auto`) approves a run only if all of these hold:
+  - the mode is `demo`;
+  - **every** document in the run is a sample (`evidence_kind = sample`);
+  - every deterministic check passes;
+  - the asset has **no active revocation**.
+
+  Otherwise the run waits for a human admin. A database constraint enforces `demo_auto → mode = demo AND evidence_kind = sample`.
+- **Real documents in demo mode** are accepted and reviewed by a human admin. Such a run is `evidence_kind = real`, and its badge is the review-mode one, not the sample one.
+- **Revocation can't be undone by regenerating samples.** While a revocation is active, only an admin can approve a new run.
+- **The IPO gate is mode-aware.**
+  - In review mode, a sample run never satisfies it: the current run must be `mode = review` and `evidence_kind = real`.
+  - **Switching a deployment from demo to review** (a real launch) makes every demo or sample run count as unverified, and suspends trading on assets whose current run is demo or sample until a review-mode approval. The switch is recorded in each affected asset's ledger.
 - **Always disclosed:**
-  - the run is stored with `mode = 'demo'`;
-  - the ledger entry records `mode: demo` and `reviewer_role: demo_auto`;
-  - the badge reads **"Demo verification: sample documents, no real ownership checked"**;
-  - the public panel repeats this at the top;
-  - the site footer shows "Verification: demo mode" whenever it's on.
-- **Real documents are still accepted in demo mode.** Anyone who wants to try the real flow can upload, and an admin reviews them.
+  - the ledger entry records `mode` and `evidence_kind`;
+  - sample runs show the badge **"Demo verification: sample documents, no real ownership checked"**, repeated at the top of the public panel;
+  - real documents reviewed in a demo deployment show "Documents reviewed by NatureX (hackathon process)";
+  - the site footer shows "Verification: demo mode" whenever demo mode is on.
 
 ### 7. The real-world path (not built in the hackathon)
 The same data model and checklist extend to real verification by adding check rows and reviewer roles, not by replacing the design:
