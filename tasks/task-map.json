@@ -916,8 +916,10 @@
       "deps": [
         "T24"
       ],
-      "status": "ready",
-      "assignees": [],
+      "status": "in_progress",
+      "assignees": [
+        "melvin1117"
+      ],
       "waiting_on": [],
       "unlocks": [
         "T47"
@@ -2246,22 +2248,19 @@
       "T35",
       "T40"
     ],
-    "D3": [
-      "T25"
-    ],
+    "D3": [],
     "any": [
       "T20",
-      "T25",
       "T35",
       "T40"
     ]
   },
   "counts": {
     "done": 23,
-    "in_progress": 8,
+    "in_progress": 9,
     "picked_early": 0,
-    "ready": 4,
+    "ready": 3,
     "blocked": 42
   },
-  "data_hash": "b6772e61cc636a75"
+  "data_hash": "254a7a0e34093018"
 }
