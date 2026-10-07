@@ -211,7 +211,7 @@
           "assets"
         ],
         "summary": "List Prices",
-        "description": "Price history, oldest first. `range` is accepted but not applied yet.",
+        "description": "Price history, oldest first. `range` is accepted but not applied yet (T43).",
         "operationId": "list_prices_assets__asset_id__prices_get",
         "parameters": [
           {
@@ -638,6 +638,7 @@
           "admin"
         ],
         "summary": "Simulate Event",
+        "description": "Stub event for an asset in the caller's world (T38 persists it and re-rates).",
         "operationId": "simulate_event_admin_simulate_event_post",
         "requestBody": {
           "content": {

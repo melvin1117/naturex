@@ -34,7 +34,8 @@ router = APIRouter(tags=["assets"])
 _HUNDRED = Decimal(100)
 
 
-def _world_asset(session: Session, world_id: UUID, asset_id: UUID) -> Asset:
+def world_asset(session: Session, world_id: UUID, asset_id: UUID) -> Asset:
+    """The asset if it's in this world; 404 otherwise (another world's or the template's)."""
     asset = session.exec(
         select(Asset).where(Asset.world_id == world_id, Asset.id == asset_id)
     ).first()
@@ -167,7 +168,7 @@ def create_asset(body: AssetCreate) -> AssetCreateResponse:
 def get_asset(
     asset_id: UUID, world: CurrentWorld, session: SessionDep, settings: SettingsDep
 ) -> AssetDetail:
-    asset = _world_asset(session, world.id, asset_id)
+    asset = world_asset(session, world.id, asset_id)
     report = session.exec(
         select(Report)
         .where(Report.world_id == world.id, Report.asset_id == asset.id)
@@ -197,7 +198,7 @@ def get_asset(
 
 @router.post("/assets/{asset_id}/evidence", response_model=EvidenceResponse)
 def upload_evidence(asset_id: UUID, world: CurrentWorld, session: SessionDep) -> EvidenceResponse:
-    _world_asset(session, world.id, asset_id)
+    world_asset(session, world.id, asset_id)
     event = EventOut(
         id=uuid4(),
         asset_id=asset_id,
@@ -219,7 +220,7 @@ def list_reports(
     asset_id: UUID, world: CurrentWorld, session: SessionDep, settings: SettingsDep
 ) -> list[ReportOut]:
     """Every report of the asset, newest first."""
-    asset = _world_asset(session, world.id, asset_id)
+    asset = world_asset(session, world.id, asset_id)
     reports = session.exec(
         select(Report)
         .where(Report.world_id == world.id, Report.asset_id == asset.id)
@@ -232,9 +233,9 @@ def list_reports(
 def list_prices(
     asset_id: UUID, world: CurrentWorld, session: SessionDep, range: str = "90d"
 ) -> list[PricePoint]:
-    """Price history, oldest first. `range` is accepted but not applied yet."""
-    _ = range
-    asset = _world_asset(session, world.id, asset_id)
+    """Price history, oldest first. `range` is accepted but not applied yet (T43)."""
+    _ = range  # TODO(T43): apply the range filter (7d, 30d, 90d, all).
+    asset = world_asset(session, world.id, asset_id)
     prices = session.exec(
         select(Price)
         .where(Price.world_id == world.id, Price.asset_id == asset.id)

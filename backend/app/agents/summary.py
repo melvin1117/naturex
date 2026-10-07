@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import time
 from calendar import month_abbr
@@ -70,11 +71,18 @@ class CachedSummary:
     expires_at: float | None
 
 
-_CACHE: dict[UUID, CachedSummary] = {}
+_CACHE: dict[str, CachedSummary] = {}
+"""Keyed by a hash of the facts the summary is written from, not by report ID: every visitor
+world copies the template's reports under fresh IDs, and they all share one summary (and one
+LLM call). A new event or any changed number gives new facts, so a new key."""
 
 
 def clear_summary_cache() -> None:
     _CACHE.clear()
+
+
+def summary_cache_key(facts: list[str]) -> str:
+    return hashlib.sha256("\n".join(facts).encode()).hexdigest()
 
 
 def generate_report_summary(
@@ -85,22 +93,27 @@ def generate_report_summary(
     clock: Callable[[], float] = time.monotonic,
     context: SummaryContext | None = None,
 ) -> SummaryResult:
-    cached = _cached(report.id, clock())
+    """Live Nemotron prose for a report, or the deterministic fallback.
+
+    Simulated (Time Machine) reports always get the fallback, which states in code that the
+    figures are a scenario, not an observation: a model reply could drop that warning.
+    """
+    facts = _facts(report, context)
+    key = summary_cache_key(facts)
+    cached = _cached(key, clock())
     if cached is not None:
         return cached
 
-    facts = _facts(report, context)
-    if settings.use_mocks or llm_client_factory is None:
-        return _cache_result(
-            report.id, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock()
-        )
+    def fallback() -> SummaryResult:
+        return _cache_result(key, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock())
+
+    if settings.use_mocks or llm_client_factory is None or report.simulated:
+        return fallback()
 
     try:
         llm_client = llm_client_factory()
         if llm_client is None:
-            return _cache_result(
-                report.id, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock()
-            )
+            return fallback()
         result = llm_client.structured(
             agent=AGENT_NAME,
             tier=Tier.FAST,
@@ -110,34 +123,30 @@ def generate_report_summary(
             asset_id=log_asset_id_factory() if log_asset_id_factory else None,
         )
     except (LLMError, SQLAlchemyError):
-        return _cache_result(
-            report.id, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock()
-        )
+        return fallback()
 
     summary = result.value.summary_md.strip()
     if not _uses_only_fact_numbers(summary, facts):
-        return _cache_result(
-            report.id, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock()
-        )
-    return _cache_result(report.id, summary, ReportSummarySource.LIVE, clock())
+        return fallback()
+    return _cache_result(key, summary, ReportSummarySource.LIVE, clock())
 
 
-def _cached(report_id: UUID, now: float) -> SummaryResult | None:
-    cached = _CACHE.get(report_id)
+def _cached(key: str, now: float) -> SummaryResult | None:
+    cached = _CACHE.get(key)
     if cached is None:
         return None
     if cached.expires_at is not None and cached.expires_at <= now:
-        _CACHE.pop(report_id, None)
+        _CACHE.pop(key, None)
         return None
     return cached.result
 
 
 def _cache_result(
-    report_id: UUID, summary_md: str, source: ReportSummarySource, now: float
+    key: str, summary_md: str, source: ReportSummarySource, now: float
 ) -> SummaryResult:
     result = SummaryResult(summary_md, source)
     expires_at = None if source is ReportSummarySource.LIVE else now + _FALLBACK_CACHE_SECONDS
-    _CACHE[report_id] = CachedSummary(result, expires_at)
+    _CACHE[key] = CachedSummary(result, expires_at)
     return result
 
 
@@ -205,8 +214,6 @@ def _prompt(facts: list[str]) -> str:
         "Write a sober NatureX rating-agency summary for the report below.\n"
         "Use Markdown. Keep it under 160 words. Say the value as a range, midpoint, "
         "and confidence. State that sandbox prices are play money only if you mention price. "
-        "If data_status says simulated, say clearly that the figures come from a simulated "
-        "scenario, not observations. "
         "Do not introduce any number that is not present verbatim in the facts. "
         "Do not present this as a real security or investment.\n\n"
         "Facts:\n- " + "\n- ".join(facts)

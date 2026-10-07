@@ -88,7 +88,7 @@ export interface paths {
         };
         /**
          * List Prices
-         * @description Price history, oldest first. `range` is accepted but not applied yet.
+         * @description Price history, oldest first. `range` is accepted but not applied yet (T43).
          */
         get: operations["list_prices_assets__asset_id__prices_get"];
         put?: never;
@@ -250,7 +250,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Simulate Event */
+        /**
+         * Simulate Event
+         * @description Stub event for an asset in the caller's world (T38 persists it and re-rates).
+         */
         post: operations["simulate_event_admin_simulate_event_post"];
         delete?: never;
         options?: never;

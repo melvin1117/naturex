@@ -27,12 +27,13 @@ def test_create_asset_accepted() -> None:
 
 def test_admin_and_copilot() -> None:
     assert client.post("/admin/simulate/quarter").status_code == 200
+    # World-scoped since T19: real coverage is in test_reports_api.py.
     assert (
         client.post(
             "/admin/simulate/event",
             json={"asset_id": str(WETLAND_ID), "preset": "encroachment"},
         ).status_code
-        == 200
+        == 401
     )
     assert client.get("/admin/trace", params={"asset_id": str(WETLAND_ID)}).status_code == 200
     assert client.post("/copilot", json={"question": "Why did it drop?"}).status_code == 200

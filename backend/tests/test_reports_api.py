@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
@@ -17,14 +18,18 @@ from sqlmodel import Session, select
 from app.agents.summary import clear_summary_cache
 from app.config import Settings, get_settings
 from app.db import get_session
+from app.llm import LLMClient
 from app.main import app
 from app.models import Asset, Report
+from app.routers import reports as reports_router
 from app.sandbox import create_world
 from app.schemas import ReportSummarySource
 from app.seed import DEMO_SITES, WORLD_ID, seed
 from app.services.rating import latest_report, rate_asset
 from app.tools.earth_obs import load_site_metrics
 from tests.conftest import alembic_cfg, requires_db
+from tests.test_summary import FakeTransport, MemoryCallLog, reply
+from tests.test_summary import settings as summary_settings
 
 HERO = "wetland_mx"
 D = Decimal
@@ -264,3 +269,48 @@ def test_world_scoped_routes_need_a_world(client: TestClient, session: Session) 
     for path in ("/assets", f"/assets/{report.asset_id}", f"/reports/{report.id}"):
         res = client.get(path)
         assert (res.status_code, res.json()["detail"]) == (401, "world_required"), path
+
+
+@requires_db
+def test_two_worlds_share_one_live_summary_per_report(
+    client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    transport = FakeTransport(
+        reply(json.dumps({"summary_md": "Health is 76.2 / 100 (grade A) at 71% confidence."}))
+    )
+
+    def fake_summary_client(config: Settings) -> LLMClient:
+        return LLMClient(config, transport, MemoryCallLog())
+
+    app.dependency_overrides[get_settings] = lambda: summary_settings(use_mocks=False)
+    monkeypatch.setattr(reports_router, "_summary_client", fake_summary_client)
+    first_world = _world(client)
+    first = client.get(f"/assets/{_asset_id(first_world)}").json()["latest_report"]
+    client.cookies.clear()
+    second_world = _world(client)
+    second = client.get(f"/assets/{_asset_id(second_world)}").json()["latest_report"]
+
+    assert first_world["id"] != second_world["id"] and first["id"] != second["id"]
+    assert first["summary_source"] == second["summary_source"] == "live"
+    assert first["summary_md"] == second["summary_md"]
+    assert len(transport.requests) == 1
+
+
+@requires_db
+def test_simulate_event_is_scoped_to_the_callers_world(
+    client: TestClient, session: Session
+) -> None:
+    template_asset = _world_asset(session, WORLD_ID)
+    body = {"asset_id": str(template_asset.id), "preset": "encroachment"}
+    no_world = client.post("/admin/simulate/event", json=body)
+    world = _world(client)
+    other_asset = _world_asset(session, create_world(session).id)
+
+    own = client.post("/admin/simulate/event", json={**body, "asset_id": _asset_id(world)})
+
+    assert (no_world.status_code, no_world.json()["detail"]) == (401, "world_required")
+    assert own.status_code == 200
+    assert own.json()["event"]["asset_id"] == _asset_id(world)
+    for asset_id in (template_asset.id, other_asset.id):
+        res = client.post("/admin/simulate/event", json={**body, "asset_id": str(asset_id)})
+        assert res.status_code == 404

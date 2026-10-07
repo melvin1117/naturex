@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from dataclasses import replace
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
@@ -16,7 +18,7 @@ from sqlalchemy import create_engine, delete
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, col, select
 
-from app.agents.summary import clear_summary_cache, generate_report_summary
+from app.agents.summary import SummaryContext, clear_summary_cache, generate_report_summary
 from app.config import Settings, get_settings
 from app.llm import BudgetExceeded, CallRecord, DbCallLog, LLMClient, Tier
 from app.main import app
@@ -24,7 +26,7 @@ from app.mocks import wetland_report
 from app.models import LlmCall, World
 from app.routers import reports as reports_router
 from app.sandbox import _delete_world_rows
-from app.schemas import ReportSummarySource
+from app.schemas import EventOut, ReportSummarySource
 from app.seed import seed
 from tests.conftest import alembic_cfg, requires_db
 
@@ -228,7 +230,7 @@ def test_number_guard_accepts_legitimate_report_number_forms(summary: str) -> No
     assert result.summary_md == summary
 
 
-def test_live_summary_is_cached_per_report_id() -> None:
+def test_live_summary_is_cached_per_facts() -> None:
     transport = FakeTransport(
         reply(
             json.dumps(
@@ -253,7 +255,7 @@ def test_live_summary_is_cached_per_report_id() -> None:
     assert len(transport.requests) == 1
 
 
-def test_fallback_summary_is_briefly_cached_per_report_id() -> None:
+def test_fallback_summary_is_briefly_cached_per_facts() -> None:
     transport = FakeTransport(
         reply(json.dumps({"summary_md": "Health is 999 / 100."})),
         reply(json.dumps({"summary_md": "Health is 77.6 / 100."})),
@@ -399,3 +401,61 @@ def test_simulated_reports_are_never_summarised_as_observed() -> None:
     assert "## Ecological Performance Report — Q4 2026" in result.summary_md
     assert "simulated Time Machine scenario" in result.summary_md
     assert "satellite metrics" not in result.summary_md
+
+
+def test_simulated_reports_never_reach_the_model() -> None:
+    """A live reply could drop the scenario warning, so simulated reports use the fallback."""
+    transport = FakeTransport(
+        reply(
+            json.dumps({"summary_md": "Satellite observations show grade A health this quarter."})
+        )
+    )
+    report = wetland_report().model_copy(update={"simulated": True, "period": "2026Q4"})
+
+    result = generate_report_summary(report, settings(), lambda: llm(transport))
+
+    assert result.source is ReportSummarySource.FALLBACK
+    assert "simulated Time Machine scenario" in result.summary_md
+    assert "not an observation" in result.summary_md
+    assert "Satellite observations" not in result.summary_md
+    assert transport.requests == []
+
+
+def _live_reply() -> Any:
+    return reply(json.dumps({"summary_md": "Health is 77.6 / 100 at 87% confidence."}))
+
+
+def test_copies_of_a_report_in_other_worlds_share_one_summary() -> None:
+    transport = FakeTransport(_live_reply())
+    context = SummaryContext(asset_name="Xochimilco Wetland", area_ha=Decimal("206.70"))
+    template = wetland_report()
+    copy = template.model_copy(update={"id": uuid4(), "asset_id": uuid4()})
+
+    first = generate_report_summary(template, settings(), lambda: llm(transport), context=context)
+    second = generate_report_summary(copy, settings(), lambda: llm(transport), context=context)
+
+    assert (first.source, second.source) == (ReportSummarySource.LIVE, ReportSummarySource.LIVE)
+    assert second.summary_md == first.summary_md
+    assert len(transport.requests) == 1
+
+
+def test_a_new_event_gives_a_new_summary() -> None:
+    transport = FakeTransport(_live_reply(), _live_reply())
+    quiet = SummaryContext(asset_name="Xochimilco Wetland", area_ha=Decimal("206.70"))
+    event = EventOut(
+        id=uuid4(),
+        asset_id=wetland_report().asset_id,
+        source="admin",
+        title="Fire",
+        impact_type="fire",
+        direction=-1,
+        severity=4,
+        summary="A fire burned the reed beds.",
+        created_at=datetime(2026, 10, 7, tzinfo=UTC),
+    )
+    busy = replace(quiet, event=event)
+
+    generate_report_summary(wetland_report(), settings(), lambda: llm(transport), context=quiet)
+    generate_report_summary(wetland_report(), settings(), lambda: llm(transport), context=busy)
+
+    assert len(transport.requests) == 2
