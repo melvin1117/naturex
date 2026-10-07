@@ -198,43 +198,6 @@ create table community_members (       -- owner-only for the Must; stewards are 
   foreign key (world_id, community_id) references communities (world_id, id),
   foreign key (world_id, user_id) references users (world_id, id)
 );
--- ADR-0006: listing verification (T69). Documents are private; the ledger keeps only randomized commitments.
-create table verification_runs (       -- immutable; one current run per asset
-  id uuid primary key default gen_random_uuid(), world_id uuid not null, asset_id uuid not null,
-  level text not null check (level in ('unverified','documents_submitted','verified','rejected','revoked')),
-  is_current boolean not null default true,
-  input_fingerprint char(64) not null, -- sha256(community, name, geometry, area, document commitments, method_version); any change → unverified
-  checklist jsonb not null,            -- [{check, result: pass|warn|fail, found, source}]; public panel shows names + results only
-  ai_suggestion text check (ai_suggestion in ('consistent','inconsistent','unreadable')), ai_reasons jsonb,  -- T71; untrusted heuristic
-  reviewer_role text check (reviewer_role in ('platform_admin','partner_reviewer')), reviewer_user_id uuid, reason text,
-  method_version text not null, created_at timestamptz default now(),
-  unique (world_id, id),
-  foreign key (world_id, asset_id) references assets (world_id, id),
-  foreign key (world_id, reviewer_user_id) references users (world_id, id)
-);
-create unique index verification_runs_current on verification_runs (world_id, asset_id) where is_current;
-create table listing_documents (       -- sensitive personal data; private storage; deleted 30 days after the listing
-  id uuid primary key default gen_random_uuid(), world_id uuid not null, asset_id uuid not null, run_id uuid,
-  doc_type text not null check (doc_type in ('title','agrarian_certificate','assembly_minutes','entity_registration','other')),
-  storage_key text not null,           -- generated; never exposed
-  mime text not null, size_bytes int not null,
-  private_fingerprint char(64) not null,  -- HMAC(per-world key, file); dedup only, never published
-  commitment_nonce bytea not null,     -- private; the ledger stores sha256(nonce || file); deleted with the listing
-  extracted jsonb,                     -- T71 fields (may hold names): members and reviewers only
-  uploaded_by uuid,                    -- null after account deletion (anonymised)
-  created_at timestamptz default now(),
-  unique (world_id, private_fingerprint),
-  foreign key (world_id, asset_id) references assets (world_id, id),
-  foreign key (world_id, run_id) references verification_runs (world_id, id),
-  foreign key (world_id, uploaded_by) references users (world_id, id)
-);
-create table payout_lines (            -- private and erasable; the public ledger holds only a hash commitment (T67)
-  id bigserial primary key, world_id uuid not null, asset_id uuid not null, quarter_label text not null,
-  user_id uuid not null, shares bigint not null, amount numeric(14,2) not null,
-  foreign key (world_id, asset_id) references assets (world_id, id),
-  foreign key (world_id, user_id) references users (world_id, id)
-);
-
 create table assets (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -253,6 +216,51 @@ create table assets (
   status text not null default 'draft'
     check (status in ('draft','rating','needs_evidence','ineligible','listed','suspended')),
   created_at timestamptz default now()
+);
+
+-- ADR-0006: listing verification (T69). Documents are private; the ledger keeps only randomized commitments.
+create table verification_runs (       -- one row per run; one current run per asset
+  id uuid primary key default gen_random_uuid(), world_id uuid not null, asset_id uuid not null,
+  level text not null check (level in ('unverified','documents_submitted','verified','rejected','revoked')),
+  is_current boolean not null default true,
+  input_fingerprint char(64) not null, -- sha256(community, name, geometry, area, document commitments, method_version); any change → unverified
+  checklist jsonb not null,            -- [{check, result: pass|warn|fail, found, source}]; public panel shows names + results only
+  ai_suggestion text check (ai_suggestion in ('consistent','inconsistent','unreadable')), ai_reasons jsonb,  -- T71; untrusted heuristic
+  reviewer_role text check (reviewer_role in ('platform_admin','partner_reviewer')), reviewer_user_id uuid, reason text,
+  method_version text not null, created_at timestamptz default now(),
+  unique (world_id, id), unique (world_id, asset_id, id),
+  foreign key (world_id, asset_id) references assets (world_id, id),
+  foreign key (world_id, reviewer_user_id) references users (world_id, id)
+);
+-- Write-once: a trigger rejects changes to input_fingerprint, checklist, ai_* and method_version; level may move only
+-- documents_submitted → verified | rejected, or verified → revoked; is_current only true → false (superseded). Every
+-- decision is also appended to the ledger, which is append-only (migration 0003).
+create unique index verification_runs_current on verification_runs (world_id, asset_id) where is_current;
+create table document_fingerprints (   -- binds a document's private fingerprint to ONE asset: no reuse across assets,
+  world_id uuid not null, private_fingerprint char(64) not null, asset_id uuid not null,  -- reuse for the same asset's re-runs is fine
+  primary key (world_id, private_fingerprint), unique (world_id, private_fingerprint, asset_id),
+  foreign key (world_id, asset_id) references assets (world_id, id)
+);
+create table listing_documents (       -- sensitive personal data; private storage; deleted 30 days after the listing
+  id uuid primary key default gen_random_uuid(), world_id uuid not null, asset_id uuid not null, run_id uuid,
+  doc_type text not null check (doc_type in ('title','agrarian_certificate','assembly_minutes','entity_registration','other')),
+  storage_key text not null,           -- generated; never exposed
+  mime text not null, size_bytes int not null,
+  private_fingerprint char(64) not null,  -- HMAC(per-world key, file); dedup only, never published
+  commitment_nonce bytea not null,     -- private; the ledger stores sha256(nonce || file); deleted with the listing
+  extracted jsonb,                     -- T71 fields (may hold names): members and reviewers only
+  uploaded_by uuid,                    -- null after account deletion (anonymised)
+  created_at timestamptz default now(),
+  foreign key (world_id, asset_id) references assets (world_id, id),
+  foreign key (world_id, asset_id, run_id) references verification_runs (world_id, asset_id, id),  -- same asset's run only
+  foreign key (world_id, private_fingerprint, asset_id) references document_fingerprints (world_id, private_fingerprint, asset_id),
+  foreign key (world_id, uploaded_by) references users (world_id, id)
+);
+create table payout_lines (            -- private and erasable; the public ledger holds only a hash commitment (T67)
+  id bigserial primary key, world_id uuid not null, asset_id uuid not null, quarter_label text not null,
+  user_id uuid not null, shares bigint not null, amount numeric(14,2) not null,
+  foreign key (world_id, asset_id) references assets (world_id, id),
+  foreign key (world_id, user_id) references users (world_id, id)
 );
 
 create table metrics (                -- raw earth-obs output per rating run
@@ -613,7 +621,7 @@ Secrets stay server-side only; never commit `.env` (commit `.env.example`).
 - **Admins:** live-world admins are created only by the operator CLI (`python -m app.cli create-admin`, password via `getpass`), never through the API or by email match. **Accepted risk:** without email verification, registration reveals whether an email exists; no permission depends on email.
 - **Authorization on every request** (§6.1), including object-level checks and the 404-across-worlds rule. Every PR touching auth, cookies, sessions or authorization gets a `security-and-hardening` review.
 - **Listing verification (ADR-0006):** uploads are allow-listed (PDF/JPEG/PNG, ≤ 5 MB, magic bytes, pixel and PDF page limits; encrypted/malformed PDFs rejected), parsed in a worker with a timeout, previewed as re-encoded PNGs, stored privately under generated names and served only to members and same-world admins; verification runs are fingerprinted, so any change to the listing resets them, and revoking suspends trading; the AI suggestion (T71) is attacker-controlled input with no tools, shown as an untrusted heuristic; a human reviewer decides; the public sees check results and what was not checked, never documents or raw hashes.
-- **Personal data:** accounts hold email, display name and password hash. Listing verification adds **sensitive** documents and extracted fields (holder names, parcel IDs), kept privately and deleted 30 days after the listing is deleted; T71 sends document previews to Nebius Token Factory (**verify its retention and training terms first**). Nothing personal goes into logs or traces (`llm_calls` keeps metadata only). The public ledger holds no account identifiers, names or raw document hashes (payout details in `payout_lines`, T67; documents as randomized commitments). Sessions and `auth_attempts` are pruned; demo worlds are pruned after 7 days.
+- **Personal data:** accounts hold email, display name and password hash. Listing verification adds **sensitive** documents and extracted fields (holder names, parcel IDs), kept privately and deleted 30 days after the listing is deleted; T71 sends document previews to Nebius Token Factory only in sandboxes (seeded demo documents) until its retention and training terms are confirmed (`VERIFICATION_AI_LIVE=false` in the live world). Nothing personal goes into logs or traces (`llm_calls` keeps metadata only). The public ledger holds no account identifiers, names or raw document hashes (payout details in `payout_lines`, T67; documents as randomized commitments). Sessions and `auth_attempts` are pruned; demo worlds are pruned after 7 days.
 - Treat all retrieved web content and uploaded media as untrusted; enforce schema-validated outputs.
 - Show uncertainty (ranges, confidence) everywhere a number appears.
 - Use only licensed data: Earth Engine terms, Tavily terms, cited valuation sources, dataset attributions; no raw ESVD data in the repo.

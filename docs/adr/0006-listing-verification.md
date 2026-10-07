@@ -33,7 +33,7 @@ Proposed (2026-10-07). Builds on [ADR-0005](./0005-accounts-roles-and-two-apps.m
 | `rejected` | The reviewer found a problem; the reasons are shown to the steward | Reviewer rejects with reasons |
 | `revoked` | An approved listing was later found wrong (dispute, new evidence) | Admin revokes with reasons; **trading is suspended at once** |
 
-- **Verification runs are immutable records.** Each run stores an **input fingerprint**: a hash of the community, the listing name, the geometry, the area, the document commitments and the method version.
+- **Verification runs are write-once records.** The checklist, fingerprint, document links and method version never change. A decision is written once (`documents_submitted` → `verified` or `rejected`; `verified` → `revoked`), and `is_current` only flips when a newer run supersedes it. A database trigger enforces this, and the ledger keeps every decision append-only. Each run stores an **input fingerprint**: a hash of the community, the listing name, the geometry, the area, the document commitments and the method version.
 - **One run is current per asset**, enforced with a partial unique index.
 - **Changes reset verification:** if the polygon, area, name, community or documents change afterwards, the fingerprint no longer matches and the listing counts as `unverified` until a new run is approved.
 - **The IPO is gated:** in the live world, the IPO transaction locks the asset and needs the current run to be `verified` with a matching fingerprint.
@@ -52,7 +52,7 @@ Each run produces a **checklist**, stored with the result and shown to the revie
 | Check | How | Type |
 |---|---|---|
 | Accepted file format | MIME allowlist (PDF, JPEG, PNG), magic bytes, ≤ 5 MB, decoded-pixel and PDF page/object limits; encrypted or malformed PDFs rejected | Deterministic |
-| Not reused | A per-world keyed fingerprint of the file is unique in the world (database constraint), so the same document can't back two listings | Deterministic |
+| Not reused | A per-world keyed fingerprint of the file is bound to one asset (database constraint): the same document can't back two listings, but the same listing can reuse it in a later run | Deterministic |
 | Boundary is free | No overlap with another listing in this world (T36/T58) | Deterministic |
 | Consent-labelled document attached | The steward attached a document labelled "assembly minutes / consent". This shows a document was attached, **not** that consent exists | Deterministic |
 | Extracted fields consistent with listing *(Should, T71)* | MiniCPM-V extracts holder name, parcel ID, place, area and issue date. Nemotron compares them with the listing: community name, municipality or state (Nominatim reverse geocode of the centroid), and area within ±20%. Each comparison shows both values and the source excerpt | AI heuristic |
@@ -108,14 +108,14 @@ It never says "Ownership proven".
   - Only `GET /assets/{id}/documents/{doc_id}` serves them. It loads by `(world_id, asset_id, id)` and allows only that community's members and same-world admins; everyone else gets 404.
   - Tests cover investors, non-members, other communities, other worlds and anonymous users.
   - Uploads are protected by the T66 CSRF rule and the T57 authorization route test.
-- **Database isolation (ADR-0005):** `uploaded_by` and `reviewer_user_id` use composite `(world_id, user_id)` foreign keys, and verification runs have `unique (world_id, id)`.
+- **Database isolation (ADR-0005):** `uploaded_by` and `reviewer_user_id` use composite `(world_id, user_id)` foreign keys, and a document can link only to a run of its own asset (a `(world_id, asset_id, run_id)` foreign key).
 - **Retention and deletion:**
   - Documents and extracted fields are kept while the listing exists, and deleted 30 days after the listing is deleted.
   - That includes the object, `extracted` JSON, previews and failed-job artefacts.
   - Account deletion (K5) anonymises the uploader and keeps the community's evidence, because it belongs to the community, not to the person.
   - Deleting a listing also deletes the commitment nonces, so the public ledger entries become unlinkable.
 - **LLM processing (T71):**
-  - Previews and extracted text go to Nebius Token Factory. **Open item:** confirm Token Factory's data retention and training terms before enabling this for live-world users.
+  - Previews and extracted text go to Nebius Token Factory. **In the live world it stays off** (`VERIFICATION_AI_LIVE=false`) until Token Factory's data retention and training terms are confirmed; sandboxes use seeded demo documents only, so no real person's data is sent.
   - Raw prompts and responses are never logged or traced; `llm_calls` keeps only metadata.
 - **Public panel:** shows only check names, pass/warn/fail and the not-checked list; never extracted fields.
 
