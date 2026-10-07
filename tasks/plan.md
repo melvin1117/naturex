@@ -30,9 +30,9 @@ The judge tour is a showcase; the product needs real flows. New tasks **T54–T6
 
 | Owner (suggested; AI-assisted) | New tasks |
 |---|---|
-| D1 | T54 accounts and sessions → T56 communities, treasury and tenant invariants → T68 authorization policy → T55 demo sessions → T57 enforcement on every route |
+| D1 | T54 accounts and sessions → T56 communities, treasury and tenant invariants → T68 authorization policy → T57 enforcement on every route |
 | D2 | T67 ledger privacy (ready now) → T58 listing lifecycle → T59 IPO launch → T60 live rating for new listings |
-| D3 | T66 auth hardening (CSRF, rate limits, pruning) |
+| D3 | T66 auth hardening (CSRF, rate limits, pruning); T55 demo sessions |
 | PD (+D1) | T61 sign-in → T62 two app shells → T65 `/judge` → T63 Steward home, T64 IPO screen |
 
 **Two chains converge on T46 (E2E):**
@@ -42,7 +42,7 @@ The judge tour is a showcase; the product needs real flows. New tasks **T54–T6
 | Week | D1 | D2 | D3 | PD |
 |---|---|---|---|---|
 | 2 (now) | **T54** | T67, then T19 once #94/#95 merge | (agent work) | P02/P03 updated for two apps, sign-in, Steward home, judge landing |
-| 3 | T56 → T68 → T55 → T57 | T58 → T59 | T66, plus agent work | T21 → T61 → T62 → T65; T33 moves into Steward |
+| 3 | T56 → T68 → T57 | T58 → T59 | T66, T55, plus agent work | T21 → T61 → T62 → T65; T33 moves into Steward |
 | 4 | Wire T63/T64 with PD | T60 | agent work | T63, T64; T45 tour on top of T65 |
 
 **Cut order if behind:** K5 delete account → community stewards (owner-only stays) → T60 live rating (fall back to the curated sites and mark new listings "awaiting satellite data").
