@@ -3,12 +3,14 @@
 Every number here comes from cited tables in ``data/`` and plain arithmetic; no model is
 involved. The flow is:
 
-1. Map each Dynamic World class to a biome. ``flooded_vegetation`` is tidal marsh /
-   mangrove only when the centroid is within 5 km of the Natural Earth coastline,
-   otherwise swamps / floodplains; ``trees`` is tropical forest when |lat| < 23.5°.
+1. Map each Dynamic World class to a biome. Coastal ``flooded_vegetation`` (centroid
+   within 5 km of the Natural Earth coastline) is mangrove when |lat| < 30°, else coastal
+   systems (tidal / salt marsh); inland it is swamps / floodplains. ``trees`` is tropical
+   forest when |lat| < 23.5°.
 2. ``value_c = area_ha × share_c × coeff_c × context_multiplier`` for low, mid and high.
    Coefficients (``data/coefficients.csv``) are Brander et al. 2024 Table 1 biome means
-   in Int$ at 2020 price levels; low/high are mid ∓ the relative median–mean spread
+   in Int$ at 2020 price levels. Mid = high = that mean (Brander publishes no biome-level
+   dispersion). Low is an indicative median-equivalent: the mean × the median/mean ratio
    published in Costanza et al. 2014 Table 4.
 3. Split each class's mid value across services in proportion to Brander 2024 Table 1's
    per-service means for its biome (``data/service_values.csv``), grouped into eight
@@ -48,13 +50,20 @@ from app.tools.coastline import (
 )
 from app.tools.earth_obs import EarthObsMetrics
 
-METHODS_VERSION = "naturex-valuation/1.0.0 (T14)"
+METHODS_VERSION = "naturex-valuation/1.1.0 (T14)"
 PRICE_BASIS = "Int$2020/ha/yr"
 """Brander 2024's basis: international dollars at 2020 price levels. One Int$ buys what one
 US$ buys in the United States, so Int$2020 equals US$2020 at US prices. Only this basis
 is used; Costanza 2014 contributes dimensionless median/mean ratios, never dollar values."""
 VALUE_UNIT = "Int$2020/yr"
 TROPICS_MAX_ABS_LAT = Decimal("23.5")
+MANGROVE_MAX_ABS_LAT = Decimal("30")
+"""Mangroves grow "largely between 30° N and 30° S latitude" (Giri 2021, Remote Sensing
+13:563, doi:10.3390/rs13040563). Coastal wetland beyond that is valued as coastal systems."""
+RANGE_BASIS = (
+    "mid = high = Brander et al. 2024 Table 1 biome mean; low = indicative "
+    "median-equivalent (mean x median/mean ratio from Costanza et al. 2014 Table 4)"
+)
 CARBON_FRACTION = Decimal("0.47")
 """IPCC 2006 Vol 4 Ch 4 Table 4.3 default carbon fraction of dry matter."""
 LANDCOVER_SUM_TOLERANCE = Decimal("0.01")
@@ -73,11 +82,10 @@ DWClass = Literal[
     "snow_and_ice",
 ]
 DW_CLASSES: tuple[DWClass, ...] = get_args(DWClass)
-_DW_BY_NAME: Mapping[str, DWClass] = {c: c for c in DW_CLASSES}
-VEGETATED_CLASSES: frozenset[DWClass] = frozenset(
-    {"trees", "grass", "shrub_and_scrub", "flooded_vegetation"}
+GMW_SOURCE = (
+    "Global Mangrove Watch v3 (Bunting, P. et al. 2022, Remote Sensing 14:3657, "
+    "doi:10.3390/rs14153657, CC BY 4.0)"
 )
-WETLAND_CLASSES: frozenset[DWClass] = frozenset({"flooded_vegetation"})
 Zone = Literal["tropical", "extratropical"]
 
 SERVICE_GROUPS: tuple[str, ...] = (
@@ -112,6 +120,16 @@ SOURCES: Mapping[str, str] = {
     "naturalearth_10m": COASTLINE_SOURCE,
     "soilgrids": "ISRIC SoilGrids soil organic carbon stock, 0-30 cm (site input)",
     "naturex_policy": "NatureX dev-spec §7.3: class not valued as natural capital",
+    "giri2021": (
+        "Giri, C. (2021) Recent advancement in mangrove forests mapping and monitoring of the "
+        "world using Earth observation satellite data. Remote Sensing 13:563. "
+        "doi:10.3390/rs13040563 (mangrove latitudinal range)"
+    ),
+    "gmw_v3": GMW_SOURCE,
+    "esvd2020": (
+        "de Groot, R., Brander, L. & Solomonides, S. (2020) Update of global ecosystem "
+        "service valuation database (ESVD). FSD report 2020-06, Appendix 6 (biome classes)"
+    ),
 }
 
 _CTX = Context(prec=50, rounding=ROUND_HALF_EVEN)
@@ -134,10 +152,10 @@ class BiomeCoefficient:
     value_source_id: str
     value_ref: str
     value_verified: bool
-    spread_basis: str
-    spread_source_id: str
-    spread_ref: str
-    spread_verified: bool
+    low_basis: str
+    low_source_id: str
+    low_ref: str
+    low_verified: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,16 +170,14 @@ class ServiceMean:
 
 @dataclass(frozen=True, slots=True)
 class CarbonFactor:
-    dw_class: DWClass
+    """IPCC Tier 1 factors for a biome, so carbon follows the same mapping as the money."""
+
+    biome_id: str
     zone: str
-    coastal: str
     root_shoot_ratio: Decimal
     agb_growth_t_dm_ha_yr: Decimal
     r_source_id: str
     growth_source_id: str
-
-    def matches(self, zone: Zone, is_coastal: bool) -> bool:
-        return self.zone in ("any", zone) and self.coastal in ("any", str(is_coastal).lower())
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,12 +187,11 @@ class CoefficientTable:
     services: Mapping[str, tuple[ServiceMean, ...]]
     carbon: tuple[CarbonFactor, ...]
 
-    def carbon_factor(self, dw_class: DWClass, zone: Zone, is_coastal: bool) -> CarbonFactor:
-        found = [f for f in self.carbon if f.dw_class == dw_class and f.matches(zone, is_coastal)]
+    def carbon_factor(self, biome_id: str, zone: Zone) -> CarbonFactor:
+        found = [f for f in self.carbon if f.biome_id == biome_id and f.zone in ("any", zone)]
         if len(found) != 1:
             raise CoefficientTableError(
-                f"Expected one carbon factor for {dw_class}/{zone}/coastal={is_coastal}, "
-                f"found {len(found)}."
+                f"Expected one carbon factor for {biome_id}/{zone}, found {len(found)}."
             )
         return found[0]
 
@@ -184,7 +199,9 @@ class CoefficientTable:
 def biome_for(dw_class: DWClass, lat: Decimal, is_coastal: bool) -> str:
     """Dynamic World class → biome ID in ``coefficients.csv`` (dev-spec §7.3)."""
     if dw_class == "flooded_vegetation":
-        return "tidal_marsh_mangrove" if is_coastal else "swamp_floodplain"
+        if not is_coastal:
+            return "swamp_floodplain"
+        return "mangrove" if abs(lat) < MANGROVE_MAX_ABS_LAT else "coastal_systems"
     if dw_class == "water":
         return "lake_river"
     if dw_class == "trees":
@@ -240,10 +257,11 @@ def _load_biomes(text: str) -> dict[str, BiomeCoefficient]:
             "value_source_id",
             "value_ref",
             "value_verified",
-            "spread_basis",
-            "spread_source_id",
-            "spread_ref",
-            "spread_verified",
+            "low_basis",
+            "low_source_id",
+            "low_ref",
+            "low_verified",
+            "high_basis",
         ),
     )
     biomes: dict[str, BiomeCoefficient] = {}
@@ -258,7 +276,11 @@ def _load_biomes(text: str) -> dict[str, BiomeCoefficient]:
             raise CoefficientTableError(f"{biome_id}: needs low ≤ mid ≤ high.")
         if high > 0:
             _check_source(row["value_source_id"], row["value_ref"], f"{biome_id} value")
-            _check_source(row["spread_source_id"], row["spread_ref"], f"{biome_id} spread")
+            _check_source(row["low_source_id"], row["low_ref"], f"{biome_id} low")
+            if row["high_basis"] != "brander_mean" or high != mid:
+                raise CoefficientTableError(
+                    f"{biome_id}: high must be the Brander mean (no published biome dispersion)."
+                )
         if biome_id in biomes:
             raise CoefficientTableError(f"Duplicate biome {biome_id}.")
         biomes[biome_id] = BiomeCoefficient(
@@ -270,10 +292,10 @@ def _load_biomes(text: str) -> dict[str, BiomeCoefficient]:
             value_source_id=row["value_source_id"],
             value_ref=row["value_ref"],
             value_verified=row["value_verified"] == "true",
-            spread_basis=row["spread_basis"],
-            spread_source_id=row["spread_source_id"],
-            spread_ref=row["spread_ref"],
-            spread_verified=row["spread_verified"] == "true",
+            low_basis=row["low_basis"],
+            low_source_id=row["low_source_id"],
+            low_ref=row["low_ref"],
+            low_verified=row["low_verified"] == "true",
         )
     return biomes
 
@@ -330,14 +352,13 @@ def _load_services(
     return {k: tuple(v) for k, v in grouped.items()}
 
 
-def _load_carbon(text: str) -> tuple[CarbonFactor, ...]:
+def _load_carbon(text: str, biomes: Mapping[str, BiomeCoefficient]) -> tuple[CarbonFactor, ...]:
     rows = _read_csv(
         text,
         "carbon_factors.csv",
         (
-            "dw_class",
+            "biome_id",
             "zone",
-            "coastal",
             "root_shoot_ratio",
             "r_source_id",
             "r_ref",
@@ -348,24 +369,21 @@ def _load_carbon(text: str) -> tuple[CarbonFactor, ...]:
     )
     factors: list[CarbonFactor] = []
     for row in rows:
-        dw_class = row["dw_class"]
-        if dw_class not in DW_CLASSES:
-            raise CoefficientTableError(f"Unknown Dynamic World class {dw_class!r}.")
+        biome_id = row["biome_id"]
+        if biome_id not in biomes:
+            raise CoefficientTableError(f"Carbon factor for unknown biome {biome_id!r}.")
         if row["zone"] not in ("any", "tropical", "extratropical"):
-            raise CoefficientTableError(f"{dw_class}: bad zone {row['zone']!r}.")
-        if row["coastal"] not in ("any", "true", "false"):
-            raise CoefficientTableError(f"{dw_class}: bad coastal flag {row['coastal']!r}.")
-        ratio = _decimal(row["root_shoot_ratio"], f"{dw_class} R")
-        growth = _decimal(row["agb_growth_t_dm_ha_yr"], f"{dw_class} growth")
+            raise CoefficientTableError(f"{biome_id}: bad zone {row['zone']!r}.")
+        ratio = _decimal(row["root_shoot_ratio"], f"{biome_id} R")
+        growth = _decimal(row["agb_growth_t_dm_ha_yr"], f"{biome_id} growth")
         if ratio > 0:
-            _check_source(row["r_source_id"], row["r_ref"], f"{dw_class} R")
+            _check_source(row["r_source_id"], row["r_ref"], f"{biome_id} R")
         if growth > 0:
-            _check_source(row["growth_source_id"], row["growth_ref"], f"{dw_class} growth")
+            _check_source(row["growth_source_id"], row["growth_ref"], f"{biome_id} growth")
         factors.append(
             CarbonFactor(
-                dw_class=_DW_BY_NAME[dw_class],
+                biome_id=biome_id,
                 zone=row["zone"],
-                coastal=row["coastal"],
                 root_shoot_ratio=ratio,
                 agb_growth_t_dm_ha_yr=growth,
                 r_source_id=row["r_source_id"],
@@ -391,16 +409,20 @@ def parse_coefficient_table(*, coefficients: str, services: str, carbon: str) ->
         price_basis=PRICE_BASIS,
         biomes=biomes,
         services=_load_services(services, biomes),
-        carbon=_load_carbon(carbon),
+        carbon=_load_carbon(carbon, biomes),
     )
-    lat_by_zone = {"tropical": Decimal(0), "extratropical": Decimal(45)}
-    for dw_class in DW_CLASSES:
-        for zone in ("tropical", "extratropical"):
-            for coastal in (True, False):
-                table.carbon_factor(dw_class, zone, coastal)
-                biome_id = biome_for(dw_class, lat_by_zone[zone], coastal)
-                if biome_id not in biomes:
-                    raise CoefficientTableError(f"coefficients.csv has no row for {biome_id}.")
+    needed = {"mangrove"} | {
+        biome_for(c, Decimal(lat), coastal)
+        for c in DW_CLASSES
+        for lat in (0, 25, 45)
+        for coastal in (True, False)
+    }
+    for biome_id in sorted(needed):
+        if biome_id not in biomes:
+            raise CoefficientTableError(f"coefficients.csv has no row for {biome_id}.")
+    for biome_id in biomes:
+        for zone in get_args(Zone):
+            table.carbon_factor(biome_id, zone)
     return table
 
 
@@ -410,6 +432,30 @@ def default_coefficient_table() -> CoefficientTable:
 
 
 # --- Inputs and outputs -------------------------------------------------------------------
+
+CoverUnit = Literal[
+    "water",
+    "trees",
+    "grass",
+    "flooded_vegetation",
+    "crops",
+    "shrub_and_scrub",
+    "built",
+    "bare",
+    "snow_and_ice",
+    "gmw_mangrove",
+]
+"""A Dynamic World class, or the share reassigned to mangrove from Global Mangrove Watch."""
+COVER_UNITS: tuple[CoverUnit, ...] = get_args(CoverUnit)
+WOODY_UNITS: tuple[CoverUnit, ...] = ("trees", "gmw_mangrove")
+VEGETATED_UNITS: tuple[CoverUnit, ...] = (
+    "trees",
+    "grass",
+    "flooded_vegetation",
+    "shrub_and_scrub",
+    "gmw_mangrove",
+)
+WETLAND_UNITS: tuple[CoverUnit, ...] = ("flooded_vegetation", "gmw_mangrove")
 
 
 class ValuationInputs(BaseModel):
@@ -423,11 +469,13 @@ class ValuationInputs(BaseModel):
     landcover: dict[DWClass, Decimal]
     """Area-weighted Dynamic World fractions (``EarthObsMetrics.landcover``)."""
     biomass_t_ha: Decimal = Field(ge=0)
-    """Mean above-ground biomass, Mg (t) dry matter per ha (GEDI L4B)."""
+    """Mean above-ground biomass, Mg (t) dry matter per ha."""
     coast_distance_km: Decimal = Field(ge=0)
     """Geodesic distance from the centroid to the nearest coastline."""
     soc_t_c_ha: Decimal | None = Field(default=None, ge=0)
     """SoilGrids soil organic carbon, t C/ha, 0–30 cm. None when not yet available."""
+    mangrove_fraction: Decimal | None = Field(default=None, ge=0, le=1)
+    """Share of the site mapped as mangrove by Global Mangrove Watch v3. None = not known."""
     context_multiplier: Decimal = Field(default=Decimal(1), gt=0)
     """Site-level value adjustment, reserved for later use (dev-spec §7.3)."""
 
@@ -449,9 +497,10 @@ class ValuationInputs(BaseModel):
 class ClassValue(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    dw_class: DWClass
+    dw_class: CoverUnit
+    """A Dynamic World class, or ``gmw_mangrove`` for the share reassigned from GMW."""
     share: Decimal
-    """Fraction of the site area after renormalisation, rounded to 6 decimals for display."""
+    """Fraction of the site area after renormalisation and mangrove reassignment, 6 dp."""
     biome_id: str
     biome_label: str
     coeff_low: Decimal
@@ -482,6 +531,21 @@ class CoastalInfo(BaseModel):
     source: str
 
 
+class MangroveInfo(BaseModel):
+    """How much of the site was revalued as mangrove from Global Mangrove Watch."""
+
+    model_config = ConfigDict(frozen=True)
+
+    mangrove_fraction: Decimal
+    """The GMW input."""
+    applied: Decimal
+    """min(mangrove_fraction, trees + flooded_vegetation), after renormalisation."""
+    from_flooded_vegetation: Decimal
+    from_trees: Decimal
+    capped: bool
+    source: str = GMW_SOURCE
+
+
 class CarbonEstimate(BaseModel):
     """IPCC Tier 1 carbon, in tCO₂. Never added to the dollar value."""
 
@@ -493,11 +557,14 @@ class CarbonEstimate(BaseModel):
     """SOC × wetland area × 44/12; None when a wetland's SOC input is missing."""
     total_stock_tco2: int
     sequestration_tco2_yr: int
-    """Gross Tier 1 biomass gain, Σ area_c × G_c × (1 + R_c) × 0.47 × 44/12."""
+    """Gross Tier 1 biomass gain, Σ area_u × G_u × (1 + R_u) × 0.47 × 44/12."""
     root_shoot_ratio: Decimal
-    """Effective R: vegetated-area-weighted mean of the per-class IPCC ratios."""
+    """R applied to the site's AGB (see ``root_shoot_ratio_basis``)."""
+    root_shoot_ratio_basis: str
+    """``woody`` (trees / mangrove share-weighted), ``dominant:<unit>`` or ``none``."""
     carbon_fraction: Decimal
     wetland_area_ha: Decimal
+    """Flooded vegetation plus GMW mangrove, where SOC is counted."""
     soc_included: bool
 
 
@@ -509,9 +576,12 @@ class ValuationResult(BaseModel):
     value_high: int
     unit: str
     """Int$ at 2020 price levels per year (= US$2020 at US prices)."""
+    range_basis: str
+    """Low is an indicative median-equivalent; mid and high are the Brander mean."""
     classes: tuple[ClassValue, ...]
     services: tuple[ServiceGroupValue, ...]
     coastal: CoastalInfo
+    mangrove: MangroveInfo | None
     carbon: CarbonEstimate
     carbon_included_in_value: Literal[False] = False
     landcover_sum: Decimal
@@ -546,35 +616,69 @@ def largest_remainder(parts: Mapping[str, Decimal], target: int) -> dict[str, in
     return floors
 
 
+def _cover_shares(
+    inputs: ValuationInputs, total_share: Decimal
+) -> tuple[dict[CoverUnit, Decimal], MangroveInfo | None]:
+    """Renormalised class shares, with the GMW mangrove share carved out of
+    flooded vegetation first, then trees (Dynamic World labels mangrove canopy as trees)."""
+    shares: dict[CoverUnit, Decimal] = {
+        c: inputs.landcover.get(c, Decimal(0)) / total_share for c in DW_CLASSES
+    }
+    shares["gmw_mangrove"] = Decimal(0)
+    if inputs.mangrove_fraction is None:
+        return shares, None
+    available = shares["flooded_vegetation"] + shares["trees"]
+    applied = min(inputs.mangrove_fraction, available)
+    from_flooded = min(applied, shares["flooded_vegetation"])
+    from_trees = applied - from_flooded
+    shares["flooded_vegetation"] -= from_flooded
+    shares["trees"] -= from_trees
+    shares["gmw_mangrove"] = applied
+    return shares, MangroveInfo(
+        mangrove_fraction=inputs.mangrove_fraction,
+        applied=applied.quantize(SHARE_QUANTUM, ROUND_HALF_EVEN),
+        from_flooded_vegetation=from_flooded.quantize(SHARE_QUANTUM, ROUND_HALF_EVEN),
+        from_trees=from_trees.quantize(SHARE_QUANTUM, ROUND_HALF_EVEN),
+        capped=inputs.mangrove_fraction > available,
+    )
+
+
+def _biome_of_unit(unit: CoverUnit, lat: Decimal, is_coastal: bool) -> str:
+    return "mangrove" if unit == "gmw_mangrove" else biome_for(unit, lat, is_coastal)
+
+
 def value_site(inputs: ValuationInputs, table: CoefficientTable) -> ValuationResult:
     """Value one site. Pure: same inputs and table, same result."""
     with localcontext(_CTX):
         total_share = sum(inputs.landcover.values(), Decimal(0))
-        shares = {c: inputs.landcover.get(c, Decimal(0)) / total_share for c in DW_CLASSES}
+        shares, mangrove = _cover_shares(inputs, total_share)
         is_coastal = inputs.coast_distance_km <= Decimal(str(COASTAL_THRESHOLD_KM))
-        zone = zone_for(inputs.lat)
         k = inputs.context_multiplier
         flags: list[str] = []
         source_ids: set[str] = {"naturalearth_10m"}
 
         exact: dict[str, dict[str, Decimal]] = {"low": {}, "mid": {}, "high": {}}
         groups = dict.fromkeys(SERVICE_GROUPS, Decimal(0))
-        biome_of: dict[DWClass, BiomeCoefficient] = {}
-        for dw_class in DW_CLASSES:
-            biome = table.biomes[biome_for(dw_class, inputs.lat, is_coastal)]
-            biome_of[dw_class] = biome
-            area = inputs.area_ha * shares[dw_class]
-            exact["low"][dw_class] = area * biome.low * k
-            exact["mid"][dw_class] = area * biome.mid * k
-            exact["high"][dw_class] = area * biome.high * k
-            mid = exact["mid"][dw_class]
+        biome_of: dict[CoverUnit, BiomeCoefficient] = {}
+        for unit in COVER_UNITS:
+            biome = table.biomes[_biome_of_unit(unit, inputs.lat, is_coastal)]
+            biome_of[unit] = biome
+            area = inputs.area_ha * shares[unit]
+            exact["low"][unit] = area * biome.low * k
+            exact["mid"][unit] = area * biome.mid * k
+            exact["high"][unit] = area * biome.high * k
+            mid = exact["mid"][unit]
             if mid == 0:
                 continue
-            source_ids.update({biome.value_source_id, biome.spread_source_id})
+            source_ids.update({biome.value_source_id, biome.low_source_id})
+            if biome.biome_id in ("mangrove", "coastal_systems") and unit != "gmw_mangrove":
+                source_ids.add("giri2021")
+            if biome.biome_id == "coastal_systems":
+                source_ids.add("esvd2020")
             if not biome.value_verified:
                 flags.append(f"unverified_coefficient:{biome.biome_id}")
-            if not biome.spread_verified:
-                flags.append(f"spread_fallback:{biome.biome_id}")
+            if not biome.low_verified:
+                flags.append(f"low_bound_fallback:{biome.biome_id}")
             services = table.services[biome.biome_id]
             service_total = sum((s.value for s in services), Decimal(0))
             for service in services:
@@ -584,31 +688,39 @@ def value_site(inputs: ValuationInputs, table: CoefficientTable) -> ValuationRes
         split = {level: largest_remainder(exact[level], totals[level]) for level in exact}
         service_split = largest_remainder(groups, totals["mid"])
 
-        carbon = _carbon(inputs, table, shares, zone, is_coastal, flags, source_ids)
+        carbon = _carbon(inputs, table, shares, biome_of, flags, source_ids)
 
         renormalised = total_share != 1
         if renormalised:
             flags.append("landcover_renormalised")
+        if is_coastal and shares["water"] > 0:
+            flags.append("coastal_water_as_lakes")
+        if mangrove is not None:
+            source_ids.add("gmw_v3")
+            if mangrove.capped:
+                flags.append("mangrove_fraction_capped")
 
+    units = [u for u in COVER_UNITS if u != "gmw_mangrove" or mangrove is not None]
     return ValuationResult(
         value_low=totals["low"],
         value_mid=totals["mid"],
         value_high=totals["high"],
         unit=VALUE_UNIT,
+        range_basis=RANGE_BASIS,
         classes=tuple(
             ClassValue(
-                dw_class=c,
-                share=shares[c].quantize(SHARE_QUANTUM, ROUND_HALF_EVEN),
-                biome_id=biome_of[c].biome_id,
-                biome_label=biome_of[c].label,
-                coeff_low=biome_of[c].low,
-                coeff_mid=biome_of[c].mid,
-                coeff_high=biome_of[c].high,
-                value_low=split["low"][c],
-                value_mid=split["mid"][c],
-                value_high=split["high"][c],
+                dw_class=u,
+                share=shares[u].quantize(SHARE_QUANTUM, ROUND_HALF_EVEN),
+                biome_id=biome_of[u].biome_id,
+                biome_label=biome_of[u].label,
+                coeff_low=biome_of[u].low,
+                coeff_mid=biome_of[u].mid,
+                coeff_high=biome_of[u].high,
+                value_low=split["low"][u],
+                value_mid=split["mid"][u],
+                value_high=split["high"][u],
             )
-            for c in DW_CLASSES
+            for u in units
         ),
         services=tuple(
             ServiceGroupValue(group=g, value_mid=service_split[g]) for g in SERVICE_GROUPS
@@ -619,6 +731,7 @@ def value_site(inputs: ValuationInputs, table: CoefficientTable) -> ValuationRes
             threshold_km=Decimal(str(COASTAL_THRESHOLD_KM)),
             source=COASTLINE_SOURCE,
         ),
+        mangrove=mangrove,
         carbon=carbon,
         landcover_sum=total_share,
         landcover_renormalised=renormalised,
@@ -630,43 +743,53 @@ def value_site(inputs: ValuationInputs, table: CoefficientTable) -> ValuationRes
     )
 
 
+def _root_shoot_ratio(
+    shares: Mapping[CoverUnit, Decimal], factors: Mapping[CoverUnit, CarbonFactor]
+) -> tuple[Decimal, str]:
+    """R for the site's AGB. GEDI/CCI AGB is mostly woody, so trees and mangrove set R when
+    present (share-weighted); otherwise the dominant vegetated unit does (ties by name)."""
+    woody = sum((shares[u] for u in WOODY_UNITS), Decimal(0))
+    if woody > 0:
+        weighted = sum((shares[u] * factors[u].root_shoot_ratio for u in WOODY_UNITS), Decimal(0))
+        return weighted / woody, "woody"
+    vegetated = [u for u in VEGETATED_UNITS if shares[u] > 0]
+    if not vegetated:
+        return Decimal(0), "none"
+    dominant = min(vegetated, key=lambda u: (-shares[u], u))
+    return factors[dominant].root_shoot_ratio, f"dominant:{dominant}"
+
+
 def _carbon(
     inputs: ValuationInputs,
     table: CoefficientTable,
-    shares: Mapping[DWClass, Decimal],
-    zone: Zone,
-    is_coastal: bool,
+    shares: Mapping[CoverUnit, Decimal],
+    biome_of: Mapping[CoverUnit, BiomeCoefficient],
     flags: list[str],
     source_ids: set[str],
 ) -> CarbonEstimate:
-    factors = {c: table.carbon_factor(c, zone, is_coastal) for c in DW_CLASSES}
-    vegetated = sum((shares[c] for c in VEGETATED_CLASSES), Decimal(0))
-    ratio = (
-        sum((shares[c] * factors[c].root_shoot_ratio for c in VEGETATED_CLASSES), Decimal(0))
-        / vegetated
-        if vegetated > 0
-        else Decimal(0)
-    )
+    zone = zone_for(inputs.lat)
+    factors = {u: table.carbon_factor(biome_of[u].biome_id, zone) for u in COVER_UNITS}
+    ratio, ratio_basis = _root_shoot_ratio(shares, factors)
     to_co2 = CARBON_FRACTION * _CO2_PER_C
     biomass = inputs.biomass_t_ha * (1 + ratio) * inputs.area_ha * to_co2
     sequestration = (
         sum(
             (
-                inputs.area_ha * shares[c] * f.agb_growth_t_dm_ha_yr * (1 + f.root_shoot_ratio)
-                for c, f in factors.items()
+                inputs.area_ha * shares[u] * f.agb_growth_t_dm_ha_yr * (1 + f.root_shoot_ratio)
+                for u, f in factors.items()
             ),
             Decimal(0),
         )
         * to_co2
     )
-    for c in VEGETATED_CLASSES:
-        if shares[c] > 0:
-            if factors[c].root_shoot_ratio > 0:
-                source_ids.add(factors[c].r_source_id)
-            if factors[c].agb_growth_t_dm_ha_yr > 0:
-                source_ids.add(factors[c].growth_source_id)
+    for u in VEGETATED_UNITS:
+        if shares[u] > 0:
+            if factors[u].root_shoot_ratio > 0:
+                source_ids.add(factors[u].r_source_id)
+            if factors[u].agb_growth_t_dm_ha_yr > 0:
+                source_ids.add(factors[u].growth_source_id)
 
-    wetland_area = inputs.area_ha * sum((shares[c] for c in WETLAND_CLASSES), Decimal(0))
+    wetland_area = inputs.area_ha * sum((shares[u] for u in WETLAND_UNITS), Decimal(0))
     soc: Decimal | None = Decimal(0)
     if wetland_area > 0:
         if inputs.soc_t_c_ha is None:
@@ -683,25 +806,34 @@ def _carbon(
         total_stock_tco2=biomass_t + (soc_t or 0),
         sequestration_tco2_yr=_round(sequestration),
         root_shoot_ratio=ratio.quantize(Decimal("0.0001"), ROUND_HALF_EVEN),
+        root_shoot_ratio_basis=ratio_basis,
         carbon_fraction=CARBON_FRACTION,
         wetland_area_ha=wetland_area.quantize(Decimal("0.0001"), ROUND_HALF_EVEN),
         soc_included=soc is not None and wetland_area > 0,
     )
 
 
+def _optional_decimal(value: float | None) -> Decimal | None:
+    return None if value is None else Decimal(repr(value))
+
+
 def inputs_from_metrics(
     metrics: EarthObsMetrics,
     *,
     soc_t_c_ha: float | None = None,
+    mangrove_fraction: float | None = None,
     coastline: CoastlineIndex | None = None,
     context_multiplier: Decimal = _ONE,
 ) -> ValuationInputs:
     """Build valuation inputs from cached Earth observation metrics (runs the coastal check).
 
-    ``soc_t_c_ha`` falls back to a ``soc_t_c_ha`` field on the metrics once T13 adds one.
+    ``soc_t_c_ha`` and ``mangrove_fraction`` fall back to fields of the same name on the
+    metrics; T13 adds them, so they're read with ``getattr`` until then.
     """
     if soc_t_c_ha is None:
         soc_t_c_ha = getattr(metrics, "soc_t_c_ha", None)
+    if mangrove_fraction is None:
+        mangrove_fraction = getattr(metrics, "mangrove_fraction", None)
     index = coastline or default_coastline()
     lat, lon = metrics.centroid.lat, metrics.centroid.lon
     return ValuationInputs.model_validate(
@@ -712,7 +844,8 @@ def inputs_from_metrics(
             "landcover": {c: Decimal(repr(v)) for c, v in metrics.landcover.items()},
             "biomass_t_ha": Decimal(repr(metrics.biomass_t_ha)),
             "coast_distance_km": Decimal(repr(index.distance_km(lat, lon))),
-            "soc_t_c_ha": None if soc_t_c_ha is None else Decimal(repr(soc_t_c_ha)),
+            "soc_t_c_ha": _optional_decimal(soc_t_c_ha),
+            "mangrove_fraction": _optional_decimal(mangrove_fraction),
             "context_multiplier": context_multiplier,
         }
     )
@@ -722,8 +855,11 @@ def value_metrics(
     metrics: EarthObsMetrics,
     *,
     soc_t_c_ha: float | None = None,
+    mangrove_fraction: float | None = None,
     table: CoefficientTable | None = None,
 ) -> ValuationResult:
     """Convenience: value a site straight from its cached metrics."""
-    inputs = inputs_from_metrics(metrics, soc_t_c_ha=soc_t_c_ha)
+    inputs = inputs_from_metrics(
+        metrics, soc_t_c_ha=soc_t_c_ha, mangrove_fraction=mangrove_fraction
+    )
     return value_site(inputs, table or default_coefficient_table())
