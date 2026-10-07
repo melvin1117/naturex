@@ -73,8 +73,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` · **Deps:** T02, T07 · **Files:** `backend/app/llm.py`, `backend/tests/test_llm.py`
 
 ### T10 · Live AI summary endpoint (#16) — D3 · S · Must
-- [ ] For a demo asset, the reports API returns a report whose summary is written live by Nemotron from (mock) metrics
-- [ ] The call appears in `llm_calls`
+- [x] For a demo asset, the reports API returns a report whose summary is written live by Nemotron from (mock) metrics
+- [x] The call appears in `llm_calls`
 
 **Verify:** `curl` the endpoint; a row appears in `llm_calls` · **Deps:** T08, T09 · **Files:** `backend/app/agents/summary.py`, `backend/app/routers/reports.py`
 

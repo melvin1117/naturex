@@ -79,6 +79,11 @@ class AssetStatusOut(StrEnum):
     SUSPENDED = "suspended"
 
 
+class ReportSummarySource(StrEnum):
+    LIVE = "live"
+    FALLBACK = "fallback"
+
+
 class AssetCreate(BaseModel):
     name: str
     country: str | None = None
@@ -131,6 +136,10 @@ class ReportOut(BaseModel):
     fair_value_per_share: Decimal | None = None
     flags: list[Any] | None = None
     summary_md: str | None = None
+    summary_source: ReportSummarySource = Field(
+        default=ReportSummarySource.FALLBACK,
+        description="Whether summary_md came from a live Nemotron call or deterministic fallback.",
+    )
     recommendations: list[str] | None = None
     auditor: AuditorOutput | None = None
     created_at: datetime

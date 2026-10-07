@@ -404,6 +404,12 @@ create table llm_calls (
 | `GET /world` | The caller's world (from the session; anonymous = the live world) and, in demo sessions, its personas |
 | `POST /world/reset` | "Reset my demo" (demo sessions only): re-seeds the world, keeping persona user IDs so the session stays valid |
 
+`ReportOut.summary_source` is additive metadata for the generated client: `"live"` means
+`summary_md` was written by a live Nemotron Nano call from deterministic report facts, and
+`"fallback"` means it came from the deterministic template used for mock mode, missing keys,
+budget exhaustion or invalid model output. The summary prose must not contain numbers outside
+the input facts.
+
 Every route is scoped to the caller's world, which comes from the session: anonymous requests read the live world, password sessions use the live world, and demo sessions use their sandbox (ADR-0005). Judges never affect each other or the live world. *(T31 below describes the `nx_world` cookie, which T55 retires.)*
 
 ### 6.1 Authorization (ADR-0005)
