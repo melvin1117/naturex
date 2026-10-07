@@ -1,7 +1,9 @@
 """Orders and portfolio (dev-spec §6, §8): persisted against the real market engine.
 
-Concurrency: every order locks the asset row, then the trader's user row (the same order as
-the revenue payout in `market/revenue.py`), so orders and payouts on one asset are
+Concurrency: every order first takes a KEY SHARE lock on its world row, so it waits behind a
+"Reset my demo" (which holds the world row FOR UPDATE) instead of deadlocking with it, while
+orders don't block each other. It then locks the asset row and the trader's user row (the same
+order as the revenue payout in `market/revenue.py`), so orders and payouts on one asset are
 serialised and balances, holdings and the primary float can't lose updates.
 """
 
@@ -26,6 +28,7 @@ from app.models import (
     Price,
     StreamEventType,
     User,
+    World,
 )
 from app.schemas import HoldingOut, ImpactSummary, OrderCreate, OrderOut, PortfolioOut
 
@@ -44,6 +47,10 @@ def _actor(session: Session, world_id: UUID, *, lock: bool = False) -> User:
     if user is None:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Demo investor not seeded")
     return user
+
+
+def _lock_world(session: Session, world_id: UUID) -> None:
+    session.exec(select(World.id).where(World.id == world_id).with_for_update(key_share=True)).one()
 
 
 def _locked_asset(session: Session, world_id: UUID, asset_id: UUID) -> Asset:
@@ -105,6 +112,8 @@ def _order_rows(
 @router.post("/orders", response_model=OrderOut)
 def place_order(body: OrderCreate, world: CurrentWorld, session: SessionDep) -> OrderOut:
     """Fill a market order instantly. `is_primary` is true if any shares came from the IPO float."""
+    _lock_world(session, world.id)
+    # After a concurrent reset the world has fresh asset ids, so a stale id is a 404.
     asset = _locked_asset(session, world.id, body.asset_id)
     actor = _actor(session, world.id, lock=True)
     if asset.status != AssetStatus.LISTED:

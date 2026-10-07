@@ -667,11 +667,13 @@ Implemented as pure functions in `backend/app/market/engine.py` (`ipo`, `quote`,
 
 **As built (T17), `POST /orders` and `GET /portfolio` (`backend/app/routers/market.py`):**
 - **Scope:** both routes act in the caller's world (`CurrentWorld`) as its demo investor persona. They move onto the signed-in principal in T57 (ADR-0005).
-- **Locking:** each order locks the asset row, then the trader's user row (the same order as the revenue payout). So concurrent orders and payouts on one asset are serialised and can't lose updates. There's a concurrency regression test.
+- **Locking:**
+  - Each order first takes a `KEY SHARE` lock on its world row, so it waits behind a "Reset my demo" instead of deadlocking with it. Orders don't block each other.
+  - Then it locks the asset row and the trader's user row (the same order as the revenue payout).   - So concurrent orders and payouts on one asset are serialised and can't lose updates. There are regression tests for concurrent buys and for an order racing a reset.
 - **Order rows:** a buy that crosses the end of the primary float is stored as two rows, the primary part (`is_primary`, which paid the community) and the secondary part. The response's `is_primary` is true if any shares came from the float.
 - **What a fill writes, in one transaction:** a new `prices` row with `reason='order'`, and a `price_tick` live event (T29).
 - **Errors:** 404 for an asset outside the world, 409 when the asset isn't listed or has no price, 400 for engine rejections (cash, shares, size).
-- **Seed IPO prices:** `make seed` gives every listed curated site an `ipo` price from its deterministic rating, `demo_ipo_price` = T14 valuation + T15 score → `ipo()`. Today that's wetland 21.4723, mangrove 285.1519 and forest 19.5456 per share. T19 stores the matching report; T59 prices owner-launched IPOs.
+- **Seed IPO prices:** `make seed` gives every listed curated site an `ipo` price from its deterministic rating, `demo_ipo_price` = T14 valuation + T15 score → `ipo()`. Today that's wetland 21.4723, mangrove 285.1519 and forest 19.5456 per share. T19 stores the matching report; T59 prices owner-launched IPOs. **On an existing database, run `make seed` once after upgrading** so the template gets its prices; visitor worlds pick them up on their next reset or creation.
 
 A tick is triggered by `POST /admin/simulate/quarter`, by a scheduled job, or by the SSE loop while the demo is running (no always-on process is required).
 

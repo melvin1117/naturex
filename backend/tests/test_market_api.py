@@ -30,8 +30,9 @@ from app.models import (
     World,
     WorldEvent,
 )
+from app.routers import market as market_router
 from app.routers.market import place_order
-from app.sandbox import _delete_world_rows, create_world
+from app.sandbox import _delete_world_rows, create_world, reset_world
 from app.schemas import OrderCreate
 from app.seed import WORLD_ID, demo_ipo_price, seed
 from app.tools.earth_obs import load_site_metrics
@@ -340,6 +341,61 @@ def test_concurrent_buys_conserve_cash_shares_and_the_float() -> None:
             assert asset.primary_shares_remaining == float_before - threads * qty
             assert asset.community_wallet == wallet_before + paid
             assert ticks == threads
+    finally:
+        with Session(engine) as cleanup:
+            _delete_world_rows(cleanup, world_id, keep_world=False)
+            cleanup.execute(delete(World).where(col(World.id) == world_id))
+            cleanup.commit()
+        engine.dispose()
+
+
+@requires_db
+def test_order_and_reset_on_the_same_world_serialise_without_deadlock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An order holding its row locks must make a concurrent reset wait, not deadlock."""
+    command.upgrade(alembic_cfg(), "head")
+    engine = create_engine(get_settings().database_url)
+    with Session(engine) as setup:
+        seed(setup)
+        world = create_world(setup)
+        world_id = world.id
+    order_has_locks = threading.Event()
+    real_execute = market_router.execute
+
+    def slow_execute(*args: Any, **kwargs: Any) -> Any:
+        order_has_locks.set()
+        threading.Event().wait(0.8)
+        return real_execute(*args, **kwargs)
+
+    monkeypatch.setattr(market_router, "execute", slow_execute)
+    try:
+        with Session(engine) as db:
+            hero = db.exec(
+                select(Asset).where(Asset.world_id == world_id, Asset.site_key == HERO)
+            ).one()
+            hero_id = hero.id
+
+        def order() -> str:
+            with Session(engine) as db:
+                current = db.get_one(World, world_id)
+                place_order(OrderCreate(asset_id=hero_id, side="buy", qty=10), current, db)
+                return "ok"
+
+        def reset() -> str:
+            assert order_has_locks.wait(timeout=10)
+            with Session(engine) as db:
+                reset_world(db, world_id)
+                return "reset"
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = [f.result(timeout=30) for f in (pool.submit(order), pool.submit(reset))]
+
+        assert results == ["ok", "reset"]
+        with Session(engine) as check:
+            # The reset ran after the order committed, so the world is back to the template.
+            assert _investor(check, world_id).cash_balance == STARTING_CASH
+            assert check.exec(select(Order).where(Order.world_id == world_id)).all() == []
     finally:
         with Session(engine) as cleanup:
             _delete_world_rows(cleanup, world_id, keep_world=False)
