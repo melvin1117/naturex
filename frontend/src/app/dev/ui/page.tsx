@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { DataLayerPanel } from "@/components/data-layer-panel";
 import { SandboxBanner } from "@/components/sandbox-banner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -95,6 +96,13 @@ export default function DevUiPage() {
       <div className="space-y-3">
         <h2 className="text-xl font-semibold">Sandbox banner</h2>
         <SandboxBanner />
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <h2 className="text-xl font-semibold">Data layer</h2>
+        <DataLayerPanel />
       </div>
 
       <Separator />

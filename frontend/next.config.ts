@@ -5,6 +5,9 @@ import type { NextConfig } from "next";
 const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
+  // shadcn components import the `radix-ui` barrel; without this, a client component that
+  // uses <Button> ships every Radix primitive (~75 kB gzipped) on every page.
+  experimental: { optimizePackageImports: ["radix-ui"] },
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${backendUrl}/:path*` }];
   },

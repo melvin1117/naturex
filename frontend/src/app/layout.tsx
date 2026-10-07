@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 
 import { SandboxBanner } from "@/components/sandbox-banner";
 import { SiteHeader } from "@/components/site-header";
+import { WorldProvider } from "@/components/world-provider";
 
 import "./globals.css";
 
@@ -37,7 +38,9 @@ export default function RootLayout({
       >
         <SandboxBanner />
         <SiteHeader />
-        <main className="flex-1">{children}</main>
+        <main className="flex-1">
+          <WorldProvider>{children}</WorldProvider>
+        </main>
       </body>
     </html>
   );

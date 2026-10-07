@@ -1,0 +1,177 @@
+/**
+ * Typed API errors. Every failed request (HTTP error, network failure, failed world
+ * bootstrap) surfaces as an `ApiError`, so screens only ever render `error.message`.
+ */
+
+/** FastAPI error bodies are `{ "detail": string }` or `{ "detail": ValidationError[] }`. */
+type ValidationIssue = { loc?: unknown[]; msg?: string };
+
+const CODE_PATTERN = /^[a-z][a-z0-9_]*$/;
+
+const CODE_MESSAGES: Record<string, string> = {
+  world_required:
+    "Your demo world has expired. Reload the page to start a new one.",
+  too_many_event_streams:
+    "Live updates are busy right now; they will keep refreshing every few seconds.",
+};
+
+export class ApiError extends Error {
+  override readonly name = "ApiError";
+
+  constructor(
+    /** HTTP status, or 0 when the request never got a response (offline, DNS, CORS). */
+    readonly status: number,
+    message: string,
+    /** Machine-readable code from a snake_case `detail` (e.g. `world_required`), else null. */
+    readonly code: string | null = null,
+    /** The raw `detail` from the response body, for debugging and 422 field errors. */
+    readonly detail: unknown = null,
+    /** Seconds from the `Retry-After` header (429/503), else null. */
+    readonly retryAfterSeconds: number | null = null,
+  ) {
+    super(message);
+  }
+
+  get isNetworkError(): boolean {
+    return this.status === 0;
+  }
+}
+
+/** `Retry-After` is either delay-seconds or an HTTP date (RFC 9110 §10.2.3). */
+export function parseRetryAfter(
+  value: string | null,
+  now: number = Date.now(),
+): number | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  const at = Date.parse(trimmed);
+  if (Number.isNaN(at)) return null;
+  return Math.max(0, Math.ceil((at - now) / 1000));
+}
+
+function formatWait(seconds: number): string {
+  if (seconds < 60) return seconds <= 1 ? "a second" : `${seconds} seconds`;
+  const minutes = Math.round(seconds / 60);
+  return minutes === 1 ? "a minute" : `${minutes} minutes`;
+}
+
+function isHumanText(detail: unknown): detail is string {
+  return (
+    typeof detail === "string" &&
+    detail.length > 0 &&
+    !CODE_PATTERN.test(detail)
+  );
+}
+
+function validationMessage(detail: unknown): string {
+  const first = Array.isArray(detail)
+    ? (detail[0] as ValidationIssue | undefined)
+    : undefined;
+  if (!first?.msg) return "Some of the details you entered aren't valid.";
+  const field = Array.isArray(first.loc)
+    ? first.loc.filter((part) => part !== "body").join(".")
+    : "";
+  return field
+    ? `Check ${field}: ${first.msg}.`
+    : `Check your input: ${first.msg}.`;
+}
+
+function friendlyMessage(
+  status: number,
+  code: string | null,
+  detail: unknown,
+  retryAfter: number | null,
+): string {
+  if (code && CODE_MESSAGES[code]) return CODE_MESSAGES[code];
+  switch (status) {
+    case 400:
+      return isHumanText(detail)
+        ? detail
+        : "That request couldn't be processed.";
+    case 401:
+      return "Your session has expired. Reload the page to continue.";
+    case 403:
+      return "You don't have permission to do that.";
+    case 404:
+      return isHumanText(detail) ? detail : "We couldn't find that.";
+    case 409:
+      return isHumanText(detail)
+        ? detail
+        : "That clashes with a recent change. Refresh and try again.";
+    case 422:
+      return validationMessage(detail);
+    case 429:
+    case 503: {
+      if (isHumanText(detail)) return detail;
+      const wait = retryAfter === null ? "a moment" : formatWait(retryAfter);
+      return `NatureX is busy right now. Try again in ${wait}.`;
+    }
+    default:
+      return status >= 500
+        ? "Something went wrong on our side. Try again."
+        : "The request failed. Try again.";
+  }
+}
+
+/** Build an `ApiError` from a non-2xx response and its (already parsed) body. */
+export function apiErrorFromResponse(
+  response: Response,
+  body: unknown,
+): ApiError {
+  const detail =
+    body && typeof body === "object" && "detail" in body
+      ? (body as { detail: unknown }).detail
+      : (body ?? null);
+  const code =
+    typeof detail === "string" && CODE_PATTERN.test(detail) ? detail : null;
+  const retryAfter = parseRetryAfter(response.headers.get("Retry-After"));
+  return new ApiError(
+    response.status,
+    friendlyMessage(response.status, code, detail, retryAfter),
+    code,
+    detail,
+    retryAfter,
+  );
+}
+
+export function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name: unknown }).name === "AbortError"
+  );
+}
+
+/** Normalise anything thrown (fetch TypeError, ApiError, unknown) into an `ApiError`. */
+export function toApiError(error: unknown): ApiError {
+  if (error instanceof ApiError) return error;
+  return new ApiError(
+    0,
+    "Can't reach NatureX. Check your connection and try again.",
+    null,
+    error instanceof Error ? error.message : error,
+  );
+}
+
+type FetchResult<T> = { data?: T; error?: unknown; response: Response };
+
+/**
+ * Await an openapi-fetch call and return its data, or throw an `ApiError`.
+ *
+ * @example const asset = await unwrap(api.GET("/assets/{asset_id}", { params }));
+ */
+export async function unwrap<T>(request: Promise<FetchResult<T>>): Promise<T> {
+  let result: FetchResult<T>;
+  try {
+    result = await request;
+  } catch (error) {
+    // Aborts stay AbortErrors so callers can tell "cancelled" from "failed".
+    if (isAbortError(error)) throw error;
+    throw toApiError(error);
+  }
+  const { data, error, response } = result;
+  if (!response.ok) throw apiErrorFromResponse(response, error);
+  return data as T;
+}
