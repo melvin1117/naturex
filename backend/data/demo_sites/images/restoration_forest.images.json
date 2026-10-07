@@ -1,0 +1,142 @@
+{
+  "data_version": "2026Q3",
+  "overlay": {
+    "attributions": [
+      "Dynamic World: This dataset is produced for the Dynamic World Project by Google in partnership with National Geographic Society and the World Resources Institute.",
+      "Contains modified Copernicus Sentinel data 2025-2026."
+    ],
+    "band": "label",
+    "bounds": [
+      [
+        16.8388,
+        -93.075
+      ],
+      [
+        16.8518,
+        -93.0442
+      ]
+    ],
+    "crs": "EPSG:3857",
+    "dataset_id": "GOOGLE/DYNAMICWORLD/V1",
+    "date_window": {
+      "end": "2026-10-01",
+      "start": "2025-10-01"
+    },
+    "file": "restoration_forest.overlay.png",
+    "height": 452,
+    "legend": [
+      {
+        "color": "#419bdf",
+        "key": "water",
+        "label": "Water",
+        "value": 0
+      },
+      {
+        "color": "#397d49",
+        "key": "trees",
+        "label": "Trees",
+        "value": 1
+      },
+      {
+        "color": "#88b053",
+        "key": "grass",
+        "label": "Grass",
+        "value": 2
+      },
+      {
+        "color": "#7a87c6",
+        "key": "flooded_vegetation",
+        "label": "Flooded vegetation",
+        "value": 3
+      },
+      {
+        "color": "#e49635",
+        "key": "crops",
+        "label": "Crops",
+        "value": 4
+      },
+      {
+        "color": "#dfc35a",
+        "key": "shrub_and_scrub",
+        "label": "Shrub and scrub",
+        "value": 5
+      },
+      {
+        "color": "#c4281b",
+        "key": "built",
+        "label": "Built area",
+        "value": 6
+      },
+      {
+        "color": "#a59b8f",
+        "key": "bare",
+        "label": "Bare ground",
+        "value": 7
+      },
+      {
+        "color": "#b39fe1",
+        "key": "snow_and_ice",
+        "label": "Snow and ice",
+        "value": 8
+      }
+    ],
+    "media_type": "image/png",
+    "method": "Per-pixel mode of the Dynamic World V1 label over the date window (the same mode as the landcover metrics), clipped to the polygon and sampled nearest-neighbour onto a Web Mercator grid; outside the polygon is transparent.",
+    "palette": [
+      "#419bdf",
+      "#397d49",
+      "#88b053",
+      "#7a87c6",
+      "#e49635",
+      "#dfc35a",
+      "#c4281b",
+      "#a59b8f",
+      "#b39fe1"
+    ],
+    "width": 1024
+  },
+  "scenario": "baseline",
+  "scenario_note": "Images show the observed baseline only. Time Machine scenarios shift land-cover fractions by scripted deltas without a per-pixel map, so no scenario overlay exists.",
+  "site_key": "restoration_forest",
+  "thumbnail": {
+    "attributions": [
+      "Contains modified Copernicus Sentinel data 2025-2026.",
+      "Cloud Score+: Pasquarella, V. J., Brown, C. F., Czerwinski, W., & Rucklidge, W. J. (2023). Comprehensive quality assessment of optical satellite imagery using weakly supervised video learning."
+    ],
+    "bounds": [
+      [
+        16.833784764118818,
+        -93.07885000000002
+      ],
+      [
+        16.85681475845034,
+        -93.04035000000002
+      ]
+    ],
+    "crs": "EPSG:3857",
+    "dataset_ids": [
+      "COPERNICUS/S2_SR_HARMONIZED",
+      "GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED"
+    ],
+    "date_window": {
+      "end": "2026-10-01",
+      "start": "2025-10-01"
+    },
+    "file": "restoration_forest.thumbnail.webp",
+    "height": 400,
+    "media_type": "image/webp",
+    "method": "Median true-colour composite (B4, B3, B2) of Sentinel-2 SR Harmonized scenes over the date window, each masked where Cloud Score+ cs_cdf < 0.60; the polygon outline is drawn on top.",
+    "outline_color": "#ffffff",
+    "visualization": {
+      "bands": [
+        "B4",
+        "B3",
+        "B2"
+      ],
+      "gamma": 1.1,
+      "max": 2500.0,
+      "min": 0.0
+    },
+    "width": 640
+  }
+}

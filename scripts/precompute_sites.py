@@ -13,11 +13,23 @@ After the observed sites, the script regenerates the Time Machine scenario varia
 (``backend/data/demo_sites/scenarios/``) from the committed baselines and
 ``scenarios.json`` with the pure functions in ``app.tools.scenarios`` (T13). Add
 ``--scenarios-only`` to skip Earth Engine and only regenerate (or ``--check``) those.
+
+``--images`` (T35) renders each site's Dynamic World land-cover overlay (indexed PNG with a
+transparent background) and a Sentinel-2 true-colour marketplace thumbnail (WebP) into
+``backend/data/demo_sites/images/`` with a sidecar ``<site>.images.json``. It needs Pillow:
+
+    cd backend && PATH=$HOME/.local/bin:$PATH uv run --with earthengine-api --with pillow \
+      python ../scripts/precompute_sites.py --images
+
+``--images --check`` needs neither Earth Engine nor Pillow: Earth Engine collections can gain
+or reprocess scenes, so it verifies the committed files (dimensions, size, bounds against the
+GeoJSON, palette, attributions, class shares against the metrics) instead of the bytes.
 """
 
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import math
 import sys
@@ -31,6 +43,30 @@ from app.config import get_settings
 from app.tools.earth_obs import SCENARIO_DIR, EarthObsMetrics, scenario_path
 from app.tools.geometry import validate_polygon
 from app.tools.scenarios import build_site_scenarios, load_scenario_spec, scenario_document
+from app.tools.site_images import (
+    DW_CLASSES,
+    DW_LABELS,
+    DW_PALETTE,
+    IMAGES_DIR,
+    SCENARIO_NOTE,
+    TRANSPARENT_INDEX,
+    LegendEntry,
+    OverlayImage,
+    PixelGrid,
+    SiteImages,
+    ThumbnailImage,
+    VisParams,
+    check_site_images,
+    encode_indexed_png,
+    image_path,
+    load_site_geojson,
+    load_site_images,
+    overlay_grid,
+    palette_rgba,
+    polygon_bounds,
+    polygon_ring,
+    thumbnail_grid,
+)
 
 ee: Any
 
@@ -634,6 +670,162 @@ def scenario_failures(site_keys: list[str], *, write: bool) -> list[str]:
     return failures
 
 
+# --- Images (T35) -------------------------------------------------------------------------
+
+THUMBNAIL_VIS = VisParams(bands=("B4", "B3", "B2"), min=0, max=2500, gamma=1.1)
+THUMBNAIL_OUTLINE = "#ffffff"
+THUMBNAIL_OUTLINE_PX = 2
+THUMBNAIL_WEBP_QUALITY = 82
+_SUPERSAMPLE = 4
+SENTINEL_2_IMAGE_ATTRIBUTION = "Contains modified Copernicus Sentinel data 2025-2026."
+
+
+def expected_site_images(site_key: str) -> SiteImages:
+    """Sidecar metadata for a site's images: a pure function of the GeoJSON and constants."""
+    bounds = polygon_bounds(load_site_geojson(site_key))
+    overlay, thumb = overlay_grid(bounds), thumbnail_grid(bounds)
+    window = {"start": START_12M, "end": END_DATE}
+    return SiteImages(
+        site_key=site_key,
+        data_version=DATA_VERSION,
+        scenario_note=SCENARIO_NOTE,
+        overlay=OverlayImage(
+            file=image_path(site_key, "overlay").name,
+            width=overlay.width,
+            height=overlay.height,
+            bounds=bounds,
+            dataset_id="GOOGLE/DYNAMICWORLD/V1",
+            band="label",
+            method=(
+                "Per-pixel mode of the Dynamic World V1 label over the date window (the "
+                "same mode as the landcover metrics), clipped to the polygon and sampled "
+                "nearest-neighbour onto a Web Mercator grid; outside the polygon is "
+                "transparent."
+            ),
+            date_window=window,
+            palette=DW_PALETTE,
+            legend=tuple(
+                LegendEntry(value=index, key=key, label=label, color=color)
+                for index, (key, label, color) in enumerate(
+                    zip(DW_CLASSES, DW_LABELS, DW_PALETTE, strict=True)
+                )
+            ),
+            attributions=(ATTRIBUTIONS["dynamic_world"], SENTINEL_2_IMAGE_ATTRIBUTION),
+        ),
+        thumbnail=ThumbnailImage(
+            file=image_path(site_key, "thumbnail").name,
+            width=thumb.width,
+            height=thumb.height,
+            bounds=thumb.bounds(),
+            dataset_ids=(
+                "COPERNICUS/S2_SR_HARMONIZED",
+                "GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED",
+            ),
+            method=(
+                "Median true-colour composite (B4, B3, B2) of Sentinel-2 SR Harmonized "
+                f"scenes over the date window, each masked where Cloud Score+ cs_cdf < "
+                f"{CLOUD_SCORE_THRESHOLD:.2f}; the polygon outline is drawn on top."
+            ),
+            date_window=window,
+            visualization=THUMBNAIL_VIS,
+            outline_color=THUMBNAIL_OUTLINE,
+            attributions=(SENTINEL_2_IMAGE_ATTRIBUTION, ATTRIBUTIONS["cloud_score_plus"]),
+        ),
+    )
+
+
+def _compute_png(image: ee.Image, grid: PixelGrid) -> bytes:
+    data = ee.data.computePixels({"expression": image, "fileFormat": "PNG", "grid": grid.ee_grid()})
+    if not isinstance(data, bytes):
+        raise RuntimeError("computePixels did not return PNG bytes.")
+    return data
+
+
+def _overlay_png(aoi: ee.Geometry, grid: PixelGrid) -> bytes:
+    from PIL import Image
+
+    labels = (
+        _dw_mode(aoi, ee.Date(START_12M), ee.Date(END_DATE)).clip(aoi).unmask(255, False).toUint8()
+    )
+    with Image.open(io.BytesIO(_compute_png(labels, grid))) as image:
+        if image.size != (grid.width, grid.height):
+            raise RuntimeError(f"Overlay is {image.size}, expected {grid.width}x{grid.height}.")
+        raw = image.getchannel(0).tobytes()
+    unexpected = set(raw) - set(range(len(DW_CLASSES))) - {255}
+    if unexpected:
+        raise RuntimeError(f"Unexpected Dynamic World labels {sorted(unexpected)}.")
+    pixels = raw.replace(b"\xff", bytes([TRANSPARENT_INDEX]))
+    return encode_indexed_png(pixels, grid.width, grid.height, palette_rgba(DW_PALETTE))
+
+
+def _thumbnail_webp(ring: list[tuple[float, float]], grid: PixelGrid) -> bytes:
+    from PIL import Image, ImageDraw
+
+    (south, west), (north, east) = grid.bounds()
+    region = ee.Geometry.Rectangle([west, south, east, north], None, False)
+    cs_plus = ee.ImageCollection("GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED")
+    composite = (
+        ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+        .filterBounds(region)
+        .filterDate(START_12M, END_DATE)
+        .linkCollection(cs_plus, ["cs_cdf"])
+        .map(lambda image: image.updateMask(image.select("cs_cdf").gte(CLOUD_SCORE_THRESHOLD)))
+        .select(list(THUMBNAIL_VIS.bands))
+        .median()
+        .visualize(
+            bands=list(THUMBNAIL_VIS.bands),
+            min=THUMBNAIL_VIS.min,
+            max=THUMBNAIL_VIS.max,
+            gamma=THUMBNAIL_VIS.gamma,
+        )
+    )
+    with Image.open(io.BytesIO(_compute_png(composite, grid))) as fetched:
+        rgb = fetched.convert("RGBA")
+    if rgb.size != (grid.width, grid.height):
+        raise RuntimeError(f"Thumbnail is {rgb.size}, expected {grid.width}x{grid.height}.")
+    # Draw the outline on a supersampled layer and downsample it, for an anti-aliased line.
+    k = _SUPERSAMPLE
+    layer = Image.new("RGBA", (grid.width * k, grid.height * k), (0, 0, 0, 0))
+    points = [(x * k, y * k) for x, y in (grid.to_pixel(lon, lat) for lon, lat in ring)]
+    ImageDraw.Draw(layer).line(
+        points, fill=THUMBNAIL_OUTLINE, width=THUMBNAIL_OUTLINE_PX * k, joint="curve"
+    )
+    layer = layer.resize((grid.width, grid.height), Image.Resampling.LANCZOS)
+    out = io.BytesIO()
+    Image.alpha_composite(rgb, layer).convert("RGB").save(
+        out, "WEBP", quality=THUMBNAIL_WEBP_QUALITY, method=6
+    )
+    return out.getvalue()
+
+
+def write_site_images(site_key: str) -> None:
+    geojson = load_site_geojson(site_key)
+    meta = expected_site_images(site_key)
+    aoi = ee.Geometry(_geometry_from_feature(geojson))
+    bounds = polygon_bounds(geojson)
+    IMAGES_DIR.mkdir(exist_ok=True)
+    overlay = _overlay_png(aoi, overlay_grid(bounds))
+    thumbnail = _thumbnail_webp(polygon_ring(geojson), thumbnail_grid(bounds))
+    for kind, data in (("overlay", overlay), ("thumbnail", thumbnail)):
+        path = image_path(site_key, kind)
+        path.write_bytes(data)
+        print(f"Wrote {path.relative_to(ROOT)} ({len(data):,} bytes)")
+    sidecar = image_path(site_key, "sidecar")
+    sidecar.write_text(_json_text(meta.model_dump(mode="json")))
+    print(f"Wrote {sidecar.relative_to(ROOT)}")
+
+
+def image_failures(site_keys: list[str]) -> list[str]:
+    """Offline check of the committed images and sidecars (no Earth Engine, no Pillow)."""
+    failures: list[str] = []
+    for site_key in site_keys:
+        problems = check_site_images(site_key)
+        failures.extend(problems)
+        if not problems and load_site_images(site_key) != expected_site_images(site_key):
+            failures.append(f"{site_key}: sidecar differs from what --images would write.")
+    return failures
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--site", help="Only compute one site key.")
@@ -643,11 +835,26 @@ def main() -> int:
         action="store_true",
         help="Skip Earth Engine; only regenerate or check the scenario variants.",
     )
+    parser.add_argument(
+        "--images",
+        action="store_true",
+        help="Only render the overlay and thumbnail images (with --check: verify them offline).",
+    )
     args = parser.parse_args()
+    if args.images and args.scenarios_only:
+        parser.error("--images and --scenarios-only are separate steps.")
 
     started = time.perf_counter()
     failures: list[str] = []
     site_keys = _site_keys(args.site)
+    if args.images:
+        if not args.check:
+            _init_ee()
+            for site_key in site_keys:
+                print(f"Rendering {site_key} images...")
+                write_site_images(site_key)
+        failures.extend(image_failures(site_keys))
+        return _report(failures, started, args.check, f"{len(site_keys)} site(s) images")
     if args.scenarios_only:
         failures.extend(scenario_failures(site_keys, write=not args.check))
         return _report(failures, started, args.check, f"{len(site_keys)} site(s) scenarios")

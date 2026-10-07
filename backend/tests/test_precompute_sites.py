@@ -28,3 +28,10 @@ def test_compare_cached_metrics_reports_meaningful_paths() -> None:
 def test_committed_scenarios_match_the_script_offline() -> None:
     """`precompute_sites.py --scenarios-only --check` without Earth Engine."""
     assert scenario_failures(_site_keys(None), write=False) == []
+
+
+def test_committed_images_match_the_script_offline() -> None:
+    """`precompute_sites.py --images --check` without Earth Engine or Pillow."""
+    from precompute_sites import image_failures
+
+    assert image_failures(_site_keys(None)) == []

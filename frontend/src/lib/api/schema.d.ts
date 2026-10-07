@@ -359,6 +359,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/media/demo-sites/{site_key}/overlay.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Overlay
+         * @description Dynamic World land cover clipped to the polygon (transparent outside it).
+         */
+        get: operations["get_overlay_media_demo_sites__site_key__overlay_png_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media/demo-sites/{site_key}/thumbnail.webp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Thumbnail
+         * @description Sentinel-2 true-colour thumbnail with the polygon outline.
+         */
+        get: operations["get_thumbnail_media_demo_sites__site_key__thumbnail_webp_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media/demo-sites/{site_key}/images.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Site Images
+         * @description Overlay bounds, palette and legend, thumbnail metadata, date windows and attributions.
+         */
+        get: operations["get_site_images_media_demo_sites__site_key__images_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -580,6 +640,13 @@ export interface components {
             /** Citations */
             citations?: components["schemas"]["CopilotCitation"][];
         };
+        /** DateWindow */
+        DateWindow: {
+            /** Start */
+            start: string;
+            /** End */
+            end: string;
+        };
         /** EventOut */
         EventOut: {
             /**
@@ -695,6 +762,20 @@ export interface components {
              */
             broken_at: number | null;
         };
+        /** LegendEntry */
+        LegendEntry: {
+            /** Value */
+            value: number;
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "water" | "trees" | "grass" | "flooded_vegetation" | "crops" | "shrub_and_scrub" | "built" | "bare" | "snow_and_ice";
+            /** Label */
+            label: string;
+            /** Color */
+            color: string;
+        };
         /** OrderCreate */
         OrderCreate: {
             /**
@@ -738,6 +819,54 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * OverlayImage
+         * @description Leaflet ``ImageOverlay`` input: the PNG spans ``bounds`` in Web Mercator.
+         */
+        OverlayImage: {
+            /** File */
+            file: string;
+            /**
+             * Media Type
+             * @default image/png
+             * @constant
+             */
+            media_type: "image/png";
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            /** Bounds */
+            bounds: [
+                [
+                    number,
+                    number
+                ],
+                [
+                    number,
+                    number
+                ]
+            ];
+            /**
+             * Crs
+             * @default EPSG:3857
+             * @constant
+             */
+            crs: "EPSG:3857";
+            /** Dataset Id */
+            dataset_id: string;
+            /** Band */
+            band: string;
+            /** Method */
+            method: string;
+            date_window: components["schemas"]["DateWindow"];
+            /** Palette */
+            palette: string[];
+            /** Legend */
+            legend: components["schemas"]["LegendEntry"][];
+            /** Attributions */
+            attributions: string[];
         };
         /** PersonaOut */
         PersonaOut: {
@@ -872,6 +1001,26 @@ export interface components {
             /** Message */
             message: string;
         };
+        /**
+         * SiteImages
+         * @description Sidecar metadata for one demo site's overlay and thumbnail (``<site>.images.json``).
+         */
+        SiteImages: {
+            /** Site Key */
+            site_key: string;
+            /** Data Version */
+            data_version: string;
+            /**
+             * Scenario
+             * @default baseline
+             * @constant
+             */
+            scenario: "baseline";
+            /** Scenario Note */
+            scenario_note: string;
+            overlay: components["schemas"]["OverlayImage"];
+            thumbnail: components["schemas"]["ThumbnailImage"];
+        };
         /** StreamEvent */
         StreamEvent: {
             /**
@@ -920,6 +1069,48 @@ export interface components {
             after: unknown;
             verify: components["schemas"]["LedgerVerifyOut"];
         };
+        /** ThumbnailImage */
+        ThumbnailImage: {
+            /** File */
+            file: string;
+            /**
+             * Media Type
+             * @default image/webp
+             * @constant
+             */
+            media_type: "image/webp";
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            /** Bounds */
+            bounds: [
+                [
+                    number,
+                    number
+                ],
+                [
+                    number,
+                    number
+                ]
+            ];
+            /**
+             * Crs
+             * @default EPSG:3857
+             * @constant
+             */
+            crs: "EPSG:3857";
+            /** Dataset Ids */
+            dataset_ids: string[];
+            /** Method */
+            method: string;
+            date_window: components["schemas"]["DateWindow"];
+            visualization: components["schemas"]["VisParams"];
+            /** Outline Color */
+            outline_color: string;
+            /** Attributions */
+            attributions: string[];
+        };
         /** TraceOut */
         TraceOut: {
             /** Asset Id */
@@ -962,6 +1153,21 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VisParams */
+        VisParams: {
+            /** Bands */
+            bands: [
+                string,
+                string,
+                string
+            ];
+            /** Min */
+            min: number;
+            /** Max */
+            max: number;
+            /** Gamma */
+            gamma: number;
         };
         /** WorldAssetOut */
         WorldAssetOut: {
@@ -1628,6 +1834,120 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_overlay_media_demo_sites__site_key__overlay_png_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Land-cover overlay PNG */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description Unknown demo site */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_thumbnail_media_demo_sites__site_key__thumbnail_webp_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marketplace thumbnail WebP */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/webp": string;
+                };
+            };
+            /** @description Unknown demo site */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_site_images_media_demo_sites__site_key__images_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteImages"];
+                };
+            };
+            /** @description Unknown demo site */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
