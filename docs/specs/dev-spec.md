@@ -200,14 +200,18 @@ create table community_members (       -- owner-only for the Must; stewards are 
 );
 create table payout_lines (            -- private and erasable; the public ledger holds only a hash commitment (T67)
   id bigserial primary key, world_id uuid not null, asset_id uuid not null, quarter_label text not null,
-  user_id uuid not null, shares bigint not null, amount numeric(14,2) not null
+  user_id uuid not null, shares bigint not null, amount numeric(14,2) not null,
+  foreign key (world_id, asset_id) references assets (world_id, id),
+  foreign key (world_id, user_id) references users (world_id, id)
 );
 
 create table assets (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  community_id uuid,                                  -- ADR-0005: (world_id, community_id) → communities; the community that manages the listing
-  community_user_id uuid references users(id),        -- the community's treasury (kind = 'treasury'): retained stake, seeded at IPO, + its dividends (T41)
+  community_id uuid,                                  -- ADR-0005: the community that manages the listing
+  community_user_id uuid,                             -- the community's treasury (kind = 'treasury'): retained stake, seeded at IPO, + its dividends (T41)
+  -- ADR-0005 (T56): unique (world_id, id); foreign key (world_id, community_id) → communities (world_id, id);
+  --                 foreign key (world_id, community_user_id) → users (world_id, id)
   country text, description text, cover_image_url text,
   geojson jsonb not null,
   area_ha numeric(12,2) not null,
@@ -353,7 +357,7 @@ Every route is scoped to the caller's world, which comes from the session: anony
 - **Rules:** orders always use the principal's user; community members can't trade their own asset, and a holder of its shares can't be added as a member (409 `member_has_holdings`); admins and treasury accounts never trade; the ledger tamper demo runs only in sandbox worlds.
 - **CSRF:** `SameSite=Lax` cookies plus an exact `Origin` (else `Referer`) allowlist (`ALLOWED_ORIGINS`) on every POST, PUT, PATCH and DELETE, uploads included; both missing, malformed or `null` → rejected; JSON routes require a JSON media type.
 
-**As built (T31)** *(T55 replaces the `nx_world` cookie with the session; the world copy, reset and prune mechanics below stay)*:
+**As built (T31), before ADR-0005.** T55 changes three things below: the `nx_world` cookie is replaced by the session; reset keeps persona user IDs (mapped by `persona_key`) instead of re-copying them with fresh IDs, so the session survives; pruning deletes a world's sessions first. The rest stays:
 - **Only `GET /world` creates a world.** It reads the `nx_world` cookie (`HttpOnly`, `SameSite=Lax`, `Secure` unless `ENVIRONMENT` is development/test, 30 days, `Cache-Control: no-store`); a missing, malformed or unknown cookie, or one naming the **template** world, gets a fresh world.
 - New worlds are capped at `SANDBOX_MAX_NEW_WORLDS_PER_HOUR` (default 300) → 503 with `Retry-After`.
 - World-scoped routes use `CurrentWorld` (`app/deps.py`) and return **401 `world_required`** without a valid cookie; they never create worlds. The frontend calls `GET /world` first (T32). Today the ledger and world routes are scoped; the other routers adopt `CurrentWorld` as they move off mocks.

@@ -211,7 +211,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ### T54 · Accounts and sessions (#97) — D1 · M · Must · K1 K2
 - [ ] `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /me`; argon2id via `pwdlib`, with a dummy-hash verify for unknown emails; `users.kind` (person | persona | treasury) and a partial unique index on lower(email) per world
 - [ ] Server-side `sessions` (with `world_id`): a 256-bit token whose SHA-256 hash is stored; `nx_session` cookie `HttpOnly`, `Secure` (outside dev/test), `SameSite=Lax`; 7 d idle / 30 d absolute; new ID on login; logout deletes the row and clears the cookie
-- [ ] Live world seeded (3 curated sites under non-login demo communities); live admins are created only with a CLI command that reads the password via `getpass` (never via the API, never by matching an email); no password or token in logs
+- [ ] The live world is created and the 3 curated sites are copied into it from the template (T56 attaches their communities and treasuries); live admins are created only with a CLI command that reads the password via `getpass` (never via the API, never by matching an email); no password or token in logs
 
 **Verify:** `make test`, including wrong password, unknown email, expired and revoked sessions, and logout; manual register → login → `/me` → logout with `curl` · **Deps:** T31 · **Files:** `backend/app/auth.py`, `backend/app/routers/auth.py`, `backend/app/cli.py`, `backend/app/models.py`, `backend/migrations/versions/*_accounts.py`, `backend/tests/test_auth.py`
 
@@ -315,7 +315,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ### T56 · Communities, treasury and tenant invariants (#99) — D1 · M · Must · A0 K3
 - [ ] `communities` and `community_members` (owner | steward) carry `world_id NOT NULL`; composite foreign keys `(world_id, …_id)` (unique `(world_id, id)` on users, assets, communities); a DB test shows cross-world inserts fail
 - [ ] One non-login, non-trading treasury user per community; `assets.community_id` set and `assets.community_user_id` = the treasury
-- [ ] Backfill the template and the live world; discard pre-migration visitor sandboxes; `sandbox.py` clone, reset and prune cover the new tables; reset keeps persona user IDs (mapped by `persona_key`) so sessions survive; pruning deletes a world's sessions first
+- [ ] Backfill the template and the live world (communities, owners and treasuries for the curated sites); discard pre-migration visitor sandboxes; `sandbox.py` clone, reset and prune cover the new tables; reset keeps persona user IDs (mapped by `persona_key`) so sessions survive; pruning deletes a world's sessions first
 
 **Verify:** `make test` · **Deps:** T54 · **Files:** `backend/app/models.py`, `backend/migrations/versions/*_communities.py`, `backend/app/sandbox.py`, `backend/app/seed.py`, `backend/tests/test_tenancy.py`
 
@@ -326,7 +326,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 **Verify:** `make test` · **Deps:** T56 · **Files:** `backend/app/authz.py`, `backend/app/routers/communities.py`, `backend/tests/test_authz.py`
 
-### T55 · Demo sessions and persona switch (#98) — D1 · S · Must · J1 J2
+### T55 · Demo sessions and persona switch (#98) — D3 · S · Must · J1 J2
 - [ ] `POST /demo/start {persona}` creates a sandbox world and a demo session (hourly world cap kept); `POST /demo/persona` switches persona inside the same world only, revoking the old token and issuing a new one; `POST /world/reset` keeps the session
 - [ ] The `nx_world` cookie is retired: the world comes from the session, `GET /world` returns the session's world, and anonymous requests read the live world
 
