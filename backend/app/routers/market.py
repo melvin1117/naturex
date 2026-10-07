@@ -1,42 +1,54 @@
-"""Orders and portfolio (dev-spec §6, §8): persisted against the real market engine."""
+"""Orders and portfolio (dev-spec §6, §8): persisted against the real market engine.
+
+Concurrency: every order locks the asset row, then the trader's user row (the same order as
+the revenue payout in `market/revenue.py`), so orders and payouts on one asset are
+serialised and balances, holdings and the primary float can't lose updates.
+"""
 
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import func
 from sqlmodel import Session, col, select
 
-from app.db import get_session
-from app.market.engine import MarketError, MarketState, Position, execute
-from app.models import Asset, AssetStatus, Holding, Order, OrderSide, Price, User
+from app import events
+from app.deps import CurrentWorld, SessionDep
+from app.market.engine import MarketError, MarketState, Position, TradeResult, execute
+from app.models import (
+    Asset,
+    AssetStatus,
+    Holding,
+    Order,
+    OrderSide,
+    Price,
+    StreamEventType,
+    User,
+)
 from app.schemas import HoldingOut, ImpactSummary, OrderCreate, OrderOut, PortfolioOut
-from app.seed import WORLD_ID
 
 router = APIRouter(tags=["market"])
 
-SessionDep = Annotated[Session, Depends(get_session)]
-
-# TODO(T31): resolve the visitor's world and persona from the `nx_world` cookie; until
-# then every request trades as the demo investor in the single seeded template world.
+# TODO(T57): trade as the signed-in principal (ADR-0005). Until accounts land, every request
+# trades as the demo investor persona of the caller's world.
 _ACTOR_PERSONA_KEY = "arjun"
 
 
-def _actor(session: Session) -> User:
-    user = session.exec(
-        select(User).where(User.world_id == WORLD_ID, User.persona_key == _ACTOR_PERSONA_KEY)
-    ).first()
+def _actor(session: Session, world_id: UUID, *, lock: bool = False) -> User:
+    stmt = select(User).where(User.world_id == world_id, User.persona_key == _ACTOR_PERSONA_KEY)
+    if lock:
+        stmt = stmt.with_for_update()
+    user = session.exec(stmt).first()
     if user is None:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Demo investor not seeded")
     return user
 
 
-def _asset(session: Session, asset_id: UUID) -> Asset:
+def _locked_asset(session: Session, world_id: UUID, asset_id: UUID) -> Asset:
     asset = session.exec(
-        select(Asset).where(Asset.world_id == WORLD_ID, Asset.id == asset_id)
+        select(Asset).where(Asset.world_id == world_id, Asset.id == asset_id).with_for_update()
     ).first()
     if asset is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found")
@@ -63,23 +75,38 @@ def _market_maker_shares(session: Session, asset: Asset) -> int:
     return asset.total_shares - asset.primary_shares_remaining - int(held)
 
 
-def _holding(session: Session, user_id: UUID, asset_id: UUID) -> Holding:
-    holding = session.exec(
-        select(Holding).where(
-            Holding.world_id == WORLD_ID,
-            Holding.user_id == user_id,
-            Holding.asset_id == asset_id,
-        )
-    ).first()
+def _holding(session: Session, world_id: UUID, user_id: UUID, asset_id: UUID) -> Holding:
+    holding = session.get(Holding, (world_id, user_id, asset_id))
     if holding is None:
-        holding = Holding(world_id=WORLD_ID, user_id=user_id, asset_id=asset_id)
+        holding = Holding(world_id=world_id, user_id=user_id, asset_id=asset_id)
     return holding
 
 
+def _order_rows(
+    world_id: UUID, user_id: UUID, asset_id: UUID, side: OrderSide, qty: int, result: TradeResult
+) -> list[Order]:
+    """One row per source: the primary-float part (pays the community) and the rest."""
+    parts = [(result.primary_qty, True), (qty - result.primary_qty, False)]
+    return [
+        Order(
+            world_id=world_id,
+            user_id=user_id,
+            asset_id=asset_id,
+            side=side,
+            qty=part_qty,
+            fill_price=result.fill_price,
+            is_primary=is_primary,
+        )
+        for part_qty, is_primary in parts
+        if part_qty > 0
+    ]
+
+
 @router.post("/orders", response_model=OrderOut)
-def place_order(body: OrderCreate, session: SessionDep) -> OrderOut:
-    actor = _actor(session)
-    asset = _asset(session, body.asset_id)
+def place_order(body: OrderCreate, world: CurrentWorld, session: SessionDep) -> OrderOut:
+    """Fill a market order instantly. `is_primary` is true if any shares came from the IPO float."""
+    asset = _locked_asset(session, world.id, body.asset_id)
+    actor = _actor(session, world.id, lock=True)
     if asset.status != AssetStatus.LISTED:
         raise HTTPException(status.HTTP_409_CONFLICT, "Asset is not listed for trading")
 
@@ -94,7 +121,7 @@ def place_order(body: OrderCreate, session: SessionDep) -> OrderOut:
         market_maker_shares=_market_maker_shares(session, asset),
         community_wallet=asset.community_wallet,
     )
-    holding = _holding(session, actor.id, asset.id)
+    holding = _holding(session, world.id, actor.id, asset.id)
     trader = Position(cash=actor.cash_balance, shares=holding.shares, avg_cost=holding.avg_cost)
     side = OrderSide(body.side)
 
@@ -108,47 +135,46 @@ def place_order(body: OrderCreate, session: SessionDep) -> OrderOut:
     actor.cash_balance = result.trader.cash
     holding.shares = result.trader.shares
     holding.avg_cost = result.trader.avg_cost
-    order = Order(
-        world_id=WORLD_ID,
-        user_id=actor.id,
+    orders = _order_rows(world.id, actor.id, asset.id, side, body.qty, result)
+    new_price = Price(
+        world_id=world.id,
         asset_id=asset.id,
-        side=side,
-        qty=body.qty,
-        fill_price=result.fill_price,
-        is_primary=result.primary_qty > 0,
+        price=result.price_change.price,
+        reason=result.price_change.reason.value,
     )
 
-    session.add(asset)
-    session.add(actor)
-    session.add(holding)
-    session.add(order)
-    session.add(
-        Price(
-            world_id=WORLD_ID,
-            asset_id=asset.id,
-            price=result.price_change.price,
-            reason=result.price_change.reason.value,
-        )
+    session.add_all([asset, actor, holding, *orders, new_price])
+    session.flush()
+    events.publish(
+        session,
+        world.id,
+        StreamEventType.PRICE_TICK,
+        {
+            "asset_id": str(asset.id),
+            "price": str(result.price_change.price),
+            "reason": result.price_change.reason.value,
+        },
     )
     session.commit()
 
+    first = orders[0]
     return OrderOut(
-        id=order.id,
-        asset_id=order.asset_id,
+        id=first.id,
+        asset_id=asset.id,
         side=body.side,
-        qty=order.qty,
+        qty=body.qty,
         fill_price=result.fill_price,
-        is_primary=order.is_primary,
-        created_at=order.created_at,
+        is_primary=result.primary_qty > 0,
+        created_at=first.created_at,
     )
 
 
 @router.get("/portfolio", response_model=PortfolioOut)
-def get_portfolio(session: SessionDep) -> PortfolioOut:
-    actor = _actor(session)
+def get_portfolio(world: CurrentWorld, session: SessionDep) -> PortfolioOut:
+    actor = _actor(session, world.id)
     holdings = session.exec(
         select(Holding).where(
-            Holding.world_id == WORLD_ID,
+            Holding.world_id == world.id,
             Holding.user_id == actor.id,
             col(Holding.shares) > 0,
         )
@@ -156,7 +182,9 @@ def get_portfolio(session: SessionDep) -> PortfolioOut:
 
     out: list[HoldingOut] = []
     for holding in holdings:
-        asset = session.get(Asset, holding.asset_id)
+        asset = session.exec(
+            select(Asset).where(Asset.world_id == world.id, Asset.id == holding.asset_id)
+        ).first()
         if asset is None:
             continue
         mark_price = _latest_price(session, asset)
@@ -176,7 +204,7 @@ def get_portfolio(session: SessionDep) -> PortfolioOut:
             )
         )
 
-    # Impact is computed pro-rata from report/metrics data in T41; left at zero here.
+    # Pro-rata impact comes from the stored report (T19 + T41 impact_for_holding); zero for now.
     return PortfolioOut(
         cash_balance=actor.cash_balance,
         holdings=out,

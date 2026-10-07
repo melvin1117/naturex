@@ -155,7 +155,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` · **Deps:** T07 · **Files:** `backend/app/market/engine.py`, `backend/tests/test_market.py`
 
 ### T17 · Orders and portfolio API (#28) — D1 · S · Must · C2 E3
-- [ ] `POST /orders` and `GET /portfolio` backed by the engine, scoped to the visitor's `world_id`
+- [x] `POST /orders` and `GET /portfolio` backed by the engine, scoped to the visitor's `world_id`
 
 **Verify:** `make test` (API tests) · **Deps:** T08, T16 · **Files:** `backend/app/routers/market.py`, `backend/tests/test_market_api.py`
 
