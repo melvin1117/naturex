@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import time
 from calendar import month_abbr
 from collections.abc import Callable
@@ -15,6 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 
 from app import mocks
+from app.agents.guards import uses_only_fact_numbers
 from app.config import Settings
 from app.llm import LLMClient, LLMError, Tier
 from app.schemas import ReportOut, ReportSummarySource
@@ -22,22 +22,6 @@ from app.schemas import ReportOut, ReportSummarySource
 AGENT_NAME = "report_summary"
 _REPORT_PERIOD = "Q3 2026"
 _FALLBACK_CACHE_SECONDS = 300.0
-_NUMERIC_TOKEN = re.compile(
-    r"(?<![\d.,])"
-    r"(?P<prefix>\$|USD|EUR|[Qq])?"
-    r"(?P<number>\d+(?:,\d{3})*(?:\.\d+)?)"
-    r"(?P<ordinal>st|nd|rd|th)?"
-    r"(?P<suffix>[KkMmBb%]| ?(?:thousand|million|billion))?",
-    re.IGNORECASE,
-)
-_SCALES = {
-    "k": Decimal("1000"),
-    "thousand": Decimal("1000"),
-    "m": Decimal("1000000"),
-    "million": Decimal("1000000"),
-    "b": Decimal("1000000000"),
-    "billion": Decimal("1000000000"),
-}
 
 
 class ReportSummaryDraft(BaseModel):
@@ -103,7 +87,7 @@ def generate_report_summary(
         )
 
     summary = result.value.summary_md.strip()
-    if not _uses_only_fact_numbers(summary, facts):
+    if not uses_only_fact_numbers(summary, facts):
         return _cache_result(
             report.id, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock()
         )
@@ -185,27 +169,6 @@ def _prompt(facts: list[str]) -> str:
         "Do not present this as a real security or investment.\n\n"
         "Facts:\n- " + "\n- ".join(facts)
     )
-
-
-def _uses_only_fact_numbers(summary: str, facts: list[str]) -> bool:
-    allowed = {
-        _normalise_number(match) for fact in facts for match in _NUMERIC_TOKEN.finditer(fact)
-    }
-    used = {_normalise_number(match) for match in _NUMERIC_TOKEN.finditer(summary)}
-    return used <= allowed
-
-
-def _normalise_number(match: re.Match[str]) -> str:
-    prefix = (match.group("prefix") or "").upper()
-    number = Decimal(match.group("number").replace(",", ""))
-    suffix = (match.group("suffix") or "").strip().lower()
-    if prefix == "Q":
-        return f"quarter:{format(number.normalize(), 'f')}"
-    if suffix == "%":
-        return f"percent:{format(number.normalize(), 'f')}"
-    scale = _SCALES.get(suffix, Decimal("1"))
-    scaled = number * scale
-    return f"number:{format(scaled.normalize(), 'f')}"
 
 
 def _fallback_summary(facts: list[str]) -> str:

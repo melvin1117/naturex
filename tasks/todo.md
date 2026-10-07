@@ -227,9 +227,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ## Week 3 · Live agents, ledger and trace (Mon Oct 12 – Fri Oct 16)
 
 ### T26 · Auditor (Nemotron 3 Ultra) (#38) — D3 · M · Must · B5
-- [ ] Input bundle (metrics, valuation, base scores, events, evidence, previous report) → schema-validated output; adjustment limited to ±10 with a reason; every claim cites a metric or event ID
-- [ ] Thinking handled per T02 (off for JSON, or reason-then-format); fallback tier on failure
-- [ ] Contract tests: numbers unchanged, citations resolve
+- [x] Input bundle (metrics, valuation, base scores, events, evidence, previous report) → schema-validated output; adjustment limited to ±10 with a reason; every claim cites a metric or event ID
+- [x] Thinking handled per T02 (off for JSON, or reason-then-format); fallback tier on failure
+- [x] Contract tests: numbers unchanged, citations resolve
 
 **Verify:** `make test` · **Deps:** T09, T15, T24 · **Files:** `backend/app/agents/auditor.py`, `backend/app/agents/prompts/auditor.md`, `backend/tests/test_auditor.py`
 
