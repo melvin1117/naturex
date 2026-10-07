@@ -862,10 +862,11 @@ export interface components {
         /** StreamEvent */
         StreamEvent: {
             /**
-             * Type
-             * @enum {string}
+             * Id
+             * @description Monotonic world_events cursor; null for transient heartbeats
              */
-            type: "price" | "alert" | "rating_progress" | "heartbeat";
+            id?: number | null;
+            type: components["schemas"]["StreamEventType"];
             /** Payload */
             payload: {
                 [key: string]: unknown;
@@ -876,6 +877,11 @@ export interface components {
              */
             ts: string;
         };
+        /**
+         * StreamEventType
+         * @enum {string}
+         */
+        StreamEventType: "rating_progress" | "price_tick" | "alert" | "heartbeat";
         /** TamperDemoIn */
         TamperDemoIn: {
             /**
@@ -1317,6 +1323,8 @@ export interface operations {
         parameters: {
             query?: {
                 since?: string | null;
+                since_id?: number | null;
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -1346,8 +1354,12 @@ export interface operations {
     };
     stream_events_events_stream_get: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                since_id?: number | null;
+            };
+            header?: {
+                "Last-Event-ID"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1360,6 +1372,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

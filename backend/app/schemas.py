@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models import AssetStatus, LedgerKind, UserRole
+from app.models import AssetStatus, LedgerKind, StreamEventType, UserRole
 
 # ----- Agent outputs (contract-tested later) -----
 
@@ -228,7 +228,11 @@ class CopilotResponse(BaseModel):
 
 
 class StreamEvent(BaseModel):
-    type: Literal["price", "alert", "rating_progress", "heartbeat"]
+    id: int | None = Field(
+        default=None,
+        description="Monotonic world_events cursor; null for transient heartbeats",
+    )
+    type: StreamEventType
     payload: dict[str, Any]
     ts: datetime
 

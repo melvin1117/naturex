@@ -483,6 +483,35 @@
               ],
               "title": "Since"
             }
+          },
+          {
+            "name": "since_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
           }
         ],
         "responses": {
@@ -520,12 +549,57 @@
         ],
         "summary": "Stream Events",
         "operationId": "stream_events_events_stream_get",
+        "parameters": [
+          {
+            "name": "since_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since Id"
+            }
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -2185,15 +2259,20 @@
       },
       "StreamEvent": {
         "properties": {
-          "type": {
-            "type": "string",
-            "enum": [
-              "price",
-              "alert",
-              "rating_progress",
-              "heartbeat"
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Type"
+            "title": "Id",
+            "description": "Monotonic world_events cursor; null for transient heartbeats"
+          },
+          "type": {
+            "$ref": "#/components/schemas/StreamEventType"
           },
           "payload": {
             "additionalProperties": true,
@@ -2213,6 +2292,16 @@
           "ts"
         ],
         "title": "StreamEvent"
+      },
+      "StreamEventType": {
+        "type": "string",
+        "enum": [
+          "rating_progress",
+          "price_tick",
+          "alert",
+          "heartbeat"
+        ],
+        "title": "StreamEventType"
       },
       "TamperDemoIn": {
         "properties": {
