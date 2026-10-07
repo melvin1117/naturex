@@ -332,7 +332,17 @@ class DocChunk(SQLModel, table=True):
 
 class LedgerEntry(SQLModel, table=True):
     __tablename__ = "ledger_entries"
-    __table_args__ = (UniqueConstraint("asset_id", "seq", name="uq_ledger_asset_seq"),)
+    __table_args__ = (
+        UniqueConstraint("asset_id", "seq", name="uq_ledger_asset_seq"),
+        # One payout per asset quarter (T67), behind `pay_quarter`'s check under the asset lock.
+        Index(
+            "uq_ledger_payout_quarter",
+            "asset_id",
+            text("(payload ->> 'quarter_label')"),
+            unique=True,
+            postgresql_where=text("kind = 'payout'"),
+        ),
+    )
 
     id: int | None = Field(default=None, primary_key=True, sa_type=BigInteger)
     world_id: UUID = Field(foreign_key="worlds.id", index=True)
@@ -348,7 +358,12 @@ class LedgerEntry(SQLModel, table=True):
 
 class PayoutLine(SQLModel, table=True):
     """One holder's share of a quarterly payout (T67). Private and erasable: the public ledger
-    holds only aggregates and a salted commitment of these lines (`app.market.revenue`)."""
+    holds only aggregates and a commitment over these lines' leaf hashes (`app.market.revenue`).
+
+    `leaf_hash = sha256(nonce ‖ canonical(line))` with a random per-line nonce. Erasure clears
+    the user, shares, amount and nonce and keeps the leaf hash as an unlinkable tombstone, so
+    the other holders' lines stay verifiable.
+    """
 
     __tablename__ = "payout_lines"
     __table_args__ = (
@@ -368,26 +383,11 @@ class PayoutLine(SQLModel, table=True):
     world_id: UUID
     asset_id: UUID
     quarter_label: str
-    user_id: UUID
-    shares: int = Field(sa_column=Column(BigInteger, nullable=False))
-    amount: Decimal = Field(max_digits=14, decimal_places=2)
-
-
-class PayoutSalt(SQLModel, table=True):
-    """The private random salt of one payout's line commitment (T67). Deleting it makes the
-    public commitment unlinkable to any copy of the lines."""
-
-    __tablename__ = "payout_salts"
-    __table_args__ = (
-        ForeignKeyConstraint(
-            ["world_id", "asset_id"], ["assets.world_id", "assets.id"], name="fk_payout_salts_asset"
-        ),
-    )
-
-    world_id: UUID = Field(primary_key=True)
-    asset_id: UUID = Field(primary_key=True)
-    quarter_label: str = Field(primary_key=True)
-    salt: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+    user_id: UUID | None = None  # None once erased (tombstone)
+    shares: int | None = Field(default=None, sa_column=Column(BigInteger, nullable=True))
+    amount: Decimal | None = Field(default=None, max_digits=14, decimal_places=2)
+    nonce: bytes | None = Field(default=None, sa_column=Column(LargeBinary, nullable=True))
+    leaf_hash: str = Field(sa_column=Column(String(64), nullable=False))
 
 
 class LlmCall(SQLModel, table=True):

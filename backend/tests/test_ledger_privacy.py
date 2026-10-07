@@ -1,15 +1,19 @@
 """Ledger privacy (ADR-0005 §6, T67): the public ledger never holds account identifiers.
 
-Two layers: `append` rejects denied keys and email-shaped strings (cheap, generic), and the scan
-below builds one entry of every `LedgerKind` and checks it against the real accounts in the DB.
+Two layers. `append` rejects denied keys, email addresses and user-ID `ref_id`s (cheap,
+generic). The scan finds every `ledger.append` call in `app/`, runs the real producer for each
+kind that has one, and checks every entry against the real accounts in the DB. Only kinds with
+no producer in `app/` yet fall back to a hand-built payload following dev-spec §17.
 """
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -17,6 +21,7 @@ from alembic import command
 from sqlalchemy import create_engine
 from sqlmodel import Session, col, select
 
+import app
 from app.config import get_settings
 from app.ledger import LedgerPrivacyError, append, canonical, check_public_payload, entries_for
 from app.market.revenue import pay_quarter
@@ -54,6 +59,12 @@ ASSET_ID = DEMO_SITES[0].id
         {"display_name": "Ada"},
         {"title": "Write to ada.lovelace+news@example.org for details"},
         {"items": ["fine", {"note": "ADA@EXAMPLE.ORG"}]},
+        {"url": "https://ada%40example.org@news.example.org/fire"},
+        {"url": "https://reader:secret@news.example.org/fire"},
+        {"url": "https://news.example.org/fire?contact=ada%40example.org&page=2"},
+        {"url": "https://news.example.org/fire?contact=ada@example.org"},
+        {"url": "https://news.example.org/fire#reply-to:ada.lovelace@example.org"},
+        {"title": "Story at https://news.example.org/fire, tips: (ada@example.org)"},
     ],
 )
 def test_guard_rejects_account_keys_and_emails_at_any_depth(payload: dict[str, Any]) -> None:
@@ -68,6 +79,12 @@ def test_guard_allows_public_business_values() -> None:
             "holder_count": 3,
             "dividends_total": "250.00",
             "url": "https://medium.com/@reporter/fire-near-the-wetland-1.html",
+            "cover_image_url": "https://cdn.example.org/img/cover@2x.png",
+            "photos": [
+                "https://cdn.example.org/img/fire@3x.jpg?w=1",
+                "HTTPS://cdn.example.org/img/smoke@2x.webp#top",
+            ],
+            "title": "Fire photographed (https://cdn.example.org/img/fire@3x.jpg?w=1) at dawn",
             "summary_sha256": "ab" * 32,
             "value_breakdown": {"regulating": 100, "cultural": 5},
             "flags": ["simulated"],
@@ -107,6 +124,21 @@ def test_append_rejects_a_private_payload_and_writes_nothing(session: Session) -
     assert entries_for(session, ASSET_ID) == []
 
 
+@requires_db
+def test_append_rejects_a_user_id_as_ref_id(session: Session) -> None:
+    with pytest.raises(LedgerPrivacyError, match="ref_id"):
+        append(
+            session,
+            world_id=WORLD_ID,
+            asset_id=ASSET_ID,
+            kind=LedgerKind.EVENT,
+            payload={"impact_type": "fire"},
+            ref_id=PERSONAS[1].id,
+        )
+
+    assert entries_for(session, ASSET_ID) == []
+
+
 def _add_person_holder(session: Session) -> User:
     """A real password account (ADR-0005), so the scan covers emails and person names."""
     person = User(
@@ -127,12 +159,72 @@ def _add_person_holder(session: Session) -> User:
     return person
 
 
-def _spec_payload(session: Session, kind: LedgerKind) -> dict[str, Any]:
-    """dev-spec §17's payload for a kind with no producer on this branch yet, built from rows.
+def _ledger_append_kind(node: ast.Call) -> str | None:
+    """`LedgerKind.X` → "X" for a call to the ledger's `append`, "?" if the kind isn't a
+    literal, None if the call isn't a ledger append (e.g. `list.append`)."""
+    func = node.func
+    is_ledger_append = (isinstance(func, ast.Name) and func.id == "append") or (
+        isinstance(func, ast.Attribute)
+        and func.attr == "append"
+        and isinstance(func.value, ast.Name)
+        and func.value.id == "ledger"
+    )
+    kind = next((kw.value for kw in node.keywords if kw.arg == "kind"), None)
+    if not is_ledger_append or kind is None:
+        return None
+    if (
+        isinstance(kind, ast.Attribute)
+        and isinstance(kind.value, ast.Name)
+        and kind.value.id == "LedgerKind"
+    ):
+        return kind.attr
+    return "?"
 
-    Each producer that lands (T19 reports, T58 listings, T27 events, T59 IPOs…) writes real
-    entries, which the scan then covers instead of these.
+
+def _ledger_producers() -> dict[LedgerKind | None, list[str]]:
+    """Every `ledger.append(…, kind=LedgerKind.X)` call in `app/`, by kind (None: not literal)."""
+    root = Path(app.__file__).parent
+    found: dict[LedgerKind | None, list[str]] = {}
+    for path in sorted(root.rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(), str(path))):
+            if isinstance(node, ast.Call) and (name := _ledger_append_kind(node)) is not None:
+                kind = None if name == "?" else LedgerKind[name]
+                found.setdefault(kind, []).append(f"{path.relative_to(root)}:{node.lineno}")
+    return found
+
+
+def _produce_payout(session: Session) -> None:
+    pay_quarter(
+        session,
+        world_id=WORLD_ID,
+        asset_id=ASSET_ID,
+        value_mid=Decimal("100000.00"),
+        quarter_label="2026-Q4",
+    )
+
+
+# The real producer to run for each kind with one in `app/`. Kinds whose producer already ran
+# during `seed()` (e.g. T19's reports) are covered by the seeded entries instead.
+_REAL_PRODUCERS: dict[LedgerKind, Callable[[Session], None]] = {
+    LedgerKind.PAYOUT: _produce_payout,
+}
+
+
+def test_producer_discovery_finds_the_payout_producer() -> None:
+    producers = _ledger_producers()
+
+    assert None not in producers, f"ledger appends with a non-literal kind: {producers.get(None)}"
+    assert any(site.startswith("market/revenue.py:") for site in producers[LedgerKind.PAYOUT])
+
+
+def _spec_payload(session: Session, kind: LedgerKind) -> dict[str, Any]:
+    """dev-spec §17's payload for a kind with no producer in `app/` yet, built from DB rows.
+
+    Raises once a producer exists, so a stand-in can never hide what the real code writes.
     """
+    sites = _ledger_producers().get(kind)
+    if sites:
+        raise AssertionError(f"{kind} has a real producer ({', '.join(sites)}); scan that")
     asset = session.get_one(Asset, ASSET_ID)
     if kind is LedgerKind.LISTING:
         return {
@@ -178,7 +270,7 @@ def _spec_payload(session: Session, kind: LedgerKind) -> dict[str, Any]:
             select(Price).where(Price.world_id == WORLD_ID, Price.asset_id == ASSET_ID)
         ).first()
         return {"price": price.price if price else Decimal("7.9200"), "reason": "ipo"}
-    raise AssertionError(f"{kind} has a real producer and needs no spec payload")
+    raise AssertionError(f"no spec payload for {kind}")
 
 
 # Keys that suggest a person or an account. `holder_count` is an aggregate, and a listing's
@@ -221,20 +313,27 @@ def _leaks(
 
 
 @requires_db
+def test_a_kind_with_a_real_producer_gets_no_stand_in_payload(session: Session) -> None:
+    with pytest.raises(AssertionError, match="real producer"):
+        _spec_payload(session, LedgerKind.PAYOUT)
+
+
+@requires_db
 def test_no_ledger_payload_of_any_kind_holds_an_account_identifier(session: Session) -> None:
+    producers = _ledger_producers()
+    assert None not in producers, f"ledger appends with a non-literal kind: {producers.get(None)}"
     _add_person_holder(session)
-    pay_quarter(
-        session,
-        world_id=WORLD_ID,
-        asset_id=ASSET_ID,
-        value_mid=Decimal("100000.00"),
-        quarter_label="2026-Q4",
-    )
-    session.flush()
     in_world = select(LedgerEntry).where(LedgerEntry.world_id == WORLD_ID)
-    produced = {e.kind for e in session.exec(in_world).all()}
+    seeded = {e.kind for e in session.exec(in_world).all()}
+    for kind, sites in producers.items():
+        assert kind is not None
+        if kind in _REAL_PRODUCERS:
+            _REAL_PRODUCERS[kind](session)
+        else:
+            assert kind in seeded, f"run {kind}'s producer ({', '.join(sites)}) in the scan"
+    session.flush()
     for kind in LedgerKind:
-        if kind not in produced:
+        if kind not in producers:
             append(
                 session,
                 world_id=WORLD_ID,
@@ -252,12 +351,11 @@ def test_no_ledger_payload_of_any_kind_holds_an_account_identifier(session: Sess
     entries = session.exec(in_world.order_by(col(LedgerEntry.asset_id), col(LedgerEntry.seq))).all()
 
     assert {e.kind for e in entries} == set(LedgerKind), "every payload kind is scanned"
-    assert LedgerKind.PAYOUT in produced, "payouts come from the real pay_quarter path"
     leaks = [leak for e in entries for leak in _leaks(e.kind, e.payload, identifiers, names)]
     assert leaks == []
     for entry in entries:
-        text = canonical(entry.payload).decode().lower()
-        assert not [i for i in identifiers if i in text], entry.kind
+        public = (canonical(entry.payload).decode() + str(entry.ref_id)).lower()
+        assert not [i for i in identifiers if i in public], entry.kind
 
 
 def test_scan_flags_the_pre_t67_payout_payload() -> None:

@@ -33,7 +33,6 @@ from app.models import (
     Order,
     OrderSide,
     PayoutLine,
-    PayoutSalt,
     Price,
     Report,
     User,
@@ -594,9 +593,7 @@ def _pay_in(session: Session, world_id: UUID) -> None:
 
 
 def payout_rows(session: Session, world_id: UUID) -> int:
-    lines = session.exec(select(PayoutLine).where(PayoutLine.world_id == world_id)).all()
-    salts = session.exec(select(PayoutSalt).where(PayoutSalt.world_id == world_id)).all()
-    return len(lines) + len(salts)
+    return len(session.exec(select(PayoutLine).where(PayoutLine.world_id == world_id)).all())
 
 
 @requires_db
@@ -605,7 +602,7 @@ def test_reset_and_prune_delete_a_worlds_private_payout_lines(session: Session) 
     kept_id, pruned_id = kept.id, pruned.id
     for world_id in (kept_id, pruned_id):
         _pay_in(session, world_id)
-        assert payout_rows(session, world_id) == 3, "two lines and one salt"
+        assert payout_rows(session, world_id) == 2, "Rosa's and Arjun's lines"
     pruned.last_seen_at = datetime.now(UTC) - timedelta(days=30)
     session.commit()
 

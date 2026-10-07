@@ -34,7 +34,6 @@ from app.models import (
     Metrics,
     Order,
     PayoutLine,
-    PayoutSalt,
     Price,
     Report,
     User,
@@ -59,7 +58,6 @@ PROTECTED_WORLDS: frozenset[UUID] = frozenset({TEMPLATE_WORLD_ID, LIVE_WORLD_ID}
 _DELETE_ORDER: tuple[type[SQLModel], ...] = (
     LedgerEntry,
     PayoutLine,
-    PayoutSalt,
     DocChunk,
     Alert,
     WorldEvent,
@@ -116,15 +114,15 @@ def _copy_world_rows(
 
     Inserts are flushed table by table in foreign-key order. Orders, sessions and LLM call logs
     are visitor activity, not template content, so they are not copied. Payouts are activity
-    too, and the source must hold none (T67): a payout's public commitment covers its holders'
-    user IDs, which the copy remaps, so copied lines could never verify. With
+    too, and the source must hold none (T67). With
     `community_users_only`, only the users that own an asset (and their holdings) are copied,
     so demo investors and the demo admin persona never reach the live world.
     """
-    if any(
-        session.exec(select(model.asset_id).where(model.world_id == source).limit(1)).first()
-        for model in (PayoutLine, PayoutSalt)
-    ):
+    # A payout's leaf hashes cover its holders' user IDs, which a copy remaps, so copied lines
+    # could never verify against the copied ledger commitment. Templates never pay out; payouts
+    # happen in visitor and live worlds (T38 Time Machine, T44 impact UI).
+    payout_line = select(PayoutLine.id).where(PayoutLine.world_id == source).limit(1)
+    if session.exec(payout_line).first() is not None:
         raise RuntimeError(f"world {source} holds payouts, which can't be copied")
     ids: dict[UUID, UUID] = {}
     copied_users: set[UUID] | None = None

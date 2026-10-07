@@ -14,9 +14,12 @@ an edited source row can be caught by comparing it with its ledger payload.
 Privacy rule (ADR-0005 §6, T67): the ledger is public and can't be edited, so payloads never
 hold account identifiers, emails or person names. `append` enforces a cheap guard as defence in
 depth: it rejects any key on a deny-list (`user_id`, `holder_id`, `email`, `password`…, at any
-depth, plus `*_user_id` and `*_email`) and any email-shaped string. It can't tell a user UUID
-from an asset UUID, so producers stay responsible for what they put in, and
-`tests/test_ledger_privacy.py` scans one payload of every kind against the real accounts.
+depth, plus `*_user_id` and `*_email`), any email address, and a `ref_id` that is a user's ID
+(`ref_id` is public too). In http(s) URLs only the userinfo (rejected outright) and the decoded
+query and fragment are checked, so paths like `cover@2x.png` pass. The guard can't tell a user
+UUID inside a payload from an asset UUID, so producers stay responsible for what they put in,
+and `tests/test_ledger_privacy.py` runs every real producer and scans its entries against the
+real accounts.
 """
 
 from __future__ import annotations
@@ -28,11 +31,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
 from typing import Any, Protocol
+from urllib.parse import unquote, unquote_plus, urlsplit
 from uuid import UUID
 
 from sqlmodel import Session, col, select
 
-from app.models import Asset, LedgerEntry, LedgerKind
+from app.models import Asset, LedgerEntry, LedgerKind, User
 
 GENESIS_HASH = "0" * 64
 TAMPER_FACTOR = 10
@@ -67,8 +71,8 @@ DENIED_PAYLOAD_KEYS: frozenset[str] = frozenset(
     }
 )
 _DENIED_KEY_SUFFIXES = ("_user_id", "_user_ids", "_email", "_password")
-# The local part can't contain "/", so URLs like medium.com/@author/post don't match.
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+_TOKEN_EDGES = "()[]<>{}\"',;"
 
 
 class LedgerPrivacyError(ValueError):
@@ -136,8 +140,23 @@ def check_public_payload(payload: Any, path: str = "$") -> None:
     elif isinstance(payload, list | tuple):
         for index, value in enumerate(payload):
             check_public_payload(value, f"{path}[{index}]")
-    elif isinstance(payload, str) and _EMAIL.search(payload):
+    elif isinstance(payload, str) and any(_token_has_email(t) for t in payload.split()):
         raise LedgerPrivacyError(f"ledger payloads must not hold an email address ({path})")
+
+
+def _token_has_email(token: str) -> bool:
+    """Full email search on plain text; for an http(s) URL, only its userinfo, query and
+    fragment, since paths and file names (`cover@2x.png`) often contain `@`."""
+    token = token.strip(_TOKEN_EDGES)
+    try:
+        url = urlsplit(token)
+    except ValueError:
+        return bool(_EMAIL.search(token))
+    if url.scheme.lower() not in ("http", "https") or not url.netloc:
+        return bool(_EMAIL.search(token))
+    if "@" in url.netloc:
+        return True  # userinfo: an account name or credentials never belong in a public URL
+    return bool(_EMAIL.search(unquote_plus(url.query)) or _EMAIL.search(unquote(url.fragment)))
 
 
 def entry_hash(payload: Mapping[str, Any], kind: LedgerKind, seq: int, prev_hash: str) -> str:
@@ -220,10 +239,12 @@ def append(
 
     Locks the asset row first, so concurrent appends for one asset queue instead of
     racing for the same `seq`. The payload is stored exactly as it was hashed. Raises
-    LedgerPrivacyError, before touching the DB, if the payload fails `check_public_payload`.
+    LedgerPrivacyError if the payload fails `check_public_payload` or `ref_id` is a user's ID.
     """
     stored: dict[str, Any] = json.loads(canonical(payload))
     check_public_payload(stored)
+    if ref_id is not None and session.get(User, ref_id) is not None:
+        raise LedgerPrivacyError("ledger ref_id must not be a user's ID")
     locked = session.exec(
         select(Asset.id).where(Asset.id == asset_id).with_for_update()
     ).one_or_none()

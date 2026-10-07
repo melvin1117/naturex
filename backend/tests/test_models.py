@@ -12,7 +12,7 @@ from sqlmodel import Session, select
 
 from app.config import get_settings
 from app.models import Asset, LedgerEntry, LedgerKind, User, World
-from app.seed import DEMO_GEOJSON, DEMO_SITES, WORLD_ID, DemoSite, seed
+from app.seed import DEMO_GEOJSON, DEMO_SITES, PERSONAS, WORLD_ID, DemoSite, seed
 from app.tools.geometry import validate_polygon
 from tests.conftest import alembic_cfg, requires_db
 
@@ -32,7 +32,6 @@ EXPECTED_TABLES = {
     "llm_calls",
     "sessions",
     "payout_lines",
-    "payout_salts",
 }
 
 
@@ -225,22 +224,29 @@ def test_world_id_present_on_mutable_models() -> None:
 
 @requires_db
 def test_payout_lines_migration_downgrades_and_upgrades() -> None:
-    """T67 (0007): private payout tables and the assets (world_id, id) key come and go."""
+    """T67 (0007): payout lines, the assets (world_id, id) key and the one-payout-per-quarter
+    ledger index come and go."""
     cfg = alembic_cfg()
     command.upgrade(cfg, "head")
     command.downgrade(cfg, "0006")
     engine = create_engine(get_settings().database_url)
     try:
         inspector = inspect(engine)
-        assert not {"payout_lines", "payout_salts"} & set(inspector.get_table_names())
+        assert "payout_lines" not in inspector.get_table_names()
         assert "uq_assets_world_id_id" not in {
             c["name"] for c in inspector.get_unique_constraints("assets")
         }
+        assert "uq_ledger_payout_quarter" not in {
+            i["name"] for i in inspector.get_indexes("ledger_entries")
+        }
         command.upgrade(cfg, "head")
         inspector = inspect(engine)
-        assert {"payout_lines", "payout_salts"} <= set(inspector.get_table_names())
+        assert "payout_lines" in inspector.get_table_names()
         assert "uq_assets_world_id_id" in {
             c["name"] for c in inspector.get_unique_constraints("assets")
+        }
+        assert "uq_ledger_payout_quarter" in {
+            i["name"] for i in inspector.get_indexes("ledger_entries")
         }
         assert {fk["name"] for fk in inspector.get_foreign_keys("payout_lines")} == {
             "fk_payout_lines_asset",
@@ -250,20 +256,35 @@ def test_payout_lines_migration_downgrades_and_upgrades() -> None:
         engine.dispose()
 
 
+_LINE_INSERT = text(
+    "INSERT INTO payout_lines (world_id, asset_id, quarter_label, user_id, shares, amount, "
+    "nonce, leaf_hash) VALUES (:w, :a, 'q', :u, :shares, :amount, :nonce, :leaf)"
+)
+
+
 @requires_db
-def test_payout_salts_must_be_32_bytes() -> None:
+@pytest.mark.parametrize(
+    ("overrides", "constraint"),
+    [
+        ({"nonce": b"short"}, "ck_payout_lines_nonce_len"),
+        ({"leaf": "not-a-hash"}, "ck_payout_lines_leaf_hash"),
+        ({"u": None}, "ck_payout_lines_erased_together"),
+        ({"nonce": None, "shares": None}, "ck_payout_lines_erased_together"),
+    ],
+    ids=["short-nonce", "bad-leaf", "half-erased", "half-erased-2"],
+)
+def test_payout_line_constraints(overrides: dict[str, object], constraint: str) -> None:
     command.upgrade(alembic_cfg(), "head")
     engine = create_engine(get_settings().database_url)
-    with (
-        engine.connect() as conn,
-        conn.begin(),
-        pytest.raises(DBAPIError, match="ck_payout_salts_salt_len"),
-    ):
-        conn.execute(
-            text(
-                "INSERT INTO payout_salts (world_id, asset_id, quarter_label, salt) "
-                "VALUES (:w, :a, 'q', :s)"
-            ),
-            {"w": WORLD_ID, "a": DEMO_SITES[0].id, "s": b"short"},
-        )
+    params: dict[str, object] = {
+        "w": WORLD_ID,
+        "a": DEMO_SITES[0].id,
+        "u": PERSONAS[1].id,
+        "shares": 1,
+        "amount": Decimal("0.01"),
+        "nonce": b"\x00" * 32,
+        "leaf": "0" * 64,
+    } | overrides
+    with engine.connect() as conn, conn.begin(), pytest.raises(DBAPIError, match=constraint):
+        conn.execute(_LINE_INSERT, params)
     engine.dispose()
