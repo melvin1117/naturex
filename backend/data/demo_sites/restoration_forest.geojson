@@ -1,0 +1,71 @@
+{
+  "type": "Feature",
+  "properties": {
+    "created_date": "2026-10-07",
+    "method": "Hand-digitised over the tropical forest slopes north of the Grijalva river in the Sumidero Canyon (Chiapas), on the edge of Canon del Sumidero National Park, where Hansen shows 2021-2025 loss; no OpenStreetMap, WDPA or share-alike boundary data copied.",
+    "name": "Sumidero Canyon Restoration Forest"
+  },
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          -93.073,
+          16.84
+        ],
+        [
+          -93.066,
+          16.839
+        ],
+        [
+          -93.059,
+          16.8388
+        ],
+        [
+          -93.052,
+          16.8395
+        ],
+        [
+          -93.0465,
+          16.841
+        ],
+        [
+          -93.0442,
+          16.8448
+        ],
+        [
+          -93.045,
+          16.849
+        ],
+        [
+          -93.049,
+          16.8512
+        ],
+        [
+          -93.057,
+          16.8518
+        ],
+        [
+          -93.065,
+          16.8516
+        ],
+        [
+          -93.0715,
+          16.8505
+        ],
+        [
+          -93.0748,
+          16.847
+        ],
+        [
+          -93.075,
+          16.843
+        ],
+        [
+          -93.073,
+          16.84
+        ]
+      ]
+    ]
+  }
+}

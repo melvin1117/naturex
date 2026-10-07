@@ -8,6 +8,11 @@ Run from the repository root with:
 Use ``--check`` to recompute and compare against committed JSON without rewriting it.
 Earth Engine is intentionally used only by this offline script; the runtime app loads
 the cached JSON through ``app.tools.earth_obs``.
+
+After the observed sites, the script regenerates the Time Machine scenario variants
+(``backend/data/demo_sites/scenarios/``) from the committed baselines and
+``scenarios.json`` with the pure functions in ``app.tools.scenarios`` (T13). Add
+``--scenarios-only`` to skip Earth Engine and only regenerate (or ``--check``) those.
 """
 
 from __future__ import annotations
@@ -23,7 +28,9 @@ from pathlib import Path
 from typing import Any
 
 from app.config import get_settings
+from app.tools.earth_obs import SCENARIO_DIR, EarthObsMetrics, scenario_path
 from app.tools.geometry import validate_polygon
+from app.tools.scenarios import build_site_scenarios, load_scenario_spec, scenario_document
 
 ee: Any
 
@@ -35,6 +42,11 @@ END_DATE = "2026-10-01"
 START_12M = "2025-10-01"
 START_5Y = "2021-10-01"
 FOREST_LOSS_YEARS = "2021-2025"
+FOREST_LOSS_LAST_12M_YEAR = "2025"
+ESA_CCI_BIOMASS_YEAR_START = "2022-01-01"
+ESA_CCI_BIOMASS_YEAR_END = "2023-01-01"
+GMW_EPOCH = "2020"
+GMW_SCALE_M = 10
 CLOUD_SCORE_THRESHOLD = 0.60
 CLOUD_FREE_MIN_CLEAR_FRACTION = 0.50
 HANSEN_TREE_COVER_MIN_PERCENT = 30
@@ -74,6 +86,22 @@ ATTRIBUTIONS = {
     "gedi": (
         "GEDI L4B: Dubayah et al. (2022), GEDI L4B Gridded Aboveground Biomass Density, "
         "Version 2, ORNL DAAC."
+    ),
+    "esa_cci_biomass": (
+        "ESA CCI Biomass: Santoro, M.; Cartus, O. (2025), ESA Biomass Climate Change "
+        "Initiative (Biomass_cci): Global datasets of forest above-ground biomass, v6.0, "
+        "NERC EDS Centre for Environmental Data Analysis, "
+        "doi:10.5285/95913ffb6467447ca72c4e9d8cf30501."
+    ),
+    "gmw": (
+        "Global Mangrove Watch v3.0 (CC BY 4.0): Bunting et al. (2022), Global Mangrove "
+        "Extent Change 1996-2020: Global Mangrove Watch Version 3.0, Remote Sensing 14(15), "
+        "3657; dataset doi:10.5281/zenodo.6894273."
+    ),
+    "soilgrids": (
+        "SoilGrids 2.0 (CC BY 4.0): ISRIC - World Soil Information; Poggio et al. (2021), "
+        "SoilGrids 2.0: producing soil information for the globe with quantified spatial "
+        "uncertainty, SOIL 7, 217-240."
     ),
 }
 
@@ -125,6 +153,30 @@ DATASETS = [
         "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/LARSE_GEDI_GEDI04_B_002",
         "bands": ["MU"],
         "attribution": ATTRIBUTIONS["gedi"],
+    },
+    {
+        "key": "esa_cci_biomass",
+        "dataset_id": "ESA/CCI/Above_Ground_Biomass/V6_0",
+        "version": "v6.0 (2022 map)",
+        "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/ESA_CCI_Above_Ground_Biomass_V6_0",
+        "bands": ["agb"],
+        "attribution": ATTRIBUTIONS["esa_cci_biomass"],
+    },
+    {
+        "key": "global_mangrove_watch",
+        "dataset_id": "projects/sat-io/open-datasets/GMW/extent/GMW_V3",
+        "version": "v3.0 (2020 epoch)",
+        "catalog_url": "https://gee-community-catalog.org/projects/mangrove/",
+        "bands": ["b1"],
+        "attribution": ATTRIBUTIONS["gmw"],
+    },
+    {
+        "key": "soilgrids_ocs",
+        "dataset_id": "projects/soilgrids-isric/ocs_mean",
+        "version": "SoilGrids 2.0 (published 2020-05-04)",
+        "catalog_url": "https://gee-community-catalog.org/projects/isric/",
+        "bands": ["ocs_0-30cm_mean"],
+        "attribution": ATTRIBUTIONS["soilgrids"],
     },
 ]
 
@@ -262,8 +314,14 @@ def _ndvi(aoi: ee.Geometry, start_12m: ee.Date, start_5y: ee.Date, end: ee.Date)
     def monthly(index: ee.Number) -> ee.Feature:
         start = start_5y.advance(index, "month")
         month = s2.filterDate(start, start.advance(1, "month"))
-        mean = (
-            month.median().reduceRegion(ee.Reducer.mean(), aoi, scale=10, maxPixels=1e9).get("ndvi")
+        # A month with no usable scenes has a band-less median; return null so the
+        # notNull filter below drops it instead of failing on a missing key.
+        mean = ee.Algorithms.If(
+            month.size().gt(0),
+            month.median()
+            .reduceRegion(ee.Reducer.mean(), aoi, scale=10, maxPixels=1e9)
+            .get("ndvi"),
+            None,
         )
         return ee.Feature(
             None,
@@ -331,26 +389,90 @@ def _water_change(aoi: ee.Geometry) -> float:
     return float(value)
 
 
-def _forest_loss(aoi: ee.Geometry) -> float:
+def _forest_loss(aoi: ee.Geometry) -> tuple[float, float]:
+    """Hansen loss (ha) in the latest five complete years and in the latest year only."""
     # Hansen v1.13 lossyear encodes 1..25 for 2001..2025. We use the latest five complete
-    # years available in the dataset: 2021..2025 -> lossyear 21..25.
+    # years available in the dataset: 2021..2025 -> lossyear 21..25; the "last 12 months"
+    # metric for the listing gate is the latest complete year, 2025 -> lossyear 25.
     hansen = ee.Image("UMD/hansen/global_forest_change_2025_v1_13")
     loss_year = hansen.select("lossyear")
     forest_2000 = hansen.select("treecover2000").gte(HANSEN_TREE_COVER_MIN_PERCENT)
     latest_five_years = loss_year.gte(21).And(loss_year.lte(25))
-    area = ee.Image.pixelArea().updateMask(latest_five_years.And(forest_2000))
-    value = area.reduceRegion(ee.Reducer.sum(), aoi, scale=30, maxPixels=1e9).getInfo().get("area")
-    return 0.0 if value is None else float(value) / 10_000
+    latest_year = loss_year.eq(25)
+    pixel_area = ee.Image.pixelArea()
+    areas = ee.Image.cat(
+        [
+            pixel_area.updateMask(latest_five_years.And(forest_2000)).rename("loss_5y"),
+            pixel_area.updateMask(latest_year.And(forest_2000)).rename("loss_12m"),
+        ]
+    )
+    values = areas.reduceRegion(ee.Reducer.sum(), aoi, scale=30, maxPixels=1e9).getInfo()
+    five_years, last_year = values.get("loss_5y"), values.get("loss_12m")
+    return (
+        0.0 if five_years is None else float(five_years) / 10_000,
+        0.0 if last_year is None else float(last_year) / 10_000,
+    )
 
 
-def _biomass(aoi: ee.Geometry) -> float:
-    # GEDI L4B v2 is gridded mean above-ground biomass density; MU is mean AGBD in Mg/ha.
-    image = ee.Image("LARSE/GEDI/GEDI04_B_002").select("MU")
+def _biomass(aoi: ee.Geometry) -> tuple[float, float | None]:
+    """Mean above-ground biomass (t/ha): ESA CCI (primary) and GEDI L4B (cross-check)."""
+    # ESA CCI Biomass v6.0, latest map (2022), 100 m, band agb in Mg/ha; EE catalog record
+    # ESA_CCI_Above_Ground_Biomass_V6_0. Primary per docs/research.md: finer than GEDI L4B.
+    cci = (
+        ee.ImageCollection("ESA/CCI/Above_Ground_Biomass/V6_0")
+        .filterDate(ESA_CCI_BIOMASS_YEAR_START, ESA_CCI_BIOMASS_YEAR_END)
+        .first()
+        .select("agb")
+    )
+    # GEDI L4B v2 is gridded mean AGBD (MU, Mg/ha) at 1 km; cells are empty where too few
+    # quality footprints pass (e.g. the steep Sumidero Canyon slopes), hence optional.
+    gedi = ee.Image("LARSE/GEDI/GEDI04_B_002").select("MU")
+    values = ee.Dictionary(
+        {
+            "cci": cci.reduceRegion(ee.Reducer.mean(), aoi, scale=100, maxPixels=1e9).get("agb"),
+            "gedi": gedi.reduceRegion(ee.Reducer.mean(), aoi, scale=1000, maxPixels=1e9).get("MU"),
+        }
+    ).getInfo()
+    if values.get("cci") is None:
+        raise RuntimeError("ESA CCI Biomass returned no agb value for this polygon.")
+    gedi_value = values.get("gedi")
+    return float(values["cci"]), None if gedi_value is None else float(gedi_value)
+
+
+def _mangrove_fraction(aoi: ee.Geometry) -> float:
+    """Area-weighted share of the polygon in Global Mangrove Watch v3.0 (2020 epoch)."""
+    # GMW v3 extent rasters (~25 m) hold 1 for mangrove and are masked elsewhere.
+    gmw = (
+        ee.ImageCollection("projects/sat-io/open-datasets/GMW/extent/GMW_V3")
+        .filterDate(f"{GMW_EPOCH}-01-01", f"{int(GMW_EPOCH) + 1}-01-01")
+        .first()
+        .select("b1")
+    )
+    mangrove = gmw.eq(1).unmask(0)
+    pixel_area = ee.Image.pixelArea()
+    sums = (
+        ee.Image.cat([pixel_area.multiply(mangrove).rename("mangrove"), pixel_area.rename("all")])
+        .reduceRegion(ee.Reducer.sum(), aoi, scale=GMW_SCALE_M, maxPixels=1e9)
+        .getInfo()
+    )
+    total = sums.get("all")
+    if not total:
+        raise RuntimeError("Polygon has no area at the GMW sampling scale.")
+    return float(sums.get("mangrove") or 0.0) / float(total)
+
+
+def _soil_organic_carbon(aoi: ee.Geometry) -> float:
+    # SoilGrids 2.0 organic carbon stock 0-30 cm (ISRIC, CC BY 4.0). Mapped units are t/ha
+    # (conversion factor 10 to kg/m2), so the polygon mean is already t C/ha:
+    # https://docs.isric.org/globaldata/soilgrids/SoilGrids_faqs_01.html
+    image = ee.Image("projects/soilgrids-isric/ocs_mean").select("ocs_0-30cm_mean")
     value = (
-        image.reduceRegion(ee.Reducer.mean(), aoi, scale=1000, maxPixels=1e9).getInfo().get("MU")
+        image.reduceRegion(ee.Reducer.mean(), aoi, scale=250, maxPixels=1e9)
+        .getInfo()
+        .get("ocs_0-30cm_mean")
     )
     if value is None:
-        raise RuntimeError("GEDI L4B returned no MU biomass value for this polygon.")
+        raise RuntimeError("SoilGrids returned no organic carbon stock for this polygon.")
     return float(value)
 
 
@@ -375,6 +497,14 @@ def compute_site(site_key: str, computed_at_utc: str | None = None) -> dict[str,
     land_cover = _land_cover(aoi, start_12m, end)
     natural_fraction = sum(land_cover[class_name] for class_name in NATURAL_CLASSES)
     ndvi = _ndvi(aoi, start_12m, start_5y, end)
+    forest_loss_5y, forest_loss_12m = _forest_loss(aoi)
+    biomass, biomass_gedi = _biomass(aoi)
+    # List only datasets that contributed a value, each with its attribution.
+    datasets = [
+        dataset for dataset in DATASETS if biomass_gedi is not None or dataset["key"] != "gedi_l4b"
+    ]
+    gedi_window = {"gedi_l4b_biomass": {"start": "2019-04-18", "end": "2021-08-04"}}
+    gedi_scale = {"gedi_biomass_scale_m": 1000}
 
     out: dict[str, Any] = {
         "site_key": site_key,
@@ -387,15 +517,23 @@ def compute_site(site_key: str, computed_at_utc: str | None = None) -> dict[str,
         "natural_fraction": natural_fraction,
         **ndvi,
         "water_change": _water_change(aoi),
-        "forest_loss_ha": _forest_loss(aoi),
-        "biomass_t_ha": _biomass(aoi),
+        "forest_loss_ha": forest_loss_5y,
+        "forest_loss_last_12m_ha": forest_loss_12m,
+        "biomass_t_ha": biomass,
+        "biomass_source": "esa_cci_biomass",
+        "biomass_gedi_t_ha": biomass_gedi,
+        "mangrove_fraction": _mangrove_fraction(aoi),
+        "soc_t_c_ha": _soil_organic_carbon(aoi),
         "date_windows": {
             "land_cover": {"start": START_12M, "end": END_DATE},
             "ndvi": {"start": START_5Y, "end": END_DATE},
             "cloud_free_obs": {"start": START_12M, "end": END_DATE},
             "jrc_water_change": {"start": "1984-03-16", "end": "2021-12-31"},
             "hansen_forest_loss": {"start": "2021-01-01", "end": "2025-12-31"},
-            "gedi_l4b_biomass": {"start": "2019-04-18", "end": "2021-08-04"},
+            "hansen_forest_loss_last_12m": {"start": "2025-01-01", "end": "2025-12-31"},
+            "esa_cci_biomass": {"start": "2022-01-01", "end": "2022-12-31"},
+            **(gedi_window if biomass_gedi is not None else {}),
+            "gmw_mangrove_extent": {"start": f"{GMW_EPOCH}-01-01", "end": f"{GMW_EPOCH}-12-31"},
         },
         "thresholds": {
             "cloud_score_plus_cs_cdf": CLOUD_SCORE_THRESHOLD,
@@ -405,11 +543,17 @@ def compute_site(site_key: str, computed_at_utc: str | None = None) -> dict[str,
             "jrc_water_change_scale_m": 30,
             "hansen_forest_loss_scale_m": 30,
             "hansen_forest_loss_years": FOREST_LOSS_YEARS,
+            "hansen_forest_loss_last_12m_year": FOREST_LOSS_LAST_12M_YEAR,
             "hansen_treecover2000_min_percent": HANSEN_TREE_COVER_MIN_PERCENT,
-            "gedi_biomass_scale_m": 1000,
+            "esa_cci_biomass_scale_m": 100,
+            **(gedi_scale if biomass_gedi is not None else {}),
+            "gmw_mangrove_epoch": GMW_EPOCH,
+            "gmw_mangrove_scale_m": GMW_SCALE_M,
+            "soilgrids_soc_scale_m": 250,
+            "soilgrids_soc_depth_cm": "0-30",
         },
-        "datasets": DATASETS,
-        "attributions": list(ATTRIBUTIONS.values()),
+        "datasets": datasets,
+        "attributions": [dataset["attribution"] for dataset in datasets],
     }
     return _round(out)
 
@@ -448,16 +592,67 @@ def _site_keys(selected: str | None) -> list[str]:
     return sorted(path.stem for path in DATA_DIR.glob("*.geojson"))
 
 
+def expected_scenario_documents(site_keys: list[str]) -> dict[Path, dict[str, Any]]:
+    """Scenario JSON that the committed baselines and ``scenarios.json`` produce (no EE)."""
+    spec = load_scenario_spec()
+    documents: dict[Path, dict[str, Any]] = {}
+    for site_key in site_keys:
+        baseline = EarthObsMetrics.model_validate_json(
+            scenario_path(site_key, "baseline").read_text()
+        )
+        for scenario, metrics in build_site_scenarios(baseline, spec).items():
+            if scenario != "baseline":
+                documents[scenario_path(site_key, scenario)] = scenario_document(metrics)
+    return documents
+
+
+def scenario_failures(site_keys: list[str], *, write: bool) -> list[str]:
+    """Regenerate (``write``) or compare the scenario files; return mismatches."""
+    failures: list[str] = []
+    expected = expected_scenario_documents(site_keys)
+    if write:
+        SCENARIO_DIR.mkdir(exist_ok=True)
+        for path, document in expected.items():
+            path.write_text(_json_text(document))
+            print(f"Wrote {path.relative_to(ROOT)}")
+        return failures
+    for path, document in expected.items():
+        if not path.exists():
+            failures.append(f"{path} does not exist.")
+            continue
+        committed = json.loads(path.read_text())
+        failures.extend(compare_cached_metrics(committed, document, path=path.name))
+    if not failures:
+        known, all_sites = set(expected), set(_site_keys(None))
+        stray = [
+            path
+            for path in SCENARIO_DIR.glob("*.json")
+            if path not in known
+            and (path.name.split(".")[0] in site_keys or path.name.split(".")[0] not in all_sites)
+        ]
+        failures.extend(f"{path} is not produced by scenarios.json." for path in stray)
+    return failures
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--site", help="Only compute one site key.")
     parser.add_argument("--check", action="store_true", help="Compare with committed JSON.")
+    parser.add_argument(
+        "--scenarios-only",
+        action="store_true",
+        help="Skip Earth Engine; only regenerate or check the scenario variants.",
+    )
     args = parser.parse_args()
 
     started = time.perf_counter()
-    _init_ee()
     failures: list[str] = []
-    for site_key in _site_keys(args.site):
+    site_keys = _site_keys(args.site)
+    if args.scenarios_only:
+        failures.extend(scenario_failures(site_keys, write=not args.check))
+        return _report(failures, started, args.check, f"{len(site_keys)} site(s) scenarios")
+    _init_ee()
+    for site_key in site_keys:
         output_path = DATA_DIR / f"{site_key}.json"
         existing_timestamp = _load_existing_timestamp(site_key)
         print(f"Computing {site_key}...")
@@ -472,13 +667,20 @@ def main() -> int:
             output_path.write_text(_json_text(data))
             print(f"Wrote {output_path.relative_to(ROOT)}")
 
+    # Scenarios derive from the committed baselines, so only check them once those match.
+    if not failures:
+        failures.extend(scenario_failures(site_keys, write=not args.check))
+    return _report(failures, started, args.check, f"{len(site_keys)} site(s) and scenarios")
+
+
+def _report(failures: list[str], started: float, check: bool, what: str) -> int:
     elapsed = time.perf_counter() - started
     if failures:
         print("\n".join(failures), file=sys.stderr)
         print(f"FAILED in {elapsed:.1f}s", file=sys.stderr)
         return 1
-    verb = "Checked" if args.check else "Computed"
-    print(f"{verb} {len(_site_keys(args.site))} site(s) in {elapsed:.1f}s")
+    verb = "Checked" if check else "Computed"
+    print(f"{verb} {what} in {elapsed:.1f}s")
     return 0
 
 

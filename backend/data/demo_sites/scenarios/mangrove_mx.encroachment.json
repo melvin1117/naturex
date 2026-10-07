@@ -1,0 +1,529 @@
+{
+  "area_ha": 457.8803,
+  "attributions": [
+    "Dynamic World: This dataset is produced for the Dynamic World Project by Google in partnership with National Geographic Society and the World Resources Institute.",
+    "Contains modified Copernicus Sentinel data 2021-2026.",
+    "Cloud Score+: Pasquarella, V. J., Brown, C. F., Czerwinski, W., & Rucklidge, W. J. (2023). Comprehensive quality assessment of optical satellite imagery using weakly supervised video learning.",
+    "JRC Global Surface Water: EC JRC/Google; Pekel et al. (2016), High-resolution mapping of global surface water and its long-term changes, Nature.",
+    "Hansen Global Forest Change: Hansen et al. (2013), High-Resolution Global Maps of 21st-Century Forest Cover Change, Science.",
+    "GEDI L4B: Dubayah et al. (2022), GEDI L4B Gridded Aboveground Biomass Density, Version 2, ORNL DAAC.",
+    "ESA CCI Biomass: Santoro, M.; Cartus, O. (2025), ESA Biomass Climate Change Initiative (Biomass_cci): Global datasets of forest above-ground biomass, v6.0, NERC EDS Centre for Environmental Data Analysis, doi:10.5285/95913ffb6467447ca72c4e9d8cf30501.",
+    "Global Mangrove Watch v3.0 (CC BY 4.0): Bunting et al. (2022), Global Mangrove Extent Change 1996-2020: Global Mangrove Watch Version 3.0, Remote Sensing 14(15), 3657; dataset doi:10.5281/zenodo.6894273.",
+    "SoilGrids 2.0 (CC BY 4.0): ISRIC - World Soil Information; Poggio et al. (2021), SoilGrids 2.0: producing soil information for the globe with quantified spatial uncertainty, SOIL 7, 217-240."
+  ],
+  "based_on": "sim-1",
+  "biomass_gedi_t_ha": 10.0585,
+  "biomass_source": "esa_cci_biomass",
+  "biomass_t_ha": 17.374,
+  "centroid": {
+    "lat": 20.9457,
+    "lon": -90.3182
+  },
+  "cloud_free_months_5y": 59,
+  "cloud_free_obs": 64,
+  "computed_at_utc": "2026-10-07T05:20:23Z",
+  "data_version": "sim-2",
+  "datasets": [
+    {
+      "attribution": "Dynamic World: This dataset is produced for the Dynamic World Project by Google in partnership with National Geographic Society and the World Resources Institute.",
+      "bands": [
+        "label"
+      ],
+      "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/GOOGLE_DYNAMICWORLD_V1",
+      "dataset_id": "GOOGLE/DYNAMICWORLD/V1",
+      "key": "dynamic_world",
+      "version": "V1"
+    },
+    {
+      "attribution": "Contains modified Copernicus Sentinel data 2021-2026.",
+      "bands": [
+        "B8",
+        "B4"
+      ],
+      "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR_HARMONIZED",
+      "dataset_id": "COPERNICUS/S2_SR_HARMONIZED",
+      "key": "sentinel_2_sr",
+      "version": "HARMONIZED"
+    },
+    {
+      "attribution": "Cloud Score+: Pasquarella, V. J., Brown, C. F., Czerwinski, W., & Rucklidge, W. J. (2023). Comprehensive quality assessment of optical satellite imagery using weakly supervised video learning.",
+      "bands": [
+        "cs_cdf"
+      ],
+      "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/GOOGLE_CLOUD_SCORE_PLUS_V1_S2_HARMONIZED",
+      "dataset_id": "GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED",
+      "key": "cloud_score_plus",
+      "version": "V1"
+    },
+    {
+      "attribution": "JRC Global Surface Water: EC JRC/Google; Pekel et al. (2016), High-resolution mapping of global surface water and its long-term changes, Nature.",
+      "bands": [
+        "change_abs"
+      ],
+      "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/JRC_GSW1_4_GlobalSurfaceWater",
+      "dataset_id": "JRC/GSW1_4/GlobalSurfaceWater",
+      "key": "jrc_global_surface_water",
+      "version": "v1.4"
+    },
+    {
+      "attribution": "Hansen Global Forest Change: Hansen et al. (2013), High-Resolution Global Maps of 21st-Century Forest Cover Change, Science.",
+      "bands": [
+        "lossyear",
+        "treecover2000"
+      ],
+      "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/UMD_hansen_global_forest_change_2025_v1_13",
+      "dataset_id": "UMD/hansen/global_forest_change_2025_v1_13",
+      "key": "hansen_global_forest_change",
+      "version": "2025 v1.13"
+    },
+    {
+      "attribution": "GEDI L4B: Dubayah et al. (2022), GEDI L4B Gridded Aboveground Biomass Density, Version 2, ORNL DAAC.",
+      "bands": [
+        "MU"
+      ],
+      "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/LARSE_GEDI_GEDI04_B_002",
+      "dataset_id": "LARSE/GEDI/GEDI04_B_002",
+      "key": "gedi_l4b",
+      "version": "Version 2"
+    },
+    {
+      "attribution": "ESA CCI Biomass: Santoro, M.; Cartus, O. (2025), ESA Biomass Climate Change Initiative (Biomass_cci): Global datasets of forest above-ground biomass, v6.0, NERC EDS Centre for Environmental Data Analysis, doi:10.5285/95913ffb6467447ca72c4e9d8cf30501.",
+      "bands": [
+        "agb"
+      ],
+      "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/ESA_CCI_Above_Ground_Biomass_V6_0",
+      "dataset_id": "ESA/CCI/Above_Ground_Biomass/V6_0",
+      "key": "esa_cci_biomass",
+      "version": "v6.0 (2022 map)"
+    },
+    {
+      "attribution": "Global Mangrove Watch v3.0 (CC BY 4.0): Bunting et al. (2022), Global Mangrove Extent Change 1996-2020: Global Mangrove Watch Version 3.0, Remote Sensing 14(15), 3657; dataset doi:10.5281/zenodo.6894273.",
+      "bands": [
+        "b1"
+      ],
+      "catalog_url": "https://gee-community-catalog.org/projects/mangrove/",
+      "dataset_id": "projects/sat-io/open-datasets/GMW/extent/GMW_V3",
+      "key": "global_mangrove_watch",
+      "version": "v3.0 (2020 epoch)"
+    },
+    {
+      "attribution": "SoilGrids 2.0 (CC BY 4.0): ISRIC - World Soil Information; Poggio et al. (2021), SoilGrids 2.0: producing soil information for the globe with quantified spatial uncertainty, SOIL 7, 217-240.",
+      "bands": [
+        "ocs_0-30cm_mean"
+      ],
+      "catalog_url": "https://gee-community-catalog.org/projects/isric/",
+      "dataset_id": "projects/soilgrids-isric/ocs_mean",
+      "key": "soilgrids_ocs",
+      "version": "SoilGrids 2.0 (published 2020-05-04)"
+    }
+  ],
+  "date_windows": {
+    "cloud_free_obs": {
+      "end": "2026-10-01",
+      "start": "2025-10-01"
+    },
+    "esa_cci_biomass": {
+      "end": "2022-12-31",
+      "start": "2022-01-01"
+    },
+    "gedi_l4b_biomass": {
+      "end": "2021-08-04",
+      "start": "2019-04-18"
+    },
+    "gmw_mangrove_extent": {
+      "end": "2020-12-31",
+      "start": "2020-01-01"
+    },
+    "hansen_forest_loss": {
+      "end": "2025-12-31",
+      "start": "2021-01-01"
+    },
+    "hansen_forest_loss_last_12m": {
+      "end": "2025-12-31",
+      "start": "2025-01-01"
+    },
+    "jrc_water_change": {
+      "end": "2021-12-31",
+      "start": "1984-03-16"
+    },
+    "land_cover": {
+      "end": "2026-10-01",
+      "start": "2025-10-01"
+    },
+    "ndvi": {
+      "end": "2026-10-01",
+      "start": "2021-10-01"
+    }
+  },
+  "forest_loss_ha": 27.5344,
+  "forest_loss_last_12m_ha": 27.5344,
+  "landcover": {
+    "bare": 0.05,
+    "built": 0.03,
+    "crops": 0.0,
+    "flooded_vegetation": 0.22,
+    "grass": 0.0063,
+    "shrub_and_scrub": 0.0058,
+    "snow_and_ice": 0.0,
+    "trees": 0.6661,
+    "water": 0.0218
+  },
+  "mangrove_fraction": 0.8699,
+  "natural_fraction": 0.92,
+  "ndvi_mean": 0.77,
+  "ndvi_series": [
+    {
+      "cloud_free_obs": 5,
+      "month": "2021-10",
+      "ndvi": 0.7508
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2021-11",
+      "ndvi": 0.8291
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2021-12",
+      "ndvi": 0.8606
+    },
+    {
+      "cloud_free_obs": 2,
+      "month": "2022-01",
+      "ndvi": 0.8571
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2022-02",
+      "ndvi": 0.8593
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2022-03",
+      "ndvi": 0.8491
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2022-04",
+      "ndvi": 0.8082
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2022-05",
+      "ndvi": 0.7736
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2022-06",
+      "ndvi": 0.7944
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2022-07",
+      "ndvi": 0.7221
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2022-08",
+      "ndvi": 0.7137
+    },
+    {
+      "cloud_free_obs": 2,
+      "month": "2022-09",
+      "ndvi": 0.8
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2022-10",
+      "ndvi": 0.8386
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2022-11",
+      "ndvi": 0.834
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2022-12",
+      "ndvi": 0.8668
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2023-01",
+      "ndvi": 0.8719
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2023-02",
+      "ndvi": 0.8656
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2023-03",
+      "ndvi": 0.8371
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2023-04",
+      "ndvi": 0.7769
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2023-05",
+      "ndvi": 0.7449
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2023-06",
+      "ndvi": 0.7548
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2023-07",
+      "ndvi": 0.7416
+    },
+    {
+      "cloud_free_obs": 2,
+      "month": "2023-08",
+      "ndvi": 0.7274
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2023-09",
+      "ndvi": 0.7895
+    },
+    {
+      "cloud_free_obs": 2,
+      "month": "2023-10",
+      "ndvi": 0.8005
+    },
+    {
+      "cloud_free_obs": 2,
+      "month": "2023-11",
+      "ndvi": 0.8148
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2024-01",
+      "ndvi": 0.8624
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2024-02",
+      "ndvi": 0.8552
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2024-03",
+      "ndvi": 0.8349
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2024-04",
+      "ndvi": 0.7752
+    },
+    {
+      "cloud_free_obs": 7,
+      "month": "2024-05",
+      "ndvi": 0.7324
+    },
+    {
+      "cloud_free_obs": 2,
+      "month": "2024-06",
+      "ndvi": 0.6719
+    },
+    {
+      "cloud_free_obs": 1,
+      "month": "2024-07",
+      "ndvi": 0.7922
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2024-08",
+      "ndvi": 0.8022
+    },
+    {
+      "cloud_free_obs": 2,
+      "month": "2024-09",
+      "ndvi": 0.6981
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2024-10",
+      "ndvi": 0.7915
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2024-11",
+      "ndvi": 0.843
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2024-12",
+      "ndvi": 0.8534
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2025-01",
+      "ndvi": 0.8419
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2025-02",
+      "ndvi": 0.8479
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2025-03",
+      "ndvi": 0.8307
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2025-04",
+      "ndvi": 0.7942
+    },
+    {
+      "cloud_free_obs": 7,
+      "month": "2025-05",
+      "ndvi": 0.7213
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2025-06",
+      "ndvi": 0.6922
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2025-07",
+      "ndvi": 0.6852
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2025-08",
+      "ndvi": 0.6842
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2025-09",
+      "ndvi": 0.708
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2025-10",
+      "ndvi": 0.7585
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2025-11",
+      "ndvi": 0.7879
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2025-12",
+      "ndvi": 0.8137
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2026-01",
+      "ndvi": 0.8242
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2026-02",
+      "ndvi": 0.8229
+    },
+    {
+      "cloud_free_obs": 7,
+      "month": "2026-03",
+      "ndvi": 0.7913
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2026-04",
+      "ndvi": 0.7436
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2026-05",
+      "ndvi": 0.7204
+    },
+    {
+      "cloud_free_obs": 7,
+      "month": "2026-06",
+      "ndvi": 0.7506
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2026-07",
+      "ndvi": 0.7331
+    },
+    {
+      "cloud_free_obs": 7,
+      "month": "2026-08",
+      "ndvi": 0.7487
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2026-09",
+      "ndvi": 0.7453
+    }
+  ],
+  "ndvi_trend": -0.0142,
+  "ndvi_trend_details": {
+    "mann_kendall_p_value": 0.0045,
+    "mann_kendall_tau": -0.2542,
+    "mean_last_12_months": 0.77,
+    "sens_slope_per_year": -0.0142,
+    "significant_05": true
+  },
+  "observed_data_version": "2026Q3",
+  "period": "2027Q1",
+  "provenance_note": "Simulated 'encroachment' version for the Time Machine: scripted deltas applied to sim-1, starting from observed data 2026Q3. Not an observation; date_windows, datasets and thresholds describe the observed data.",
+  "scenario": "encroachment",
+  "scenario_deltas": {
+    "biomass_pct_change": -8.0,
+    "description": "A coastal road and fill for tourism development clear mangrove: 3 pp of mangrove (trees and flooded vegetation) become built land and 5 pp bare fill, the last 12 months brown and tidal exchange drops.",
+    "extra_forest_loss_ha": 0.0,
+    "landcover_transfers": [
+      {
+        "from": [
+          "trees",
+          "flooded_vegetation"
+        ],
+        "pp": 3.0,
+        "to": "built"
+      },
+      {
+        "from": [
+          "trees",
+          "flooded_vegetation"
+        ],
+        "pp": 5.0,
+        "to": "bare"
+      }
+    ],
+    "ndvi_step_last_12m": -0.05,
+    "water_change_delta": -10.0
+  },
+  "simulated": true,
+  "site_key": "mangrove_mx",
+  "soc_t_c_ha": 69.4106,
+  "thresholds": {
+    "cloud_free_scene_min_clear_fraction": 0.5,
+    "cloud_score_plus_cs_cdf": 0.6,
+    "dynamic_world_mode_scale_m": 10,
+    "esa_cci_biomass_scale_m": 100,
+    "gedi_biomass_scale_m": 1000,
+    "gmw_mangrove_epoch": "2020",
+    "gmw_mangrove_scale_m": 10,
+    "hansen_forest_loss_last_12m_year": "2025",
+    "hansen_forest_loss_scale_m": 30,
+    "hansen_forest_loss_years": "2021-2025",
+    "hansen_treecover2000_min_percent": 30,
+    "jrc_water_change_scale_m": 30,
+    "sentinel2_ndvi_scale_m": 10,
+    "soilgrids_soc_depth_cm": "0-30",
+    "soilgrids_soc_scale_m": 250
+  },
+  "water_change": -1.1562
+}

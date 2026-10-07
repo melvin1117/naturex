@@ -1,0 +1,63 @@
+{
+  "type": "Feature",
+  "properties": {
+    "created_date": "2026-10-07",
+    "method": "Hand-digitised over Dynamic World tree and flooded-vegetation pixels on the east bank of the Ria Celestun estuary (Yucatan), inside the Ria Celestun Biosphere Reserve; no OpenStreetMap, WDPA or share-alike boundary data copied.",
+    "name": "Ria Celestun Mangrove"
+  },
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          -90.3255,
+          20.9355
+        ],
+        [
+          -90.3185,
+          20.9345
+        ],
+        [
+          -90.3115,
+          20.936
+        ],
+        [
+          -90.3075,
+          20.94
+        ],
+        [
+          -90.307,
+          20.9465
+        ],
+        [
+          -90.3095,
+          20.9525
+        ],
+        [
+          -90.315,
+          20.9565
+        ],
+        [
+          -90.3215,
+          20.9575
+        ],
+        [
+          -90.3265,
+          20.955
+        ],
+        [
+          -90.3285,
+          20.949
+        ],
+        [
+          -90.3285,
+          20.942
+        ],
+        [
+          -90.3255,
+          20.9355
+        ]
+      ]
+    ]
+  }
+}
