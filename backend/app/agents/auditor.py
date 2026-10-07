@@ -3,10 +3,13 @@
 The Auditor sees a compact bundle of facts that deterministic code already computed (metrics,
 valuation, base scores, events, the previous report), each with a citable ID. It may only:
 
-- shift health by an integer in [−10, +10], with a reason that cites the bundle;
-- set `agreement` in [0, 1], which feeds confidence;
+- shift health by an integer in [−10, +10], with a reason whose citations pass the per-sign
+  rules in `_justification_errors` (no double-counting of events `score:threat_pressure`
+  already prices);
+- set `agreement`, which feeds confidence: 0.5 unless a relevant event or validated evidence
+  is cited, and never more than 0.3 from it;
 - write flags and Markdown prose in which every claim cites a bundle ID and every number is
-  one of the bundle's trusted numbers.
+  one of the bundle's trusted numbers. Code appends the adjustment line itself.
 
 Model output is untrusted. After the JSON schema, `check_audit` re-checks every rule in code.
 A rejected answer is retried once with the errors fed back, then sent one tier down; if that
@@ -67,6 +70,8 @@ MAX_CITATIONS = 40
 UNTRUSTED_TITLE_CHARS = 160
 UNTRUSTED_SUMMARY_CHARS = 400
 MAX_FEEDBACK_ERRORS = 8
+REJECTED = "rejected"
+"""`llm_calls.status` of a schema-valid answer that `check_audit` refused."""
 
 ID_PREFIXES = ("metric", "valuation", "score", "event", "report")
 CITATION_RE = re.compile(
@@ -74,6 +79,23 @@ CITATION_RE = re.compile(
 )
 _EVENT_ID_RE = r"^[A-Za-z0-9_](?:[A-Za-z0-9_.\-]{0,62}[A-Za-z0-9_])?$"
 _HTML_TAG_RE = re.compile(r"<[A-Za-z!/?]")
+_LINK_RE = re.compile(r"\]\(|!\[|https?://", re.IGNORECASE)
+_MAX_SHOWN_ID = 80
+
+# Facts the deterministic score already prices (V, N, L, W, or the score and valuation
+# themselves). An adjustment reason that cites only these restates the score (dev-spec §7.7).
+_PRICED_METRICS = frozenset(
+    {
+        "metric:area_ha",
+        "metric:natural_fraction",
+        "metric:ndvi_mean",
+        "metric:ndvi_trend",
+        "metric:water_change",
+        "metric:forest_loss_5y_ha",
+    }
+)
+# Agreement may move off neutral by at most this much, and only with cited evidence.
+MAX_AGREEMENT_DEVIATION = Decimal("0.3")
 
 AuditSource = Literal["ultra", "super", "nano", "fallback"]
 _SOURCE: dict[Tier, AuditSource] = {
@@ -208,9 +230,10 @@ class AuditorInput(BaseModel):
         ]
 
     def trusted_lines(self) -> list[str]:
-        """Every line whose numbers the model may repeat: header, facts, event metadata."""
+        """Every line whose numbers the model may repeat: header (without the issuer-written
+        asset name), facts and event metadata."""
         return [
-            *self.header_lines(),
+            *self.header_lines()[1:],
             *(f"{fact.id} = {fact.value}" for fact in self.facts),
             *(_event_meta(event) for event in self.events),
         ]
@@ -493,9 +516,10 @@ def check_audit(output: AuditorOutput, bundle: AuditorInput) -> list[str]:
     except ValueError as exc:
         errors.append(str(exc))
     agreement = output.agreement
-    if not (
+    agreement_valid = (
         isinstance(agreement, int | float) and math.isfinite(agreement) and 0 <= agreement <= 1
-    ):
+    )
+    if not agreement_valid:
         errors.append(f"agreement must be between 0 and 1, got {agreement!r}")
 
     # Citations: all must resolve; key changes and a non-zero adjustment must cite something.
@@ -503,43 +527,37 @@ def check_audit(output: AuditorOutput, bundle: AuditorInput) -> list[str]:
         errors.append("citations is empty; cite the bundle IDs you used")
     if len(output.citations) > MAX_CITATIONS:
         errors.append(f"at most {MAX_CITATIONS} citations")
-    errors += [f"unknown citation {c!r}" for c in output.citations if c not in known]
+    errors += [
+        f"unknown citation in citations[{i}]: {_shown(c)}"
+        for i, c in enumerate(output.citations)
+        if c not in known
+    ]
     for field, text in _texts(output):
         errors += [
-            f"{field} cites unknown ID {c!r}" for c in inline_citations(text) if c not in known
+            f"{field} cites an unknown ID: {_shown(c)}"
+            for c in inline_citations(text)
+            if c not in known
         ]
     for i, text in enumerate(output.key_changes):
         if not inline_citations(text):
             errors.append(f"key_changes[{i}] has no [ID] citation")
     if output.summary_md.strip() and not inline_citations(output.summary_md):
         errors.append("summary_md has no [ID] citations; cite each claim inline")
-    if adjustment != 0:
-        cited = inline_citations(reason)
-        if not cited:
-            errors.append("a non-zero adjustment_reason must cite at least one bundle ID")
-        sign = 1 if adjustment > 0 else -1
-        for citation in cited:
-            event = bundle.event(citation)
-            if event is None:
-                continue
-            if not event.relevant:
-                errors.append(f"adjustment_reason cites {citation}, which is not relevant")
-            elif event.direction == -sign:
-                errors.append(
-                    f"adjustment_reason cites {citation} (direction {event.direction}) "
-                    f"for an adjustment of {adjustment:+d}"
-                )
+    if isinstance(adjustment, int) and adjustment != 0:
+        errors += _justification_errors(adjustment, reason, bundle)
+    if agreement_valid:
+        errors += _agreement_errors(output, bundle)
 
     # Flags: typed, cited, and consistent with the greenwashing rating and simulated data.
     if len(output.flags) > MAX_FLAGS:
         errors.append(f"at most {MAX_FLAGS} flags")
     for i, flag in enumerate(output.flags):
         if flag.type not in MODEL_FLAG_TYPES:
-            errors.append(f"flags[{i}].type {flag.type!r} is not an allowed flag type")
+            errors.append(f"flags[{i}].type is an invalid flag type; use one from the list")
         if not flag.citation:
             errors.append(f"flags[{i}] needs a citation")
         elif flag.citation not in known:
-            errors.append(f"flags[{i}] cites unknown ID {flag.citation!r}")
+            errors.append(f"flags[{i}] cites an unknown ID: {_shown(flag.citation)}")
     types = {flag.type for flag in output.flags}
     if (
         output.greenwashing_risk != "low"
@@ -571,26 +589,143 @@ def check_audit(output: AuditorOutput, bundle: AuditorInput) -> list[str]:
             errors.append(f"{field} must be under {MAX_ITEM_CHARS} characters")
         if _HTML_TAG_RE.search(text):
             errors.append(f"{field} contains HTML; use Markdown only")
+        if _LINK_RE.search(text):
+            errors.append(f"{field} contains a link or image; cite bundle IDs instead")
 
-    # Numbers: only trusted bundle numbers, plus the adjustment and the health it implies.
-    facts = [*bundle.trusted_lines(), *_implied_facts(bundle, adjustment)]
-    stripped_facts = [_strip_ids(fact) for fact in facts]
+    # Numbers: only trusted bundle numbers. The adjustment line (adjustment, adjusted health,
+    # reason) is written by code after acceptance, so the model never restates its own number.
+    facts = [_strip_ids(fact) for fact in bundle.trusted_lines()]
     for field, text in _texts(output):
-        invented = invented_numbers(_strip_ids(text), stripped_facts)
+        prose = _strip_ids(_strip_asset_name(text, bundle.asset_name))
+        invented = invented_numbers(prose, facts)
         if invented:
             errors.append(f"{field} uses numbers not in the bundle: {', '.join(invented[:5])}")
     return errors
 
 
-def _implied_facts(bundle: AuditorInput, adjustment: int) -> list[str]:
-    if not -MAX_AUDITOR_ADJUSTMENT <= adjustment <= MAX_AUDITOR_ADJUSTMENT:
+def _shown(value: str) -> str:
+    """A model-written ID, echoed back only when it is a well-formed citation."""
+    if len(value) <= _MAX_SHOWN_ID and CITATION_RE.fullmatch(value):
+        return repr(value)
+    return "an invalid citation"
+
+
+def _is_priced(citation: str) -> bool:
+    return (
+        citation.startswith(("score:", "valuation:", "metric:landcover."))
+        or citation in _PRICED_METRICS
+    )
+
+
+def _justifies_positive(event: AuditEvent) -> bool:
+    return (
+        event.relevant
+        and event.direction == 1
+        and (event.source == "news" or event.validated is True)
+    )
+
+
+def _is_agreement_evidence(event: AuditEvent) -> bool:
+    return event.relevant and (event.source == "news" or event.validated is True)
+
+
+def _justification_errors(adjustment: int, reason: str, bundle: AuditorInput) -> list[str]:
+    """Deterministic per-sign rules for what may justify a non-zero adjustment.
+
+    - Positive: a relevant direction +1 news event, or validated field evidence pointing up.
+    - Negative: a `metric:` or `report:previous.` fact that carries the disagreement, because
+      `score:threat_pressure` already prices every relevant negative event.
+    - Never: citations that are only facts the score already prices.
+    - Cited events must be relevant and must not point the other way.
+    """
+    cited = [c for c in dict.fromkeys(inline_citations(reason)) if c in set(bundle.ids)]
+    if not cited:
+        return ["a non-zero adjustment_reason must cite at least one bundle ID"]
+    errors: list[str] = []
+    sign = 1 if adjustment > 0 else -1
+    events = [event for c in cited if (event := bundle.event(c)) is not None]
+    for event in events:
+        if not event.relevant:
+            errors.append(f"adjustment_reason cites {event.citation_id}, which is not relevant")
+        elif event.direction == -sign:
+            errors.append(
+                f"adjustment_reason cites {event.citation_id} (direction {event.direction}) "
+                f"for an adjustment of {adjustment:+d}"
+            )
+    if all(_is_priced(c) for c in cited):
+        errors.append(
+            "adjustment_reason cites only facts the score already prices (score, valuation, "
+            "or metrics in V, N, L and W); cite the evidence that disagrees with them"
+        )
+    if sign > 0 and not any(_justifies_positive(event) for event in events):
+        errors.append(
+            "a positive adjustment must cite a relevant direction 1 news event or validated "
+            "field evidence"
+        )
+    if sign < 0 and not any(c.startswith(("metric:", "report:previous.")) for c in cited):
+        errors.append(
+            "a negative adjustment must also cite the metric or report fact that disagrees; "
+            "score:threat_pressure already prices relevant negative events"
+        )
+    return errors
+
+
+def _agreement_errors(output: AuditorOutput, bundle: AuditorInput) -> list[str]:
+    """Agreement moves confidence and the listing gate, so it needs evidence (dev-spec §7.7)."""
+    agreement = Decimal(repr(float(output.agreement)))
+    neutral = DEFAULT_AGREEMENT
+    if not any(event.relevant for event in bundle.events):
+        if agreement != neutral:
+            return [f"there are no relevant events or evidence, so agreement must be {neutral}"]
         return []
-    adjusted = min(max(bundle.base_health + adjustment, Decimal(0)), Decimal(100))
-    return [f"auditor_adjustment: {abs(adjustment)}", f"adjusted_health: {adjusted}"]
+    errors: list[str] = []
+    if abs(agreement - neutral) > MAX_AGREEMENT_DEVIATION:
+        errors.append(
+            f"agreement must stay between {neutral - MAX_AGREEMENT_DEVIATION} and "
+            f"{neutral + MAX_AGREEMENT_DEVIATION}"
+        )
+    if agreement != neutral:
+        cited = set(_cited_ids(output))
+        if not any(_is_agreement_evidence(e) for e in bundle.events if e.citation_id in cited):
+            errors.append(
+                f"an agreement other than {neutral} must cite a relevant news event or "
+                "validated field evidence"
+            )
+    return errors
+
+
+def _cited_ids(output: AuditorOutput) -> set[str]:
+    used = set(output.citations)
+    used.update(c for _, text in _texts(output) for c in inline_citations(text))
+    used.update(flag.citation for flag in output.flags if flag.citation)
+    return used
 
 
 def _strip_ids(text: str) -> str:
     return CITATION_RE.sub("[id]", text)
+
+
+def _strip_asset_name(text: str, name: str) -> str:
+    """The issuer-written asset name may be repeated, but its digits are not trusted facts."""
+    if len(name.strip()) < 3 or not any(ch.isalpha() for ch in name):
+        return text
+    for form in dict.fromkeys((name, html.unescape(name), html.escape(name))):
+        text = text.replace(form, "[asset]")
+    return text
+
+
+def adjustment_line(bundle: AuditorInput, adjustment: int, reason: str) -> str:
+    """The summary's adjustment sentence, written by code so its sign and numbers are right."""
+    if adjustment == 0:
+        return (
+            f"**Auditor adjustment:** none; health stays at the base score of "
+            f"{bundle.base_health} [score:base_health]."
+        )
+    health = scoring.adjusted_health(bundle.base_health, adjustment, reason)
+    return (
+        f"**Auditor adjustment:** {adjustment:+d}, from base health {bundle.base_health} to "
+        f"{health} out of 100 [score:base_health]. Reason: {reason.strip()}"
+    )
 
 
 # ----- running the Auditor --------------------------------------------------------------------
@@ -611,6 +746,9 @@ class AuditResult:
     """LLM calls made by `run_auditor` (each may include LLMClient retries and fallbacks)."""
     rejections: tuple[str, ...]
     """Validation errors of rejected answers, for the Agent Trace."""
+    greenwashing_risk: Literal["low", "medium", "high"] | None
+    """The audit's greenwashing risk, or None when it was **not assessed** (the no-op audit).
+    T27: show "not assessed" for None; `output.greenwashing_risk` is only a schema filler."""
     reasoning: str | None = None
 
 
@@ -660,6 +798,7 @@ def run_auditor(
         problems = check_audit(first.value, bundle)
         if not problems:
             return _accepted(first, bundle, rounds, rejections)
+        llm.mark(first, REJECTED)
         rejections += problems
 
         retry = [
@@ -671,6 +810,7 @@ def run_auditor(
         problems = check_audit(second.value, bundle)
         if not problems:
             return _accepted(second, bundle, rounds, rejections)
+        llm.mark(second, REJECTED)
         rejections += problems
 
         lower = _LOWER_TIER[second.tier]
@@ -680,6 +820,7 @@ def run_auditor(
             problems = check_audit(third.value, bundle)
             if not problems:
                 return _accepted(third, bundle, rounds, rejections)
+            llm.mark(third, REJECTED)
             rejections += problems
     except (LLMError, SQLAlchemyError) as exc:
         rejections.append(f"{type(exc).__name__}: {str(exc)[:200]}")
@@ -703,25 +844,26 @@ def _accepted(
     rounds: int,
     rejections: Sequence[str],
 ) -> AuditResult:
-    output = result.value
+    answer = result.value
+    line = adjustment_line(bundle, answer.auditor_adjustment, answer.adjustment_reason)
+    output = answer.model_copy(update={"summary_md": f"{answer.summary_md.rstrip()}\n\n{line}"})
     source = _SOURCE[result.tier]
     return AuditResult(
         output=output,
-        citations=_resolved_citations(output, bundle),
+        citations=_resolved_citations(answer, bundle),
         source=source,
         model=result.model,
         degraded=source != "ultra",
         fallback=False,
         rounds=rounds,
         rejections=tuple(rejections),
+        greenwashing_risk=output.greenwashing_risk,
         reasoning=result.reasoning,
     )
 
 
 def _resolved_citations(output: AuditorOutput, bundle: AuditorInput) -> tuple[str, ...]:
-    used = set(output.citations)
-    used.update(c for _, text in _texts(output) for c in inline_citations(text))
-    used.update(flag.citation for flag in output.flags if flag.citation)
+    used = _cited_ids(output)
     return tuple(i for i in bundle.ids if i in used)
 
 
@@ -730,15 +872,18 @@ def no_op_audit(
 ) -> AuditResult:
     """The audit used when no model answer passes: no adjustment, neutral agreement
     (`scoring.DEFAULT_AGREEMENT`, recorded as `agreement_source="default"` by `apply_audit`),
-    one `auditor_unavailable` flag and a template summary built only from bundle facts."""
+    one `auditor_unavailable` flag, greenwashing **not assessed** (`greenwashing_risk=None`;
+    the schema's required `output.greenwashing_risk` is a filler) and a template summary
+    built only from bundle facts."""
     citations = ["score:base_health", "score:base_grade", "valuation:value_mid"]
     value_mid = bundle.fact("valuation:value_mid") or "unavailable"
     summary = (
         f"## Ecological Performance Report — {bundle.period}\n\n"
         f"Health is **{bundle.base_health} out of 100 (grade {bundle.base_grade})** "
         "[score:base_health] [score:base_grade], the deterministic score from satellite metrics "
-        "and news. The AI Auditor was unavailable, so no adjustment was applied and confidence "
-        f"uses neutral agreement. Estimated ecosystem-service value: {value_mid} "
+        "and news. The AI Auditor was unavailable, so no adjustment was applied, confidence "
+        "uses neutral agreement and greenwashing risk was not assessed. Estimated "
+        f"ecosystem-service value: {value_mid} "
         "[valuation:value_mid]. Sandbox prices are play money; nothing here is a real security."
     )
     output = AuditorOutput(
@@ -767,6 +912,7 @@ def no_op_audit(
         fallback=True,
         rounds=rounds,
         rejections=tuple(rejections),
+        greenwashing_risk=None,
     )
 
 

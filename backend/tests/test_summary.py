@@ -226,6 +226,27 @@ def test_number_guard_accepts_legitimate_report_number_forms(summary: str) -> No
     assert result.summary_md == summary
 
 
+@pytest.mark.parametrize(
+    ("summary", "source"),
+    [
+        # Since T26 moved the guard to app/agents/guards.py, "87 %" and "87 percent" are read
+        # as the percentage fact "87%" (before, they were bare numbers and fell back).
+        ("Health is 77.6 / 100 with 87 % confidence.", ReportSummarySource.LIVE),
+        ("Health is 77.6 / 100 with 87 percent confidence.", ReportSummarySource.LIVE),
+        ("Health is 77.6 / 100; 40 % of the site is water.", ReportSummarySource.FALLBACK),
+        ("Health is 77.6 / 100; 40 percent of the site is water.", ReportSummarySource.FALLBACK),
+    ],
+)
+def test_number_guard_reads_spaced_and_spelled_out_percentages(
+    summary: str, source: ReportSummarySource
+) -> None:
+    transport = FakeTransport(reply(json.dumps({"summary_md": summary})))
+
+    result = generate_report_summary(wetland_report(), settings(), lambda: llm(transport))
+
+    assert result.source is source
+
+
 def test_live_summary_is_cached_per_report_id() -> None:
     transport = FakeTransport(
         reply(
