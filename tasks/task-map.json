@@ -774,7 +774,7 @@
       "deps": [
         "T09"
       ],
-      "status": "in_progress",
+      "status": "done",
       "assignees": [
         "melvin1117"
       ],
@@ -784,7 +784,7 @@
         "T26"
       ],
       "step": 3,
-      "chain": 9,
+      "chain": 0,
       "critical": false
     },
     {
@@ -918,11 +918,9 @@
       "deps": [
         "T24"
       ],
-      "status": "blocked",
+      "status": "ready",
       "assignees": [],
-      "waiting_on": [
-        "T24"
-      ],
+      "waiting_on": [],
       "unlocks": [
         "T47"
       ],
@@ -946,11 +944,9 @@
         "T15",
         "T24"
       ],
-      "status": "blocked",
+      "status": "ready",
       "assignees": [],
-      "waiting_on": [
-        "T24"
-      ],
+      "waiting_on": [],
       "unlocks": [
         "T27",
         "T47"
@@ -2250,21 +2246,24 @@
       "T67",
       "T40"
     ],
-    "D3": [],
+    "D3": [
+      "T26",
+      "T25"
+    ],
     "any": [
       "T54",
+      "T26",
       "T32",
       "T20",
-      "T35",
-      "T67"
+      "T25"
     ]
   },
   "counts": {
-    "done": 19,
-    "in_progress": 6,
+    "done": 20,
+    "in_progress": 5,
     "picked_early": 1,
-    "ready": 6,
-    "blocked": 45
+    "ready": 8,
+    "blocked": 43
   },
-  "data_hash": "e26cff8ae20bdbbe"
+  "data_hash": "32bba91ee7bba18d"
 }
