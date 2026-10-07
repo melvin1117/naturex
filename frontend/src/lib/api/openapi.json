@@ -362,6 +362,7 @@
           "market"
         ],
         "summary": "Place Order",
+        "description": "Fill a market order instantly. `is_primary` is true if any shares came from the IPO float.",
         "operationId": "place_order_orders_post",
         "requestBody": {
           "content": {

@@ -12,8 +12,11 @@ from sqlalchemy import update
 from sqlmodel import Session, col, select
 
 from app.db import engine
-from app.models import Asset, AssetStatus, Holding, User, UserRole, World
-from app.tools.earth_obs import DATA_DIR, load_site_metrics
+from app.market.engine import ipo
+from app.models import Asset, AssetStatus, Holding, Price, User, UserRole, World
+from app.tools.earth_obs import DATA_DIR, EarthObsMetrics, load_site_metrics
+from app.tools.scoring import is_wetland_from_landcover, score_metrics
+from app.tools.valuation import value_metrics
 
 # Stable IDs so re-running seed is a no-op.
 WORLD_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -127,6 +130,51 @@ def _upgrade_demo_site_content(session: Session) -> None:
     session.commit()
 
 
+def demo_ipo_price(metrics: EarthObsMetrics) -> Decimal:
+    """IPO price of a curated demo site from its deterministic rating (dev-spec §8).
+
+    Fair value uses the T14 valuation and the T15 score of the cached metrics, rated on the day
+    the freshest data window ends, with no Auditor or field evidence yet. T19 stores the matching
+    report; T59 replaces this for listings launched by their owner.
+    """
+    valuation = value_metrics(metrics)
+    score = score_metrics(
+        metrics,
+        is_wetland=is_wetland_from_landcover(metrics.landcover),
+        data_age_days=0,
+        forest_loss_last_12m_ha=metrics.forest_loss_last_12m_ha,
+    )
+    listing = ipo(
+        value_mid=Decimal(valuation.value_mid),
+        health=score.health,
+        confidence=score.confidence,
+        total_shares=TOTAL_SHARES,
+        retained_pct=RETAINED_PCT,
+    )
+    return listing.price_change.price
+
+
+def _seed_ipo_prices(session: Session) -> None:
+    """One `ipo` price per listed demo asset without a price, so trading works after `make seed`."""
+    for site in DEMO_SITES:
+        asset = session.exec(
+            select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == site.key)
+        ).one()
+        has_price = session.exec(
+            select(Price.asset_id).where(Price.world_id == WORLD_ID, Price.asset_id == asset.id)
+        ).first()
+        if asset.status == AssetStatus.LISTED and has_price is None:
+            session.add(
+                Price(
+                    world_id=WORLD_ID,
+                    asset_id=asset.id,
+                    price=demo_ipo_price(load_site_metrics(site.key)),
+                    reason="ipo",
+                )
+            )
+    session.commit()
+
+
 def seed(session: Session) -> None:
     """Insert template world, personas and demo assets if missing."""
     if session.get(World, WORLD_ID) is None:
@@ -198,11 +246,15 @@ def seed(session: Session) -> None:
             )
     session.commit()
 
+    _seed_ipo_prices(session)
+
 
 def main() -> None:
     with Session(engine) as session:
         seed(session)
-    print("Seed complete: template world, 4 personas, 3 demo assets, community holdings.")
+    print(
+        "Seed complete: template world, 4 personas, 3 demo assets, community holdings, IPO prices."
+    )
 
 
 if __name__ == "__main__":

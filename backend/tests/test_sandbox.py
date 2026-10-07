@@ -165,8 +165,18 @@ def test_template_holdings_prices_and_ledger_are_copied_and_remapped(session: Se
         select(Holding).where(Holding.world_id == world.id, Holding.asset_id == wetland.id)
     ).one()
     assert (holding.user_id, holding.shares) == (rosa.id, 510_000)
-    price = session.exec(select(Price).where(Price.world_id == world.id)).one()
-    assert (price.asset_id, price.price, price.reason) == (wetland.id, Decimal("7.9200"), "ipo")
+    world_assets = {a.id: a.site_key for a in assets(session, world.id)}
+    template_assets = {a.id: a.site_key for a in assets(session, WORLD_ID)}
+
+    def by_site(
+        world_id: UUID, keys: dict[UUID, str | None]
+    ) -> list[tuple[str | None, Decimal, str | None]]:
+        rows = session.exec(select(Price).where(Price.world_id == world_id)).all()
+        return sorted((keys[p.asset_id], p.price, p.reason) for p in rows)
+
+    copied_prices = by_site(world.id, world_assets)
+    assert copied_prices == by_site(WORLD_ID, template_assets)
+    assert (DEMO_SITES[0].key, Decimal("7.9200"), "ipo") in copied_prices
     copied = entries_for(session, wetland.id)
     assert [e.kind for e in copied] == [LedgerKind.LISTING, LedgerKind.PRICE_ANCHOR]
     assert verify(copied).valid, "a copied chain must still verify"

@@ -133,7 +133,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Place Order */
+        /**
+         * Place Order
+         * @description Fill a market order instantly. `is_primary` is true if any shares came from the IPO float.
+         */
         post: operations["place_order_orders_post"];
         delete?: never;
         options?: never;

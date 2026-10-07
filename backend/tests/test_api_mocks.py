@@ -1,4 +1,5 @@
-"""Contract smoke tests for mock API routes (T08). Ledger coverage is in test_ledger.py."""
+"""Contract smoke tests for mock API routes (T08). Ledger coverage is in test_ledger.py;
+orders/portfolio coverage is in test_market_api.py."""
 
 from __future__ import annotations
 
@@ -41,18 +42,6 @@ def test_create_asset_accepted() -> None:
     )
     assert res.status_code == 202
     assert "run_id" in res.json()
-
-
-def test_orders_and_portfolio() -> None:
-    order = client.post(
-        "/orders",
-        json={"asset_id": str(WETLAND_ID), "side": "buy", "qty": 100},
-    )
-    assert order.status_code == 200
-    assert order.json()["fill_price"]
-    port = client.get("/portfolio")
-    assert port.status_code == 200
-    assert "cash_balance" in port.json()
 
 
 def test_admin_and_copilot() -> None:
