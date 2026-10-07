@@ -494,6 +494,38 @@ Confidence: `100 × (0.4·coverage + 0.3·agreement + 0.2·evidence + 0.1·recen
 
 Listing gate: `confidence ≥ 70 AND grade ≥ C AND forest_loss_last_12m < 1% of area`.
 
+**As built (T15, `backend/app/tools/scoring.py`, method version `naturex-scoring/1.0`).** The formulas above are implemented exactly, with these refinements:
+- **Exact arithmetic and rounding.** All maths is `Decimal`; float inputs go through their shortest repr. NaN, ±inf and out-of-domain inputs (NDVI outside [−1, 1], natural fraction outside [0, 1], water change outside [−100, 100], negative loss, area ≤ 0, severity outside 1–5, direction outside {−1, 0, 1}) raise an error instead of being clamped. Components and confidence terms keep **full precision** in every sum; only the stored snapshot shows them rounded to 4 decimal places. `base_health`, `health` and `confidence` are rounded once, at the end, to **1 decimal place, half-up**, and the grade and gate are decided on those rounded values, so the displayed number is always the graded one (a displayed 90.0 is AAA, never AA). Band edges are inclusive lower bounds (90 → AAA, 89.9 → AA). Rounding the components first could flip a grade: the hero with natural fraction 0.587 is exactly 69.949685 → 69.9 (BBB), while 4-decimal components would give 69.95 → 70.0 (A).
+- **V: the trend counts only when significant.** `ndvi_trend` is used only when its Mann-Kendall p < 0.05 (`ndvi_trend_details.significant_05`); otherwise it's treated as 0, i.e. "no significant change" (ADR-0004 finding 2).
+- **W: what counts as a wetland.** Wetland status is decided **once per asset** and passed explicitly to every rating: either the asset's declared ecosystem type, or `water + flooded_vegetation ≥ 0.20` in its **baseline** Dynamic World land cover (`is_wetland_from_landcover`). It's never re-derived from the data version being scored: otherwise a wetland drained below 20% water would switch to W = 1 and gain health (the hero at 17% water would jump from 76.2, A, to 84.7, AA). Non-wetlands have W = 1. `water_change` is the stored JRC `change_abs` mean (range −100..100).
+- **T** sums severity over events with `direction = −1` only, and skips any marked `relevant = false` by the News Scout.
+- **Auditor adjustment** must be an integer in [−10, +10] (matching `AuditorOutput`). Out-of-range values are **rejected, not clamped**, and a non-zero adjustment needs a non-empty reason. Final health is clamped to [0, 100].
+- **Agreement before the Auditor runs** defaults to 0.5 (neutral), recorded as `agreement_source = "default"`. Recency uses the age of the freshest Sentinel-2 window (the NDVI window end) on the rating date. `agb_sd` isn't in the confidence formula yet: GEDI L4B's standard-error band isn't in the cached metrics (follow-up).
+- **Gate loss proxy.** `forest_loss_last_12m` isn't in the cached metrics yet (T13). Until it is, the gate uses the full 5-year Hansen loss as a conservative upper bound, recorded as `forest_loss_basis = "5y_total_proxy"`. L always uses the 5-year loss.
+- **Gate failure codes**, in this order: `confidence_below_70`, `grade_below_c`, `forest_loss_last_12m_at_least_1pct_of_area`.
+
+**Worked example: hero wetland (`wetland_mx.json`, rated 2026-10-07, data age 6 days, no Auditor yet, no field evidence).** Water + flooded vegetation = 0.2484 + 0.0296 = 0.278 ≥ 0.20, so it's a wetland. The Sen's slope +0.0097/yr has p = 0.0986, so it's not used.
+
+| Term | Calculation | Value |
+|---|---|---|
+| V | clamp(0.5 + 0/0.02) × 0.5 + clamp(0.6008/0.8) × 0.5 = 0.25 + 0.3755 | 0.6255 |
+| N | natural fraction | 0.8389 |
+| L | 1 − clamp(0 / (0.1 × 206.6995)) | 1.0000 |
+| W | clamp(0.5 − 6.6021/100) | 0.433979 |
+| T | no events | 1.0000 |
+| base_health | 100 × (0.30·0.6255 + 0.25·0.8389 + 0.20·1 + 0.15·0.433979 + 0.10·1) = 76.247185 | **76.2 → A** |
+| confidence | 100 × (0.4·min(73/24, 1) + 0.3·0.5 + 0.2·0.3 + 0.1·1) | **71.0** |
+| gate | 71.0 ≥ 70; A ≥ C; loss 0 ha (5-year proxy) < 2.066995 ha | **passes** |
+
+With the mock encroachment news (severity 4, direction −1): T = 1 − 4/15 = 0.7333…, base_health = 73.580518… → **73.6, grade A**; confidence 71.0; the gate passes.
+
+**The hero only just clears the confidence gate** (T26/T38 take note). At the default agreement of 0.5 it sits at 71.0, so any one of these fails the gate: Auditor agreement below 0.465 (0.465 gives exactly 69.95 → 70.0), fewer than 24 cloud-free observations (23 gives 69.3), or data 90 or more days old (66.0). Field evidence would add 14 points.
+
+Each gate failure on its own (all asserted in `tests/test_scoring.py`):
+- Hero with 10 cloud-free observations: coverage 10/24, confidence 47.666… → 47.7 → `confidence_below_70`.
+- Hero with 2.1 ha of loss in the last 12 months (limit 2.066995 ha) → `forest_loss_last_12m_at_least_1pct_of_area`.
+- A degraded non-wetland parcel (NDVI 0.2, natural fraction 0.05, 30 ha of loss over 5 years but none in the last 12 months, three severity-5 threats): V 0.375, N 0.05, L 0, W 1, T 0 → health 27.5, grade D → `grade_below_c`.
+
 ### 7.5 News Scout (Tavily + Nemotron Nano)
 1. Build 2–3 queries from asset name, nearest town (reverse geocode via OpenStreetMap Nominatim, max 1 request/s with a custom User-Agent, cached per asset), and keywords: `"<place> wetland factory permit"`, `"<place> fire OR drought OR pollution"`, `"<place> restoration OR protected area"`.
 2. `tavily.search(query, topic="news", days=lookback, max_results=5)`.

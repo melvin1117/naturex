@@ -143,8 +143,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` · **Deps:** T06, T11 · **Files:** `backend/app/tools/valuation.py`, `backend/data/coefficients.csv`, `backend/data/coastline/*`, `backend/tests/test_valuation.py`
 
 ### T15 · Scoring, grade, confidence and listing gate (#26) — D2 · M · Must · B5
-- [ ] Pure functions for V, N, L, W, T, health, grade, confidence and the listing gate (dev-spec §7.4, as updated by T06)
-- [ ] Unit tests for bounds, thresholds and the worked example
+- [x] Pure functions for V, N, L, W, T, health, grade, confidence and the listing gate (dev-spec §7.4, as updated by T06)
+- [x] Unit tests for bounds, thresholds and the worked example
 
 **Verify:** `make test` · **Deps:** T11 · **Files:** `backend/app/tools/scoring.py`, `backend/tests/test_scoring.py`
 
