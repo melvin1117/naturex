@@ -499,7 +499,7 @@ Fallback rows add the flag `low_bound_fallback:<biome>`. All mid values were tra
 
 **Mangrove vs marsh:** mangroves grow "largely between 30° N and 30° S latitude" (Giri 2021, *Remote Sensing* 13:563, CC BY), so coastal flooded vegetation at |lat| ≥ 30° is valued as Brander's "Coastal systems", which includes tidal and salt marshes (ESVD classification: de Groot, Brander & Solomonides 2020, Appendix 6, codes 3.2–3.3; Brander 2024 footnote 7 splits mangroves out of it). Outlying mangroves beyond 30° (Bermuda, Japan, south-east Australia, South Africa) are valued conservatively as coastal systems unless GMW maps them.
 
-**Global Mangrove Watch share:** Dynamic World labels most mangrove canopy as `trees`. When the optional input `mangrove_fraction` (GMW v3, Bunting et al. 2022, CC BY 4.0; read from `EarthObsMetrics` with `getattr` until T13 adds it) is set, `m = min(mangrove_fraction, trees + flooded_vegetation)` is valued as Mangrove, taken from flooded_vegetation first and then from trees, which shrink by that amount. GMW is an observed map, so this ignores the coastal check and latitude (the coastal result is still reported); a capped fraction adds the flag `mangrove_fraction_capped`. The result lists the reassigned share as `gmw_mangrove` plus a `mangrove` block (input, applied, from each class). There is no "coastal trees = mangrove" heuristic.
+**Global Mangrove Watch share:** Dynamic World labels most mangrove canopy as `trees`. When the optional input `mangrove_fraction` (GMW v3, Bunting et al. 2022, CC BY 4.0; read from the precomputed metrics, T13) is set, `m = min(mangrove_fraction, trees + flooded_vegetation)` is valued as Mangrove, taken from flooded_vegetation first and then from trees, which shrink by that amount. GMW is an observed map, so this ignores the coastal check and latitude (the coastal result is still reported); a capped fraction adds the flag `mangrove_fraction_capped`. The result lists the reassigned share as `gmw_mangrove` plus a `mangrove` block (input, applied, from each class). There is no "coastal trees = mangrove" heuristic.
 
 **Coastal** = centroid within 5 km of the Natural Earth 1:10m coastline (v5.1.2, public domain), bundled unmodified as `backend/data/coastline/ne_10m_coastline.geojson.gz` (3.4 MB; `python3 scripts/fetch_coastline.py` regenerates it byte for byte). Distance is geodesic: STRtree candidates within a lon/lat box that contains the search disc, measured in an azimuthal equidistant projection centred on the point. The index loads lazily, once, behind a lock. Coastal `water` stays lakes/rivers; the result then carries the flag `coastal_water_as_lakes` so the report can disclose it (lagoons may fit Brander's "Coastal systems" better).
 
@@ -515,7 +515,7 @@ biomass_tCO2 = AGB_t_ha × (1 + R) × area_ha × 0.47 × 44/12
 soc_tCO2     = SOC_tC_ha × wetland_area_ha × 44/12          (flooded vegetation + GMW mangrove)
 seq_tCO2_yr  = Σ_u area_ha × share_u × G_u × (1 + R_u) × 0.47 × 44/12     (gross Tier 1 biomass gain)
 ```
-AGB is the site mean (`biomass_t_ha`), which is mostly woody biomass, so **R comes from woody cover**: when trees or GMW mangrove are present, R is their share-weighted ratio (trees only → the trees row for the climate zone); otherwise R is the ratio of the dominant vegetated class (ties by name); with no vegetation, R = 0. The result reports `root_shoot_ratio_basis` (`woody`, `dominant:<class>` or `none`). SOC (SoilGrids, t C/ha, 0–30 cm) is an optional input until T13 adds it; with wetland area and no SOC, `soc_tCO2` is null and the result is flagged `soc_missing`. Factors are in `backend/data/carbon_factors.csv`, keyed by **biome** so carbon always follows the same mapping as the money, with the moist/wet row used wherever IPCC splits by moisture:
+AGB is the site mean (`biomass_t_ha`), which is mostly woody biomass, so **R comes from woody cover**: when trees or GMW mangrove are present, R is their share-weighted ratio (trees only → the trees row for the climate zone); otherwise R is the ratio of the dominant vegetated class (ties by name); with no vegetation, R = 0. The result reports `root_shoot_ratio_basis` (`woody`, `dominant:<class>` or `none`). SOC (SoilGrids, t C/ha, 0–30 cm) comes from the precomputed metrics (T13) and may be missing for a new site; with wetland area and no SOC, `soc_tCO2` is null and the result is flagged `soc_missing`. Factors are in `backend/data/carbon_factors.csv`, keyed by **biome** so carbon always follows the same mapping as the money, with the moist/wet row used wherever IPCC splits by moisture:
 | Biome (zone) | R | Source | G (t d.m./ha/yr) | Source |
 |---|---|---|---|---|
 | Tropical forest | 0.20 | IPCC 2006 V4 Ch4 Table 4.4, tropical moist deciduous, AGB < 125 | 2.0 | Table 4.9, tropical moist deciduous, N & S America, > 20 y |
@@ -525,6 +525,16 @@ AGB is the site mean (`biomass_t_ha`), which is mostly woody biomass, so **R com
 | Mangrove | 0.492 | IPCC 2013 Wetlands Suppl. Ch4 Table 4.5, mangroves, tropical wet | 9.9 | Table 4.4, tropical wet (the Subtropical rows are internally inconsistent and not used) |
 | Coastal systems, swamps / floodplains | 0 | no Tier 1 biomass default (tidal / salt marsh, inland herbaceous wetland) | 0 | carbon comes from SOC |
 Carbon fraction 0.47: IPCC 2006 V4 Ch4 Table 4.3.
+
+**With today's committed metrics (T13: ESA CCI biomass, SoilGrids SOC, GMW mangrove fraction)**, `value_metrics` gives (Int$2020/yr, low / mid = high; total carbon stock tCO₂; sequestration tCO₂/yr):
+
+| Site | Low | Mid = high | Carbon stock | Sequestration |
+|---|---|---|---|---|
+| Wetland (hero) | 2,121,067 | 2,669,511 | 8,828 (incl. SOC) | 306 |
+| Ría Celestún mangrove | 2,466,117 | 33,801,307 | 130,883 (incl. SOC) | 10,910 |
+| Sumidero restoration forest | 1,295,918 | 2,424,480 | 52,657 | 1,005 |
+
+The mangrove's wide range is real: the published mangrove median is far below the mean (Costanza 2014 Table 4). The worked example below stays pinned to the T11 inputs so it doesn't move when the cache is recomputed.
 
 **Worked example: hero wetland** (T11 snapshot of `wetland_mx.json`, pinned as literals in `backend/tests/test_valuation.py` so it doesn't move when T13 recomputes the JSON): 206.6995 ha, centroid 19.2873, −99.0976 (tropical by the latitude rule), 253.354 km from the coast (inland), AGB 9.4681 t/ha, no SOC or GMW input yet.
 | Class | Share | Area (ha) | Biome | low / **mid = high** coefficient | **$/yr (Int$2020)** low / **mid = high** |

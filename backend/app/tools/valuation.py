@@ -827,13 +827,12 @@ def inputs_from_metrics(
 ) -> ValuationInputs:
     """Build valuation inputs from cached Earth observation metrics (runs the coastal check).
 
-    ``soc_t_c_ha`` and ``mangrove_fraction`` fall back to fields of the same name on the
-    metrics; T13 adds them, so they're read with ``getattr`` until then.
+    ``soc_t_c_ha`` and ``mangrove_fraction`` default to the precomputed metrics (T13).
     """
     if soc_t_c_ha is None:
-        soc_t_c_ha = getattr(metrics, "soc_t_c_ha", None)
+        soc_t_c_ha = metrics.soc_t_c_ha
     if mangrove_fraction is None:
-        mangrove_fraction = getattr(metrics, "mangrove_fraction", None)
+        mangrove_fraction = metrics.mangrove_fraction
     index = coastline or default_coastline()
     lat, lon = metrics.centroid.lat, metrics.centroid.lon
     return ValuationInputs.model_validate(

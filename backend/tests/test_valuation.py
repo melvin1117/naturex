@@ -13,7 +13,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.tools.coastline import default_coastline
-from app.tools.earth_obs import EarthObsMetrics, load_site_metrics
+from app.tools.earth_obs import load_site_metrics
 from app.tools.valuation import (
     CARBON_FRACTION,
     DW_CLASSES,
@@ -667,14 +667,17 @@ def test_valuation_is_deterministic() -> None:
     assert value_metrics(metrics) == value_metrics(metrics)
 
 
-def test_adapter_reads_optional_fields_once_t13_adds_them() -> None:
-    class MetricsWithT13Fields(EarthObsMetrics):
-        mangrove_fraction: float | None = None
-        soc_t_c_ha: float | None = None
-
+def test_adapter_reads_t13_fields_from_metrics() -> None:
     base = load_site_metrics("wetland_mx")
-    metrics = MetricsWithT13Fields(**base.model_dump(), mangrove_fraction=0.02, soc_t_c_ha=40.0)
+    inputs = inputs_from_metrics(base)
+    assert inputs.mangrove_fraction == Decimal(str(base.mangrove_fraction))
+    assert inputs.soc_t_c_ha == Decimal(str(base.soc_t_c_ha))
+
+    metrics = base.model_copy(update={"mangrove_fraction": 0.02, "soc_t_c_ha": 40.0})
     inputs = inputs_from_metrics(metrics)
     assert inputs.mangrove_fraction == Decimal("0.02")
     assert inputs.soc_t_c_ha == Decimal("40.0")
-    assert inputs_from_metrics(base).mangrove_fraction is None
+
+    missing = base.model_copy(update={"mangrove_fraction": None, "soc_t_c_ha": None})
+    assert inputs_from_metrics(missing).mangrove_fraction is None
+    assert inputs_from_metrics(missing).soc_t_c_ha is None
