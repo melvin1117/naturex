@@ -12,11 +12,13 @@ from typing import Any, cast
 from uuid import UUID
 
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import Connection, delete, insert, text
 from sqlalchemy.engine import CursorResult
 from sqlmodel import Session, col, select
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
+from starlette.types import Receive, Scope, Send
 
 from app.db import engine
 from app.models import StreamEventType, WorldEvent
@@ -24,14 +26,19 @@ from app.schemas import StreamEvent
 
 REPLAY_BATCH_LIMIT = 100
 STREAM_REPLAY_BATCH_LIMIT = 100
-STREAM_POLL_INTERVAL_SECONDS = 0.5
+STREAM_POLL_INTERVAL_SECONDS = 1.0
 HEARTBEAT_INTERVAL_SECONDS = 15.0
 STREAM_MAX_SECONDS = 300.0
-STREAM_MAX_CONCURRENT = 4
 STREAM_ACQUIRE_TIMEOUT_SECONDS = 0.01
 SSE_RETRY_MS = 3000
 EVENT_RETENTION = timedelta(hours=24)
-_stream_semaphore = asyncio.BoundedSemaphore(STREAM_MAX_CONCURRENT)
+_stream_semaphore_limit = 0
+_stream_semaphore = asyncio.BoundedSemaphore(1)
+
+
+async def _empty_stream() -> AsyncIterator[str]:
+    if False:
+        yield ""
 
 
 @contextmanager
@@ -163,10 +170,24 @@ def _poll_once(world_id: UUID, cursor: int | None) -> list[StreamEvent]:
         )
 
 
-async def acquire_stream_slot() -> Callable[[], None] | None:
+def _stream_slots(max_concurrent: int) -> asyncio.BoundedSemaphore:
+    global _stream_semaphore, _stream_semaphore_limit
+    if max_concurrent < 1:
+        raise ValueError("event_stream_max_concurrent must be at least 1")
+    if _stream_semaphore_limit != max_concurrent:
+        _stream_semaphore = asyncio.BoundedSemaphore(max_concurrent)
+        _stream_semaphore_limit = max_concurrent
+    return _stream_semaphore
+
+
+def stream_slots_available(max_concurrent: int) -> int:
+    return cast(int, cast(Any, _stream_slots(max_concurrent))._value)
+
+
+async def acquire_stream_slot(max_concurrent: int) -> Callable[[], None] | None:
     try:
         await asyncio.wait_for(
-            _stream_semaphore.acquire(),
+            _stream_slots(max_concurrent).acquire(),
             timeout=STREAM_ACQUIRE_TIMEOUT_SECONDS,
         )
     except TimeoutError:
@@ -181,6 +202,43 @@ async def acquire_stream_slot() -> Callable[[], None] | None:
             _stream_semaphore.release()
 
     return release
+
+
+class EventStreamResponse(StreamingResponse):
+    def __init__(
+        self,
+        world_id: UUID,
+        request: Request,
+        since_id: int | None,
+        max_concurrent: int,
+    ) -> None:
+        self.world_id = world_id
+        self.request = request
+        self.since_id = since_id
+        self.max_concurrent = max_concurrent
+        super().__init__(
+            _empty_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        release_slot = await acquire_stream_slot(self.max_concurrent)
+        if release_slot is None:
+            await JSONResponse(
+                {"detail": "too_many_event_streams"},
+                status_code=503,
+                headers={"Retry-After": str(SSE_RETRY_MS // 1000)},
+            )(scope, receive, send)
+            return
+        self.body_iterator = stream(self.world_id, self.request, self.since_id, release_slot)
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            release_slot()
 
 
 async def stream(

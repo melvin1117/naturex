@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
-from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from app import events as event_bus
@@ -60,22 +59,14 @@ def poll_events(
 async def stream_events(
     request: Request,
     world: CurrentWorldForStream,
+    settings: SettingsDep,
     last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
     since_id: Annotated[int | None, Query(ge=0)] = None,
-) -> StreamingResponse:
+) -> event_bus.EventStreamResponse:
     cursor = _parse_last_event_id(last_event_id) if last_event_id is not None else since_id
-    release_slot = await event_bus.acquire_stream_slot()
-    if release_slot is None:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "too_many_event_streams",
-            headers={"Retry-After": str(event_bus.SSE_RETRY_MS // 1000)},
-        )
-    return StreamingResponse(
-        event_bus.stream(world.id, request, cursor, release_slot),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+    return event_bus.EventStreamResponse(
+        world.id,
+        request,
+        cursor,
+        settings.event_stream_max_concurrent,
     )

@@ -7,13 +7,16 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
+from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlmodel import Session, col, select
+from starlette.requests import Request
+from starlette.types import Message, Scope
 
 from app import events
 from app.config import get_settings
@@ -241,6 +244,47 @@ def test_sse_stream_releases_request_db_connection_between_polls(
         while time.monotonic() < deadline and engine.pool.checkedout() != 0:
             time.sleep(0.01)
         assert engine.pool.checkedout() == 0
+
+
+async def test_event_stream_response_releases_slot_when_response_fails_before_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    max_concurrent = 2
+    assert events.stream_slots_available(max_concurrent) == max_concurrent
+
+    async def receive() -> Message:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: Message) -> None:
+        _ = message
+
+    scope: Scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/events/stream",
+        "raw_path": b"/events/stream",
+        "query_string": b"",
+        "headers": [],
+        "client": ("127.0.0.1", 1),
+        "server": ("testserver", 80),
+    }
+    response = events.EventStreamResponse(uuid4(), Request(scope, receive), None, max_concurrent)
+
+    async def fail_before_body(
+        self: StreamingResponse, scope: Scope, receive: object, send: object
+    ) -> None:
+        _ = (self, scope, receive, send)
+        raise RuntimeError("response failed before stream body")
+
+    monkeypatch.setattr(StreamingResponse, "__call__", fail_before_body)
+
+    with pytest.raises(RuntimeError, match="before stream body"):
+        await response(scope, receive, send)
+
+    assert events.stream_slots_available(max_concurrent) == max_concurrent
 
 
 @requires_db
