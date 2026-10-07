@@ -185,11 +185,9 @@ def stream_slots_available(max_concurrent: int) -> int:
 
 
 async def acquire_stream_slot(max_concurrent: int) -> Callable[[], None] | None:
+    slots = _stream_slots(max_concurrent)
     try:
-        await asyncio.wait_for(
-            _stream_slots(max_concurrent).acquire(),
-            timeout=STREAM_ACQUIRE_TIMEOUT_SECONDS,
-        )
+        await asyncio.wait_for(slots.acquire(), timeout=STREAM_ACQUIRE_TIMEOUT_SECONDS)
     except TimeoutError:
         return None
 
@@ -199,7 +197,8 @@ async def acquire_stream_slot(max_concurrent: int) -> Callable[[], None] | None:
         nonlocal released
         if not released:
             released = True
-            _stream_semaphore.release()
+            # Release the semaphore we acquired, even if the limit changed meanwhile.
+            slots.release()
 
     return release
 
