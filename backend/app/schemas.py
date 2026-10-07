@@ -18,6 +18,10 @@ from app.models import AssetStatus, LedgerKind, UserRole
 class NewsScoutItem(BaseModel):
     """Nemotron Nano classification of one Tavily hit (dev-spec §7.5)."""
 
+    id: str | None = Field(
+        default=None,
+        description="Stable event ID derived from the source URL, so reports can cite it.",
+    )
     relevant: bool
     impact_type: Literal[
         "encroachment",

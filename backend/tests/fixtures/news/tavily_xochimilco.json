@@ -1,0 +1,29 @@
+{
+  "query": "Xochimilco wetland factory permit",
+  "results": [
+    {
+      "title": "Industrial park expansion cleared near Xochimilco wetlands",
+      "url": "https://example.com/news/xochimilco-industrial-park",
+      "published_date": "2026-09-12",
+      "content": "Authorities approved an industrial park expansion bordering canals near Xochimilco, raising concern from wetland residents.",
+      "raw_content": "Authorities approved an industrial park expansion bordering canals near Xochimilco. Local conservation groups warned that truck traffic and drainage works could disturb the wetland edge.",
+      "score": 0.87
+    },
+    {
+      "title": "Industrial park expansion cleared near Xochimilco wetlands",
+      "url": "https://example.com/news/xochimilco-industrial-park",
+      "published_date": "2026-09-12",
+      "content": "Duplicate syndicated snippet of the same story.",
+      "raw_content": "Duplicate syndicated snippet of the same story.",
+      "score": 0.55
+    },
+    {
+      "title": "Weekend food festival returns to Xochimilco",
+      "url": "https://example.com/news/xochimilco-food-festival",
+      "published_date": "2026-09-13",
+      "content": "A tourism story unrelated to ecological condition.",
+      "raw_content": "A tourism story unrelated to ecological condition.",
+      "score": 0.31
+    }
+  ]
+}

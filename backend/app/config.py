@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     model_embed: str = ""
 
     tavily_api_key: str = ""
+    nominatim_user_agent: str = "NatureX/0.1 (https://github.com/melvin1117/naturex)"
     ee_service_account_json: str = ""
 
 

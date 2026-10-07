@@ -1,0 +1,14 @@
+{
+  "place_id": 285912613,
+  "licence": "Data © OpenStreetMap contributors, ODbL 1.0. https://osm.org/copyright",
+  "lat": "19.2633",
+  "lon": "-99.1036",
+  "display_name": "Xochimilco, Mexico City, Mexico",
+  "address": {
+    "suburb": "Xochimilco",
+    "city": "Mexico City",
+    "state": "Mexico City",
+    "country": "Mexico",
+    "country_code": "mx"
+  }
+}

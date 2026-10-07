@@ -190,8 +190,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make fe-check`; matches P05 · **Deps:** T21, T19 · **Files:** `frontend/src/app/asset/[id]/page.tsx`, `frontend/src/components/ReportView.tsx`, charts
 
 ### T24 · News Scout (#35) — D3 · M · Must · B4
-- [ ] Nominatim reverse geocode (1 req/s, cached) → Tavily queries → Nemotron Nano classification into the event schema; untrusted-content guard; 24 h cache
-- [ ] Contract tests on recorded fixtures (no live calls in CI)
+- [x] Nominatim reverse geocode (1 req/s, cached) → Tavily queries → Nemotron Nano classification into the event schema; untrusted-content guard; 24 h cache
+- [x] Contract tests on recorded fixtures (no live calls in CI)
 
 **Verify:** `make test`; manual run for the hero site · **Deps:** T09 · **Files:** `backend/app/agents/news_scout.py`, `backend/tests/fixtures/news/*`, `backend/tests/test_news_scout.py`
 
