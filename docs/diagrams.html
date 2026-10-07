@@ -445,13 +445,13 @@ Low / High = same with the low / high coefficient  →  always shown as a range<
       </div>
       <div class="branch">
         <div>📄 Title or agrarian certificate, assembly minutes (consent), community registration</div>
-        <div>🔎 Each check shows pass / warn / fail and what it found: file integrity, not reused, no boundary overlap, consent present, <b>AI reads the document and compares</b> name, place and area with the listing (it only suggests)</div>
-        <div>🧑‍⚖️ An admin approves or rejects with a reason; in the live world the IPO needs “verified”</div>
-        <div>🔗 The ledger records the decision, the reviewer role and document hashes (never the documents); investors see <i>“How this listing was verified”</i>, including what was <b>not</b> checked</div>
+        <div>🔎 Each check shows pass / warn / fail and what it found: accepted file format, not reused, no boundary overlap, consent-labelled document attached; optionally an <b>AI heuristic</b> compares name, place and area with the listing (it only suggests, and the reviewer sees the source)</div>
+        <div>🧑‍⚖️ An admin approves or rejects with a reason; in the live world the IPO needs “verified”; changing the land or documents resets it; revoking suspends trading</div>
+        <div>🔗 The ledger records the decision, the reviewer role and private document commitments (never the documents or names); investors see <i>“How this listing was verified”</i>, including what was <b>not</b> checked</div>
       </div>
     </div>
     <div class="grid g2" style="margin-top:12px">
-      <div class="card"><div class="ic">🏁</div><h4>Hackathon</h4><p>Documents + visible checklist + AI consistency check + admin decision. The badge says “Documents reviewed by NatureX (hackathon process)”, never “ownership proven”.</p></div>
+      <div class="card"><div class="ic">🏁</div><h4>Hackathon</h4><p>Documents + visible checklist + admin decision (+ an AI consistency hint if time allows). The badge says “Documents reviewed by NatureX (hackathon process)”, never “ownership proven”.</p></div>
       <div class="card"><div class="ic">🏛️</div><h4>Real world (same model, more checks)</h4><p>Land-registry match (in Mexico: RAN for communal and ejido land, the public property registry for private land) · legal entity · community consent (FPIC) · accredited local verifiers · 30-day public objection period · yearly re-verification and disputes.</p></div>
     </div>
 
@@ -629,7 +629,7 @@ const D = {
   PLAN: ["Stewardship plan", "action", "Auditor generates concrete actions to improve the grade (e.g. stop grazing in zone 2, restore buffer strip).", []],
   IPO: ["IPO launch", "step", "The owner chooses shares offered and % retained and confirms. IPO price = fair value per share; the community's retained stake is held by its treasury; the public float is sold to investors.", []],
   LIVE: ["Listed", "step", "The listing passed the gate; its report is public on the Exchange. Trading starts once the owner launches the IPO.", []],
-  VER: ["Listing verification", "rule", "Before a live-world IPO: the steward uploads documents (title or agrarian certificate, assembly minutes), an automated checklist runs (integrity, reuse, overlap, consent, and an AI comparison of name, place and area that only suggests), and a reviewer approves or rejects with a reason. The decision goes into the ledger and the public 'How this listing was verified' panel, including what was not checked (ADR-0006).", ["Real world: registry match, legal entity, FPIC consent, accredited verifiers, objection period"]],
+  VER: ["Listing verification", "rule", "Before a live-world IPO: the steward uploads documents (title or agrarian certificate, assembly minutes), an automated checklist runs (accepted format, not reused, no overlap, consent-labelled document, plus an optional AI heuristic that only suggests), and a reviewer approves or rejects with a reason. Any later change resets it; revoking suspends trading. The decision goes into the ledger and the public 'How this listing was verified' panel, including what was not checked (ADR-0006).", ["Real world: registry match, legal entity, FPIC consent, accredited verifiers, objection period"]],
   SUSP: ["Suspended", "action", "An admin can pause a listed asset (e.g. abuse or a disputed boundary) and resume it later. Every change is in the Nature Ledger.", []],
   TRADE: ["Trading", "step", "Sandbox trades with play money; instant fills against market maker.", []],
   PRICE: ["Price update", "step", "Market Engine blends fair value + order flow.", []],

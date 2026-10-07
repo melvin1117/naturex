@@ -59,7 +59,7 @@ Living ecosystems produce enormous value (water filtration, flood protection, ca
 | A5 | If not eligible, I get a stewardship plan | 3–5 concrete, location-specific recommendations |
 | A6 | My listing moves through clear states | draft → rating → listed / needs evidence / ineligible; each state shows the next action; admins can suspend and resume; every change is in the ledger |
 | A7 | I launch the IPO | Owner only, once the asset is listed: choose shares offered and % retained, see the price formula step by step, confirm; trading opens in the Exchange |
-| A9 | My listing is verified, visibly | I upload documents (title or agrarian certificate, assembly minutes); an automated checklist shows each result; an admin approves or rejects with a reason; the decision is in the ledger; in the live world the IPO needs `verified`. Investors see a precise badge and a public "How this listing was verified" panel, including what was **not** checked ([ADR-0006](../adr/0006-listing-verification.md)) |
+| A9 | My listing is verified, visibly | I upload documents (title or agrarian certificate, assembly minutes); an automated checklist shows each result; an admin approves or rejects with a reason; the decision is in the ledger; in the live world the IPO needs `verified`, any later change to the listing resets it, and revoking suspends trading. Investors see a precise badge and a public "How this listing was verified" panel, including what was **not** checked ([ADR-0006](../adr/0006-listing-verification.md)) |
 | A8 | I see what the community earns | Steward home shows the wallet, IPO proceeds, holders, quarterly payouts, alerts and stewardship actions |
 
 ### Epic B — AI rating & report
