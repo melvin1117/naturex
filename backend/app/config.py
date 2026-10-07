@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "NatureX"
+    # development | test | production. Cookies drop `Secure` only when this is explicitly
+    # development or test (see secure_cookies); every deployment must set production.
     environment: str = "development"
     use_mocks: bool = True
     demo_mode: bool = True
@@ -38,6 +40,19 @@ class Settings(BaseSettings):
     tavily_api_key: str = ""
     nominatim_user_agent: str = "NatureX/0.1 (https://github.com/melvin1117/naturex)"
     ee_service_account_json: str = ""
+
+
+INSECURE_COOKIE_ENVIRONMENTS = frozenset({"development", "test"})
+
+
+def secure_cookies(settings: Settings) -> bool:
+    """Fail closed: cookies are `Secure` unless ENVIRONMENT is *explicitly* development or test.
+
+    The `development` default keeps local work simple, but an unset ENVIRONMENT never turns
+    `Secure` off, so a deployment that forgets the variable still protects its cookies.
+    """
+    explicit = "environment" in settings.model_fields_set
+    return not (explicit and settings.environment in INSECURE_COOKIE_ENVIRONMENTS)
 
 
 @lru_cache

@@ -382,6 +382,14 @@ class LoginIn(BaseModel):
     email: str = Field(max_length=EMAIL_MAX_LENGTH)
     password: SecretStr = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
 
+    @field_validator("email")
+    @classmethod
+    def _email(cls, value: str) -> str:
+        email = normalize_email(value)
+        if not is_valid_email(email):
+            raise ValueError("Enter a valid email address")
+        return email
+
 
 class MeOut(BaseModel):
     """The signed-in account. Never includes the password hash."""

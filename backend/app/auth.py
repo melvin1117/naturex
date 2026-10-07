@@ -17,8 +17,8 @@ from functools import cache
 from uuid import UUID
 
 from pwdlib import PasswordHash
-from sqlalchemy import delete, func, or_
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import delete, func, or_, update
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlmodel import Session, col, select
 
 from app.models import SessionKind, User, UserKind, UserRole, UserSession
@@ -37,7 +37,7 @@ STARTING_CASH = Decimal("10000.00")
 LOGIN_FAILED = "Email or password is incorrect"
 EMAIL_UNAVAILABLE = "This email can't be used to create an account"
 
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_EMAIL_RE = re.compile(r"^[^@\s\x00-\x1f\x7f]+@[^@\s\x00-\x1f\x7f]+\.[^@\s\x00-\x1f\x7f]+$")
 _hasher = PasswordHash.recommended()
 
 
@@ -66,7 +66,12 @@ def normalize_email(raw: str) -> str:
 
 
 def is_valid_email(email: str) -> bool:
-    return len(email) <= EMAIL_MAX_LENGTH and _EMAIL_RE.fullmatch(email) is not None
+    """A plausible address with no control or other non-printable characters (NUL included)."""
+    return (
+        len(email) <= EMAIL_MAX_LENGTH
+        and email.isprintable()
+        and _EMAIL_RE.fullmatch(email) is not None
+    )
 
 
 def hash_password(password: str) -> str:
@@ -121,9 +126,9 @@ def register_person(session: Session, world_id: UUID, email: str, password: str,
     session.add(user)
     try:
         session.commit()
-    except IntegrityError as exc:
+    except SQLAlchemyError as exc:
         session.rollback()
-        if "users_world_email" in str(exc.orig):
+        if isinstance(exc, IntegrityError) and "users_world_email" in str(exc.orig):
             raise EmailTaken from None
         raise
     session.refresh(user)
@@ -180,6 +185,8 @@ def resolve_session(session: Session, token: str | None) -> Principal | None:
     """The principal for a cookie token, or None if missing, unknown, expired or revoked.
 
     Expired rows are deleted on sight; `last_seen_at` is bumped at most every TOUCH_EVERY.
+    Both use core statements by ID, so a logout or prune that removed the row in between makes
+    this a revoked session (None), never a StaleDataError.
     """
     if not token or len(token) > 128:
         return None
@@ -197,13 +204,16 @@ def resolve_session(session: Session, token: str | None) -> Principal | None:
     row, user = found
     now = _now()
     if _expired(row, now) or user.kind == UserKind.TREASURY:
-        session.delete(row)
+        session.execute(delete(UserSession).where(col(UserSession.id) == row.id))
         session.commit()
         return None
     if now - row.last_seen_at > TOUCH_EVERY:
-        row.last_seen_at = now
-        session.add(row)
+        bumped = session.execute(
+            update(UserSession).where(col(UserSession.id) == row.id).values(last_seen_at=now)
+        )
         session.commit()
+        if not getattr(bumped, "rowcount", 0):
+            return None
     return Principal(
         user_id=user.id,
         world_id=row.world_id,

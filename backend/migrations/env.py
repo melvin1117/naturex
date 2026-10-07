@@ -11,7 +11,8 @@ from app.config import get_settings
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Keep loggers created before the migration (e.g. app.* when tests run Alembic in-process).
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = SQLModel.metadata
 # Escape % for configparser: URL-encoded passwords (e.g. %40 for "@") would otherwise crash.

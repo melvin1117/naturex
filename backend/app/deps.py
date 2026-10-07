@@ -11,7 +11,7 @@ from fastapi import Depends, HTTPException, Request, Response, status
 from sqlmodel import Session
 
 from app.auth import SESSION_COOKIE, Principal, resolve_session
-from app.config import Settings, get_settings
+from app.config import Settings, get_settings, secure_cookies
 from app.db import get_session
 from app.models import World
 from app.sandbox import (
@@ -34,11 +34,6 @@ PRUNE_EVERY = timedelta(minutes=10)
 WORLD_REQUIRED = "world_required"
 AUTH_REQUIRED = "auth_required"
 _last_prune: datetime | None = None
-
-
-def secure_cookies(settings: Settings) -> bool:
-    """Cookies are `Secure` everywhere except plain-HTTP local development and tests."""
-    return settings.environment not in {"development", "test"}
 
 
 def _set_world_cookie(response: Response, world: World, settings: Settings) -> None:

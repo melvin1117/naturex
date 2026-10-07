@@ -189,7 +189,7 @@ def test_people_outside_the_live_world_and_personas_cannot_sign_in(
     session.commit()
 
     assert login(client, email="elsewhere@example.org").status_code == 401
-    assert login(client, email="rosa").status_code == 401
+    assert login(client, email="rosa").status_code in {401, 422}, "personas have no email"
 
 
 @requires_db
@@ -640,3 +640,160 @@ def test_cli_rejects_weak_or_mismatched_passwords(
 
     assert code == 1
     assert session.exec(select(User).where(User.is_admin)).all() == []
+
+
+# --- Review follow-ups -----------------------------------------------------------------------
+
+
+@requires_db
+@pytest.mark.parametrize(
+    "email",
+    [
+        "ro\x00sa@example.org",
+        "rosa@exam\x00ple.org",
+        "ro\x1fsa@example.org",
+        "rosa\x7f@example.org",
+    ],
+)
+def test_control_characters_in_emails_are_422_never_500(client: TestClient, email: str) -> None:
+    registered = register(client, email=email)
+    signed_in = login(client, email=email)
+
+    assert registered.status_code == 422
+    assert signed_in.status_code in {401, 422}
+    assert PASSWORD not in registered.text + signed_in.text
+
+
+@requires_db
+def test_a_database_error_on_an_auth_route_is_a_bare_500_that_logs_no_secrets(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from app.routers import auth as auth_router
+
+    hashes: list[str] = []
+    real_hash, real_register = auth.hash_password, auth.register_person
+
+    def spy_hash(password: str) -> str:
+        hashes.append(real_hash(password))
+        return hashes[-1]
+
+    def nul_register(
+        session: Session, world_id: UUID, email: str, password: str, name: str
+    ) -> User:
+        # Bypasses validation to force a real psycopg DataError on INSERT.
+        return real_register(session, world_id, "nul\x00" + email, password, name)
+
+    monkeypatch.setattr(auth, "hash_password", spy_hash)
+    monkeypatch.setattr(auth_router, "register_person", nul_register)
+    caplog.set_level(logging.DEBUG)
+
+    res = register(client)
+
+    assert (res.status_code, res.json()) == (500, {"detail": "internal_error"})
+    assert res.headers["cache-control"] == "no-store"
+    assert hashes, "the INSERT carried a real argon2 hash"
+    assert "DataError" in caplog.text
+    for secret in (hashes[0], EMAIL, PASSWORD):
+        assert secret not in caplog.text and secret not in res.text
+    assert "nx_session" not in client.cookies
+
+
+@requires_db
+def test_the_app_engine_never_puts_bound_parameters_in_errors_or_logs(
+    conn: Connection, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from sqlalchemy.exc import DataError
+
+    from app.db import engine
+
+    hashes: list[str] = []
+    real_hash = auth.hash_password
+    monkeypatch.setattr(
+        auth, "hash_password", lambda pw: hashes.append(real_hash(pw)) or hashes[-1]
+    )
+
+    with Session(engine) as db, pytest.raises(DataError) as failure:
+        auth.register_person(db, WORLD_ID, "nul\x00@example.org", PASSWORD, "Nul")
+    logging.getLogger("tests.auth").error("insert failed", exc_info=failure.value)
+
+    assert engine.hide_parameters
+    assert "parameters hidden" in str(failure.value)
+    assert hashes and hashes[0] not in caplog.text
+    assert "nul\x00@example.org" not in caplog.text
+
+
+@requires_db
+def test_a_session_revoked_between_lookup_and_bump_is_a_401_not_a_500(
+    conn: Connection, session: Session, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    register(client)
+    token = client.cookies["nx_session"]
+    row = row_for(session, token)
+    row.last_seen_at = datetime.now(UTC) - timedelta(hours=1)  # due for a bump
+    session.add(row)
+    session.commit()
+    real_now = auth._now
+    revoked: list[bool] = []
+
+    def logout_elsewhere_then_now() -> datetime:
+        """Runs after the session SELECT and before the bump: a concurrent logout."""
+        if not revoked:
+            with Session(bind=conn, join_transaction_mode="create_savepoint") as other:
+                other.execute(
+                    text("DELETE FROM sessions WHERE token_hash = :h"),
+                    {"h": auth.hash_token(token)},
+                )
+                other.commit()
+            revoked.append(True)
+        return real_now()
+
+    monkeypatch.setattr(auth, "_now", logout_elsewhere_then_now)
+
+    res = client.get("/me")
+
+    assert revoked, "the concurrent delete ran"
+    assert (res.status_code, res.json()["detail"]) == (401, "auth_required")
+
+
+@pytest.mark.parametrize(
+    ("environment", "secure"),
+    [(None, True), ("development", False), ("test", False), ("production", True), ("Dev", True)],
+)
+def test_secure_cookies_fail_closed_unless_environment_is_explicitly_dev_or_test(
+    monkeypatch: pytest.MonkeyPatch, environment: str | None, secure: bool
+) -> None:
+    from app.config import secure_cookies
+
+    if environment is None:
+        monkeypatch.delenv("ENVIRONMENT", raising=False)
+    else:
+        monkeypatch.setenv("ENVIRONMENT", environment)
+
+    assert secure_cookies(Settings(_env_file=None)) is secure  # type: ignore[call-arg]
+
+
+@requires_db
+def test_cookie_flags_with_environment_production(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)  # type: ignore[call-arg]
+
+    signed_up = register(client).headers["set-cookie"].lower()
+    cleared = TestClient(app).post("/auth/logout").headers["set-cookie"].lower()
+
+    for cookie in (signed_up, cleared):
+        assert cookie.startswith("nx_session=")
+        for flag in ("secure", "httponly", "samesite=lax", "path=/"):
+            assert flag in cookie, (flag, cookie)
+
+
+def test_startup_warns_whenever_cookies_are_not_secure(caplog: pytest.LogCaptureFixture) -> None:
+    from app.main import warn_if_cookies_insecure
+
+    warn_if_cookies_insecure(Settings(_env_file=None, environment="production"))  # type: ignore[call-arg]
+    assert caplog.text == ""
+
+    warn_if_cookies_insecure(Settings(_env_file=None, environment="development"))  # type: ignore[call-arg]
+    assert "ENVIRONMENT=development" in caplog.text
+    assert "ENVIRONMENT=production" in caplog.text

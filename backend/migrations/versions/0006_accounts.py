@@ -4,6 +4,10 @@ Adds `users.kind`, `email`, `password_hash` and `is_admin`, a unique `(world_id,
 for composite foreign keys, the per-world case-insensitive email index and the `sessions`
 table. Every existing user is a seeded or copied persona, so the `kind` default backfills them.
 
+Downgrading drops the sessions and every account's email, password hash, kind and admin flag;
+upgrading again turns former `person` rows into credential-less personas, so nobody can sign in
+as them. That data loss is accepted for the hackathon (T54 review).
+
 Revision ID: 0006
 Revises: 0005
 Create Date: 2026-10-07

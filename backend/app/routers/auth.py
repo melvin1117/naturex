@@ -5,7 +5,14 @@ Password accounts live in the live world. CSRF and rate limits arrive with T66.
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Callable, Coroutine
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth import (
     ABSOLUTE_TIMEOUT,
@@ -18,12 +25,41 @@ from app.auth import (
     register_person,
     start_session,
 )
-from app.deps import AUTH_REQUIRED, CurrentPrincipal, SessionDep, SettingsDep, secure_cookies
+from app.config import secure_cookies
+from app.deps import AUTH_REQUIRED, CurrentPrincipal, SessionDep, SettingsDep
 from app.models import User
 from app.sandbox import ensure_live_world
 from app.schemas import LoginIn, MeOut, RegisterIn
 
-router = APIRouter(tags=["auth"])
+log = logging.getLogger(__name__)
+INTERNAL_ERROR = "internal_error"
+
+
+class _AuthRoute(APIRoute):
+    """Any unexpected database error becomes a bare 500.
+
+    Only the exception type is logged: driver messages can quote the email (e.g. a unique
+    violation's DETAIL), and nothing personal or secret may reach the logs.
+    """
+
+    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
+        handler = super().get_route_handler()
+
+        async def guarded(request: Request) -> Response:
+            try:
+                return await handler(request)
+            except SQLAlchemyError as exc:
+                log.error("database error on %s: %s", request.url.path, type(exc).__name__)
+                return JSONResponse(
+                    {"detail": INTERNAL_ERROR},
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    headers={"Cache-Control": "no-store"},
+                )
+
+        return guarded
+
+
+router = APIRouter(tags=["auth"], route_class=_AuthRoute)
 
 
 def _no_store(response: Response) -> None:
