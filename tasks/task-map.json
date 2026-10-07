@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-07 08:12 UTC",
+  "generated_at": "2026-10-07 08:55 UTC",
   "tasks": [
     {
       "id": "P01",
@@ -721,7 +721,7 @@
         "T08",
         "T16"
       ],
-      "status": "in_progress",
+      "status": "done",
       "assignees": [
         "adi095"
       ],
@@ -732,7 +732,7 @@
         "T59"
       ],
       "step": 3,
-      "chain": 7,
+      "chain": 0,
       "critical": false
     },
     {
@@ -1265,7 +1265,6 @@
       "status": "blocked",
       "assignees": [],
       "waiting_on": [
-        "T17",
         "T21",
         "P05",
         "T61"
@@ -1586,8 +1585,7 @@
       "assignees": [],
       "waiting_on": [
         "T68",
-        "T55",
-        "T17"
+        "T55"
       ],
       "unlocks": [
         "T46",
@@ -1775,7 +1773,6 @@
       "status": "blocked",
       "assignees": [],
       "waiting_on": [
-        "T17",
         "T58"
       ],
       "unlocks": [
@@ -2255,11 +2252,11 @@
     ]
   },
   "counts": {
-    "done": 22,
-    "in_progress": 4,
+    "done": 23,
+    "in_progress": 3,
     "picked_early": 0,
     "ready": 9,
     "blocked": 42
   },
-  "data_hash": "3e0fc9510e8b2166"
+  "data_hash": "aa20efd077da8416"
 }
