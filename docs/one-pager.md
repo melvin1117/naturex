@@ -66,4 +66,4 @@ Rating-as-a-service for funds & corporates · listing/verification fee per asset
 [diagrams.html](./diagrams.html) (overview, rating engine, architecture, flows) · [pm-spec.md](./specs/pm-spec.md) (scope & plan) · [dev-spec.md](./specs/dev-spec.md) (technical design) · [demo-plan.md](./specs/demo-plan.md) (judge tour & video).
 
 ## Honest limits
-Sandbox with play money — **not** a securities offering. Valuations are screening estimates using published benefit-transfer coefficients (starter values from Costanza et al. 2014, to be replaced by cited published values such as Brander et al. 2024; never raw ESVD data), not certified appraisals. Real-money trading would require licensed partners and regulation.
+Sandbox with play money — **not** a securities offering. Valuations are screening estimates using published benefit-transfer coefficients (Brander et al. 2024 biome means in 2020 Int$ as the central and upper value, with an indicative low from the published median/mean ratios in Costanza et al. 2014; never raw ESVD data), not certified appraisals. Real-money trading would require licensed partners and regulation.

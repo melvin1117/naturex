@@ -475,26 +475,89 @@ Demo sites: run offline once and store to `data/demo_sites/*.json` (method, site
 
 ### 7.3 Valuation engine (deterministic)
 ```
-value_c   = area_ha × share_c × coeff_c × context_multiplier_c
+value_c   = area_ha × share_c × coeff_c × context_multiplier      (context_multiplier = 1 for now)
 value_mid = Σ value_c
-value_low = Σ area_ha × share_c × coeff_low_c
-value_high= Σ area_ha × share_c × coeff_high_c
+value_low = Σ area_ha × share_c × coeff_low_c × context_multiplier
+value_high= Σ area_ha × share_c × coeff_high_c × context_multiplier
 ```
-Class → biome mapping and **starter coefficients** (USD/ha/yr). These are illustrative, from Costanza et al. 2014 global unit values (2007 USD). **Replace with cited, published values before the demo** (e.g. Brander et al. 2024, CC BY, which summarises ESVD; final source decided in T06). **Raw ESVD data can't be committed:** its terms forbid redistribution and derivative works without written consent.
-| Dynamic World class | Biome used | Starter mid $/ha/yr | low / high |
-|---|---|---|---|
-| flooded_vegetation (coastal) | Tidal marsh / mangrove | 193,843 | ×0.3 / ×1.5 |
-| flooded_vegetation (inland) | Swamps / floodplains | 25,681 | ×0.4 / ×1.5 |
-| water | Lakes / rivers | 12,512 | ×0.4 / ×1.5 |
-| trees (\|lat\| < 23.5°) | Tropical forest | 5,382 | ×0.5 / ×1.5 |
-| trees (other) | Temperate / boreal forest | 3,137 | ×0.5 / ×1.5 |
-| grass | Grassland | 4,166 | ×0.5 / ×1.5 |
-| shrub_and_scrub | Shrubland (use grassland × 0.5) | 2,083 | ×0.5 / ×1.5 |
-| crops, built, bare, snow_and_ice | Not valued as natural capital | 0 | 0 |
+**As built (T14):** `backend/app/tools/valuation.py` (`value_site`, a pure function, plus `value_metrics` for cached `EarthObsMetrics`) and `backend/app/tools/coastline.py`. The context multiplier is one site-level `Decimal` applied to low, mid and high alike, so low ≤ mid ≤ high always holds.
 
-"Coastal" = centroid within 5 km of coastline (Natural Earth 1:10m coastline, public domain, bundled in `data/`). Service breakdown split per biome from a small CSV (e.g. wetland: water 35%, flood 30%, habitat 20%, carbon 10%, recreation 5%).
+**Price basis: Int$ at 2020 price levels per ha per year** (Brander et al. 2024's basis; one Int$ buys what one US$ buys in the US, so Int$2020 = US$2020 at US prices). Only this basis is used: Costanza et al. 2014 contributes dimensionless median/mean ratios, never dollar values, so no deflator or PPP conversion is applied anywhere. The UI can label the figures "$ (2020)".
 
-**Carbon (shown separately; never added to the $ value, which already includes climate regulation):** `stock_tCO2 = AGB_t_ha × (1 + R) × area_ha × 0.47 × 44/12 + SOC_tC_ha × area_ha × 44/12`, where R is the IPCC Tier-1 root-to-shoot ratio for the class and SOC is SoilGrids soil organic carbon (0–30 cm), included for wetlands, where most carbon is in the soil (ADR-0001; exact factors set in T14). Annual sequestration uses IPCC Tier-1 default rates per class.
+**Coefficients** live in `backend/data/coefficients.csv`, one row per biome with table and row citations. Only published statistics are used:
+- **mid = high = the Brander et al. 2024 Table 1 biome mean** ("Sum" row; CC BY 4.0; ESVD summary means, so no raw ESVD data is committed). Brander publishes no biome-level dispersion: Appendix Table A1 gives one dispersion per service cell (the caption says standard errors, the text says standard deviations), many cells are NA, and a biome total would need an independence assumption. So we don't invent an upper bound.
+- **low = an indicative median-equivalent**: the Brander mean × the median/mean ratio of the matching row in Costanza et al. 2014 Table 4 (which reproduces de Groot et al. 2012 Table 3). It's indicative because the ratio comes from the 2012 ESVD sample, not Brander's. Distributions are right-skewed, so low sits far below the mean where the median does (coastal wetlands) and close to it where they agree (grassland, lakes).
+
+| Dynamic World class | Biome (Brander 2024 Table 1 column) | low | **mid = high** | Low ratio row (Costanza 2014 Table 4, median / mean) |
+|---|---|---|---|---|
+| flooded_vegetation (coastal, \|lat\| < 30°) | Mangrove (Mangroves) | 4,890 | **77,928** | Coastal wetlands 12,163 / 193,845 |
+| flooded_vegetation (coastal, \|lat\| ≥ 30°) | Coastal systems: tidal / salt marsh, estuary, lagoon (Coastal systems) | 2,260 | **36,026** | ⚠️ fallback: Coastal wetlands (de Groot's "Coastal systems" row excludes marshes) |
+| flooded_vegetation (inland) | Swamps / floodplains (Inland wetlands) | 21,901 | **34,018** | Inland wetlands 16,534 / 25,682 |
+| water | Lakes / rivers (Rivers and lakes) | 30,868 | **33,447** | Rivers and lakes 3,938 / 4,267 |
+| trees (\|lat\| < 23.5°) | Tropical & sub-tropical forests | 3,653 | **8,166** | Tropical forest 2,355 / 5,264 |
+| trees (other) | Temperate forest and woodland | 5,824 | **15,570** | Temperate forest 1,127 / 3,013 |
+| grass | Rangeland, natural grasslands & savannas | 5,576 | **5,934** | Grasslands 2,698 / 2,871 |
+| shrub_and_scrub | Shrubland and shrubby woodland | 684 | **728** | ⚠️ fallback: Grasslands (no published shrubland median) |
+| GMW mangrove share (see below) | Mangrove (Mangroves) | 4,890 | **77,928** | Coastal wetlands |
+| crops, built, bare, snow_and_ice | Not valued as natural capital | 0 | **0** | — |
+
+Fallback rows add the flag `low_bound_fallback:<biome>`. All mid values were transcribed from Table 1 and cross-checked: each column's per-service cells add up to the published "Sum" row (to rounding) and the value counts match exactly. The superseded starter table (Costanza 2014 Table 3, 2007 US$) is no longer used.
+
+**Mangrove vs marsh:** mangroves grow "largely between 30° N and 30° S latitude" (Giri 2021, *Remote Sensing* 13:563, CC BY), so coastal flooded vegetation at |lat| ≥ 30° is valued as Brander's "Coastal systems", which includes tidal and salt marshes (ESVD classification: de Groot, Brander & Solomonides 2020, Appendix 6, codes 3.2–3.3; Brander 2024 footnote 7 splits mangroves out of it). Outlying mangroves beyond 30° (Bermuda, Japan, south-east Australia, South Africa) are valued conservatively as coastal systems unless GMW maps them.
+
+**Global Mangrove Watch share:** Dynamic World labels most mangrove canopy as `trees`. When the optional input `mangrove_fraction` (GMW v3, Bunting et al. 2022, CC BY 4.0; read from the precomputed metrics, T13) is set, `m = min(mangrove_fraction, trees + flooded_vegetation)` is valued as Mangrove, taken from flooded_vegetation first and then from trees, which shrink by that amount. GMW is an observed map, so this ignores the coastal check and latitude (the coastal result is still reported); a capped fraction adds the flag `mangrove_fraction_capped`. The result lists the reassigned share as `gmw_mangrove` plus a `mangrove` block (input, applied, from each class). There is no "coastal trees = mangrove" heuristic.
+
+**Coastal** = centroid within 5 km of the Natural Earth 1:10m coastline (v5.1.2, public domain), bundled unmodified as `backend/data/coastline/ne_10m_coastline.geojson.gz` (3.4 MB; `python3 scripts/fetch_coastline.py` regenerates it byte for byte). Distance is geodesic: STRtree candidates within a lon/lat box that contains the search disc, measured in an azimuthal equidistant projection centred on the point. The index loads lazily, once, behind a lock. Coastal `water` stays lakes/rivers; the result then carries the flag `coastal_water_as_lakes` so the report can disclose it (lagoons may fit Brander's "Coastal systems" better).
+
+**Service breakdown:** `backend/data/service_values.csv` holds Brander 2024 Table 1's per-service means for each biome used, each mapped to one of eight groups: food & materials, water supply, climate regulation, flood & hazard regulation, pollution & soil, habitat & biodiversity, recreation & culture, existence & bequest. Each class's mid value is split in proportion to its biome's service means.
+
+**Land cover:** fractions must be finite and in [0, 1]. A sum within ±0.01 of 1 is renormalised to 1 and flagged `landcover_renormalised`; anything else is rejected. Missing classes count as 0; unknown class names are rejected, as are negative or NaN inputs.
+
+**Rounding:** all arithmetic is `Decimal` at 50 significant digits. Only outputs are rounded: totals to whole Int$ (round half to even); per-class and per-service splits by the largest-remainder method (ties by name), so they sum exactly to the rounded totals. Carbon is rounded to whole tCO₂.
+
+**Carbon (tCO₂ only; never added to the $ value, which already includes climate regulation):**
+```
+biomass_tCO2 = AGB_t_ha × (1 + R) × area_ha × 0.47 × 44/12
+soc_tCO2     = SOC_tC_ha × wetland_area_ha × 44/12          (flooded vegetation + GMW mangrove)
+seq_tCO2_yr  = Σ_u area_ha × share_u × G_u × (1 + R_u) × 0.47 × 44/12     (gross Tier 1 biomass gain)
+```
+AGB is the site mean (`biomass_t_ha`), which is mostly woody biomass, so **R comes from woody cover**: when trees or GMW mangrove are present, R is their share-weighted ratio (trees only → the trees row for the climate zone); otherwise R is the ratio of the dominant vegetated class (ties by name); with no vegetation, R = 0. The result reports `root_shoot_ratio_basis` (`woody`, `dominant:<class>` or `none`). SOC (SoilGrids, t C/ha, 0–30 cm) comes from the precomputed metrics (T13) and may be missing for a new site; with wetland area and no SOC, `soc_tCO2` is null and the result is flagged `soc_missing`. Factors are in `backend/data/carbon_factors.csv`, keyed by **biome** so carbon always follows the same mapping as the money, with the moist/wet row used wherever IPCC splits by moisture:
+| Biome (zone) | R | Source | G (t d.m./ha/yr) | Source |
+|---|---|---|---|---|
+| Tropical forest | 0.20 | IPCC 2006 V4 Ch4 Table 4.4, tropical moist deciduous, AGB < 125 | 2.0 | Table 4.9, tropical moist deciduous, N & S America, > 20 y |
+| Temperate forest | 0.29 | Table 4.4, temperate conifers, AGB 50–150 | 4.0 | Table 4.9, temperate continental forest, > 20 y |
+| Grassland (tropical / extratropical) | 1.6 / 4.0 | IPCC 2006 V4 Ch6 Table 6.1, tropical moist & wet / temperate wet | 0 | Ch6 §6.2.1.1: Tier 1 assumes no change |
+| Shrubland | 2.8 | Table 6.1, shrubland | 0 | as above |
+| Mangrove | 0.492 | IPCC 2013 Wetlands Suppl. Ch4 Table 4.5, mangroves, tropical wet | 9.9 | Table 4.4, tropical wet (the Subtropical rows are internally inconsistent and not used) |
+| Coastal systems, swamps / floodplains | 0 | no Tier 1 biomass default (tidal / salt marsh, inland herbaceous wetland) | 0 | carbon comes from SOC |
+Carbon fraction 0.47: IPCC 2006 V4 Ch4 Table 4.3.
+
+**With today's committed metrics (T13: ESA CCI biomass, SoilGrids SOC, GMW mangrove fraction)**, `value_metrics` gives (Int$2020/yr, low / mid = high; total carbon stock tCO₂; sequestration tCO₂/yr):
+
+| Site | Low | Mid = high | Carbon stock | Sequestration |
+|---|---|---|---|---|
+| Wetland (hero) | 2,121,067 | 2,669,511 | 8,828 (incl. SOC) | 306 |
+| Ría Celestún mangrove | 2,466,117 | 33,801,307 | 130,883 (incl. SOC) | 10,910 |
+| Sumidero restoration forest | 1,295,918 | 2,424,480 | 52,657 | 1,005 |
+
+The mangrove's wide range is real: the published mangrove median is far below the mean (Costanza 2014 Table 4). The worked example below stays pinned to the T11 inputs so it doesn't move when the cache is recomputed.
+
+**Worked example: hero wetland** (T11 snapshot of `wetland_mx.json`, pinned as literals in `backend/tests/test_valuation.py` so it doesn't move when T13 recomputes the JSON): 206.6995 ha, centroid 19.2873, −99.0976 (tropical by the latitude rule), 253.354 km from the coast (inland), AGB 9.4681 t/ha, no SOC or GMW input yet.
+| Class | Share | Area (ha) | Biome | low / **mid = high** coefficient | **$/yr (Int$2020)** low / **mid = high** |
+|---|---|---|---|---|---|
+| water | 0.2484 | 51.3442 | Lakes / rivers | 30,868 / **33,447** | 1,584,891 / **1,717,308** |
+| trees | 0.3574 | 73.8744 | Tropical forest | 3,653 / **8,166** | 269,863 / **603,258** |
+| flooded_vegetation | 0.0296 | 6.1183 | Swamps / floodplains | 21,901 / **34,018** | 133,997 / **208,133** |
+| grass | 0.1024 | 21.1660 | Grassland | 5,576 / **5,934** | 118,022 / **125,599** |
+| shrub_and_scrub | 0.1011 | 20.8973 | Shrubland ⚠️ | 684 / **728** | 14,294 / **15,213** |
+| built, crops (bare, snow 0) | 0.1611 | 33.2993 | Not valued | 0 | 0 |
+| **Total** | 1.0000 | 206.6995 | | | **low 2,121,067 / mid = high 2,669,511** |
+
+By service (mid): existence & bequest 608,919; recreation & culture 554,083; flood & hazard regulation 548,143; water supply 461,645; pollution & soil 186,468; food & materials 119,266; habitat & biodiversity 112,589; climate regulation 78,398 (sum 2,669,511). Carbon: trees are present, so R = 0.20 (tropical forest); biomass stock 9.4681 × 1.20 × 206.6995 × 0.47 × 44/12 = **4,047 tCO₂**; SOC not included (flag `soc_missing`; an illustrative 50 t C/ha would add 1,122 tCO₂); sequestration 73.8744 ha × 2.0 × 1.20 × 0.47 × 44/12 = **306 tCO₂/yr**. Flags: `low_bound_fallback:shrubland`, `soc_missing`.
+
+**Sanity check:** the documentary claim "wetlands might be worth $25–50k per acre per year" is $62–124k/ha/yr. Our pure-wetland coefficients are 34,018 Int$/ha/yr for inland wetlands (below that range) and 77,928 for mangroves (inside it). The hero site averages 12,915 Int$/ha/yr (mid) because only 3% of it is flooded vegetation, a quarter is open water, and 16% is built or cropped. We report this gap rather than tune the numbers to it.
+
+**Known limitations:** global benefit-transfer means, no local adjustment yet (`context_multiplier` reserved for it); the range is one-sided (no published upper bound) and its low end is indicative; temperate tidal marsh and inland herbaceous wetland have no Tier 1 biomass factors; mangroves beyond 30° are valued as coastal systems unless GMW maps them.
 
 ### 7.4 Scoring (deterministic base + bounded LLM adjustment)
 ```

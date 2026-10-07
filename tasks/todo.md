@@ -136,9 +136,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** script reproduces all JSON · **Deps:** T11 · **Files:** `backend/data/demo_sites/*`, `scripts/precompute_sites.py`
 
 ### T14 · Valuation engine (#25) — D2 · M · Must · B3
-- [ ] Coefficient table per T06 (cited; no raw ESVD), class → biome mapping including the coastal check (Natural Earth)
-- [ ] Low / mid / high $/yr and per-service breakdown; carbon stock per the agreed formula
-- [ ] Unit tests including the worked example
+- [x] Coefficient table per T06 (cited; no raw ESVD), class → biome mapping including the coastal check (Natural Earth)
+- [x] Low / mid / high $/yr and per-service breakdown; carbon stock per the agreed formula
+- [x] Unit tests including the worked example
 
 **Verify:** `make test` · **Deps:** T06, T11 · **Files:** `backend/app/tools/valuation.py`, `backend/data/coefficients.csv`, `backend/data/coastline/*`, `backend/tests/test_valuation.py`
 
