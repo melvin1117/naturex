@@ -37,11 +37,11 @@ def upgrade() -> None:
             name="ck_world_events_type",
         ),
     )
-    op.create_index("ix_world_events_world_id", "world_events", ["world_id"])
     op.create_index("ix_world_events_world_id_id", "world_events", ["world_id", "id"])
+    op.create_index("ix_world_events_created_at", "world_events", ["created_at"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_world_events_world_id_id", table_name="world_events")
-    op.drop_index("ix_world_events_world_id", table_name="world_events")
+    op.execute("DROP INDEX IF EXISTS ix_world_events_created_at")
+    op.execute("DROP INDEX IF EXISTS ix_world_events_world_id_id")
     op.drop_table("world_events")

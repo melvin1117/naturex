@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -15,7 +17,7 @@ from sqlmodel import Session, col, select
 
 from app import events
 from app.config import get_settings
-from app.db import get_session
+from app.db import engine, get_session
 from app.main import app
 from app.models import World, WorldEvent
 from app.sandbox import COOKIE_NAME, create_world, prune_stale_worlds
@@ -51,6 +53,10 @@ def client(session: Session, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestCl
 
 def set_world_cookie(client: TestClient, world_id: UUID) -> None:
     client.cookies.set(COOKIE_NAME, str(world_id))
+
+
+def migrate() -> None:
+    command.upgrade(alembic_cfg(), "head")
 
 
 @requires_db
@@ -90,6 +96,48 @@ def test_publish_accepts_a_transaction_connection(session: Session) -> None:
     assert [replayed.payload for replayed in events.replay(session, world.id)] == [
         {"message": "via connection"}
     ]
+
+
+@requires_db
+def test_same_world_publish_ids_follow_commit_order() -> None:
+    migrate()
+    with Session(engine) as setup:
+        seed(setup)
+        world = create_world(setup)
+        world_id = world.id
+
+    tx_a = engine.connect()
+    trans_a = tx_a.begin()
+    tx_b_done = threading.Event()
+    tx_b_ids: list[int | None] = []
+    try:
+        event_a = events.publish(tx_a, world_id, "alert", {"message": "a"})
+
+        def publish_b() -> None:
+            with engine.begin() as tx_b:
+                tx_b_ids.append(events.publish(tx_b, world_id, "alert", {"message": "b"}).id)
+            tx_b_done.set()
+
+        thread = threading.Thread(target=publish_b)
+        thread.start()
+        time.sleep(0.2)
+        assert not tx_b_done.is_set(), "same-world publisher B waits for publisher A to commit"
+
+        with Session(engine) as reader:
+            assert events.replay(reader, world_id) == []
+
+        trans_a.commit()
+        thread.join(timeout=2)
+        assert tx_b_done.is_set(), "publisher B completed after A committed"
+
+        with Session(engine) as reader:
+            replayed = events.replay(reader, world_id)
+            assert [event.id for event in replayed] == [event_a.id, tx_b_ids[0]]
+            assert [event.payload["message"] for event in replayed] == ["a", "b"]
+    finally:
+        if trans_a.is_active:
+            trans_a.rollback()
+        tx_a.close()
 
 
 @requires_db
@@ -171,6 +219,55 @@ def test_sse_stream_emits_heartbeats_when_idle(
 
     assert res.status_code == 200
     assert "event: heartbeat" in res.text
+
+
+@requires_db
+def test_sse_stream_releases_request_db_connection_between_polls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    migrate()
+    app.dependency_overrides.clear()
+    monkeypatch.setattr(events, "STREAM_MAX_SECONDS", 0.5)
+    monkeypatch.setattr(events, "STREAM_POLL_INTERVAL_SECONDS", 0.1)
+    monkeypatch.setattr(events, "HEARTBEAT_INTERVAL_SECONDS", 10.0)
+    client = TestClient(app)
+    assert client.get("/world").status_code == 200
+    assert engine.pool.checkedout() == 0
+
+    with client.stream("GET", "/events/stream") as res:
+        assert res.status_code == 200
+        assert next(res.iter_lines()) == "retry: 3000"
+        deadline = time.monotonic() + 1
+        while time.monotonic() < deadline and engine.pool.checkedout() != 0:
+            time.sleep(0.01)
+        assert engine.pool.checkedout() == 0
+
+
+@requires_db
+def test_sse_stream_never_replays_another_worlds_event_after_last_event_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    migrate()
+    app.dependency_overrides.clear()
+    monkeypatch.setattr(events, "STREAM_MAX_SECONDS", 0.03)
+    monkeypatch.setattr(events, "STREAM_POLL_INTERVAL_SECONDS", 0.01)
+    monkeypatch.setattr(events, "HEARTBEAT_INTERVAL_SECONDS", 0.0)
+    mine = TestClient(app)
+    other = TestClient(app)
+    mine_world = UUID(mine.get("/world").json()["id"])
+    other_world = UUID(other.get("/world").json()["id"])
+
+    with Session(engine) as session:
+        own_event = events.publish(session, mine_world, "alert", {"message": "mine"})
+        other_event = events.publish(session, other_world, "alert", {"message": "not mine"})
+        session.commit()
+
+    res = mine.get("/events/stream", headers={"Last-Event-ID": str(other_event.id - 1)})
+
+    assert res.status_code == 200
+    assert "not mine" not in res.text
+    assert f"id: {other_event.id}" not in res.text
+    assert f"id: {own_event.id}" not in res.text
 
 
 @requires_db

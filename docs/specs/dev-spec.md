@@ -269,6 +269,7 @@ create table world_events (           -- T29: SSE + polling replay by visitor wo
   created_at timestamptz default now()
 );
 create index ix_world_events_world_id_id on world_events(world_id, id);
+create index ix_world_events_created_at on world_events(created_at);
 
 create table llm_calls (
   id bigserial primary key, agent text, model text, asset_id uuid,
@@ -314,10 +315,10 @@ Every route is scoped to the visitor's world through the `nx_world` cookie, so j
 Rating runs asynchronously: the API returns `202` + `run_id`, and progress arrives over SSE (`step: earth_obs → valuation → news → evidence → audit → done`).
 
 **As built (T29):**
-- `app.events.publish(session_or_conn, world_id, type, payload)` writes `rating_progress`, `price_tick` and `alert` events into `world_events` in the caller's transaction, so rolled-back business changes do not leak as live events.
+- `app.events.publish(session_or_conn, world_id, type, payload)` writes `rating_progress`, `price_tick` and `alert` events into `world_events` in the caller's transaction, so rolled-back business changes do not leak as live events. Same-world publishers take a transaction advisory lock before insert, which makes monotonic event IDs match commit visibility for that world; publishing transactions must stay short. Rating progress should publish each step in its own short transaction instead of holding one transaction across a full rating run.
 - `GET /events/stream` uses standard `text/event-stream` over HTTP, sends `id:`, `event:`, `data:` and `retry:` fields, resumes from `Last-Event-ID`, and emits transient `heartbeat` events every ~15 s so proxies do not drop idle connections.
 - Fan-out is by short-interval database polling rather than per-process queues or LISTEN/NOTIFY. This is less clever but portable across multiple workers, serverless timeouts and free-tier hosts; events are persisted first, so reconnects and the polling fallback replay from the same source of truth.
-- Streams are finite (clients reconnect automatically) and set `Cache-Control: no-cache` plus `X-Accel-Buffering: no`. `GET /events?since_id=` is the preferred cursor; legacy `since=` datetime remains accepted for generated clients.
+- Streams are finite (clients reconnect automatically), poll the database from a threadpool with short-lived sessions, and set `Cache-Control: no-cache` plus `X-Accel-Buffering: no`. A per-process semaphore caps concurrent streams below the DB pool; overflow returns `503` + `Retry-After`, so clients can fall back to polling. `GET /events?since_id=` is the preferred cursor; legacy `since=` datetime remains accepted for generated clients.
 - Retention keeps live replay lightweight by pruning `world_events` older than 24 h during the existing sandbox prune path; deleting a stale visitor world also deletes its events.
 
 > Free hosts and serverless endpoints may drop long-lived connections **(verify)**; the frontend falls back to polling every 3 s.

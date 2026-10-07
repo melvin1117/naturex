@@ -5,16 +5,17 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import AsyncIterator, Iterator, Mapping
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID
 
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import Connection, delete, insert
+from sqlalchemy import Connection, delete, insert, text
 from sqlalchemy.engine import CursorResult
 from sqlmodel import Session, col, select
+from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 
 from app.db import engine
@@ -26,8 +27,11 @@ STREAM_REPLAY_BATCH_LIMIT = 100
 STREAM_POLL_INTERVAL_SECONDS = 0.5
 HEARTBEAT_INTERVAL_SECONDS = 15.0
 STREAM_MAX_SECONDS = 300.0
+STREAM_MAX_CONCURRENT = 4
+STREAM_ACQUIRE_TIMEOUT_SECONDS = 0.01
 SSE_RETRY_MS = 3000
 EVENT_RETENTION = timedelta(hours=24)
+_stream_semaphore = asyncio.BoundedSemaphore(STREAM_MAX_CONCURRENT)
 
 
 @contextmanager
@@ -60,15 +64,28 @@ def _to_stream_event(row: WorldEvent) -> StreamEvent:
     return StreamEvent(id=row.id, type=row.type, payload=row.payload, ts=row.created_at)
 
 
+def _lock_world_publisher(session_or_conn: Session | Connection, world_id: UUID) -> None:
+    session_or_conn.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:world_id, 0))"),
+        {"world_id": str(world_id)},
+    )
+
+
 def publish(
     session_or_conn: Session | Connection,
     world_id: UUID,
     type: StreamEventType | str,
     payload: Mapping[str, Any],
 ) -> StreamEvent:
-    """Persist an event in the caller's transaction and return its stream contract shape."""
+    """Persist an event in the caller's transaction and return its stream contract shape.
+
+    Same-world publishers take a transaction-level advisory lock before inserting, so the
+    monotonic id cursor matches commit visibility for one world. Keep publishing
+    transactions short; long transactions delay later events in the same visitor world.
+    """
     event_type = _event_type(type)
     event_payload = _payload(payload)
+    _lock_world_publisher(session_or_conn, world_id)
     if isinstance(session_or_conn, Session):
         row = WorldEvent(world_id=world_id, type=event_type, payload=event_payload)
         session_or_conn.add(row)
@@ -136,36 +153,67 @@ def heartbeat() -> StreamEvent:
     return StreamEvent(id=None, type=StreamEventType.HEARTBEAT, payload={}, ts=datetime.now(UTC))
 
 
+def _poll_once(world_id: UUID, cursor: int | None) -> list[StreamEvent]:
+    with session_scope() as session:
+        return replay(
+            session,
+            world_id,
+            since_id=cursor,
+            limit=STREAM_REPLAY_BATCH_LIMIT,
+        )
+
+
+async def acquire_stream_slot() -> Callable[[], None] | None:
+    try:
+        await asyncio.wait_for(
+            _stream_semaphore.acquire(),
+            timeout=STREAM_ACQUIRE_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        return None
+
+    released = False
+
+    def release() -> None:
+        nonlocal released
+        if not released:
+            released = True
+            _stream_semaphore.release()
+
+    return release
+
+
 async def stream(
-    world_id: UUID, request: Request, since_id: int | None = None
+    world_id: UUID,
+    request: Request,
+    since_id: int | None = None,
+    release_slot: Callable[[], None] | None = None,
 ) -> AsyncIterator[str]:
     """Yield a finite SSE stream with replay, DB polling and heartbeat keep-alives."""
     cursor = since_id
     deadline = time.monotonic() + STREAM_MAX_SECONDS
     last_heartbeat = time.monotonic()
-    yield f"retry: {SSE_RETRY_MS}\n\n"
+    try:
+        yield f"retry: {SSE_RETRY_MS}\n\n"
 
-    while time.monotonic() < deadline:
-        if await request.is_disconnected():
-            break
+        while time.monotonic() < deadline:
+            if await request.is_disconnected():
+                break
 
-        with session_scope() as session:
-            batch = replay(
-                session,
-                world_id,
-                since_id=cursor,
-                limit=STREAM_REPLAY_BATCH_LIMIT,
-            )
+            batch = await run_in_threadpool(_poll_once, world_id, cursor)
 
-        if batch:
-            for event in batch:
-                yield format_sse(event)
-                cursor = event.id
-            continue
+            if batch:
+                for event in batch:
+                    yield format_sse(event)
+                    cursor = event.id
+                continue
 
-        now = time.monotonic()
-        if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
-            yield format_sse(heartbeat())
-            last_heartbeat = now
+            now = time.monotonic()
+            if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+                yield format_sse(heartbeat())
+                last_heartbeat = now
 
-        await asyncio.sleep(STREAM_POLL_INTERVAL_SECONDS)
+            await asyncio.sleep(STREAM_POLL_INTERVAL_SECONDS)
+    finally:
+        if release_slot is not None:
+            release_slot()

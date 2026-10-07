@@ -161,13 +161,16 @@ class Event(SQLModel, table=True):
 
 class WorldEvent(SQLModel, table=True):
     __tablename__ = "world_events"
-    __table_args__ = (Index("ix_world_events_world_id_id", "world_id", "id"),)
+    __table_args__ = (
+        Index("ix_world_events_world_id_id", "world_id", "id"),
+        Index("ix_world_events_created_at", "created_at"),
+    )
 
     id: int | None = Field(
         default=None,
         sa_column=Column(BigInteger, primary_key=True, autoincrement=True),
     )
-    world_id: UUID = Field(foreign_key="worlds.id", index=True)
+    world_id: UUID = Field(foreign_key="worlds.id")
     type: StreamEventType = Field(sa_column=_enum_column(StreamEventType))
     payload: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
     created_at: datetime = _created_at()

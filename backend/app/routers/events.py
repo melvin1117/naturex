@@ -5,14 +5,30 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
+from sqlmodel import Session
 
 from app import events as event_bus
-from app.deps import CurrentWorld, SessionDep
+from app.db import get_session
+from app.deps import CurrentWorld, SessionDep, SettingsDep, current_world
+from app.models import World
 from app.schemas import StreamEvent
 
 router = APIRouter(tags=["events"])
+StreamSessionDep = Annotated[Session, Depends(get_session, scope="function")]
+
+
+def current_world_for_stream(
+    request: Request,
+    response: Response,
+    session: StreamSessionDep,
+    settings: SettingsDep,
+) -> World:
+    return current_world(request, response, session, settings)
+
+
+CurrentWorldForStream = Annotated[World, Depends(current_world_for_stream)]
 
 
 def _parse_last_event_id(value: str | None) -> int | None:
@@ -43,13 +59,20 @@ def poll_events(
 @router.get("/events/stream")
 async def stream_events(
     request: Request,
-    world: CurrentWorld,
+    world: CurrentWorldForStream,
     last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
     since_id: Annotated[int | None, Query(ge=0)] = None,
 ) -> StreamingResponse:
     cursor = _parse_last_event_id(last_event_id) if last_event_id is not None else since_id
+    release_slot = await event_bus.acquire_stream_slot()
+    if release_slot is None:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "too_many_event_streams",
+            headers={"Retry-After": str(event_bus.SSE_RETRY_MS // 1000)},
+        )
     return StreamingResponse(
-        event_bus.stream(world.id, request, cursor),
+        event_bus.stream(world.id, request, cursor, release_slot),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
