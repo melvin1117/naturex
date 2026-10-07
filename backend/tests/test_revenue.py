@@ -204,38 +204,19 @@ def session() -> Iterator[Session]:
 
 
 def _add_holdings(session: Session) -> None:
+    """Investor holdings on top of the community's retained stake, which seed() creates."""
     asset = session.get_one(Asset, ASSET_ID)
-    retained_shares = asset.total_shares - asset.primary_shares_remaining
-    asset.primary_shares_remaining -= ARJUN_SHARES + MIA_SHARES
-    session.add_all(
-        [
-            Holding(
-                world_id=WORLD_ID,
-                user_id=COMMUNITY_PERSONA.id,
-                asset_id=ASSET_ID,
-                shares=retained_shares,
-                avg_cost=D("0.0001"),
-            ),
-            Holding(
-                world_id=WORLD_ID,
-                user_id=ARJUN_ID,
-                asset_id=ASSET_ID,
-                shares=ARJUN_SHARES,
-                avg_cost=D("10.0000"),
-            ),
-            Holding(
-                world_id=WORLD_ID,
-                user_id=MIA_ID,
-                asset_id=ASSET_ID,
-                shares=MIA_SHARES,
-                avg_cost=D("10.0000"),
-            ),
-        ]
-    )
+    community = session.get_one(Holding, (WORLD_ID, COMMUNITY_PERSONA.id, ASSET_ID))
+    assert community.shares == asset.total_shares - asset.primary_shares_remaining
+    _add_investor_holdings(session)
+
+
+def _remove_community_holding(session: Session) -> None:
+    session.delete(session.get_one(Holding, (WORLD_ID, COMMUNITY_PERSONA.id, ASSET_ID)))
     session.flush()
 
 
-def _add_investor_holdings_without_community(session: Session) -> None:
+def _add_investor_holdings(session: Session) -> None:
     asset = session.get_one(Asset, ASSET_ID)
     asset.primary_shares_remaining -= ARJUN_SHARES + MIA_SHARES
     session.add_all(
@@ -308,7 +289,8 @@ def test_pay_quarter_credits_wallets_users_and_appends_a_verifiable_ledger_entry
 def test_pay_quarter_rejects_missing_community_retained_holding_without_changes(
     session: Session,
 ) -> None:
-    _add_investor_holdings_without_community(session)
+    _remove_community_holding(session)
+    _add_investor_holdings(session)
     before = _world_cash_and_wallets(session)
 
     with pytest.raises(
