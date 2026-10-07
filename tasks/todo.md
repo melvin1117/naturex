@@ -127,8 +127,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ## Week 2 · Real data and the exchange (Mon Oct 5 – Fri Oct 9)
 
 ### T13 · Remaining demo sites and scenarios (#24) — D2 · M · Must
-- [ ] Mangrove and restoration-forest sites precomputed like T11
-- [ ] Time Machine scenario versions for each site (baseline, restoration, encroachment), generated as scripted deltas
+- [x] Mangrove and restoration-forest sites precomputed like T11
+- [x] Time Machine scenario versions for each site (baseline, restoration, encroachment), generated as scripted deltas
 
 **Verify:** script reproduces all JSON · **Deps:** T11 · **Files:** `backend/data/demo_sites/*`, `scripts/precompute_sites.py`
 

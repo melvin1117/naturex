@@ -127,7 +127,7 @@
 | **ESA CCI Biomass v6** (`ESA/CCI/Above_Ground_Biomass/V6_0`, CC-BY 4.0, 100 m, has `agb_sd`) | Weak for wetlands and grass | **ADOPT** (primary biomass) |
 | GEDI L4B | 1 km, single 2019–21 mean; too coarse for 500 ha | Cross-check only |
 | Chloris biomass | **CC-BY-NC-SA** | SKIP |
-| **SoilGrids SOC** (ISRIC; licence to verify) | Wetland carbon is mostly in soil | ADOPT |
+| **SoilGrids SOC** (ISRIC, CC BY 4.0, verified in T13; `projects/soilgrids-isric/ocs_mean`, 0–30 cm stock in t/ha) | Wetland carbon is mostly in soil | ADOPT (T13: `soc_t_c_ha`) |
 | Impact Observatory Biodiversity Intactness (CC-BY 4.0) | Optional biodiversity input | Optional |
 | Global Forest Watch, **CarbonPlan** (MIT), **Regen Network** (Apache-2.0), Restor | Polygon-report UX, honest MRV analysis, credit data model | BORROW ideas |
 
@@ -137,6 +137,7 @@
 - `JRC/GSW1_4/*` (to 2021)
 - `LARSE/GEDI/GEDI04_B_002`
 - `ESA/CCI/Above_Ground_Biomass/V6_0`
+- `projects/soilgrids-isric/ocs_mean` (community catalog, ISRIC)
 
 **Data terms and attribution:**
 | Source | Obligation |
@@ -147,6 +148,8 @@
 | JRC GSW | Cite Pekel et al. 2016; "Source: EC JRC/Google" |
 | Hansen GFC | CC-BY 4.0; cite Hansen et al. 2013 |
 | GEDI | Public domain; cite doi:10.3334/ORNLDAAC/2056 |
+| ESA CCI Biomass | Public; cite Santoro & Cartus (2025), doi:10.5285/95913ffb6467447ca72c4e9d8cf30501 |
+| SoilGrids 2.0 | CC BY 4.0 (ISRIC data README, files.isric.org/soilgrids/latest/data); cite Poggio et al. 2021 and credit ISRIC |
 | Nominatim | ≤ 1 req/s, custom User-Agent, cache results, "© OpenStreetMap contributors" (ODbL) |
 | Natural Earth | Public domain (safe to commit) |
 
@@ -166,6 +169,6 @@
 
 ## 7. Open items to verify
 - Nemotron model IDs, JSON-mode support, and `chat_template_kwargs` passthrough on Token Factory (needs an API key).
-- The four unverified Costanza rows, the SoilGrids licence, and GEDI L4B v2.1 coverage.
+- The four unverified Costanza rows and GEDI L4B v2.1 coverage (v2 has no 1 km cell over the Sumidero forest site; T13 falls back to ESA CCI there). The SoilGrids licence was verified as CC BY 4.0 in T13.
 - Earth Engine terms for a prize-bearing hackathon.
 - ESVD written consent if we want ESVD-derived coefficients.

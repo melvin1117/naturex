@@ -9,10 +9,11 @@ from uuid import uuid4
 import pytest
 
 from app.models import Metrics
-from app.tools.earth_obs import load_site_metrics
+from app.tools.earth_obs import EarthObsMetrics, load_site_metrics
 from app.tools.geometry import validate_polygon
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "demo_sites"
+SITE_KEYS = ("wetland_mx", "mangrove_mx", "restoration_forest")
 
 
 def test_loads_committed_wetland_metrics() -> None:
@@ -26,8 +27,9 @@ def test_loads_committed_wetland_metrics() -> None:
     assert metrics.cloud_free_obs > 0
 
 
-def test_land_cover_fractions_are_complete_and_normalized() -> None:
-    metrics = load_site_metrics("wetland_mx")
+@pytest.mark.parametrize("site_key", SITE_KEYS)
+def test_land_cover_fractions_are_complete_and_normalized(site_key: str) -> None:
+    metrics = load_site_metrics(site_key)
 
     assert set(metrics.landcover) == {
         "water",
@@ -43,22 +45,73 @@ def test_land_cover_fractions_are_complete_and_normalized() -> None:
     assert sum(metrics.landcover.values()) == pytest.approx(1.0, abs=0.0002)
 
 
-def test_area_matches_committed_geojson() -> None:
-    geojson = json.loads((DATA_DIR / "wetland_mx.geojson").read_text())
-    metrics = load_site_metrics("wetland_mx")
+@pytest.mark.parametrize("site_key", SITE_KEYS)
+def test_area_matches_committed_geojson(site_key: str) -> None:
+    geojson = json.loads((DATA_DIR / f"{site_key}.geojson").read_text())
+    metrics = load_site_metrics(site_key)
     check = validate_polygon(geojson)
 
     assert check.ok
     assert check.area_ha is not None
+    assert 150 <= metrics.area_ha <= 600
     assert metrics.area_ha == pytest.approx(check.area_ha, rel=0.005)
+    assert len(geojson["geometry"]["coordinates"][0]) - 1 > 4  # hand-drawn, not a box
 
 
-def test_attributions_cover_every_dataset_used() -> None:
-    metrics = load_site_metrics("wetland_mx")
+@pytest.mark.parametrize("site_key", SITE_KEYS)
+def test_attributions_cover_every_dataset_used(site_key: str) -> None:
+    metrics = load_site_metrics(site_key)
 
+    assert len(metrics.attributions) == len(metrics.datasets)
     for dataset in metrics.datasets:
         assert dataset.attribution
         assert dataset.attribution in metrics.attributions
+    keys = {dataset.key for dataset in metrics.datasets}
+    assert metrics.biomass_source in keys
+    assert {"dynamic_world", "hansen_global_forest_change", "soilgrids_ocs"} <= keys
+    assert any("CC BY 4.0" in text and "ISRIC" in text for text in metrics.attributions)
+
+
+@pytest.mark.parametrize("site_key", SITE_KEYS)
+def test_t13_metrics_are_present_for_every_site(site_key: str) -> None:
+    metrics = load_site_metrics(site_key)
+
+    assert metrics.soc_t_c_ha is not None
+    assert 0 < metrics.soc_t_c_ha < 500
+    assert metrics.forest_loss_last_12m_ha is not None
+    assert 0 <= metrics.forest_loss_last_12m_ha <= metrics.forest_loss_ha
+    assert metrics.thresholds["hansen_forest_loss_last_12m_year"] == "2025"
+    assert metrics.thresholds["soilgrids_soc_depth_cm"] == "0-30"
+    assert metrics.simulated is False
+    assert metrics.scenario == "baseline"
+
+
+def test_demo_sites_tell_their_stories() -> None:
+    mangrove = load_site_metrics("mangrove_mx")
+    forest = load_site_metrics("restoration_forest")
+
+    # Mangrove: coastal wetland, almost all mangrove (trees + flooded vegetation) and water.
+    mangrove_cover = mangrove.landcover
+    assert mangrove_cover["trees"] + mangrove_cover["flooded_vegetation"] >= 0.85
+    assert mangrove_cover["water"] + mangrove_cover["flooded_vegetation"] >= 0.20
+    assert mangrove.natural_fraction >= 0.95
+    # Forest: tree-dominated, damaged in 2021-2025, and still listable (< 1% loss last year).
+    assert max(forest.landcover, key=lambda name: forest.landcover[name]) == "trees"
+    assert forest.forest_loss_ha >= 0.05 * forest.area_ha
+    assert forest.forest_loss_last_12m_ha is not None
+    assert forest.forest_loss_last_12m_ha < 0.01 * forest.area_ha
+
+
+def test_old_json_without_t13_fields_still_loads() -> None:
+    data = json.loads((DATA_DIR / "wetland_mx.json").read_text())
+    for key in ("soc_t_c_ha", "forest_loss_last_12m_ha", "biomass_source"):
+        data.pop(key)
+
+    metrics = EarthObsMetrics.model_validate(data)
+
+    assert metrics.soc_t_c_ha is None
+    assert metrics.forest_loss_last_12m_ha is None
+    assert metrics.biomass_source is None
 
 
 def test_unknown_site_raises_clear_error() -> None:

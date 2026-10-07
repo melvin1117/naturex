@@ -6,8 +6,10 @@
     "Cloud Score+: Pasquarella, V. J., Brown, C. F., Czerwinski, W., & Rucklidge, W. J. (2023). Comprehensive quality assessment of optical satellite imagery using weakly supervised video learning.",
     "JRC Global Surface Water: EC JRC/Google; Pekel et al. (2016), High-resolution mapping of global surface water and its long-term changes, Nature.",
     "Hansen Global Forest Change: Hansen et al. (2013), High-Resolution Global Maps of 21st-Century Forest Cover Change, Science.",
-    "GEDI L4B: Dubayah et al. (2022), GEDI L4B Gridded Aboveground Biomass Density, Version 2, ORNL DAAC."
+    "GEDI L4B: Dubayah et al. (2022), GEDI L4B Gridded Aboveground Biomass Density, Version 2, ORNL DAAC.",
+    "SoilGrids 2.0 (CC BY 4.0): ISRIC - World Soil Information; Poggio et al. (2021), SoilGrids 2.0: producing soil information for the globe with quantified spatial uncertainty, SOIL 7, 217-240."
   ],
+  "biomass_source": "gedi_l4b",
   "biomass_t_ha": 9.4681,
   "centroid": {
     "lat": 19.2873,
@@ -79,6 +81,16 @@
       "dataset_id": "LARSE/GEDI/GEDI04_B_002",
       "key": "gedi_l4b",
       "version": "Version 2"
+    },
+    {
+      "attribution": "SoilGrids 2.0 (CC BY 4.0): ISRIC - World Soil Information; Poggio et al. (2021), SoilGrids 2.0: producing soil information for the globe with quantified spatial uncertainty, SOIL 7, 217-240.",
+      "bands": [
+        "ocs_0-30cm_mean"
+      ],
+      "catalog_url": "https://gee-community-catalog.org/projects/isric/",
+      "dataset_id": "projects/soilgrids-isric/ocs_mean",
+      "key": "soilgrids_ocs",
+      "version": "SoilGrids 2.0 (published 2020-05-04)"
     }
   ],
   "date_windows": {
@@ -94,6 +106,10 @@
       "end": "2025-12-31",
       "start": "2021-01-01"
     },
+    "hansen_forest_loss_last_12m": {
+      "end": "2025-12-31",
+      "start": "2025-01-01"
+    },
     "jrc_water_change": {
       "end": "2021-12-31",
       "start": "1984-03-16"
@@ -108,6 +124,7 @@
     }
   },
   "forest_loss_ha": 0.0,
+  "forest_loss_last_12m_ha": 0.0,
   "landcover": {
     "bare": 0.0,
     "built": 0.1288,
@@ -432,16 +449,20 @@
     "significant_05": false
   },
   "site_key": "wetland_mx",
+  "soc_t_c_ha": 55.4083,
   "thresholds": {
     "cloud_free_scene_min_clear_fraction": 0.5,
     "cloud_score_plus_cs_cdf": 0.6,
     "dynamic_world_mode_scale_m": 10,
     "gedi_biomass_scale_m": 1000,
+    "hansen_forest_loss_last_12m_year": "2025",
     "hansen_forest_loss_scale_m": 30,
     "hansen_forest_loss_years": "2021-2025",
     "hansen_treecover2000_min_percent": 30,
     "jrc_water_change_scale_m": 30,
-    "sentinel2_ndvi_scale_m": 10
+    "sentinel2_ndvi_scale_m": 10,
+    "soilgrids_soc_depth_cm": "0-30",
+    "soilgrids_soc_scale_m": 250
   },
   "water_change": -6.6021
 }

@@ -12,7 +12,8 @@ from sqlmodel import Session, select
 
 from app.config import get_settings
 from app.models import Asset, LedgerEntry, LedgerKind, User, World
-from app.seed import _PLACEHOLDER_POLY, DEMO_SITES, WORLD_ID, seed
+from app.seed import DEMO_GEOJSON, DEMO_SITES, WORLD_ID, DemoSite, seed
+from app.tools.geometry import validate_polygon
 from tests.conftest import alembic_cfg, requires_db
 
 EXPECTED_TABLES = {
@@ -87,8 +88,18 @@ def test_seed_is_idempotent() -> None:
     }
 
 
+# Square the seed used before T11/T13 replaced the placeholders with real boundaries.
+_OLD_PLACEHOLDER_POLY = {
+    "type": "Polygon",
+    "coordinates": [
+        [[-99.10, 19.25], [-99.08, 19.25], [-99.08, 19.27], [-99.10, 19.27], [-99.10, 19.25]]
+    ],
+}
+
+
 @requires_db
-def test_seed_upgrades_existing_wetland_geometry_without_touching_accounting() -> None:
+@pytest.mark.parametrize("site", DEMO_SITES, ids=lambda site: site.key)
+def test_seed_upgrades_existing_geometry_without_touching_accounting(site: DemoSite) -> None:
     cfg = alembic_cfg()
     command.downgrade(cfg, "base")
     command.upgrade(cfg, "head")
@@ -96,30 +107,42 @@ def test_seed_upgrades_existing_wetland_geometry_without_touching_accounting() -
     engine = create_engine(get_settings().database_url)
     with Session(engine) as session:
         seed(session)
-        wetland = session.exec(
-            select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == "wetland_mx")
+        asset = session.exec(
+            select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == site.key)
         ).one()
-        wetland.geojson = _PLACEHOLDER_POLY
-        wetland.area_ha = Decimal("500.00")
-        wetland.centroid_lat = 19.26
-        wetland.centroid_lon = -99.09
-        wetland.primary_shares_remaining = 123
-        wetland.community_wallet = Decimal("42.00")
-        session.add(wetland)
+        asset.name = "Old placeholder name"
+        asset.geojson = _OLD_PLACEHOLDER_POLY
+        asset.area_ha = Decimal("500.00")
+        asset.centroid_lat = 19.26
+        asset.centroid_lon = -99.09
+        asset.primary_shares_remaining = 123
+        asset.community_wallet = Decimal("42.00")
+        session.add(asset)
         session.commit()
 
         seed(session)
         upgraded = session.exec(
-            select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == "wetland_mx")
+            select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == site.key)
         ).one()
 
     engine.dispose()
-    assert upgraded.geojson != _PLACEHOLDER_POLY
-    assert upgraded.area_ha == DEMO_SITES[0].area_ha
-    assert upgraded.centroid_lat == DEMO_SITES[0].centroid_lat
-    assert upgraded.centroid_lon == DEMO_SITES[0].centroid_lon
+    assert upgraded.geojson == DEMO_GEOJSON[site.key]
+    assert upgraded.name == site.name
+    assert upgraded.area_ha == site.area_ha
+    assert upgraded.centroid_lat == site.centroid_lat
+    assert upgraded.centroid_lon == site.centroid_lon
     assert upgraded.primary_shares_remaining == 123
     assert upgraded.community_wallet == Decimal("42.00")
+
+
+def test_demo_sites_use_their_committed_boundaries() -> None:
+    for site in DEMO_SITES:
+        check = validate_polygon(DEMO_GEOJSON[site.key])
+        assert check.ok, site.key
+        assert check.area_ha is not None
+        assert float(site.area_ha) == pytest.approx(check.area_ha, abs=0.01)
+        assert site.centroid_lat == pytest.approx(check.centroid_lat, abs=1e-4)
+        assert site.centroid_lon == pytest.approx(check.centroid_lon, abs=1e-4)
 
 
 @requires_db

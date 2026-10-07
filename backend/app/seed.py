@@ -51,8 +51,6 @@ PERSONAS: tuple[Persona, ...] = (
 )
 COMMUNITY_PERSONA = PERSONAS[0]
 
-_WETLAND_METRICS = load_site_metrics("wetland_mx")
-
 
 def _decimal_ha(value: float) -> Decimal:
     return Decimal(str(value)).quantize(Decimal("0.01"))
@@ -63,54 +61,45 @@ def _load_demo_geojson(site_key: str) -> dict[str, Any]:
     return cast(dict[str, Any], json.loads(path.read_text()))
 
 
+def _demo_site(id_: UUID, key: str, name: str, description: str) -> DemoSite:
+    """A demo site whose area and centroid come from its committed boundary (T11/T13)."""
+    metrics = load_site_metrics(key)
+    return DemoSite(
+        id=id_,
+        key=key,
+        name=name,
+        country="MX",
+        description=description,
+        area_ha=_decimal_ha(metrics.area_ha),
+        centroid_lat=metrics.centroid.lat,
+        centroid_lon=metrics.centroid.lon,
+    )
+
+
 DEMO_SITES: tuple[DemoSite, ...] = (
-    DemoSite(
-        id=UUID("33333333-3333-3333-3333-333333333301"),
-        key="wetland_mx",
-        name="Xochimilco Wetland",
-        country="MX",
-        description="Hero inland wetland near Mexico City (demo).",
-        area_ha=_decimal_ha(_WETLAND_METRICS.area_ha),
-        centroid_lat=_WETLAND_METRICS.centroid.lat,
-        centroid_lon=_WETLAND_METRICS.centroid.lon,
+    _demo_site(
+        UUID("33333333-3333-3333-3333-333333333301"),
+        "wetland_mx",
+        "Xochimilco Wetland",
+        "Hero inland wetland near Mexico City (demo).",
     ),
-    DemoSite(
-        id=UUID("33333333-3333-3333-3333-333333333302"),
-        key="mangrove_mx",
-        name="Coastal Mangrove Reserve",
-        country="MX",
-        description="Blue-carbon mangrove site (demo).",
-        area_ha=Decimal("320.00"),
-        centroid_lat=21.50,
-        centroid_lon=-87.50,
+    _demo_site(
+        UUID("33333333-3333-3333-3333-333333333302"),
+        "mangrove_mx",
+        "Ría Celestún Mangrove",
+        "Blue-carbon mangrove in the Ría Celestún Biosphere Reserve, Yucatán (demo).",
     ),
-    DemoSite(
-        id=UUID("33333333-3333-3333-3333-333333333303"),
-        key="restoration_forest",
-        name="Restoration Forest Parcel",
-        country="MX",
-        description="Degraded forest under restoration (demo).",
-        area_ha=Decimal("450.00"),
-        centroid_lat=16.75,
-        centroid_lon=-93.10,
+    _demo_site(
+        UUID("33333333-3333-3333-3333-333333333303"),
+        "restoration_forest",
+        "Sumidero Canyon Restoration Forest",
+        "Tropical forest recovering from 2021–2025 loss on the edge of Cañón del Sumidero "
+        "National Park, Chiapas (demo).",
     ),
 )
 
-_WETLAND_GEOJSON = _load_demo_geojson("wetland_mx")
-
-# Placeholder polygon, replaced by real GeoJSON in T11/T13. It's mostly built-up town;
-# the real wetland is ~3 km north, near Xochimilco Ecological Park (ADR-0004).
-_PLACEHOLDER_POLY: dict[str, Any] = {
-    "type": "Polygon",
-    "coordinates": [
-        [
-            [-99.10, 19.25],
-            [-99.08, 19.25],
-            [-99.08, 19.27],
-            [-99.10, 19.27],
-            [-99.10, 19.25],
-        ]
-    ],
+DEMO_GEOJSON: dict[str, dict[str, Any]] = {
+    site.key: _load_demo_geojson(site.key) for site in DEMO_SITES
 }
 
 
@@ -151,7 +140,7 @@ def seed(session: Session) -> None:
                     community_user_id=COMMUNITY_PERSONA.id,
                     country=site.country,
                     description=site.description,
-                    geojson=_WETLAND_GEOJSON if site.key == "wetland_mx" else _PLACEHOLDER_POLY,
+                    geojson=DEMO_GEOJSON[site.key],
                     area_ha=site.area_ha,
                     centroid_lat=site.centroid_lat,
                     centroid_lon=site.centroid_lon,
@@ -163,8 +152,12 @@ def seed(session: Session) -> None:
                     site_key=site.key,
                 )
             )
-        elif site.key == "wetland_mx":
-            existing_asset.geojson = _WETLAND_GEOJSON
+        else:
+            # Upgrade databases seeded with the old placeholder boundaries; never touches
+            # shares, cash or the community wallet.
+            existing_asset.name = site.name
+            existing_asset.description = site.description
+            existing_asset.geojson = DEMO_GEOJSON[site.key]
             existing_asset.area_ha = site.area_ha
             existing_asset.centroid_lat = site.centroid_lat
             existing_asset.centroid_lon = site.centroid_lon

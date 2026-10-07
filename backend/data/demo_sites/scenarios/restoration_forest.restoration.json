@@ -1,0 +1,483 @@
+{
+  "area_ha": 400.2052,
+  "attributions": [
+    "Dynamic World: This dataset is produced for the Dynamic World Project by Google in partnership with National Geographic Society and the World Resources Institute.",
+    "Contains modified Copernicus Sentinel data 2021-2026.",
+    "Cloud Score+: Pasquarella, V. J., Brown, C. F., Czerwinski, W., & Rucklidge, W. J. (2023). Comprehensive quality assessment of optical satellite imagery using weakly supervised video learning.",
+    "JRC Global Surface Water: EC JRC/Google; Pekel et al. (2016), High-resolution mapping of global surface water and its long-term changes, Nature.",
+    "Hansen Global Forest Change: Hansen et al. (2013), High-Resolution Global Maps of 21st-Century Forest Cover Change, Science.",
+    "ESA CCI Biomass: Santoro, M.; Cartus, O. (2025), ESA Biomass Climate Change Initiative (Biomass_cci): Global datasets of forest above-ground biomass, v6.0, NERC EDS Centre for Environmental Data Analysis, doi:10.5285/95913ffb6467447ca72c4e9d8cf30501.",
+    "SoilGrids 2.0 (CC BY 4.0): ISRIC - World Soil Information; Poggio et al. (2021), SoilGrids 2.0: producing soil information for the globe with quantified spatial uncertainty, SOIL 7, 217-240."
+  ],
+  "based_on": "2026Q3",
+  "biomass_source": "esa_cci_biomass",
+  "biomass_t_ha": 66.8054,
+  "centroid": {
+    "lat": 16.8453,
+    "lon": -93.0598
+  },
+  "cloud_free_months_5y": 59,
+  "cloud_free_obs": 63,
+  "computed_at_utc": "2026-10-07T05:24:11Z",
+  "data_version": "sim-1",
+  "datasets": [
+    {
+      "attribution": "Dynamic World: This dataset is produced for the Dynamic World Project by Google in partnership with National Geographic Society and the World Resources Institute.",
+      "bands": [
+        "label"
+      ],
+      "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/GOOGLE_DYNAMICWORLD_V1",
+      "dataset_id": "GOOGLE/DYNAMICWORLD/V1",
+      "key": "dynamic_world",
+      "version": "V1"
+    },
+    {
+      "attribution": "Contains modified Copernicus Sentinel data 2021-2026.",
+      "bands": [
+        "B8",
+        "B4"
+      ],
+      "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR_HARMONIZED",
+      "dataset_id": "COPERNICUS/S2_SR_HARMONIZED",
+      "key": "sentinel_2_sr",
+      "version": "HARMONIZED"
+    },
+    {
+      "attribution": "Cloud Score+: Pasquarella, V. J., Brown, C. F., Czerwinski, W., & Rucklidge, W. J. (2023). Comprehensive quality assessment of optical satellite imagery using weakly supervised video learning.",
+      "bands": [
+        "cs_cdf"
+      ],
+      "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/GOOGLE_CLOUD_SCORE_PLUS_V1_S2_HARMONIZED",
+      "dataset_id": "GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED",
+      "key": "cloud_score_plus",
+      "version": "V1"
+    },
+    {
+      "attribution": "JRC Global Surface Water: EC JRC/Google; Pekel et al. (2016), High-resolution mapping of global surface water and its long-term changes, Nature.",
+      "bands": [
+        "change_abs"
+      ],
+      "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/JRC_GSW1_4_GlobalSurfaceWater",
+      "dataset_id": "JRC/GSW1_4/GlobalSurfaceWater",
+      "key": "jrc_global_surface_water",
+      "version": "v1.4"
+    },
+    {
+      "attribution": "Hansen Global Forest Change: Hansen et al. (2013), High-Resolution Global Maps of 21st-Century Forest Cover Change, Science.",
+      "bands": [
+        "lossyear",
+        "treecover2000"
+      ],
+      "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/UMD_hansen_global_forest_change_2025_v1_13",
+      "dataset_id": "UMD/hansen/global_forest_change_2025_v1_13",
+      "key": "hansen_global_forest_change",
+      "version": "2025 v1.13"
+    },
+    {
+      "attribution": "ESA CCI Biomass: Santoro, M.; Cartus, O. (2025), ESA Biomass Climate Change Initiative (Biomass_cci): Global datasets of forest above-ground biomass, v6.0, NERC EDS Centre for Environmental Data Analysis, doi:10.5285/95913ffb6467447ca72c4e9d8cf30501.",
+      "bands": [
+        "agb"
+      ],
+      "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/ESA_CCI_Above_Ground_Biomass_V6_0",
+      "dataset_id": "ESA/CCI/Above_Ground_Biomass/V6_0",
+      "key": "esa_cci_biomass",
+      "version": "v6.0 (2022 map)"
+    },
+    {
+      "attribution": "SoilGrids 2.0 (CC BY 4.0): ISRIC - World Soil Information; Poggio et al. (2021), SoilGrids 2.0: producing soil information for the globe with quantified spatial uncertainty, SOIL 7, 217-240.",
+      "bands": [
+        "ocs_0-30cm_mean"
+      ],
+      "catalog_url": "https://gee-community-catalog.org/projects/isric/",
+      "dataset_id": "projects/soilgrids-isric/ocs_mean",
+      "key": "soilgrids_ocs",
+      "version": "SoilGrids 2.0 (published 2020-05-04)"
+    }
+  ],
+  "date_windows": {
+    "cloud_free_obs": {
+      "end": "2026-10-01",
+      "start": "2025-10-01"
+    },
+    "esa_cci_biomass": {
+      "end": "2022-12-31",
+      "start": "2022-01-01"
+    },
+    "hansen_forest_loss": {
+      "end": "2025-12-31",
+      "start": "2021-01-01"
+    },
+    "hansen_forest_loss_last_12m": {
+      "end": "2025-12-31",
+      "start": "2025-01-01"
+    },
+    "jrc_water_change": {
+      "end": "2021-12-31",
+      "start": "1984-03-16"
+    },
+    "land_cover": {
+      "end": "2026-10-01",
+      "start": "2025-10-01"
+    },
+    "ndvi": {
+      "end": "2026-10-01",
+      "start": "2021-10-01"
+    }
+  },
+  "forest_loss_ha": 26.811,
+  "forest_loss_last_12m_ha": 0.8566,
+  "landcover": {
+    "bare": 0.0,
+    "built": 0.0,
+    "crops": 0.0,
+    "flooded_vegetation": 0.0,
+    "grass": 0.0031,
+    "shrub_and_scrub": 0.2654,
+    "snow_and_ice": 0.0,
+    "trees": 0.7071,
+    "water": 0.0244
+  },
+  "natural_fraction": 1.0,
+  "ndvi_mean": 0.7152,
+  "ndvi_series": [
+    {
+      "cloud_free_obs": 4,
+      "month": "2021-10",
+      "ndvi": 0.8006
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2021-11",
+      "ndvi": 0.7748
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2021-12",
+      "ndvi": 0.7037
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2022-01",
+      "ndvi": 0.6209
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2022-02",
+      "ndvi": 0.5423
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2022-03",
+      "ndvi": 0.4362
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2022-04",
+      "ndvi": 0.388
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2022-05",
+      "ndvi": 0.5286
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2022-06",
+      "ndvi": 0.699
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2022-07",
+      "ndvi": 0.7907
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2022-08",
+      "ndvi": 0.8008
+    },
+    {
+      "cloud_free_obs": 1,
+      "month": "2022-09",
+      "ndvi": 0.7768
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2022-10",
+      "ndvi": 0.7918
+    },
+    {
+      "cloud_free_obs": 1,
+      "month": "2022-11",
+      "ndvi": 0.7915
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2022-12",
+      "ndvi": 0.6921
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2023-01",
+      "ndvi": 0.6339
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2023-02",
+      "ndvi": 0.5573
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2023-03",
+      "ndvi": 0.4843
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2023-04",
+      "ndvi": 0.4188
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2023-05",
+      "ndvi": 0.4706
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2023-06",
+      "ndvi": 0.5446
+    },
+    {
+      "cloud_free_obs": 1,
+      "month": "2023-07",
+      "ndvi": 0.7392
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2023-08",
+      "ndvi": 0.7973
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2023-09",
+      "ndvi": 0.8066
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2023-10",
+      "ndvi": 0.8147
+    },
+    {
+      "cloud_free_obs": 2,
+      "month": "2023-11",
+      "ndvi": 0.7783
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2023-12",
+      "ndvi": 0.7468
+    },
+    {
+      "cloud_free_obs": 2,
+      "month": "2024-01",
+      "ndvi": 0.6468
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2024-02",
+      "ndvi": 0.5594
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2024-03",
+      "ndvi": 0.4302
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2024-04",
+      "ndvi": 0.3879
+    },
+    {
+      "cloud_free_obs": 7,
+      "month": "2024-05",
+      "ndvi": 0.4514
+    },
+    {
+      "cloud_free_obs": 2,
+      "month": "2024-06",
+      "ndvi": 0.6275
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2024-07",
+      "ndvi": 0.7749
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2024-08",
+      "ndvi": 0.788
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2024-10",
+      "ndvi": 0.785
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2024-11",
+      "ndvi": 0.7637
+    },
+    {
+      "cloud_free_obs": 2,
+      "month": "2024-12",
+      "ndvi": 0.6805
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2025-01",
+      "ndvi": 0.5745
+    },
+    {
+      "cloud_free_obs": 2,
+      "month": "2025-02",
+      "ndvi": 0.4857
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2025-03",
+      "ndvi": 0.5051
+    },
+    {
+      "cloud_free_obs": 7,
+      "month": "2025-04",
+      "ndvi": 0.4653
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2025-05",
+      "ndvi": 0.5006
+    },
+    {
+      "cloud_free_obs": 1,
+      "month": "2025-06",
+      "ndvi": 0.5338
+    },
+    {
+      "cloud_free_obs": 7,
+      "month": "2025-07",
+      "ndvi": 0.7644
+    },
+    {
+      "cloud_free_obs": 7,
+      "month": "2025-08",
+      "ndvi": 0.7876
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2025-09",
+      "ndvi": 0.8162
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2025-10",
+      "ndvi": 0.8326
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2025-11",
+      "ndvi": 0.7942
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2025-12",
+      "ndvi": 0.7051
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2026-01",
+      "ndvi": 0.706
+    },
+    {
+      "cloud_free_obs": 4,
+      "month": "2026-02",
+      "ndvi": 0.6016
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2026-03",
+      "ndvi": 0.5094
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2026-04",
+      "ndvi": 0.4969
+    },
+    {
+      "cloud_free_obs": 7,
+      "month": "2026-05",
+      "ndvi": 0.63
+    },
+    {
+      "cloud_free_obs": 3,
+      "month": "2026-06",
+      "ndvi": 0.8202
+    },
+    {
+      "cloud_free_obs": 7,
+      "month": "2026-07",
+      "ndvi": 0.8461
+    },
+    {
+      "cloud_free_obs": 5,
+      "month": "2026-08",
+      "ndvi": 0.8123
+    },
+    {
+      "cloud_free_obs": 6,
+      "month": "2026-09",
+      "ndvi": 0.8278
+    }
+  ],
+  "ndvi_trend": 0.0096,
+  "ndvi_trend_details": {
+    "mann_kendall_p_value": 0.2444,
+    "mann_kendall_tau": 0.1046,
+    "mean_last_12_months": 0.7152,
+    "sens_slope_per_year": 0.0096,
+    "significant_05": false
+  },
+  "period": "2026Q4",
+  "scenario": "restoration",
+  "scenario_deltas": {
+    "biomass_pct_change": 5.0,
+    "description": "Assisted natural regeneration and native planting on the 2021-2025 loss scars: 10 pp of scrub grows into tree cover and the last 12 months are greener.",
+    "extra_forest_loss_ha": 0.0,
+    "landcover_transfers": [
+      {
+        "from": [
+          "shrub_and_scrub"
+        ],
+        "pp": 10.0,
+        "to": "trees"
+      }
+    ],
+    "ndvi_step_last_12m": 0.05,
+    "water_change_delta": 0.0
+  },
+  "simulated": true,
+  "site_key": "restoration_forest",
+  "soc_t_c_ha": 56.7109,
+  "thresholds": {
+    "cloud_free_scene_min_clear_fraction": 0.5,
+    "cloud_score_plus_cs_cdf": 0.6,
+    "dynamic_world_mode_scale_m": 10,
+    "esa_cci_biomass_scale_m": 100,
+    "hansen_forest_loss_last_12m_year": "2025",
+    "hansen_forest_loss_scale_m": 30,
+    "hansen_forest_loss_years": "2021-2025",
+    "hansen_treecover2000_min_percent": 30,
+    "jrc_water_change_scale_m": 30,
+    "sentinel2_ndvi_scale_m": 10,
+    "soilgrids_soc_depth_cm": "0-30",
+    "soilgrids_soc_scale_m": 250
+  },
+  "water_change": 0.0863
+}
