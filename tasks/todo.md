@@ -11,9 +11,9 @@
 ## Week 1 · Foundations and walking skeleton (Mon Sep 28 – Fri Oct 2)
 
 ### T01 · Accounts, credits and keys (#7) — All · XS · Must
-- [ ] Each member claims the Token Factory promo ($25, code `NEBIUS-DEVPOST-GLOBAL26`) and joins the Nebius Builders Program ($25 Token Factory + $25 Tavily)
-- [ ] D2 registers an Earth Engine non-commercial project; hosting accounts are set up in T20; one person owns the shared deployment keys
-- [ ] Keys live only in personal `.env` files; `.env.example` lists the variable names
+- [x] Each member claims the Token Factory promo ($25, code `NEBIUS-DEVPOST-GLOBAL26`) and joins the Nebius Builders Program ($25 Token Factory + $25 Tavily)
+- [x] D2 registers an Earth Engine non-commercial project; hosting accounts are set up in T20; one person owns the shared deployment keys
+- [x] Keys live only in personal `.env` files; `.env.example` lists the variable names
 
 **Verify:** `make check-keys` passes for each dev with their own key (it also lists the Nemotron model IDs for `MODEL_*`) · **Deps:** none
 
@@ -33,35 +33,35 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** notebook runs top to bottom · **Deps:** T01 · **Files:** `notebooks/ee_spike.ipynb`, `docs/adr/0004-earth-observation.md`
 
 ### T04 · Backend and repo skeleton (#10) — D1 · M · Must
-- [ ] `LICENSE` (MIT); `backend/` with uv, FastAPI `/healthz`, pydantic-settings; `compose.yml` with `pgvector/pgvector:pg16`
-- [ ] ruff, `mypy --strict`, pytest, pre-commit; root `Makefile` with `lint`, `test`
-- [ ] GitHub Actions backend job; `main` branch ruleset (PR + 1 review + green CI); CODEOWNERS, PR template
+- [x] `LICENSE` (MIT); `backend/` with uv, FastAPI `/healthz`, pydantic-settings; `compose.yml` with `pgvector/pgvector:pg16`
+- [x] ruff, `mypy --strict`, pytest, pre-commit; root `Makefile` with `lint`, `test`
+- [x] GitHub Actions backend job; `main` branch ruleset (PR + 1 review + green CI); CODEOWNERS, PR template
 
 **Verify:** `make lint && make test`; CI green on the first PR · **Deps:** none · **Files:** `LICENSE`, `backend/pyproject.toml`, `backend/app/main.py`, `compose.yml`, `.pre-commit-config.yaml`, `.github/workflows/backend.yml`, `Makefile`
 
 ### T05 · Frontend skeleton (#11) — D1 · M · Must
-- [ ] Next.js (version per T06) App Router, TypeScript strict, Tailwind v4, shadcn/ui init, ESLint 9 + Prettier
-- [ ] Route stubs for `/`, `/list`, `/asset/[id]`, `/portfolio`, `/admin`, `/dev/ui`; persistent sandbox banner (C5)
-- [ ] `make fe-check` and a GitHub Actions frontend job
+- [x] Next.js (version per T06) App Router, TypeScript strict, Tailwind v4, shadcn/ui init, ESLint 9 + Prettier
+- [x] Route stubs for `/`, `/list`, `/asset/[id]`, `/portfolio`, `/admin`, `/dev/ui`; persistent sandbox banner (C5)
+- [x] `make fe-check` and a GitHub Actions frontend job
 
 **Verify:** `make fe-check`; `pnpm dev` shows all routes · **Deps:** T04, T06 · **Files:** `frontend/**` (scaffold), `.github/workflows/frontend.yml`
 
 ### T06 · Architecture decisions (ADR session, day 1) (#12) — D1 (writes) + All · S · Must
-- [ ] ADRs 0001–0002 (stack & versions, repo layout) plus decisions on each open item in `plan.md` "Architecture decisions"
-- [ ] Accepted changes applied to `docs/specs/dev-spec.md`, the Rating Engine page in `docs/diagrams.html` and `research.md` (mark OpenSpec as replaced by Addy's skills)
+- [x] ADRs 0001–0002 (stack & versions, repo layout) plus decisions on each open item in `plan.md` "Architecture decisions"
+- [x] Accepted changes applied to `docs/specs/dev-spec.md`, the Rating Engine page in `docs/diagrams.html` and `research.md` (mark OpenSpec as replaced by Addy's skills)
 
 **Verify:** ADRs merged; docs agree (link check passes) · **Deps:** none · **Files:** `docs/adr/0001-*.md`, `docs/adr/0002-*.md`, `docs/specs/dev-spec.md`, `docs/diagrams.html`
 
 ### T07 · Database schema v1 (#13) — D1 · M · Must
-- [ ] SQLModel models and first Alembic migration for every table in dev-spec §5, **plus `world_id` on all tables that change during the demo** (sandbox, demo-plan §3.5)
-- [ ] Seed script: 4 personas, 3 demo assets
-- [ ] Tests: migration up/down, seed is idempotent
+- [x] SQLModel models and first Alembic migration for every table in dev-spec §5, **plus `world_id` on all tables that change during the demo** (sandbox, demo-plan §3.5)
+- [x] Seed script: 4 personas, 3 demo assets
+- [x] Tests: migration up/down, seed is idempotent
 
 **Verify:** `make test`; `docker compose up` then seed · **Deps:** T04, T06 · **Files:** `backend/app/models.py`, `backend/migrations/**`, `backend/app/seed.py`, `backend/tests/test_models.py`
 
 ### T08 · API contract v1 + generated client (#14) — D1 (+D3 for agent schemas) · M · Must
-- [ ] All dev-spec §6 routes exist and return typed **mock data** (`USE_MOCKS=true`), including Pydantic schemas for News Scout and Auditor outputs
-- [ ] `openapi-typescript` + `openapi-fetch` client generated into `frontend/src/lib/api/`; CI fails if the client is out of date
+- [x] All dev-spec §6 routes exist and return typed **mock data** (`USE_MOCKS=true`), including Pydantic schemas for News Scout and Auditor outputs
+- [x] `openapi-typescript` + `openapi-fetch` client generated into `frontend/src/lib/api/`; CI fails if the client is out of date
 
 **Verify:** `make test`; `make fe-check`; client drift check in CI · **Deps:** T04, T05, T07 · **Files:** `backend/app/routers/*.py`, `backend/app/schemas.py`, `scripts/generate-client.sh`, `frontend/src/lib/api/*`
 
@@ -90,8 +90,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make fe-check`; manual check in the browser · **Deps:** T05, T08, T10 · **Files:** `frontend/src/app/asset/[id]/page.tsx`
 
 ### P01 · Product brief and voice (#19) — PD · S · Must
-- [ ] `PRODUCT.md` via `/impeccable init` (audience, purpose, voice, constraints, anti-patterns)
-- [ ] UX writing rules: numbers always as range + confidence, sandbox wording, grade language
+- [x] `PRODUCT.md` via `/impeccable init` (audience, purpose, voice, constraints, anti-patterns)
+- [x] UX writing rules: numbers always as range + confidence, sandbox wording, grade language
 
 **Verify:** team review · **Deps:** none · **Files:** `PRODUCT.md`, `docs/design/ux-writing.md`
 
@@ -149,8 +149,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` · **Deps:** T11 · **Files:** `backend/app/tools/scoring.py`, `backend/tests/test_scoring.py`
 
 ### T16 · Market engine (#27) — D1 · M · Must · C2 C4
-- [ ] IPO price from fair value; instant fills with slippage; primary shares credit the community wallet; price moves with order flow and re-anchoring (dev-spec §8)
-- [ ] Invariant tests: no negative cash, shares conserved, price > 0, every price change has a reason
+- [x] IPO price from fair value; instant fills with slippage; primary shares credit the community wallet; price moves with order flow and re-anchoring (dev-spec §8)
+- [x] Invariant tests: no negative cash, shares conserved, price > 0, every price change has a reason
 
 **Verify:** `make test` · **Deps:** T07 · **Files:** `backend/app/market/engine.py`, `backend/tests/test_market.py`
 
@@ -250,13 +250,13 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`; events arrive in the browser · **Deps:** T08, T31 · **Files:** `backend/app/routers/events.py`, `backend/app/events.py`
 
 ### T30 · Nature Ledger (#42) — D1 · M · Must · F1 F2
-- [ ] Append-only, hash-chained entries written in the same transaction as listings, reports, events, price anchors and payouts (dev-spec §17)
-- [ ] `GET /ledger/{asset_id}` and `/verify`; tamper demo in `DEMO_MODE`
+- [x] Append-only, hash-chained entries written in the same transaction as listings, reports, events, price anchors and payouts (dev-spec §17)
+- [x] `GET /ledger/{asset_id}` and `/verify`; tamper demo in `DEMO_MODE`
 
 **Verify:** `make test` (valid chain, tamper detected) · **Deps:** T07 · **Files:** `backend/app/ledger.py`, `backend/app/routers/ledger.py`, `backend/tests/test_ledger.py`
 
 ### T31 · Per-visitor sandbox (#43) — D1 · S · Must · J
-- [ ] First visit creates a world (cookie) with personas, holdings and demo assets; "Reset my demo" restores it; worlds never affect each other
+- [x] First visit creates a world (cookie) with personas, holdings and demo assets; "Reset my demo" restores it; worlds never affect each other
 
 **Verify:** `make test` (two worlds isolated) · **Deps:** T07, T16 · **Files:** `backend/app/sandbox.py`, `backend/app/routers/admin.py`
 
@@ -282,7 +282,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** images render in the UI · **Deps:** T13 · **Files:** `scripts/precompute_sites.py`, `backend/data/demo_sites/*.png`
 
 ### T36 · Polygon validation (#48) — D2 · S · Must · A1
-- [ ] Rejects self-intersection, < 10 ha or > 50,000 ha, and overlap with existing listings; area in an equal-area projection
+- [x] Rejects self-intersection, < 10 ha or > 50,000 ha, and overlap with existing listings; area in an equal-area projection
 
 **Verify:** `make test` · **Deps:** T07 · **Files:** `backend/app/tools/geometry.py`, `backend/tests/test_geometry.py`
 
