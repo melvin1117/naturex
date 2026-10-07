@@ -41,10 +41,19 @@ from app.sandbox import (
     COOKIE_NAME,
     WorldLimitReached,
     create_world,
+    ensure_live_world,
     prune_stale_worlds,
     reset_world,
 )
-from app.seed import COMMUNITY_PERSONA, DEMO_GEOJSON, DEMO_SITES, PERSONAS, WORLD_ID, seed
+from app.seed import (
+    COMMUNITY_PERSONA,
+    DEMO_GEOJSON,
+    DEMO_SITES,
+    LIVE_WORLD_ID,
+    PERSONAS,
+    WORLD_ID,
+    seed,
+)
 from tests.conftest import alembic_cfg, requires_db
 
 TEMPLATE_ASSET = DEMO_SITES[0].id
@@ -244,9 +253,11 @@ def test_reset_restores_the_template_state_and_keeps_the_world_id(session: Sessi
 
 
 @requires_db
-def test_the_template_world_can_never_be_reset(session: Session) -> None:
-    with pytest.raises(ValueError):
-        reset_world(session, WORLD_ID)
+def test_the_template_and_live_worlds_can_never_be_reset(session: Session) -> None:
+    ensure_live_world(session)
+    for world_id in (WORLD_ID, LIVE_WORLD_ID):
+        with pytest.raises(ValueError):
+            reset_world(session, world_id)
 
 
 @requires_db
@@ -274,6 +285,8 @@ def test_prune_removes_only_stale_visitor_worlds(session: Session) -> None:
     template = session.get(World, WORLD_ID)
     assert template is not None
     template.last_seen_at = long_ago
+    live = ensure_live_world(session)
+    live.last_seen_at = long_ago
     session.commit()
 
     removed = prune_stale_worlds(session, older_than=timedelta(days=7))
@@ -283,6 +296,7 @@ def test_prune_removes_only_stale_visitor_worlds(session: Session) -> None:
     assert users(session, stale_id) == []
     assert session.get(World, fresh_id) is not None
     assert session.get(World, WORLD_ID) is not None, "the template is never pruned"
+    assert session.get(World, LIVE_WORLD_ID) is not None, "the live world is never pruned"
 
 
 # --- API -------------------------------------------------------------------------------------
@@ -320,15 +334,18 @@ def test_returning_visitor_keeps_the_same_world(client: TestClient) -> None:
     assert client.get("/world").json()["id"] == first
 
 
-@pytest.mark.parametrize("cookie", ["not-a-uuid", str(uuid4()), str(WORLD_ID)])
+@pytest.mark.parametrize("cookie", ["not-a-uuid", str(uuid4()), str(WORLD_ID), str(LIVE_WORLD_ID)])
 @requires_db
-def test_bad_unknown_or_template_cookie_gets_a_fresh_world(client: TestClient, cookie: str) -> None:
+def test_bad_unknown_template_or_live_cookie_gets_a_fresh_world(
+    session: Session, client: TestClient, cookie: str
+) -> None:
+    ensure_live_world(session)
     client.cookies.set(COOKIE_NAME, cookie)
 
     body = client.get("/world").json()
 
     assert body["id"] != cookie
-    assert UUID(body["id"]) != WORLD_ID
+    assert UUID(body["id"]) not in {WORLD_ID, LIVE_WORLD_ID}
 
 
 @requires_db

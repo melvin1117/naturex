@@ -49,3 +49,9 @@ task-map:
 # Set a task's board Status, e.g. make board ISSUE=27 STATUS="In progress" (needs gh auth login -s project)
 board:
 	scripts/board_status.sh "$(ISSUE)" "$(STATUS)"
+
+# T54: create a live-world admin (prompts for the password; never pass it on the command line)
+# e.g. make create-admin EMAIL=ops@example.org NAME="Ops"
+.PHONY: create-admin
+create-admin:
+	cd backend && uv run python -m app.cli create-admin --email "$(EMAIL)" --name "$(NAME)"

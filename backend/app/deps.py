@@ -1,4 +1,5 @@
-"""FastAPI dependencies shared by routers: DB session, settings and the visitor's world."""
+"""FastAPI dependencies shared by routers: DB session, settings, the visitor's world and the
+signed-in principal."""
 
 from __future__ import annotations
 
@@ -9,6 +10,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request, Response, status
 from sqlmodel import Session
 
+from app.auth import SESSION_COOKIE, Principal, resolve_session
 from app.config import Settings, get_settings
 from app.db import get_session
 from app.models import World
@@ -30,7 +32,13 @@ SettingsDep = Annotated[Settings, Depends(get_settings)]
 TOUCH_EVERY = timedelta(minutes=5)
 PRUNE_EVERY = timedelta(minutes=10)
 WORLD_REQUIRED = "world_required"
+AUTH_REQUIRED = "auth_required"
 _last_prune: datetime | None = None
+
+
+def secure_cookies(settings: Settings) -> bool:
+    """Cookies are `Secure` everywhere except plain-HTTP local development and tests."""
+    return settings.environment not in {"development", "test"}
 
 
 def _set_world_cookie(response: Response, world: World, settings: Settings) -> None:
@@ -42,7 +50,7 @@ def _set_world_cookie(response: Response, world: World, settings: Settings) -> N
         max_age=COOKIE_MAX_AGE_S,
         httponly=True,
         samesite="lax",
-        secure=settings.environment not in {"development", "test"},
+        secure=secure_cookies(settings),
     )
     response.headers["Cache-Control"] = "no-store"
 
@@ -107,3 +115,24 @@ def current_world(
 
 VisitorWorld = Annotated[World, Depends(visitor_world)]
 CurrentWorld = Annotated[World, Depends(current_world)]
+
+
+def optional_principal(request: Request, session: SessionDep) -> Principal | None:
+    """The signed-in principal from the `nx_session` cookie, or None (ADR-0005 §1).
+
+    Unknown, expired and revoked sessions all resolve to None; expired rows are deleted.
+    """
+    return resolve_session(session, request.cookies.get(SESSION_COOKIE))
+
+
+def current_principal(
+    principal: Annotated[Principal | None, Depends(optional_principal)],
+) -> Principal:
+    """The signed-in principal; 401 `auth_required` without a valid session."""
+    if principal is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, AUTH_REQUIRED)
+    return principal
+
+
+OptionalPrincipal = Annotated[Principal | None, Depends(optional_principal)]
+CurrentPrincipal = Annotated[Principal, Depends(current_principal)]

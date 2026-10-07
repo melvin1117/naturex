@@ -20,6 +20,9 @@ from app.tools.valuation import value_metrics
 
 # Stable IDs so re-running seed is a no-op.
 WORLD_ID = UUID("11111111-1111-1111-1111-111111111111")
+# The one persistent world for real accounts (ADR-0005 §2); built by app.sandbox.ensure_live_world.
+LIVE_WORLD_ID = UUID("44444444-4444-4444-4444-444444444444")
+LIVE_LABEL = "live"
 
 TOTAL_SHARES = 1_000_000
 RETAINED_PCT = Decimal("51.00")
@@ -250,10 +253,15 @@ def seed(session: Session) -> None:
 
 
 def main() -> None:
+    # Imported here: app.sandbox imports this module.
+    from app.sandbox import ensure_live_world
+
     with Session(engine) as session:
         seed(session)
+        ensure_live_world(session)
     print(
-        "Seed complete: template world, 4 personas, 3 demo assets, community holdings, IPO prices."
+        "Seed complete: template world, 4 personas, 3 demo assets, community holdings, IPO prices;"
+        " live world with the 3 curated sites."
     )
 
 
