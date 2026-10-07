@@ -226,7 +226,8 @@ create table verification_runs (       -- one row per run; one current run per a
   input_fingerprint char(64) not null, -- sha256(community, name, geometry, area, document commitments, method_version); any change → unverified
   checklist jsonb not null,            -- [{check, result: pass|warn|fail, found, source}]; public panel shows names + results only
   ai_suggestion text check (ai_suggestion in ('consistent','inconsistent','unreadable')), ai_reasons jsonb,  -- T71; untrusted heuristic
-  reviewer_role text check (reviewer_role in ('platform_admin','partner_reviewer')), reviewer_user_id uuid, reason text,
+  reviewer_role text check (reviewer_role in ('platform_admin','partner_reviewer','demo_auto')), reviewer_user_id uuid, reason text,
+  mode text not null check (mode in ('review','demo')),  -- demo: sample documents + auto-reviewer, always disclosed (ADR-0006 §6)
   method_version text not null, created_at timestamptz default now(),
   unique (world_id, id), unique (world_id, asset_id, id),
   foreign key (world_id, asset_id) references assets (world_id, id),
@@ -249,6 +250,7 @@ create table listing_documents (       -- sensitive personal data; private stora
   private_fingerprint char(64) not null,  -- HMAC(per-world key, file); dedup only, never published
   commitment_nonce bytea not null,     -- private; the ledger stores sha256(nonce || file); deleted with the listing
   extracted jsonb,                     -- T71 fields (may hold names): members and reviewers only
+  is_sample boolean not null default false,  -- generated fictional sample (demo mode), watermarked
   uploaded_by uuid,                    -- null after account deletion (anonymised)
   created_at timestamptz default now(),
   foreign key (world_id, asset_id) references assets (world_id, id),
@@ -366,6 +368,7 @@ create table llm_calls (
 | `POST /assets/{id}/submit` | Start a rating run; the result sets `listed` / `needs_evidence` / `ineligible` (T58) |
 | `GET /assets/{id}/ipo/preview` · `POST /assets/{id}/ipo` | IPO price with every formula term; launch (owner only, once; T59) |
 | `POST /admin/assets/{id}/suspend` · `…/resume` | Moderation (admin; T58) |
+| `POST /assets/{id}/documents/sample` | Demo mode only: generate watermarked fictional documents for this listing and run the checklist; the `demo_auto` reviewer approves if every check passes (ADR-0006 §6) |
 | `POST /assets/{id}/documents` · `GET /assets/{id}/documents/{doc_id}` | Upload evidence (steward/owner) → checklist; download a document (community members + same-world admins only; 404 otherwise; attachment, `nosniff`, `no-store`) (ADR-0006, T69) |
 | `GET /assets/{id}/verification` · `POST /admin/assets/{id}/verification` · `POST /admin/assets/{id}/verification/revoke` | Public verification summary (check names + results + not-checked list); reviewer approve/reject with a reason; revoke (suspends trading) (T69) |
 | `GET /assets` | Marketplace list (latest price, grade, trend) |
@@ -591,6 +594,8 @@ EE_SERVICE_ACCOUNT_JSON=   # or PC_SUBSCRIPTION_KEY
 DATABASE_URL=              S3_ENDPOINT=  S3_BUCKET=  S3_KEY=  S3_SECRET=
 USE_MOCKS=false            LOCAL_JOBS=true            DEMO_MODE=true
 LLM_BUDGET_USD=20          # hard cap per deployment key (§21)
+VERIFICATION_MODE=review   # review (a person decides) | demo (sample docs + auto-reviewer, always disclosed); hackathon deploy + E2E use demo (ADR-0006)
+VERIFICATION_AI_LIVE=false # T71 AI check on real documents in the live world, only after Token Factory data terms are confirmed
 ```
 Secrets stay server-side only; never commit `.env` (commit `.env.example`).
 

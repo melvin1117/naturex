@@ -403,6 +403,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 ### T42 · Demo deploy (#54) — D1 · S · Must
 - [ ] Full app deployed on the T20 host with live keys and `LLM_BUDGET_USD` set; keep-alive ping workflow if the host sleeps (free tiers)
+- [ ] *(ADR-0006)* `VERIFICATION_MODE=demo` and `VERIFICATION_AI_LIVE=false` set; the README and Devpost text say listings are verified with sample documents in demo mode
 
 **Verify:** the demo script runs on the public URL · **Deps:** T20, T38 · **Files:** deploy config, `.github/workflows/keepalive.yml`
 
@@ -423,7 +424,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 ### T46 · E2E demo test (#58) — D2 · S · Must
 - [ ] Playwright runs the tour's autoplay path end to end; runs in CI; reused to record the video
-- [ ] *(ADR-0005)* Real-account path: owner registers → creates a community → lists → rating → uploads documents → admin verifies (ADR-0006) → IPO → (later) a revoke suspends trading → a second account signs up, buys and sells → a quarter passes → alert, owner payout and dividends show → sign out; an investor gets 403 on Steward actions
+- [ ] *(ADR-0005)* Real-account path: owner registers → creates a community → lists → rating → uses sample documents → auto-verified in demo mode (ADR-0006, `VERIFICATION_MODE=demo`) → IPO → (later) a revoke suspends trading → a second account signs up, buys and sells → a quarter passes → alert, owner payout and dividends show → sign out; an investor gets 403 on Steward actions
 - [ ] *(ADR-0005)* Demo path: `/judge` → each persona; two demo sessions stay isolated from each other and from the live world
 
 **Verify:** `make e2e` green locally and in CI · **Deps:** T45, T57, T63, T64, T65, T70 · **Files:** `frontend/e2e/demo.spec.ts`, `.github/workflows/e2e.yml`
@@ -462,8 +463,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 - [ ] Private document upload and serving: PDF/JPEG/PNG, ≤ 5 MB, magic bytes, decoded-pixel and PDF page/object limits, encrypted or malformed PDFs rejected, parsing in a worker with a timeout, sanitised previews; `GET /assets/{id}/documents/{doc_id}` loads by `(world_id, asset_id, id)` for the community's members and same-world admins only (404 otherwise), `Content-Disposition: attachment`, `nosniff`, `no-store`; per-world keyed fingerprint bound to one asset (no reuse across listings; same listing may reuse it)
 - [ ] Write-once verification runs (trigger-enforced) with an input fingerprint (community, name, geometry, area, document commitments, method version) and one current run per asset (partial unique index); documents link only to runs of their own asset; any change to those inputs makes the listing unverified; deterministic checklist (accepted file format, not reused, no boundary overlap, consent-labelled document attached) with pass/warn/fail and values; reviewer approve/reject with a reason; `verification` ledger entries with randomized document commitments (no raw hashes, names or account IDs)
 - [ ] Gates: the live-world IPO transaction locks the asset and needs the current run `verified` with a matching fingerprint (409 `not_verified`); revoke (admin, reason) atomically suspends the asset and blocks orders until a new verified run; authorization tests for investors, non-members, other communities, other worlds and anonymous users
+- [ ] Demo mode (`VERIFICATION_MODE=demo`, default `review`, added to `.env.example`): `POST /assets/{id}/documents/sample` generates watermarked fictional documents filled from the listing (`is_sample`), the same checklist runs, and a `demo_auto` reviewer approves only if every check passes; `mode` is stored on the run, the ledger and the public summary
 
-**Verify:** `make test` (hostile files, stale-fingerprint bypass, revoke during trading, cross-world document access, ledger payload privacy); manual: upload → review → IPO → revoke · **Deps:** T58, T59, T68, T57, T66, T30 · **Files:** `backend/app/services/verification.py`, `backend/app/routers/verification.py`, `backend/app/models.py`, `backend/migrations/versions/*_verification.py`, `backend/tests/test_verification.py`
+**Verify:** `make test` in both modes (hostile files, stale-fingerprint bypass, revoke during trading, cross-world document access, ledger payload privacy, sample docs auto-approve only when checks pass); manual: sample docs → auto-approved → IPO → revoke · **Deps:** T58, T59, T68, T57, T66, T30 · **Files:** `backend/app/services/verification.py`, `backend/app/routers/verification.py`, `backend/app/models.py`, `backend/migrations/versions/*_verification.py`, `backend/tests/test_verification.py`
 
 ### T71 · AI document extraction for verification (heuristic) (#115) — D3 · S · Should · A9
 - [ ] MiniCPM-V extracts fields (holder name, parcel ID, place, area, issue date) from sanitised previews; Nemotron compares them with the listing (name, place via reverse geocode, area ±20%) and suggests consistent | inconsistent | unreadable with reasons and source excerpts; no tools, no other tenants' data, no secrets; output schema-validated
@@ -473,8 +475,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` with a fake LLM and adversarial fixtures · **Deps:** T69, T09 · **Files:** `backend/app/agents/document_check.py`, `backend/tests/test_document_check.py`, `backend/tests/fixtures/verification/*`
 
 ### T70 · Verification screens and transparency panel (#114) — PD + D1 · S · Must · A9
-- [ ] Steward: upload documents, see the checklist and the reviewer's decision; the IPO screen explains why launch is blocked until verified
-- [ ] Exchange: a badge with precise wording ("Documents reviewed by NatureX (hackathon process)" / "Self-attested by the community" / "Verification revoked") and a public "How this listing was verified" panel: level, date, reviewer role, each check's result, everything not checked, link to the ledger entry
+- [ ] Steward: upload documents, or in demo mode "Use sample documents (demo)"; see the checklist and the decision; the IPO screen explains why launch is blocked until verified
+- [ ] Exchange: a badge with precise wording ("Documents reviewed by NatureX (hackathon process)" / "Demo verification: sample documents, no real ownership checked" / "Self-attested by the community" / "Verification revoked"); a site footer note when demo mode is on and a public "How this listing was verified" panel: level, date, reviewer role, each check's result, everything not checked, link to the ledger entry
 - [ ] Admin: a review queue with document previews, the checklist, any AI suggestion labelled as an untrusted heuristic with source excerpts, and the map; approve, reject or revoke with a reason
 
 **Verify:** `make fe-check`; `web-design-guidelines` review; manual upload → approve → badge → revoke · **Deps:** T69, T62, P05 · **Files:** `frontend/src/app/(steward)/steward/assets/[id]/verify/page.tsx`, `frontend/src/components/VerificationPanel.tsx`, `frontend/src/app/admin/verifications/page.tsx`
@@ -483,7 +485,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ### ✅ Checkpoint W4 (Fri Oct 23) = FEATURE FREEZE
 - [ ] The public URL runs the whole 3-minute demo script, including the judge tour
 - [ ] *(ADR-0005)* Both apps work for real accounts: Steward (community, listing, live rating, IPO, wallet) and Exchange (browse, trade, portfolio, alerts)
-- [ ] *(ADR-0006)* Listing verification: documents → visible checklist → admin decision in the ledger → "How this listing was verified" panel; the live-world IPO needs `verified`
+- [ ] *(ADR-0006)* Listing verification: documents → visible checklist → decision in the ledger → "How this listing was verified" panel; the live-world IPO needs `verified`; the deployment runs in labelled demo mode (sample documents, auto-approved, disclosed)
 - [ ] `make eval` and `make e2e` green; UI polish pass done
 - [ ] **No new features after this point**
 

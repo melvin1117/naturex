@@ -119,7 +119,32 @@ It never says "Ownership proven".
   - Raw prompts and responses are never logged or traced; `llm_calls` keeps only metadata.
 - **Public panel:** shows only check names, pass/warn/fail and the not-checked list; never extracted fields.
 
-### 6. The real-world path (not built in the hackathon)
+### 6. Demo verification mode (deployment, judging and E2E tests)
+Nobody can upload real land papers to a hackathon deployment or a test run, so there is a **labelled demo mode**, not a hidden bypass.
+- **The setting:** `VERIFICATION_MODE=review | demo`.
+  - The default is `review`, the real process: a person decides.
+  - The hackathon deployment, sandbox worlds and E2E tests set `demo`.
+  - A real launch sets `review`, and demo mode can't be switched on for a single listing.
+- **Sample documents:** in demo mode the Steward app offers **"Use sample documents (demo)"**.
+  - It generates fictional documents for that listing: an agrarian certificate and assembly minutes, filled with the listing's own name, place and area.
+  - Each page is watermarked **"SAMPLE: FICTIONAL DOCUMENT, NOT A REAL TITLE"**.
+  - Each document is stored with `is_sample = true`.
+  - No real person's data is involved.
+- **The checklist still runs for real:**
+  - format, not reused (each sample is generated per listing, so its fingerprint is unique), overlap and consent-labelled document;
+  - in sandboxes, the T71 AI comparison too.
+
+  That keeps the whole flow exercised end to end.
+- **The demo auto-reviewer:** if every deterministic check passes, a reviewer with role `demo_auto` approves at once, with the reason "Demo mode: sample documents, all checks passed". If a check fails, the run is rejected, as in review mode. An admin can still reject or revoke.
+- **Always disclosed:**
+  - the run is stored with `mode = 'demo'`;
+  - the ledger entry records `mode: demo` and `reviewer_role: demo_auto`;
+  - the badge reads **"Demo verification: sample documents, no real ownership checked"**;
+  - the public panel repeats this at the top;
+  - the site footer shows "Verification: demo mode" whenever it's on.
+- **Real documents are still accepted in demo mode.** Anyone who wants to try the real flow can upload, and an admin reviews them.
+
+### 7. The real-world path (not built in the hackathon)
 The same data model and checklist extend to real verification by adding check rows and reviewer roles, not by replacing the design:
 1. **Registry lookup.**
    - Mexico: the Registro Agrario Nacional (RAN) for ejido and communal land; the state public property registry and cadastre for private land. Other countries have their own registries.
@@ -147,7 +172,8 @@ The same data model and checklist extend to real verification by adding check ro
   - `verification_runs` and a private `listing_documents` table (dev-spec §5).
   - The ledger gains a `verification` kind, which needs a migration to the ledger's `kind` check constraint.
 - **T59 (IPO launch):** in the live world, T69 adds the "current run verified, fingerprint matches" rule inside the IPO transaction.
-- **T46 (E2E):** the real-account path includes upload → admin approves → IPO, and a revoke that suspends trading.
+- **T46 (E2E):** runs with `VERIFICATION_MODE=demo`. The real-account path uses sample documents → auto-approved → IPO, plus a revoke that suspends trading. The review-mode path (upload → admin approves) is covered by T69's tests.
+- **Deployment (T20/T42):** sets `VERIFICATION_MODE=demo`, and the README and Devpost text say so.
 - **Reused work:** T71 reuses the MiniCPM-V perception path from ADR-0003. It doesn't depend on T40 photo evidence; it shares the same model routing.
 
 ## Alternatives considered

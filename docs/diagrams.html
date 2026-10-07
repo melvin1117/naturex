@@ -394,7 +394,7 @@ Low / High = same with the low / high coefficient  →  always shown as a range<
       <div class="cell r"><div class="stp"><span class="n">1</span><b>Sign up</b><p>Registers her wetland community; she's the owner.</p></div></div>
       <div class="cell r"><div class="stp"><span class="n">2</span><b>Draw the land</b><p>Polygon on the map, then <i>Submit for rating</i>.</p></div></div>
       <div class="cell r"></div>
-      <div class="cell r"><div class="stp"><span class="n">4</span><b>Launch the IPO</b><p>Listed! Picks shares offered and % kept; sees the price formula.</p></div></div>
+      <div class="cell r"><div class="stp"><span class="n">4</span><b>Verify + IPO</b><p>Listed! Adds documents (sample docs in demo), the checklist passes, then picks shares offered and % kept.</p></div></div>
       <div class="cell r"><div class="stp fx">💰 <b>Wallet goes up</b><p>Each share Arjun buys from the IPO pays the community.</p></div></div>
       <div class="cell r"></div>
       <div class="cell r"><div class="stp fx">💰 <b>Payout + tips</b><p>Quarterly community fund and dividends; stewardship actions after bad news.</p></div></div>
@@ -438,7 +438,7 @@ Low / High = same with the low / high coefficient  →  always shown as a range<
     <div class="card">
       <div class="chips">
         <span class="chip x">✍️ Self-attested</span><span class="ar">→</span>
-        <span class="chip b">📄 Documents submitted</span><span class="ar">→</span>
+        <span class="chip b">📄 Documents submitted <small>(or 🧪 sample docs in demo)</small></span><span class="ar">→</span>
         <span class="chip p">🔎 Checklist runs</span><span class="ar">→</span>
         <span class="chip g">🧑‍⚖️ Reviewer decides</span><span class="ar">→</span>
         <span class="chip y">🔗 Ledger + public panel</span>
@@ -446,12 +446,13 @@ Low / High = same with the low / high coefficient  →  always shown as a range<
       <div class="branch">
         <div>📄 Title or agrarian certificate, assembly minutes (consent), community registration</div>
         <div>🔎 Each check shows pass / warn / fail and what it found: accepted file format, not reused, no boundary overlap, consent-labelled document attached; optionally an <b>AI heuristic</b> compares name, place and area with the listing (it only suggests, and the reviewer sees the source)</div>
-        <div>🧑‍⚖️ An admin approves or rejects with a reason; in the live world the IPO needs “verified”; changing the land or documents resets it; revoking suspends trading</div>
+        <div>🧑‍⚖️ An admin approves or rejects with a reason (in demo mode, the demo auto-reviewer approves only if all checks pass); in the live world the IPO needs “verified”; changing the land or documents resets it; revoking suspends trading</div>
         <div>🔗 The ledger records the decision, the reviewer role and private document commitments (never the documents or names); investors see <i>“How this listing was verified”</i>, including what was <b>not</b> checked</div>
       </div>
     </div>
-    <div class="grid g2" style="margin-top:12px">
+    <div class="grid g3" style="margin-top:12px">
       <div class="card"><div class="ic">🏁</div><h4>Hackathon</h4><p>Documents + visible checklist + admin decision (+ an AI consistency hint if time allows). The badge says “Documents reviewed by NatureX (hackathon process)”, never “ownership proven”.</p></div>
+      <div class="card"><div class="ic">🧪</div><h4>Demo mode (deployment, judges, E2E)</h4><p>Nobody has real land papers in a demo, so <b>“Use sample documents (demo)”</b> generates fictional, watermarked papers filled from the listing. The real checklist runs; a <b>demo auto-reviewer</b> approves only if every check passes. Badge, panel, ledger and footer all say <i>“Demo verification: sample documents, no real ownership checked”</i>. Real launch: <code>VERIFICATION_MODE=review</code>.</p></div>
       <div class="card"><div class="ic">🏛️</div><h4>Real world (same model, more checks)</h4><p>Land-registry match (in Mexico: RAN for communal and ejido land, the public property registry for private land) · legal entity · community consent (FPIC) · accredited local verifiers · 30-day public objection period · yearly re-verification and disputes.</p></div>
     </div>
 
@@ -519,7 +520,9 @@ sequenceDiagram
   end
 
   rect rgba(201,154,85,0.13)
-  Note over C,I: Phase B — IPO (Steward) & trading (Exchange)
+  Note over C,I: Phase B — Verification, IPO (Steward) & trading (Exchange)
+  C->>W: Add documents (demo: sample docs)
+  W->>A: checklist → reviewer / demo auto-reviewer → verified (ledger)
   C->>W: Launch IPO (owner): shares offered, % kept
   W->>M: POST /assets/{id}/ipo
   M-->>W: IPO price from fair value · trading opens
@@ -557,7 +560,7 @@ flowchart TD
   PLAN -. "improve & re-apply" .-> RATE
   G1 -- Yes --> LIVE["✅ Listed<br/>report public"]
   LIVE --> VER{"Verified?<br/>docs + checklist<br/>+ reviewer"}
-  VER -- "No · upload docs" --> VER
+  VER -- "No · add docs<br/>(sample docs in demo)" --> VER
   VER -- Yes --> IPO["Owner launches IPO<br/>price from fair value"]
   IPO --> TRADE["Investors buy / sell<br/>(Exchange · play money)"]
   LIVE -. "admin" .-> SUSP["⏸ Suspended<br/>(trading paused)"]
@@ -629,7 +632,7 @@ const D = {
   PLAN: ["Stewardship plan", "action", "Auditor generates concrete actions to improve the grade (e.g. stop grazing in zone 2, restore buffer strip).", []],
   IPO: ["IPO launch", "step", "The owner chooses shares offered and % retained and confirms. IPO price = fair value per share; the community's retained stake is held by its treasury; the public float is sold to investors.", []],
   LIVE: ["Listed", "step", "The listing passed the gate; its report is public on the Exchange. Trading starts once the owner launches the IPO.", []],
-  VER: ["Listing verification", "rule", "Before a live-world IPO: the steward uploads documents (title or agrarian certificate, assembly minutes), an automated checklist runs (accepted format, not reused, no overlap, consent-labelled document, plus an optional AI heuristic that only suggests), and a reviewer approves or rejects with a reason. Any later change resets it; revoking suspends trading. The decision goes into the ledger and the public 'How this listing was verified' panel, including what was not checked (ADR-0006).", ["Real world: registry match, legal entity, FPIC consent, accredited verifiers, objection period"]],
+  VER: ["Listing verification", "rule", "Before a live-world IPO: the steward uploads documents (title or agrarian certificate, assembly minutes), an automated checklist runs (accepted format, not reused, no overlap, consent-labelled document, plus an optional AI heuristic that only suggests), and a reviewer approves or rejects with a reason. Any later change resets it; revoking suspends trading. The decision goes into the ledger and the public 'How this listing was verified' panel, including what was not checked (ADR-0006).", ["Demo mode (deployment, judges, E2E): fictional watermarked sample documents are generated for the listing; the same checklist runs; a demo auto-reviewer approves only if every check passes; always labelled 'Demo verification: no real ownership checked'", "Real world: registry match, legal entity, FPIC consent, accredited verifiers, objection period"]],
   SUSP: ["Suspended", "action", "An admin can pause a listed asset (e.g. abuse or a disputed boundary) and resume it later. Every change is in the Nature Ledger.", []],
   TRADE: ["Trading", "step", "Sandbox trades with play money; instant fills against market maker.", []],
   PRICE: ["Price update", "step", "Market Engine blends fair value + order flow.", []],
@@ -653,8 +656,10 @@ const SEQ_STEPS = [
   ["Send to Auditor", "All evidence goes to Nemotron 3 Ultra for cross-checking."],
   ["Rating produced", "Health score, grade (AAA–D), confidence and a written report."],
   ["Listed", "The report is sealed in the Nature Ledger; the listing gate passes, so the status becomes listed."],
+  ["Add documents", "Rosa uploads documents, or in demo mode clicks “Use sample documents (demo)” to generate fictional, watermarked ones."],
+  ["Verified", "The checklist runs and is shown; a reviewer approves (in demo mode the demo auto-reviewer, only if all checks pass). The decision is sealed in the ledger and shown publicly, labelled “demo” when it is."],
   ["Owner launches IPO", "Rosa picks shares offered and the % the community keeps, and sees the price formula step by step."],
-  ["IPO request", "Only the owner may launch, once, for a listed asset."],
+  ["IPO request", "Only the owner may launch, once, for a listed and verified asset."],
   ["Trading opens", "Fair value per share becomes the IPO price; the asset appears on the Exchange."],
   ["Investor buys", "Arjun signs up in the Exchange and buys 100 shares with play money."],
   ["Order sent", "The order uses Arjun's session; community members can't trade their own asset."],
