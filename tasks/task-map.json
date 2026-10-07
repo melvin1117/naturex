@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-07 08:02 UTC",
+  "generated_at": "2026-10-07 08:03 UTC",
   "tasks": [
     {
       "id": "P01",
@@ -974,7 +974,7 @@
         "T08",
         "T31"
       ],
-      "status": "in_progress",
+      "status": "done",
       "assignees": [
         "melvin1117"
       ],
@@ -986,7 +986,7 @@
         "T58"
       ],
       "step": 4,
-      "chain": 8,
+      "chain": 0,
       "critical": false
     },
     {
@@ -1157,11 +1157,9 @@
         "T29",
         "T31"
       ],
-      "status": "blocked",
+      "status": "ready",
       "assignees": [],
-      "waiting_on": [
-        "T29"
-      ],
+      "waiting_on": [],
       "unlocks": [
         "T33",
         "T34",
@@ -1507,7 +1505,6 @@
       "assignees": [],
       "waiting_on": [
         "T27",
-        "T29",
         "T68"
       ],
       "unlocks": [
@@ -1598,8 +1595,7 @@
       "waiting_on": [
         "T68",
         "T55",
-        "T17",
-        "T29"
+        "T17"
       ],
       "unlocks": [
         "T46",
@@ -1631,8 +1627,7 @@
       "assignees": [],
       "waiting_on": [
         "T19",
-        "T68",
-        "T29"
+        "T68"
       ],
       "unlocks": [
         "T33",
@@ -2247,6 +2242,7 @@
     "PD": [],
     "D1": [
       "T54",
+      "T32",
       "T20"
     ],
     "D2": [
@@ -2257,18 +2253,18 @@
     "D3": [],
     "any": [
       "T54",
+      "T32",
       "T20",
       "T35",
-      "T67",
-      "T40"
+      "T67"
     ]
   },
   "counts": {
-    "done": 18,
-    "in_progress": 7,
+    "done": 19,
+    "in_progress": 6,
     "picked_early": 1,
-    "ready": 5,
-    "blocked": 46
+    "ready": 6,
+    "blocked": 45
   },
-  "data_hash": "a17ac5a954dc8c4b"
+  "data_hash": "e26cff8ae20bdbbe"
 }
