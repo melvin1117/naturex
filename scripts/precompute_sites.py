@@ -45,6 +45,7 @@ from app.tools.geometry import validate_polygon
 from app.tools.scenarios import build_site_scenarios, load_scenario_spec, scenario_document
 from app.tools.site_images import (
     DW_CLASSES,
+    Bounds,
     DW_LABELS,
     DW_PALETTE,
     IMAGES_DIR,
@@ -680,6 +681,13 @@ _SUPERSAMPLE = 4
 SENTINEL_2_IMAGE_ATTRIBUTION = "Contains modified Copernicus Sentinel data 2025-2026."
 
 
+def _stable_bounds(bounds: Bounds) -> Bounds:
+    """Round to 1e-9 degrees (~0.1 mm): Web Mercator trig differs in the last bit across
+    platforms (macOS vs Linux libm), which would make the committed sidecar flap in CI."""
+    (south, west), (north, east) = bounds
+    return (round(south, 9), round(west, 9)), (round(north, 9), round(east, 9))
+
+
 def expected_site_images(site_key: str) -> SiteImages:
     """Sidecar metadata for a site's images: a pure function of the GeoJSON and constants."""
     bounds = polygon_bounds(load_site_geojson(site_key))
@@ -716,7 +724,7 @@ def expected_site_images(site_key: str) -> SiteImages:
             file=image_path(site_key, "thumbnail").name,
             width=thumb.width,
             height=thumb.height,
-            bounds=thumb.bounds(),
+            bounds=_stable_bounds(thumb.bounds()),
             dataset_ids=(
                 "COPERNICUS/S2_SR_HARMONIZED",
                 "GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED",
