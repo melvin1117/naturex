@@ -60,7 +60,7 @@ Design principles:
 Exact IDs, prices and test evidence: [ADR-0003](../adr/0003-model-routing-on-token-factory.md) (`make check-keys` lists what your key can call). Auditor: `nvidia/Nemotron-3-Ultra-550b-a55b`; Nano: `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`. `nvidia/Nemotron-3_5-Lightning` (Nano price, 1M context) is compared against Nano in T02.
 
 **Routing rules (and how we prove them):**
-- Use reasoning / "thinking" mode only where it pays off (Auditor). Keep it off for classification, chat and orchestration with `extra_body={"chat_template_kwargs": {"enable_thinking": False}}` (verified in T02; Nemotron reasons by default). Structured output uses `response_format` `json_schema` in the OpenAI shape (`name`, `schema`, `strict`); see [ADR-0003](../adr/0003-model-routing-on-token-factory.md) for the measured results.
+- Use reasoning / "thinking" mode only where it pays off. Keep it off for classification, chat and orchestration, and for the Auditor's JSON call too (T26: with thinking on, Ultra spent its whole 3,000-token cap reasoning and returned truncated JSON; see §7.7) with `extra_body={"chat_template_kwargs": {"enable_thinking": False}}` (verified in T02; Nemotron reasons by default). Structured output uses `response_format` `json_schema` in the OpenAI shape (`name`, `schema`, `strict`); see [ADR-0003](../adr/0003-model-routing-on-token-factory.md) for the measured results.
 - The eval harness (§18) runs each task on Nano, Super and Ultra and records accuracy, p50 latency and cost per call. That produces the README routing table, turning the choice of model into evidence rather than opinion.
 - On timeout or invalid JSON, retry once on the same model, then fall back one tier (Ultra → Super → Nano) and flag the report `degraded_model=true`.
 
@@ -644,16 +644,40 @@ Input: metrics, valuation, base scores, events, evidence, and the previous repor
 ```json
 {
   "auditor_adjustment": -2,
-  "adjustment_reason": "Two credible reports of illegal dumping in the NE sector not yet visible in satellite data.",
-  "agreement": 0.8,
-  "flags": [{"type": "data_gap", "detail": "No cloud-free scenes in Jul–Aug (rainy season)"}],
+  "adjustment_reason": "Two reports of illegal dumping in the NE sector [event:9f1c…] [event:4ab2…] are not yet visible in the built-up land cover [metric:landcover.built].",
+  "agreement": 0.7,
+  "flags": [{"type": "data_gap", "detail": "Few cloud-free scenes in the rainy season.", "citation": "metric:cloud_free_obs"}],
   "greenwashing_risk": "low",
-  "key_changes": ["Flooded vegetation −3.1 pp vs last quarter", "New encroachment news (severity 4)"],
+  "key_changes": ["Flooded vegetation is shrinking [metric:landcover.flooded_vegetation] [report:previous.health_change]", "New encroachment news [event:9f1c…]"],
   "recommendations": ["Install boundary markers along the NE industrial edge", "..."],
-  "summary_md": "## Ecological Performance Report — Q3 2026\n..."
+  "summary_md": "## Ecological Performance Report — Q3 2026\n...",
+  "citations": ["event:9f1c…", "event:4ab2…", "metric:landcover.built", "metric:cloud_free_obs", "metric:landcover.flooded_vegetation", "report:previous.health_change"]
 }
 ```
-Rules in the prompt: cite a metric or event ID for every claim; never change numbers other than `auditor_adjustment`; write the report for non-experts; ≤ 400 words.
+Rules in the prompt: cite a metric or event ID for every claim; never change numbers other than `auditor_adjustment`; `score:threat_pressure` already prices every relevant negative event by severity, so adjust only for cross-evidence disagreement, data gaps or validated field evidence, citing the metric or report fact involved; write the report for non-experts; ≤ 400 words.
+
+**As built (T26, `backend/app/agents/auditor.py`, prompt in `agents/prompts/auditor.md`).** A pure agent module; T27 calls it.
+- **Input bundle** (`build_auditor_input` → `AuditorInput`): deterministic facts, each with a citable ID and a display value with its unit. `metric:*` (area, each non-zero land-cover class, natural fraction, NDVI mean, NDVI trend with its Mann-Kendall p and significance, water change, 5-year and 12-month forest loss, biomass, SOC, mangrove fraction, cloud-free observations), `valuation:*` (low / mid / high, unit, carbon stock and sequestration, coastal, flags), `score:*` (the five components, negative severity sum, base health and grade, confidence before the audit with its terms, listing gate), `event:<id>` per news or field-evidence event (News Scout's URL-derived ID; relevance, impact type, direction, severity, date, and `validated` for evidence) and `report:previous.*` with deterministic health and value changes. The bundle must be built from the pre-audit score. The hero bundle is about 2,200 characters.
+- **Untrusted text:** event titles and summaries are HTML-escaped, truncated and fenced in `<untrusted_content>`. Their numbers are **not** allowed in the output, so an article can't put a figure into the report; the model refers to the event by ID ("a reported clearing [event:…]", not "a 40-ha clearing"). The issuer-written asset name is escaped too and is left out of the number allowlist: prose may repeat the name, but not its digits as claims.
+- **Thinking off for the JSON call** (`reasoning=False`, `max_tokens=1800`). T02 had Ultra 3/3 correct with `json_schema` and thinking off; in the T26 live smoke, thinking on used the whole 3,000-token cap and returned truncated JSON twice. `run_auditor(reasoning=True)` stays for the T47 evals.
+- **Post-validation in code** (`check_audit`, after the Pydantic schema):
+  - adjustment is an integer in [−10, +10] (`scoring.check_auditor_adjustment`) and a non-zero one has a reason citing at least one ID;
+  - **per-sign justification** (`_justification_errors`): a **positive** adjustment cites a relevant direction +1 news event or field evidence with `validated=true`; a **negative** one cites a `metric:` or `report:previous.` fact carrying the disagreement, not only relevant negative events (already priced by T); a reason citing **only** `score:*`, `valuation:*` or the metrics in V, N, L and W (area, NDVI mean and trend, land cover, natural fraction, water change, 5-year loss) is always rejected; cited events must be relevant and must not point the other way; direction-0 events and unvalidated evidence justify nothing;
+  - **agreement needs evidence** (`_agreement_errors`): with no relevant events or evidence it must be exactly 0.5; otherwise it stays within 0.5 ± 0.3, and any value other than 0.5 must cite (anywhere in the audit) a relevant news event or validated evidence;
+  - `citations` is non-empty and every ID (in the list, inline in any text, and on every flag) resolves to the bundle; every key change and the summary cite inline;
+  - flag types come from a fixed list (`AuditorFlagType`), each flag cites an ID, `medium`/`high` greenwashing needs a `greenwashing_claim_mismatch` flag and simulated data needs a `simulated_data` flag;
+  - no HTML, Markdown links, images or URLs; size limits (summary ≤ 400 words, ≤ 5 key changes, ≤ 4 recommendations, ≤ 8 flags);
+  - prose (summary, reason, key changes, recommendations, flag details) may only use numbers from the trusted bundle text (the T10 number guard, now shared in `agents/guards.py`; since T26 it also reads "40 %" and "40 percent" as percentages). The adjustment and adjusted health are **not** allowed: code appends the adjustment line (`adjustment_line`: adjustment, base → adjusted health, reason) to the accepted summary, so its sign and numbers are always right.
+- **Retries and fallback:** Ultra (LLMClient retries and falls back a tier on transport or schema failure) → on a rule violation, one retry on the same tier with the errors fed back → one attempt a tier lower → a deterministic **no-op audit**: adjustment 0, agreement 0.5 (`DEFAULT_AGREEMENT`; `apply_audit` passes `None`, so the score records `agreement_source = "default"`), one `auditor_unavailable` flag (reserved; the model can't emit it) and a template summary built only from bundle facts. Budget, model and call-log failures also end in the no-op, so a rating never blocks. Feedback only echoes model-written values that are well-formed citations or numbers; anything else is described as "an invalid citation" or "an invalid flag type".
+- **Call log:** every attempt is logged in `llm_calls` with agent `auditor` and the asset ID. A schema-valid answer that `check_audit` refuses is re-marked `status = 'rejected'` (`LLMClient.mark`, via the call-log handle now on `LLMResult.call_id`), so spend shows which answers were used.
+- **Output:** `AuditResult` with the validated `AuditorOutput` (summary including the code-written adjustment line), the resolved citations in bundle order, `source` (`ultra` / `super` / `nano` / `fallback`), `model`, `degraded` (anything but Ultra), `fallback`, `rounds`, the rejection messages (for the Agent Trace), `greenwashing_risk` (**`None` = not assessed**, for the no-op; T27 shows that instead of the schema's filler `low`) and any reasoning text. `AuditorOutput` is unchanged.
+- **Applying it:** `apply_audit(ScoreInputs, AuditResult)` re-runs `scoring.score` with the adjustment and agreement. Components, base health and valuation are untouched; health moves by exactly the adjustment (clamped to [0, 100]) and confidence only through agreement.
+- **Live smoke (hero wetland, 2026-10-07, mock encroachment news, after the review rules):** Ultra answered in 2 rounds. The first was rejected: a negative adjustment citing only the counted event, plus "40" from the news text. Accepted answer: adjustment −2 citing the event and `metric:landcover.built`, agreement 0.3 citing the event, flags `encroachment_pressure` and `water_decline`, 9 citations. Health 73.6 → 71.6 (A), but confidence 71.0 → **65.0, so the hero fails the listing gate** (see §7.4: agreement below 0.465 fails it).
+  - **Decision (agreement vs the gate):** keep the ±0.3 cap; agreement must cite relevant news or validated evidence. That's acceptable because:
+    - the listing gate applies only when an asset is listed (T38), so an audited re-rate never delists a listed asset;
+    - the curated sites are listed from the deterministic report v1 (T19);
+    - a new listing that the Auditor pushes below 70 goes to `needs_evidence`, and validated field photos add 14 confidence points (T40/T58). That's the designed path.
+  - **Known limit:** prose may still quote a number equal to another trusted fact (e.g. "-2"); the code-written adjustment line is the authoritative one. 2,661 + 3,377 prompt and 671 + 636 output tokens, $0.0100, 2.9 s + 2.0 s. (First T26 smoke, before the review: also −2 in 2 rounds, agreement 0.5, $0.0095.)
 
 ## 8. Market engine
 **IPO:** `ipo_price = fair_value_per_share` where
