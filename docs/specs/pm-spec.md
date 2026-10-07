@@ -21,11 +21,13 @@ Living ecosystems produce enormous value (water filtration, flood protection, ca
 2. Investors can discover, compare, buy and sell (play money) and see prices react to AI ratings and news.
 3. The full lifecycle — list → rate → IPO → trade → re-rate → alert → explain — is demoable in < 3 minutes.
 4. Meets every Devpost requirement and clearly showcases Nemotron + Token Factory (+ Tavily).
+5. **Real flows, not only a tour** ([ADR-0005](../adr/0005-accounts-roles-and-two-apps.md)): people sign up, roles are enforced server-side, and there are two experiences: **Steward** for communities and **Exchange** for investors. Judges get a one-click demo session.
 
 **Non-goals**
 - Real money, real securities, KYC/AML, custody.
 - Certified valuations or carbon-credit issuance.
-- Global coverage — 3 curated demo sites; live rating of user-drawn polygons is a *Could* (best-effort, falls back to cached sites).
+- Global coverage: 3 curated demo sites carry the story. New listings are rated live with quotas (T60); a failed live run never shows another site's data in the live world.
+- KYC, email verification, password reset by email, MFA (OAuth sign-in is a *Could*).
 - Mobile-native apps (responsive web only).
 
 ## 3. Personas
@@ -34,18 +36,31 @@ Living ecosystems produce enormous value (water filtration, flood protection, ca
 | **Rosa — community steward** | Leads a cooperative that owns a wetland near an industrial zone | Prove the wetland is worth more alive; attract funding without selling |
 | **Arjun — impact investor** | Manages a small nature-focused fund | Trustworthy, comparable data; know when something goes wrong |
 | **Mia — curious retail user** | Wants to "own a piece of the Amazon" | Simple UI, visible impact |
-| **Judge / Demo admin** | Hackathon judge | See the whole story fast |
+| **Platform admin** | NatureX operator | Run re-ratings, inject events, suspend abusive listings |
+| **Judge** | Hackathon judge | See the whole story fast: one click, no sign-up |
+
+### 3.1 Roles and access ([ADR-0005](../adr/0005-accounts-roles-and-two-apps.md))
+- **Anyone** can browse the Exchange: marketplace, asset pages, reports, ledger.
+- **Any signed-in user** can invest: buy and sell, portfolio, alerts, Copilot.
+- **Community roles come from membership.** The **owner** registers the community, manages members and launches the IPO. **Stewards** manage listings and evidence. Members can't trade their own asset's shares.
+- **Admins** run the Time Machine and moderation, inside their own world only.
+- **Real accounts live in one live world.** Demo sessions get a private sandbox world with ready-made personas.
 
 ## 4. User stories & acceptance criteria
 
 ### Epic A — Listing (Community)
 | ID | Story | Acceptance criteria |
 |---|---|---|
+| A0 | As Rosa, I create an account and register my community | Sign-up with email and password; I become the community's owner; the Steward app opens on an empty home with "List your land" |
 | A1 | As Rosa, I draw my land on a map | Polygon tool; area shown in ha; rejects self-intersecting polygons, < 10 ha or > 50,000 ha, and overlaps with existing listings |
 | A2 | I enter community details | Name, country, description, photo, total shares (default 1,000,000), community retained % (default 51%) |
 | A3 | I submit for rating | Rating job starts; progress UI shows agent steps (satellite → valuation → news → evidence → audit) |
 | A4 | I upload field evidence | Up to 5 geotagged photos (audio is post-hackathon); analysis appears in report; confidence increases |
 | A5 | If not eligible, I get a stewardship plan | 3–5 concrete, location-specific recommendations |
+| A6 | My listing moves through clear states | draft → rating → listed / needs evidence / ineligible; each state shows the next action; admins can suspend and resume; every change is in the ledger |
+| A7 | I launch the IPO | Owner only, once the asset is listed: choose shares offered and % retained, see the price formula step by step, confirm; trading opens in the Exchange |
+| A9 | My listing is verified, visibly | I upload documents (title or agrarian certificate, assembly minutes); an automated checklist shows each result; an admin approves or rejects with a reason; the decision is in the ledger; in the live world the IPO needs `verified`, any later change to the listing resets it, and revoking suspends trading. **For the hackathon deployment and tests, a labelled demo mode** generates fictional sample documents for the listing and auto-approves when every check passes; the badge and panel say "Demo verification: sample documents, no real ownership checked" Investors see a precise badge and a public "How this listing was verified" panel, including what was **not** checked ([ADR-0006](../adr/0006-listing-verification.md)) |
+| A8 | I see what the community earns | Steward home shows the wallet, IPO proceeds, holders, quarterly payouts, alerts and stewardship actions |
 
 ### Epic B — AI rating & report
 | ID | Story | Acceptance criteria |
@@ -65,6 +80,8 @@ Living ecosystems produce enormous value (water filtration, flood protection, ca
 | C3 | I see a live price chart | Price history with markers on report/news events |
 | C4 | IPO proceeds go to community | Community wallet balance increases with each primary-share sale |
 | C5 | Everything is labelled sandbox | Persistent "Sandbox — play money, not a real security" banner |
+| C6 | Insiders can't trade | Members of an asset's community get 403 `insider_trading_blocked` on that asset's orders; a holder can't be added as a member (409); admins and treasury accounts never trade |
+| C7 | Browsing is open, trading needs an account | Anonymous visitors browse; buy/sell, portfolio and alerts ask them to sign in |
 
 ### Epic D — Monitoring & alerts
 | ID | Story | Acceptance criteria |
@@ -86,7 +103,7 @@ Principle: **one flawless end-to-end story on 3 real sites** beats a wide app wi
 
 | Must (PoC core) | Should | Could | Won't |
 |---|---|---|---|
-| A1–A3, B1–B5, C1–C5, D1–D3, E1 · Time Machine · 3 real demo sites (cached satellite data) · **Nature Ledger** (F1–F2) · **Agent Trace** (G1) · **Eval harness** (G2) · **Judge tour + per-visitor sandbox** (J1–J2) · deployed (host per dev-spec §21) · CI with tests | A4 field evidence (**photos only**), B6 report diffs, D4 revenue split, E3 impact | Live rating of arbitrary user polygons (fallback to cached), A5 stewardship plan, E2 compare, Spanish report, OpenTimestamps anchoring (F3) | Real money, tokens/blockchain trading, full auth/KYC, audio evidence, mobile app, PDF export |
+| A0–A3, A6–A9, B1–B5, C1–C7, D1–D4, E1, **K1–K4** · Steward and Exchange apps · live rating of new listings (quota) · Time Machine · 3 real demo sites (cached satellite data) · **Nature Ledger** (F1–F2) · **Agent Trace** (G1) · **Eval harness** (G2) · **One-click judge demo sessions + optional tour** (J1–J2) · deployed (host per dev-spec §21) · CI with tests | A4 field evidence (**photos only**), B6 report diffs, E3 impact, K5 delete account, community stewards (more members than the owner) | OAuth sign-in, A5 stewardship plan, E2 compare, Spanish report, OpenTimestamps anchoring (F3) | Real money, tokens/blockchain trading, KYC, email verification and password reset by email, audio evidence, mobile app, PDF export |
 
 ### Epic F — Nature Ledger (tamper-evident records)
 | ID | Story | Acceptance criteria |
@@ -98,8 +115,17 @@ Principle: **one flawless end-to-end story on 3 real sites** beats a wide app wi
 ### Epic J — Judge experience (details in [demo-plan.md](./demo-plan.md))
 | ID | Story | Acceptance criteria |
 |---|---|---|
-| J1 | Each judge gets a private sandbox | First visit creates a private demo world (personas, holdings, demo assets); "Reset my demo" restores it; visitors never affect each other |
-| J2 | A judge can follow a guided tour | No login; persona switcher (community, investor, NatureX AI, Time Machine); 10-chapter tour with spotlight hints, "Do it for me" and Live badges; completes in ~7 minutes |
+| J1 | Each judge gets a private sandbox in one click | `/judge` → "Explore as a community steward / an investor / the platform admin" starts a demo session with its own world (personas, holdings, demo assets) and opens the matching app; no sign-up; "Reset my demo" restores it; visitors never affect each other |
+| J2 | A judge can follow an optional guided tour | A demo bar with a persona switcher (demo sessions only); the 10-chapter tour is an overlay on demo mode, with spotlight hints, "Do it for me" and Live badges; completes in ~7 minutes; "Create a real account" shows real sign-up |
+
+### Epic K — Accounts and access ([ADR-0005](../adr/0005-accounts-roles-and-two-apps.md))
+| ID | Story | Acceptance criteria |
+|---|---|---|
+| K1 | I sign up, sign in and sign out | Email + password; generic login errors; rate-limited; signing out ends the session immediately, open live streams included (registration enumeration is an accepted risk without email verification) |
+| K2 | My session is safe | Server-side session in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie; no tokens in browser storage; cross-site writes rejected |
+| K3 | I can only do what my role allows | Every API route, reads included, checks the ADR-0005 matrix; 401 / 403 with a reason / 404 across worlds; a test fails if a route has no check; the database rejects rows that link across worlds |
+| K4 | Each audience has its own app | Exchange at `/` and Steward at `/steward`, each with its own navigation; an app switcher for community members |
+| K5 *(should)* | I can delete my account | Credentials and sessions deleted, name pseudonymised; market history stays consistent |
 
 ### Epic G — Engineering visibility (for Technological Implementation score)
 | ID | Story | Acceptance criteria |

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>NatureX — Overview, Architecture, Interaction & Flow</title>
+<title>NatureX — Overview, Apps, Architecture, Interaction & Flow</title>
 <style>
   :root {
     --bg: #f5f7f3; --panel: #ffffff; --panel2: #eef3ec; --border: #dde5da;
@@ -136,6 +136,40 @@
   .calc .out .big { font-size: 40px; font-weight: 800; color: var(--accent); line-height: 1.1; }
   .calc .out .gr { font-size: 22px; font-weight: 700; margin-top: 4px; }
   .ai-roles li { margin-bottom: 6px; }
+  /* ---------- Apps & users page ---------- */
+  #apps.active { display: block; flex: 1; overflow-y: auto; }
+  #apps .ov { max-width: 1240px; }
+  .app-card { border-radius: 16px; padding: 18px 20px; border: 1px solid var(--border); }
+  .app-card.steward { background: linear-gradient(160deg, #f8e6c8 0%, #fff 70%); }
+  .app-card.exchange { background: linear-gradient(160deg, #d3ead8 0%, #fff 70%); }
+  .app-card h4 { font-size: 18px; margin: 0 0 2px; }
+  .app-card .url { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+  .app-card ul { margin: 10px 0 0; padding-left: 18px; }
+  .app-card li { font-size: 14.5px; margin: 3px 0; }
+  .mini { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
+  .mini div { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+  .mini b { display: block; font-size: 14.5px; }
+  .lanes { overflow-x: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 12px; }
+  .lanes-grid { display: grid; grid-template-columns: 96px repeat(7, minmax(112px, 1fr)); gap: 6px; min-width: 900px; }
+  .lane-h { font-weight: 700; font-size: 13.5px; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px; border-radius: 10px; }
+  .lane-h small { display: block; font-weight: 500; color: var(--muted); font-size: 11.5px; }
+  .lane-h.r, .cell.r { background: #fbf1df; }
+  .lane-h.a, .cell.a { background: #e6f2e9; }
+  .lane-h.i, .cell.i { background: #e8f0f8; }
+  .cell { border-radius: 10px; min-height: 80px; padding: 4px; }
+  .stp { background: var(--panel); border: 1px solid rgba(0,0,0,.08); border-radius: 10px; padding: 8px 9px 9px; height: 100%; position: relative; box-shadow: 0 1px 2px rgba(40,60,50,.05); }
+  .stp .n { display: inline-grid; place-items: center; width: 21px; height: 21px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; margin-right: 4px; }
+  .stp b { font-size: 13.3px; }
+  .stp p { margin: 4px 0 0; font-size: 12.3px; color: var(--muted); line-height: 1.35; }
+  .stp.fx { background: transparent; border: 1.5px dashed #c99a55; box-shadow: none; }
+  .stp.fx.i { border-color: #7c9fc2; }
+  .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .chip { border-radius: 999px; padding: 6px 13px; font-size: 14px; font-weight: 600; border: 1px solid rgba(0,0,0,.1); background: var(--panel); }
+  .chip.g { background: #d3ead8; } .chip.y { background: #f8e6c8; } .chip.b { background: #dbe8f5; } .chip.p { background: #e6e0f5; } .chip.x { background: #eee; color: #6b6b6b; }
+  .chips .ar { color: #8a9a90; font-size: 18px; }
+  .branch { margin: 8px 0 0 18px; font-size: 14px; color: var(--muted); }
+  .branch div { margin: 4px 0; }
+  table.cmp.roles td:not(:first-child), table.cmp.roles th:not(:first-child) { text-align: center; }
   @media (max-width: 900px) { .calc { grid-template-columns: 1fr; } .calc label { grid-template-columns: 1fr 44px; gap: 2px 10px; } .calc label > span:first-child { grid-column: 1 / -1; } }
   @media (max-width: 900px) { body { height: auto; overflow: auto; } main.active { grid-template-columns: 1fr; height: auto; } #stage { height: 70vh; } .hero h2 { font-size: 24px; } }
 </style>
@@ -152,6 +186,7 @@
     <button data-tab="arch">② Architecture</button>
     <button data-tab="seq">③ Interaction</button>
     <button data-tab="flow">④ Flowchart</button>
+    <button data-tab="apps">⑤ Apps &amp; users</button>
   </nav>
 </header>
 <section id="overview" class="page active">
@@ -196,6 +231,7 @@
       <button class="sec" data-goto="arch">② Architecture</button>
       <button class="sec" data-goto="seq">③ Interaction</button>
       <button class="sec" data-goto="flow">④ Flowchart</button>
+      <button class="sec" data-goto="apps">⑤ Apps &amp; users</button>
     </div>
   </div>
 </section>
@@ -301,6 +337,133 @@ Low / High = same with the low / high coefficient  →  always shown as a range<
     </div>
   </div>
 </section>
+<section id="apps" class="page">
+  <div class="ov">
+    <div class="hero">
+      <p class="quote">Who uses NatureX, and how</p>
+      <h2>Two apps, one platform: communities steward the land, investors back it.</h2>
+      <p>Real accounts with roles, not just a demo tour. Communities use <b>NatureX Steward</b>; investors use <b>NatureX Exchange</b>; judges get both in one click. <span style="color:var(--muted)">(Design: ADR-0005.)</span></p>
+    </div>
+
+    <h3>1 · The two apps</h3>
+    <div class="grid g2">
+      <div class="app-card steward">
+        <div class="ic" style="font-size:28px">🏘️</div>
+        <h4>NatureX Steward</h4><div class="url">/steward · for community owners &amp; stewards</div>
+        <ul>
+          <li>Register the community</li>
+          <li>Draw the land and submit it for an AI rating</li>
+          <li>Follow the listing status; add photo evidence</li>
+          <li>Launch the IPO (owner)</li>
+          <li>Community home: wallet, IPO money, payouts, holders, alerts, stewardship tips</li>
+        </ul>
+      </div>
+      <div class="app-card exchange">
+        <div class="ic" style="font-size:28px">📈</div>
+        <h4>NatureX Exchange</h4><div class="url">/ · for investors and everyone</div>
+        <ul>
+          <li>Browse rated nature assets (no account needed)</li>
+          <li>Asset page: AI report, grade, value range, price chart, ledger</li>
+          <li>Buy and sell shares with play money (signed in)</li>
+          <li>Portfolio and impact: ha protected, CO₂ stored</li>
+          <li>Alerts and the Copilot: “why did this drop?”</li>
+        </ul>
+      </div>
+    </div>
+    <div class="mini">
+      <div><b>🔑 Sign in</b>/login · /register: email and password</div>
+      <div><b>🎛️ Control room</b>/admin: Time Machine, events, suspend a listing (admins)</div>
+      <div><b>🧑‍⚖️ Judge access</b>/judge: one click into either app, no sign-up</div>
+    </div>
+
+    <h3>2 · Who can do what</h3>
+    <table class="cmp roles">
+      <tr><th style="width:38%"></th><th>👀 Anyone</th><th>💼 Investor<br><small>signed in</small></th><th>🏘️ Community<br><small>owner · steward</small></th><th>🎛️ Admin</th></tr>
+      <tr><td>Browse marketplace, reports, ledger</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+      <tr><td>Buy and sell shares</td><td>—</td><td>✅</td><td>✅ <small>not their own land</small></td><td>—</td></tr>
+      <tr><td>List land, add evidence</td><td>—</td><td>—</td><td>✅</td><td>—</td></tr>
+      <tr><td>Launch the IPO</td><td>—</td><td>—</td><td>✅ <small>owner</small></td><td>—</td></tr>
+      <tr><td>See wallet, payouts, holders</td><td>—</td><td>—</td><td>✅</td><td>👁️</td></tr>
+      <tr><td>Time Machine, suspend a listing</td><td>—</td><td>—</td><td>—</td><td>✅</td></tr>
+    </table>
+    <p style="font-size:14px;color:var(--muted);margin-top:8px">Anyone can become an investor by signing up. Anyone signed in can register a community and becomes its owner. The server checks every request; the buttons are only a convenience.</p>
+
+    <h3>3 · The journey, end to end</h3>
+    <div class="lanes"><div class="lanes-grid">
+      <div class="lane-h r">🏘️ Rosa<small>Steward app</small></div>
+      <div class="cell r"><div class="stp"><span class="n">1</span><b>Sign up</b><p>Registers her wetland community; she's the owner.</p></div></div>
+      <div class="cell r"><div class="stp"><span class="n">2</span><b>Draw the land</b><p>Polygon on the map, then <i>Submit for rating</i>.</p></div></div>
+      <div class="cell r"></div>
+      <div class="cell r"><div class="stp"><span class="n">4</span><b>Verify + IPO</b><p>Listed! Adds documents (sample docs in demo), the checklist passes, then picks shares offered and % kept.</p></div></div>
+      <div class="cell r"><div class="stp fx">💰 <b>Wallet goes up</b><p>Each share Arjun buys from the IPO pays the community.</p></div></div>
+      <div class="cell r"></div>
+      <div class="cell r"><div class="stp fx">💰 <b>Payout + tips</b><p>Quarterly community fund and dividends; stewardship actions after bad news.</p></div></div>
+
+      <div class="lane-h a">🛰️ NatureX AI<small>Nemotron agents</small></div>
+      <div class="cell a"></div>
+      <div class="cell a"></div>
+      <div class="cell a"><div class="stp"><span class="n">3</span><b>Rate the land</b><p>Satellite → $ value → news → audit. Grade A, $/yr range, confidence.</p></div></div>
+      <div class="cell a"></div>
+      <div class="cell a"></div>
+      <div class="cell a"><div class="stp"><span class="n">6</span><b>Next quarter</b><p>Re-rate with new satellite data and news; price re-anchors; revenue split.</p></div></div>
+      <div class="cell a"></div>
+
+      <div class="lane-h i">💼 Arjun<small>Exchange app</small></div>
+      <div class="cell i"></div>
+      <div class="cell i"></div>
+      <div class="cell i"></div>
+      <div class="cell i"></div>
+      <div class="cell i"><div class="stp"><span class="n">5</span><b>Sign up and buy</b><p>Browses, reads the report, buys 100 shares with play money.</p></div></div>
+      <div class="cell i"></div>
+      <div class="cell i"><div class="stp"><span class="n">7</span><b>🔔 Alert</b><p>“Encroachment: A → BBB.” Asks the Copilot why, then holds or sells.</p></div></div>
+    </div></div>
+
+    <h3>4 · A listing's status</h3>
+    <div class="card">
+      <div class="chips">
+        <span class="chip x">📝 Draft</span><span class="ar">→</span>
+        <span class="chip b">🛰️ Rating</span><span class="ar">→</span>
+        <span class="chip g">✅ Listed</span><span class="ar">→</span>
+        <span class="chip y">📈 IPO launched · trading</span>
+      </div>
+      <div class="branch">
+        <div>↳ <span class="chip p" style="font-size:12.5px;padding:3px 10px">📸 Needs evidence</span> confidence below 70%: add photos, then it's rated again</div>
+        <div>↳ <span class="chip p" style="font-size:12.5px;padding:3px 10px">🌱 Ineligible</span> grade below C or recent forest loss: a stewardship plan to improve and re-apply</div>
+        <div>↳ <span class="chip x" style="font-size:12.5px;padding:3px 10px">⏸ Suspended</span> an admin can pause and resume a listed asset</div>
+      </div>
+      <p style="font-size:13.5px;color:var(--muted);margin-top:10px">Every status change is written to the Nature Ledger.</p>
+    </div>
+
+    <h3>5 · How a listing is verified (no black box)</h3>
+    <div class="card">
+      <div class="chips">
+        <span class="chip x">✍️ Self-attested</span><span class="ar">→</span>
+        <span class="chip b">📄 Documents submitted <small>(or 🧪 sample docs in demo)</small></span><span class="ar">→</span>
+        <span class="chip p">🔎 Checklist runs</span><span class="ar">→</span>
+        <span class="chip g">🧑‍⚖️ Reviewer decides</span><span class="ar">→</span>
+        <span class="chip y">🔗 Ledger + public panel</span>
+      </div>
+      <div class="branch">
+        <div>📄 Title or agrarian certificate, assembly minutes (consent), community registration</div>
+        <div>🔎 Each check shows pass / warn / fail and what it found: accepted file format, not reused, no boundary overlap, consent-labelled document attached; optionally an <b>AI heuristic</b> compares name, place and area with the listing (it only suggests, and the reviewer sees the source)</div>
+        <div>🧑‍⚖️ An admin approves or rejects with a reason (in demo mode, sample documents are auto-approved only if all checks pass and nothing was revoked); in the live world the IPO needs “verified”; changing the land or documents resets it; revoking suspends trading</div>
+        <div>🔗 The ledger records the decision, the reviewer role and private document commitments (never the documents or names); investors see <i>“How this listing was verified”</i>, including what was <b>not</b> checked</div>
+      </div>
+    </div>
+    <div class="grid g3" style="margin-top:12px">
+      <div class="card"><div class="ic">🏁</div><h4>Hackathon</h4><p>Documents + visible checklist + admin decision (+ an AI consistency hint if time allows). The badge says “Documents reviewed by NatureX (hackathon process)”, never “ownership proven”.</p></div>
+      <div class="card"><div class="ic">🧪</div><h4>Demo mode (deployment, judges, E2E)</h4><p>Nobody has real land papers in a demo, so <b>“Use sample documents (demo)”</b> generates fictional, watermarked papers (listing reference, place and area only; no user-written text). The real checklist runs; a <b>demo auto-reviewer</b> approves only sample documents, only if every check passes, and never after a revoke. Sample runs say <i>“Demo verification: sample documents, no real ownership checked”</i> (badge, panel, ledger, footer). Real launch: <code>VERIFICATION_MODE=review</code>; demo approvals stop counting.</p></div>
+      <div class="card"><div class="ic">🏛️</div><h4>Real world (same model, more checks)</h4><p>Land-registry match (in Mexico: RAN for communal and ejido land, the public property registry for private land) · legal entity · community consent (FPIC) · accredited local verifiers · 30-day public objection period · yearly re-verification and disputes.</p></div>
+    </div>
+
+    <h3>6 · Real accounts and the judge demo</h3>
+    <div class="grid g2">
+      <div class="card"><div class="ic">🌍</div><h4>Live world</h4><p>Real sign-up at /register. One shared market: real communities list real land, real investors trade play money. Starts with the 3 curated sites.</p></div>
+      <div class="card"><div class="ic">🧪</div><h4>Demo sandbox</h4><p>/judge → <b>Explore as community</b>, <b>investor</b> or <b>admin</b>. A private copy with Rosa, Arjun and an admin ready; switch persona, “Reset my demo”, optional guided tour. Never touches the live world.</p></div>
+    </div>
+    <div class="note" style="margin-top:16px">🧪 Sandbox with play money, not a real securities offering. Values are estimates, always shown with ranges and a confidence score.</div>
+  </div>
+</section>
 <main id="diagrams" class="page">
   <section id="stage">
     <div class="toolbar">
@@ -341,9 +504,11 @@ sequenceDiagram
   actor I as 💼 Investor
 
   rect rgba(111,159,126,0.13)
-  Note over C,R: Phase A — Listing & AI rating
-  C->>W: Draw land boundary + add details
-  W->>A: POST /assets
+  Note over C,R: Phase A — Sign-up, listing & AI rating (Steward app)
+  C->>W: Sign up + register community
+  W->>A: POST /auth/register · POST /communities
+  C->>W: Draw land boundary + submit
+  W->>A: POST /assets · /submit (session + role checked)
   A->>O: rate(asset_id)
   O->>E: land cover, NDVI trend, carbon, $ value
   E-->>O: metrics + value range (low/mid/high)
@@ -351,24 +516,30 @@ sequenceDiagram
   N-->>O: events with impact type, direction, severity
   O->>R: metrics + events + field evidence
   R-->>O: health score, grade, confidence, report
+  O-->>A: report sealed in ledger · status = listed
   end
 
   rect rgba(201,154,85,0.13)
-  Note over O,I: Phase B — IPO & trading
-  O->>M: fair value → set IPO price
-  M-->>W: asset live on marketplace
-  I->>W: Buy 100 shares
-  W->>M: POST /orders
-  M-->>W: order filled, price ticks, community credited
+  Note over C,I: Phase B — Verification, IPO (Steward) & trading (Exchange)
+  C->>W: Add documents (demo: sample docs)
+  W->>A: checklist → reviewer / demo auto-reviewer → verified (ledger)
+  C->>W: Launch IPO (owner): shares offered, % kept
+  W->>M: POST /assets/{id}/ipo
+  M-->>W: IPO price from fair value · trading opens
+  I->>W: Sign up · buy 100 shares
+  W->>M: POST /orders (signed-in investor)
+  M-->>W: order filled, price ticks, community wallet credited
   end
 
   rect rgba(150,135,196,0.13)
-  Note over J,I: Phase C — Continuous monitoring
+  Note over C,I: Phase C — Continuous monitoring
   J->>O: re-rate (every quarter / Time Machine click)
   O->>R: new satellite metrics + new news
   R-->>M: new fair value + alerts
   M-->>W: price update (SSE)
   W-->>I: 🔔 "Encroachment detected — grade A → BBB"
+  J->>M: quarterly revenue split
+  M-->>C: 💰 community fund + dividends to holders
   I->>A: Copilot: "Why did the price drop?"
   A-->>I: Grounded answer with report citations
   end
@@ -376,8 +547,8 @@ sequenceDiagram
 
 const FLOW = `
 flowchart TD
-  S(["▶ Start"]) --> REG["Community registers<br/>(identity check mocked)"]
-  REG --> DRAW["Draw land boundary<br/>+ upload ownership docs"]
+  S(["▶ Start"]) --> REG["Sign up + register community<br/>(Steward app · becomes owner)"]
+  REG --> DRAW["Draw land boundary<br/>+ attest stewardship (draft)"]
   DRAW --> V1{"Valid polygon?<br/>no overlap?"}
   V1 -- No --> DRAW
   V1 -- Yes --> RATE["🤖 AI rating pipeline<br/>satellite · valuation · news"]
@@ -387,9 +558,13 @@ flowchart TD
   C1 -- Yes --> G1{"Grade ≥ C and<br/>habitat loss below 1%<br/>(last 12 months)?"}
   G1 -- No --> PLAN["Stewardship plan<br/>AI recommendations"]
   PLAN -. "improve & re-apply" .-> RATE
-  G1 -- Yes --> IPO["Set IPO price<br/>from fair value"]
-  IPO --> LIVE["📈 Listed on marketplace"]
-  LIVE --> TRADE["Investors buy / sell<br/>(play money)"]
+  G1 -- Yes --> LIVE["✅ Listed<br/>report public"]
+  LIVE --> VER{"Verified?<br/>docs + checklist<br/>+ reviewer"}
+  VER -- "No · add docs<br/>(sample docs in demo)" --> VER
+  VER -- Yes --> IPO["Owner launches IPO<br/>price from fair value"]
+  IPO --> TRADE["Investors buy / sell<br/>(Exchange · play money)"]
+  LIVE -. "admin" .-> SUSP["⏸ Suspended<br/>(trading paused)"]
+  SUSP -. "resume" .-> LIVE
   TRADE --> PRICE["Price updates"]
   LIVE --> MON["🛰️ Continuous monitoring<br/>satellite + news"]
   MON --> CH{"Significant<br/>change?"}
@@ -408,23 +583,25 @@ flowchart TD
   class S start
   class REG,DRAW,IPO,LIVE,TRADE,PRICE,PAY step
   class RATE,RERATE,MON ai
-  class V1,C1,G1,CH dec
-  class EVID,PLAN,ALERT warn
+  class V1,C1,G1,CH,VER dec
+  class EVID,PLAN,ALERT,SUSP warn
 `;
 
 // ---------- Details for clickable nodes ----------
 const D = {
-  COM: ["Community / Landowner", "user", "Owns or stewards the land (e.g. the wetland community in Mexico). Lists the asset, uploads field evidence, receives IPO proceeds and quarterly revenue share.", ["Draws boundary on map", "Uploads geotagged photos", "Sees stewardship recommendations"]],
-  INV: ["Investor", "user", "Impact investor or ordinary person who browses rated nature assets, buys/sells shares in the sandbox, and tracks impact.", ["Starts with $10,000 play money", "Receives alerts on rating changes", "Asks the Copilot questions"]],
-  ADM: ["Judge / Demo Admin", "user", "Explores the product through the guided tour and drives the story with the Time Machine.", ["Private sandbox per visitor", "Advance one quarter", "Inject events: fire, encroachment, restoration"]],
-  JT: ["Judge Tour", "ours", "Guided, no-login tour (Driver.js) across all personas: spotlight hints, \u201cDo it for me\u201d, Live badges and an Under-the-hood drawer.", ["Persona switcher: community, investor, NatureX AI, Time Machine", "10 chapters, ~7 minutes (demo-plan §3)"]],
-  SB: ["Sandbox Worlds", "ours", "Each visitor gets a private copy of the demo world (personas, holdings, assets), so judges never affect each other.", ["world_id on every changing table", "POST /world/reset = Reset my demo"]],
-  LP: ["Listing Portal", "ours", "Map UI (Leaflet + OpenStreetMap/Esri tiles, no Mapbox key) to draw a polygon, enter community details, shares offered and community retained stake.", ["Validates area & overlap", "Calls POST /assets"]],
-  MK: ["Marketplace & Exchange", "ours", "Cards for each listed asset with price, grade, health trend; buy/sell with instant fills against the market maker.", ["Clearly labelled SANDBOX — play money", "Live price via SSE (polling fallback)"]],
+  COM: ["Community (owner & stewards)", "user", "Signs up and registers the community in the Steward app (the person who registers it is the owner). Lists land, adds field evidence, launches the IPO and sees the wallet, payouts and alerts. Can't trade their own asset.", ["Draws boundary on map", "Uploads geotagged photos", "Launches the IPO (owner)", "Sees stewardship recommendations"]],
+  INV: ["Investor", "user", "Anyone can browse; signing up lets them buy and sell shares in the sandbox and track impact in the Exchange app.", ["Starts with $10,000 play money", "Receives alerts on rating changes", "Asks the Copilot questions"]],
+  ADM: ["Platform admin", "user", "Runs the Control room: Time Machine, event presets, suspend or resume a listing. Created only by the operator CLI; admin powers stay inside their own world, and admins never trade.", ["Advance one quarter", "Inject events: fire, encroachment, restoration", "Suspend / resume a listing"]],
+  JDG: ["Judge", "user", "Opens /judge and, with one click, explores as a community steward, an investor or the platform admin in a private demo sandbox. No sign-up.", ["Persona switcher in the demo bar", "Reset my demo", "Optional guided tour", "Can also create a real account"]],
+  JT: ["Judge access", "ours", "/judge landing with three one-click entries; a demo bar (persona switcher, Reset my demo) on every page in demo sessions; the Driver.js tour is an optional overlay.", ["POST /demo/start · /demo/persona", "10-chapter tour, ~7 minutes (demo-plan §3)"]],
+  SB: ["Worlds", "ours", "One live world for real accounts and a private sandbox world per demo session. Every tenant table carries world_id, and composite foreign keys stop rows linking across worlds.", ["World comes from the session", "Reset my demo keeps you signed in"]],
+  AUTH: ["Accounts & roles", "ours", "Email + password with server-side sessions (HttpOnly, Secure, SameSite=Lax cookie). A pure, tested authorization policy is checked on every route: anyone browses; signed-in users invest; community owner/stewards manage listings; admins run the Control room.", ["argon2id via pwdlib", "CSRF origin check · rate limits in Postgres", "401 / 403 / 404 across worlds", "ADR-0005"]],
+  LP: ["Steward app", "ours", "/steward: register the community, draw the land (Leaflet + OpenStreetMap/Esri tiles), follow the listing status, add evidence, launch the IPO, and see the wallet, payouts and holders.", ["Validates area & overlap", "POST /assets → /submit · /ipo", "Owner & stewards only"]],
+  MK: ["Exchange", "ours", "/: cards for each listed asset with price, grade and health trend; signed-in investors buy and sell with instant fills against the market maker.", ["Clearly labelled SANDBOX — play money", "Live price via SSE (polling fallback)"]],
   AP: ["Asset Page", "ours", "The ‘stock page’ for nature: map with land-cover overlay, AI Ecological Performance Report, price chart, news & alerts feed.", ["Value range low / mid / high", "Confidence badge"]],
   PF: ["Portfolio & Impact", "ours", "Holdings, P&L and impact metrics: hectares protected, t CO₂ stored, water filtered.", []],
   CP: ["Investor Copilot (UI)", "ours", "Chat box on asset & portfolio pages. Answers grounded in stored reports.", []],
-  TM: ["Time Machine", "ours", "Demo control that triggers the re-rating job or injects a synthetic event so judges see the full loop in 3 minutes.", []],
+  TM: ["Control room", "ours", "/admin (admins only): the Time Machine triggers the re-rating job or injects a synthetic event so judges see the full loop in 3 minutes; suspend or resume a listing.", []],
   API: ["Backend API", "ours", "FastAPI service, small CPU-only container; host chosen in T20: Nebius Serverless Endpoint if credits, else Azure Container Apps or a free host (Hugging Face Spaces / Render). REST for CRUD, SSE for price ticks, alerts & rating progress.", ["/assets, /reports, /orders, /copilot, /simulate"]],
   ORC: ["Rating Orchestrator Agent", "nebius", "Nemotron 3 Super (Token Factory) with tool-calling. Plans the rating run, calls tools in order, handles missing data, and hands a structured bundle to the Auditor.", ["Model: Nemotron 3 Super", "Tools: earth_obs, valuation, news_scout, field_evidence, auditor"]],
   ME: ["Market Engine", "ours", "Deterministic Python. Anchors price to AI fair value and adds order-flow pressure.", ["price += α(FV − price) + β·flow/liquidity", "Credits community on IPO fills"]],
@@ -445,28 +622,32 @@ const D = {
   TAV: ["Tavily Search API", "tavily", "Real-time web search built for agents. Supplies the ‘news’ that moves nature ‘stocks’.", []],
   // Flowchart
   S: ["Start", "ai", "Community arrives on NatureX.", []],
-  REG: ["Register", "step", "Basic KYC for community representative (mocked in hackathon).", []],
-  DRAW: ["Draw boundary", "step", "Polygon drawn on map; ownership docs uploaded (stored, not verified by AI in MVP).", []],
+  REG: ["Sign up + register", "step", "Email + password account; registering a community makes you its owner and creates its treasury account. No KYC (out of scope for the hackathon).", []],
+  DRAW: ["Draw boundary", "step", "Polygon drawn on the map in the Steward app; the steward attests they represent the community. Saved as a draft, then submitted for rating.", []],
   V1: ["Polygon validation", "rule", "Checks area limits (e.g. 10 – 50,000 ha), self-intersection, overlap with existing listings.", []],
   RATE: ["AI rating pipeline", "ai", "Orchestrator → Earth Obs → Valuation → News Scout → Field Evidence → Auditor.", []],
   C1: ["Confidence gate", "rule", "Confidence = 40% satellite coverage + 30% satellite–news agreement + 20% field evidence + 10% data recency. Below 70% the asset can't list yet.", []],
   EVID: ["Request evidence", "action", "App asks the community for up to 5 geotagged photos; GPS/date checked in code, MiniCPM-V describes them, Nemotron Ultra weighs them.", []],
   G1: ["Listing eligibility", "rule", "Grade ≥ C and forest/habitat loss in the last 12 months below 1% of the area (Hansen / Dynamic World change).", []],
   PLAN: ["Stewardship plan", "action", "Auditor generates concrete actions to improve the grade (e.g. stop grazing in zone 2, restore buffer strip).", []],
-  IPO: ["IPO pricing", "step", "IPO price = fair value per share. Community keeps its retained stake; public float sold to investors.", []],
-  LIVE: ["Listed", "step", "Asset appears on marketplace with report and price chart.", []],
+  IPO: ["IPO launch", "step", "The owner chooses shares offered and % retained and confirms. IPO price = fair value per share; the community's retained stake is held by its treasury; the public float is sold to investors.", []],
+  LIVE: ["Listed", "step", "The listing passed the gate; its report is public on the Exchange. Trading starts once the owner launches the IPO.", []],
+  VER: ["Listing verification", "rule", "Before a live-world IPO: the steward uploads documents (title or agrarian certificate, assembly minutes), an automated checklist runs (accepted format, not reused, no overlap, consent-labelled document, plus an optional AI heuristic that only suggests), and a reviewer approves or rejects with a reason. Any later change resets it; revoking suspends trading. The decision goes into the ledger and the public 'How this listing was verified' panel, including what was not checked (ADR-0006).", ["Demo mode (deployment, judges, E2E): fictional watermarked sample documents are generated for the listing; the same checklist runs; a demo auto-reviewer approves only all-sample runs when every check passes and no revocation is active; always labelled 'Demo verification: sample documents, no real ownership checked'; switching to review mode makes demo approvals stop counting", "Real world: registry match, legal entity, FPIC consent, accredited verifiers, objection period"]],
+  SUSP: ["Suspended", "action", "An admin can pause a listed asset (e.g. abuse or a disputed boundary) and resume it later. Every change is in the Nature Ledger.", []],
   TRADE: ["Trading", "step", "Sandbox trades with play money; instant fills against market maker.", []],
   PRICE: ["Price update", "step", "Market Engine blends fair value + order flow.", []],
   MON: ["Continuous monitoring", "ai", "Scheduled jobs: daily news sweep (GitHub Actions), quarterly satellite re-rating (Time Machine / job).", []],
   CH: ["Significant change?", "rule", "Health score Δ ≥ 5, a grade change, or a news event with severity ≥ 4.", []],
   RERATE: ["Re-rate", "ai", "New Ecological Performance Report is published and versioned.", []],
-  ALERT: ["Alert", "action", "Push to investors holding the asset and to the community dashboard.", []],
+  ALERT: ["Alert", "action", "Sent to investors holding the asset (Exchange) and to the community\u2019s members (Steward home).", []],
   PAY: ["Revenue split", "step", "Simulated revenue = 2% of annual ecosystem value per year, paid quarterly (stands in for carbon credits, water payments, tourism). Split 50% community fund / 50% dividends to all holders.", []],
 };
 
 const SEQ_STEPS = [
-  ["Community draws land", "On the Listing Portal the community draws the wetland boundary and enters shares offered."],
-  ["Create asset", "Web app sends the polygon and metadata to the backend."],
+  ["Community signs up", "Rosa creates an account and registers her community in the Steward app; she becomes its owner."],
+  ["Account + community", "The backend creates the account, a session cookie, the community and its treasury account."],
+  ["Community draws land", "In the Steward app she draws the wetland boundary and submits it for rating."],
+  ["Create + submit", "The backend checks the session and her role, creates a draft listing and starts the rating."],
   ["Start rating", "Backend kicks off the Rating Orchestrator (Nemotron 3 Super, tool-calling)."],
   ["Satellite + valuation", "Tools fetch land cover, NDVI trend, carbon, then compute $/yr value."],
   ["Metrics returned", "Structured metrics and a low/mid/high value range come back."],
@@ -474,16 +655,22 @@ const SEQ_STEPS = [
   ["Events returned", "Nemotron Nano classifies each event’s impact and severity."],
   ["Send to Auditor", "All evidence goes to Nemotron 3 Ultra for cross-checking."],
   ["Rating produced", "Health score, grade (AAA–D), confidence and a written report."],
-  ["IPO price", "Fair value per share becomes the IPO price."],
-  ["Listed", "Asset appears live on the marketplace."],
-  ["Investor buys", "Investor buys 100 shares with play money."],
-  ["Order sent", "Order goes to the Market Engine."],
-  ["Filled", "Order filled; price ticks; IPO proceeds credited to the community."],
+  ["Listed", "The report is sealed in the Nature Ledger; the listing gate passes, so the status becomes listed."],
+  ["Add documents", "Rosa uploads documents, or in demo mode clicks “Use sample documents (demo)” to generate fictional, watermarked ones."],
+  ["Verified", "The checklist runs and is shown; a reviewer approves (in demo mode the demo auto-reviewer, only if all checks pass). The decision is sealed in the ledger and shown publicly, labelled “demo” when it is."],
+  ["Owner launches IPO", "Rosa picks shares offered and the % the community keeps, and sees the price formula step by step."],
+  ["IPO request", "Only the owner may launch, once, for a listed and verified asset."],
+  ["Trading opens", "Fair value per share becomes the IPO price; the asset appears on the Exchange."],
+  ["Investor buys", "Arjun signs up in the Exchange and buys 100 shares with play money."],
+  ["Order sent", "The order uses Arjun's session; community members can't trade their own asset."],
+  ["Filled", "Order filled; price ticks; IPO proceeds credited to the community wallet."],
   ["Re-rate", "A scheduled job (or a Time Machine click) re-rates the asset."],
   ["New evidence", "Latest satellite metrics and news go to the Auditor."],
   ["New fair value", "Auditor updates fair value and raises alerts."],
   ["Price update", "Market Engine pushes the new price to the browser over SSE."],
   ["Alert", "Investor sees: ‘Encroachment detected — grade A → BBB’."],
+  ["Quarterly split", "Simulated revenue (2% of annual value per year) is paid each quarter."],
+  ["Payout", "50% to the community fund (Steward wallet), 50% as dividends to holders."],
   ["Ask Copilot", "Investor asks why the price dropped."],
   ["Grounded answer", "Copilot (Nemotron Nano + RAG) answers citing the report and news."],
 ];
@@ -516,7 +703,7 @@ function bindSteps() {
 }
 
 function addClicks(src, ids) { return src + "\n" + ids.map(id => `  click ${id} call showDetails("${id}")`).join("\n"); }
-const FLOW_IDS = ["S","REG","DRAW","V1","RATE","C1","EVID","G1","PLAN","IPO","LIVE","TRADE","PRICE","MON","CH","RERATE","ALERT","PAY"];
+const FLOW_IDS = ["S","REG","DRAW","V1","RATE","C1","EVID","G1","PLAN","IPO","LIVE","VER","SUSP","TRADE","PRICE","MON","CH","RERATE","ALERT","PAY"];
 
 
 // ---------- Custom architecture (HTML + logos) ----------
@@ -533,24 +720,26 @@ const img = k => `<img src="${LOGO[k]}" alt="${k}" title="${k}" onerror="this.st
 // [id, title, subtitle, logos (keys or emoji), type]
 const BANDS = [
   { cls: "users", h: "👥 Users", nodes: [
-    ["COM", "Community / Landowner", "Lists land, uploads evidence", ["🏘️"], "user"],
-    ["INV", "Investor", "Buys, sells, tracks impact", ["💼"], "user"],
-    ["ADM", "Judge", "Guided tour · Time Machine", ["🎛️"], "user"] ] },
+    ["COM", "Community", "Owner & stewards · Steward app", ["🏘️"], "user"],
+    ["INV", "Investor", "Exchange app · buys, sells", ["💼"], "user"],
+    ["ADM", "Platform admin", "Control room · Time Machine", ["🎛️"], "user"],
+    ["JDG", "Judge", "/judge · one-click demo", ["🧑‍⚖️"], "user"] ] },
   { conn: "HTTPS · browser" },
-  { h: "🖥️ Web App", logos: ["vercel", "next", "react", "tailwind", "leaflet"], sub: "Next.js · React · Tailwind · Leaflet · hosted on Vercel", nodes: [
-    ["LP", "Listing Portal", "Draw land on a map", ["leaflet"], "ours"],
-    ["MK", "Marketplace", "Sandbox exchange", ["📈"], "ours"],
+  { h: "🖥️ Web App", logos: ["vercel", "next", "react", "tailwind", "leaflet"], sub: "Two apps, one Next.js app: Steward /steward + Exchange / · hosted on Vercel", nodes: [
+    ["LP", "Steward app", "List land · IPO · wallet", ["leaflet"], "ours"],
+    ["MK", "Exchange", "Marketplace · trade", ["📈"], "ours"],
     ["AP", "Asset Page", "Report · chart · alerts", ["📄"], "ours"],
     ["PF", "Portfolio", "Holdings & impact", ["🌱"], "ours"],
     ["CP", "Copilot Chat", "Ask why prices moved", ["💬"], "ours"],
-    ["TM", "Time Machine", "Simulate quarter / event", ["⏩"], "ours"],
-    ["JT", "Judge Tour", "Guided story · personas", ["🧭"], "ours"] ] },
+    ["TM", "Control room", "Time Machine · admins", ["⏩"], "ours"],
+    ["JT", "Judge access", "One click · demo bar · tour", ["🧭"], "ours"] ] },
   { conn: "REST + SSE (live prices & alerts)" },
   { h: "⚙️ Backend", logos: ["fastapi", "python"], sub: "FastAPI (Python) · host per T20: Nebius Serverless · Azure · HF Spaces/Render", nodes: [
     ["API", "REST + SSE API", "Assets · orders · reports", ["fastapi"], "ours"],
+    ["AUTH", "Accounts & roles", "Sessions · authz policy", ["🔐"], "ours"],
     ["ORC", "Rating Orchestrator", "Nemotron 3 Super · tool-calling", ["nvidia"], "nebius"],
     ["ME", "Market Engine", "IPO · orders · price", ["python"], "ours"],
-    ["SB", "Sandbox Worlds", "Private demo per visitor", ["🧪"], "ours"] ] },
+    ["SB", "Worlds", "Live + demo sandboxes", ["🧪"], "ours"] ] },
   { conn: "tool calls & agent hand-offs" },
   { h: "🤖 AI Agents & Tools", logos: ["nvidia", "nebius"], sub: "NVIDIA Nemotron on Nebius Token Factory (+ MiniCPM-V vision, Qwen3 embeddings where no Nemotron exists)", nodes: [
     ["EO", "Earth Observation", "Land · vegetation · carbon", ["gearth"], "ours"],
@@ -576,7 +765,7 @@ const BANDS = [
 ];
 
 const EDGES = [
-  ["COM","LP"],["INV","MK"],["INV","CP"],["INV","PF"],["ADM","TM"],["ADM","JT"],["JT","API"],["API","SB"],["SB","DB"],
+  ["COM","LP"],["INV","MK"],["INV","CP"],["INV","PF"],["ADM","TM"],["JDG","JT"],["JT","API"],["API","AUTH"],["AUTH","SB"],["AUTH","DB"],["SB","DB"],
   ["LP","API"],["MK","API"],["AP","API"],["PF","API"],["CP","API"],["TM","API"],
   ["API","ORC"],["API","ME"],["API","CPA"],["API","DB"],
   ["ORC","EO"],["ORC","VAL"],["ORC","NS"],["ORC","FEV"],["ORC","AUD"],
@@ -587,8 +776,9 @@ const EDGES = [
 ];
 
 const RATING_FLOW = [
-  ["COM", "A community draws its wetland on the map…"],
-  ["LP", "…and submits it from the Listing Portal."],
+  ["COM", "A signed-in community owner draws their wetland on the map…"],
+  ["LP", "…and submits it from the Steward app."],
+  ["AUTH", "The backend checks the session and that they steward this community."],
   ["API", "The backend creates the asset and starts a rating run."],
   ["ORC", "The Orchestrator (Nemotron 3 Super) plans which tools to call."],
   ["EO", "Earth Observation measures land cover, vegetation trend, water and carbon…"],
@@ -600,8 +790,8 @@ const RATING_FLOW = [
   ["TF", "Every model call runs on NVIDIA Nemotron via Nebius Token Factory."],
   ["DB", "The report is saved…"],
   ["LED", "…and sealed in the tamper-evident Nature Ledger."],
-  ["ME", "The Market Engine turns fair value into an IPO price."],
-  ["MK", "The asset goes live on the marketplace — investors can buy."],
+  ["ME", "The asset is listed; when the owner launches the IPO, the Market Engine prices it from fair value."],
+  ["MK", "It goes live on the Exchange: signed-in investors can buy."],
 ];
 
 function nodeHTML([id, t, sub, logos, type]) {
@@ -747,9 +937,10 @@ await draw("flow", addClicks(FLOW, FLOW_IDS));
 
 function showTab(tab) {
   document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x.dataset.tab === tab));
-  const isPage = tab === "overview" || tab === "engine";
+  const isPage = tab === "overview" || tab === "engine" || tab === "apps";
   document.getElementById("overview").classList.toggle("active", tab === "overview");
   document.getElementById("engine").classList.toggle("active", tab === "engine");
+  document.getElementById("apps").classList.toggle("active", tab === "apps");
   document.getElementById("diagrams").classList.toggle("active", !isPage);
   current = tab;
   if (isPage) return;

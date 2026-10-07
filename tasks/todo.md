@@ -98,11 +98,13 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ### P02 · User flows and information architecture (#20) — PD · M · Must
 - [ ] Flows for Rosa (community), Arjun (investor), NatureX AI (under the hood), Time Machine, and the judge tour chapters (demo-plan §3.3)
 - [ ] Sitemap and navigation; persona switcher behaviour
+- [ ] *(ADR-0005)* Two apps (Exchange at `/`, Steward at `/steward`) plus `/admin`; sign-in and sign-up; the `/judge` one-click demo; which role sees what
 
 **Verify:** team walkthrough · **Deps:** P01 · **Files:** `docs/design/flows.md` (links to the design file)
 
 ### P03 · Wireframes for all screens (#21) — PD · M · Must
 - [ ] Marketplace, listing (map + form), rating progress, asset page, portfolio, admin/Time Machine, Copilot, Agent Trace drawer, ledger tab, judge landing
+- [ ] *(ADR-0005)* Sign-in and sign-up, Steward home (wallet, holders, payouts, listing status), community and members, IPO launch, app switcher, demo bar
 
 **Verify:** each wireframe maps to user stories in `pm-spec.md` · **Deps:** P02 · **Files:** design file, `docs/design/`
 
@@ -114,6 +116,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 ### P05 · Hi-fi key screens (#23) — PD · M · Must
 - [ ] Asset page (hero screen), marketplace and listing flow in high fidelity, using P04 tokens
+- [ ] *(ADR-0005)* Steward home and IPO launch in high fidelity
 
 **Verify:** Friday review; `/impeccable critique` pass · **Deps:** P03, P04 · **Files:** design file
 
@@ -159,7 +162,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ### T18 · Trade panel and portfolio UI (#29) — D1 (with PD designs) · M · Must · C2
 - [ ] Buy/sell panel on the asset page with validation and play-money balance; portfolio page with holdings and P&L
 
-**Verify:** `make fe-check`; manual buy then sell · **Deps:** T17, T21, P05 · **Files:** `frontend/src/components/TradePanel.tsx`, `frontend/src/app/portfolio/page.tsx`
+**Verify:** `make fe-check`; manual buy then sell (signed in, in the Exchange app) · **Deps:** T17, T21, P05, T61 · **Files:** `frontend/src/components/TradePanel.tsx`, `frontend/src/app/portfolio/page.tsx`
 
 ### T19 · Deterministic rating into the reports API (#30) — D2 · S · Must · B1–B3 B5
 - [ ] Rating service runs earth_obs (cached) → valuation → scoring for each demo site and stores report v1 (no agents yet); the reports API serves real data instead of mocks
@@ -175,7 +178,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** public URL loads the marketplace · **Deps:** T04, T05 · **Files:** `backend/Dockerfile`, deploy config
 
 ### T21 · Design system in code (#32) — PD · M · Must
-- [ ] P04 tokens as Tailwind v4 theme + shadcn theme; app shell, navigation, persona switcher shell; `/dev/ui` shows every component and state
+- [ ] P04 tokens as Tailwind v4 theme + shadcn theme; app shell and navigation primitives (the two app shells are T62; the persona switcher moves to the demo bar, T65); `/dev/ui` shows every component and state
 
 **Verify:** `make fe-check`; `/dev/ui` reviewed · **Deps:** P04, T05 · **Files:** `frontend/src/app/globals.css`, `frontend/src/components/ui/*`, `frontend/src/app/dev/ui/page.tsx`
 
@@ -204,6 +207,14 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 - [ ] Portfolio, admin/Time Machine, Copilot, Agent Trace drawer, ledger tab, alerts, judge landing and tour hint style
 
 **Verify:** Friday review · **Deps:** P03, P04 · **Files:** design file
+
+### T54 · Accounts and sessions (#97) — D1 · M · Must · K1 K2
+- [ ] `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /me`; argon2id via `pwdlib`, with a dummy-hash verify for unknown emails; `users.kind` (person | persona | treasury) and a partial unique index on lower(email) per world
+- [ ] Server-side `sessions` (with `world_id`): a 256-bit token whose SHA-256 hash is stored; `nx_session` cookie `HttpOnly`, `Secure` (outside dev/test), `SameSite=Lax`; 7 d idle / 30 d absolute; new ID on login; logout deletes the row and clears the cookie
+- [ ] The live world is created and the 3 curated sites are copied into it from the template (T56 attaches their communities and treasuries); live admins are created only with a CLI command that reads the password via `getpass` (never via the API, never by matching an email); no password or token in logs
+
+**Verify:** `make test`, including wrong password, unknown email, expired and revoked sessions, and logout; manual register → login → `/me` → logout with `curl` · **Deps:** T31 · **Files:** `backend/app/auth.py`, `backend/app/routers/auth.py`, `backend/app/cli.py`, `backend/app/models.py`, `backend/migrations/versions/*_accounts.py`, `backend/tests/test_auth.py`
+
 
 ### ✅ Checkpoint W2 (Fri Oct 9)
 - [ ] Real satellite metrics, $ ranges and a grade for all 3 sites visible in the UI
@@ -258,7 +269,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ### T33 · Listing flow and rating progress (#45) — PD · M · Must · A1–A3
 - [ ] Map drawing, area display and validation messages, community form, submit; live progress through the agent steps
 
-**Verify:** `make fe-check`; list a new polygon end to end · **Deps:** T32, T36, P05 · **Files:** `frontend/src/app/list/page.tsx`, `frontend/src/components/MapDraw.tsx`, `RatingProgress.tsx`
+**Verify:** `make fe-check`; a signed-in steward lists a new polygon end to end in the Steward app (`/steward/list`, lifecycle endpoints from T58) · **Deps:** T32, T36, P05, T58, T62 · **Files:** `frontend/src/app/(steward)/steward/list/page.tsx`, `frontend/src/components/MapDraw.tsx`, `RatingProgress.tsx`
 
 ### T34 · Agent Trace drawer and ledger tab (#46) — PD · M · Must · G1 F2
 - [ ] Drawer lists each step (model, tokens, latency, output); ledger tab shows entries and the verify/tamper badge
@@ -287,17 +298,93 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`; manual upload raises confidence · **Deps:** T09, T15 · **Files:** `backend/app/agents/field_evidence.py`, `backend/app/routers/assets.py`
 
 
-### T41 · Revenue split and impact (#51) — D2 · S · Should · D4 E3
+### T41 · Revenue split and impact (#51) — D2 · S · Must · D4 E3
 - [x] Pure functions for simulated quarterly revenue (2% of annual value / 4) split 50/50 community / dividends; portfolio impact metrics (ha, t CO₂, $ services) pro-rata; `pay_quarter` applies one quarter's payout transactionally for T38/T44
 - Handoff: Time Machine triggering remains in T38, whose task calls the T41 payout helper each quarter.
 
 **Verify:** `make test` · **Deps:** T16 · **Files:** `backend/app/market/revenue.py`, `backend/app/routers/market.py`
 
 
+### T66 · Auth hardening: CSRF, rate limits and pruning (#109) — D3 · S · Must · K2
+- [ ] CSRF on every unsafe method (POST, PUT, PATCH, DELETE, including multipart uploads): exact scheme/host/port allowlist (`ALLOWED_ORIGINS`) on `Origin`, falling back to `Referer`; reject when both are absent, malformed or `null`; JSON routes require a JSON media type
+- [ ] Rate limits with independent per-IP and per-account buckets (account key = HMAC of the normalised email with `AUTH_RATE_LIMIT_SECRET`); client IP taken only through `TRUSTED_PROXY_HOPS`; atomic counting under an advisory lock; login 10 per 15 min, register 5 per hour
+- [ ] Expired sessions and `auth_attempts` older than 24 h are pruned; registration enumeration is an accepted, documented risk (no email verification), and duplicate registration returns the same status and body shape
+
+**Verify:** `make test`: forged-prefix origins, missing and `null` headers, concurrent attempts, both bucket dimensions · **Deps:** T54 · **Files:** `backend/app/auth.py`, `backend/app/middleware.py`, `backend/app/config.py`, `backend/tests/test_auth_hardening.py`
+
+### T56 · Communities, treasury and tenant invariants (#99) — D1 · M · Must · A0 K3
+- [ ] `communities` and `community_members` (owner | steward) carry `world_id NOT NULL`; composite foreign keys `(world_id, …_id)` (unique `(world_id, id)` on users, assets, communities); a DB test shows cross-world inserts fail
+- [ ] One non-login, non-trading treasury user per community; `assets.community_id` set and `assets.community_user_id` = the treasury
+- [ ] Backfill the template and the live world (communities, owners and treasuries for the curated sites); discard pre-migration visitor sandboxes; `sandbox.py` clone, reset and prune cover the new tables; reset keeps persona user IDs (mapped by `persona_key`) so sessions survive; pruning deletes a world's sessions first
+
+**Verify:** `make test` · **Deps:** T54 · **Files:** `backend/app/models.py`, `backend/migrations/versions/*_communities.py`, `backend/app/sandbox.py`, `backend/app/seed.py`, `backend/tests/test_tenancy.py`
+
+### T68 · Authorization policy and community routes (#110) — D1 · M · Must · K3 C6
+- [ ] Pure `authorize(principal, action, resource)` implementing the ADR-0005 matrix: world scoping; members can't trade their community's asset; adding a member who holds its shares returns 409 `member_has_holdings`; admins and treasury accounts can't trade
+- [ ] A `require(action)` dependency; 401 `auth_required` / 403 with a reason / 404 across worlds; a matrix test covers every role × action, allowed and denied
+- [ ] `POST /communities` (creator becomes owner; treasury created), `GET`/`PATCH /communities/{id}` (owner). *Should:* add and remove stewards
+
+**Verify:** `make test` · **Deps:** T56 · **Files:** `backend/app/authz.py`, `backend/app/routers/communities.py`, `backend/tests/test_authz.py`
+
+### T55 · Demo sessions and persona switch (#98) — D3 · S · Must · J1 J2
+- [ ] `POST /demo/start {persona}` creates a sandbox world and a demo session (hourly world cap kept); `POST /demo/persona` switches persona inside the same world only, revoking the old token and issuing a new one; `POST /world/reset` keeps the session
+- [ ] The `nx_world` cookie is retired: the world comes from the session, `GET /world` returns the session's world, and anonymous requests read the live world
+
+**Verify:** `make test` (two demo sessions isolated; a demo session can't reach the live world; a password session can't switch persona; reset keeps the active persona) · **Deps:** T54, T56 · **Files:** `backend/app/sandbox.py`, `backend/app/deps.py`, `backend/app/routers/world.py`, `backend/tests/test_sandbox.py`
+
+### T57 · Enforce authorization on every route (#100) — D1 · M · Must · K3 C6
+- [ ] Every route, GET included, loads resources by `(world_id, id)` before authorizing; state-changing routes use `require(...)`; orders and portfolio use the principal's user; admin routes are admin-only; the tamper demo runs in sandbox worlds only
+- [ ] A route-inventory test fails if any route lacks an authorization dependency, and a cross-world test returns 404 for every object endpoint
+- [ ] SSE and `GET /events` derive the principal and world from the session, revalidate it on every poll and heartbeat, close after logout, expiry or revocation, and deliver `alert` events only to their targets
+
+**Verify:** `make test` · **Deps:** T68, T55, T17, T29 · **Files:** `backend/app/routers/*.py`, `backend/app/events.py`, `backend/tests/test_route_authz.py`
+
+### T67 · Ledger privacy (#111) — D2 · S · Must · F1 K5
+- [ ] Public ledger payloads never contain user IDs, emails or names: payout entries record aggregates (revenue, community fund, dividends total, holder count) plus a hash commitment of the per-holder lines
+- [ ] Per-holder payout lines move to a private, erasable `payout_lines` table; a test scans every ledger payload kind for account identifiers
+
+**Verify:** `make test`; ledger verify still passes · **Deps:** T30, T41 · **Files:** `backend/app/market/revenue.py`, `backend/app/models.py`, `backend/migrations/versions/*_payout_lines.py`, `backend/tests/test_revenue.py`
+
+### T58 · Listing lifecycle (#101) — D2 · M · Must · A3 A5 A6
+- [ ] Pure state machine: draft → rating → listed | needs_evidence | ineligible; needs_evidence → rating after evidence; listed ↔ suspended (admin). The listing gate applies at listing time only; invalid transitions are rejected
+- [ ] `POST /assets` creates a draft in the principal's community (attestation required, polygon validated by T36, no overlap within the world); `POST /assets/{id}/submit` starts a rating through the rating service, whose result sets the status
+- [ ] Every transition appends a ledger entry and publishes an event
+
+**Verify:** `make test` · **Deps:** T19, T68, T36, T29, T30 · **Files:** `backend/app/services/lifecycle.py`, `backend/app/routers/assets.py`, `backend/tests/test_lifecycle.py`
+
+### T59 · IPO launch (#102) — D2 · S · Must · A7 C4
+- [ ] `GET /assets/{id}/ipo/preview` returns the IPO price with every term of the dev-spec §8 formula
+- [ ] `POST /assets/{id}/ipo` (owner only, listed, once): validates shares offered and retained % (10–90); in one transaction writes the first `prices` row (`reason='ipo'`), seeds the treasury's retained holding, appends a ledger entry and opens the primary float
+- [ ] Orders on an asset without an IPO return 409 `not_trading`
+
+**Verify:** `make test` · **Deps:** T16, T17, T30, T58 · **Files:** `backend/app/routers/ipo.py`, `backend/app/services/ipo.py`, `backend/tests/test_ipo.py`
+
+### T61 · Sign-in screens and session handling (#104) — PD + D1 · S · Must · K1 K2
+- [ ] `/login`, `/register`, and an account menu with sign out; clear error states; no tokens in JS-readable storage
+- [ ] Protected routes (`/steward/*`, `/portfolio`, `/admin`) redirect to sign-in and back; the client handles 401 and 403 with clear messages
+
+**Verify:** `make fe-check`; manual register → sign out → sign in · **Deps:** T54, T21 · **Files:** `frontend/src/app/(auth)/login/page.tsx`, `frontend/src/app/(auth)/register/page.tsx`, `frontend/src/middleware.ts`, `frontend/src/lib/session.ts`
+
+### T62 · Two app shells and app switcher (#105) — PD · S · Must · K4
+- [ ] Route groups `(exchange)` at `/` and `(steward)` at `/steward`, each with its own shell and navigation, plus an `/admin` shell; the sandbox banner on every page
+- [ ] An app switcher for community members; navigation follows the signed-in user's roles; a slot for the demo bar (T65)
+
+**Verify:** `make fe-check`; `web-design-guidelines` review · **Deps:** T21, T61 · **Files:** `frontend/src/app/(exchange)/layout.tsx`, `frontend/src/app/(steward)/steward/layout.tsx`, `frontend/src/app/admin/layout.tsx`, `frontend/src/components/AppSwitcher.tsx`
+
+### T65 · Judge access (#108) — PD · S · Must · J1 J2
+- [ ] `/judge`: one click on "Explore as a community steward / an investor / the platform admin" starts a demo session and opens the matching app; a "Create a real account" link
+- [ ] In demo sessions, a demo bar on every page: persona switcher, Reset my demo, "private sandbox" label
+
+**Verify:** `make fe-check`; manual: each button lands in the right app within 2 s · **Deps:** T55, T62 · **Files:** `frontend/src/app/judge/page.tsx`, `frontend/src/components/DemoBar.tsx`
+
+
 ### ✅ Checkpoint W3 (Fri Oct 16)
 - [ ] A full rating run is **100% live AI** (Super → tools → Nano → Ultra), started from the UI
 - [ ] Trace drawer shows every step; ledger verifies and the tamper demo fails as expected
 - [ ] Listing a new polygon works; two browsers have separate sandboxes
+- [ ] *(ADR-0005)* Register, sign in and sign out work; every state-changing route enforces authorization (route test green)
+- [ ] *(ADR-0005)* A real account creates a community, lists the hero polygon, gets it rated and launches the IPO; a second account buys and the community wallet rises
+- [ ] *(ADR-0005)* `/judge` opens a demo session as any persona in one click
 
 ---
 
@@ -305,9 +392,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 ### T38 · Time Machine, re-rating and alerts (#52) — D1 · M · Must · D1–D4
 - [ ] "Next quarter" re-rates each asset with the next scenario version; event presets (fire, encroachment, drought, restoration, protection); prices re-anchor
-- [ ] Alerts on health Δ ≥ 5, a grade change or news severity ≥ 4; each quarter pays out revenue via T41; same entrypoints usable as jobs (`jobs/rerate_all.py`, `jobs/news_sweep.py`; daily sweep via GitHub Actions)
+- [ ] Alerts on health Δ ≥ 5, a grade change or news severity ≥ 4, sent to the asset's holders and its community's members; each quarter pays out revenue via T41; same entrypoints usable as jobs (`jobs/rerate_all.py`, `jobs/news_sweep.py`; daily sweep via GitHub Actions)
 
-**Verify:** `make test`; manual encroachment gives grade A → BBB and an alert · **Deps:** T27, T16, T29, T41 · **Files:** `backend/app/routers/admin.py`, `jobs/*.py`, `.github/workflows/news-sweep.yml`
+**Verify:** `make test`; manual encroachment gives grade A → BBB and an alert · **Deps:** T27, T16, T29, T41, T68 · **Files:** `backend/app/routers/admin.py`, `jobs/*.py`, `.github/workflows/news-sweep.yml`
 
 ### T39 · Copilot (RAG) (#53) — D3 · M · Must · E1
 - [ ] Reports and events chunked and embedded (per T06) into pgvector; Nemotron Nano answers only from context with `[R…]`/`[E…]` citations; streamed
@@ -316,13 +403,14 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 ### T42 · Demo deploy (#54) — D1 · S · Must
 - [ ] Full app deployed on the T20 host with live keys and `LLM_BUDGET_USD` set; keep-alive ping workflow if the host sleeps (free tiers)
+- [ ] *(ADR-0006)* `VERIFICATION_MODE=demo` and `VERIFICATION_AI_LIVE=false` set; the README and Devpost text say listings are verified with sample documents in demo mode
 
 **Verify:** the demo script runs on the public URL · **Deps:** T20, T38 · **Files:** deploy config, `.github/workflows/keepalive.yml`
 
 ### T43 · Time Machine and alerts UI (#55) — D1 (with PD designs) · M · Must · D2 D3 C3
 - [ ] Admin panel (next quarter, event presets, reset), phone-style alerts, price chart with event markers
 
-**Verify:** `make fe-check`; encroachment flow in the browser · **Deps:** T38, T32 · **Files:** `frontend/src/app/admin/page.tsx`, `PriceChart.tsx`, `AlertsFeed.tsx`
+**Verify:** `make fe-check`; encroachment flow in the browser, as an admin in `/admin` · **Deps:** T38, T32, T62 · **Files:** `frontend/src/app/admin/page.tsx`, `PriceChart.tsx`, `AlertsFeed.tsx`
 
 ### T44 · Copilot and impact UI (#56) — PD · M · Must · E1 E3
 - [ ] Chat on asset and portfolio pages (streaming, citations link to sources); impact summary on the portfolio
@@ -330,14 +418,16 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make fe-check` · **Deps:** T39, T41 · **Files:** `frontend/src/components/CopilotChat.tsx`, `ImpactSummary.tsx`
 
 ### T45 · Judge tour (#57) — PD (lead) + D2 · M · Must · J
-- [ ] Driver.js tour: judge landing, persona switcher, 10 chapters (demo-plan §3.3), "Do it for me", Live badges, two-layer hints
+- [ ] Driver.js tour as an optional overlay on demo mode (ADR-0005; `/judge` and the demo bar are T65): 10 chapters (demo-plan §3.3), "Do it for me", Live badges, two-layer hints
 
-**Verify:** `make fe-check`; a newcomer completes the tour unaided · **Deps:** T33, T34, T43, T44 · **Files:** `frontend/src/tour/*`, `frontend/src/app/page.tsx`
+**Verify:** `make fe-check`; a newcomer completes the tour unaided · **Deps:** T33, T34, T43, T44, T65 · **Files:** `frontend/src/tour/*`, `frontend/src/app/judge/page.tsx`
 
 ### T46 · E2E demo test (#58) — D2 · S · Must
 - [ ] Playwright runs the tour's autoplay path end to end; runs in CI; reused to record the video
+- [ ] *(ADR-0005)* Real-account path: owner registers → creates a community → lists → rating → uses sample documents → auto-verified in demo mode (ADR-0006, `VERIFICATION_MODE=demo`) → IPO → (later) a revoke suspends trading → a second account signs up, buys and sells → a quarter passes → alert, owner payout and dividends show → sign out; an investor gets 403 on Steward actions
+- [ ] *(ADR-0005)* Demo path: `/judge` → each persona; two demo sessions stay isolated from each other and from the live world
 
-**Verify:** `make e2e` green locally and in CI · **Deps:** T45 · **Files:** `frontend/e2e/demo.spec.ts`, `.github/workflows/e2e.yml`
+**Verify:** `make e2e` green locally and in CI · **Deps:** T45, T57, T63, T64, T65, T70 · **Files:** `frontend/e2e/demo.spec.ts`, `.github/workflows/e2e.yml`
 
 ### T47 · Eval harness (#59) — D3 · M · Must · G2 G3
 - [ ] `make eval`: news classification, Auditor faithfulness and direction, schema reliability, Copilot grounding, and the Nano/Super/Ultra routing comparison (dev-spec §18)
@@ -351,8 +441,51 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** audit score recorded; no blocking issues · **Deps:** T33, T34
 
 
+### T60 · Live rating for new listings (#103) — D2 · M · Must · A3
+- [ ] `earth_obs` computes metrics for any validated polygon live on Earth Engine, using the T11/T13 methods, with a timeout and a cache keyed by geometry hash; the orchestrator (T27) uses it for new listings
+- [ ] Quotas: 2 live ratings per user per day plus the global `LLM_BUDGET_USD`. On failure the listing stays in `rating` with a retry; it never shows another site's data
+- [ ] In demo worlds only, a failed live run may show the nearest cached site with an explicit "cached example" notice
+
+**Verify:** `make test` (Earth Engine mocked); manual live rating of a new polygon · **Deps:** T13, T19, T27, T58 · **Files:** `backend/app/tools/earth_obs.py`, `backend/app/services/rating.py`, `backend/tests/test_earth_obs_live.py`
+
+### T63 · Steward home and community management (#106) — PD + D1 · M · Must · A0 A8 D4
+- [ ] Create or edit a community (A0); owner sees members
+- [ ] Home (`GET /communities/{id}/summary`): listings with status and next action; IPO proceeds, community-fund payouts and retained-stake dividends with clear totals; holders; alerts and stewardship recommendations
+
+**Verify:** `make fe-check`; manual: a new account creates a community and sees an empty home with "List your land" · **Deps:** T68, T58, T59, T41, T38, T62, P05 · **Files:** `frontend/src/app/(steward)/steward/page.tsx`, `frontend/src/app/(steward)/steward/community/page.tsx`, `frontend/src/components/WalletCard.tsx`, `backend/app/routers/communities.py`
+
+### T64 · IPO launch screen (#107) — PD · S · Must · A7
+- [ ] The owner sets shares offered and retained %; a preview shows the IPO price formula step by step; confirming launches the IPO and the asset becomes tradable in the Exchange
+
+**Verify:** `make fe-check`; manual launch, then a second account buys · **Deps:** T59, T62 · **Files:** `frontend/src/app/(steward)/steward/assets/[id]/ipo/page.tsx`, `frontend/src/components/IpoPreview.tsx`
+
+### T69 · Listing verification core (deterministic checks, review, revoke) (#113) — D3 · M · Must · A9
+- [ ] Private document upload and serving: PDF/JPEG/PNG, ≤ 5 MB, magic bytes, decoded-pixel and PDF page/object limits, encrypted or malformed PDFs rejected, parsing in a worker with a timeout, sanitised previews; `GET /assets/{id}/documents/{doc_id}` loads by `(world_id, asset_id, id)` for the community's members and same-world admins only (404 otherwise), `Content-Disposition: attachment`, `nosniff`, `no-store`; per-world keyed fingerprint bound to one asset (no reuse across listings; same listing may reuse it)
+- [ ] Write-once verification runs (trigger-enforced) with an input fingerprint (community, name, geometry, area, document commitments, method version) and one current run per asset (partial unique index); documents link only to runs of their own asset; any change to those inputs makes the listing unverified; deterministic checklist (accepted file format, not reused, no boundary overlap, consent-labelled document attached) with pass/warn/fail and values; reviewer approve/reject with a reason; `verification` ledger entries with randomized document commitments (no raw hashes, names or account IDs)
+- [ ] Gates: the live-world IPO transaction locks the asset and needs the current run `verified` with a matching fingerprint (409 `not_verified`); revoke (admin, reason) atomically suspends the asset and blocks orders until a new verified run; authorization tests for investors, non-members, other communities, other worlds and anonymous users
+- [ ] Demo mode (`VERIFICATION_MODE=demo`, default `review`, added to `.env.example`): `POST /assets/{id}/documents/sample` (404 in review mode) generates watermarked fictional documents from non-personal fields (listing reference, place, area) and synthetic identities; `mode` is write-once and `evidence_kind` is derived by trigger from all linked documents (links frozen after submission), both in the fingerprint; `demo_auto` approves only demo + all-sample + all checks pass + `verification_revoked_at` unset (DB constraint), and only a human approval clears a revocation; the review-mode IPO gate needs `mode = review` and real evidence; switching demo → review invalidates demo/sample runs and suspends their trading
+
+**Verify:** `make test` in both modes: hostile files, stale-fingerprint bypass, revoke during trading, cross-world document access, ledger payload privacy, sample endpoint rejected in review mode with nothing created, `demo_auto` can't approve real or mixed documents, a run can't be relabelled sample, a mode switch invalidates demo approvals for the IPO, a revoked listing can't auto-re-approve; manual: sample docs → auto-approved → IPO → revoke · **Deps:** T58, T59, T68, T57, T66, T30 · **Files:** `backend/app/services/verification.py`, `backend/app/routers/verification.py`, `backend/app/models.py`, `backend/migrations/versions/*_verification.py`, `backend/tests/test_verification.py`
+
+### T71 · AI document extraction for verification (heuristic) (#115) — D3 · S · Should · A9
+- [ ] MiniCPM-V extracts fields (holder name, parcel ID, place, area, issue date) from sanitised previews; Nemotron compares them with the listing (name, place via reverse geocode, area ±20%) and suggests consistent | inconsistent | unreadable with reasons and source excerpts; no tools, no other tenants' data, no secrets; output schema-validated
+- [ ] Treated as attacker-controlled: shown to the reviewer as an untrusted heuristic next to the source excerpts; can't change deterministic checks or the verification level; raw prompts and responses are never logged (only `llm_calls` metadata)
+- [ ] Adversarial PDFs and images (injected instructions) in tests prove the level and deterministic checks are unaffected; off in the live world (`VERIFICATION_AI_LIVE=false`) until Token Factory data terms are confirmed, so sandboxes send only seeded demo documents
+
+**Verify:** `make test` with a fake LLM and adversarial fixtures · **Deps:** T69, T09 · **Files:** `backend/app/agents/document_check.py`, `backend/tests/test_document_check.py`, `backend/tests/fixtures/verification/*`
+
+### T70 · Verification screens and transparency panel (#114) — PD + D1 · S · Must · A9
+- [ ] Steward: upload documents, or in demo mode "Use sample documents (demo)"; see the checklist and the decision; the IPO screen explains why launch is blocked until verified
+- [ ] Exchange: a badge with precise wording by evidence, not deployment mode (sample runs: "Demo verification: sample documents, no real ownership checked"; human-reviewed real documents: "Documents reviewed by NatureX (hackathon process)"; "Self-attested by the community"; "Verification revoked"); a site footer note when demo mode is on and a public "How this listing was verified" panel: level, date, reviewer role, each check's result, everything not checked, link to the ledger entry
+- [ ] Admin: a review queue with document previews, the checklist, any AI suggestion labelled as an untrusted heuristic with source excerpts, and the map; approve, reject or revoke with a reason
+
+**Verify:** `make fe-check`; `web-design-guidelines` review; manual upload → approve → badge → revoke · **Deps:** T69, T62, P05 · **Files:** `frontend/src/app/(steward)/steward/assets/[id]/verify/page.tsx`, `frontend/src/components/VerificationPanel.tsx`, `frontend/src/app/admin/verifications/page.tsx`
+
+
 ### ✅ Checkpoint W4 (Fri Oct 23) = FEATURE FREEZE
 - [ ] The public URL runs the whole 3-minute demo script, including the judge tour
+- [ ] *(ADR-0005)* Both apps work for real accounts: Steward (community, listing, live rating, IPO, wallet) and Exchange (browse, trade, portfolio, alerts)
+- [ ] *(ADR-0006)* Listing verification: documents → visible checklist → decision in the ledger → "How this listing was verified" panel; the live-world IPO needs `verified`; the deployment runs in labelled demo mode (sample documents, auto-approved, disclosed)
 - [ ] `make eval` and `make e2e` green; UI polish pass done
 - [ ] **No new features after this point**
 

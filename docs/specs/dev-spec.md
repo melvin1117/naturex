@@ -8,8 +8,9 @@
 
 ## 1. System overview
 ```
-Next.js web app (Vercel) ──HTTP/SSE──► FastAPI backend (host chosen in T20, see §21: Nebius Serverless · Azure Container Apps · HF Spaces/Render)
-                                 ├── Sandbox worlds (one private copy of the demo per visitor)
+Next.js web app: Exchange `/` + Steward `/steward` (Vercel) ──HTTP/SSE──► FastAPI backend (host chosen in T20, see §21: Nebius Serverless · Azure Container Apps · HF Spaces/Render)
+                                 ├── Accounts, sessions and authorization (ADR-0005; server-side sessions, policy in app/authz.py)
+                                 ├── Worlds: one live world for real accounts + sandbox worlds for demo sessions
                                  ├── Rating Orchestrator (Nemotron 3 Super, tool-calling)
                                  │     ├── earth_obs tool ──► Google Earth Engine
                                  │     ├── valuation tool (pure Python + cited coefficient CSV)
@@ -139,7 +140,7 @@ naturex/
 ```sql
 create extension if not exists vector;
 
-create table worlds (                 -- per-visitor sandbox (demo-plan §3.5)
+create table worlds (                 -- 'live' (real accounts, ADR-0005), 'template', and one sandbox per demo session
   id uuid primary key default gen_random_uuid(),
   label text not null,                 -- e.g. 'template' for the seed world
   created_at timestamptz default now(),
@@ -155,14 +156,56 @@ create table worlds (                 -- per-visitor sandbox (demo-plan §3.5)
 create table users (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  role text not null check (role in ('community','investor','admin')),
-  cash_balance numeric(14,2) not null default 10000
+  role text not null check (role in ('community','investor','admin')),  -- persona label only; not used for authorization (ADR-0005)
+  cash_balance numeric(14,2) not null default 10000,
+  kind text not null default 'persona' check (kind in ('person','persona','treasury')),  -- ADR-0005
+  email text,                          -- lower-cased; null for personas and treasuries
+  password_hash text,                  -- argon2id (pwdlib); only for kind = 'person'
+  is_admin boolean not null default false,  -- live world: set only by the operator CLI
+  unique (world_id, id)                -- target of composite foreign keys
 );
+create unique index users_world_email on users (world_id, lower(email)) where email is not null;
 
+-- ADR-0005: accounts, communities and authorization (tasks T54, T56)
+create table sessions (
+  id uuid primary key default gen_random_uuid(),
+  token_hash char(64) not null unique,  -- sha256 of the cookie token; the token itself is never stored
+  world_id uuid not null, user_id uuid not null,
+  foreign key (world_id, user_id) references users (world_id, id),  -- pruning a world deletes its sessions first
+  kind text not null check (kind in ('password','demo')),
+  created_at timestamptz default now(), last_seen_at timestamptz default now(),
+  expires_at timestamptz not null      -- 30 d absolute; 7 d idle enforced from last_seen_at
+);
+create table auth_attempts (           -- Postgres-backed rate limits (shared across instances; T66)
+  id bigserial primary key,
+  bucket text not null check (bucket in ('ip','account')),  -- independent buckets
+  key_hmac char(64) not null,          -- HMAC(AUTH_RATE_LIMIT_SECRET, ip | lower(email)); no raw email
+  kind text not null check (kind in ('login','register')), created_at timestamptz default now()
+);
+create index on auth_attempts (bucket, key_hmac, created_at);  -- rows older than 24 h are pruned
+create table communities (
+  id uuid primary key default gen_random_uuid(), world_id uuid not null references worlds(id),
+  name text not null, country text, description text,
+  treasury_user_id uuid not null,      -- kind = 'treasury'; never signs in or trades
+  created_at timestamptz default now(),
+  unique (world_id, id),
+  foreign key (world_id, treasury_user_id) references users (world_id, id)
+);
+create table community_members (       -- owner-only for the Must; stewards are a Should
+  world_id uuid not null, community_id uuid not null, user_id uuid not null,
+  role text not null check (role in ('owner','steward')),
+  primary key (community_id, user_id),
+  foreign key (world_id, community_id) references communities (world_id, id),
+  foreign key (world_id, user_id) references users (world_id, id)
+);
 create table assets (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  community_user_id uuid references users(id),
+  community_id uuid,                                  -- ADR-0005: the community that manages the listing
+  community_user_id uuid,                             -- the community's treasury (kind = 'treasury'): retained stake, seeded at IPO, + its dividends (T41)
+  verification_revoked_at timestamptz,                -- ADR-0006: set on revoke; while set, demo_auto can't approve; cleared only by a human admin approval
+  -- ADR-0005 (T56): unique (world_id, id); foreign key (world_id, community_id) → communities (world_id, id);
+  --                 foreign key (world_id, community_user_id) → users (world_id, id)
   country text, description text, cover_image_url text,
   geojson jsonb not null,
   area_ha numeric(12,2) not null,
@@ -174,6 +217,57 @@ create table assets (
   status text not null default 'draft'
     check (status in ('draft','rating','needs_evidence','ineligible','listed','suspended')),
   created_at timestamptz default now()
+);
+
+-- ADR-0006: listing verification (T69). Documents are private; the ledger keeps only randomized commitments.
+create table verification_runs (       -- one row per run; one current run per asset
+  id uuid primary key default gen_random_uuid(), world_id uuid not null, asset_id uuid not null,
+  level text not null check (level in ('unverified','documents_submitted','verified','rejected','revoked')),
+  is_current boolean not null default true,
+  input_fingerprint char(64) not null, -- sha256(community, name, geometry, area, document commitments, method_version, mode, evidence_kind); any change → unverified
+  checklist jsonb not null,            -- [{check, result: pass|warn|fail, found, source}]; public panel shows names + results only
+  ai_suggestion text check (ai_suggestion in ('consistent','inconsistent','unreadable')), ai_reasons jsonb,  -- T71; untrusted heuristic
+  reviewer_role text check (reviewer_role in ('platform_admin','partner_reviewer','demo_auto')), reviewer_user_id uuid, reason text,
+  mode text not null check (mode in ('review','demo')),  -- deployment mode at creation (ADR-0006 §6)
+  evidence_kind text not null check (evidence_kind in ('sample','real')),  -- set by trigger at submission from ALL linked documents' is_sample
+  check (reviewer_role is distinct from 'demo_auto' or (mode = 'demo' and evidence_kind = 'sample')),
+  method_version text not null, created_at timestamptz default now(),
+  unique (world_id, id), unique (world_id, asset_id, id),
+  foreign key (world_id, asset_id) references assets (world_id, id),
+  foreign key (world_id, reviewer_user_id) references users (world_id, id)
+);
+-- Write-once: a trigger rejects changes to input_fingerprint, checklist, ai_*, method_version, mode and evidence_kind, and
+-- rewrites of reviewer_role/reviewer_user_id/reason once set; a second trigger derives evidence_kind at submission and rejects
+-- listing_documents.run_id changes once the run is submitted; level may move only
+-- documents_submitted → verified | rejected, or verified → revoked; is_current only true → false (superseded). Every
+-- decision is also appended to the ledger, which is append-only (migration 0003).
+create unique index verification_runs_current on verification_runs (world_id, asset_id) where is_current;
+create table document_fingerprints (   -- binds a document's private fingerprint to ONE asset: no reuse across assets,
+  world_id uuid not null, private_fingerprint char(64) not null, asset_id uuid not null,  -- reuse for the same asset's re-runs is fine
+  primary key (world_id, private_fingerprint), unique (world_id, private_fingerprint, asset_id),
+  foreign key (world_id, asset_id) references assets (world_id, id)
+);
+create table listing_documents (       -- sensitive personal data; private storage; deleted 30 days after the listing
+  id uuid primary key default gen_random_uuid(), world_id uuid not null, asset_id uuid not null, run_id uuid,
+  doc_type text not null check (doc_type in ('title','agrarian_certificate','assembly_minutes','entity_registration','other')),
+  storage_key text not null,           -- generated; never exposed
+  mime text not null, size_bytes int not null,
+  private_fingerprint char(64) not null,  -- HMAC(per-world key, file); dedup only, never published
+  commitment_nonce bytea not null,     -- private; the ledger stores sha256(nonce || file); deleted with the listing
+  extracted jsonb,                     -- T71 fields (may hold names): members and reviewers only
+  is_sample boolean not null default false,  -- generated fictional sample (demo mode), watermarked
+  uploaded_by uuid,                    -- null after account deletion (anonymised)
+  created_at timestamptz default now(),
+  foreign key (world_id, asset_id) references assets (world_id, id),
+  foreign key (world_id, asset_id, run_id) references verification_runs (world_id, asset_id, id),  -- same asset's run only
+  foreign key (world_id, private_fingerprint, asset_id) references document_fingerprints (world_id, private_fingerprint, asset_id),
+  foreign key (world_id, uploaded_by) references users (world_id, id)
+);
+create table payout_lines (            -- private and erasable; the public ledger holds only a hash commitment (T67)
+  id bigserial primary key, world_id uuid not null, asset_id uuid not null, quarter_label text not null,
+  user_id uuid not null, shares bigint not null, amount numeric(14,2) not null,
+  foreign key (world_id, asset_id) references assets (world_id, id),
+  foreign key (world_id, user_id) references users (world_id, id)
 );
 
 create table metrics (                -- raw earth-obs output per rating run
@@ -249,7 +343,7 @@ create table ledger_entries (         -- Nature Ledger: append-only, hash-chaine
   id bigserial primary key,
   asset_id uuid references assets(id),
   seq int not null,                    -- 0,1,2… per asset
-  kind text not null check (kind in ('listing','report','event','price_anchor','payout')),
+  kind text not null check (kind in ('listing','report','event','price_anchor','payout','verification')),  -- 'verification': ADR-0006 (T69)
   ref_id uuid,                         -- id of report/event/etc.
   payload jsonb not null,              -- canonical snapshot of what was recorded
   prev_hash char(64) not null,         -- '0'*64 for seq 0
@@ -272,7 +366,16 @@ create table llm_calls (
 ## 6. API (FastAPI)
 | Method & path | Purpose |
 |---|---|
-| `POST /assets` | Create asset from GeoJSON + details → validates → status `rating` → enqueue rating |
+| `POST /auth/register` · `POST /auth/login` · `POST /auth/logout` · `GET /me` | Accounts and sessions (ADR-0005, T54) |
+| `POST /demo/start` · `POST /demo/persona` | One-click demo session in a new sandbox world; switch persona (demo sessions only; T55) |
+| `POST /communities` · `GET`/`PATCH /communities/{id}` · `…/members` · `GET /communities/{id}/summary` | Communities, members (owner only), Steward home data (T56, T63) |
+| `POST /assets` | Create a **draft** listing in the caller's community from GeoJSON + details (steward or owner; T58) |
+| `POST /assets/{id}/submit` | Start a rating run; the result sets `listed` / `needs_evidence` / `ineligible` (T58) |
+| `GET /assets/{id}/ipo/preview` · `POST /assets/{id}/ipo` | IPO price with every formula term; launch (owner only, once; T59) |
+| `POST /admin/assets/{id}/suspend` · `…/resume` | Moderation (admin; T58) |
+| `POST /assets/{id}/documents/sample` | Demo mode only (404 in review mode, nothing created): generate watermarked fictional documents from non-personal fields (listing reference, place from reverse geocode, area) + synthetic identities and run the checklist; the `demo_auto` reviewer approves only if every document is a sample, every check passes and no revocation is active (ADR-0006 §6) |
+| `POST /assets/{id}/documents` · `GET /assets/{id}/documents/{doc_id}` | Upload evidence (steward/owner) → checklist; download a document (community members + same-world admins only; 404 otherwise; attachment, `nosniff`, `no-store`) (ADR-0006, T69) |
+| `GET /assets/{id}/verification` · `POST /admin/assets/{id}/verification` · `POST /admin/assets/{id}/verification/revoke` | Public verification summary (check names + results + not-checked list); reviewer approve/reject with a reason; revoke (suspends trading) (T69) |
 | `GET /assets` | Marketplace list (latest price, grade, trend) |
 | `GET /assets/{id}` | Asset detail + latest report + recent events |
 | `POST /assets/{id}/evidence` | Upload photos (audio post-hackathon) → field_evidence agent → event + re-rate |
@@ -288,12 +391,21 @@ create table llm_calls (
 | `GET /ledger/{asset_id}` | Ledger entries (hashes, kinds, timestamps) |
 | `GET /ledger/{asset_id}/verify` | Recomputes the chain → `{valid, entries, broken_at?}` |
 | `POST /admin/tamper-demo` | *(DEMO_MODE only)* mutates a copy of one entry to show verification failing |
-| `GET /world` | The visitor's sandbox world (created on first request, stored in the `nx_world` cookie) and its personas |
-| `POST /world/reset` | "Reset my demo": re-seeds the visitor's world |
+| `GET /world` | The caller's world (from the session; anonymous = the live world) and, in demo sessions, its personas |
+| `POST /world/reset` | "Reset my demo" (demo sessions only): re-seeds the world, keeping persona user IDs so the session stays valid |
 
-Every route is scoped to the visitor's world through the `nx_world` cookie, so judges never affect each other.
+Every route is scoped to the caller's world, which comes from the session: anonymous requests read the live world, password sessions use the live world, and demo sessions use their sandbox (ADR-0005). Judges never affect each other or the live world. *(T31 below describes the `nx_world` cookie, which T55 retires.)*
 
-**As built (T31):**
+### 6.1 Authorization (ADR-0005)
+- `app/authz.py`: pure `authorize(principal, action, resource) -> Allow | Deny(reason)`, tested over every role × action; routes use a `require(action)` dependency.
+- **Every route, reads included,** loads resources by `(world_id, id)` before authorizing; a route-inventory test fails if any route has no authorization dependency, and a cross-world test returns 404 for every object endpoint.
+- **SSE and polling** take the principal and world from the session, recheck the session on every poll and heartbeat, and close after logout, expiry or revocation.
+- **Roles:** any signed-in user can trade; community **owner** / **steward** via `community_members`; **admin** via `users.is_admin`, scoped to its world. The full matrix is in ADR-0005 §3.
+- **Errors:** 401 `auth_required`; 403 with a reason (`owner_only`, `insider_trading_blocked`, …); 404 for anything in another world.
+- **Rules:** orders always use the principal's user; community members can't trade their own asset, and a holder of its shares can't be added as a member (409 `member_has_holdings`); admins and treasury accounts never trade; the ledger tamper demo runs only in sandbox worlds.
+- **CSRF:** `SameSite=Lax` cookies plus an exact `Origin` (else `Referer`) allowlist (`ALLOWED_ORIGINS`) on every POST, PUT, PATCH and DELETE, uploads included; both missing, malformed or `null` → rejected; JSON routes require a JSON media type.
+
+**As built (T31), before ADR-0005.** T55 changes three things below: the `nx_world` cookie is replaced by the session; reset keeps persona user IDs (mapped by `persona_key`) instead of re-copying them with fresh IDs, so the session survives; pruning deletes a world's sessions first. The rest stays:
 - **Only `GET /world` creates a world.** It reads the `nx_world` cookie (`HttpOnly`, `SameSite=Lax`, `Secure` unless `ENVIRONMENT` is development/test, 30 days, `Cache-Control: no-store`); a missing, malformed or unknown cookie, or one naming the **template** world, gets a fresh world.
 - New worlds are capped at `SANDBOX_MAX_NEW_WORLDS_PER_HOUR` (default 300) → 503 with `Retry-After`.
 - World-scoped routes use `CurrentWorld` (`app/deps.py`) and return **401 `world_required`** without a valid cookie; they never create worlds. The frontend calls `GET /world` first (T32). Today the ledger and world routes are scoped; the other routers adopt `CurrentWorld` as they move off mocks.
@@ -464,12 +576,18 @@ Both reuse the backend code with a different entrypoint:
 ## 11. Frontend pages & key components
 | Page | Components | Notes |
 |---|---|---|
-| Marketplace `/` | AssetCard grid, filters, SandboxBanner | Sort by grade / change / value |
-| List `/list` | MapDraw, AssetForm, RatingProgress (SSE) | Area and validation shown live |
-| Asset `/asset/[id]` | Map + land-cover overlay, ReportView (grade badge, value range, breakdown chart, NDVI chart, flags, recommendations), PriceChart with event markers, TradePanel, AlertsFeed, CopilotChat, AgentTrace drawer | The hero page |
-| Portfolio `/portfolio` | Holdings table, P&L, ImpactSummary | |
-| Admin `/admin` | Time Machine: "Next quarter", event presets, reset demo | Hidden link for the demo |
-| Judge landing + tour (all pages) | Judge landing, PersonaSwitcher, Driver.js tour with spotlight hints, "Do it for me", Live badges, Under-the-hood drawer | See demo-plan §3; each screen exposes stable anchors for tour steps |
+| **Two apps in one Next.js app** (ADR-0005) | Route groups `(exchange)` at `/` and `(steward)` at `/steward`, each with its own shell and nav; AppSwitcher for community members; DemoBar in demo sessions | Shared design system, generated client and session |
+| Sign in `/login`, `/register` | AuthForm, AccountMenu | Protected routes redirect here and back |
+| Judge `/judge` | Three one-click demo entries, "Create a real account" | Starts `POST /demo/start` |
+| Exchange · Marketplace `/` | AssetCard grid, filters, SandboxBanner | Sort by grade / change / value |
+| Steward · Home `/steward` | Listings with status and next action, WalletCard, holders, payouts, alerts, stewardship actions | Owner and stewards |
+| Steward · Community `/steward/community` | Community form, members (owner) | A0 |
+| Steward · List `/steward/list` | MapDraw, AssetForm, RatingProgress (SSE) | Area and validation shown live |
+| Steward · IPO `/steward/assets/[id]/ipo` | IpoPreview (formula step by step), confirm | Owner only |
+| Exchange · Asset `/asset/[id]` | Map + land-cover overlay, ReportView (grade badge, value range, breakdown chart, NDVI chart, flags, recommendations), PriceChart with event markers, TradePanel, AlertsFeed, CopilotChat, AgentTrace drawer | The hero page |
+| Exchange · Portfolio `/portfolio` | Holdings table, P&L, ImpactSummary | |
+| Admin `/admin` | Time Machine: "Next quarter", event presets, reset demo, suspend/resume | Admins only (own world) |
+| Tour (all pages, optional) | DemoBar persona switcher, Driver.js tour with spotlight hints, "Do it for me", Live badges, Under-the-hood drawer | See demo-plan §3; each screen exposes stable anchors for tour steps |
 
 ## 12. Configuration
 ```
@@ -481,6 +599,8 @@ EE_SERVICE_ACCOUNT_JSON=   # or PC_SUBSCRIPTION_KEY
 DATABASE_URL=              S3_ENDPOINT=  S3_BUCKET=  S3_KEY=  S3_SECRET=
 USE_MOCKS=false            LOCAL_JOBS=true            DEMO_MODE=true
 LLM_BUDGET_USD=20          # hard cap per deployment key (§21)
+VERIFICATION_MODE=review   # review (a person decides) | demo (sample docs + auto-reviewer, always disclosed); hackathon deploy + E2E use demo (ADR-0006)
+VERIFICATION_AI_LIVE=false # T71 AI check on real documents in the live world, only after Token Factory data terms are confirmed
 ```
 Secrets stay server-side only; never commit `.env` (commit `.env.example`).
 
@@ -507,6 +627,11 @@ Secrets stay server-side only; never commit `.env` (commit `.env.example`).
 ## 15. Security & responsible AI
 - Sandbox banner on every page; no real payments; no tokens or crypto.
 - Rate-limit `/copilot` and `/assets`; validate GeoJSON size.
+- **Accounts (ADR-0005):** argon2id via `pwdlib` with a dummy-hash verify for unknown emails; server-side sessions (hashed token, `HttpOnly`/`Secure`/`SameSite=Lax`, 7 d idle / 30 d absolute, rotated on login and persona switch); the §6.1 CSRF rule; login 10 per 15 min and register 5 per hour in independent per-IP and per-account buckets, counted in Postgres, client IP only through `TRUSTED_PROXY_HOPS`; generic login errors.
+- **Admins:** live-world admins are created only by the operator CLI (`python -m app.cli create-admin`, password via `getpass`), never through the API or by email match. **Accepted risk:** without email verification, registration reveals whether an email exists; no permission depends on email.
+- **Authorization on every request** (§6.1), including object-level checks and the 404-across-worlds rule. Every PR touching auth, cookies, sessions or authorization gets a `security-and-hardening` review.
+- **Listing verification (ADR-0006):** uploads are allow-listed (PDF/JPEG/PNG, ≤ 5 MB, magic bytes, pixel and PDF page limits; encrypted/malformed PDFs rejected), parsed in a worker with a timeout, previewed as re-encoded PNGs, stored privately under generated names and served only to members and same-world admins; verification runs are fingerprinted, so any change to the listing resets them, and revoking suspends trading; the AI suggestion (T71) is attacker-controlled input with no tools, shown as an untrusted heuristic; a human reviewer decides; the public sees check results and what was not checked, never documents or raw hashes.
+- **Personal data:** accounts hold email, display name and password hash. Listing verification adds **sensitive** documents and extracted fields (holder names, parcel IDs), kept privately and deleted 30 days after the listing is deleted; T71 sends document previews to Nebius Token Factory only in sandboxes (seeded demo documents) until its retention and training terms are confirmed (`VERIFICATION_AI_LIVE=false` in the live world). Nothing personal goes into logs or traces (`llm_calls` keeps metadata only). The public ledger holds no account identifiers, names or raw document hashes (payout details in `payout_lines`, T67; documents as randomized commitments). Sessions and `auth_attempts` are pruned; demo worlds are pruned after 7 days.
 - Treat all retrieved web content and uploaded media as untrusted; enforce schema-validated outputs.
 - Show uncertainty (ranges, confidence) everywhere a number appears.
 - Use only licensed data: Earth Engine terms, Tavily terms, cited valuation sources, dataset attributions; no raw ESVD data in the repo.
