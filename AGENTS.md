@@ -20,11 +20,11 @@ NatureX is an AI rating agency and sandbox exchange for living nature, built for
 If code and docs disagree, stop and ask; don't silently pick one.
 
 ## Non-negotiables
-1. **AI calls use NVIDIA Nemotron via Nebius Token Factory only** (OpenAI-compatible `base_url`). Never Azure OpenAI or other hosted LLMs for product features; this is a hackathon requirement.
+1. **All AI calls go through Nebius Token Factory** (OpenAI-compatible `base_url`); never Azure OpenAI or other providers. **Nemotron does all reasoning and text.** A non-NVIDIA Token Factory model is allowed only where no Nemotron model can do the job (today: photo perception, embeddings); see [ADR-0003](./docs/adr/0003-model-routing-on-token-factory.md). No local models.
 2. **Numbers come from deterministic, tested code.** LLMs orchestrate, classify, explain and may adjust the health score only within ±10 with cited evidence. Never let a model invent a metric, value or price.
 3. **Every LLM output is schema-validated** (Pydantic) with retry; every call is logged (model, tokens, latency) and counts against `LLM_BUDGET_USD`.
 4. **No secrets in the repo.** Use `.env` (git-ignored) and `.env.example`.
-5. **Free tiers only** unless covered by hackathon credits; see `docs/specs/dev-spec.md` §21.
+5. **Free tiers only** unless covered by credits: hackathon credits, or personal credits the team approves for hosting (e.g. Azure in T20). Ranked hosting options in `docs/specs/dev-spec.md` §21.
 6. **Licences:** the repo is MIT. Don't add GPL/AGPL code or non-open data (e.g. raw ESVD data). No third-party logos or unlicensed music in demo assets. Keep data attributions (Dynamic World, Copernicus, JRC, Hansen, OpenStreetMap).
 7. **Sandbox framing:** play money only; never present anything as a real security.
 
@@ -33,7 +33,7 @@ If code and docs disagree, stop and ask; don't silently pick one.
 - **TypeScript (frontend):** Next.js App Router, `strict` mode, Tailwind, **shadcn/ui components only** (no ad-hoc styled clones), shared design tokens; follow `PRODUCT.md` once it exists (created by `impeccable`).
 - **API contract first:** FastAPI's OpenAPI schema is the source of truth; the frontend client is **generated**, never hand-edited.
 - **Tests with every change:** unit tests for formulas, market invariants and the ledger; contract tests for agent outputs.
-- **Never push to `main`.** Branch, run `make ci` (with `docker compose up -d`), open a PR, get 1 teammate approval, squash-merge only when CI is green. GitHub doesn't enforce this on the private repo, so it's on us (`docs/ci.md`).
+- **Never push to `main`.** Branch, run `make ci` (with `docker compose up -d`), get an independent agent review, open a PR, get 1 teammate approval, squash-merge only when CI is green. GitHub doesn't enforce this on the private repo, so it's on us (`docs/ci.md`).
 - **Small PRs** (~100–300 lines), one concern each, **Conventional Commit** titles (`feat:`, `fix:`, `docs:`…). Update the docs when behaviour changes.
 - **Local development uses no cloud:** Docker Compose for Postgres; cloud hosting is chosen later (T20).
 - **Mocks behind interfaces** (`USE_MOCKS=true`) so work can proceed in parallel and CI runs without keys.
@@ -46,8 +46,9 @@ If code and docs disagree, stop and ask; don't silently pick one.
   1. **Claim:** `make board ISSUE=<n> STATUS="In progress"` (sets the board Status and assigns you).
   2. **Branch and build:** `git checkout -b <type>/<tNN>-<slug>`, implement with tests, `make ci`.
   3. **Check the map:** the workflow updates it on `main` within a minute of step 1. **Never commit `tasks/task-map.*` in a PR**: it conflicts with the workflow's commits and blocks CI. (`make task-map` is only for a local look; discard the result.)
-  4. **PR:** Conventional Commit title, `Closes #<n>` in the body, then `make board ISSUE=<n> STATUS="In review"`.
-  5. Merging closes the issue, which marks it done on the map and the board.
+  4. **Independent review before the PR:** commit, `git fetch origin`, then have a **separate agent with fresh context** (a sub-agent or a new session, never the one that wrote the code) review **only the changes** (`git diff origin/main...HEAD`, reading surrounding code only where needed to judge a change) with the `code-review-and-quality` skill (plus `security-and-hardening` for auth, cookies, sessions, user input or text sent to an LLM). Fresh context means it gets only the standard prompt in `docs/ai-setup.md` (task, acceptance criteria, specs), not your explanation of the design. **Show the findings to the user and let them decide** which to fix and which to reject (with a reason). Don't apply, commit or push review fixes without the user's go-ahead; after fixing, re-run `make ci`. Repeat the review if the teammate's comments lead to large changes. Skip it only for trivial changes (typo, link or comment, no behaviour change) and Dependabot PRs.
+  5. **PR:** use the PR template, Conventional Commit title, `Closes #<n>` in the body, a short summary of the review (findings fixed or rejected), then `make board ISSUE=<n> STATUS="In review"`.
+  6. Merging closes the issue, which marks it done on the map and the board.
 
 ## Skills (in `.agents/skills`, mirrored in `.claude/skills`)
 Load the matching skill before starting; `using-agent-skills` picks one if unsure.
@@ -73,6 +74,7 @@ GitHub (issues, PRs, board), Context7 (current library docs; use it before writi
 ## Definition of done
 - [ ] Meets the story's acceptance criteria in `docs/specs/pm-spec.md`
 - [ ] Lint, type-check and tests pass locally and in CI
+- [ ] Reviewed by a separate agent with `code-review-and-quality` before the PR; Critical and Required findings fixed or rejected with a reason
 - [ ] No secrets, no new paid services, licences respected
 - [ ] Docs and generated API client updated if behaviour or contracts changed
 - [ ] UI changes checked with `web-design-guidelines`; screenshots in the PR

@@ -1,7 +1,7 @@
 # ADR-0001: Stack and version pins
 
 ## Status
-Accepted
+Accepted. Partly superseded: models and embeddings by [ADR-0003](./0003-model-routing-on-token-factory.md); hosting options re-ranked in [dev-spec §21](../specs/dev-spec.md) (Oct 5).
 
 ## Date
 2026-10-04
@@ -24,7 +24,7 @@ Constraints from [AGENTS.md](../../AGENTS.md): Python 3.12 + FastAPI + SQLModel;
 | CSS / UI | Tailwind **v4** + **shadcn/ui only** | Tokens via `@theme`; `/dev/ui` showcase |
 | Maps | react-leaflet + leaflet-draw | Esri/OSM basemap |
 | Charts | Recharts | |
-| DB | Postgres **16** + **pgvector** | Local: `pgvector/pgvector:pg16`; hosted: Supabase free tier |
+| DB | Postgres **16** + **pgvector** | Local: `pgvector/pgvector:pg16`; hosted: per dev-spec §21 |
 | LLM client | OpenAI-compatible SDK via Token Factory `base_url` | Wrapper in `backend/app/llm.py` (T09) |
 | Agent framework | **PydanticAI** with `OpenAIProvider(base_url=Token Factory)` | Prefer over a hand-rolled loop; fall back to plain tool-calling if spike fails |
 | News | **tavily-python** | |
@@ -32,10 +32,10 @@ Constraints from [AGENTS.md](../../AGENTS.md): Python 3.12 + FastAPI + SQLModel;
 | Valuation coefficients | **Brander 2024 (CC BY) + Costanza 2014**, cited | **Do not** commit raw ESVD data |
 | Carbon | AGB × (1 + R) × 0.47 × 44/12 + SoilGrids SOC for wetlands | Formula refined in T14; see research §6 |
 | NDVI trend | Cloud Score+ masking + **Sen's slope** | Confirmed in T03/T11 |
-| Embeddings | Token Factory NVIDIA embed if available; else local **bge-small** | |
+| Embeddings | ~~Token Factory NVIDIA embed if available; else local bge-small~~ | Superseded by [ADR-0003](./0003-model-routing-on-token-factory.md): `Qwen3-Embedding-8B` on Token Factory |
 | Tracing | OpenTelemetry spans → Postgres (`llm_calls` + Agent Trace); optional Langfuse | |
 | Evals | **promptfoo** + pytest runner (`make eval`) | |
-| Hosting (demo) | Frontend **Vercel Hobby**; backend HF Spaces or Render; DB Supabase | Nebius Serverless if credits unlock |
+| Hosting (demo) | Frontend **Vercel Hobby**; backend + DB chosen in T20 | Ranked in dev-spec §21: Nebius Serverless → Azure (approved credits) → HF Spaces/Render + Supabase |
 | Package managers | **uv** (backend), **pnpm** (frontend) | Plain-folder monorepo |
 
 ## Alternatives considered

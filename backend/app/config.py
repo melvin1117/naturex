@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     local_jobs: bool = True
     database_url: str = "postgresql+psycopg://naturex:naturex@localhost:5432/naturex"
     llm_budget_usd: float = 20.0
+    # Cap on new sandbox worlds per hour, so clients that drop the cookie can't fill the DB.
+    sandbox_max_new_worlds_per_hour: int = 300
+    event_stream_max_concurrent: int = 40
 
     nebius_api_key: str = ""
     token_factory_base_url: str = "https://api.tokenfactory.nebius.com/v1/"
@@ -33,6 +36,7 @@ class Settings(BaseSettings):
     model_embed: str = ""
 
     tavily_api_key: str = ""
+    nominatim_user_agent: str = "NatureX/0.1 (https://github.com/melvin1117/naturex)"
     ee_service_account_json: str = ""
 
 

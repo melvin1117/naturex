@@ -9,6 +9,8 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, HTTPException, status
 
 from app import mocks
+from app.deps import SettingsDep
+from app.routers.reports import summarize_report
 from app.schemas import (
     AssetCard,
     AssetCreate,
@@ -58,11 +60,15 @@ def create_asset(body: AssetCreate) -> AssetCreateResponse:
 
 
 @router.get("/assets/{asset_id}", response_model=AssetDetail)
-def get_asset(asset_id: UUID) -> AssetDetail:
+def get_asset(asset_id: UUID, settings: SettingsDep) -> AssetDetail:
     asset = mocks.get_asset(asset_id)
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found")
-    return asset
+    if asset.latest_report is None:
+        return asset
+    return asset.model_copy(
+        update={"latest_report": summarize_report(asset.latest_report, settings)}
+    )
 
 
 @router.post("/assets/{asset_id}/evidence", response_model=EvidenceResponse)
@@ -86,13 +92,13 @@ def upload_evidence(asset_id: UUID) -> EvidenceResponse:
 
 
 @router.get("/assets/{asset_id}/reports", response_model=list[ReportOut])
-def list_reports(asset_id: UUID) -> list[ReportOut]:
+def list_reports(asset_id: UUID, settings: SettingsDep) -> list[ReportOut]:
     asset = mocks.get_asset(asset_id)
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found")
     if asset.latest_report is None:
         return []
-    return [asset.latest_report]
+    return [summarize_report(asset.latest_report, settings)]
 
 
 @router.get("/assets/{asset_id}/prices", response_model=list[PricePoint])

@@ -57,8 +57,9 @@ def test_admin_and_copilot() -> None:
     assert client.post("/copilot", json={"question": "Why did it drop?"}).status_code == 200
 
 
-def test_events_poll_and_report() -> None:
-    assert client.get("/events").status_code == 200
+def test_events_require_world_cookie_and_report_still_works() -> None:
+    event_res = client.get("/events")
+    assert (event_res.status_code, event_res.json()["detail"]) == (401, "world_required")
     assert client.get(f"/reports/{REPORT_WETLAND}").status_code == 200
 
 

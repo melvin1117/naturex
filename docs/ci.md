@@ -29,9 +29,10 @@ While the repo is private, GitHub **doesn't enforce** the `protect-main` ruleset
 
 1. **Never push to `main`.** Work on a branch (`feat/…`, `fix/…`, `docs/…`).
 2. **Run `make ci` locally** and get it green before opening the PR (start Postgres first: `docker compose up -d`).
-3. **Open a PR** using the template, with `Closes #NN` for the task.
-4. **Get 1 approval from a teammate.** Don't approve or merge your own PR.
-5. **Merge only when GitHub CI is green**, using **Squash and merge**. Never click merge before the checks have finished.
+3. **Get an independent agent review** before opening the PR: a separate agent with fresh context runs the `code-review-and-quality` skill on the diff only (not the whole codebase); you decide which findings to fix or reject (with a reason) before anything is committed (the *Independent review* step in [AGENTS.md](../AGENTS.md)). Skip it for trivial changes (typo, link or comment only, no behaviour change) and Dependabot PRs; the teammate review covers those.
+4. **Open a PR** using the template, with `Closes #NN` for the task.
+5. **Get 1 approval from a teammate.** Don't approve or merge your own PR. The agent review doesn't replace this.
+6. **Merge only when GitHub CI is green**, using **Squash and merge**. Never click merge before the checks have finished.
 
 ## Local commands
 

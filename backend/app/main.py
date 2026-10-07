@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 
 from app.config import get_settings
-from app.routers import admin, assets, copilot, events, ledger, market, reports
+from app.routers import admin, assets, copilot, events, ledger, market, reports, world
 
 settings = get_settings()
 
@@ -20,6 +20,7 @@ app.include_router(copilot.router)
 app.include_router(events.router)
 app.include_router(admin.router)
 app.include_router(ledger.router)
+app.include_router(world.router)
 
 
 @app.get("/healthz")

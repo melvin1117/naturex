@@ -1,16 +1,19 @@
-"""Idempotent seed: one template world, 4 personas, 3 demo assets."""
+"""Idempotent seed: one template world, 4 personas, 3 demo assets and the community's stake."""
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
-from sqlmodel import Session, select
+from sqlalchemy import update
+from sqlmodel import Session, col, select
 
 from app.db import engine
-from app.models import Asset, AssetStatus, User, UserRole, World
+from app.models import Asset, AssetStatus, Holding, User, UserRole, World
+from app.tools.earth_obs import DATA_DIR, load_site_metrics
 
 # Stable IDs so re-running seed is a no-op.
 WORLD_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -49,52 +52,79 @@ PERSONAS: tuple[Persona, ...] = (
 )
 COMMUNITY_PERSONA = PERSONAS[0]
 
+
+def _decimal_ha(value: float) -> Decimal:
+    return Decimal(str(value)).quantize(Decimal("0.01"))
+
+
+def _load_demo_geojson(site_key: str) -> dict[str, Any]:
+    path = DATA_DIR / f"{site_key}.geojson"
+    return cast(dict[str, Any], json.loads(path.read_text()))
+
+
+def _demo_site(id_: UUID, key: str, name: str, description: str) -> DemoSite:
+    """A demo site whose area and centroid come from its committed boundary (T11/T13)."""
+    metrics = load_site_metrics(key)
+    return DemoSite(
+        id=id_,
+        key=key,
+        name=name,
+        country="MX",
+        description=description,
+        area_ha=_decimal_ha(metrics.area_ha),
+        centroid_lat=metrics.centroid.lat,
+        centroid_lon=metrics.centroid.lon,
+    )
+
+
 DEMO_SITES: tuple[DemoSite, ...] = (
-    DemoSite(
-        id=UUID("33333333-3333-3333-3333-333333333301"),
-        key="wetland_mx",
-        name="Xochimilco Wetland",
-        country="MX",
-        description="Hero inland wetland near Mexico City (demo).",
-        area_ha=Decimal("500.00"),
-        centroid_lat=19.26,
-        centroid_lon=-99.09,
+    _demo_site(
+        UUID("33333333-3333-3333-3333-333333333301"),
+        "wetland_mx",
+        "Xochimilco Wetland",
+        "Hero inland wetland near Mexico City (demo).",
     ),
-    DemoSite(
-        id=UUID("33333333-3333-3333-3333-333333333302"),
-        key="mangrove_mx",
-        name="Coastal Mangrove Reserve",
-        country="MX",
-        description="Blue-carbon mangrove site (demo).",
-        area_ha=Decimal("320.00"),
-        centroid_lat=21.50,
-        centroid_lon=-87.50,
+    _demo_site(
+        UUID("33333333-3333-3333-3333-333333333302"),
+        "mangrove_mx",
+        "Ría Celestún Mangrove",
+        "Blue-carbon mangrove in the Ría Celestún Biosphere Reserve, Yucatán (demo).",
     ),
-    DemoSite(
-        id=UUID("33333333-3333-3333-3333-333333333303"),
-        key="restoration_forest",
-        name="Restoration Forest Parcel",
-        country="MX",
-        description="Degraded forest under restoration (demo).",
-        area_ha=Decimal("450.00"),
-        centroid_lat=16.75,
-        centroid_lon=-93.10,
+    _demo_site(
+        UUID("33333333-3333-3333-3333-333333333303"),
+        "restoration_forest",
+        "Sumidero Canyon Restoration Forest",
+        "Tropical forest recovering from 2021–2025 loss on the edge of Cañón del Sumidero "
+        "National Park, Chiapas (demo).",
     ),
 )
 
-# Placeholder polygon, replaced by real GeoJSON in T11/T13.
-_PLACEHOLDER_POLY: dict[str, Any] = {
-    "type": "Polygon",
-    "coordinates": [
-        [
-            [-99.10, 19.25],
-            [-99.08, 19.25],
-            [-99.08, 19.27],
-            [-99.10, 19.27],
-            [-99.10, 19.25],
-        ]
-    ],
+DEMO_GEOJSON: dict[str, dict[str, Any]] = {
+    site.key: _load_demo_geojson(site.key) for site in DEMO_SITES
 }
+
+
+def _upgrade_demo_site_content(session: Session) -> None:
+    """Refresh demo-site content in every world, visitor copies included.
+
+    Name, description and boundary are template content, not visitor state, so databases
+    seeded with the old placeholder squares (before T11/T13) get the real boundaries on the
+    next ``make seed``. Shares, cash, the community wallet and status are never touched.
+    """
+    for site in DEMO_SITES:
+        session.execute(
+            update(Asset)
+            .where(col(Asset.site_key) == site.key)
+            .values(
+                name=site.name,
+                description=site.description,
+                geojson=DEMO_GEOJSON[site.key],
+                area_ha=site.area_ha,
+                centroid_lat=site.centroid_lat,
+                centroid_lon=site.centroid_lon,
+            )
+        )
+    session.commit()
 
 
 def seed(session: Session) -> None:
@@ -134,7 +164,7 @@ def seed(session: Session) -> None:
                     community_user_id=COMMUNITY_PERSONA.id,
                     country=site.country,
                     description=site.description,
-                    geojson=_PLACEHOLDER_POLY,
+                    geojson=DEMO_GEOJSON[site.key],
                     area_ha=site.area_ha,
                     centroid_lat=site.centroid_lat,
                     centroid_lon=site.centroid_lon,
@@ -147,12 +177,32 @@ def seed(session: Session) -> None:
                 )
             )
     session.commit()
+    _upgrade_demo_site_content(session)
+
+    # The community keeps its retained stake as a holding, so shares are conserved:
+    # total_shares = primary_shares_remaining + market_maker_shares + sum(holdings) (dev-spec §8).
+    retained = TOTAL_SHARES - primary_shares
+    for site in DEMO_SITES:
+        asset = session.exec(
+            select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == site.key)
+        ).one()
+        holding = session.get(Holding, (WORLD_ID, COMMUNITY_PERSONA.id, asset.id))
+        if holding is None:
+            session.add(
+                Holding(
+                    world_id=WORLD_ID,
+                    user_id=COMMUNITY_PERSONA.id,
+                    asset_id=asset.id,
+                    shares=retained,
+                )
+            )
+    session.commit()
 
 
 def main() -> None:
     with Session(engine) as session:
         seed(session)
-    print("Seed complete: template world, 4 personas, 3 demo assets.")
+    print("Seed complete: template world, 4 personas, 3 demo assets, community holdings.")
 
 
 if __name__ == "__main__":

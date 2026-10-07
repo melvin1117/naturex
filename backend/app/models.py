@@ -9,7 +9,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import BigInteger, Column, DateTime, SmallInteger, UniqueConstraint, text
+from sqlalchemy import BigInteger, Column, DateTime, Index, SmallInteger, UniqueConstraint, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
@@ -73,6 +73,13 @@ class LedgerKind(StrEnum):
     EVENT = "event"
     PRICE_ANCHOR = "price_anchor"
     PAYOUT = "payout"
+
+
+class StreamEventType(StrEnum):
+    RATING_PROGRESS = "rating_progress"
+    PRICE_TICK = "price_tick"
+    ALERT = "alert"
+    HEARTBEAT = "heartbeat"
 
 
 class World(SQLModel, table=True):
@@ -149,6 +156,23 @@ class Event(SQLModel, table=True):
     direction: int | None = Field(default=None, ge=-1, le=1, sa_type=SmallInteger)
     severity: int | None = Field(default=None, ge=1, le=5, sa_type=SmallInteger)
     summary: str | None = None
+    created_at: datetime = _created_at()
+
+
+class WorldEvent(SQLModel, table=True):
+    __tablename__ = "world_events"
+    __table_args__ = (
+        Index("ix_world_events_world_id_id", "world_id", "id"),
+        Index("ix_world_events_created_at", "created_at"),
+    )
+
+    id: int | None = Field(
+        default=None,
+        sa_column=Column(BigInteger, primary_key=True, autoincrement=True),
+    )
+    world_id: UUID = Field(foreign_key="worlds.id")
+    type: StreamEventType = Field(sa_column=_enum_column(StreamEventType))
+    payload: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
     created_at: datetime = _created_at()
 
 
@@ -265,4 +289,13 @@ class LlmCall(SQLModel, table=True):
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     latency_ms: int | None = None
+    cost_usd: Decimal = Field(
+        default=Decimal("0"),
+        max_digits=12,
+        decimal_places=6,
+        sa_column_kwargs={"server_default": "0"},
+    )
+    tier: str | None = None
+    status: str = Field(default="ok", sa_column_kwargs={"server_default": "ok"})
+    """ok | invalid_output | error (one row per attempt, including failed ones)."""
     created_at: datetime = _created_at()

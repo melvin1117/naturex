@@ -1,6 +1,6 @@
 # Implementation Plan: NatureX (hackathon build)
 
-> Task list: [todo.md](./todo.md). Specs: [pm-spec](../docs/specs/pm-spec.md) · [dev-spec](../docs/specs/dev-spec.md) · [demo-plan](../docs/specs/demo-plan.md). **Tasks are tracked in [GitHub Issues](https://github.com/melvin1117/naturex/issues):** 6 module epics (#1–#6) with 59 task sub-issues (#7–#65), labelled `week:N`, `owner:X`, `size:X`, `priority:X`, `module:X`.
+> Task list: [todo.md](./todo.md). Specs: [pm-spec](../docs/specs/pm-spec.md) · [dev-spec](../docs/specs/dev-spec.md) · [demo-plan](../docs/specs/demo-plan.md). **Tasks are tracked in [GitHub Issues](https://github.com/melvin1117/naturex/issues):** 6 module epics (#1–#6) with 77 task sub-issues (#7–#65, plus #97–#111 from ADR-0005 and #113–#115 from ADR-0006), labelled `week:N`, `owner:X`, `size:X`, `priority:X`, `module:X`.
 
 ## Overview
 Build the NatureX PoC in 5 weeks: a community lists land, Nemotron agents rate it from satellite data and news, investors trade play-money shares in a per-visitor sandbox, and ratings update as nature changes. Every Friday has a demo gate from `pm-spec.md` §8. Only the money is simulated; every AI step is real.
@@ -24,6 +24,28 @@ Week 1 ended with 3 of 17 tasks done (T04, T06, T07). **The Oct 23 freeze and Oc
 | PD | P01 brief → P02 flows → P03 wireframes + P04 design system → P05 hi-fi key screens |
 
 Pick tasks from [task-map.html](./task-map.html) (🟢 = every dependency done). Weeks 2–4 below keep their content. Anything not done by its Friday gate rolls into the next sprint, and the next *Should* item is cut first.
+
+## Re-plan (Tue Oct 6): real accounts, roles and two apps ([ADR-0005](../docs/adr/0005-accounts-roles-and-two-apps.md))
+The judge tour is a showcase; the product needs real flows. New tasks **T54–T68** (#97–#111), all *Must*. The quarterly revenue split (D4, T41, already merged) also becomes *Must*.
+
+| Owner (suggested; AI-assisted) | New tasks |
+|---|---|
+| D1 | T54 accounts and sessions → T56 communities, treasury and tenant invariants → T68 authorization policy → T57 enforcement on every route |
+| D2 | T67 ledger privacy (ready now) → T58 listing lifecycle → T59 IPO launch → T60 live rating for new listings |
+| D3 | T66 auth hardening (CSRF, rate limits, pruning); T55 demo sessions; T69 listing verification core → T71 AI document check (*Should*) ([ADR-0006](../docs/adr/0006-listing-verification.md)) |
+| PD (+D1) | T61 sign-in → T62 two app shells → T65 `/judge` → T63 Steward home, T64 IPO screen, T70 verification screens |
+
+**Two chains converge on T46 (E2E):**
+- **Backend (now the longest chain):** T54 → T56 → T68 → T58 → T59 → T69 → T70 → T46. T58 also needs T19, so T14/T15 → T19 matter here too.
+- **Frontend:** P04 → T21 → T61 → T62 → T33 → T45. **T21 is now the biggest single risk;** pair on it if it slips.
+
+| Week | D1 | D2 | D3 | PD |
+|---|---|---|---|---|
+| 2 (now) | **T54** | T67, then T19 once #94/#95 merge | (agent work) | P02/P03 updated for two apps, sign-in, Steward home, judge landing |
+| 3 | T56 → T68 → T57 | T58 → T59 | T66, T55, plus agent work | T21 → T61 → T62 → T65; T33 moves into Steward |
+| 4 | Wire T63/T64/T70 with PD | T60 | T69 → T71, agent work | T63, T64, T70; T45 tour on top of T65 |
+
+**Cut order if behind:** K5 delete account → community stewards (owner-only stays) → T71 AI document check (T69's deterministic checks, reviewer decision, ledger entry and public panel stay) → T60 live rating (fall back to the curated sites and mark new listings "awaiting satellite data").
 
 ## Team and ownership
 | Who | Role | Owns (long-term) | Weeks 1–2 focus | Weeks 3–5 focus |
@@ -53,10 +75,10 @@ Open items from [research.md](../docs/research.md) §6:
 - Carbon formula (roots + SoilGrids soil carbon)
 - NDVI method (Cloud Score+, Sen's slope)
 - Satellite platform: Earth Engine primary
-- Embeddings: NVIDIA on Token Factory vs local `bge-small`
+- Embeddings: decided in ADR-0003 (`Qwen3-Embedding-8B` on Token Factory, no local models)
 - Tracing: OpenTelemetry → Postgres + Langfuse
 - Evals: promptfoo
-- Hosting: free tiers per dev-spec §21
+- Hosting: decided in T20 from the ranked options in dev-spec §21 (Nebius Serverless → Azure with approved credits → free tiers)
 
 ## Modules at a glance
 ```
@@ -124,7 +146,7 @@ All: **T52 submit on Devpost (Thu Oct 29).**
 ## Critical path
 T02/T03 → T09/T11 → T14/T15/T24 → T26 Auditor → T27 Orchestrator → T38 Time Machine → T42 deploy → T45 tour → T46 E2E → **freeze Fri Oct 23** → T50 video → T52 submit.
 
-A slip on T26/T27 (week 3) threatens everything. **Fallback:** the fixed Python pipeline (dev-spec §7.1) keeps the demo working with the same agents.
+Since ADR-0005, two more chains converge on T46: accounts (T54 → T56 → T68 → T58 → T59 → T63/T64) and the app shells (T21 → T61 → T62 → T33/T65). A slip on T26/T27 (week 3) threatens everything. **Fallback:** the fixed Python pipeline (dev-spec §7.1) keeps the demo working with the same agents.
 
 ## Risks and mitigations
 | Risk | Impact | Mitigation |
@@ -135,6 +157,8 @@ A slip on T26/T27 (week 3) threatens everything. **Fallback:** the fixed Python 
 | Credits run out | Medium | `LLM_BUDGET_USD` cap, Nano for dev, caching, precomputed sites |
 | Free hosting sleeps during judging (Dec 1–15) | Medium | Deploy early (T20); keep-alive pings; checks before Dec 1 (T51) |
 | Scope creep | Medium | Must/Should/Could labels; freeze Fri Oct 23; week 5 reserved for demo and presentation |
+| Accounts and authorization (ADR-0005) add 15 tasks 2.5 weeks before the freeze | High | Owner-only communities for the *Must*; cut order in the Oct 6 re-plan; `security-and-hardening` review on every auth PR; the curated demo flow keeps working throughout |
+| A security bug in auth leaks across worlds or lets roles escalate | High | Composite foreign keys across worlds, a pure policy with a full matrix test, a route-inventory test, cross-world 404 tests |
 | ADR decisions change the formulas, so the worked-example numbers change | Low | Update the Rating Engine page, specs and tests together (T06 follow-up) |
 
 ## Open questions

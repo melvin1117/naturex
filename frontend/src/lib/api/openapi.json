@@ -483,6 +483,35 @@
               ],
               "title": "Since"
             }
+          },
+          {
+            "name": "since_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
           }
         ],
         "responses": {
@@ -520,12 +549,57 @@
         ],
         "summary": "Stream Events",
         "operationId": "stream_events_events_stream_get",
+        "parameters": [
+          {
+            "name": "since_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since Id"
+            }
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -772,6 +846,56 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/world": {
+      "get": {
+        "tags": [
+          "world"
+        ],
+        "summary": "Get World",
+        "description": "The visitor's world. The first call creates it and sets the `nx_world` cookie.\n\nCall this once before any other route; they return 401 `world_required` without it.",
+        "operationId": "get_world_world_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldOut"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Too many new demo worlds; retry later"
+          }
+        }
+      }
+    },
+    "/world/reset": {
+      "post": {
+        "tags": [
+          "world"
+        ],
+        "summary": "Reset",
+        "description": "\"Reset my demo\": restore the visitor's world to the template, keeping its ID.",
+        "operationId": "reset_world_reset_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No world yet: call GET /world first"
           }
         }
       }
@@ -1167,6 +1291,18 @@
           "community_wallet"
         ],
         "title": "AssetDetail"
+      },
+      "AssetStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "rating",
+          "needs_evidence",
+          "ineligible",
+          "listed",
+          "suspended"
+        ],
+        "title": "AssetStatus"
       },
       "AssetStatusOut": {
         "type": "string",
@@ -1756,6 +1892,47 @@
         ],
         "title": "OrderOut"
       },
+      "PersonaOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
+          },
+          "cash_balance": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cash Balance"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "name",
+          "role",
+          "cash_balance"
+        ],
+        "title": "PersonaOut"
+      },
       "PortfolioOut": {
         "properties": {
           "cash_balance": {
@@ -1975,6 +2152,11 @@
             ],
             "title": "Summary Md"
           },
+          "summary_source": {
+            "$ref": "#/components/schemas/ReportSummarySource",
+            "description": "Whether summary_md came from a live Nemotron call or deterministic fallback.",
+            "default": "fallback"
+          },
           "recommendations": {
             "anyOf": [
               {
@@ -2013,6 +2195,14 @@
           "created_at"
         ],
         "title": "ReportOut"
+      },
+      "ReportSummarySource": {
+        "type": "string",
+        "enum": [
+          "live",
+          "fallback"
+        ],
+        "title": "ReportSummarySource"
       },
       "SimulateEventRequest": {
         "properties": {
@@ -2082,15 +2272,20 @@
       },
       "StreamEvent": {
         "properties": {
-          "type": {
-            "type": "string",
-            "enum": [
-              "price",
-              "alert",
-              "rating_progress",
-              "heartbeat"
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Type"
+            "title": "Id",
+            "description": "Monotonic world_events cursor; null for transient heartbeats"
+          },
+          "type": {
+            "$ref": "#/components/schemas/StreamEventType"
           },
           "payload": {
             "additionalProperties": true,
@@ -2110,6 +2305,16 @@
           "ts"
         ],
         "title": "StreamEvent"
+      },
+      "StreamEventType": {
+        "type": "string",
+        "enum": [
+          "rating_progress",
+          "price_tick",
+          "alert",
+          "heartbeat"
+        ],
+        "title": "StreamEventType"
       },
       "TamperDemoIn": {
         "properties": {
@@ -2235,6 +2440,15 @@
         ],
         "title": "TraceStep"
       },
+      "UserRole": {
+        "type": "string",
+        "enum": [
+          "community",
+          "investor",
+          "admin"
+        ],
+        "title": "UserRole"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -2274,6 +2488,82 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WorldAssetOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "site_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AssetStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "site_key",
+          "name",
+          "status"
+        ],
+        "title": "WorldAssetOut"
+      },
+      "WorldOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "personas": {
+            "items": {
+              "$ref": "#/components/schemas/PersonaOut"
+            },
+            "type": "array",
+            "title": "Personas"
+          },
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/WorldAssetOut"
+            },
+            "type": "array",
+            "title": "Assets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "created_at",
+          "personas",
+          "assets"
+        ],
+        "title": "WorldOut"
       }
     }
   }

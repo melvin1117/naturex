@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models import LedgerKind
+from app.models import AssetStatus, LedgerKind, StreamEventType, UserRole
 
 # ----- Agent outputs (contract-tested later) -----
 
@@ -18,6 +18,10 @@ from app.models import LedgerKind
 class NewsScoutItem(BaseModel):
     """Nemotron Nano classification of one Tavily hit (dev-spec §7.5)."""
 
+    id: str | None = Field(
+        default=None,
+        description="Stable event ID derived from the source URL, so reports can cite it.",
+    )
     relevant: bool
     impact_type: Literal[
         "encroachment",
@@ -75,6 +79,11 @@ class AssetStatusOut(StrEnum):
     SUSPENDED = "suspended"
 
 
+class ReportSummarySource(StrEnum):
+    LIVE = "live"
+    FALLBACK = "fallback"
+
+
 class AssetCreate(BaseModel):
     name: str
     country: str | None = None
@@ -127,6 +136,10 @@ class ReportOut(BaseModel):
     fair_value_per_share: Decimal | None = None
     flags: list[Any] | None = None
     summary_md: str | None = None
+    summary_source: ReportSummarySource = Field(
+        default=ReportSummarySource.FALLBACK,
+        description="Whether summary_md came from a live Nemotron call or deterministic fallback.",
+    )
     recommendations: list[str] | None = None
     auditor: AuditorOutput | None = None
     created_at: datetime
@@ -228,7 +241,11 @@ class CopilotResponse(BaseModel):
 
 
 class StreamEvent(BaseModel):
-    type: Literal["price", "alert", "rating_progress", "heartbeat"]
+    id: int | None = Field(
+        default=None,
+        description="Monotonic world_events cursor; null for transient heartbeats",
+    )
+    type: StreamEventType
     payload: dict[str, Any]
     ts: datetime
 
@@ -296,3 +313,33 @@ class TamperDemoOut(BaseModel):
     before: Any
     after: Any
     verify: LedgerVerifyOut
+
+
+# ----- Sandbox worlds (T31) -----
+
+
+class PersonaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    key: str | None = Field(validation_alias="persona_key")
+    name: str
+    role: UserRole
+    cash_balance: Decimal
+
+
+class WorldAssetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    site_key: str | None
+    name: str
+    status: AssetStatus
+
+
+class WorldOut(BaseModel):
+    id: UUID
+    label: str
+    created_at: datetime
+    personas: list[PersonaOut]
+    assets: list[WorldAssetOut]

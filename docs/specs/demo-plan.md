@@ -22,12 +22,15 @@
 ---
 
 ## 3. Judge Mode: "Story Mode"
-### 3.1 Landing screen (no login)
-- ▶ **Guided tour** (recommended, ~7 min): one story across all users.
-- 🧭 **Explore freely**: all personas unlocked, with hints available.
-- Each visitor gets a **private sandbox**: their own copy of the demo world with all personas pre-created, so judges never affect each other.
+### 3.1 Judge landing `/judge` (no sign-up)
+> The product has real accounts and two apps, Steward and Exchange ([ADR-0005](../adr/0005-accounts-roles-and-two-apps.md)). Judge mode is a fast way *into* those real flows, not a separate product.
 
-### 3.2 Persona switcher (top bar, instant, no login)
+- **One click to explore:** *Explore as a community steward* (opens Steward), *Explore as an investor* (opens Exchange) or *Explore as the platform admin* (opens `/admin`). Each click starts a **demo session** with a **private sandbox**: its own copy of the demo world with every persona pre-created, so judges never affect each other or the live world.
+- ▶ **Guided tour** (optional overlay, ~7 min): one story across all personas.
+- **Create a real account:** for judges who want to try real sign-up in the live world.
+- Devpost and the README link straight to `/judge`; no shared passwords are published.
+
+### 3.2 Demo bar and persona switcher (demo sessions only, instant)
 | Persona | Role | What the judge experiences |
 |---|---|---|
 | 🏘️ **Rosa, community steward** | Lists the wetland | Registration, drawing the land, receiving IPO money, stewardship tips |
@@ -38,11 +41,11 @@
 ### 3.3 Tour chapters (with a progress bar)
 | Chapter | Persona | Judge does | Wow moment |
 |---|---|---|---|
-| 1. Register | Rosa | Fills a prefilled form (editable) | Sign-up in 10 seconds |
+| 1. Register | Rosa | Fills a prefilled community form (editable) in the Steward app | Community registered in 10 seconds |
 | 2. List the land | Rosa | Watches the boundary draw itself, or draws their own | Map zooms to the Xochimilco wetland |
 | 3. AI rates it | 🛰️ | Clicks **Rate** | Agent pipeline lights up live: Super plans → satellite → valuation → Tavily news → Ultra audits; report card revealed, grade stamps in |
-| 4. IPO | Rosa | Sets shares offered and % retained | IPO price formula shown step by step |
-| 5. Invest | Arjun | Browses, compares, buys 100 shares | **Split screen:** Arjun's cash goes down, Rosa's community wallet goes up |
+| 4. IPO | Rosa | Clicks **Use sample documents (demo)**, watches the verification checklist pass, then sets shares offered and % retained on the Steward IPO screen | "How this listing was verified" is visible, not a black box; IPO price formula shown step by step |
+| 5. Invest | Arjun | Switches to the Exchange, browses, compares, buys 100 shares | **Split screen:** Arjun's cash goes down, Rosa's community wallet (Steward home) goes up |
 | 6. Time passes | 🎛️ | "Next quarter" | Restoration detected → new report → price rises |
 | 7. Bad news | 🎛️ | "Inject: factory encroachment" | 🔔 Phone-style alert for Arjun, grade A → BBB, price drops; Rosa gets stewardship actions |
 | 8. Ask why | Arjun | Asks the Copilot "Why did it drop?" | Answer cites the report and the news link |
@@ -62,7 +65,7 @@
 ### 3.5 Reliability and cost safeguards
 | Problem | Solution |
 |---|---|
-| Judges affect each other | Per-visitor sandbox: `world_id` on every table that changes during the demo (holdings, orders, prices, events, reports, alerts, ledger), plus Reset my demo. **Design this in week 1.** |
+| Judges affect each other or the live world | Each demo session gets its own sandbox world: `world_id` on every tenant table (users, communities, members, sessions, assets, holdings, orders, prices, events, reports, alerts, ledger), composite foreign keys so rows can't link across worlds (ADR-0005), plus Reset my demo |
 | Credit costs | Demo sites use **cached real ratings** (browsing is free); Time Machine uses a short live Auditor call; "Rate your own land" limited to **2 live runs per visitor**; global `LLM_BUDGET_USD` cap |
 | Free host asleep | GitHub Actions `/healthz` pings every few hours; "Waking up… ~30 s" screen; re-check everything before Dec 1 |
 | Credits run out during judging | Reserve ~40% of the budget for Dec 1–15; at the cap, live steps fall back to cached results with a clear notice |
