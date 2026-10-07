@@ -5,8 +5,11 @@ Copies get fresh IDs, and every reference between them (asset → community pers
 holdings, prices, reports, ledger entries…) is remapped to the copy. Ledger chains stay
 valid because an entry's hash covers its payload, kind, seq and previous hash, not its IDs.
 
-`create_world`, `reset_world` and `prune_stale_worlds` each run and commit their own
-transaction; call them with no other pending work in the session.
+The live world (ADR-0005 §2, T54) is built with the same copy, once, and is never served as a
+sandbox, reset or pruned.
+
+`create_world`, `reset_world`, `prune_stale_worlds` and `ensure_live_world` each run and
+commit their own transaction; call them with no other pending work in the session.
 """
 
 from __future__ import annotations
@@ -33,11 +36,13 @@ from app.models import (
     Price,
     Report,
     User,
+    UserKind,
+    UserSession,
     World,
     WorldEvent,
 )
+from app.seed import LIVE_LABEL, LIVE_WORLD_ID, seed
 from app.seed import WORLD_ID as TEMPLATE_WORLD_ID
-from app.seed import seed
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +50,8 @@ COOKIE_NAME = "nx_world"
 COOKIE_MAX_AGE_S = 30 * 24 * 3600
 STALE_AFTER = timedelta(days=7)
 VISITOR_LABEL = "visitor"
+# Never served as a sandbox, reset or pruned.
+PROTECTED_WORLDS: frozenset[UUID] = frozenset({TEMPLATE_WORLD_ID, LIVE_WORLD_ID})
 
 # Children before parents, so deletes never violate a foreign key.
 _DELETE_ORDER: tuple[type[SQLModel], ...] = (
@@ -59,6 +66,7 @@ _DELETE_ORDER: tuple[type[SQLModel], ...] = (
     Report,
     Metrics,
     Asset,
+    UserSession,
     User,
 )
 
@@ -97,13 +105,24 @@ def _ensure_template(session: Session) -> None:
         log.info("template world was seeded concurrently")
 
 
-def _copy_world_rows(session: Session, source: UUID, target: UUID) -> None:
+def _copy_world_rows(
+    session: Session, source: UUID, target: UUID, *, community_users_only: bool = False
+) -> None:
     """Copy every world-scoped row from `source` into `target`, remapping IDs.
 
-    Inserts are flushed table by table in foreign-key order. Orders and LLM call logs are
-    visitor activity, not template content, so they are not copied.
+    Inserts are flushed table by table in foreign-key order. Orders, sessions and LLM call logs
+    are visitor activity, not template content, so they are not copied. With
+    `community_users_only`, only the users that own an asset (and their holdings) are copied,
+    so demo investors and the demo admin persona never reach the live world.
     """
     ids: dict[UUID, UUID] = {}
+    copied_users: set[UUID] | None = None
+    if community_users_only:
+        copied_users = {
+            a.community_user_id
+            for a in _rows(session, Asset, source)
+            if a.community_user_id is not None
+        }
 
     def fk(old: UUID | None) -> UUID | None:
         """Foreign keys must point at a row copied earlier; anything else is a copy-order bug."""
@@ -115,6 +134,8 @@ def _copy_world_rows(session: Session, source: UUID, target: UUID) -> None:
 
     def copy_with_new_id(model: type[SQLModel], *fk_fields: str) -> None:
         for row in _rows(session, model, source):
+            if model is User and copied_users is not None and row.id not in copied_users:
+                continue
             clone: Any = model(
                 **_clone(
                     row,
@@ -140,6 +161,8 @@ def _copy_world_rows(session: Session, source: UUID, target: UUID) -> None:
             Price(**_clone(price, {"world_id"}, world_id=target, asset_id=fk(price.asset_id)))
         )
     for holding in _rows(session, Holding, source):
+        if copied_users is not None and holding.user_id not in copied_users:
+            continue
         session.add(
             Holding(
                 **_clone(
@@ -204,7 +227,8 @@ def create_world(session: Session, max_new_per_hour: int | None = None) -> World
             select(func.count())
             .select_from(World)
             .where(
-                World.id != TEMPLATE_WORLD_ID, col(World.created_at) > _now() - timedelta(hours=1)
+                col(World.id).not_in(PROTECTED_WORLDS),
+                col(World.created_at) > _now() - timedelta(hours=1),
             )
         ).one()
         if recent >= max_new_per_hour:
@@ -225,12 +249,14 @@ def reset_world(session: Session, world_id: UUID) -> World:
     was waiting then fails on its now-deleted user or asset; callers (e.g. the trade API)
     should turn that IntegrityError into a 409 "your demo was reset".
     """
-    if world_id == TEMPLATE_WORLD_ID:
-        raise ValueError("the template world can't be reset")
+    if world_id in PROTECTED_WORLDS:
+        raise ValueError("the template and live worlds can't be reset")
     _ensure_template(session)
     world = session.exec(select(World).where(World.id == world_id).with_for_update()).first()
     if world is None:
         raise LookupError(f"world {world_id} not found")
+    if world.label == LIVE_LABEL:
+        raise ValueError("the live world can't be reset")
     _delete_world_rows(session, world_id, keep_world=True)
     _copy_world_rows(session, TEMPLATE_WORLD_ID, world_id)
     world.last_seen_at = _now()
@@ -243,17 +269,25 @@ def reset_world(session: Session, world_id: UUID) -> World:
 def prune_stale_worlds(
     session: Session, older_than: timedelta = STALE_AFTER, limit: int = 50
 ) -> int:
-    """Delete visitor worlds not seen for `older_than`. Never touches the template.
+    """Delete visitor worlds not seen for `older_than`, and expired sessions.
+
+    Never touches the template or the live world.
 
     Rows are locked in a fixed order and locked ones are skipped, so concurrent prunes
     can't deadlock and a world busy with a request is left for next time.
     """
+    from app.auth import prune_expired_sessions
     from app.events import prune_old_events
 
     prune_old_events(session)
+    prune_expired_sessions(session)
     stale = session.exec(
         select(World.id)
-        .where(World.id != TEMPLATE_WORLD_ID, col(World.last_seen_at) < _now() - older_than)
+        .where(
+            col(World.id).not_in(PROTECTED_WORLDS),
+            col(World.label) != LIVE_LABEL,
+            col(World.last_seen_at) < _now() - older_than,
+        )
         .order_by(col(World.id))
         .limit(limit)
         .with_for_update(skip_locked=True)
@@ -266,22 +300,54 @@ def prune_stale_worlds(
 
 
 def world_from_cookie(session: Session, value: str | None) -> World | None:
-    """The visitor's world, or None if the cookie is missing, malformed, unknown or the template."""
+    """The visitor's sandbox, or None if the cookie is missing, malformed or unknown, or names
+    the template or the live world (which are never served as sandboxes)."""
     if not value:
         return None
     try:
         world_id = UUID(value)
     except ValueError:
         return None
-    if world_id == TEMPLATE_WORLD_ID:
+    if world_id in PROTECTED_WORLDS:
         return None
-    return session.get(World, world_id)
+    world = session.get(World, world_id)
+    if world is None or world.label == LIVE_LABEL:
+        return None
+    return world
+
+
+def ensure_live_world(session: Session) -> World:
+    """Create the live world once: the curated sites copied from the template (ADR-0005 §2).
+
+    Only the community persona that owns the sites comes along (no password, so nobody can
+    sign in as it); T56 replaces it with real communities and treasuries. Idempotent, and
+    safe when two processes run it at once.
+    """
+    world = session.get(World, LIVE_WORLD_ID)
+    if world is not None:
+        return world
+    _ensure_template(session)
+    try:
+        world = World(id=LIVE_WORLD_ID, label=LIVE_LABEL)
+        session.add(world)
+        session.flush()
+        _copy_world_rows(session, TEMPLATE_WORLD_ID, LIVE_WORLD_ID, community_users_only=True)
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        log.info("live world was created concurrently")
+    live = session.get(World, LIVE_WORLD_ID)
+    if live is None:
+        raise RuntimeError("the live world could not be created")
+    return live
 
 
 def world_contents(session: Session, world_id: UUID) -> tuple[list[User], list[Asset]]:
-    """The world's personas and assets, in a stable order."""
+    """The world's personas and assets, in a stable order. Password accounts are never listed."""
     users = session.exec(
-        select(User).where(User.world_id == world_id).order_by(col(User.persona_key))
+        select(User)
+        .where(User.world_id == world_id, User.kind == UserKind.PERSONA)
+        .order_by(col(User.persona_key))
     ).all()
     assets = session.exec(
         select(Asset).where(Asset.world_id == world_id).order_by(col(Asset.site_key))

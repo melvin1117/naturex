@@ -8,9 +8,17 @@ from enum import StrEnum
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
-from app.models import AssetStatus, LedgerKind, StreamEventType, UserRole
+from app.auth import (
+    EMAIL_MAX_LENGTH,
+    NAME_MAX_LENGTH,
+    PASSWORD_MAX_LENGTH,
+    PASSWORD_MIN_LENGTH,
+    is_valid_email,
+    normalize_email,
+)
+from app.models import AssetStatus, LedgerKind, StreamEventType, UserKind, UserRole
 
 # ----- Agent outputs (contract-tested later) -----
 
@@ -343,3 +351,54 @@ class WorldOut(BaseModel):
     created_at: datetime
     personas: list[PersonaOut]
     assets: list[WorldAssetOut]
+
+
+# ----- Accounts and sessions (ADR-0005, T54) -----
+
+
+class RegisterIn(BaseModel):
+    email: str = Field(max_length=EMAIL_MAX_LENGTH)
+    password: SecretStr = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
+    name: str = Field(min_length=1, max_length=NAME_MAX_LENGTH)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, value: str) -> str:
+        email = normalize_email(value)
+        if not is_valid_email(email):
+            raise ValueError("Enter a valid email address")
+        return email
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str) -> str:
+        name = value.strip()
+        if not name or not name.isprintable():
+            raise ValueError("Enter a display name")
+        return name
+
+
+class LoginIn(BaseModel):
+    email: str = Field(max_length=EMAIL_MAX_LENGTH)
+    password: SecretStr = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, value: str) -> str:
+        email = normalize_email(value)
+        if not is_valid_email(email):
+            raise ValueError("Enter a valid email address")
+        return email
+
+
+class MeOut(BaseModel):
+    """The signed-in account. Never includes the password hash."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    email: str | None
+    kind: UserKind
+    is_admin: bool
+    world_id: UUID
