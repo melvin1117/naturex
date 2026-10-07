@@ -32,7 +32,7 @@ Design principles:
 | Layer | Choice | Notes |
 |---|---|---|
 | Frontend | Next.js **15.5** (App Router), TypeScript strict, Tailwind v4, shadcn/ui | Pin per [ADR-0001](../adr/0001-stack-and-versions.md); not Next 16 for the hackathon |
-| Maps | react-leaflet + leaflet-draw (or MapLibre + terra-draw) | Esri/OSM basemap; land-cover tile overlay |
+| Maps | Leaflet (BSD-2) in client components + leaflet-draw (MIT) (or MapLibre + terra-draw) | Esri/OSM basemap; land-cover image overlay. Not react-leaflet (Hippocratic-2.1 licence; see ADR-0001) |
 | Charts | Recharts | Price chart with event markers |
 | Backend | Python 3.12, FastAPI, SQLModel, Pydantic v2 | |
 | DB | Postgres 16 + pgvector; local Docker for development | Hosted DB per §21 (Supabase free tier or Azure Database for PostgreSQL) |
@@ -726,7 +726,7 @@ Both reuse the backend code with a different entrypoint:
 | Admin `/admin` | Time Machine: "Next quarter", event presets, reset demo, suspend/resume | Admins only (own world) |
 | Tour (all pages, optional) | DemoBar persona switcher, Driver.js tour with spotlight hints, "Do it for me", Live badges, Under-the-hood drawer | See demo-plan §3; each screen exposes stable anchors for tour steps |
 
-**As built (T35):** the backend serves the precomputed images publicly at `GET /media/demo-sites/{site_key}/overlay.png`, `/thumbnail.webp` and `/images.json` (allowlisted site keys, 404 otherwise, `nosniff`, one-day cache); the browser loads them via `/api/media/…`. For the asset page's "Map + land-cover overlay", put `overlay.png` in a Leaflet `ImageOverlay` at the sidecar's `overlay.bounds` over the OSM basemap, with the legend and attributions from the sidecar; for AssetCard, use `thumbnail.webp` with its caption attributions. A dev-only preview of both is on `/dev/ui` (`DemoSiteImages`, `LandCoverMap`, `LandCoverLegend`, `SiteThumbnail`). `LandCoverMap` uses **plain Leaflet** (BSD-2-Clause), not react-leaflet, whose licence is Hippocratic-2.1 (not OSI open source): a team decision, see `tasks/todo.md` T35.
+**As built (T35):** the backend serves the precomputed images publicly at `GET /media/demo-sites/{site_key}/overlay.png`, `/thumbnail.webp` and `/images.json` (allowlisted site keys, 404 otherwise, `nosniff`, one-day cache); the browser loads them via `/api/media/…`. For the asset page's "Map + land-cover overlay", put `overlay.png` in a Leaflet `ImageOverlay` at the sidecar's `overlay.bounds` over the OSM basemap, with the legend and attributions from the sidecar; for AssetCard, use `thumbnail.webp` with its caption attributions. A dev-only preview of both is on `/dev/ui` (`DemoSiteImages`, `LandCoverMap`, `LandCoverLegend`, `SiteThumbnail`). `LandCoverMap` uses **plain Leaflet** (BSD-2-Clause), not react-leaflet, whose licence is Hippocratic-2.1 (not OSI open source); ADR-0001 is updated accordingly, and T23/T33 should use the same approach.
 
 ## 12. Configuration
 ```
