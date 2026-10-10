@@ -261,8 +261,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` (two worlds isolated) · **Deps:** T07, T16 · **Files:** `backend/app/sandbox.py`, `backend/app/routers/admin.py`
 
 ### T32 · Frontend data layer (#44) — D1 · S · Must
-- [ ] Shared hooks for the API client, SSE subscription with polling fallback, sandbox cookie and error/loading states, so PD's screens stay presentational
-- [ ] On load, call `GET /world` once and wait for it before any other request; on a 401 `world_required`, call `GET /world` again and retry. Server-side fetches forward the visitor's `nx_world` cookie
+- [x] Shared hooks for the API client, SSE subscription with polling fallback, sandbox cookie and error/loading states, so PD's screens stay presentational
+- [x] On load, call `GET /world` once and wait for it before any other request; on a 401 `world_required`, call `GET /world` again and retry. Server-side fetches forward the visitor's `nx_world` cookie
 
 **Verify:** `make fe-check` · **Deps:** T29, T31 · **Files:** `frontend/src/lib/*.ts`
 
