@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-10 16:32 UTC",
+  "generated_at": "2026-10-10 16:33 UTC",
   "tasks": [
     {
       "id": "P01",
@@ -781,7 +781,8 @@
       "waiting_on": [],
       "unlocks": [
         "T25",
-        "T26"
+        "T26",
+        "T72"
       ],
       "step": 3,
       "chain": 0,
@@ -916,16 +917,17 @@
       "deps": [
         "T24"
       ],
-      "status": "in_progress",
+      "status": "done",
       "assignees": [
         "melvin1117"
       ],
       "waiting_on": [],
       "unlocks": [
-        "T47"
+        "T47",
+        "T72"
       ],
       "step": 4,
-      "chain": 4,
+      "chain": 0,
       "critical": false
     },
     {
@@ -1114,35 +1116,6 @@
       "critical": false
     },
     {
-      "id": "T27",
-      "title": "Orchestrator and async rating runs",
-      "issue": 39,
-      "owner": "D3",
-      "roles": [
-        "D3"
-      ],
-      "size": "M",
-      "priority": "Must",
-      "week": 3,
-      "deps": [
-        "T26",
-        "T19"
-      ],
-      "status": "ready",
-      "assignees": [],
-      "waiting_on": [],
-      "unlocks": [
-        "T28",
-        "T37",
-        "T38",
-        "T39",
-        "T60"
-      ],
-      "step": 5,
-      "chain": 7,
-      "critical": false
-    },
-    {
       "id": "T32",
       "title": "Frontend data layer",
       "issue": 44,
@@ -1250,6 +1223,31 @@
       "critical": false
     },
     {
+      "id": "T72",
+      "title": "News Scout prompt-injection hardening",
+      "issue": 123,
+      "owner": "D3",
+      "roles": [
+        "D3"
+      ],
+      "size": "S",
+      "priority": "Must",
+      "week": 3,
+      "deps": [
+        "T24",
+        "T25"
+      ],
+      "status": "ready",
+      "assignees": [],
+      "waiting_on": [],
+      "unlocks": [
+        "T27"
+      ],
+      "step": 5,
+      "chain": 8,
+      "critical": false
+    },
+    {
       "id": "T18",
       "title": "Trade panel and portfolio UI",
       "issue": 29,
@@ -1280,81 +1278,35 @@
       "critical": false
     },
     {
-      "id": "T28",
-      "title": "Agent Trace API",
-      "issue": 40,
-      "owner": "D3",
-      "roles": [
-        "D3"
-      ],
-      "size": "S",
-      "priority": "Must",
-      "week": 3,
-      "deps": [
-        "T09",
-        "T27"
-      ],
-      "status": "blocked",
-      "assignees": [],
-      "waiting_on": [
-        "T27"
-      ],
-      "unlocks": [
-        "T34"
-      ],
-      "step": 6,
-      "chain": 6,
-      "critical": false
-    },
-    {
-      "id": "T37",
-      "title": "Report versions and diffs",
-      "issue": 49,
-      "owner": "D2",
-      "roles": [
-        "D2"
-      ],
-      "size": "S",
-      "priority": "Could",
-      "week": 3,
-      "deps": [
-        "T27"
-      ],
-      "status": "blocked",
-      "assignees": [],
-      "waiting_on": [
-        "T27"
-      ],
-      "unlocks": [],
-      "step": 6,
-      "chain": 1,
-      "critical": false
-    },
-    {
-      "id": "T39",
-      "title": "Copilot (RAG)",
-      "issue": 53,
+      "id": "T27",
+      "title": "Orchestrator and async rating runs",
+      "issue": 39,
       "owner": "D3",
       "roles": [
         "D3"
       ],
       "size": "M",
       "priority": "Must",
-      "week": 4,
+      "week": 3,
       "deps": [
-        "T27"
+        "T26",
+        "T19",
+        "T72"
       ],
       "status": "blocked",
       "assignees": [],
       "waiting_on": [
-        "T27"
+        "T72"
       ],
       "unlocks": [
-        "T44",
-        "T47"
+        "T28",
+        "T37",
+        "T38",
+        "T39",
+        "T60"
       ],
       "step": 6,
-      "chain": 6,
+      "chain": 7,
       "critical": false
     },
     {
@@ -1449,32 +1401,54 @@
       "critical": false
     },
     {
-      "id": "T34",
-      "title": "Agent Trace drawer and ledger tab",
-      "issue": 46,
-      "owner": "PD",
+      "id": "T28",
+      "title": "Agent Trace API",
+      "issue": 40,
+      "owner": "D3",
       "roles": [
-        "PD"
+        "D3"
       ],
-      "size": "M",
+      "size": "S",
       "priority": "Must",
       "week": 3,
       "deps": [
-        "T28",
-        "T30",
-        "T32"
+        "T09",
+        "T27"
       ],
       "status": "blocked",
       "assignees": [],
       "waiting_on": [
-        "T28"
+        "T27"
       ],
       "unlocks": [
-        "T45",
-        "T48"
+        "T34"
       ],
       "step": 7,
-      "chain": 5,
+      "chain": 6,
+      "critical": false
+    },
+    {
+      "id": "T37",
+      "title": "Report versions and diffs",
+      "issue": 49,
+      "owner": "D2",
+      "roles": [
+        "D2"
+      ],
+      "size": "S",
+      "priority": "Could",
+      "week": 3,
+      "deps": [
+        "T27"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T27"
+      ],
+      "unlocks": [],
+      "step": 7,
+      "chain": 1,
       "critical": false
     },
     {
@@ -1511,36 +1485,9 @@
       "critical": false
     },
     {
-      "id": "T44",
-      "title": "Copilot and impact UI",
-      "issue": 56,
-      "owner": "PD",
-      "roles": [
-        "PD"
-      ],
-      "size": "M",
-      "priority": "Must",
-      "week": 4,
-      "deps": [
-        "T39",
-        "T41"
-      ],
-      "status": "blocked",
-      "assignees": [],
-      "waiting_on": [
-        "T39"
-      ],
-      "unlocks": [
-        "T45"
-      ],
-      "step": 7,
-      "chain": 5,
-      "critical": false
-    },
-    {
-      "id": "T47",
-      "title": "Eval harness",
-      "issue": 59,
+      "id": "T39",
+      "title": "Copilot (RAG)",
+      "issue": 53,
       "owner": "D3",
       "roles": [
         "D3"
@@ -1549,21 +1496,19 @@
       "priority": "Must",
       "week": 4,
       "deps": [
-        "T25",
-        "T26",
-        "T39"
+        "T27"
       ],
       "status": "blocked",
       "assignees": [],
       "waiting_on": [
-        "T25",
-        "T39"
+        "T27"
       ],
       "unlocks": [
-        "T49"
+        "T44",
+        "T47"
       ],
       "step": 7,
-      "chain": 3,
+      "chain": 6,
       "critical": false
     },
     {
@@ -1694,6 +1639,35 @@
       "critical": true
     },
     {
+      "id": "T34",
+      "title": "Agent Trace drawer and ledger tab",
+      "issue": 46,
+      "owner": "PD",
+      "roles": [
+        "PD"
+      ],
+      "size": "M",
+      "priority": "Must",
+      "week": 3,
+      "deps": [
+        "T28",
+        "T30",
+        "T32"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T28"
+      ],
+      "unlocks": [
+        "T45",
+        "T48"
+      ],
+      "step": 8,
+      "chain": 5,
+      "critical": false
+    },
+    {
       "id": "T42",
       "title": "Demo deploy",
       "issue": 54,
@@ -1750,6 +1724,61 @@
       ],
       "step": 8,
       "chain": 5,
+      "critical": false
+    },
+    {
+      "id": "T44",
+      "title": "Copilot and impact UI",
+      "issue": 56,
+      "owner": "PD",
+      "roles": [
+        "PD"
+      ],
+      "size": "M",
+      "priority": "Must",
+      "week": 4,
+      "deps": [
+        "T39",
+        "T41"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T39"
+      ],
+      "unlocks": [
+        "T45"
+      ],
+      "step": 8,
+      "chain": 5,
+      "critical": false
+    },
+    {
+      "id": "T47",
+      "title": "Eval harness",
+      "issue": 59,
+      "owner": "D3",
+      "roles": [
+        "D3"
+      ],
+      "size": "M",
+      "priority": "Must",
+      "week": 4,
+      "deps": [
+        "T25",
+        "T26",
+        "T39"
+      ],
+      "status": "blocked",
+      "assignees": [],
+      "waiting_on": [
+        "T39"
+      ],
+      "unlocks": [
+        "T49"
+      ],
+      "step": 8,
+      "chain": 3,
       "critical": false
     },
     {
@@ -2234,23 +2263,23 @@
       "T40"
     ],
     "D3": [
-      "T27",
+      "T72",
       "T66"
     ],
     "any": [
       "T56",
-      "T27",
+      "T72",
       "T66",
       "T20",
       "T40"
     ]
   },
   "counts": {
-    "done": 28,
-    "in_progress": 5,
+    "done": 29,
+    "in_progress": 4,
     "picked_early": 0,
     "ready": 5,
-    "blocked": 39
+    "blocked": 40
   },
-  "data_hash": "40ce642e0eb3cedb"
+  "data_hash": "c24c20a9f3f7de5f"
 }
