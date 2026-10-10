@@ -15,6 +15,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKeyConstraint,
     Index,
+    LargeBinary,
     SmallInteger,
     String,
     UniqueConstraint,
@@ -169,6 +170,8 @@ class UserSession(SQLModel, table=True):
 
 class Asset(SQLModel, table=True):
     __tablename__ = "assets"
+    # Target of composite foreign keys, so private rows can't link across worlds (T67).
+    __table_args__ = (UniqueConstraint("world_id", "id", name="uq_assets_world_id_id"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     world_id: UUID = Field(foreign_key="worlds.id", index=True)
@@ -329,7 +332,17 @@ class DocChunk(SQLModel, table=True):
 
 class LedgerEntry(SQLModel, table=True):
     __tablename__ = "ledger_entries"
-    __table_args__ = (UniqueConstraint("asset_id", "seq", name="uq_ledger_asset_seq"),)
+    __table_args__ = (
+        UniqueConstraint("asset_id", "seq", name="uq_ledger_asset_seq"),
+        # One payout per asset quarter (T67), behind `pay_quarter`'s check under the asset lock.
+        Index(
+            "uq_ledger_payout_quarter",
+            "asset_id",
+            text("(payload ->> 'quarter_label')"),
+            unique=True,
+            postgresql_where=text("kind = 'payout'"),
+        ),
+    )
 
     id: int | None = Field(default=None, primary_key=True, sa_type=BigInteger)
     world_id: UUID = Field(foreign_key="worlds.id", index=True)
@@ -341,6 +354,40 @@ class LedgerEntry(SQLModel, table=True):
     prev_hash: str = Field(max_length=64)
     hash: str = Field(max_length=64)
     created_at: datetime = _created_at()
+
+
+class PayoutLine(SQLModel, table=True):
+    """One holder's share of a quarterly payout (T67). Private and erasable: the public ledger
+    holds only aggregates and a commitment over these lines' leaf hashes (`app.market.revenue`).
+
+    `leaf_hash = sha256(nonce ‖ canonical(line))` with a random per-line nonce. Erasure clears
+    the user, shares, amount and nonce and keeps the leaf hash as an unlinkable tombstone, so
+    the other holders' lines stay verifiable.
+    """
+
+    __tablename__ = "payout_lines"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["world_id", "asset_id"], ["assets.world_id", "assets.id"], name="fk_payout_lines_asset"
+        ),
+        ForeignKeyConstraint(
+            ["world_id", "user_id"], ["users.world_id", "users.id"], name="fk_payout_lines_user"
+        ),
+        UniqueConstraint(
+            "world_id", "asset_id", "quarter_label", "user_id", name="uq_payout_lines_holder"
+        ),
+        Index("ix_payout_lines_world_id_user_id", "world_id", "user_id"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True, sa_type=BigInteger)
+    world_id: UUID
+    asset_id: UUID
+    quarter_label: str
+    user_id: UUID | None = None  # None once erased (tombstone)
+    shares: int | None = Field(default=None, sa_column=Column(BigInteger, nullable=True))
+    amount: Decimal | None = Field(default=None, max_digits=14, decimal_places=2)
+    nonce: bytes | None = Field(default=None, sa_column=Column(LargeBinary, nullable=True))
+    leaf_hash: str = Field(sa_column=Column(String(64), nullable=False))
 
 
 class LlmCall(SQLModel, table=True):

@@ -4,31 +4,47 @@ from __future__ import annotations
 
 import threading
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 
 import pytest
 from alembic import command
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.config import get_settings
-from app.ledger import entries_for, verify
+from app.ledger import append, canonical, entries_for, tamper, verify
 from app.market.revenue import (
     CAPTURE_RATE,
+    NONCE_BYTES,
+    PAYOUT_COMMITMENT_METHOD,
     CommunityStakeMissing,
     HolderShares,
     ImpactInput,
     PayoutAlreadyApplied,
     calculate_quarterly_payout,
+    erase_payout_lines_for_user,
     impact_for_holding,
     pay_quarter,
+    payout_line_leaf,
+    payout_lines_commitment,
     portfolio_impact,
     quarterly_revenue,
     split_revenue,
+    verify_payout_commitment,
 )
-from app.models import Asset, Holding, LedgerEntry, LedgerKind, User, UserRole, World
+from app.models import (
+    Asset,
+    Holding,
+    LedgerEntry,
+    LedgerKind,
+    PayoutLine,
+    User,
+    UserRole,
+    World,
+)
 from app.seed import COMMUNITY_PERSONA, DEMO_SITES, PERSONAS, WORLD_ID, seed
 from tests.conftest import alembic_cfg, requires_db
 
@@ -376,6 +392,7 @@ def test_pay_quarter_refuses_a_second_payout_for_the_same_asset_and_quarter(
         )
         == 1
     )
+    assert len(_lines(session)) == 3
 
 
 @requires_db
@@ -409,6 +426,312 @@ def test_pay_quarter_rejects_an_asset_outside_the_world(session: Session) -> Non
             value_mid=D("100000.00"),
             quarter_label="2026-Q4",
         )
+
+
+# --- Ledger privacy (T67): private payout lines and per-line commitments ------------------
+
+PUBLIC_PAYOUT_KEYS = {
+    "quarter_label",
+    "value_mid",
+    "capture_rate",
+    "revenue",
+    "community_fund",
+    "dividend_pool",
+    "dividends_total",
+    "unallocated_dividends",
+    "community_wallet_credit",
+    "holder_count",
+    "lines_commitment",
+    "commitment_method",
+}
+
+
+def _lines(session: Session) -> list[PayoutLine]:
+    return list(
+        session.exec(
+            select(PayoutLine).where(
+                PayoutLine.world_id == WORLD_ID, PayoutLine.asset_id == ASSET_ID
+            )
+        ).all()
+    )
+
+
+def _line(session: Session, user_id: uuid.UUID) -> PayoutLine:
+    return next(line for line in _lines(session) if line.user_id == user_id)
+
+
+def _pay(session: Session, quarter_label: str = "2026-Q4") -> LedgerEntry:
+    _add_holdings(session)
+    entry = pay_quarter(
+        session,
+        world_id=WORLD_ID,
+        asset_id=ASSET_ID,
+        value_mid=D("100000.00"),
+        quarter_label=quarter_label,
+    ).ledger_entry
+    session.flush()
+    return entry
+
+
+def test_leaf_binds_the_nonce_and_every_field_and_normalises_cents() -> None:
+    nonce, other_nonce = b"\x01" * NONCE_BYTES, b"\x02" * NONCE_BYTES
+    a, b = uuid.uuid4(), uuid.uuid4()
+    base = payout_line_leaf(nonce, a, 10, D("1.50"))
+
+    assert payout_line_leaf(nonce, a, 10, D("1.5")) == base
+    assert payout_line_leaf(other_nonce, a, 10, D("1.50")) != base
+    assert payout_line_leaf(nonce, b, 10, D("1.50")) != base
+    assert payout_line_leaf(nonce, a, 11, D("1.50")) != base
+    assert payout_line_leaf(nonce, a, 10, D("1.51")) != base
+    with pytest.raises(ValueError, match="nonce"):
+        payout_line_leaf(b"short", a, 10, D("1.50"))
+
+
+def test_commitment_ignores_leaf_order_but_binds_every_leaf() -> None:
+    leaves = ["a" * 64, "b" * 64, "c" * 64]
+    base = payout_lines_commitment(leaves)
+
+    assert payout_lines_commitment(reversed(leaves)) == base
+    assert payout_lines_commitment(leaves[:2]) != base
+    assert payout_lines_commitment([*leaves, "d" * 64]) != base
+
+
+@requires_db
+def test_payout_lines_equal_the_per_holder_allocation_and_sum_to_the_dividends(
+    session: Session,
+) -> None:
+    _add_holdings(session)
+    result = pay_quarter(
+        session,
+        world_id=WORLD_ID,
+        asset_id=ASSET_ID,
+        value_mid=D("100000.00"),
+        quarter_label="2026-Q4",
+    )
+    session.flush()
+
+    lines = _lines(session)
+    assert sorted((str(line.user_id), line.shares, line.amount) for line in lines) == sorted(
+        (p.key, p.shares, p.amount) for p in result.payout.holder_payouts
+    )
+    assert {line.user_id: line.amount for line in lines} == {
+        COMMUNITY_PERSONA.id: D("127.50"),
+        ARJUN_ID: D("75.00"),
+        MIA_ID: D("47.50"),
+    }
+    assert sum((line.amount or D("0") for line in lines), start=D("0.00")) == D("250.00")
+    assert {line.quarter_label for line in lines} == {"2026-Q4"}
+    for line in lines:
+        assert line.nonce is not None and len(line.nonce) == NONCE_BYTES
+        assert line.user_id is not None and line.shares is not None and line.amount is not None
+        assert line.leaf_hash == payout_line_leaf(
+            line.nonce, line.user_id, line.shares, line.amount
+        )
+    assert len({line.nonce for line in lines}) == 3, "a fresh nonce per line"
+
+
+@requires_db
+def test_payout_ledger_payload_holds_aggregates_and_the_commitment_only(
+    session: Session,
+) -> None:
+    entry = _pay(session)
+    text_payload = canonical(entry.payload).decode()
+
+    assert set(entry.payload) == PUBLIC_PAYOUT_KEYS
+    assert entry.ref_id is None
+    assert entry.payload["holder_count"] == 3
+    assert entry.payload["dividends_total"] == "250.00"
+    assert entry.payload["commitment_method"] == PAYOUT_COMMITMENT_METHOD
+    assert entry.payload["lines_commitment"] == payout_lines_commitment(
+        line.leaf_hash for line in _lines(session)
+    )
+    for user in session.exec(select(User).where(User.world_id == WORLD_ID)).all():
+        assert str(user.id) not in text_payload
+        assert user.name not in text_payload
+    for line in _lines(session):
+        assert line.leaf_hash not in text_payload, "only the root is public"
+        assert line.nonce is not None and line.nonce.hex() not in text_payload
+
+
+@requires_db
+def test_payout_commitment_verifies_against_the_private_lines(session: Session) -> None:
+    entry = _pay(session)
+
+    check = verify_payout_commitment(session, entry)
+
+    assert (check.status, check.erased, check.valid) == ("ok", 0, True)
+    assert verify(entries_for(session, ASSET_ID)).valid
+
+
+def _change_amount(session: Session) -> None:
+    line = _line(session, ARJUN_ID)
+    line.amount = D("75.01")
+
+
+def _change_shares(session: Session) -> None:
+    line = _line(session, ARJUN_ID)
+    line.shares = ARJUN_SHARES + 1
+
+
+def _reassign_holder(session: Session) -> None:
+    _line(session, ARJUN_ID).user_id = PERSONAS[3].id
+
+
+def _change_nonce(session: Session) -> None:
+    line = _line(session, ARJUN_ID)
+    assert line.nonce is not None
+    line.nonce = bytes([line.nonce[0] ^ 1]) + line.nonce[1:]
+
+
+def _change_tombstone_leaf(session: Session) -> None:
+    erase_payout_lines_for_user(session, world_id=WORLD_ID, user_id=ARJUN_ID)
+    session.flush()
+    tombstone = next(line for line in _lines(session) if line.user_id is None)
+    tombstone.leaf_hash = "0" * 64
+
+
+def _drop_line(session: Session) -> None:
+    session.delete(_line(session, MIA_ID))
+
+
+def _add_line(session: Session) -> None:
+    nonce = b"\x07" * NONCE_BYTES
+    session.add(
+        PayoutLine(
+            world_id=WORLD_ID,
+            asset_id=ASSET_ID,
+            quarter_label="2026-Q4",
+            user_id=PERSONAS[3].id,
+            shares=1,
+            amount=D("0.01"),
+            nonce=nonce,
+            leaf_hash=payout_line_leaf(nonce, PERSONAS[3].id, 1, D("0.01")),
+        )
+    )
+
+
+@requires_db
+@pytest.mark.parametrize(
+    "edit",
+    [
+        _change_amount,
+        _change_shares,
+        _reassign_holder,
+        _change_nonce,
+        _change_tombstone_leaf,
+        _drop_line,
+        _add_line,
+    ],
+    ids=lambda edit: edit.__name__.lstrip("_"),
+)
+def test_payout_commitment_fails_if_any_line_changes(
+    session: Session, edit: Callable[[Session], None]
+) -> None:
+    entry = _pay(session)
+
+    edit(session)
+    session.flush()
+
+    assert verify_payout_commitment(session, entry).status == "mismatch"
+
+
+@requires_db
+def test_verify_payout_commitment_rejects_other_kinds_and_flags_legacy_entries(
+    session: Session,
+) -> None:
+    listing = append(
+        session,
+        world_id=WORLD_ID,
+        asset_id=ASSET_ID,
+        kind=LedgerKind.LISTING,
+        payload={"area_ha": "500.00"},
+    )
+    legacy = append(
+        session,
+        world_id=WORLD_ID,
+        asset_id=ASSET_ID,
+        kind=LedgerKind.PAYOUT,
+        payload={"quarter_label": "2026-Q3", "dividends_total": "1.00", "holder_count": 1},
+    )
+
+    with pytest.raises(ValueError, match="not a payout"):
+        verify_payout_commitment(session, listing)
+    assert verify_payout_commitment(session, legacy).status == "no_commitment"
+
+
+@requires_db
+def test_erasing_one_holder_leaves_a_tombstone_and_keeps_the_others_verifiable(
+    session: Session,
+) -> None:
+    entry = _pay(session)
+    payload_before = dict(entry.payload)
+    leaf_before = _line(session, ARJUN_ID).leaf_hash
+
+    erased = erase_payout_lines_for_user(session, world_id=WORLD_ID, user_id=ARJUN_ID)
+    session.flush()
+    session.expire_all()
+
+    assert erased == 1
+    [tombstone] = [line for line in _lines(session) if line.user_id is None]
+    assert (tombstone.shares, tombstone.amount, tombstone.nonce) == (None, None, None)
+    assert tombstone.leaf_hash == leaf_before, "only the unlinkable leaf hash is kept"
+    assert {line.user_id for line in _lines(session)} == {COMMUNITY_PERSONA.id, MIA_ID, None}
+    check = verify_payout_commitment(session, entry)
+    assert (check.status, check.erased, check.valid) == ("ok_with_erasures", 1, True)
+    [stored] = entries_for(session, ASSET_ID)
+    assert stored.payload == payload_before, "the public aggregates are untouched"
+    assert verify([stored]).valid
+    assert session.get_one(User, ARJUN_ID).cash_balance == D("10075.00"), "only lines are erased"
+
+
+@requires_db
+def test_a_tombstone_holds_no_user_id_anywhere(session: Session) -> None:
+    _pay(session)
+    erase_payout_lines_for_user(session, world_id=WORLD_ID, user_id=ARJUN_ID)
+    session.flush()
+
+    row = session.execute(
+        text("SELECT to_jsonb(p)::text FROM payout_lines p WHERE user_id IS NULL")
+    ).scalar_one()
+
+    assert str(ARJUN_ID) not in row
+    assert "75.00" not in row and str(ARJUN_SHARES) not in row
+
+
+@requires_db
+def test_erasing_a_user_without_payout_lines_changes_nothing(session: Session) -> None:
+    entry = _pay(session)
+
+    assert erase_payout_lines_for_user(session, world_id=WORLD_ID, user_id=PERSONAS[3].id) == 0
+    assert erase_payout_lines_for_user(session, world_id=uuid.uuid4(), user_id=ARJUN_ID) == 0
+    assert len(_lines(session)) == 3
+    assert verify_payout_commitment(session, entry).status == "ok"
+
+
+@requires_db
+def test_a_second_payout_for_one_quarter_is_also_refused_by_the_database(
+    session: Session,
+) -> None:
+    entry = _pay(session)
+
+    with pytest.raises(IntegrityError, match="uq_ledger_payout_quarter"), session.begin_nested():
+        append(
+            session,
+            world_id=WORLD_ID,
+            asset_id=ASSET_ID,
+            kind=LedgerKind.PAYOUT,
+            payload={"quarter_label": entry.payload["quarter_label"], "holder_count": 0},
+        )
+
+
+@requires_db
+def test_tamper_demo_still_breaks_a_payout_entry(session: Session) -> None:
+    entry = _pay(session)
+
+    result = tamper(entries_for(session, ASSET_ID), entry.seq)
+
+    assert result.field == "capture_rate"
+    assert not verify(result.entries).valid
 
 
 @requires_db
@@ -520,6 +843,7 @@ def test_concurrent_pay_quarter_applies_once_for_one_asset_quarter() -> None:
             conn.execute(text("SET LOCAL naturex.allow_ledger_delete = 'on'"))
             params = {"world_id": world_id, "asset_id": asset_id}
             conn.execute(text("DELETE FROM ledger_entries WHERE asset_id = :asset_id"), params)
+            conn.execute(text("DELETE FROM payout_lines WHERE world_id = :world_id"), params)
             conn.execute(text("DELETE FROM holdings WHERE world_id = :world_id"), params)
             conn.execute(text("DELETE FROM assets WHERE id = :asset_id"), params)
             conn.execute(text("DELETE FROM users WHERE world_id = :world_id"), params)

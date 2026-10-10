@@ -421,7 +421,7 @@ def test_a_session_cannot_point_at_a_user_in_another_world(session: Session) -> 
 def test_accounts_migration_downgrades_and_upgrades() -> None:
     cfg = alembic_cfg()
     command.upgrade(cfg, "head")
-    command.downgrade(cfg, "-1")
+    command.downgrade(cfg, "0005")
     engine = create_engine(get_settings().database_url)
     with engine.connect() as connection:
         tables = connection.execute(text("SELECT to_regclass('sessions')")).scalar()

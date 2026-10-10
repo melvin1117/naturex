@@ -340,10 +340,10 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` · **Deps:** T68, T55, T17, T29 · **Files:** `backend/app/routers/*.py`, `backend/app/events.py`, `backend/tests/test_route_authz.py`
 
 ### T67 · Ledger privacy (#111) — D2 · S · Must · F1 K5
-- [ ] Public ledger payloads never contain user IDs, emails or names: payout entries record aggregates (revenue, community fund, dividends total, holder count) plus a hash commitment of the per-holder lines
-- [ ] Per-holder payout lines move to a private, erasable `payout_lines` table; a test scans every ledger payload kind for account identifiers
+- [x] Public ledger payloads never contain user IDs, emails or names: payout entries record aggregates (revenue, community fund, dividends total, holder count) plus a hash commitment of the per-holder lines
+- [x] Per-holder payout lines move to a private, erasable `payout_lines` table; a test scans every ledger payload kind for account identifiers
 
-**Verify:** `make test`; ledger verify still passes · **Deps:** T30, T41 · **Files:** `backend/app/market/revenue.py`, `backend/app/models.py`, `backend/migrations/versions/*_payout_lines.py`, `backend/tests/test_revenue.py`
+**Verify:** `make test`; ledger verify still passes · **Deps:** T30, T41 · **Files:** `backend/app/market/revenue.py`, `backend/app/ledger.py`, `backend/app/models.py`, `backend/app/sandbox.py`, `backend/migrations/versions/*_payout_lines.py`, `backend/tests/test_revenue.py`, `backend/tests/test_ledger_privacy.py`
 
 ### T58 · Listing lifecycle (#101) — D2 · M · Must · A3 A5 A6
 - [ ] Pure state machine: draft → rating → listed | needs_evidence | ineligible; needs_evidence → rating after evidence; listed ↔ suspended (admin). The listing gate applies at listing time only; invalid transitions are rejected

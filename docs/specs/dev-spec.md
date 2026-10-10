@@ -204,7 +204,7 @@ create table assets (
   community_id uuid,                                  -- ADR-0005: the community that manages the listing
   community_user_id uuid,                             -- the community's treasury (kind = 'treasury'): retained stake, seeded at IPO, + its dividends (T41)
   verification_revoked_at timestamptz,                -- ADR-0006: set on revoke; while set, demo_auto can't approve; cleared only by a human admin approval
-  -- ADR-0005 (T56): unique (world_id, id); foreign key (world_id, community_id) → communities (world_id, id);
+  -- unique (world_id, id) (added by T67 for payout_lines); ADR-0005 (T56): foreign key (world_id, community_id) → communities (world_id, id);
   --                 foreign key (world_id, community_user_id) → users (world_id, id)
   country text, description text, cover_image_url text,
   geojson jsonb not null,
@@ -265,10 +265,18 @@ create table listing_documents (       -- sensitive personal data; private stora
 );
 create table payout_lines (            -- private and erasable; the public ledger holds only a hash commitment (T67)
   id bigserial primary key, world_id uuid not null, asset_id uuid not null, quarter_label text not null,
-  user_id uuid not null, shares bigint not null, amount numeric(14,2) not null,
+  user_id uuid, shares bigint, amount numeric(14,2),   -- all null once erased (tombstone)
+  nonce bytea check (octet_length(nonce) = 32),        -- private, random per line; null once erased
+  leaf_hash char(64) not null,                         -- sha256(nonce || canonical(line)); kept on erasure
   foreign key (world_id, asset_id) references assets (world_id, id),
-  foreign key (world_id, user_id) references users (world_id, id)
+  foreign key (world_id, user_id) references users (world_id, id),
+  unique (world_id, asset_id, quarter_label, user_id),  -- one line per holder per payout
+  check (num_nulls(user_id, shares, amount, nonce) in (0, 4)),  -- erased all together
+  check (shares > 0), check (amount > 0)
 );
+create index on payout_lines (world_id, user_id);       -- erasure (K5)
+create unique index uq_ledger_payout_quarter on ledger_entries (asset_id, (payload ->> 'quarter_label'))
+  where kind = 'payout';                                -- one payout per asset quarter (T67)
 
 create table metrics (                -- raw earth-obs output per rating run
   id uuid primary key default gen_random_uuid(),
@@ -702,6 +710,32 @@ A tick is triggered by `POST /admin/simulate/quarter`, by a scheduled job, or by
   can report a no-holders case, but `pay_quarter` refuses to apply one to the DB. `pay_quarter`
   is a thin transaction-scoped helper for T38/T44 and is not wired to `routers/market.py` while
   T17 rewrites that router.
+- **As built (T67), ledger privacy (ADR-0005 §6):** `pay_quarter` writes one private
+  `payout_lines` row per paid holder (user, shares, amount, a random 32-byte `nonce` and
+  `leaf_hash = sha256(nonce ‖ canonical(line))`) and a public `payout` ledger entry with
+  aggregates only: `quarter_label`, `value_mid`, `capture_rate`, `revenue`, `community_fund`,
+  `dividend_pool`, `dividends_total`, `unallocated_dividends`, `community_wallet_credit`,
+  `holder_count`, plus `lines_commitment = sha256(canonical({"leaves": sorted(leaf hashes)}))`
+  and `commitment_method`. Nonces and leaves never reach the ledger, so nobody can confirm a
+  guessed holder line from public data.
+  - `verify_payout_commitment(session, entry)` audits the private lines against the public
+    entry: live lines are rehashed from their contents and nonce, erased lines contribute their
+    tombstone leaf. It returns `ok`, `ok_with_erasures` (with the count), `mismatch` (a line,
+    nonce or leaf was added, removed or changed) or `no_commitment`.
+  - `erase_payout_lines_for_user(session, world_id=, user_id=)` (for K5 delete-account) clears
+    the user's user ID, shares, amount and nonce and keeps the leaf hash as a tombstone. Without
+    its nonce the leaf can't be linked to the erased line; every other holder's line still
+    verifies, and the ledger and its aggregates are untouched.
+  - Idempotency per asset quarter: the ledger check under the asset lock, plus the
+    `uq_ledger_payout_quarter` partial unique index on `ledger_entries`.
+  - **Legacy entries:** payout entries written before T67 list per-holder payouts (user IDs)
+    in their immutable payload and verify as `no_commitment`. Only sandbox personas existed
+    then, never real accounts, so they stay.
+  - Sandboxes: reset and prune delete a world's payout lines. Payouts are visitor activity and
+    aren't copied, and a source world that holds payout lines can't be copied at all
+    (`RuntimeError`): leaves cover user IDs, which the copy remaps, so copied lines could never
+    verify. **T38 (Time Machine) and T44 (impact UI), which call `pay_quarter`, must only pay
+    out in visitor or live worlds, never in the template.**
 
 Invariants (unit-tested): cash is never negative; shares are conserved; the price stays > 0; every price change has a `reason`.
 
@@ -825,6 +859,22 @@ def verify(entries) -> dict:
   - `canonical` rejects NaN.
   - `append` locks the asset row (`SELECT … FOR UPDATE`) so concurrent appends can't race for a `seq`, and it stores the payload exactly as hashed.
   - `verify` also checks that `seq` runs 0, 1, 2… with no gaps, and returns `head: null` when the chain is broken.
+- **As built (T67), privacy:** payloads and `ref_id`s never hold account identifiers, emails or
+  person names (ADR-0005 §6). Payouts record aggregates plus a commitment over per-line nonced
+  hashes of the private `payout_lines` (§8). As defence in depth, `append` raises
+  `LedgerPrivacyError` for:
+  - a deny-listed key at any depth (`user_id`, `holder_id`, `holder_payouts`, `email`,
+    `password`, `display_name`… and any `*_user_id` or `*_email`); a listing's `name` is the
+    public site name and is allowed;
+  - an email address in a string. In an http(s) URL, any userinfo is rejected and only the
+    decoded query and fragment are searched, so paths like `cover@2x.png` pass;
+  - a `ref_id` that is a user's ID (one primary-key lookup), since `ref_id` is public too.
+
+  The guard can't tell a user UUID inside a payload from an asset UUID, so
+  `tests/test_ledger_privacy.py` finds every `ledger.append` call in `app/` (AST), runs the
+  real producer for each kind that has one, falls back to a §17-shaped payload only for kinds
+  with no producer yet, and scans every payload and `ref_id` against every account's ID, email
+  and name.
 - **Tamper demo:** `POST /admin/tamper-demo {asset_id, seq?}` (DEMO_MODE only; 404 otherwise).
   - It copies the chain and multiplies the first numeric payload field of one entry (default: the latest) by 10. If the payload has no number, it adds `"tampered": true`.
   - It returns the field, the before and after values, and the failing verification. Nothing is written; the DB trigger would reject an UPDATE anyway.
