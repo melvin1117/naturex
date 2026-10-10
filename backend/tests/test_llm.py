@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from dataclasses import replace
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
@@ -111,6 +112,9 @@ class MemoryCallLog:
 
     def settle(self, handle: int, call: CallRecord) -> None:
         self.rows[handle] = call
+
+    def mark(self, handle: int, status: str) -> None:
+        self.rows[handle] = replace(self.rows[handle], status=status)
 
 
 def client(
@@ -553,3 +557,32 @@ def test_concurrent_reservations_never_overshoot_the_budget(
 
     assert granted == 5
     assert log.spent_usd() <= budget
+
+
+def test_mark_relabels_the_call_that_produced_a_result() -> None:
+    log = MemoryCallLog()
+    llm = client(FakeTransport(reply("nope"), reply(GOOD)), log)
+
+    result = llm.structured(agent="news_scout", tier=Tier.FAST, messages=MESSAGES, schema=Event)
+    llm.mark(result, "rejected")
+
+    assert result.call_id == 1
+    assert [r.status for r in log.records] == ["invalid_output", "rejected"]
+    assert log.records[1].cost_usd == cost_usd(NANO, 100, 20)
+
+
+@requires_db
+def test_db_call_log_mark_changes_only_the_status(db_log: tuple[DbCallLog, str]) -> None:
+    log, agent = db_log
+    llm = LLMClient(settings(), FakeTransport(reply(GOOD)), log)
+
+    result = llm.structured(agent=agent, tier=Tier.FAST, messages=MESSAGES, schema=Event)
+    llm.mark(result, "rejected")
+
+    engine = create_engine(get_settings().database_url)
+    with Session(engine) as session:
+        row = session.get(LlmCall, result.call_id)
+        assert row is not None
+        assert (row.agent, row.status, row.prompt_tokens) == (agent, "rejected", 100)
+        assert row.cost_usd == cost_usd(NANO, 100, 20).quantize(Decimal("0.000001"))
+    engine.dispose()

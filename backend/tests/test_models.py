@@ -30,6 +30,7 @@ EXPECTED_TABLES = {
     "doc_chunks",
     "ledger_entries",
     "llm_calls",
+    "sessions",
 }
 
 

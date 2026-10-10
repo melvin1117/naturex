@@ -209,9 +209,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** Friday review · **Deps:** P03, P04 · **Files:** design file
 
 ### T54 · Accounts and sessions (#97) — D1 · M · Must · K1 K2
-- [ ] `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /me`; argon2id via `pwdlib`, with a dummy-hash verify for unknown emails; `users.kind` (person | persona | treasury) and a partial unique index on lower(email) per world
-- [ ] Server-side `sessions` (with `world_id`): a 256-bit token whose SHA-256 hash is stored; `nx_session` cookie `HttpOnly`, `Secure` (outside dev/test), `SameSite=Lax`; 7 d idle / 30 d absolute; new ID on login; logout deletes the row and clears the cookie
-- [ ] The live world is created and the 3 curated sites are copied into it from the template (T56 attaches their communities and treasuries); live admins are created only with a CLI command that reads the password via `getpass` (never via the API, never by matching an email); no password or token in logs
+- [x] `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /me`; argon2id via `pwdlib`, with a dummy-hash verify for unknown emails; `users.kind` (person | persona | treasury) and a partial unique index on lower(email) per world
+- [x] Server-side `sessions` (with `world_id`): a 256-bit token whose SHA-256 hash is stored; `nx_session` cookie `HttpOnly`, `Secure` (outside dev/test), `SameSite=Lax`; 7 d idle / 30 d absolute; new ID on login; logout deletes the row and clears the cookie
+- [x] The live world is created and the 3 curated sites are copied into it from the template (T56 attaches their communities and treasuries); live admins are created only with a CLI command that reads the password via `getpass` (never via the API, never by matching an email); no password or token in logs
 
 **Verify:** `make test`, including wrong password, unknown email, expired and revoked sessions, and logout; manual register → login → `/me` → logout with `curl` · **Deps:** T31 · **Files:** `backend/app/auth.py`, `backend/app/routers/auth.py`, `backend/app/cli.py`, `backend/app/models.py`, `backend/migrations/versions/*_accounts.py`, `backend/tests/test_auth.py`
 
@@ -227,9 +227,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ## Week 3 · Live agents, ledger and trace (Mon Oct 12 – Fri Oct 16)
 
 ### T26 · Auditor (Nemotron 3 Ultra) (#38) — D3 · M · Must · B5
-- [ ] Input bundle (metrics, valuation, base scores, events, evidence, previous report) → schema-validated output; adjustment limited to ±10 with a reason; every claim cites a metric or event ID
-- [ ] Thinking handled per T02 (off for JSON, or reason-then-format); fallback tier on failure
-- [ ] Contract tests: numbers unchanged, citations resolve
+- [x] Input bundle (metrics, valuation, base scores, events, evidence, previous report) → schema-validated output; adjustment limited to ±10 with a reason; every claim cites a metric or event ID
+- [x] Thinking handled per T02 (off for JSON, or reason-then-format); fallback tier on failure
+- [x] Contract tests: numbers unchanged, citations resolve
 
 **Verify:** `make test` · **Deps:** T09, T15, T24 · **Files:** `backend/app/agents/auditor.py`, `backend/app/agents/prompts/auditor.md`, `backend/tests/test_auditor.py`
 

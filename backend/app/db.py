@@ -11,6 +11,8 @@ engine = create_engine(
     _settings.database_url,
     echo=False,
     pool_pre_ping=True,
+    # Errors and logs never include bound parameters (password hashes, emails).
+    hide_parameters=True,
 )
 
 

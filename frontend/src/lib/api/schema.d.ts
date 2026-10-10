@@ -4,6 +4,89 @@
  */
 
 export interface paths {
+    "/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register
+         * @description Create a password account in the live world and sign in.
+         *
+         *     A taken email returns a generic 409; without email verification that reveals the email
+         *     exists, a risk ADR-0005 accepts. No permission depends on the email.
+         */
+        post: operations["register_auth_register_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login
+         * @description Sign in with email and password. Every failure is the same generic 401.
+         */
+        post: operations["login_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout
+         * @description End this session now: the row is deleted and the cookie cleared. Always succeeds.
+         */
+        post: operations["logout_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Me
+         * @description The signed-in account.
+         */
+        get: operations["me_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assets": {
         parameters: {
             query?: never;
@@ -730,6 +813,39 @@ export interface components {
              */
             broken_at: number | null;
         };
+        /** LoginIn */
+        LoginIn: {
+            /** Email */
+            email: string;
+            /**
+             * Password
+             * Format: password
+             */
+            password: string;
+        };
+        /**
+         * MeOut
+         * @description The signed-in account. Never includes the password hash.
+         */
+        MeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Email */
+            email: string | null;
+            kind: components["schemas"]["UserKind"];
+            /** Is Admin */
+            is_admin: boolean;
+            /**
+             * World Id
+             * Format: uuid
+             */
+            world_id: string;
+        };
         /** OrderCreate */
         OrderCreate: {
             /**
@@ -808,6 +924,18 @@ export interface components {
             price: string;
             /** Reason */
             reason?: string | null;
+        };
+        /** RegisterIn */
+        RegisterIn: {
+            /** Email */
+            email: string;
+            /**
+             * Password
+             * Format: password
+             */
+            password: string;
+            /** Name */
+            name: string;
         };
         /** ReportDiff */
         ReportDiff: {
@@ -1004,6 +1132,12 @@ export interface components {
             created_at: string;
         };
         /**
+         * UserKind
+         * @description ADR-0005 §3: only a `person` signs in with a password; treasuries never sign in or trade.
+         * @enum {string}
+         */
+        UserKind: "person" | "persona" | "treasury";
+        /**
          * UserRole
          * @enum {string}
          */
@@ -1062,6 +1196,131 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    register_auth_register_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeOut"];
+                };
+            };
+            /** @description This email can't be used to create an account */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    login_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeOut"];
+                };
+            };
+            /** @description Email or password is incorrect */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    me_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_assets_assets_get: {
         parameters: {
             query?: never;

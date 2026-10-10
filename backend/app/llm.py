@@ -119,6 +119,11 @@ class CallLog(Protocol):
         """Replace the reservation with what the attempt actually cost."""
         ...
 
+    def mark(self, handle: int, status: str) -> None:
+        """Change a settled call's status, e.g. `rejected` when the caller's own checks
+        refuse a schema-valid answer. Cost and tokens stay as settled."""
+        ...
+
 
 class DbCallLog:
     """`llm_calls` in Postgres, in its own short transactions, so spend is recorded even if
@@ -158,6 +163,15 @@ class DbCallLog:
             session.add(row)
             session.commit()
 
+    def mark(self, handle: int, status: str) -> None:
+        with self._session_factory() as session:
+            row = session.get(LlmCall, handle)
+            if row is None:
+                raise LLMError(f"llm_calls row {handle} vanished before marking")
+            row.status = status
+            session.add(row)
+            session.commit()
+
 
 def _row(call: CallRecord) -> LlmCall:
     return LlmCall(
@@ -191,6 +205,8 @@ class LLMResult[T]:
     attempts: int
     reasoning: str | None
     """Nemotron's reasoning text when reasoning was on (returned in `message.reasoning`)."""
+    call_id: int | None = None
+    """Call-log handle of the answering attempt (the `llm_calls` row ID), for `LLMClient.mark`."""
 
 
 def _describe(exc: Exception) -> str:
@@ -372,6 +388,13 @@ class LLMClient:
             tool_choice=tool_choice,
         )
 
+    def mark(self, result: LLMResult[Any], status: str) -> None:
+        """Re-label the logged call that produced `result` (e.g. `rejected` by the caller's
+        semantic checks), so the spend log shows which answers were actually used."""
+        if result.call_id is None:
+            raise LLMError("this result has no call-log handle")
+        self._log.mark(result.call_id, status)
+
     def _attempts(self, tier: Tier) -> list[Tier]:
         chain = FALLBACK[tier]
         return [chain[0], *chain]
@@ -453,6 +476,7 @@ class LLMClient:
                 degraded=attempt_tier != tier,
                 attempts=attempt,
                 reasoning=_reasoning(message),
+                call_id=handle,
             )
         raise LLMError(f"{agent}: no usable answer after {len(failures)} attempts: {failures}")
 
