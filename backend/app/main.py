@@ -9,7 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
 from app.config import Settings, get_settings, secure_cookies
-from app.routers import admin, assets, auth, copilot, events, ledger, market, reports, world
+from app.routers import admin, assets, auth, copilot, events, ledger, market, media, reports, world
 
 settings = get_settings()
 
@@ -41,6 +41,7 @@ app.include_router(events.router)
 app.include_router(admin.router)
 app.include_router(ledger.router)
 app.include_router(world.router)
+app.include_router(media.router)
 
 
 @app.exception_handler(RequestValidationError)

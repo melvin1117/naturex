@@ -1036,6 +1036,146 @@
         }
       }
     },
+    "/media/demo-sites/{site_key}/overlay.png": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Overlay",
+        "description": "Dynamic World land cover clipped to the polygon (transparent outside it).",
+        "operationId": "get_overlay_media_demo_sites__site_key__overlay_png_get",
+        "parameters": [
+          {
+            "name": "site_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Site Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Land-cover overlay PNG",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown demo site"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/media/demo-sites/{site_key}/thumbnail.webp": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Thumbnail",
+        "description": "Sentinel-2 true-colour thumbnail with the polygon outline.",
+        "operationId": "get_thumbnail_media_demo_sites__site_key__thumbnail_webp_get",
+        "parameters": [
+          {
+            "name": "site_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Site Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Marketplace thumbnail WebP",
+            "content": {
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown demo site"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/media/demo-sites/{site_key}/images.json": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Site Images",
+        "description": "Overlay bounds, palette and legend, thumbnail metadata, date windows and attributions.",
+        "operationId": "get_site_images_media_demo_sites__site_key__images_json_get",
+        "parameters": [
+          {
+            "name": "site_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Site Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteImages"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown demo site"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/healthz": {
       "get": {
         "summary": "Healthz",
@@ -1668,6 +1808,24 @@
         ],
         "title": "CopilotResponse"
       },
+      "DateWindow": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "DateWindow"
+      },
       "EventOut": {
         "properties": {
           "id": {
@@ -2000,6 +2158,48 @@
         ],
         "title": "LedgerVerifyOut"
       },
+      "LegendEntry": {
+        "properties": {
+          "value": {
+            "type": "integer",
+            "maximum": 8.0,
+            "minimum": 0.0,
+            "title": "Value"
+          },
+          "key": {
+            "type": "string",
+            "enum": [
+              "water",
+              "trees",
+              "grass",
+              "flooded_vegetation",
+              "crops",
+              "shrub_and_scrub",
+              "built",
+              "bare",
+              "snow_and_ice"
+            ],
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$",
+            "title": "Color"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "key",
+          "label",
+          "color"
+        ],
+        "title": "LegendEntry"
+      },
       "LoginIn": {
         "properties": {
           "email": {
@@ -2149,6 +2349,123 @@
           "created_at"
         ],
         "title": "OrderOut"
+      },
+      "OverlayImage": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "title": "File"
+          },
+          "media_type": {
+            "type": "string",
+            "const": "image/png",
+            "title": "Media Type",
+            "default": "image/png"
+          },
+          "width": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Height"
+          },
+          "bounds": {
+            "prefixItems": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              }
+            ],
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Bounds"
+          },
+          "crs": {
+            "type": "string",
+            "const": "EPSG:3857",
+            "title": "Crs",
+            "default": "EPSG:3857"
+          },
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id"
+          },
+          "band": {
+            "type": "string",
+            "title": "Band"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "date_window": {
+            "$ref": "#/components/schemas/DateWindow"
+          },
+          "palette": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Palette"
+          },
+          "legend": {
+            "items": {
+              "$ref": "#/components/schemas/LegendEntry"
+            },
+            "type": "array",
+            "title": "Legend"
+          },
+          "attributions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Attributions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file",
+          "width",
+          "height",
+          "bounds",
+          "dataset_id",
+          "band",
+          "method",
+          "date_window",
+          "palette",
+          "legend",
+          "attributions"
+        ],
+        "title": "OverlayImage",
+        "description": "Leaflet ``ImageOverlay`` input: the PNG spans ``bounds`` in Web Mercator."
       },
       "PersonaOut": {
         "properties": {
@@ -2601,6 +2918,44 @@
         ],
         "title": "SimulateQuarterResponse"
       },
+      "SiteImages": {
+        "properties": {
+          "site_key": {
+            "type": "string",
+            "title": "Site Key"
+          },
+          "data_version": {
+            "type": "string",
+            "title": "Data Version"
+          },
+          "scenario": {
+            "type": "string",
+            "const": "baseline",
+            "title": "Scenario",
+            "default": "baseline"
+          },
+          "scenario_note": {
+            "type": "string",
+            "title": "Scenario Note"
+          },
+          "overlay": {
+            "$ref": "#/components/schemas/OverlayImage"
+          },
+          "thumbnail": {
+            "$ref": "#/components/schemas/ThumbnailImage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "site_key",
+          "data_version",
+          "scenario_note",
+          "overlay",
+          "thumbnail"
+        ],
+        "title": "SiteImages",
+        "description": "Sidecar metadata for one demo site's overlay and thumbnail (``<site>.images.json``)."
+      },
       "StreamEvent": {
         "properties": {
           "id": {
@@ -2703,6 +3058,113 @@
           "verify"
         ],
         "title": "TamperDemoOut"
+      },
+      "ThumbnailImage": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "title": "File"
+          },
+          "media_type": {
+            "type": "string",
+            "const": "image/webp",
+            "title": "Media Type",
+            "default": "image/webp"
+          },
+          "width": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Height"
+          },
+          "bounds": {
+            "prefixItems": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              }
+            ],
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Bounds"
+          },
+          "crs": {
+            "type": "string",
+            "const": "EPSG:3857",
+            "title": "Crs",
+            "default": "EPSG:3857"
+          },
+          "dataset_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dataset Ids"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "date_window": {
+            "$ref": "#/components/schemas/DateWindow"
+          },
+          "visualization": {
+            "$ref": "#/components/schemas/VisParams"
+          },
+          "outline_color": {
+            "type": "string",
+            "title": "Outline Color"
+          },
+          "attributions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Attributions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file",
+          "width",
+          "height",
+          "bounds",
+          "dataset_ids",
+          "method",
+          "date_window",
+          "visualization",
+          "outline_color",
+          "attributions"
+        ],
+        "title": "ThumbnailImage"
       },
       "TraceOut": {
         "properties": {
@@ -2829,6 +3291,47 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VisParams": {
+        "properties": {
+          "bands": {
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 3,
+            "title": "Bands"
+          },
+          "min": {
+            "type": "number",
+            "title": "Min"
+          },
+          "max": {
+            "type": "number",
+            "title": "Max"
+          },
+          "gamma": {
+            "type": "number",
+            "title": "Gamma"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bands",
+          "min",
+          "max",
+          "gamma"
+        ],
+        "title": "VisParams"
       },
       "WorldAssetOut": {
         "properties": {

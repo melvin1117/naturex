@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { DemoSiteImages } from "@/components/demo-site-images";
 import { DataLayerPanel } from "@/components/data-layer-panel";
 import { SandboxBanner } from "@/components/sandbox-banner";
 import { Badge } from "@/components/ui/badge";
@@ -96,6 +97,17 @@ export default function DevUiPage() {
       <div className="space-y-3">
         <h2 className="text-xl font-semibold">Sandbox banner</h2>
         <SandboxBanner />
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <h2 className="text-xl font-semibold">Demo-site images</h2>
+        <p className="text-sm text-muted-foreground">
+          Precomputed land-cover overlay and marketplace thumbnail (T35), served
+          by the backend at <code>/media/demo-sites/…</code>.
+        </p>
+        <DemoSiteImages />
       </div>
 
       <Separator />

@@ -22,7 +22,7 @@ Constraints from [AGENTS.md](../../AGENTS.md): Python 3.12 + FastAPI + SQLModel;
 | Frontend language | TypeScript **5.x** (strict) | Pin when T05 scaffolds; avoid TS 6 until typescript-eslint support is confirmed in CI |
 | Lint/format (FE) | ESLint 9 + Prettier | Biome skipped for Next.js compatibility |
 | CSS / UI | Tailwind **v4** + **shadcn/ui only** | Tokens via `@theme`; `/dev/ui` showcase |
-| Maps | react-leaflet + leaflet-draw | Esri/OSM basemap |
+| Maps | **Leaflet** (BSD-2-Clause) used directly from client components; drawing via a BSD/MIT plugin (e.g. leaflet-draw, MIT) | Esri/OSM basemap. *Updated in T35:* react-leaflet was dropped because its licence is Hippocratic-2.1, which isn't OSI open source; wrap Leaflet in small client components instead |
 | Charts | Recharts | |
 | DB | Postgres **16** + **pgvector** | Local: `pgvector/pgvector:pg16`; hosted: per dev-spec §21 |
 | LLM client | OpenAI-compatible SDK via Token Factory `base_url` | Wrapper in `backend/app/llm.py` (T09) |

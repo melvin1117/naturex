@@ -32,7 +32,7 @@ Design principles:
 | Layer | Choice | Notes |
 |---|---|---|
 | Frontend | Next.js **15.5** (App Router), TypeScript strict, Tailwind v4, shadcn/ui | Pin per [ADR-0001](../adr/0001-stack-and-versions.md); not Next 16 for the hackathon |
-| Maps | react-leaflet + leaflet-draw (or MapLibre + terra-draw) | Esri/OSM basemap; land-cover tile overlay |
+| Maps | Leaflet (BSD-2) in client components + leaflet-draw (MIT) (or MapLibre + terra-draw) | Esri/OSM basemap; land-cover image overlay. Not react-leaflet (Hippocratic-2.1 licence; see ADR-0001) |
 | Charts | Recharts | Price chart with event markers |
 | Backend | Python 3.12, FastAPI, SQLModel, Pydantic v2 | |
 | DB | Postgres 16 + pgvector; local Docker for development | Hosted DB per §21 (Supabase free tier or Azure Database for PostgreSQL) |
@@ -485,6 +485,8 @@ Demo sites: run offline once and store to `data/demo_sites/*.json` (method, site
 - Every simulated version carries `simulated: true`, `scenario`, `based_on`, `period`, `observed_data_version`, its `scenario_deltas` and a `provenance_note`, and keeps the observed provenance (`date_windows` describe the observed data, never the simulated quarter). Mangrove share shrinks with cleared trees + flooded vegetation. Load one with `load_site_metrics(site_key, scenario)`, which checks the file's labels.
 - `scripts/precompute_sites.py --check` reproduces all of it; `--scenarios-only` skips Earth Engine.
 
+**As built (T35): map images.** `scripts/precompute_sites.py --images` renders, per demo site, a Dynamic World land-cover overlay (indexed PNG, official palette, transparent outside the polygon, 1024 px long side, exact polygon bounds in EPSG:3857) and a 640×400 Sentinel-2 true-colour thumbnail (Cloud Score+ masked 12-month median, polygon outline, WebP) into `data/demo_sites/images/`, with a sidecar `<site>.images.json` (bounds `[[south, west], [north, east]]`, palette, legend, date window, attributions). Images are **baseline only**: scenarios have no per-pixel map. `--images --check` verifies them offline (byte-identical output isn't guaranteed). Method and sizes in [ADR-0004](../adr/0004-earth-observation.md).
+
 ### 7.3 Valuation engine (deterministic)
 ```
 value_c   = area_ha × share_c × coeff_c × context_multiplier      (context_multiplier = 1 for now)
@@ -780,6 +782,8 @@ Both reuse the backend code with a different entrypoint:
 | Exchange · Portfolio `/portfolio` | Holdings table, P&L, ImpactSummary | |
 | Admin `/admin` | Time Machine: "Next quarter", event presets, reset demo, suspend/resume | Admins only (own world) |
 | Tour (all pages, optional) | DemoBar persona switcher, Driver.js tour with spotlight hints, "Do it for me", Live badges, Under-the-hood drawer | See demo-plan §3; each screen exposes stable anchors for tour steps |
+
+**As built (T35):** the backend serves the precomputed images publicly at `GET /media/demo-sites/{site_key}/overlay.png`, `/thumbnail.webp` and `/images.json` (allowlisted site keys, 404 otherwise, `nosniff`, one-day cache); the browser loads them via `/api/media/…`. For the asset page's "Map + land-cover overlay", put `overlay.png` in a Leaflet `ImageOverlay` at the sidecar's `overlay.bounds` over the OSM basemap, with the legend and attributions from the sidecar; for AssetCard, use `thumbnail.webp` with its caption attributions. A dev-only preview of both is on `/dev/ui` (`DemoSiteImages`, `LandCoverMap`, `LandCoverLegend`, `SiteThumbnail`). `LandCoverMap` uses **plain Leaflet** (BSD-2-Clause), not react-leaflet, whose licence is Hippocratic-2.1 (not OSI open source); ADR-0001 is updated accordingly, and T23/T33 should use the same approach.
 
 ## 12. Configuration
 ```

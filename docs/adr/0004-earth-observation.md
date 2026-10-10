@@ -195,6 +195,41 @@ PATH=$HOME/.local/bin:$PATH uv run python ../scripts/precompute_sites.py --scena
 ```
 `tests/test_scenarios.py` and `tests/test_precompute_sites.py` regenerate the scenarios offline in CI and compare them byte for byte with the committed files.
 
+## As built (T35, 2026-10-07): land-cover overlays and thumbnails
+
+Each demo site has two precomputed images and a sidecar in `backend/data/demo_sites/images/` (a subfolder, like `scenarios/`, so nothing that lists `demo_sites/*.json` picks them up):
+
+| File | What | Format, size |
+|---|---|---|
+| `<site>.overlay.png` | Dynamic World land cover clipped to the polygon, for a Leaflet `ImageOverlay` | Indexed PNG: the 9 official classes + 1 transparent entry; 1024 px on the long side; 5.5–9 KB |
+| `<site>.thumbnail.webp` | Sentinel-2 true-colour marketplace thumbnail with the polygon outline | 640×400 lossy WebP (quality 82); 14–39 KB |
+| `<site>.images.json` | Sidecar (`SiteImages` in `app/tools/site_images.py`) | Bounds, CRS, palette, legend, date window, method, visualisation, attributions |
+
+| Site | Overlay | Thumbnail |
+|---|---|---|
+| `wetland_mx` | 1024×946, 8,984 B | 640×400, 38,580 B |
+| `mangrove_mx` | 894×1024, 8,916 B | 640×400, 14,504 B |
+| `restoration_forest` | 1024×452, 5,542 B | 640×400, 27,884 B |
+
+- **Overlay method:** the same per-pixel mode of `GOOGLE/DYNAMICWORLD/V1` `label` as the land-cover metric (2025-10-01 to 2026-10-01), `clip`ped to the polygon and `unmask(255)`ed so outside is a distinct value, fetched with `ee.data.computePixels` on an explicit **EPSG:3857 grid that spans exactly the polygon's bounding box** (nearest-neighbour at 1.8–3.4 Web Mercator metres per pixel, so each 10 m pixel stays a crisp block). Leaflet stretches an `ImageOverlay` linearly between its corner points in Web Mercator, so a Mercator grid lines up exactly; the sidecar's `bounds` (`[[south, west], [north, east]]`) are the GeoJSON's bounds.
+  - Palette and class order are the official Dynamic World ones (`#419bdf` water, `#397d49` trees, `#88b053` grass, `#7a87c6` flooded vegetation, `#e49635` crops, `#dfc35a` shrub and scrub, `#c4281b` built, `#a59b8f` bare, `#b39fe1` snow and ice).
+  - **Encoding:** a small stdlib encoder (`encode_indexed_png`) writes the PNG with no timestamps, so the same pixels give the same bytes. PNG, not WebP, because the overlay is categorical: lossless, a 10-entry palette with a transparent index, and it compresses to under 10 KB.
+  - **Consistency:** the overlay's class shares match the committed `landcover` fractions within 0.3 pp (wetland: water 24.72% vs 24.84%, trees 35.64% vs 35.74%); the check allows 1.5 pp. Its opaque share matches the polygon's share of the bounding box within 2 pp.
+- **Thumbnail method:** median of `COPERNICUS/S2_SR_HARMONIZED` B4/B3/B2 over the same 12 months, each scene masked where Cloud Score+ `cs_cdf` < 0.60 (as for NDVI), `visualize(min=0, max=2500, gamma=1.1)`, fetched on a 640×400 EPSG:3857 grid centred on the polygon with a 25% margin (square pixels, 5.3–8.6 Web Mercator metres). The outline is drawn locally with Pillow (white, 2 px, anti-aliased by 4× supersampling) from the GeoJSON, so it's exact. **WebP, not PNG,** because a 640×400 photo is 180–290 KB as PNG and 14–39 KB as WebP at quality 82, which every current browser decodes.
+- **Attribution** isn't burned into the pixels: the sidecar carries it (overlay: Dynamic World and "Contains modified Copernicus Sentinel data 2025-2026"; thumbnail: Copernicus Sentinel and Cloud Score+), and the UI shows it in captions. The basemap credit (© OpenStreetMap contributors) is Leaflet's attribution control.
+- **Scenarios: baseline only.** Time Machine versions change land-cover *fractions* by scripted deltas; there's no per-pixel map, so drawing one would invent pixels. The sidecar says so (`scenario: "baseline"`, `scenario_note`) and the UI must label the overlay as observed.
+- **Serving:** `GET /media/demo-sites/{site_key}/overlay.png | thumbnail.webp | images.json` (`app/routers/media.py`), public (no world needed: public demo data), read-only. The key must match `^[a-z0-9_]{1,64}$` **and** be a committed demo site (a `*.geojson` stem) before any path is built; the resolved path must stay under `images/`. Everything else is 404. Responses carry the exact content type, `Cache-Control: public, max-age=86400` (not `immutable`: URLs aren't content-hashed) and `X-Content-Type-Options: nosniff`. The browser fetches them through the frontend's `/api` proxy. Serving from the backend keeps one copy of each file in git (no copy step into `frontend/public/`) and works the same wherever the backend is hosted (T20).
+
+Re-run and check:
+
+```bash
+cd backend
+PATH=$HOME/.local/bin:$PATH uv run --with earthengine-api --with pillow python ../scripts/precompute_sites.py --images  # ~2 min
+PATH=$HOME/.local/bin:$PATH uv run python ../scripts/precompute_sites.py --images --check                             # offline, no EE
+```
+
+`--images` renders only the images (not the metrics). Byte-identical output isn't guaranteed: Earth Engine collections can gain or reprocess scenes. So `--images --check` (and `tests/test_site_images.py`, `tests/test_precompute_sites.py`) verify the committed files offline instead: they exist and decode; dimensions; the 300 KB budget; overlay bounds equal the GeoJSON bounds and the thumbnail grid contains the polygon; the official palette and legend; attributions; class shares against the metrics; transparency outside the polygon; and that the sidecar equals what the script would write.
+
 ## Licence and terms
 - **Earth Engine use appears noncommercial**, subject to the unverified prize-money point below: an individual using it for noncommercial purposes, an open-source project, play money only, no fees, no monetisation. That appears consistent with the "Individual using Earth Engine for noncommercial purposes" category (https://earthengine.google.com/noncommercial/). This is the team's reading, not legal clearance.
 - **What counts as commercial:** the commercial examples are "monetization of services built on top of Earth Engine" and material made "to influence current and prospective customers' or investors' decisions". NatureX does neither: the exchange is a sandbox and nothing is a real security.

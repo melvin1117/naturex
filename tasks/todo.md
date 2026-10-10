@@ -277,7 +277,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make fe-check`; matches P06 · **Deps:** T28, T30, T32 · **Files:** `frontend/src/components/AgentTrace.tsx`, `LedgerTab.tsx`
 
 ### T35 · Map overlays and thumbnails (#47) — D2 · S · Must
-- [ ] Land-cover overlay and marketplace thumbnail images per demo site (precomputed)
+- [x] Land-cover overlay and marketplace thumbnail images per demo site (precomputed)
+  - As built: `scripts/precompute_sites.py --images` → `backend/data/demo_sites/images/<site>.overlay.png` (Dynamic World, transparent outside the polygon), `<site>.thumbnail.webp` (640×400 Sentinel-2) and `<site>.images.json` (bounds, legend, attributions); baseline only (scenarios have no per-pixel map). Served at `GET /media/demo-sites/{site_key}/…`; previewed on `/dev/ui`. Details in ADR-0004 (T35).
+  - **Decided (ADR-0001 updated):** react-leaflet's licence is Hippocratic-2.1 (not OSI open source), so maps use plain Leaflet (BSD-2-Clause) in client components, as `LandCoverMap` does; T23 (asset page map) and T33 (MapDraw) follow the same approach.
 
 **Verify:** images render in the UI · **Deps:** T13 · **Files:** `scripts/precompute_sites.py`, `backend/data/demo_sites/*.png`
 
