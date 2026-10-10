@@ -219,7 +219,9 @@ class EventStreamResponse(StreamingResponse):
             _empty_stream(),
             media_type="text/event-stream",
             headers={
-                "Cache-Control": "no-cache",
+                # no-transform: stops proxies (e.g. Next.js's gzip on the /api rewrite) from
+                # compressing, and so buffering, the stream.
+                "Cache-Control": "no-cache, no-transform",
                 "X-Accel-Buffering": "no",
             },
         )

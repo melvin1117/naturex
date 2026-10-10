@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import AdminPage from "@/app/admin/page";
 import AssetPage from "@/app/asset/[id]/page";
@@ -8,6 +8,11 @@ import ListPage from "@/app/list/page";
 import MarketplacePage from "@/app/page";
 import NotFound from "@/app/not-found";
 import PortfolioPage from "@/app/portfolio/page";
+
+// Live data is covered in tests/lib/hooks.test.tsx; route stubs render without a world.
+vi.mock("@/components/data-layer-panel", () => ({
+  DataLayerPanel: () => null,
+}));
 
 describe("route stubs", () => {
   it.each([

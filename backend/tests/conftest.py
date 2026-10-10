@@ -32,6 +32,8 @@ def _test_database_url() -> str:
 # Point the app (settings, engine, Alembic env) at the test database before any test imports it.
 TEST_DATABASE_URL = _test_database_url()
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+# Cookies drop `Secure` only when ENVIRONMENT is explicitly development or test (fail closed).
+os.environ.setdefault("ENVIRONMENT", "test")
 get_settings.cache_clear()
 
 

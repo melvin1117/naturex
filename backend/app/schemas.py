@@ -8,9 +8,17 @@ from enum import StrEnum
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
-from app.models import AssetStatus, LedgerKind, StreamEventType, UserRole
+from app.auth import (
+    EMAIL_MAX_LENGTH,
+    NAME_MAX_LENGTH,
+    PASSWORD_MAX_LENGTH,
+    PASSWORD_MIN_LENGTH,
+    is_valid_email,
+    normalize_email,
+)
+from app.models import AssetStatus, LedgerKind, StreamEventType, UserKind, UserRole
 
 # ----- Agent outputs (contract-tested later) -----
 
@@ -99,11 +107,21 @@ class AssetCard(BaseModel):
     country: str | None = None
     status: AssetStatusOut
     area_ha: Decimal
-    price: Decimal | None = None
-    price_change_pct: float | None = None
+    price: Decimal | None = Field(default=None, description="Latest sandbox price (play money).")
+    price_change_pct: float | None = Field(
+        default=None, description="Latest price vs the IPO price, in percent (2 dp)."
+    )
     grade: str | None = None
-    trend: str | None = None
+    trend: str | None = Field(
+        default=None,
+        description="Health vs the previous report: improving, declining or stable; "
+        "null with a single report.",
+    )
     confidence: Decimal | None = None
+    health_score: Decimal | None = None
+    value_low: Decimal | None = Field(default=None, description="Int$2020/yr, latest report.")
+    value_mid: Decimal | None = None
+    value_high: Decimal | None = None
     cover_image_url: str | None = None
     site_key: str | None = None
 
@@ -142,6 +160,21 @@ class ReportOut(BaseModel):
     )
     recommendations: list[str] | None = None
     auditor: AuditorOutput | None = None
+    data_version: str | None = Field(
+        default=None, description="Earth observation data version, e.g. 2026Q3 or sim-1."
+    )
+    period: str | None = Field(
+        default=None, description="Quarter the report stands for (a simulated version's quarter)."
+    )
+    simulated: bool = Field(
+        default=False,
+        description="True for Time Machine scenarios: scripted changes, never observed data.",
+    )
+    rating: dict[str, Any] | None = Field(
+        default=None,
+        description="Deterministic rating snapshot: metrics provenance, valuation, score and "
+        "fair-value inputs (T19).",
+    )
     created_at: datetime
 
 
@@ -343,3 +376,54 @@ class WorldOut(BaseModel):
     created_at: datetime
     personas: list[PersonaOut]
     assets: list[WorldAssetOut]
+
+
+# ----- Accounts and sessions (ADR-0005, T54) -----
+
+
+class RegisterIn(BaseModel):
+    email: str = Field(max_length=EMAIL_MAX_LENGTH)
+    password: SecretStr = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
+    name: str = Field(min_length=1, max_length=NAME_MAX_LENGTH)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, value: str) -> str:
+        email = normalize_email(value)
+        if not is_valid_email(email):
+            raise ValueError("Enter a valid email address")
+        return email
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str) -> str:
+        name = value.strip()
+        if not name or not name.isprintable():
+            raise ValueError("Enter a display name")
+        return name
+
+
+class LoginIn(BaseModel):
+    email: str = Field(max_length=EMAIL_MAX_LENGTH)
+    password: SecretStr = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, value: str) -> str:
+        email = normalize_email(value)
+        if not is_valid_email(email):
+            raise ValueError("Enter a valid email address")
+        return email
+
+
+class MeOut(BaseModel):
+    """The signed-in account. Never includes the password hash."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    email: str | None
+    kind: UserKind
+    is_admin: bool
+    world_id: UUID

@@ -28,8 +28,8 @@ from app.ledger import (
     verify,
 )
 from app.main import app
-from app.models import LedgerKind, World
-from app.seed import DEMO_SITES, WORLD_ID, seed
+from app.models import Asset, LedgerKind, World
+from app.seed import WORLD_ID, seed
 from tests.conftest import alembic_cfg, requires_db
 
 # --- Hashing --------------------------------------------------------------------------------
@@ -179,7 +179,8 @@ def test_tamper_rejects_an_unknown_seq() -> None:
 
 # --- Database: append -----------------------------------------------------------------------
 
-ASSET_ID = DEMO_SITES[0].id
+# A bare asset with an empty chain: seeded demo assets already hold their report v1 entry (T19).
+ASSET_ID = uuid.UUID("33333333-3333-3333-3333-3333333333ff")
 
 
 @pytest.fixture
@@ -191,6 +192,17 @@ def session() -> Iterator[Session]:
         outer = conn.begin()
         db = Session(bind=conn, join_transaction_mode="create_savepoint")
         seed(db)
+        db.add(
+            Asset(
+                id=ASSET_ID,
+                world_id=WORLD_ID,
+                name="Ledger test parcel",
+                geojson={"type": "Polygon", "coordinates": []},
+                area_ha=Decimal("500.00"),
+                primary_shares_remaining=490_000,
+            )
+        )
+        db.commit()
         yield db
         db.close()
         outer.rollback()

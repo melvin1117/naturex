@@ -9,7 +9,17 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import BigInteger, Column, DateTime, Index, SmallInteger, UniqueConstraint, text
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    DateTime,
+    ForeignKeyConstraint,
+    Index,
+    SmallInteger,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
@@ -24,11 +34,12 @@ def _enum_values(enum_cls: type[StrEnum]) -> list[str]:
     return [member.value for member in enum_cls]
 
 
-def _enum_column(enum_cls: type[StrEnum]) -> Column[Any]:
+def _enum_column(enum_cls: type[StrEnum], server_default: str | None = None) -> Column[Any]:
     """Store enum .value (matches DB CHECK constraints), not SQLAlchemy's default .name."""
     return Column(
         SAEnum(enum_cls, values_callable=_enum_values, native_enum=False),
         nullable=False,
+        server_default=server_default,
     )
 
 
@@ -45,6 +56,19 @@ class UserRole(StrEnum):
     COMMUNITY = "community"
     INVESTOR = "investor"
     ADMIN = "admin"
+
+
+class UserKind(StrEnum):
+    """ADR-0005 §3: only a `person` signs in with a password; treasuries never sign in or trade."""
+
+    PERSON = "person"
+    PERSONA = "persona"
+    TREASURY = "treasury"
+
+
+class SessionKind(StrEnum):
+    PASSWORD = "password"
+    DEMO = "demo"  # T55
 
 
 class AssetStatus(StrEnum):
@@ -93,13 +117,54 @@ class World(SQLModel, table=True):
 
 class User(SQLModel, table=True):
     __tablename__ = "users"
+    __table_args__ = (
+        # Target of composite foreign keys, so rows can't link across worlds (ADR-0005 §3).
+        UniqueConstraint("world_id", "id", name="uq_users_world_id_id"),
+        # Email is unique per world, case-insensitively; personas and treasuries have none.
+        Index(
+            "users_world_email",
+            "world_id",
+            text("lower(email)"),
+            unique=True,
+            postgresql_where=text("email IS NOT NULL"),
+        ),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     world_id: UUID = Field(foreign_key="worlds.id", index=True)
     name: str
-    role: UserRole = Field(sa_column=_enum_column(UserRole))
+    role: UserRole = Field(sa_column=_enum_column(UserRole))  # persona label, not authorization
     cash_balance: Decimal = Field(default=Decimal("10000.00"), max_digits=14, decimal_places=2)
     persona_key: str | None = Field(default=None, index=True)
+    kind: UserKind = Field(
+        default=UserKind.PERSONA, sa_column=_enum_column(UserKind, server_default="persona")
+    )
+    email: str | None = None  # normalised (stripped, lower-cased); only for kind = person
+    password_hash: str | None = None  # argon2id (pwdlib); never returned or logged
+    is_admin: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
+
+
+class UserSession(SQLModel, table=True):
+    """A server-side session (ADR-0005 §1). Only the SHA-256 of the cookie token is stored."""
+
+    __tablename__ = "sessions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["world_id", "user_id"], ["users.world_id", "users.id"], name="fk_sessions_user"
+        ),
+        UniqueConstraint("token_hash", name="uq_sessions_token_hash"),
+        Index("ix_sessions_world_id_user_id", "world_id", "user_id"),
+        Index("ix_sessions_expires_at", "expires_at"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    token_hash: str = Field(sa_column=Column(String(64), nullable=False))
+    world_id: UUID
+    user_id: UUID
+    kind: SessionKind = Field(sa_column=_enum_column(SessionKind))
+    created_at: datetime = _created_at()
+    last_seen_at: datetime = _created_at()  # bumped at most every few minutes; 7 d idle limit
+    expires_at: datetime = Field(sa_type=DateTime(timezone=True))  # 30 d absolute limit
 
 
 class Asset(SQLModel, table=True):
@@ -193,7 +258,7 @@ class Report(SQLModel, table=True):
     value_high: Decimal | None = Field(default=None, max_digits=16, decimal_places=2)
     value_breakdown: dict[str, Any] | None = Field(default=None, sa_column=Column(JSONB))
     fair_value_per_share: Decimal | None = Field(default=None, max_digits=12, decimal_places=4)
-    flags: dict[str, Any] | None = Field(default=None, sa_column=Column(JSONB))
+    flags: list[dict[str, Any]] | None = Field(default=None, sa_column=Column(JSONB))
     summary_md: str | None = None
     recommendations: list[Any] | None = Field(default=None, sa_column=Column(JSONB))
     auditor_json: dict[str, Any] | None = Field(default=None, sa_column=Column(JSONB))

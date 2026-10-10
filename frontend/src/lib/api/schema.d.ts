@@ -4,6 +4,89 @@
  */
 
 export interface paths {
+    "/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register
+         * @description Create a password account in the live world and sign in.
+         *
+         *     A taken email returns a generic 409; without email verification that reveals the email
+         *     exists, a risk ADR-0005 accepts. No permission depends on the email.
+         */
+        post: operations["register_auth_register_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login
+         * @description Sign in with email and password. Every failure is the same generic 401.
+         */
+        post: operations["login_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout
+         * @description End this session now: the row is deleted and the cookie cleared. Always succeeds.
+         */
+        post: operations["logout_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Me
+         * @description The signed-in account.
+         */
+        get: operations["me_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assets": {
         parameters: {
             query?: never;
@@ -11,7 +94,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Assets */
+        /**
+         * List Assets
+         * @description Marketplace cards for every asset in the world except drafts.
+         */
         get: operations["list_assets_assets_get"];
         put?: never;
         /** Create Asset */
@@ -63,7 +149,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Reports */
+        /**
+         * List Reports
+         * @description Every report of the asset, newest first.
+         */
         get: operations["list_reports_assets__asset_id__reports_get"];
         put?: never;
         post?: never;
@@ -80,7 +169,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Prices */
+        /**
+         * List Prices
+         * @description Price history, oldest first. `range` is accepted but not applied yet (T43).
+         */
         get: operations["list_prices_assets__asset_id__prices_get"];
         put?: never;
         post?: never;
@@ -114,7 +206,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Diff Reports */
+        /**
+         * Diff Reports
+         * @description Headline changes between two reports of one asset (deterministic; T37 extends it).
+         */
         get: operations["diff_reports_reports__report_id__diff__prev__get"];
         put?: never;
         post?: never;
@@ -238,7 +333,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Simulate Event */
+        /**
+         * Simulate Event
+         * @description Stub event for an asset in the caller's world (T38 persists it and re-rates).
+         */
         post: operations["simulate_event_admin_simulate_event_post"];
         delete?: never;
         options?: never;
@@ -477,16 +575,36 @@ export interface components {
             status: components["schemas"]["AssetStatusOut"];
             /** Area Ha */
             area_ha: string;
-            /** Price */
+            /**
+             * Price
+             * @description Latest sandbox price (play money).
+             */
             price?: string | null;
-            /** Price Change Pct */
+            /**
+             * Price Change Pct
+             * @description Latest price vs the IPO price, in percent (2 dp).
+             */
             price_change_pct?: number | null;
             /** Grade */
             grade?: string | null;
-            /** Trend */
+            /**
+             * Trend
+             * @description Health vs the previous report: improving, declining or stable; null with a single report.
+             */
             trend?: string | null;
             /** Confidence */
             confidence?: string | null;
+            /** Health Score */
+            health_score?: string | null;
+            /**
+             * Value Low
+             * @description Int$2020/yr, latest report.
+             */
+            value_low?: string | null;
+            /** Value Mid */
+            value_mid?: string | null;
+            /** Value High */
+            value_high?: string | null;
             /** Cover Image Url */
             cover_image_url?: string | null;
             /** Site Key */
@@ -776,6 +894,39 @@ export interface components {
             /** Color */
             color: string;
         };
+        /** LoginIn */
+        LoginIn: {
+            /** Email */
+            email: string;
+            /**
+             * Password
+             * Format: password
+             */
+            password: string;
+        };
+        /**
+         * MeOut
+         * @description The signed-in account. Never includes the password hash.
+         */
+        MeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Email */
+            email: string | null;
+            kind: components["schemas"]["UserKind"];
+            /** Is Admin */
+            is_admin: boolean;
+            /**
+             * World Id
+             * Format: uuid
+             */
+            world_id: string;
+        };
         /** OrderCreate */
         OrderCreate: {
             /**
@@ -903,6 +1054,18 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /** RegisterIn */
+        RegisterIn: {
+            /** Email */
+            email: string;
+            /**
+             * Password
+             * Format: password
+             */
+            password: string;
+            /** Name */
+            name: string;
+        };
         /** ReportDiff */
         ReportDiff: {
             /**
@@ -962,6 +1125,29 @@ export interface components {
             /** Recommendations */
             recommendations?: string[] | null;
             auditor?: components["schemas"]["AuditorOutput"] | null;
+            /**
+             * Data Version
+             * @description Earth observation data version, e.g. 2026Q3 or sim-1.
+             */
+            data_version?: string | null;
+            /**
+             * Period
+             * @description Quarter the report stands for (a simulated version's quarter).
+             */
+            period?: string | null;
+            /**
+             * Simulated
+             * @description True for Time Machine scenarios: scripted changes, never observed data.
+             * @default false
+             */
+            simulated: boolean;
+            /**
+             * Rating
+             * @description Deterministic rating snapshot: metrics provenance, valuation, score and fair-value inputs (T19).
+             */
+            rating?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Created At
              * Format: date-time
@@ -1137,6 +1323,12 @@ export interface components {
             created_at: string;
         };
         /**
+         * UserKind
+         * @description ADR-0005 §3: only a `person` signs in with a password; treasuries never sign in or trade.
+         * @enum {string}
+         */
+        UserKind: "person" | "persona" | "treasury";
+        /**
          * UserRole
          * @enum {string}
          */
@@ -1210,6 +1402,131 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    register_auth_register_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeOut"];
+                };
+            };
+            /** @description This email can't be used to create an account */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    login_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeOut"];
+                };
+            };
+            /** @description Email or password is incorrect */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    me_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_assets_assets_get: {
         parameters: {
             query?: never;

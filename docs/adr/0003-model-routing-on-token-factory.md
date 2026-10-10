@@ -70,6 +70,8 @@ Estimated cost: ≈ $0.035 per full rating, ≈ $0.0002 per photo, ≈ $0.0003 p
 
 **Interim routing to build against** (T09, T13): reasoning **off** for News Scout, Copilot and the Orchestrator; **on** for the Auditor (Ultra), where it costs under $0.002 per call. `MODEL_FAST` stays Nano; Super stays the Orchestrator. These results come from N=3 runs of one news item and one toy tool loop, so **the T47 evals (≥30 labelled news items, full rating loop) are the decision point**, including Super vs Lightning for the Orchestrator.
 
+**Update (T26, 2026-10-07):** the Auditor's JSON call runs with thinking **off**. On the full audit task (about 2,500 prompt tokens), Ultra with thinking on spent its whole 3,000-token cap reasoning and returned truncated JSON on both attempts; with thinking off it returned a valid audit in about 2 s for under $0.005 per call. Details in [dev-spec §7.7](../specs/dev-spec.md).
+
 ## Consequences
 - The backend stays a small CPU-only container with no GPU and no model weights, so every hosting option ranked in [dev-spec §21](../specs/dev-spec.md) works: Nebius Serverless, Azure Container Apps (team-approved credits), or Hugging Face Spaces / Render.
 - Model IDs live in `.env` (`MODEL_*`), so swapping a model is a config change. `make check-keys` warns if a configured ID isn't served.
