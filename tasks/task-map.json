@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-10 16:33 UTC",
+  "generated_at": "2026-10-10 19:11 UTC",
   "tasks": [
     {
       "id": "P01",
@@ -1237,8 +1237,10 @@
         "T24",
         "T25"
       ],
-      "status": "ready",
-      "assignees": [],
+      "status": "in_progress",
+      "assignees": [
+        "adi095"
+      ],
       "waiting_on": [],
       "unlocks": [
         "T27"
@@ -2263,12 +2265,10 @@
       "T40"
     ],
     "D3": [
-      "T72",
       "T66"
     ],
     "any": [
       "T56",
-      "T72",
       "T66",
       "T20",
       "T40"
@@ -2276,10 +2276,10 @@
   },
   "counts": {
     "done": 29,
-    "in_progress": 4,
+    "in_progress": 5,
     "picked_early": 0,
-    "ready": 5,
+    "ready": 4,
     "blocked": 40
   },
-  "data_hash": "c24c20a9f3f7de5f"
+  "data_hash": "f790536a8d1c744b"
 }
