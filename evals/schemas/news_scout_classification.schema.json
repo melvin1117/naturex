@@ -1,0 +1,71 @@
+{
+  "$defs": {
+    "NewsScoutClassificationItem": {
+      "description": "Index-bound LLM output. URLs/titles/dates come only from fetched articles.",
+      "properties": {
+        "article_index": {
+          "minimum": 1,
+          "title": "Article Index",
+          "type": "integer"
+        },
+        "relevant": {
+          "title": "Relevant",
+          "type": "boolean"
+        },
+        "impact_type": {
+          "enum": [
+            "encroachment",
+            "fire",
+            "drought",
+            "pollution",
+            "restoration",
+            "protection",
+            "other"
+          ],
+          "title": "Impact Type",
+          "type": "string"
+        },
+        "direction": {
+          "enum": [
+            -1,
+            0,
+            1
+          ],
+          "title": "Direction",
+          "type": "integer"
+        },
+        "severity": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Severity",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "article_index",
+        "relevant",
+        "impact_type",
+        "direction",
+        "severity",
+        "summary"
+      ],
+      "title": "NewsScoutClassificationItem",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "events": {
+      "items": {
+        "$ref": "#/$defs/NewsScoutClassificationItem"
+      },
+      "title": "Events",
+      "type": "array"
+    }
+  },
+  "title": "NewsScoutClassificationOutput",
+  "type": "object"
+}

@@ -37,7 +37,7 @@ check-client:
 	cd frontend && git diff --exit-code -- src/lib/api/openapi.json src/lib/api/schema.d.ts
 
 eval:
-	@echo "eval: harness lands in T47" >&2; exit 1
+	@echo "eval: harness lands in T47; to run the News Scout eval now, see evals/README.md" >&2; exit 1
 
 e2e:
 	@echo "e2e: Playwright suite lands in T46" >&2; exit 1

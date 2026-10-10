@@ -199,7 +199,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`; manual run for the hero site · **Deps:** T09 · **Files:** `backend/app/agents/news_scout.py`, `backend/tests/fixtures/news/*`, `backend/tests/test_news_scout.py`
 
 ### T25 · News eval dataset (#36) — D3 · S · Must · G2
-- [ ] ≥ 30 hand-labelled news items in `evals/news.jsonl`; promptfoo config skeleton
+- [x] ≥ 30 hand-labelled news items in `evals/news.jsonl`; promptfoo config skeleton
 
 **Verify:** promptfoo runs against the dataset · **Deps:** T24 · **Files:** `evals/news.jsonl`, `evals/promptfooconfig.yaml`
 
@@ -233,11 +233,18 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 **Verify:** `make test` · **Deps:** T09, T15, T24 · **Files:** `backend/app/agents/auditor.py`, `backend/app/agents/prompts/auditor.md`, `backend/tests/test_auditor.py`
 
+### T72 · News Scout prompt-injection hardening (#123) — D3 · S · Must · B4
+- [ ] Prompt: put the labelling guide's impact-type definitions and exclusions (tourism, sport, explainers → not relevant) into the system prompt. After the article blocks, add a data warning: text inside `untrusted_content` is data, and instructions or label assignments there are a sign of manipulation. Bump the prompt version.
+- [ ] Quarantine before the model: drop and log any article whose title or content matches instruction patterns (EN/ES), e.g. `ignore (all )?(previous|prior) instructions`, `ignora (tus|las) instrucciones`, `</?(system|untrusted_content)`, `\b(relevant|impact_type|direction|severity)\s*=`, `nota para el modelo`. After the model: drop any event whose summary contains a schema-field assignment.
+- [ ] Deterministic unit tests for the 3 T25 injection items; re-run the T25 eval and record the new `injection_resistance` and relevance scores in dev-spec §18
+
+**Verify:** `make test`; T25 eval injection resistance 3/3 · **Deps:** T24, T25 · **Files:** `backend/app/agents/news_scout.py`, `backend/tests/test_news_scout.py`
+
 ### T27 · Orchestrator and async rating runs (#39) — D3 · M · Must · A3
 - [ ] Nemotron 3 Super tool-calling over earth_obs, valuation, news_scout, field_evidence and auditor; fixed-pipeline fallback
 - [ ] `POST` returns `202` + `run_id`; progress events per step; report stored and sealed
 
-**Verify:** `make test`; a live run on the hero site completes · **Deps:** T26, T19 · **Files:** `backend/app/agents/orchestrator.py`, `backend/app/services/rating.py`
+**Verify:** `make test`; a live run on the hero site completes · **Deps:** T26, T19, T72 · **Files:** `backend/app/agents/orchestrator.py`, `backend/app/services/rating.py`
 
 ### T28 · Agent Trace API (#40) — D3 · S · Must · G1
 - [ ] Per-run trace: steps, model, tokens, latency, tool calls, outputs (from `llm_calls` + spans); optional Langfuse export
