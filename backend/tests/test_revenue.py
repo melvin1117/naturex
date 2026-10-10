@@ -275,13 +275,14 @@ def test_pay_quarter_credits_wallets_users_and_appends_a_verifiable_ledger_entry
     assert arjun.cash_balance == D("10075.00")
     assert mia.cash_balance == D("10047.50")
     assert result.payout.revenue == D("500.00")
-    assert len(entries) == 1
-    assert entries[0].kind is LedgerKind.PAYOUT
-    assert entries[0].payload["quarter_label"] == "2026-Q4"
-    assert entries[0].payload["revenue"] == "500.00"
-    assert entries[0].payload["community_fund"] == "250.00"
-    assert entries[0].payload["dividends_total"] == "250.00"
-    assert entries[0].payload["holder_count"] == 3
+    # The seed's report v1 entry (T19) comes first.
+    assert [e.kind for e in entries] == [LedgerKind.REPORT, LedgerKind.PAYOUT]
+    payout = entries[-1]
+    assert payout.payload["quarter_label"] == "2026-Q4"
+    assert payout.payload["revenue"] == "500.00"
+    assert payout.payload["community_fund"] == "250.00"
+    assert payout.payload["dividends_total"] == "250.00"
+    assert payout.payload["holder_count"] == 3
     assert verify(entries).valid
 
 
@@ -307,7 +308,7 @@ def test_pay_quarter_rejects_missing_community_retained_holding_without_changes(
     session.flush()
 
     assert _world_cash_and_wallets(session) == before
-    assert entries_for(session, ASSET_ID) == []
+    assert [e.kind for e in entries_for(session, ASSET_ID)] == [LedgerKind.REPORT]
 
 
 @requires_db

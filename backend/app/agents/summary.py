@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import re
 import time
 from calendar import month_abbr
 from collections.abc import Callable
@@ -13,14 +15,14 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 
-from app import mocks
 from app.agents.guards import uses_only_fact_numbers
 from app.config import Settings
 from app.llm import LLMClient, LLMError, Tier
-from app.schemas import ReportOut, ReportSummarySource
+from app.schemas import EventOut, ReportOut, ReportSummarySource
 
 AGENT_NAME = "report_summary"
 _REPORT_PERIOD = "Q3 2026"
+_QUARTER = re.compile(r"^(?P<year>\d{4})Q(?P<quarter>[1-4])$")
 _FALLBACK_CACHE_SECONDS = 300.0
 
 
@@ -38,16 +40,34 @@ class SummaryResult:
 
 
 @dataclass(frozen=True, slots=True)
+class SummaryContext:
+    """Facts about the rated asset that aren't on the report itself."""
+
+    asset_name: str
+    area_ha: Decimal
+    country: str | None = None
+    event: EventOut | None = None
+    """The asset's most recent event, if any."""
+
+
+@dataclass(frozen=True, slots=True)
 class CachedSummary:
     result: SummaryResult
     expires_at: float | None
 
 
-_CACHE: dict[UUID, CachedSummary] = {}
+_CACHE: dict[str, CachedSummary] = {}
+"""Keyed by a hash of the facts the summary is written from, not by report ID: every visitor
+world copies the template's reports under fresh IDs, and they all share one summary (and one
+LLM call). A new event or any changed number gives new facts, so a new key."""
 
 
 def clear_summary_cache() -> None:
     _CACHE.clear()
+
+
+def summary_cache_key(facts: list[str]) -> str:
+    return hashlib.sha256("\n".join(facts).encode()).hexdigest()
 
 
 def generate_report_summary(
@@ -56,23 +76,29 @@ def generate_report_summary(
     llm_client_factory: Callable[[], LLMClient | None] | None,
     log_asset_id_factory: Callable[[], UUID | None] | None = None,
     clock: Callable[[], float] = time.monotonic,
+    context: SummaryContext | None = None,
 ) -> SummaryResult:
-    cached = _cached(report.id, clock())
+    """Live Nemotron prose for a report, or the deterministic fallback.
+
+    Simulated (Time Machine) reports always get the fallback, which states in code that the
+    figures are a scenario, not an observation: a model reply could drop that warning.
+    """
+    facts = _facts(report, context)
+    key = summary_cache_key(facts)
+    cached = _cached(key, clock())
     if cached is not None:
         return cached
 
-    facts = _facts(report)
-    if settings.use_mocks or llm_client_factory is None:
-        return _cache_result(
-            report.id, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock()
-        )
+    def fallback() -> SummaryResult:
+        return _cache_result(key, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock())
+
+    if settings.use_mocks or llm_client_factory is None or report.simulated:
+        return fallback()
 
     try:
         llm_client = llm_client_factory()
         if llm_client is None:
-            return _cache_result(
-                report.id, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock()
-            )
+            return fallback()
         result = llm_client.structured(
             agent=AGENT_NAME,
             tier=Tier.FAST,
@@ -82,42 +108,50 @@ def generate_report_summary(
             asset_id=log_asset_id_factory() if log_asset_id_factory else None,
         )
     except (LLMError, SQLAlchemyError):
-        return _cache_result(
-            report.id, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock()
-        )
+        return fallback()
 
     summary = result.value.summary_md.strip()
     if not uses_only_fact_numbers(summary, facts):
-        return _cache_result(
-            report.id, _fallback_summary(facts), ReportSummarySource.FALLBACK, clock()
-        )
-    return _cache_result(report.id, summary, ReportSummarySource.LIVE, clock())
+        return fallback()
+    return _cache_result(key, summary, ReportSummarySource.LIVE, clock())
 
 
-def _cached(report_id: UUID, now: float) -> SummaryResult | None:
-    cached = _CACHE.get(report_id)
+def _cached(key: str, now: float) -> SummaryResult | None:
+    cached = _CACHE.get(key)
     if cached is None:
         return None
     if cached.expires_at is not None and cached.expires_at <= now:
-        _CACHE.pop(report_id, None)
+        _CACHE.pop(key, None)
         return None
     return cached.result
 
 
 def _cache_result(
-    report_id: UUID, summary_md: str, source: ReportSummarySource, now: float
+    key: str, summary_md: str, source: ReportSummarySource, now: float
 ) -> SummaryResult:
     result = SummaryResult(summary_md, source)
     expires_at = None if source is ReportSummarySource.LIVE else now + _FALLBACK_CACHE_SECONDS
-    _CACHE[report_id] = CachedSummary(result, expires_at)
+    _CACHE[key] = CachedSummary(result, expires_at)
     return result
 
 
-def _facts(report: ReportOut) -> list[str]:
-    asset = mocks.get_asset(report.asset_id)
-    event = asset.recent_events[0] if asset and asset.recent_events else None
+def _report_period(report: ReportOut) -> str:
+    match = _QUARTER.match(report.period or "")
+    if match is None:
+        return _REPORT_PERIOD
+    return f"Q{match['quarter']} {match['year']}"
+
+
+def _facts(report: ReportOut, context: SummaryContext | None) -> list[str]:
+    event = context.event if context else None
+    data_status = (
+        "simulated Time Machine scenario (scripted changes to observed data), not an observation"
+        if report.simulated
+        else "observed satellite data"
+    )
     lines = [
-        f"report_period: {_REPORT_PERIOD}",
+        f"report_period: {_report_period(report)}",
+        f"data_status: {data_status}",
         "health_score_scale: 100",
         f"health_score: {_decimal(report.health_score, places=1)}",
         f"grade: {report.grade or 'unknown'}",
@@ -132,12 +166,12 @@ def _facts(report: ReportOut) -> list[str]:
         f"value_high_usd: {_decimal(report.value_high, places=2)}",
         f"sandbox_price_per_unit: {_decimal(report.fair_value_per_share, places=4)}",
     ]
-    if asset is not None:
+    if context is not None:
         lines.extend(
             [
-                f"asset_name: {asset.name}",
-                f"asset_area: {_whole(asset.area_ha)} ha",
-                f"asset_country: {asset.country or 'unknown'}",
+                f"asset_name: {context.asset_name}",
+                f"asset_area: {_whole(context.area_ha)} ha",
+                f"asset_country: {context.country or 'unknown'}",
             ]
         )
     if report.value_breakdown:
@@ -180,10 +214,15 @@ def _fallback_summary(facts: list[str]) -> str:
         if event
         else ""
     )
+    basis = (
+        "a simulated Time Machine scenario (scripted changes to observed data, not an observation)"
+        if values["data_status"].startswith("simulated")
+        else "deterministic satellite metrics"
+    )
     return (
         f"## Ecological Performance Report — {values['report_period']}\n\n"
         f"Health {values['health_score']} / {values['health_score_scale']} "
-        f"(grade {values['grade']}) is based on deterministic mock metrics for "
+        f"(grade {values['grade']}) is based on {basis} for "
         f"{values.get('asset_area', 'the demo site')}. The annual value range is "
         f"{values['value_range']} · mid {values['value_mid']} · "
         f"{values['confidence']} confidence.{pressure} Sandbox pricing is play money only; "

@@ -12,11 +12,16 @@ from sqlalchemy import update
 from sqlmodel import Session, col, select
 
 from app.db import engine
-from app.market.engine import ipo
 from app.models import Asset, AssetStatus, Holding, Price, User, UserRole, World
+from app.services.rating import (
+    SiteRating,
+    latest_report,
+    observed_until,
+    rate_asset,
+    rate_site,
+)
 from app.tools.earth_obs import DATA_DIR, EarthObsMetrics, load_site_metrics
-from app.tools.scoring import is_wetland_from_landcover, score_metrics
-from app.tools.valuation import value_metrics
+from app.tools.scoring import is_wetland_from_landcover
 
 # Stable IDs so re-running seed is a no-op.
 WORLD_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -133,48 +138,72 @@ def _upgrade_demo_site_content(session: Session) -> None:
     session.commit()
 
 
-def demo_ipo_price(metrics: EarthObsMetrics) -> Decimal:
-    """IPO price of a curated demo site from its deterministic rating (dev-spec §8).
+def demo_rating(metrics: EarthObsMetrics) -> SiteRating:
+    """Deterministic rating of a curated demo site's cached metrics (T14 + T15 + dev-spec §8).
 
-    Fair value uses the T14 valuation and the T15 score of the cached metrics, rated on the day
-    the freshest data window ends, with no Auditor or field evidence yet. T19 stores the matching
-    report; T59 replaces this for listings launched by their owner.
+    Rated on the day the freshest data window ends, with no Auditor or field evidence yet, so
+    the numbers never drift with the wall clock. Wetland status comes from these metrics,
+    which for the seed are the site's baseline.
     """
-    valuation = value_metrics(metrics)
-    score = score_metrics(
+    return rate_site(
         metrics,
         is_wetland=is_wetland_from_landcover(metrics.landcover),
-        data_age_days=0,
-        forest_loss_last_12m_ha=metrics.forest_loss_last_12m_ha,
-    )
-    listing = ipo(
-        value_mid=Decimal(valuation.value_mid),
-        health=score.health,
-        confidence=score.confidence,
+        as_of=observed_until(metrics),
         total_shares=TOTAL_SHARES,
-        retained_pct=RETAINED_PCT,
     )
-    return listing.price_change.price
+
+
+def demo_ipo_price(metrics: EarthObsMetrics) -> Decimal:
+    """IPO price of a curated demo site: its report v1's fair value per share (dev-spec §8).
+
+    Shares `rate_site` with the stored report (`_seed_reports`), so the two can't disagree.
+    T59 replaces this for listings launched by their owner.
+    """
+    return demo_rating(metrics).fair_value_per_share
+
+
+def _template_asset(session: Session, site: DemoSite) -> Asset:
+    return session.exec(
+        select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == site.key)
+    ).one()
+
+
+def _seed_reports(session: Session) -> None:
+    """Report v1 for every curated demo site in the template that has none yet (T19).
+
+    Each is stored through the rating service (metrics row, report, `report` ledger entry) in
+    one transaction. Visitor worlds copy them on creation or reset.
+    """
+    for site in DEMO_SITES:
+        asset = _template_asset(session, site)
+        if latest_report(session, WORLD_ID, asset.id) is not None:
+            continue
+        metrics = load_site_metrics(site.key)
+        rate_asset(session, WORLD_ID, asset, metrics=metrics, as_of=observed_until(metrics))
+        session.commit()
 
 
 def _seed_ipo_prices(session: Session) -> None:
-    """One `ipo` price per listed demo asset without a price, so trading works after `make seed`."""
+    """One `ipo` price per listed demo asset without a price, at its stored report's fair value
+    per share, so trading works after `make seed`."""
     for site in DEMO_SITES:
-        asset = session.exec(
-            select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == site.key)
-        ).one()
+        asset = _template_asset(session, site)
         has_price = session.exec(
             select(Price.asset_id).where(Price.world_id == WORLD_ID, Price.asset_id == asset.id)
         ).first()
-        if asset.status == AssetStatus.LISTED and has_price is None:
-            session.add(
-                Price(
-                    world_id=WORLD_ID,
-                    asset_id=asset.id,
-                    price=demo_ipo_price(load_site_metrics(site.key)),
-                    reason="ipo",
-                )
+        report = latest_report(session, WORLD_ID, asset.id)
+        if asset.status != AssetStatus.LISTED or has_price is not None or report is None:
+            continue
+        if report.fair_value_per_share is None or report.fair_value_per_share <= 0:
+            raise RuntimeError(f"report {report.id} has no positive fair value per share")
+        session.add(
+            Price(
+                world_id=WORLD_ID,
+                asset_id=asset.id,
+                price=report.fair_value_per_share,
+                reason="ipo",
             )
+        )
     session.commit()
 
 
@@ -249,6 +278,7 @@ def seed(session: Session) -> None:
             )
     session.commit()
 
+    _seed_reports(session)
     _seed_ipo_prices(session)
 
 
@@ -260,8 +290,8 @@ def main() -> None:
         seed(session)
         ensure_live_world(session)
     print(
-        "Seed complete: template world, 4 personas, 3 demo assets, community holdings, IPO prices;"
-        " live world with the 3 curated sites."
+        "Seed complete: template world, 4 personas, 3 demo assets, community holdings, "
+        "report v1 and IPO prices; live world with the 3 curated sites."
     )
 
 

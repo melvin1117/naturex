@@ -6,9 +6,11 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 
 from app import mocks
+from app.deps import CurrentWorld, SessionDep
+from app.routers.assets import world_asset
 from app.schemas import (
     EventOut,
     SimulateEventRequest,
@@ -30,9 +32,11 @@ def simulate_quarter() -> SimulateQuarterResponse:
 
 
 @router.post("/simulate/event", response_model=SimulateEventResponse)
-def simulate_event(body: SimulateEventRequest) -> SimulateEventResponse:
-    if mocks.get_asset(body.asset_id) is None:
-        raise HTTPException(status_code=404, detail="Asset not found")
+def simulate_event(
+    body: SimulateEventRequest, world: CurrentWorld, session: SessionDep
+) -> SimulateEventResponse:
+    """Stub event for an asset in the caller's world (T38 persists it and re-rates)."""
+    world_asset(session, world.id, body.asset_id)
     event = EventOut(
         id=uuid4(),
         asset_id=body.asset_id,

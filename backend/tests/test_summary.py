@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from dataclasses import replace
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
+from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
@@ -15,14 +18,15 @@ from sqlalchemy import create_engine, delete
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, col, select
 
-from app.agents.summary import clear_summary_cache, generate_report_summary
+from app.agents.summary import SummaryContext, clear_summary_cache, generate_report_summary
 from app.config import Settings, get_settings
 from app.llm import BudgetExceeded, CallRecord, DbCallLog, LLMClient, Tier
 from app.main import app
-from app.mocks import REPORT_WETLAND, wetland_report
-from app.models import LlmCall
+from app.mocks import wetland_report
+from app.models import LlmCall, World
 from app.routers import reports as reports_router
-from app.schemas import ReportSummarySource
+from app.sandbox import _delete_world_rows
+from app.schemas import EventOut, ReportSummarySource
 from app.seed import seed
 from tests.conftest import alembic_cfg, requires_db
 
@@ -247,7 +251,7 @@ def test_number_guard_reads_spaced_and_spelled_out_percentages(
     assert result.source is source
 
 
-def test_live_summary_is_cached_per_report_id() -> None:
+def test_live_summary_is_cached_per_facts() -> None:
     transport = FakeTransport(
         reply(
             json.dumps(
@@ -272,7 +276,7 @@ def test_live_summary_is_cached_per_report_id() -> None:
     assert len(transport.requests) == 1
 
 
-def test_fallback_summary_is_briefly_cached_per_report_id() -> None:
+def test_fallback_summary_is_briefly_cached_per_facts() -> None:
     transport = FakeTransport(
         reply(json.dumps({"summary_md": "Health is 999 / 100."})),
         reply(json.dumps({"summary_md": "Health is 77.6 / 100."})),
@@ -315,26 +319,54 @@ def test_call_log_database_errors_trigger_fallback() -> None:
     assert result.source is ReportSummarySource.FALLBACK
 
 
-def test_report_endpoint_returns_summary_source_for_generated_client() -> None:
+@pytest.fixture
+def world_client() -> Iterator[tuple[TestClient, Any]]:
+    """A client with a committed visitor world, so the call log's own session sees its assets."""
+    command.upgrade(alembic_cfg(), "head")
+    engine = create_engine(get_settings().database_url)
+    with Session(engine) as session:
+        seed(session)
     client = TestClient(app)
+    world_id = UUID(client.get("/world").json()["id"])
+    yield client, engine
+    with Session(engine) as session:
+        _delete_world_rows(session, world_id, keep_world=False)
+        session.execute(delete(World).where(col(World.id) == world_id))
+        session.commit()
+    engine.dispose()
 
-    res = client.get(f"/reports/{REPORT_WETLAND}")
+
+def _hero(client: TestClient) -> dict[str, Any]:
+    world = client.get("/world").json()
+    asset_id = next(a["id"] for a in world["assets"] if a["site_key"] == "wetland_mx")
+    body: dict[str, Any] = client.get(f"/assets/{asset_id}").json()
+    return body
+
+
+@requires_db
+def test_report_endpoint_returns_summary_source_for_generated_client(
+    world_client: tuple[TestClient, Any],
+) -> None:
+    client, _ = world_client
+    report_id = _hero(client)["latest_report"]["id"]
+
+    res = client.get(f"/reports/{report_id}")
 
     assert res.status_code == 200
     body = res.json()
     assert body["summary_source"] == ReportSummarySource.FALLBACK.value
-    assert "summary_md" in body
+    assert "Health 76.2 / 100 (grade A)" in body["summary_md"]
+    assert "deterministic satellite metrics for 207 ha" in body["summary_md"]
 
 
 @requires_db
 def test_report_endpoint_live_mode_uses_fake_client_and_logs_call(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, world_client: tuple[TestClient, Any]
 ) -> None:
-    command.upgrade(alembic_cfg(), "head")
-    engine = create_engine(get_settings().database_url)
+    client, engine = world_client
     agent = "report_summary"
+    hero = _hero(client)
     with Session(engine) as session:
-        seed(session)
         session.execute(delete(LlmCall).where(LlmCall.agent == agent))
         session.commit()
     transport = FakeTransport(
@@ -342,8 +374,8 @@ def test_report_endpoint_live_mode_uses_fake_client_and_logs_call(
             json.dumps(
                 {
                     "summary_md": (
-                        "Q3 2026 health is 77.6/100 with 87% confidence and "
-                        "$4.7M–$17.5M /yr value, mid $11.7M."
+                        "Q3 2026 health is 76.2/100 with 71% confidence and "
+                        "$2.1M–$2.7M /yr value, mid $2.7M."
                     )
                 }
             )
@@ -355,30 +387,96 @@ def test_report_endpoint_live_mode_uses_fake_client_and_logs_call(
 
     app.dependency_overrides[get_settings] = lambda: settings(use_mocks=False)
     monkeypatch.setattr(reports_router, "_summary_client", fake_summary_client)
-    client = TestClient(app)
+    clear_summary_cache()  # reading the asset above cached the fallback
 
-    res = client.get(f"/reports/{REPORT_WETLAND}")
+    res = client.get(f"/reports/{hero['latest_report']['id']}")
 
     with Session(engine) as session:
         rows = session.exec(select(LlmCall).where(LlmCall.agent == agent)).all()
         session.execute(delete(LlmCall).where(LlmCall.agent == agent))
         session.commit()
-    engine.dispose()
     assert res.status_code == 200
     assert res.json()["summary_source"] == ReportSummarySource.LIVE.value
     [row] = rows
-    assert (row.agent, row.status, row.asset_id) == (
-        agent,
-        "ok",
-        wetland_report().asset_id,
-    )
+    assert (row.agent, row.status, row.asset_id) == (agent, "ok", UUID(hero["id"]))
 
 
-def test_asset_detail_uses_the_same_summary_as_report_endpoint() -> None:
-    client = TestClient(app)
+@requires_db
+def test_asset_detail_uses_the_same_summary_as_report_endpoint(
+    world_client: tuple[TestClient, Any],
+) -> None:
+    client, _ = world_client
+    asset = _hero(client)
 
-    report = client.get(f"/reports/{REPORT_WETLAND}").json()
-    asset = client.get(f"/assets/{wetland_report().asset_id}").json()
+    report = client.get(f"/reports/{asset['latest_report']['id']}").json()
 
     assert asset["latest_report"]["summary_md"] == report["summary_md"]
     assert asset["latest_report"]["summary_source"] == report["summary_source"]
+
+
+def test_simulated_reports_are_never_summarised_as_observed() -> None:
+    report = wetland_report().model_copy(update={"simulated": True, "period": "2026Q4"})
+
+    result = generate_report_summary(report, settings(use_mocks=True), None)
+
+    assert "## Ecological Performance Report — Q4 2026" in result.summary_md
+    assert "simulated Time Machine scenario" in result.summary_md
+    assert "satellite metrics" not in result.summary_md
+
+
+def test_simulated_reports_never_reach_the_model() -> None:
+    """A live reply could drop the scenario warning, so simulated reports use the fallback."""
+    transport = FakeTransport(
+        reply(
+            json.dumps({"summary_md": "Satellite observations show grade A health this quarter."})
+        )
+    )
+    report = wetland_report().model_copy(update={"simulated": True, "period": "2026Q4"})
+
+    result = generate_report_summary(report, settings(), lambda: llm(transport))
+
+    assert result.source is ReportSummarySource.FALLBACK
+    assert "simulated Time Machine scenario" in result.summary_md
+    assert "not an observation" in result.summary_md
+    assert "Satellite observations" not in result.summary_md
+    assert transport.requests == []
+
+
+def _live_reply() -> Any:
+    return reply(json.dumps({"summary_md": "Health is 77.6 / 100 at 87% confidence."}))
+
+
+def test_copies_of_a_report_in_other_worlds_share_one_summary() -> None:
+    transport = FakeTransport(_live_reply())
+    context = SummaryContext(asset_name="Xochimilco Wetland", area_ha=Decimal("206.70"))
+    template = wetland_report()
+    copy = template.model_copy(update={"id": uuid4(), "asset_id": uuid4()})
+
+    first = generate_report_summary(template, settings(), lambda: llm(transport), context=context)
+    second = generate_report_summary(copy, settings(), lambda: llm(transport), context=context)
+
+    assert (first.source, second.source) == (ReportSummarySource.LIVE, ReportSummarySource.LIVE)
+    assert second.summary_md == first.summary_md
+    assert len(transport.requests) == 1
+
+
+def test_a_new_event_gives_a_new_summary() -> None:
+    transport = FakeTransport(_live_reply(), _live_reply())
+    quiet = SummaryContext(asset_name="Xochimilco Wetland", area_ha=Decimal("206.70"))
+    event = EventOut(
+        id=uuid4(),
+        asset_id=wetland_report().asset_id,
+        source="admin",
+        title="Fire",
+        impact_type="fire",
+        direction=-1,
+        severity=4,
+        summary="A fire burned the reed beds.",
+        created_at=datetime(2026, 10, 7, tzinfo=UTC),
+    )
+    busy = replace(quiet, event=event)
+
+    generate_report_summary(wetland_report(), settings(), lambda: llm(transport), context=quiet)
+    generate_report_summary(wetland_report(), settings(), lambda: llm(transport), context=busy)
+
+    assert len(transport.requests) == 2
