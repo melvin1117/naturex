@@ -8,20 +8,33 @@ stored only as their SHA-256. Nothing here logs an email, a password or a token.
 from __future__ import annotations
 
 import hashlib
+import hmac
+import ipaddress
 import re
 import secrets
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from functools import cache
+from math import ceil
 from uuid import UUID
 
 from pwdlib import PasswordHash
-from sqlalchemy import delete, func, or_, update
+from sqlalchemy import delete, func, or_, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlmodel import Session, col, select
 
-from app.models import SessionKind, User, UserKind, UserRole, UserSession
+from app.models import (
+    AuthAttempt,
+    AuthAttemptKind,
+    AuthBucket,
+    SessionKind,
+    User,
+    UserKind,
+    UserRole,
+    UserSession,
+)
 
 SESSION_COOKIE = "nx_session"
 IDLE_TIMEOUT = timedelta(days=7)
@@ -36,6 +49,8 @@ EMAIL_MAX_LENGTH = 254
 STARTING_CASH = Decimal("10000.00")
 LOGIN_FAILED = "Email or password is incorrect"
 EMAIL_UNAVAILABLE = "This email can't be used to create an account"
+TOO_MANY_ATTEMPTS = "too_many_attempts"
+ATTEMPT_RETENTION = timedelta(hours=24)
 
 _EMAIL_RE = re.compile(r"^[^@\s\x00-\x1f\x7f]+@[^@\s\x00-\x1f\x7f]+\.[^@\s\x00-\x1f\x7f]+$")
 _hasher = PasswordHash.recommended()
@@ -236,3 +251,111 @@ def prune_expired_sessions(session: Session) -> int:
         )
     )
     return int(getattr(result, "rowcount", 0) or 0)
+
+
+# --- Rate limits (ADR-0005 section 1, T66) -----------------------------------------------------
+
+
+@dataclass(frozen=True)
+class RateLimit:
+    attempts: int
+    window: timedelta
+
+
+RATE_LIMITS = {
+    AuthAttemptKind.LOGIN: RateLimit(10, timedelta(minutes=15)),
+    AuthAttemptKind.REGISTER: RateLimit(5, timedelta(hours=1)),
+}
+
+
+def client_ip(forwarded_for: Sequence[str], peer: str | None, hops: int) -> str:
+    """The address rate limits count as the client.
+
+    `hops` is the number of trusted reverse proxies, each appending the address it saw to
+    X-Forwarded-For, so the client is the entry `hops` from the right; anything further left was
+    written by the client and is ignored. With 0 hops, or a chain too short or not an address,
+    the socket peer is used. IPv6 clients are bucketed by /64, as one customer holds the whole
+    prefix and could otherwise rotate addresses to dodge the limit.
+    """
+    entries = [part.strip() for line in forwarded_for for part in line.split(",")]
+    peer_address = peer or "unknown"
+    forwarded = entries[-hops] if 0 < hops <= len(entries) else None
+    for candidate in (forwarded, peer_address):
+        try:
+            address = ipaddress.ip_address(candidate or "")
+        except ValueError:
+            continue
+        if isinstance(address, ipaddress.IPv6Address):
+            return str(ipaddress.ip_network(f"{address}/64", strict=False).network_address)
+        return str(address)
+    return peer_address.lower()
+
+
+def bucket_key(secret: str, bucket: AuthBucket, value: str) -> str:
+    """HMAC-SHA256 hex of one bucket's subject, so a table row can't be matched to an email or IP.
+
+    The bucket name is part of the message, so an IP and an email can never share a key.
+    """
+    message = f"{bucket.value}|{value}".encode()
+    return hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
+
+
+def consume_attempt(
+    session: Session,
+    kind: AuthAttemptKind,
+    keys: Sequence[tuple[AuthBucket, str]],
+    now: datetime | None = None,
+) -> int | None:
+    """Count one attempt in every bucket, or refuse it. Commits.
+
+    Returns None when the attempt is allowed, else the seconds until it would be. Each bucket is
+    counted under a transaction-scoped advisory lock for its key, so concurrent attempts can't
+    all slip under the limit; locks are taken in sorted order, so requests sharing a bucket can't
+    deadlock. A refused attempt is not stored, so a blocked client can't extend its own lockout.
+    """
+    limit = RATE_LIMITS[kind]
+    moment = now or _now()
+    since = moment - limit.window
+    ordered = sorted(set(keys), key=lambda item: (item[0].value, item[1]))
+    for bucket, key_hmac in ordered:
+        session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:name, 0))"),
+            {"name": f"auth_attempts|{kind.value}|{bucket.value}|{key_hmac}"},
+        )
+    retry_after = 0
+    for bucket, key_hmac in ordered:
+        count, oldest = session.execute(
+            select(func.count(), func.min(col(AuthAttempt.created_at))).where(
+                col(AuthAttempt.bucket) == bucket,
+                col(AuthAttempt.key_hmac) == key_hmac,
+                col(AuthAttempt.kind) == kind,
+                col(AuthAttempt.created_at) > since,
+            )
+        ).one()
+        if count >= limit.attempts and oldest is not None:
+            wait = ceil((oldest + limit.window - moment).total_seconds())
+            retry_after = max(retry_after, wait, 1)
+    if retry_after:
+        session.rollback()  # releases the locks
+        return retry_after
+    session.add_all(
+        AuthAttempt(bucket=bucket, key_hmac=key_hmac, kind=kind, created_at=moment)
+        for bucket, key_hmac in ordered
+    )
+    session.commit()
+    return None
+
+
+def prune_auth_attempts(session: Session, now: datetime | None = None) -> int:
+    """Delete attempts older than ATTEMPT_RETENTION. The caller commits."""
+    cutoff = (now or _now()) - ATTEMPT_RETENTION
+    result = session.execute(delete(AuthAttempt).where(col(AuthAttempt.created_at) <= cutoff))
+    return int(getattr(result, "rowcount", 0) or 0)
+
+
+def prune_auth_data(session: Session) -> tuple[int, int]:
+    """Delete expired sessions and day-old attempts: (sessions, attempts). Commits."""
+    sessions = prune_expired_sessions(session)
+    attempts = prune_auth_attempts(session)
+    session.commit()
+    return sessions, attempts

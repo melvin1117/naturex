@@ -349,7 +349,9 @@ def test_cookie_flags_in_test_and_production(client: TestClient) -> None:
     assert f"max-age={30 * 24 * 3600}" in cookie
     assert "secure" not in cookie, "plain-HTTP local development must still get the cookie"
 
-    app.dependency_overrides[get_settings] = lambda: Settings(environment="production")
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        environment="production", auth_rate_limit_secret="test-secret"
+    )
     prod = login(client)
     assert "secure" in prod.headers["set-cookie"].lower()
     assert "secure" in client.post("/auth/logout").headers["set-cookie"].lower()
@@ -421,7 +423,7 @@ def test_a_session_cannot_point_at_a_user_in_another_world(session: Session) -> 
 def test_accounts_migration_downgrades_and_upgrades() -> None:
     cfg = alembic_cfg()
     command.upgrade(cfg, "head")
-    command.downgrade(cfg, "-1")
+    command.downgrade(cfg, "0005")  # the revision before accounts (0006)
     engine = create_engine(get_settings().database_url)
     with engine.connect() as connection:
         tables = connection.execute(text("SELECT to_regclass('sessions')")).scalar()
@@ -777,7 +779,10 @@ def test_cookie_flags_with_environment_production(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("ENVIRONMENT", "production")
-    app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)  # type: ignore[call-arg]
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        auth_rate_limit_secret="test-secret",
+    )
 
     signed_up = register(client).headers["set-cookie"].lower()
     cleared = TestClient(app).post("/auth/logout").headers["set-cookie"].lower()

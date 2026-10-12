@@ -1,6 +1,8 @@
 """FastAPI application entrypoint."""
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -8,7 +10,8 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
-from app.config import Settings, get_settings, secure_cookies
+from app.config import Settings, get_settings, rate_limit_secret, secure_cookies
+from app.middleware import CsrfMiddleware, parse_allowed_origins
 from app.routers import admin, assets, auth, copilot, events, ledger, market, media, reports, world
 
 settings = get_settings()
@@ -26,10 +29,35 @@ def warn_if_cookies_insecure(settings: Settings) -> None:
 
 warn_if_cookies_insecure(settings)
 
+
+def validate_auth_settings(settings: Settings) -> frozenset[str]:
+    """Fail at startup, not on the first login, when the auth settings are unusable."""
+    rate_limit_secret(settings)
+    origins = parse_allowed_origins(settings.allowed_origins)
+    if not origins:
+        logging.getLogger("app").warning(
+            "ALLOWED_ORIGINS is empty: every POST, PUT, PATCH and DELETE will be rejected."
+        )
+    return origins
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    # At startup rather than import, so tools that only import the app (the OpenAPI export for
+    # the API client) don't need production secrets. uvicorn runs this before serving.
+    validate_auth_settings(settings)
+    yield
+
+
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
     description="AI rating agency and sandbox exchange for living nature",
+    lifespan=lifespan,
+)
+app.add_middleware(
+    CsrfMiddleware,
+    allowed_origins=[item.strip() for item in settings.allowed_origins.split(",") if item.strip()],
 )
 
 app.include_router(auth.router)

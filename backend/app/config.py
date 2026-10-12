@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +29,14 @@ class Settings(BaseSettings):
     # Cap on new sandbox worlds per hour, so clients that drop the cookie can't fill the DB.
     sandbox_max_new_worlds_per_hour: int = 300
     event_stream_max_concurrent: int = 40
+    # Exact origins (scheme://host[:port], comma separated) allowed to send POST, PUT, PATCH and
+    # DELETE requests (T66, ADR-0005). Every deployment must set its public frontend origin.
+    allowed_origins: str = "http://localhost:3000"
+    # Reverse proxies in front of the API that each append to X-Forwarded-For. 0 ignores the
+    # header, so a client can't choose its own rate-limit bucket.
+    trusted_proxy_hops: int = Field(default=0, ge=0, le=10)
+    # HMAC key for the rate-limit buckets, so a guessed email can't be matched to a row.
+    auth_rate_limit_secret: str = ""
 
     nebius_api_key: str = ""
     token_factory_base_url: str = "https://api.tokenfactory.nebius.com/v1/"
@@ -58,3 +67,18 @@ def secure_cookies(settings: Settings) -> bool:
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+# Only ever used when ENVIRONMENT is explicitly development or test.
+DEV_RATE_LIMIT_SECRET = "naturex-dev-only-rate-limit-secret"
+
+
+def rate_limit_secret(settings: Settings) -> str:
+    """The HMAC key for rate-limit buckets. Fails closed outside explicit development or test."""
+    if settings.auth_rate_limit_secret:
+        return settings.auth_rate_limit_secret
+    if not secure_cookies(settings):
+        return DEV_RATE_LIMIT_SECRET
+    raise RuntimeError(
+        "AUTH_RATE_LIMIT_SECRET must be set (ENVIRONMENT is not development or test)"
+    )

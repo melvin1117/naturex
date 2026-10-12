@@ -10,7 +10,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request, Response, status
 from sqlmodel import Session
 
-from app.auth import SESSION_COOKIE, Principal, resolve_session
+from app.auth import SESSION_COOKIE, Principal, prune_auth_data, resolve_session
 from app.config import Settings, get_settings, secure_cookies
 from app.db import get_session
 from app.models import World
@@ -34,6 +34,7 @@ PRUNE_EVERY = timedelta(minutes=10)
 WORLD_REQUIRED = "world_required"
 AUTH_REQUIRED = "auth_required"
 _last_prune: datetime | None = None
+_last_auth_prune: datetime | None = None
 
 
 def _set_world_cookie(response: Response, world: World, settings: Settings) -> None:
@@ -62,6 +63,23 @@ def _prune_now_and_then(session: Session) -> None:
     except Exception:
         session.rollback()
         log.exception("pruning stale sandbox worlds failed")
+
+
+def prune_auth_data_now_and_then(session: Session) -> None:
+    """Prune expired sessions and day-old auth attempts at most every PRUNE_EVERY per process.
+
+    Never fails the request (T66).
+    """
+    global _last_auth_prune
+    now = datetime.now(UTC)
+    if _last_auth_prune is not None and now - _last_auth_prune < PRUNE_EVERY:
+        return
+    _last_auth_prune = now
+    try:
+        prune_auth_data(session)
+    except Exception:
+        session.rollback()
+        log.exception("pruning expired sessions and auth attempts failed")
 
 
 def _touch(session: Session, world: World) -> None:
