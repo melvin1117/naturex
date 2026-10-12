@@ -42,8 +42,10 @@ def validate_auth_settings(settings: Settings) -> frozenset[str]:
         log.warning("ALLOWED_ORIGINS is empty: every state-changing request will be rejected.")
     if deployed and settings.trusted_proxy_hops == 0:
         log.warning(
-            "TRUSTED_PROXY_HOPS=0: behind a reverse proxy (the Next.js /api rewrite) every "
-            "visitor shares one rate-limit bucket. Set it to the number of proxies in front."
+            "TRUSTED_PROXY_HOPS=0: every request counts as coming from the API's direct peer "
+            "(the Next.js server or a load balancer), so all visitors share one rate-limit "
+            "bucket. Set it to the number of trusted proxies that append to X-Forwarded-For; "
+            "the Next.js /api rewrite does not."
         )
     return origins
 
