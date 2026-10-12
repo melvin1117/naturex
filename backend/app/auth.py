@@ -22,7 +22,7 @@ from uuid import UUID
 
 from pwdlib import PasswordHash
 from sqlalchemy import delete, func, or_, text, update
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlmodel import Session, col, select
 
 from app.models import (
@@ -266,6 +266,32 @@ RATE_LIMITS = {
     AuthAttemptKind.LOGIN: RateLimit(10, timedelta(minutes=15)),
     AuthAttemptKind.REGISTER: RateLimit(5, timedelta(hours=1)),
 }
+# Longest a request waits for a bucket's lock; each waiter holds a pooled connection.
+LOCK_TIMEOUT_MS = 2000
+
+
+class AttemptsBusy(Exception):
+    """A bucket's lock wasn't free in time; the caller answers 503 and the client retries."""
+
+
+def _parse_ip(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """An address from a forwarded entry, which may carry a port (`1.2.3.4:5`, `[::1]:5`).
+
+    An IPv4-mapped IPv6 address (`::ffff:1.2.3.4`, as dual-stack sockets report IPv4 clients)
+    is returned as the IPv4 address, so those clients don't all share one /64 bucket.
+    """
+    text_value = value.strip()
+    if text_value.startswith("["):
+        text_value = text_value[1:].split("]", 1)[0]
+    elif text_value.count(":") == 1:
+        text_value = text_value.split(":", 1)[0]
+    try:
+        address = ipaddress.ip_address(text_value)
+    except ValueError:
+        return None
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        return address.ipv4_mapped
+    return address
 
 
 def client_ip(forwarded_for: Sequence[str], peer: str | None, hops: int) -> str:
@@ -281,9 +307,8 @@ def client_ip(forwarded_for: Sequence[str], peer: str | None, hops: int) -> str:
     peer_address = peer or "unknown"
     forwarded = entries[-hops] if 0 < hops <= len(entries) else None
     for candidate in (forwarded, peer_address):
-        try:
-            address = ipaddress.ip_address(candidate or "")
-        except ValueError:
+        address = _parse_ip(candidate or "")
+        if address is None:
             continue
         if isinstance(address, ipaddress.IPv6Address):
             return str(ipaddress.ip_network(f"{address}/64", strict=False).network_address)
@@ -305,23 +330,34 @@ def consume_attempt(
     kind: AuthAttemptKind,
     keys: Sequence[tuple[AuthBucket, str]],
     now: datetime | None = None,
+    lock_timeout_ms: int = LOCK_TIMEOUT_MS,
 ) -> int | None:
     """Count one attempt in every bucket, or refuse it. Commits.
 
-    Returns None when the attempt is allowed, else the seconds until it would be. Each bucket is
-    counted under a transaction-scoped advisory lock for its key, so concurrent attempts can't
-    all slip under the limit; locks are taken in sorted order, so requests sharing a bucket can't
-    deadlock. A refused attempt is not stored, so a blocked client can't extend its own lockout.
+    Call it first in a request: a refusal rolls the session back, which would discard any
+    pending writes. Returns None when the attempt is allowed, else the seconds until it would be.
+    Each bucket is counted under a transaction-scoped advisory lock for its key, so concurrent
+    attempts can't all slip under the limit; locks are taken in sorted order, so requests sharing
+    a bucket can't deadlock. A refused attempt is not stored, so a blocked client can't extend
+    its own lockout. Raises AttemptsBusy if a lock isn't free within `lock_timeout_ms`.
     """
     limit = RATE_LIMITS[kind]
     moment = now or _now()
     since = moment - limit.window
     ordered = sorted(set(keys), key=lambda item: (item[0].value, item[1]))
-    for bucket, key_hmac in ordered:
+    try:
         session.execute(
-            text("SELECT pg_advisory_xact_lock(hashtextextended(:name, 0))"),
-            {"name": f"auth_attempts|{kind.value}|{bucket.value}|{key_hmac}"},
+            text("SELECT set_config('lock_timeout', :value, true)"),
+            {"value": f"{lock_timeout_ms}ms"},
         )
+        for bucket, key_hmac in ordered:
+            session.execute(
+                text("SELECT pg_advisory_xact_lock(hashtextextended(:name, 0))"),
+                {"name": f"auth_attempts|{kind.value}|{bucket.value}|{key_hmac}"},
+            )
+    except OperationalError as exc:
+        session.rollback()
+        raise AttemptsBusy from exc
     retry_after = 0
     for bucket, key_hmac in ordered:
         count, oldest = session.execute(

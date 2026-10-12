@@ -1,7 +1,8 @@
 """CSRF protection for state-changing requests (ADR-0005 §1, T66).
 
-Cookies are `SameSite=Lax`; on top of that every POST, PUT, PATCH and DELETE must come from an
-allowed origin. `Origin` is checked first; only when it is absent does `Referer` count. A value
+Cookies are `SameSite=Lax`; on top of that every method except GET, HEAD, OPTIONS and TRACE
+(POST, PUT, PATCH, DELETE and anything unusual) must come from an allowed origin. `Origin` is
+checked first; only when it is absent does `Referer` count. A value
 that is `null`, malformed, duplicated or not exactly in `ALLOWED_ORIGINS` (scheme, host and port)
 is rejected, and so is a request with neither header. A request body must be JSON, or multipart
 for uploads, so a cross-site HTML form can't be used even where a header check is bypassed.
@@ -18,7 +19,7 @@ from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
 DEFAULT_PORTS = {"http": 80, "https": 443}
 CSRF_FAILED = "csrf_origin"
 UNSUPPORTED_MEDIA_TYPE = "unsupported_media_type"
@@ -47,7 +48,7 @@ def canonical_origin(value: str, *, allow_path: bool) -> str | None:
     if not allow_path and (parts.path not in ("", "/") or parts.query or parts.fragment):
         return None
     shown = f"[{host}]" if ":" in host else host
-    return f"{scheme}://{shown}:{port or DEFAULT_PORTS[scheme]}"
+    return f"{scheme}://{shown}:{port if port is not None else DEFAULT_PORTS[scheme]}"
 
 
 def parse_allowed_origins(raw: str) -> frozenset[str]:
@@ -78,7 +79,11 @@ def origin_allowed(origins: Sequence[str], referers: Sequence[str], allowed: Ite
 
 def media_type_ok(content_type: str | None) -> bool:
     media = (content_type or "").split(";", 1)[0].strip().lower()
-    return media == "application/json" or media.endswith("+json") or media == "multipart/form-data"
+    return (
+        media == "application/json"
+        or (media.startswith("application/") and media.endswith("+json"))
+        or media == "multipart/form-data"
+    )
 
 
 def has_body(headers: Headers) -> bool:
@@ -91,10 +96,11 @@ def has_body(headers: Headers) -> bool:
 class CsrfMiddleware:
     def __init__(self, app: ASGIApp, *, allowed_origins: Iterable[str]) -> None:
         self.app = app
-        self.allowed = frozenset(allowed_origins)
+        cleaned = (canonical_origin(item, allow_path=False) for item in allowed_origins)
+        self.allowed = frozenset(origin for origin in cleaned if origin is not None)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope["method"] not in UNSAFE_METHODS:
+        if scope["type"] != "http" or scope["method"] in SAFE_METHODS:
             await self.app(scope, receive, send)
             return
         headers = Headers(scope=scope)

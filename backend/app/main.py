@@ -33,10 +33,17 @@ warn_if_cookies_insecure(settings)
 def validate_auth_settings(settings: Settings) -> frozenset[str]:
     """Fail at startup, not on the first login, when the auth settings are unusable."""
     rate_limit_secret(settings)
+    deployed = secure_cookies(settings)  # ENVIRONMENT is not explicitly development or test
+    if deployed and "allowed_origins" not in settings.model_fields_set:
+        raise RuntimeError("ALLOWED_ORIGINS must be set (ENVIRONMENT is not development or test)")
     origins = parse_allowed_origins(settings.allowed_origins)
+    log = logging.getLogger("app")
     if not origins:
-        logging.getLogger("app").warning(
-            "ALLOWED_ORIGINS is empty: every POST, PUT, PATCH and DELETE will be rejected."
+        log.warning("ALLOWED_ORIGINS is empty: every state-changing request will be rejected.")
+    if deployed and settings.trusted_proxy_hops == 0:
+        log.warning(
+            "TRUSTED_PROXY_HOPS=0: behind a reverse proxy (the Next.js /api rewrite) every "
+            "visitor shares one rate-limit bucket. Set it to the number of proxies in front."
         )
     return origins
 

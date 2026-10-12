@@ -14,7 +14,7 @@ from uuid import uuid4
 import pytest
 from alembic import command
 from fastapi.testclient import TestClient
-from sqlalchemy import Connection, create_engine, func, update
+from sqlalchemy import Connection, create_engine, func, text, update
 from sqlmodel import Session, col, select
 
 from app import auth, deps
@@ -696,3 +696,169 @@ def test_importing_the_app_needs_no_production_secrets() -> None:
     )
 
     assert result.returncode == 0, result.stderr
+
+
+# --- Review fixes (R1, R2, C1, C4, C6, C8, N1, N2) ---------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("forwarded", "peer", "hops", "expected"),
+    [
+        ([], "::ffff:203.0.113.7", 0, "203.0.113.7"),  # IPv4 client on a dual-stack socket
+        (["::ffff:198.51.100.9"], "10.0.0.1", 1, "198.51.100.9"),
+        (["203.0.113.7:5000"], "10.0.0.1", 1, "203.0.113.7"),  # a proxy that appends the port
+        (["[2001:db8:1:2::1]:443"], "10.0.0.1", 1, "2001:db8:1:2::"),
+        (["[2001:db8:1:2::1]"], "10.0.0.1", 1, "2001:db8:1:2::"),
+        (["1.1.1.1, 2.2.2.2, 3.3.3.3, 4.4.4.4"], "10.0.0.1", 2, "3.3.3.3"),  # left entries ignored
+    ],
+)
+def test_client_ip_handles_mapped_addresses_and_ports(
+    forwarded: list[str], peer: str | None, hops: int, expected: str
+) -> None:
+    assert auth.client_ip(forwarded, peer, hops) == expected
+
+
+def test_different_ipv4_clients_on_a_dual_stack_socket_get_different_buckets() -> None:
+    first = auth.client_ip([], "::ffff:203.0.113.7", 0)
+    second = auth.client_ip([], "::ffff:198.51.100.9", 0)
+
+    assert first != second
+
+
+def test_port_zero_is_not_the_default_port() -> None:
+    assert origin_allowed(["https://app.example.com:0"], [], ALLOWED) is False
+    assert canonical_origin("http://example.com:0", allow_path=False) == "http://example.com:0"
+
+
+def test_a_vendor_json_type_must_be_an_application_type() -> None:
+    assert media_type_ok("application/vnd.api+json") is True
+    assert media_type_ok("text/foo+json") is False
+
+
+def test_two_origin_header_lines_are_rejected_through_the_middleware() -> None:
+    res = bare_client().post(
+        "/copilot",
+        json=BODY,
+        headers=[("Origin", "http://testserver"), ("Origin", "http://testserver")],
+    )
+
+    assert res.status_code == 403
+
+
+def test_an_unusual_method_is_checked_like_any_unsafe_one() -> None:
+    assert bare_client().request("PROPFIND", "/copilot").status_code == 403
+
+
+@pytest.mark.parametrize("method", ["HEAD", "OPTIONS"])
+def test_head_and_options_need_no_origin(method: str) -> None:
+    assert bare_client().request(method, "/healthz").status_code != 403
+
+
+def test_a_chunked_body_with_no_content_length_still_needs_a_json_type(
+    client: TestClient,
+) -> None:
+    res = client.post("/copilot", content=iter([b"hello"]), headers={"Content-Type": "text/plain"})
+
+    assert res.status_code == 415
+
+
+def test_an_empty_body_needs_no_media_type(client: TestClient) -> None:
+    res = client.post("/copilot", content=b"", headers={"Content-Type": "text/plain"})
+
+    assert res.status_code == 422  # reached the route, which wants a JSON body
+
+
+def test_startup_warns_when_a_deployed_api_trusts_no_proxy(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def settings(hops: int) -> Settings:
+        return Settings(
+            _env_file=None,  # type: ignore[call-arg]
+            environment="production",
+            auth_rate_limit_secret="x" * 32,
+            allowed_origins="https://app.example.com",
+            trusted_proxy_hops=hops,
+        )
+
+    with caplog.at_level("WARNING", logger="app"):
+        validate_auth_settings(settings(0))
+    assert "TRUSTED_PROXY_HOPS=0" in caplog.text
+
+    caplog.clear()
+    with caplog.at_level("WARNING", logger="app"):
+        validate_auth_settings(settings(1))
+    assert "TRUSTED_PROXY_HOPS" not in caplog.text
+
+
+def test_a_deployed_api_must_set_allowed_origins_explicitly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ALLOWED_ORIGINS")  # conftest forces it for the other tests
+    deployed = Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        environment="production",
+        auth_rate_limit_secret="x" * 32,
+    )
+
+    with pytest.raises(RuntimeError, match="ALLOWED_ORIGINS"):
+        validate_auth_settings(deployed)
+
+
+def test_development_and_test_may_use_the_default_origin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ALLOWED_ORIGINS")
+    settings = Settings(_env_file=None, environment="test")  # type: ignore[call-arg]
+
+    assert validate_auth_settings(settings) == {"http://localhost:3000"}
+
+
+@requires_db
+def test_a_held_bucket_lock_makes_the_attempt_give_up_with_attempts_busy(
+    committed_engine: Any,
+) -> None:
+    keys = [ip_key(f"busy-{uuid4()}")]
+    name = f"auth_attempts|login|ip|{keys[0][1]}"
+    with committed_engine.connect() as holder:
+        holder.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:name, 0))"), {"name": name}
+        )
+        with Session(committed_engine) as db:
+            with pytest.raises(auth.AttemptsBusy):
+                auth.consume_attempt(db, LOGIN, keys, lock_timeout_ms=200)
+            assert db.execute(text("SELECT 1")).scalar() == 1  # the session is still usable
+
+    with Session(committed_engine) as db:  # once the holder is gone the attempt goes through
+        assert auth.consume_attempt(db, LOGIN, keys) is None
+    forget(committed_engine, keys)
+
+
+@requires_db
+def test_a_busy_bucket_is_a_503_that_says_to_retry(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def busy(*args: object, **kwargs: object) -> int | None:
+        raise auth.AttemptsBusy
+
+    monkeypatch.setattr("app.routers.auth.consume_attempt", busy)
+
+    res = db_client.post("/auth/login", json=credentials("ro@example.org"))
+
+    assert res.status_code == 503
+    assert res.json() == {"detail": "auth_busy"}
+    assert res.headers["retry-after"] == "1"
+
+
+@requires_db
+def test_a_failing_prune_does_not_fail_the_login(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def boom(_session: Session) -> tuple[int, int]:
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(deps, "prune_auth_data", boom)
+    monkeypatch.setattr(deps, "_last_auth_prune", None)
+
+    res = db_client.post("/auth/login", json=credentials("nobody@example.org"))
+
+    assert res.status_code == 401  # an ordinary wrong-credentials answer, not a 500

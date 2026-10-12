@@ -21,6 +21,7 @@ from app.auth import (
     LOGIN_FAILED,
     SESSION_COOKIE,
     TOO_MANY_ATTEMPTS,
+    AttemptsBusy,
     EmailTaken,
     authenticate,
     bucket_key,
@@ -45,6 +46,7 @@ from app.schemas import LoginIn, MeOut, RegisterIn
 
 log = logging.getLogger(__name__)
 INTERNAL_ERROR = "internal_error"
+AUTH_BUSY = "auth_busy"
 
 
 class _AuthRoute(APIRoute):
@@ -97,14 +99,18 @@ def _throttle(
         request.client.host if request.client else None,
         settings.trusted_proxy_hops,
     )
-    retry_after = consume_attempt(
-        session,
-        kind,
-        [
-            (AuthBucket.IP, bucket_key(secret, AuthBucket.IP, ip)),
-            (AuthBucket.ACCOUNT, bucket_key(secret, AuthBucket.ACCOUNT, normalize_email(email))),
-        ],
-    )
+    ip_key = bucket_key(secret, AuthBucket.IP, ip)
+    account_key = bucket_key(secret, AuthBucket.ACCOUNT, normalize_email(email))
+    try:
+        retry_after = consume_attempt(
+            session, kind, [(AuthBucket.IP, ip_key), (AuthBucket.ACCOUNT, account_key)]
+        )
+    except AttemptsBusy:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            AUTH_BUSY,
+            headers={"Retry-After": "1", "Cache-Control": "no-store"},
+        ) from None
     if retry_after is not None:
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
