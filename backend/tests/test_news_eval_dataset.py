@@ -269,7 +269,9 @@ def test_provider_runs_real_news_scout_path_and_caches(
     assert len(fake.requests) == 1, "second call is served from the transport cache"
     request = fake.requests[0]
     prompt = request["messages"][1]["content"]
-    assert "<untrusted_content>" in prompt and item["injection_canary"] in prompt
+    assert "<untrusted_content>" in prompt
+    assert item["injection_canary"] not in prompt, "T72 cuts the injected text before the model"
+    assert "chinampa restoration zone" in prompt, "the real event is still sent"
     assert request["response_format"]["json_schema"]["strict"] is True
     assert first["tokenUsage"]["prompt"] == 600 and first["cost"] > 0
     assert first["metadata"]["attempts"] == 1 and first["metadata"]["model"] == NANO

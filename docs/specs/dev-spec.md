@@ -656,6 +656,11 @@ Each gate failure on its own (all asserted in `tests/test_scoring.py`):
  "summary": "State approved an industrial park expansion bordering the wetland."}
 ```
 4. **Prompt-injection guard:** wrap retrieved text in `<untrusted_content>` tags and instruct the model to treat it as data only; validate the output against a JSON schema; post-check that each index is in range and unique, URL/title/date come from the fetched article, dates are not in the future, and unsupported currency amounts are stripped from summaries.
+5. **Hardening (T72, prompt `news-scout-v3`):**
+   - **Prompt:** the system prompt carries the labelling guide (what counts as relevant, the impact types, the severity scale). After the article blocks the user message ends with the rule that text inside `untrusted_content` is data and that instructions or label assignments there are a sign of manipulation. The title is inside the `untrusted_content` block.
+   - **Before the model:** the title and text are normalised (NFKC, invisible format characters removed) and searched, across line breaks, for instruction patterns (EN/ES, e.g. `ignore/disregard previous instructions`, `nota para el modelo`, fake `<system>` tags, `severity=`, a JSON `"severity":` key). From the sentence holding the first match to the end of the article is cut; the real report before it is still classified, so an attacker can't suppress a genuine event by attaching an instruction to it. An article that is only injected text is not sent. Each cut is logged with the article URL, never its text.
+   - **After the model:** an event whose summary assigns a schema field (`relevant=`, `impact_type=`, `direction=`, `severity=`) is dropped and logged. The stored title is the redacted one, and a currency amount counts as supported only if it appears in the redacted article text.
+   - **Known limits:** the pattern list can't be complete, so the prompt rule and the post-model check are the real defence. Look-alike letters from other scripts (for example Cyrillic `і`) are not mapped. Because the redaction runs before the prompt, the T25 injection items measure the filter and the model together; items the patterns don't match are needed to measure the model alone.
 
 T24 returns URL-bound events with stable URL-derived IDs for downstream citation. Full results cache for 24 h; empty non-degraded results cache for 1 h. Persistence into `events` and Nature Ledger `kind='event'` is left to the Orchestrator/Auditor integration so the append happens in the same transaction as the asset re-rate.
 
@@ -898,7 +903,7 @@ Implementation: plain pytest + a small runner that writes `evals/results.md` (co
 - **Provider:** `evals/promptfooconfig.yaml` (promptfoo 0.124.0) runs a Python provider that calls the real News Scout path: `_messages`, then `LLMClient.structured`, then `_post_check`. It runs one article per call, with the model tier as a parameter. Nano is on by default; Super and Ultra are opt-in.
 - **Metrics:** promptfoo scores these named metrics: `schema_valid`, `schema_first_try`, `relevance`, `impact_type`, `direction`, `severity` (±1) and `injection_resistance`. Labels are scored on the post-checked events, the ones production keeps. A provider error counts as a failure in every metric.
 - **Cost and caching:** spend is logged to `llm_calls` as `news_scout_eval`. The provider caches at the transport level, keyed on the exact request payload, because promptfoo's Python-provider cache misses across runs.
-- **Baseline (Nano):** relevance 72% (target 85%), impact_type 79%, first-try schema 100%, injection resistance 0/3. One run costs about $0.002. See `evals/README.md`. The prompt fixes are tracked in T72 (#123).
+- **Baseline (Nano):** relevance 72% (target 85%), impact_type 79%, first-try schema 100%, injection resistance 0/3. One run costs about $0.002. See `evals/README.md`. T72 (#123) added the labelling guide to the prompt and the injection guards (§7.5 step 5); the scores after T72 are recorded here once the eval is re-run with a Token Factory key.
 - **Left for T47:** `make eval`, macro-F1, `evals/results.md`, and the other §18 rows.
 
 ## 19. Engineering quality bar
