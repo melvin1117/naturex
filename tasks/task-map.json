@@ -1212,7 +1212,7 @@
       "deps": [
         "T54"
       ],
-      "status": "in_progress",
+      "status": "done",
       "assignees": [
         "adi095"
       ],
@@ -1221,7 +1221,7 @@
         "T69"
       ],
       "step": 5,
-      "chain": 6,
+      "chain": 0,
       "critical": false
     },
     {
@@ -2052,8 +2052,7 @@
         "T58",
         "T59",
         "T68",
-        "T57",
-        "T66"
+        "T57"
       ],
       "unlocks": [
         "T70",
@@ -2275,11 +2274,11 @@
     ]
   },
   "counts": {
-    "done": 30,
-    "in_progress": 5,
+    "done": 31,
+    "in_progress": 4,
     "picked_early": 0,
     "ready": 4,
     "blocked": 39
   },
-  "data_hash": "c16478be6e36c98e"
+  "data_hash": "f663ed586b26ddcc"
 }
