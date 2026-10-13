@@ -1,6 +1,8 @@
 """FastAPI application entrypoint."""
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -8,7 +10,8 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
-from app.config import Settings, get_settings, secure_cookies
+from app.config import Settings, get_settings, rate_limit_secret, secure_cookies
+from app.middleware import CsrfMiddleware, parse_allowed_origins
 from app.routers import admin, assets, auth, copilot, events, ledger, market, media, reports, world
 
 settings = get_settings()
@@ -26,10 +29,44 @@ def warn_if_cookies_insecure(settings: Settings) -> None:
 
 warn_if_cookies_insecure(settings)
 
+
+def validate_auth_settings(settings: Settings) -> frozenset[str]:
+    """Fail at startup, not on the first login, when the auth settings are unusable."""
+    rate_limit_secret(settings)
+    deployed = secure_cookies(settings)  # ENVIRONMENT is not explicitly development or test
+    if deployed and "allowed_origins" not in settings.model_fields_set:
+        raise RuntimeError("ALLOWED_ORIGINS must be set (ENVIRONMENT is not development or test)")
+    origins = parse_allowed_origins(settings.allowed_origins)
+    log = logging.getLogger("app")
+    if not origins:
+        log.warning("ALLOWED_ORIGINS is empty: every state-changing request will be rejected.")
+    if deployed and settings.trusted_proxy_hops == 0:
+        log.warning(
+            "TRUSTED_PROXY_HOPS=0: every request counts as coming from the API's direct peer "
+            "(the Next.js server or a load balancer), so all visitors share one rate-limit "
+            "bucket. Set it to the number of trusted proxies that append to X-Forwarded-For; "
+            "the Next.js /api rewrite does not."
+        )
+    return origins
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    # At startup rather than import, so tools that only import the app (the OpenAPI export for
+    # the API client) don't need production secrets. uvicorn runs this before serving.
+    validate_auth_settings(settings)
+    yield
+
+
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
     description="AI rating agency and sandbox exchange for living nature",
+    lifespan=lifespan,
+)
+app.add_middleware(
+    CsrfMiddleware,
+    allowed_origins=[item.strip() for item in settings.allowed_origins.split(",") if item.strip()],
 )
 
 app.include_router(auth.router)

@@ -71,6 +71,16 @@ class SessionKind(StrEnum):
     DEMO = "demo"  # T55
 
 
+class AuthBucket(StrEnum):
+    IP = "ip"
+    ACCOUNT = "account"
+
+
+class AuthAttemptKind(StrEnum):
+    LOGIN = "login"
+    REGISTER = "register"
+
+
 class AssetStatus(StrEnum):
     DRAFT = "draft"
     RATING = "rating"
@@ -165,6 +175,28 @@ class UserSession(SQLModel, table=True):
     created_at: datetime = _created_at()
     last_seen_at: datetime = _created_at()  # bumped at most every few minutes; 7 d idle limit
     expires_at: datetime = Field(sa_type=DateTime(timezone=True))  # 30 d absolute limit
+
+
+class AuthAttempt(SQLModel, table=True):
+    """One counted sign-in or registration attempt (ADR-0005 section 1, T66).
+
+    Only HMACs are stored, so neither an email nor an IP address can be read back from the table.
+    """
+
+    __tablename__ = "auth_attempts"
+    __table_args__ = (
+        Index("ix_auth_attempts_bucket_key_hmac_created_at", "bucket", "key_hmac", "created_at"),
+        Index("ix_auth_attempts_created_at", "created_at"),
+    )
+
+    id: int | None = Field(
+        default=None,
+        sa_column=Column(BigInteger, primary_key=True, autoincrement=True),
+    )
+    bucket: AuthBucket = Field(sa_column=_enum_column(AuthBucket))
+    key_hmac: str = Field(sa_column=Column(String(64), nullable=False))
+    kind: AuthAttemptKind = Field(sa_column=_enum_column(AuthAttemptKind))
+    created_at: datetime = _created_at()
 
 
 class Asset(SQLModel, table=True):

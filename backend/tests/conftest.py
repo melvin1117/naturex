@@ -11,6 +11,7 @@ import os
 
 import pytest
 from alembic.config import Config
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
@@ -34,7 +35,21 @@ TEST_DATABASE_URL = _test_database_url()
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 # Cookies drop `Secure` only when ENVIRONMENT is explicitly development or test (fail closed).
 os.environ.setdefault("ENVIRONMENT", "test")
+# State-changing requests need an allowed Origin (T66); TestClient's default host is `testserver`.
+TEST_ORIGIN = "http://testserver"
+os.environ["ALLOWED_ORIGINS"] = TEST_ORIGIN
 get_settings.cache_clear()
+
+_testclient_init = TestClient.__init__
+
+
+def _init_with_origin(self: TestClient, *args: object, **kwargs: object) -> None:
+    _testclient_init(self, *args, **kwargs)  # type: ignore[arg-type]
+    # Tests that exercise CSRF remove or replace this header explicitly.
+    self.headers.setdefault("Origin", TEST_ORIGIN)
+
+
+TestClient.__init__ = _init_with_origin  # type: ignore[method-assign]
 
 
 def _can_connect(url: str) -> bool:
