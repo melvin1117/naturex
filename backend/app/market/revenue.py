@@ -15,22 +15,39 @@ asset's community retained stake is recorded as a positive holding for `Asset.co
 
 Market mutation lock contract for T17/T38: lock the `Asset` row first, then affected `User`
 rows in ascending ID order, then `Holding` rows in ascending user ID order, before computing
-or writing the mutation. `pay_quarter` follows that order. Its ledger payload keeps per-holder
-payouts for the demo; this is bounded by the small sandbox holder count.
+or writing the mutation. `pay_quarter` follows that order.
+
+Ledger privacy (ADR-0005 §6, T67): the public `payout` ledger entry holds only aggregates
+(revenue, community fund, dividends total, holder count…) and a commitment of the per-holder
+lines, which live in the private, erasable `payout_lines` table. Each line gets a random
+32-byte nonce and a leaf hash `sha256(nonce ‖ canonical(line))`; the public commitment is
+`sha256(canonical(sorted leaf hashes))`. Without a line's nonce nobody can confirm a guessed
+holder line against the public ledger. Erasing a line clears its contents and nonce but keeps
+its leaf hash as a tombstone, so the erased line becomes unlinkable while every other holder's
+line stays verifiable. `verify_payout_commitment` audits the private lines against the public
+entry; `erase_payout_lines_for_user` erases one user's lines (K5).
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import secrets
+from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Any, Literal, cast
 from uuid import UUID
 
+from sqlalchemy import CursorResult, update
 from sqlmodel import Session, col, select
 
-from app.ledger import append
-from app.models import Asset, Holding, LedgerEntry, LedgerKind, User
+from app.ledger import append, canonical
+from app.models import Asset, Holding, LedgerEntry, LedgerKind, PayoutLine, User
 
 CAPTURE_RATE = Decimal("0.02")
+PAYOUT_COMMITMENT_METHOD = "sha256(canonical(sorted(sha256(nonce||canonical(line)))))/v1"
+NONCE_BYTES = 32
 _QUARTERS_PER_YEAR = Decimal("4")
 _CENT = Decimal("0.01")
 _IMPACT = Decimal("0.0001")
@@ -117,6 +134,26 @@ class ImpactAllocation:
 class AppliedPayout:
     payout: QuarterlyPayout
     ledger_entry: LedgerEntry
+
+
+CommitmentStatus = Literal["ok", "ok_with_erasures", "mismatch", "no_commitment"]
+
+
+@dataclass(frozen=True, slots=True)
+class CommitmentCheck:
+    """The result of auditing a payout's private lines against its public commitment.
+
+    `ok`: the lines reproduce the commitment. `ok_with_erasures`: they do, with `erased`
+    tombstones standing in for erased lines. `mismatch`: a line, a nonce or a leaf was added,
+    removed or changed. `no_commitment`: a pre-T67 entry that lists holders in its payload.
+    """
+
+    status: CommitmentStatus
+    erased: int = 0
+
+    @property
+    def valid(self) -> bool:
+        return self.status in ("ok", "ok_with_erasures")
 
 
 def _cash(value: Decimal) -> Decimal:
@@ -322,6 +359,39 @@ def _require_community_holding(asset: Asset, holdings: list[Holding]) -> None:
         )
 
 
+def payout_line_leaf(nonce: bytes, user_id: UUID, shares: int, amount: Decimal) -> str:
+    """`sha256(nonce ‖ canonical(line))` for one holder line; amounts normalised to cents."""
+    if len(nonce) != NONCE_BYTES:
+        raise ValueError(f"nonce must be {NONCE_BYTES} bytes, got {len(nonce)}")
+    line = canonical({"user_id": str(user_id), "shares": shares, "amount": str(_cash(amount))})
+    return hashlib.sha256(nonce + line).hexdigest()
+
+
+def payout_lines_commitment(leaf_hashes: Iterable[str]) -> str:
+    """`sha256(canonical({"leaves": sorted(leaf_hashes)}))`; row order doesn't matter."""
+    return hashlib.sha256(canonical({"leaves": sorted(leaf_hashes)})).hexdigest()
+
+
+def _payout_ledger_payload(
+    payout: QuarterlyPayout, *, quarter_label: str, commitment: str
+) -> dict[str, object]:
+    """Aggregates and the line commitment only: never a holder ID, name or email."""
+    return {
+        "quarter_label": quarter_label,
+        "value_mid": payout.value_mid,
+        "capture_rate": payout.capture_rate,
+        "revenue": payout.revenue,
+        "community_fund": payout.split.community_fund,
+        "dividend_pool": payout.split.dividend_pool,
+        "dividends_total": payout.dividends_total,
+        "unallocated_dividends": payout.unallocated_dividends,
+        "community_wallet_credit": payout.community_wallet_credit,
+        "holder_count": len(payout.holder_payouts),
+        "lines_commitment": commitment,
+        "commitment_method": PAYOUT_COMMITMENT_METHOD,
+    }
+
+
 def pay_quarter(
     session: Session,
     *,
@@ -336,6 +406,9 @@ def pay_quarter(
     the same asset queue behind the same `SELECT … FOR UPDATE` and the second transaction
     sees the first transaction's payout entry. The function is intentionally not wired to
     routers while T17 rewrites `routers/market.py`; T38/T44 will call it from jobs/UI flows.
+
+    Writes one private `payout_lines` row per paid holder (with its nonce and leaf hash) and a
+    public ledger entry with aggregates and the commitment over the leaf hashes.
     """
     if not quarter_label:
         raise ValueError("quarter_label must not be empty")
@@ -356,34 +429,97 @@ def pay_quarter(
         holders=tuple(HolderShares(str(holding.user_id), holding.shares) for holding in holdings),
     )
 
+    lines: list[PayoutLine] = []
     for holder_payout in payout.holder_payouts:
         user_id = UUID(holder_payout.key)
         user = users_by_id.get(user_id)
         if user is None:
             raise LookupError(f"holder user {user_id} not found in world {world_id}")
         user.cash_balance = _cash(user.cash_balance + holder_payout.amount)
+        nonce = secrets.token_bytes(NONCE_BYTES)
+        lines.append(
+            PayoutLine(
+                world_id=world_id,
+                asset_id=asset_id,
+                quarter_label=quarter_label,
+                user_id=user_id,
+                shares=holder_payout.shares,
+                amount=holder_payout.amount,
+                nonce=nonce,
+                leaf_hash=payout_line_leaf(
+                    nonce, user_id, holder_payout.shares, holder_payout.amount
+                ),
+            )
+        )
 
     asset.community_wallet = _cash(asset.community_wallet + payout.community_wallet_credit)
+    session.add_all(lines)
+    commitment = payout_lines_commitment(line.leaf_hash for line in lines)
     ledger_entry = append(
         session,
         world_id=world_id,
         asset_id=asset_id,
         kind=LedgerKind.PAYOUT,
-        payload={
-            "quarter_label": quarter_label,
-            "value_mid": payout.value_mid,
-            "capture_rate": payout.capture_rate,
-            "revenue": payout.revenue,
-            "community_fund": payout.split.community_fund,
-            "dividend_pool": payout.split.dividend_pool,
-            "dividends_total": payout.dividends_total,
-            "unallocated_dividends": payout.unallocated_dividends,
-            "community_wallet_credit": payout.community_wallet_credit,
-            "holder_count": len(payout.holder_payouts),
-            "holder_payouts": [
-                {"user_id": p.key, "shares": p.shares, "amount": p.amount}
-                for p in payout.holder_payouts
-            ],
-        },
+        payload=_payout_ledger_payload(payout, quarter_label=quarter_label, commitment=commitment),
     )
     return AppliedPayout(payout=payout, ledger_entry=ledger_entry)
+
+
+def _recomputed_leaf(line: PayoutLine) -> str | None:
+    """The line's leaf from its contents, its stored leaf if it's a tombstone, None if broken."""
+    if line.user_id is None and line.shares is None and line.amount is None and line.nonce is None:
+        return line.leaf_hash
+    if line.user_id is None or line.shares is None or line.amount is None or line.nonce is None:
+        return None
+    try:
+        return payout_line_leaf(line.nonce, line.user_id, line.shares, line.amount)
+    except ValueError:
+        return None
+
+
+def verify_payout_commitment(session: Session, ledger_entry: LedgerEntry) -> CommitmentCheck:
+    """Recompute a payout entry's commitment from the private lines.
+
+    Audits `payout_lines` against the public ledger. Live lines are rehashed from their
+    contents and nonce; erased lines contribute their tombstone leaf hash. Any edited, added
+    or removed line gives `mismatch`.
+    """
+    if ledger_entry.kind != LedgerKind.PAYOUT:
+        raise ValueError(f"ledger entry {ledger_entry.seq} is a {ledger_entry.kind}, not a payout")
+    commitment = ledger_entry.payload.get("lines_commitment")
+    if not isinstance(commitment, str):
+        return CommitmentCheck("no_commitment")
+    lines = session.exec(
+        select(PayoutLine).where(
+            PayoutLine.world_id == ledger_entry.world_id,
+            PayoutLine.asset_id == ledger_entry.asset_id,
+            PayoutLine.quarter_label == ledger_entry.payload["quarter_label"],
+        )
+    ).all()
+    leaves = [_recomputed_leaf(line) for line in lines]
+    if any(leaf is None for leaf in leaves):
+        return CommitmentCheck("mismatch")
+    recomputed = payout_lines_commitment(leaf for leaf in leaves if leaf is not None)
+    if not hmac.compare_digest(recomputed, commitment):
+        return CommitmentCheck("mismatch")
+    erased = sum(1 for line in lines if line.user_id is None)
+    return CommitmentCheck("ok_with_erasures", erased) if erased else CommitmentCheck("ok")
+
+
+def erase_payout_lines_for_user(session: Session, *, world_id: UUID, user_id: UUID) -> int:
+    """Erase one user's payout lines, leaving tombstones (K5).
+
+    Runs in the caller's transaction and returns the number of lines erased. Each line's user,
+    shares, amount and nonce are cleared; its leaf hash stays, without the nonce it can't be
+    linked to the erased contents. The public ledger entries are untouched and every other
+    holder's line still verifies (`ok_with_erasures`).
+    """
+    erased = cast(
+        CursorResult[Any],
+        session.execute(
+            update(PayoutLine)
+            .where(col(PayoutLine.world_id) == world_id, col(PayoutLine.user_id) == user_id)
+            .values(user_id=None, shares=None, amount=None, nonce=None)
+        ),
+    )
+    return int(erased.rowcount or 0)
