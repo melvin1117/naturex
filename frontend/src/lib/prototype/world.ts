@@ -13,6 +13,7 @@ import {
   type ScenarioKey,
 } from "./data";
 import { compareGrades, GRADE_LABEL, price as fmtPrice } from "./format";
+import { areaHa as polygonArea } from "./geo";
 import { append, type LedgerEntry } from "./ledger";
 import {
   ALPHA_RERATE,
@@ -20,7 +21,7 @@ import {
   addDays,
   gauss,
   maxOrderUnits,
-  priceAfter,
+  priceAfterOrder,
   quote,
   reanchor,
   rng,
@@ -140,6 +141,8 @@ export type Site = {
   totalUnits: number;
   retainedPct: number;
   primaryRemaining: number;
+  /** Units sold back to the sandbox market maker; buys draw on these after the primary float. */
+  marketMakerUnits: number;
   price: number;
   ipoPrice: number | null;
   listedAt: string | null;
@@ -183,7 +186,7 @@ export type TradeReceipt = {
 };
 
 export type World = {
-  schema: 3;
+  schema: 4;
   seq: number;
   quarter: number;
   today: string;
@@ -204,6 +207,47 @@ export type World = {
 };
 
 const START = QUARTER_DATES[0];
+/** When the seeded sites were re-rated after their first news. */
+const REVIEW_DATE = "2026-10-01";
+
+/** Sample documents for the demo verification mode (ADR-0006 §6). */
+export const SAMPLE_DOCUMENTS = [
+  "Land title certificate (sample).pdf",
+  "Assembly minutes, consent (sample).pdf",
+  "Cooperative registration (sample).pdf",
+];
+
+export function hasConsentDocument(documents: string[]) {
+  return documents.some((d) => /consent/i.test(d));
+}
+
+/** ADR-0006 deterministic checks, as far as the prototype can run them. */
+export function documentChecks(documents: string[]) {
+  const any = documents.length > 0;
+  return {
+    format: any ? "pass" : "not_run",
+    not_reused: any ? "pass" : "not_run",
+    boundary_free: "pass",
+    consent_document: hasConsentDocument(documents)
+      ? "pass"
+      : any
+        ? "fail"
+        : "not_run",
+  };
+}
+
+/** Events for a site in the year up to `date`: what a rating on that date could know. */
+function eventsAt(world: World, siteId: string, date: string) {
+  const from = addDays(date, -365);
+  return world.events.filter(
+    (e) => e.siteId === siteId && e.date <= date && e.date > from,
+  );
+}
+
+/** Which account trades and receives alerts for the current persona. Admins never trade. */
+export function actingTrader(persona: PersonaKey): TraderKey | null {
+  return persona === "admin" ? null : persona;
+}
 
 function nextId(world: World, prefix: string): [World, string] {
   const seq = world.seq + 1;
@@ -343,6 +387,7 @@ function seedSite(
     totalUnits: TOTAL_UNITS,
     retainedPct: 51,
     primaryRemaining: 0,
+    marketMakerUnits: 0,
     price: 0,
     ipoPrice: null,
     listedAt: null,
@@ -353,45 +398,78 @@ function seedSite(
   };
   if (!meta.initiallyListed) return { world: w, site };
 
-  for (const news of SAMPLE_NEWS[meta.id] ?? []) {
-    const idNext = nextId(w, "ev");
-    w = idNext[0];
-    const id = idNext[1];
-    w = { ...w, events: [...w.events, { ...news, id, siteId: meta.id }] };
-  }
-  const runIdNext = nextId(w, "run");
-  w = runIdNext[0];
-  const runId = runIdNext[1];
-  const siteEvents = w.events.filter((e) => e.siteId === meta.id);
-  const report = buildReport({
+  // v1: the deterministic rating at listing, exactly as the backend seeds it (no news yet,
+  // Auditor pending), so the opening price matches dev-spec §8 and the backend seed.
+  const v1 = buildReport({
     siteKey: meta.key,
     siteName: data.name,
     scenario: "baseline",
     period: QUARTERS[0],
     version: 1,
     createdAt: listedAt,
+    runId: `seed-${meta.id}`,
+  });
+  const ipo = v1.fairValuePerUnit;
+  const before = seedHistory({
+    seed,
+    start: listedAt,
+    until: REVIEW_DATE,
+    ipo,
+    fair: ipo,
+  });
+
+  for (const news of SAMPLE_NEWS[meta.id] ?? []) {
+    const idNext = nextId(w, "ev");
+    w = idNext[0];
+    w = {
+      ...w,
+      events: [...w.events, { ...news, id: idNext[1], siteId: meta.id }],
+    };
+  }
+  // v2: re-rated after the news, with the (scripted) Auditor review.
+  const runIdNext = nextId(w, "run");
+  w = runIdNext[0];
+  const runId = runIdNext[1];
+  const siteEvents = eventsAt(w, meta.id, REVIEW_DATE);
+  const v2 = buildReport({
+    siteKey: meta.key,
+    siteName: data.name,
+    scenario: "baseline",
+    period: QUARTERS[0],
+    version: 2,
+    createdAt: REVIEW_DATE,
     runId,
     overlay: auditorFor("baseline", 0, siteEvents),
+    events: siteEvents,
   });
   const run = buildRun({
     id: runId,
     siteId: meta.id,
     siteName: data.name,
-    report,
+    report: v2,
     trigger: "seed",
-    startedAt: listedAt,
+    startedAt: REVIEW_DATE,
     events: siteEvents,
     photos: 0,
     seed,
   });
-  const ipo = report.fairValuePerUnit;
-  const prices = seedHistory({
-    seed,
-    start: listedAt,
+  const rerated = reanchor(
+    before[before.length - 1].price,
+    v2.fairValuePerUnit,
+    ALPHA_RERATE,
+  );
+  const after = seedHistory({
+    seed: seed + 1,
+    start: REVIEW_DATE,
     until: START,
-    ipo,
-    fair: ipo,
+    ipo: rerated,
+    fair: v2.fairValuePerUnit,
   });
+  const prices: PricePoint[] = [
+    ...before.slice(0, -1),
+    { t: REVIEW_DATE, price: rerated, reason: "rerate" },
+    ...after.slice(1),
+  ];
   const offered = Math.round(TOTAL_UNITS * 0.49);
   // Earlier supporters already bought some primary units.
   const sold = Math.round(offered * (0.03 + (seed % 7) / 1000));
@@ -400,13 +478,13 @@ function seedSite(
     status: "listed",
     verification: "verified",
     verifiedAt: addDays(listedAt, -4),
-    documents: ["Land title certificate.pdf", "Assembly minutes (consent).pdf"],
+    documents: [...SAMPLE_DOCUMENTS],
     primaryRemaining: offered - sold,
     price: prices[prices.length - 1].price,
     ipoPrice: ipo,
     listedAt,
     communityFund: round2(sold * ipo),
-    reports: [report],
+    reports: [v1, v2],
     prices,
   };
   let chain: LedgerEntry[] = [];
@@ -414,29 +492,31 @@ function seedSite(
     site: site.name,
     community: site.community,
     area_ha: site.areaHa,
+    polygon: site.polygon,
   });
   chain = append(chain, "verification", addDays(listedAt, -4), {
     level: "verified",
+    evidence_kind: "sample",
     reviewer_role: "platform_admin",
-    checks: {
-      format: "pass",
-      not_reused: "pass",
-      boundary_free: "pass",
-      consent_document: "pass",
-    },
+    checks: documentChecks(site.documents),
   });
-  chain = append(chain, "report", listedAt, reportPayload(report));
+  chain = append(chain, "report", listedAt, reportPayload(v1));
   chain = append(chain, "price_anchor", listedAt, {
     reason: "ipo",
     price: ipo,
     units_offered: offered,
   });
-  for (const e of siteEvents)
+  for (const e of [...siteEvents].sort((a, b) => (a.date < b.date ? -1 : 1)))
     chain = append(chain, "event", e.date, {
       title: e.title,
       direction: e.direction,
       severity: e.severity,
     });
+  chain = append(chain, "report", REVIEW_DATE, reportPayload(v2));
+  chain = append(chain, "price_anchor", REVIEW_DATE, {
+    reason: "rerate",
+    price: rerated,
+  });
   w = {
     ...w,
     runs: [...w.runs, run],
@@ -459,7 +539,7 @@ function reportPayload(r: Report) {
 
 export function createInitialWorld(persona: PersonaKey = "investor"): World {
   let world: World = {
-    schema: 3,
+    schema: 4,
     seq: 0,
     quarter: 0,
     today: START,
@@ -569,23 +649,43 @@ export function updateDraft(world: World, patch: Partial<Draft>): World {
 
 export const HERO_ID = "xochimilco-wetland";
 
-/** Runs the (recorded) rating pipeline on the steward's draft and stores report v1. */
+/** Fixed seed so the listing preview and the stored run show the same steps and timings. */
+const LISTING_RUN_SEED = 17;
+
+function samePolygon(a: LatLng[], b: LatLng[]) {
+  return (
+    a.length === b.length &&
+    a.every((p, i) => p[0] === b[i][0] && p[1] === b[i][1])
+  );
+}
+
+/**
+ * Runs the (recorded) rating pipeline on the steward's draft and stores the report. Pure, so
+ * the listing screen can preview the exact run before it's stored.
+ */
 export function rateDraft(world: World): World {
   const site = siteById(world, HERO_ID);
   if (!site) return world;
+  const data = siteDataFor(site.key);
   let w = world;
   if (!w.events.some((e) => e.siteId === HERO_ID)) {
     for (const news of SAMPLE_NEWS[HERO_ID]) {
       const idNext = nextId(w, "ev");
       w = idNext[0];
-      const id = idNext[1];
-      w = { ...w, events: [...w.events, { ...news, id, siteId: HERO_ID }] };
+      w = {
+        ...w,
+        events: [...w.events, { ...news, id: idNext[1], siteId: HERO_ID }],
+      };
     }
   }
   const runIdNext = nextId(w, "run");
   w = runIdNext[0];
   const runId = runIdNext[1];
-  const events = w.events.filter((e) => e.siteId === HERO_ID);
+  const saved = data.polygon.slice(0, -1);
+  const drawn = w.draft.polygon.length >= 3 ? w.draft.polygon : saved;
+  const custom = !samePolygon(drawn, saved);
+  const area = custom ? Math.round(polygonArea(drawn) * 10) / 10 : data.areaHa;
+  const events = eventsAt(w, HERO_ID, w.today);
   const report = buildReport({
     siteKey: site.key,
     siteName: site.name,
@@ -595,6 +695,8 @@ export function rateDraft(world: World): World {
     createdAt: w.today,
     runId,
     overlay: auditorFor("baseline", w.draft.photos, events),
+    events,
+    areaHa: area,
   });
   const run = buildRun({
     id: runId,
@@ -605,13 +707,13 @@ export function rateDraft(world: World): World {
     startedAt: w.today,
     events,
     photos: w.draft.photos,
-    seed: w.seq,
+    seed: LISTING_RUN_SEED,
   });
   w = updateSite(w, HERO_ID, (s) => ({
     ...s,
-    name: s.name,
     description: w.draft.description,
-    polygon: w.draft.polygon.length >= 3 ? w.draft.polygon : s.polygon,
+    polygon: custom ? drawn : data.polygon,
+    areaHa: area,
     documents: w.draft.documents,
     photos: w.draft.photos,
     verification: w.draft.documents.length
@@ -623,7 +725,8 @@ export function rateDraft(world: World): World {
     w = addLedger(w, HERO_ID, "listing", {
       site: site.name,
       community: w.community.name,
-      area_ha: site.areaHa,
+      area_ha: area,
+      polygon: custom ? drawn : data.polygon,
     });
   }
   w = addLedger(w, HERO_ID, "report", reportPayload(report));
@@ -687,6 +790,11 @@ export function placeOrder(
   units: number,
 ): OrderResult {
   const site = siteById(world, siteId);
+  if (site?.status === "suspended")
+    return {
+      ok: false,
+      message: "Trading is paused on this site while the platform reviews it.",
+    };
   if (!site || site.status !== "listed")
     return { ok: false, message: "This site isn't open for stakes yet." };
   if (trader === "steward" && site.stewardOwned)
@@ -702,6 +810,12 @@ export function placeOrder(
     return {
       ok: false,
       message: `One order can be at most ${max.toLocaleString("en-US")} units.`,
+    };
+  const available = site.primaryRemaining + site.marketMakerUnits;
+  if (side === "buy" && units > available)
+    return {
+      ok: false,
+      message: `Only ${available.toLocaleString("en-US")} units are available right now.`,
     };
   const fill = quote(site.price, side, units, site.totalUnits);
   const total = round2(fill * units);
@@ -721,7 +835,8 @@ export function placeOrder(
   const primaryUnits =
     side === "buy" ? Math.min(units, site.primaryRemaining) : 0;
   const fundGain = round2(primaryUnits * fill);
-  const newPrice = priceAfter(site.price, fill);
+  const newPrice = priceAfterOrder(site.price, side, units, site.totalUnits);
+  const marketMakerDelta = side === "buy" ? -(units - primaryUnits) : units;
   let w: World;
   const orderIdNext = nextId(world, "ord");
   w = orderIdNext[0];
@@ -770,6 +885,7 @@ export function placeOrder(
     ...s,
     price: newPrice,
     primaryRemaining: s.primaryRemaining - primaryUnits,
+    marketMakerUnits: s.marketMakerUnits + marketMakerDelta,
     communityFund: round2(s.communityFund + fundGain),
     prices: [...s.prices, { t: w.today, price: newPrice, reason: "order" }],
   }));
@@ -830,7 +946,7 @@ function rerate(
   const runIdNext = nextId(w, "run");
   w = runIdNext[0];
   const runId = runIdNext[1];
-  const events = w.events.filter((e) => e.siteId === siteId);
+  const events = eventsAt(w, siteId, w.today);
   const report = buildReport({
     siteKey: site.key,
     siteName: site.name,
@@ -840,6 +956,8 @@ function rerate(
     createdAt: w.today,
     runId,
     overlay: auditorFor(scenario, site.photos, events),
+    events,
+    areaHa: site.areaHa,
   });
   const run = buildRun({
     id: runId,
@@ -1037,15 +1155,12 @@ export function setVerification(
     verification: level,
     verifiedAt: level === "verified" ? world.today : s.verifiedAt,
   }));
+  const site = siteById(w, siteId);
   return addLedger(w, siteId, "verification", {
     level,
+    evidence_kind: "sample",
     reviewer_role: "platform_admin",
-    checks: {
-      format: "pass",
-      not_reused: "pass",
-      boundary_free: "pass",
-      consent_document: "pass",
-    },
+    checks: documentChecks(site?.documents ?? []),
   });
 }
 
@@ -1098,4 +1213,27 @@ export function markAlertsRead(world: World, persona: TraderKey): World {
 
 export function gradeLine(report: Report) {
   return `${report.grade} · ${report.health.toFixed(1)} · ${GRADE_LABEL[report.grade]}`;
+}
+
+/** True until the visitor changes anything (price ticks don't count). */
+export function isFreshWorld(world: World) {
+  const initial = createInitialWorld(world.persona);
+  return (
+    world.quarter === 0 &&
+    world.orders.length === 0 &&
+    world.events.length === initial.events.length &&
+    world.runs.length === initial.runs.length &&
+    world.copilot.length === 0 &&
+    !world.community.registered &&
+    world.draft.step === 0 &&
+    world.draft.polygon.length === 0 &&
+    world.draft.documents.length === 0 &&
+    world.draft.photos === 0 &&
+    Object.keys(world.tampered).length === 0 &&
+    world.sites.every(
+      (s, i) =>
+        s.status === initial.sites[i]?.status &&
+        s.verification === initial.sites[i]?.verification,
+    )
+  );
 }

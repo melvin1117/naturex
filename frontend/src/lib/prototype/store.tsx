@@ -55,12 +55,42 @@ type Store = {
 
 const Ctx = createContext<Store | null>(null);
 
+/** A stored world from an older build or a hand-edited blob is dropped, not trusted. */
+export function isValidWorld(value: unknown): value is World {
+  if (!value || typeof value !== "object") return false;
+  const w = value as Partial<World>;
+  return (
+    w.schema === 4 &&
+    typeof w.seq === "number" &&
+    typeof w.quarter === "number" &&
+    typeof w.today === "string" &&
+    Array.isArray(w.sites) &&
+    w.sites.every(
+      (s) =>
+        Array.isArray(s.reports) &&
+        Array.isArray(s.prices) &&
+        typeof s.marketMakerUnits === "number",
+    ) &&
+    Array.isArray(w.events) &&
+    Array.isArray(w.alerts) &&
+    Array.isArray(w.orders) &&
+    Array.isArray(w.runs) &&
+    Array.isArray(w.copilot) &&
+    !!w.cash &&
+    !!w.holdings &&
+    !!w.ledger &&
+    !!w.draft &&
+    !!w.community &&
+    !!w.tampered
+  );
+}
+
 function load(): World | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as World;
-    return parsed.schema === 3 ? parsed : null;
+    const parsed: unknown = JSON.parse(raw);
+    return isValidWorld(parsed) ? parsed : null;
   } catch {
     return null;
   }

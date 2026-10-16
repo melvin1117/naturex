@@ -61,6 +61,10 @@ export function Delta({
   );
 }
 
+/**
+ * Marks a step that calls Nemotron or Tavily live in the full build. The prototype replays a
+ * recorded run, so the visible text says so (not just a tooltip).
+ */
 export function LiveBadge({
   className,
   label = "Live",
@@ -81,6 +85,7 @@ export function LiveBadge({
         <span className="relative inline-flex size-1.5 rounded-full bg-lime-ink" />
       </span>
       {label}
+      <span className="font-medium normal-case opacity-80">· replay</span>
     </span>
   );
 }

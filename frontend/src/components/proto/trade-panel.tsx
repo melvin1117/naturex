@@ -9,27 +9,39 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { price as fmtPrice } from "@/lib/prototype/format";
-import { maxOrderUnits, quote, type Side } from "@/lib/prototype/market";
+import {
+  maxAffordableUnits,
+  maxOrderUnits,
+  quote,
+  type Side,
+} from "@/lib/prototype/market";
 import { usePrototype } from "@/lib/prototype/store";
-import { PERSONAS, type Site, type TraderKey } from "@/lib/prototype/world";
+import {
+  actingTrader,
+  PERSONAS,
+  type Site,
+  type TraderKey,
+} from "@/lib/prototype/world";
 
 export function TradePanel({ site }: { site: Site }) {
   const { world, placeOrder } = usePrototype();
-  const [side, setSide] = useState<Side>("buy");
+  const [chosenSide, setSide] = useState<Side>("buy");
   const [unitsText, setUnitsText] = useState("100");
   const [error, setError] = useState<string | null>(null);
   const persona = world.persona;
-  const trader: TraderKey | null = persona === "admin" ? null : persona;
+  const trader: TraderKey | null = actingTrader(persona);
   const units = Number(unitsText);
   const valid = Number.isInteger(units) && units > 0;
-  const fill = valid
-    ? quote(site.price, side, units, site.totalUnits)
-    : site.price;
-  const total = valid ? fill * units : 0;
   const cash = trader ? world.cash[trader] : 0;
   const held = trader
     ? (world.holdings[trader].find((h) => h.siteId === site.id)?.units ?? 0)
     : 0;
+  // Selling everything disables the Sell tab, so fall back to Buy.
+  const side: Side = held === 0 ? "buy" : chosenSide;
+  const fill = valid
+    ? quote(site.price, side, units, site.totalUnits)
+    : site.price;
+  const total = valid ? fill * units : 0;
   const primary =
     side === "buy" && valid ? Math.min(units, site.primaryRemaining) : 0;
   const receipt =
@@ -101,7 +113,7 @@ export function TradePanel({ site }: { site: Site }) {
                 setError(null);
               }}
               aria-invalid={!valid || undefined}
-              aria-describedby="trade-error"
+              aria-describedby={error ? "trade-error" : undefined}
               className="tabular text-lg"
             />
             <div className="flex gap-1.5">
@@ -123,11 +135,13 @@ export function TradePanel({ site }: { site: Site }) {
                       Math.max(
                         0,
                         side === "buy"
-                          ? Math.min(
-                              Math.floor(cash / (site.price * 1.002)),
-                              maxOrderUnits(site.totalUnits),
+                          ? maxAffordableUnits(
+                              site.price,
+                              cash,
+                              site.totalUnits,
+                              site.primaryRemaining + site.marketMakerUnits,
                             )
-                          : held,
+                          : Math.min(held, maxOrderUnits(site.totalUnits)),
                       ),
                     ),
                   )

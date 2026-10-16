@@ -30,6 +30,7 @@ import { usePrototype } from "@/lib/prototype/store";
 import { siteDataFor } from "@/lib/prototype/data";
 import {
   HERO_ID,
+  isFreshWorld,
   launchOffer,
   rateDraft,
   registerCommunity,
@@ -365,17 +366,25 @@ export function TourProvider({ children }: { children: ReactNode }) {
     go(Math.min(resumeAt, TOUR_STEPS.length - 1));
   }, [resumeAt, store.hydrated, go]);
 
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const beginFresh = useCallback(() => {
+    setConfirmOpen(false);
+    store.reset();
+    window.setTimeout(() => go(0), 30);
+  }, [store, go]);
+
   const api = useMemo<TourApi>(
     () => ({
       ...state,
       start: () => {
-        store.reset();
-        window.setTimeout(() => go(0), 30);
+        // The tour needs the starting world; ask before discarding the visitor's changes.
+        if (isFreshWorld(store.world)) beginFresh();
+        else setConfirmOpen(true);
       },
       stop: () => setState({ active: false, index: 0, finished: false }),
       go,
     }),
-    [state, go, store],
+    [state, go, store, beginFresh],
   );
 
   return (
@@ -393,6 +402,24 @@ export function TourProvider({ children }: { children: ReactNode }) {
         onClose={() => setState((s) => ({ ...s, finished: false }))}
         onRestart={() => api.start()}
       />
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>Start the tour from a fresh sandbox?</DialogTitle>
+            <DialogDescription>
+              The tour starts from the beginning of the story, so your listings,
+              stakes and Time Machine changes will be reset. You stay on the
+              same persona.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+              Keep my demo
+            </Button>
+            <Button onClick={beginFresh}>Reset and start the tour</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </TourCtx.Provider>
   );
 }

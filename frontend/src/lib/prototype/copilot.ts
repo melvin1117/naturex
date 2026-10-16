@@ -3,7 +3,7 @@
  * citations to the report, news events and ledger. T39 replaces this with Nemotron 3 Nano + RAG.
  */
 import { GRADE_LABEL, money, pct, price, signedPct } from "./format";
-import { SERVICE_GROUPS } from "./data";
+import { SCORE_COMPONENTS, SERVICE_GROUPS, siteDataFor } from "./data";
 import { latestReport, previousReport, type World } from "./world";
 
 export type CopilotAnswer = {
@@ -53,6 +53,14 @@ export function answer(
   const events = world.events.filter((e) => e.siteId === site.id);
   const latestNeg = [...events].reverse().find((e) => e.direction < 0);
 
+  if (/(sure|confiden|certain|trust)/.test(q)) {
+    const c = report.confidenceComponents;
+    return {
+      text: `Confidence is ${pct(report.confidence)}. It weighs satellite coverage (${pct(c.coverage * 100)}, 40%), agreement between satellite and news (${pct(c.agreement * 100)}, 30%), field evidence (${c.evidence === 1 ? "validated photos" : "none yet"}, 20%) and data recency (${pct(c.recency * 100)}, 10%). ${c.evidence < 1 ? "Geotagged photos from the community would raise it." : ""}`,
+      citations: [reportCite],
+    };
+  }
+
   if (/(why|drop|fell|fall|down|change|price|move|downgrad)/.test(q)) {
     if (prev && report.health !== prev.health) {
       const dir = report.health < prev.health ? "fell" : "rose";
@@ -83,7 +91,7 @@ export function answer(
           );
       } else if (report.scenario === "restoration") {
         parts.push(
-          `Vegetation is greener over the last 12 months and the canals are re-flooded, which lifts vegetation vigour and water stability.`,
+          `${siteDataFor(site.key).scenarios.restoration.description ?? "Restoration work shows in the latest satellite data."} That lifts vegetation vigour and water stability.`,
         );
       }
       const first = site.prices[0]?.price;
@@ -99,14 +107,6 @@ export function answer(
     };
   }
 
-  if (/(sure|confiden|certain|trust)/.test(q)) {
-    const c = report.confidenceComponents;
-    return {
-      text: `Confidence is ${pct(report.confidence)}. It weighs satellite coverage (${pct(c.coverage * 100)}, 40%), agreement between satellite and news (${pct(c.agreement * 100)}, 30%), field evidence (${c.evidence === 1 ? "validated photos" : "none yet"}, 20%) and data recency (${pct(c.recency * 100)}, 10%). ${c.evidence < 1 ? "Geotagged photos from the community would raise it." : ""}`,
-      citations: [reportCite],
-    };
-  }
-
   if (/(value|worth|dollar|\$|estimat|service)/.test(q)) {
     const groups = SERVICE_GROUPS.map((g) => ({
       label: g.label,
@@ -118,8 +118,12 @@ export function answer(
     };
   }
 
+  const weakest = SCORE_COMPONENTS.map((c) => ({
+    label: c.issue,
+    value: report.components[c.key] ?? 0,
+  })).reduce((a, b) => (b.value < a.value ? b : a));
   return {
-    text: `${site.name} is rated ${report.grade} (${GRADE_LABEL[report.grade].toLowerCase()}), health ${report.health.toFixed(1)}. The score weighs vegetation vigour (30%), natural cover (25%), habitat loss (20%), water stability (15%) and threat pressure (10%). Its weakest part is water stability at ${pct(report.components.water_stability * 100)}. The formula sets the number; the Auditor can only adjust it within ±10 with cited evidence.`,
+    text: `${site.name} is rated ${report.grade} (${GRADE_LABEL[report.grade].toLowerCase()}), health ${report.health.toFixed(1)}. The score weighs vegetation vigour (30%), natural cover (25%), habitat loss (20%), water stability (15%) and threat pressure (10%). Its weakest part is ${weakest.label}, scoring ${Math.round(weakest.value * 100)} out of 100. The formula sets the number; the Auditor can only adjust it within ±10 with cited evidence.`,
     citations: [
       reportCite,
       { label: "Nature Ledger", href: `${href}?tab=ledger` },

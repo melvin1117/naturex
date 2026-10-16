@@ -17,12 +17,17 @@ import {
 } from "@/components/ui/table";
 import { date, int, price } from "@/lib/prototype/format";
 import { usePrototype } from "@/lib/prototype/store";
-import { latestReport, PERSONAS, type TraderKey } from "@/lib/prototype/world";
+import {
+  actingTrader,
+  latestReport,
+  PERSONAS,
+  type TraderKey,
+} from "@/lib/prototype/world";
 
 export function Portfolio() {
   const { world } = usePrototype();
-  const trader: TraderKey =
-    world.persona === "steward" ? "steward" : "investor";
+  // Admins don't hold stakes; the page then shows Arjun's account with a note.
+  const trader: TraderKey = actingTrader(world.persona) ?? "investor";
   const holdings = world.holdings[trader]
     .map((h) => {
       const site = world.sites.find((s) => s.id === h.siteId)!;

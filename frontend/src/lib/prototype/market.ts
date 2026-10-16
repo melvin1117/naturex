@@ -39,9 +39,43 @@ export function quote(
   return round4(price * (1 + (side === "buy" ? 1 : -1) * slippage));
 }
 
-/** Price after an order moves halfway toward its fill (β = 0.5). */
-export function priceAfter(price: number, fill: number) {
-  return round4(price + BETA * (fill - price));
+export const MIN_PRICE = 0.0001;
+
+/**
+ * Price after an order, as in `engine.execute`: price + β × price × signed_qty / liquidity.
+ * With β = k this equals the fill price, so the next order starts where this one filled.
+ */
+export function priceAfterOrder(
+  price: number,
+  side: Side,
+  units: number,
+  totalUnits: number,
+) {
+  const signed = side === "buy" ? units : -units;
+  return Math.max(
+    MIN_PRICE,
+    round4(price + (BETA * price * signed) / liquidity(totalUnits)),
+  );
+}
+
+/** Largest whole number of units whose total (with slippage) fits the cash and supply. */
+export function maxAffordableUnits(
+  price: number,
+  cash: number,
+  totalUnits: number,
+  available: number,
+) {
+  let units = Math.min(
+    Math.floor(cash / price),
+    maxOrderUnits(totalUnits),
+    available,
+  );
+  while (
+    units > 0 &&
+    round2(quote(price, "buy", units, totalUnits) * units) > cash
+  )
+    units -= 1;
+  return Math.max(0, units);
 }
 
 export function reanchor(
@@ -51,7 +85,7 @@ export function reanchor(
   noise = 0,
 ) {
   const anchored = price + alpha * (fair - price);
-  return Math.max(0.0001, round4(anchored * (1 + noise)));
+  return Math.max(MIN_PRICE, round4(anchored * (1 + noise)));
 }
 
 /** Deterministic PRNG (mulberry32), so the seeded world renders the same on server and client. */

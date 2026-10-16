@@ -4,13 +4,14 @@ import { cn } from "cn";
 import type { Verification } from "@/lib/prototype/world";
 
 const TEXT: Record<Verification, { short: string; long: string }> = {
+  // Every document in the prototype is a sample, so the ADR-0006 §6 demo badge applies.
   verified: {
-    short: "Documents reviewed",
-    long: "Documents reviewed by NatureX (hackathon process)",
+    short: "Demo verification",
+    long: "Demo verification: sample documents, no real ownership checked",
   },
   documents_submitted: {
-    short: "Documents submitted",
-    long: "Documents submitted, awaiting review",
+    short: "Sample documents submitted",
+    long: "Sample documents submitted, awaiting review (demo)",
   },
   unverified: {
     short: "Self-attested",

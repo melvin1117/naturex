@@ -39,7 +39,12 @@ import { date, money, quarterLabel, signed } from "@/lib/prototype/format";
 import { verify, type VerifyResult } from "@/lib/prototype/ledger";
 import type { Report } from "@/lib/prototype/rating";
 import { usePrototype } from "@/lib/prototype/store";
-import { tamperLedger, type NewsEvent, type Site } from "@/lib/prototype/world";
+import {
+  documentChecks,
+  tamperLedger,
+  type NewsEvent,
+  type Site,
+} from "@/lib/prototype/world";
 
 export function Panel({
   title,
@@ -268,7 +273,15 @@ export function ScorePanel({ report }: { report: Report }) {
           <span className="tabular">{report.baseHealth.toFixed(1)}</span>
         </div>
         <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
-          <span>Auditor adjustment (±10 max)</span>
+          <span>
+            Auditor adjustment (±10 max)
+            {report.scriptedAuditor && (
+              <span className="text-muted-foreground">
+                {" "}
+                · scripted in prototype
+              </span>
+            )}
+          </span>
           <span
             className={cn("tabular", report.adjustment < 0 && "text-clay-ink")}
           >
@@ -418,7 +431,10 @@ export function ReportTab({ site }: { site: Site }) {
         )}
         {report.citations.length > 0 && (
           <div className="mt-5">
-            <h4 className="text-sm font-medium">Auditor cited</h4>
+            <h4 className="text-sm font-medium">
+              Auditor cited
+              {report.scriptedAuditor ? " (scripted in this prototype)" : ""}
+            </h4>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {report.citations.map((c) => (
                 <span
@@ -685,24 +701,40 @@ export function LedgerTab({ site }: { site: Site }) {
   );
 }
 
-const CHECKS = [
-  [
-    "Accepted file format",
-    "PDF, JPEG or PNG under 5 MB; malformed files rejected",
-  ],
-  ["Not reused", "The same document can't back two listings"],
-  ["Boundary is free", "No overlap with another listing"],
-  [
-    "Consent-labelled document attached",
-    "Shows a document was attached, not that consent exists",
-  ],
+const CHECKS: {
+  key: keyof ReturnType<typeof documentChecks>;
+  name: string;
+  note: string;
+}[] = [
+  {
+    key: "format",
+    name: "Accepted file format",
+    note: "PDF, JPEG or PNG under 5 MB; malformed files rejected",
+  },
+  {
+    key: "not_reused",
+    name: "Not reused",
+    note: "The same document can't back two listings",
+  },
+  {
+    key: "boundary_free",
+    name: "Boundary is free",
+    note: "No overlap with another listing",
+  },
+  {
+    key: "consent_document",
+    name: "Consent-labelled document attached",
+    note: "Shows a document labelled as consent was attached, not that consent exists",
+  },
 ];
+
+const RESULT_TEXT = { pass: "Pass", fail: "Fail", not_run: "Not run" } as const;
 
 const NOT_CHECKED =
   "Whether documents are authentic; whether the issuing authority is real and the title current; legal validity and signatures; quorum and validity of community consent (FPIC); whether the drawn boundary matches the legal parcel; who the uploader really is.";
 
 export function VerificationTab({ site }: { site: Site }) {
-  const hasDocs = site.documents.length > 0;
+  const checks = documentChecks(site.documents);
   return (
     <Panel title="How this listing was verified">
       <div className="flex flex-wrap items-center gap-3">
@@ -713,23 +745,33 @@ export function VerificationTab({ site }: { site: Site }) {
           </span>
         )}
       </div>
+      {site.documents.length > 0 && (
+        <p className="mt-4 rounded-2xl bg-secondary p-4 text-sm font-medium">
+          Demo verification: sample documents, no real ownership checked.
+        </p>
+      )}
       <ul className="mt-5 divide-y">
-        {CHECKS.map(([name, note]) => {
-          const pass = hasDocs || name === "Boundary is free";
+        {CHECKS.map(({ key, name, note }) => {
+          const result = checks[key] as keyof typeof RESULT_TEXT;
           return (
-            <li key={name} className="flex items-start gap-3 py-3">
+            <li key={key} className="flex items-start gap-3 py-3">
               <span
                 className={cn(
                   "mt-0.5 grid size-6 shrink-0 place-items-center rounded-full",
-                  pass
+                  result === "pass"
                     ? "bg-lime/30 text-lime-ink"
-                    : "bg-secondary text-muted-foreground",
+                    : result === "fail"
+                      ? "bg-clay/15 text-clay-ink"
+                      : "bg-secondary text-muted-foreground",
                 )}
+                aria-hidden="true"
               >
-                {pass ? (
-                  <Check className="size-3.5" aria-label="pass" />
+                {result === "pass" ? (
+                  <Check className="size-3.5" />
+                ) : result === "fail" ? (
+                  <AlertTriangle className="size-3.5" />
                 ) : (
-                  <CircleSlash className="size-3.5" aria-label="not run" />
+                  <CircleSlash className="size-3.5" />
                 )}
               </span>
               <div>
@@ -737,7 +779,7 @@ export function VerificationTab({ site }: { site: Site }) {
                 <div className="text-xs text-muted-foreground">{note}</div>
               </div>
               <span className="ml-auto text-xs text-muted-foreground">
-                {pass ? "Pass" : "Not run"}
+                {RESULT_TEXT[result]}
               </span>
             </li>
           );

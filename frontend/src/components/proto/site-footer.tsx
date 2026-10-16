@@ -13,6 +13,7 @@ export function SiteFooter() {
             investment. Values are screening estimates from published
             benefit-transfer coefficients, not certified appraisals.
           </p>
+          <p>Verification: demo mode.</p>
         </div>
         <div>
           <p className="font-medium text-foreground">Data</p>

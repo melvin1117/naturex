@@ -168,8 +168,8 @@ export function JudgeLanding() {
               </div>
             </div>
             <p className="mt-3 text-center text-xs text-muted-foreground">
-              A real rating: cached Earth Engine metrics run through
-              NatureX&apos;s tested formulas.
+              Satellite metrics and formulas are real (cached Earth Engine
+              data); the Auditor&apos;s review is scripted in this prototype.
             </p>
           </div>
         )}

@@ -28,10 +28,15 @@ export function RatingPipeline({
   onDone?: () => void;
   className?: string;
 }) {
-  const [active, setActive] = useState(play ? 0 : run.steps.length);
+  // -1 = waiting to start; nothing shows as done before the run plays.
+  const [active, setActive] = useState(-1);
 
   useEffect(() => {
-    if (!play) return;
+    if (!play) {
+      setActive(-1);
+      return;
+    }
+    setActive(0);
     const reduced = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
@@ -59,8 +64,8 @@ export function RatingPipeline({
   return (
     <ol className={cn("relative space-y-1", className)} aria-live="polite">
       {run.steps.map((step, i) => {
-        const done = i < active;
-        const running = i === active && play;
+        const done = active >= 0 && i < active;
+        const running = play && i === active;
         const Icon = ICON[step.kind];
         return (
           <li

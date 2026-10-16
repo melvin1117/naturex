@@ -192,13 +192,40 @@ export const SERVICE_GROUPS: {
 export const SCORE_COMPONENTS: {
   key: string;
   label: string;
+  /** How a low score on this component reads in a sentence. */
+  issue: string;
   weight: number;
 }[] = [
-  { key: "vegetation_vigor", label: "Vegetation vigour", weight: 0.3 },
-  { key: "natural_cover", label: "Natural cover", weight: 0.25 },
-  { key: "habitat_loss", label: "No habitat loss", weight: 0.2 },
-  { key: "water_stability", label: "Water stability", weight: 0.15 },
-  { key: "threat_pressure", label: "Low threat pressure", weight: 0.1 },
+  {
+    key: "vegetation_vigor",
+    label: "Vegetation vigour",
+    issue: "vegetation vigour",
+    weight: 0.3,
+  },
+  {
+    key: "natural_cover",
+    label: "Natural cover",
+    issue: "natural cover",
+    weight: 0.25,
+  },
+  {
+    key: "habitat_loss",
+    label: "No habitat loss",
+    issue: "habitat loss",
+    weight: 0.2,
+  },
+  {
+    key: "water_stability",
+    label: "Water stability",
+    issue: "water stability",
+    weight: 0.15,
+  },
+  {
+    key: "threat_pressure",
+    label: "Low threat pressure",
+    issue: "threat pressure from news",
+    weight: 0.1,
+  },
 ];
 
 export const DATA_ATTRIBUTIONS = [

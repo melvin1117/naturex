@@ -332,7 +332,7 @@ export function ControlRoom() {
                               }
                             >
                               <ShieldCheck aria-hidden="true" />
-                              Approve documents
+                              Approve sample documents
                             </Button>
                           )}
                         {s.status !== "draft" && (

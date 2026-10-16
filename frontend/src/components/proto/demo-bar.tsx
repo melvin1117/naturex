@@ -49,6 +49,9 @@ export function DemoBar() {
           <span className="font-medium whitespace-nowrap">
             Demo mode · private sandbox.
           </span>
+          <span className="whitespace-nowrap text-primary-foreground/75 md:hidden">
+            Play money only.
+          </span>
           <span className="hidden text-primary-foreground/75 md:inline">
             {SANDBOX_NOTICE} Prototype with scripted data.
           </span>

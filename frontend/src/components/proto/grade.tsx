@@ -25,7 +25,7 @@ export const GRADE_TEXT: Record<Grade, string> = {
   D: "text-grade-d",
 };
 
-/** Light grades get dark ink so the label always clears 4.5:1. */
+/** Light grades get dark ink; every badge clears 4.5:1 (checked in oklch → sRGB). */
 const DARK_INK: Grade[] = ["BBB", "BB", "B"];
 
 export function GradeBadge({
@@ -43,6 +43,7 @@ export function GradeBadge({
 }) {
   return (
     <span
+      role="img"
       className={cn("inline-flex items-center gap-2", className)}
       aria-label={`Grade ${grade}${health !== undefined ? `, health ${health.toFixed(1)}` : ""}, ${GRADE_LABEL[grade]}`}
     >

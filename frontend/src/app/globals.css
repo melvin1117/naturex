@@ -123,11 +123,11 @@
 
   --grade-aaa: oklch(0.43 0.1 152);
   --grade-aa: oklch(0.5 0.115 146);
-  --grade-a: oklch(0.58 0.125 138);
+  --grade-a: oklch(0.54 0.12 138);
   --grade-bbb: oklch(0.66 0.13 120);
   --grade-bb: oklch(0.7 0.13 92);
   --grade-b: oklch(0.67 0.13 66);
-  --grade-c: oklch(0.6 0.14 46);
+  --grade-c: oklch(0.56 0.14 46);
   --grade-d: oklch(0.52 0.16 30);
 
   --sidebar: var(--card);

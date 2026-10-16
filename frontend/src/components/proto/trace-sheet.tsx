@@ -30,7 +30,7 @@ const TRIGGER: Record<string, string> = {
   listing: "New listing",
   time_machine: "Time Machine",
   event: "Event re-rate",
-  seed: "Initial rating",
+  seed: "Auditor review",
 };
 
 export function TraceSheet() {

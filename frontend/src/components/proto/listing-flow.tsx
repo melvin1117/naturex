@@ -1,11 +1,13 @@
 "use client";
 
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Camera,
   Check,
   FileText,
+  Info,
   Plus,
   RotateCcw,
   Sparkles,
@@ -28,30 +30,22 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { siteDataFor, type LatLng } from "@/lib/prototype/data";
 import { GRADE_LABEL, ha, int, money, price } from "@/lib/prototype/format";
-import { checkPolygon } from "@/lib/prototype/geo";
-import {
-  buildReport,
-  fairValuePerUnit,
-  TOTAL_UNITS,
-} from "@/lib/prototype/rating";
+import { areaHa as polygonArea, checkPolygon } from "@/lib/prototype/geo";
+import { fairValuePerUnit, TOTAL_UNITS } from "@/lib/prototype/rating";
 import { usePrototype } from "@/lib/prototype/store";
-import { buildRun } from "@/lib/prototype/trace";
 import {
   HERO_ID,
   latestReport,
   launchOffer,
   rateDraft,
   registerCommunity,
+  SAMPLE_DOCUMENTS,
   updateDraft,
 } from "@/lib/prototype/world";
 
 const STEPS = ["Details", "Boundary", "Evidence", "Rating", "Opening offer"];
 
-const SAMPLE_DOCS = [
-  "Land title certificate.pdf",
-  "Assembly minutes (consent).pdf",
-  "Cooperative registration.pdf",
-];
+const SAMPLE_DOCS = SAMPLE_DOCUMENTS;
 
 export function ListingFlow() {
   const { world, act } = usePrototype();
@@ -355,6 +349,18 @@ function BoundaryStep({
               </p>
             )}
           </div>
+          {check?.ok &&
+            !animating &&
+            (points.length !== saved.length ||
+              points.some(
+                (p, i) => p[0] !== saved[i][0] || p[1] !== saved[i][1],
+              )) && (
+              <p className="text-xs text-muted-foreground">
+                Prototype: a drawn boundary is rated with the demo
+                wetland&apos;s cached satellite data, scaled to its area. Live
+                rating of any boundary comes with the full build.
+              </p>
+            )}
           <p className="text-xs text-muted-foreground">
             Dashed outlines are sites already listed. Boundaries can&apos;t
             overlap them.
@@ -435,7 +441,8 @@ function EvidenceStep({
             })}
           </ul>
           <p className="mt-3 text-xs text-muted-foreground">
-            Sample files for the demo. Nothing is uploaded.
+            Use sample documents (demo): nothing is uploaded and no real
+            ownership is checked.
           </p>
         </div>
         <div>
@@ -507,29 +514,16 @@ function RatingStep({ onBack }: { onBack: () => void }) {
   const { world, act } = usePrototype();
   const site = world.sites.find((s) => s.id === HERO_ID)!;
   const [playing, setPlaying] = useState(false);
-  // A preview run so the pipeline can play before the report is stored.
+  // The exact run rateDraft will store (pure, fixed seed), so the pipeline plays what the
+  // Agent Trace shows afterwards.
   const preview = useMemo(() => {
-    const report = buildReport({
-      siteKey: site.key,
-      siteName: site.name,
-      scenario: "baseline",
-      period: "2026Q3",
-      version: 1,
-      createdAt: world.today,
-      runId: "preview",
-    });
-    return buildRun({
-      id: "preview",
-      siteId: site.id,
-      siteName: site.name,
-      report,
-      trigger: "listing",
-      startedAt: world.today,
-      events: [],
-      photos: world.draft.photos,
-      seed: 7,
-    });
-  }, [site.key, site.name, site.id, world.today, world.draft.photos]);
+    const rated = rateDraft(world);
+    return rated.runs[rated.runs.length - 1];
+  }, [world]);
+  const drawnArea =
+    world.draft.polygon.length >= 3
+      ? polygonArea(world.draft.polygon)
+      : site.areaHa;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
@@ -542,7 +536,7 @@ function RatingStep({ onBack }: { onBack: () => void }) {
           </div>
           <div className="rounded-2xl bg-secondary p-4">
             <dt className="text-xs text-muted-foreground">Area</dt>
-            <dd className="tabular font-medium">{ha(site.areaHa)}</dd>
+            <dd className="tabular font-medium">{ha(drawnArea)}</dd>
           </div>
           <div className="rounded-2xl bg-secondary p-4">
             <dt className="text-xs text-muted-foreground">Documents</dt>
@@ -636,22 +630,41 @@ function OfferStep() {
           />
         </div>
         <ul className="mt-6 space-y-2 text-sm">
-          <li className="flex gap-2">
-            <Check
-              className="mt-0.5 size-4 shrink-0 text-lime-ink"
-              aria-hidden="true"
-            />
+          <li
+            className={cn("flex gap-2", !report.gatePassed && "text-clay-ink")}
+          >
+            {report.gatePassed ? (
+              <Check
+                className="mt-0.5 size-4 shrink-0 text-lime-ink"
+                aria-hidden="true"
+              />
+            ) : (
+              <AlertTriangle
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden="true"
+              />
+            )}
             {report.gatePassed
               ? "Passes the listing gate: confidence ≥ 70, grade ≥ C, no significant forest loss this year."
-              : "Doesn't pass the listing gate yet."}
+              : "Doesn't pass the listing gate yet (confidence ≥ 70, grade ≥ C, forest loss under 1% this year). Add field evidence or follow the stewardship actions, then re-rate."}
           </li>
           <li className="flex gap-2">
             <Check
               className="mt-0.5 size-4 shrink-0 text-lime-ink"
               aria-hidden="true"
             />
-            Auditor: {report.adjustmentReason}
+            <span>
+              Auditor (scripted in this prototype): {report.adjustmentReason}
+            </span>
           </li>
+          {report.flags.some((f) => f.code === "custom_boundary") && (
+            <li className="flex gap-2 text-muted-foreground">
+              <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              Drawn boundary: values use the demo site&apos;s cached land-cover
+              shares, scaled to {ha(site.areaHa)}. Live rating of new boundaries
+              comes with the full build.
+            </li>
+          )}
         </ul>
         <div className="mt-6 flex flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
@@ -738,6 +751,7 @@ function OfferStep() {
               launchOffer(updateDraft(w, { retainedPct: retained }), retained),
             )
           }
+          disabled={!report.gatePassed}
           data-tour="launch-offer"
         >
           Launch opening offer

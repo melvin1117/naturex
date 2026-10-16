@@ -41,6 +41,8 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           <Wordmark />
         </Link>
         <form
+          // A submit before hydration posts instead of putting the password in the URL.
+          method="post"
           onSubmit={onSubmit}
           className="mt-8 rounded-[1.75rem] bg-card p-6 shadow-lift sm:p-8"
           noValidate
