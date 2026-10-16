@@ -175,6 +175,14 @@ class ReportOut(BaseModel):
         description="Deterministic rating snapshot: metrics provenance, valuation, score and "
         "fair-value inputs (T19).",
     )
+    greenwashing_risk: Literal["low", "medium", "high"] | None = Field(
+        default=None,
+        description="The Auditor's greenwashing risk; null when it was not assessed (no audit, "
+        "or the Auditor fell back). Prefer this over auditor.greenwashing_risk.",
+    )
+    run_id: UUID | None = Field(
+        default=None, description="Rating run that produced this report (T27); null for seeds."
+    )
     created_at: datetime
 
 
@@ -281,6 +289,62 @@ class StreamEvent(BaseModel):
     type: StreamEventType
     payload: dict[str, Any]
     ts: datetime
+
+
+class RatingRunStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    DEGRADED = "degraded"
+    """Finished with a report, but a fallback was used (fixed pipeline, lower model tier,
+    no audit or a failed optional step); `reasons` says which."""
+
+
+class RatingRunAccepted(BaseModel):
+    run_id: UUID
+    asset_id: UUID
+    status: Literal["queued"] = "queued"
+
+
+class RatingRunStep(BaseModel):
+    """One `rating_progress` event of a run (T27)."""
+
+    step: str = Field(
+        description="queued, started, earth_obs, valuation, news, evidence, audit, fallback or done"
+    )
+    status: str
+    tool: str | None = None
+    pipeline: str | None = Field(default=None, description="orchestrator or fixed")
+    model: str | None = None
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    latency_ms: int | None = None
+    cost_usd: Decimal | None = None
+    error: str | None = None
+    ts: datetime | None = None
+
+
+class RatingRunOut(BaseModel):
+    """A rating run's status, rebuilt from its progress events (or its report's run record)."""
+
+    run_id: UUID
+    asset_id: UUID
+    status: RatingRunStatus
+    trigger: str | None = None
+    scenario: str | None = None
+    pipeline: str | None = None
+    degraded: bool = False
+    reasons: list[str] = Field(default_factory=list)
+    error: str | None = None
+    report_id: UUID | None = None
+    version: int | None = None
+    grade: str | None = None
+    health_score: Decimal | None = None
+    confidence: Decimal | None = None
+    steps: list[RatingRunStep] = Field(default_factory=list)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class SimulateQuarterResponse(BaseModel):

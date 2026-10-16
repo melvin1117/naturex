@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # Cap on new sandbox worlds per hour, so clients that drop the cookie can't fill the DB.
     sandbox_max_new_worlds_per_hour: int = 300
     event_stream_max_concurrent: int = 40
+    # Rating runs (T27): each visitor world may start this many per rolling hour (429 after);
+    # LLM_BUDGET_USD stays the global hard cap.
+    rating_runs_per_world_per_hour: int = Field(default=6, ge=1)
     # Exact origins (scheme://host[:port], comma separated) allowed to send POST, PUT, PATCH and
     # DELETE requests (T66, ADR-0005). Every deployment must set its public frontend origin.
     allowed_origins: str = "http://localhost:3000"

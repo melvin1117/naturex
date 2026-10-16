@@ -14,12 +14,19 @@ Storage without new columns (T19):
   The Auditor's own output goes under `auditor_json["auditor"]` (T26).
 - `metrics.data_version`: `sim-N` marks a simulated version (dev-spec §5); its full scenario
   labels live in the report's `simulated` flag and snapshot.
+
+Audited reports (T27): `rate_asset(..., events=, audit=, run=)` scores the same metrics with the
+run's events, then applies the Auditor's bounded adjustment and agreement through
+`auditor.apply_audit`, so every stored number still comes from `rate_site` + `apply_audit`.
+`auditor_json` then also holds `auditor` (the validated `AuditorOutput`), `audit` (source,
+model, degraded, `greenwashing_risk` with None = not assessed) and `run` (the run record).
 """
 
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -28,6 +35,7 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlmodel import Session, col, select
 
+from app.agents.auditor import AuditEvent, AuditResult, ScoreInputs, apply_audit
 from app.ledger import append
 from app.market.engine import fair_value_per_share, fair_value_total
 from app.models import Asset, LedgerKind, Metrics, Report
@@ -38,6 +46,7 @@ from app.tools.scoring import (
     GATE_GRADE_BELOW_C,
     RECENCY_FRESH_MAX_DAYS,
     ScoreResult,
+    ThreatEvent,
     is_wetland_from_landcover,
     metrics_data_age_days,
     score_metrics,
@@ -45,6 +54,7 @@ from app.tools.scoring import (
 from app.tools.valuation import ValuationResult, value_metrics
 
 RATING_METHOD_VERSION = "naturex-rating/1.0 (T19)"
+SANDBOX_NOTE = "Sandbox prices are play money only; nothing here is a real security or investment."
 SIMULATED_DATA_VERSION_PREFIX = "sim-"
 
 _VALUATION_FLAG_DETAILS = {
@@ -88,6 +98,24 @@ class SiteRating:
     def period(self) -> str:
         """The quarter this version stands for (a simulated version's display quarter)."""
         return self.metrics.period or self.metrics.data_version
+
+    def with_score(self, score: ScoreResult) -> SiteRating:
+        """This rating with another score of the same metrics (the audited one), and the fair
+        value recomputed from its health and confidence (dev-spec §8)."""
+        value_mid = Decimal(self.valuation.value_mid)
+        return replace(
+            self,
+            score=score,
+            fair_value_total=fair_value_total(
+                value_mid=value_mid, health=score.health, confidence=score.confidence
+            ),
+            fair_value_per_share=fair_value_per_share(
+                value_mid=value_mid,
+                health=score.health,
+                confidence=score.confidence,
+                total_shares=self.total_shares,
+            ),
+        )
 
     @property
     def value_breakdown(self) -> dict[str, int]:
@@ -187,18 +215,24 @@ class SiteRating:
             f"The site {gate} the listing gate. This is a deterministic first rating from "
             "cached satellite metrics: no Auditor review, news check or field evidence yet.",
             "",
-            "Sandbox prices are play money only; nothing here is a real security or investment.",
+            SANDBOX_NOTE,
         ]
         return "\n".join(lines)
 
 
 def rate_site(
-    metrics: EarthObsMetrics, *, is_wetland: bool, as_of: date, total_shares: int
+    metrics: EarthObsMetrics,
+    *,
+    is_wetland: bool,
+    as_of: date,
+    total_shares: int,
+    events: Iterable[ThreatEvent] = (),
 ) -> SiteRating:
     """Rate one set of metrics: T14 valuation, T15 score and the §8 fair value per share.
 
     ``is_wetland`` is the asset's fixed wetland status (from its baseline, never from the
     version being scored). ``as_of`` is the rating date, which sets the recency term.
+    ``events`` (News Scout or field evidence) feed the threat-pressure term T.
     """
     age = metrics_data_age_days(metrics, as_of=as_of)
     valuation = value_metrics(metrics)
@@ -206,6 +240,7 @@ def rate_site(
         metrics,
         is_wetland=is_wetland,
         data_age_days=age,
+        events=events,
         forest_loss_last_12m_ha=metrics.forest_loss_last_12m_ha,
     )
     value_mid = Decimal(valuation.value_mid)
@@ -290,10 +325,72 @@ def _metrics_row(world_id: UUID, asset_id: UUID, metrics: EarthObsMetrics) -> Me
     )
 
 
-def _ledger_payload(report: Report, rating: SiteRating) -> dict[str, Any]:
+def audited_rating(
+    rating: SiteRating, *, events: Sequence[AuditEvent], audit: AuditResult
+) -> SiteRating:
+    """`rating` re-scored with the Auditor's bounded adjustment and agreement (T26 path)."""
+    metrics = rating.metrics
+    inputs = ScoreInputs.from_metrics(
+        metrics,
+        is_wetland=rating.is_wetland,
+        data_age_days=rating.data_age_days,
+        events=events,
+        forest_loss_last_12m_ha=metrics.forest_loss_last_12m_ha,
+    )
+    return rating.with_score(apply_audit(inputs, audit))
+
+
+def event_snapshot(event: AuditEvent) -> dict[str, Any]:
+    """An event as the rating used it. Title and summary are untrusted text, kept as data."""
+    return {
+        "id": event.citation_id,
+        "source": event.source,
+        "relevant": event.relevant,
+        "impact_type": event.impact_type,
+        "direction": event.direction,
+        "severity": event.severity,
+        "published_at": event.published_at.isoformat() if event.published_at else None,
+        "validated": event.validated,
+        "title": event.title,
+        "summary": event.summary,
+    }
+
+
+def audit_snapshot(audit: AuditResult) -> dict[str, Any]:
+    """How the audit was made (`auditor_json["audit"]`); `greenwashing_risk` None = not
+    assessed, because the no-op audit's `output.greenwashing_risk` is only a schema filler."""
+    return {
+        "source": audit.source,
+        "model": audit.model,
+        "degraded": audit.degraded,
+        "fallback": audit.fallback,
+        "rounds": audit.rounds,
+        "rejections": [rejection[:200] for rejection in audit.rejections[:8]],
+        "citations": list(audit.citations),
+        "greenwashing_risk": audit.greenwashing_risk,
+    }
+
+
+def _audit_flags(audit: AuditResult) -> list[dict[str, str]]:
+    return [_flag(flag.type, "auditor", flag.detail) for flag in audit.output.flags]
+
+
+def _audited_summary(audit: AuditResult) -> str:
+    summary = audit.output.summary_md.rstrip()
+    return summary if "play money" in summary else f"{summary}\n\n{SANDBOX_NOTE}"
+
+
+def _ledger_payload(
+    report: Report,
+    rating: SiteRating,
+    flags: Sequence[Mapping[str, str]],
+    *,
+    events: Sequence[AuditEvent] = (),
+    audit: AuditResult | None = None,
+) -> dict[str, Any]:
     """The report's business values themselves, so editing the row is detectable (§17)."""
     summary = report.summary_md or ""
-    return {
+    payload: dict[str, Any] = {
         "version": report.version,
         "data_version": rating.metrics.data_version,
         "simulated": rating.metrics.simulated,
@@ -306,10 +403,20 @@ def _ledger_payload(report: Report, rating: SiteRating) -> dict[str, Any]:
         "value_high": str(report.value_high),
         "value_breakdown": rating.value_breakdown,
         "fair_value_per_share": str(report.fair_value_per_share),
-        "flags": [flag["type"] for flag in rating.flags()],
+        "flags": [flag["type"] for flag in flags],
         "summary_sha256": hashlib.sha256(summary.encode()).hexdigest(),
         "method_version": RATING_METHOD_VERSION,
     }
+    if audit is not None:
+        output = audit.output
+        payload["audit"] = {
+            "source": audit.source,
+            "auditor_adjustment": output.auditor_adjustment,
+            "agreement": None if audit.fallback else str(output.agreement),
+            "greenwashing_risk": audit.greenwashing_risk,
+        }
+        payload["event_ids"] = [event.citation_id for event in events]
+    return payload
 
 
 def rate_asset(
@@ -321,6 +428,10 @@ def rate_asset(
     as_of: date,
     previous_report: Report | None = None,
     is_wetland: bool | None = None,
+    events: Sequence[AuditEvent] = (),
+    audit: AuditResult | None = None,
+    run: Mapping[str, Any] | None = None,
+    extra_flags: Sequence[Mapping[str, str]] = (),
 ) -> Report:
     """Store report v(n + 1) for an asset from these metrics, with its metrics row and ledger
     entry, in the caller's transaction (the caller commits).
@@ -329,6 +440,10 @@ def rate_asset(
     stored under its `sim-N` data version and flagged `simulated`. ``is_wetland`` overrides
     the baseline rule for an asset with a declared ecosystem type. ``previous_report``, if
     given, must be the asset's latest report; the version always comes from the database.
+
+    A rating run (T27) also passes the ``events`` it scored with, the ``audit`` (applied only
+    through `apply_audit`), its ``run`` record and any run ``extra_flags``. The ledger entry
+    then covers the audited numbers, the audit's adjustment and agreement and the event IDs.
     """
     if asset.world_id != world_id:
         raise ValueError(f"asset {asset.id} is not in world {world_id}")
@@ -351,8 +466,26 @@ def rate_asset(
         raise ValueError("previous_report is not this asset's latest report")
 
     wetland = asset_is_wetland(session, asset, metrics) if is_wetland is None else is_wetland
-    rating = rate_site(metrics, is_wetland=wetland, as_of=as_of, total_shares=asset.total_shares)
+    rating = rate_site(
+        metrics,
+        is_wetland=wetland,
+        as_of=as_of,
+        total_shares=asset.total_shares,
+        events=events,
+    )
+    if audit is not None:
+        rating = audited_rating(rating, events=events, audit=audit)
     version = (last_version or 0) + 1
+    flags = [*rating.flags(), *(_audit_flags(audit) if audit else []), *map(dict, extra_flags)]
+    snapshot = rating.snapshot()
+    if events or audit is not None:
+        snapshot["events"] = [event_snapshot(event) for event in events]
+    auditor_json: dict[str, Any] = {"rating": snapshot}
+    if audit is not None:
+        auditor_json["auditor"] = audit.output.model_dump(mode="json")
+        auditor_json["audit"] = audit_snapshot(audit)
+    if run is not None:
+        auditor_json["run"] = dict(run)
 
     metrics_row = _metrics_row(world_id, asset.id, metrics)
     session.add(metrics_row)
@@ -370,10 +503,10 @@ def rate_asset(
         value_high=Decimal(rating.valuation.value_high),
         value_breakdown=rating.value_breakdown,
         fair_value_per_share=rating.fair_value_per_share,
-        flags=rating.flags(),
-        summary_md=rating.summary_md(asset.name, version),
-        recommendations=[],
-        auditor_json={"rating": rating.snapshot()},
+        flags=flags,
+        summary_md=_audited_summary(audit) if audit else rating.summary_md(asset.name, version),
+        recommendations=list(audit.output.recommendations) if audit else [],
+        auditor_json=auditor_json,
     )
     session.add(report)
     session.flush()
@@ -382,7 +515,7 @@ def rate_asset(
         world_id=world_id,
         asset_id=asset.id,
         kind=LedgerKind.REPORT,
-        payload=_ledger_payload(report, rating),
+        payload=_ledger_payload(report, rating, flags, events=events, audit=audit),
         ref_id=report.id,
     )
     return report

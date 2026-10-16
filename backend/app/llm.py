@@ -513,8 +513,8 @@ class OpenAITransport:
         return self._sdk.chat.completions.create(**kwargs)
 
 
-def get_llm_client(settings: Settings, session_factory: Callable[[], Session]) -> LLMClient:
-    """The production client: Token Factory over the OpenAI SDK, spend logged in Postgres."""
+def token_factory_transport(settings: Settings) -> OpenAITransport:
+    """Token Factory over the OpenAI SDK; raises ModelNotConfigured without a key."""
     if not settings.nebius_api_key:
         raise ModelNotConfigured("NEBIUS_API_KEY is empty; run `make check-keys`")
     sdk = openai.OpenAI(
@@ -522,4 +522,21 @@ def get_llm_client(settings: Settings, session_factory: Callable[[], Session]) -
         api_key=settings.nebius_api_key,
         max_retries=0,  # retries are ours, so every attempt is logged and counted
     )
-    return LLMClient(settings, OpenAITransport(sdk), DbCallLog(session_factory))
+    return OpenAITransport(sdk)
+
+
+def get_llm_client(
+    settings: Settings,
+    session_factory: Callable[[], Session],
+    *,
+    wrap_log: Callable[[CallLog], CallLog] | None = None,
+) -> LLMClient:
+    """The production client: Token Factory over the OpenAI SDK, spend logged in Postgres.
+
+    ``wrap_log`` decorates the Postgres call log, e.g. to also record a rating run's calls
+    for its progress events (T27); spend is still written to `llm_calls` first.
+    """
+    call_log: CallLog = DbCallLog(session_factory)
+    if wrap_log is not None:
+        call_log = wrap_log(call_log)
+    return LLMClient(settings, token_factory_transport(settings), call_log)

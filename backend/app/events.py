@@ -71,7 +71,9 @@ def _to_stream_event(row: WorldEvent) -> StreamEvent:
     return StreamEvent(id=row.id, type=row.type, payload=row.payload, ts=row.created_at)
 
 
-def _lock_world_publisher(session_or_conn: Session | Connection, world_id: UUID) -> None:
+def lock_world_publisher(session_or_conn: Session | Connection, world_id: UUID) -> None:
+    """The per-world publisher lock (transaction-scoped and re-entrant). Rating runs (T27)
+    take it before their check-then-publish, so run caps can't race."""
     session_or_conn.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:world_id, 0))"),
         {"world_id": str(world_id)},
@@ -92,7 +94,7 @@ def publish(
     """
     event_type = _event_type(type)
     event_payload = _payload(payload)
-    _lock_world_publisher(session_or_conn, world_id)
+    lock_world_publisher(session_or_conn, world_id)
     if isinstance(session_or_conn, Session):
         row = WorldEvent(world_id=world_id, type=event_type, payload=event_payload)
         session_or_conn.add(row)

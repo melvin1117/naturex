@@ -517,6 +517,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/{asset_id}/rate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Rating
+         * @description Start an async rating run for the asset; follow it with `GET /runs/{run_id}`.
+         */
+        post: operations["start_rating_assets__asset_id__rate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Rating Run
+         * @description The run's status and steps, rebuilt from its progress events (any worker can answer).
+         */
+        get: operations["get_rating_run_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -1054,6 +1094,118 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /** RatingRunAccepted */
+        RatingRunAccepted: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /**
+             * Status
+             * @default queued
+             * @constant
+             */
+            status: "queued";
+        };
+        /**
+         * RatingRunOut
+         * @description A rating run's status, rebuilt from its progress events (or its report's run record).
+         */
+        RatingRunOut: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            status: components["schemas"]["RatingRunStatus"];
+            /** Trigger */
+            trigger?: string | null;
+            /** Scenario */
+            scenario?: string | null;
+            /** Pipeline */
+            pipeline?: string | null;
+            /**
+             * Degraded
+             * @default false
+             */
+            degraded: boolean;
+            /** Reasons */
+            reasons?: string[];
+            /** Error */
+            error?: string | null;
+            /** Report Id */
+            report_id?: string | null;
+            /** Version */
+            version?: number | null;
+            /** Grade */
+            grade?: string | null;
+            /** Health Score */
+            health_score?: string | null;
+            /** Confidence */
+            confidence?: string | null;
+            /** Steps */
+            steps?: components["schemas"]["RatingRunStep"][];
+            /** Created At */
+            created_at?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /**
+         * RatingRunStatus
+         * @enum {string}
+         */
+        RatingRunStatus: "queued" | "running" | "succeeded" | "failed" | "degraded";
+        /**
+         * RatingRunStep
+         * @description One `rating_progress` event of a run (T27).
+         */
+        RatingRunStep: {
+            /**
+             * Step
+             * @description queued, started, earth_obs, valuation, news, evidence, audit, fallback or done
+             */
+            step: string;
+            /** Status */
+            status: string;
+            /** Tool */
+            tool?: string | null;
+            /**
+             * Pipeline
+             * @description orchestrator or fixed
+             */
+            pipeline?: string | null;
+            /** Model */
+            model?: string | null;
+            /**
+             * Prompt Tokens
+             * @default 0
+             */
+            prompt_tokens: number;
+            /**
+             * Completion Tokens
+             * @default 0
+             */
+            completion_tokens: number;
+            /** Latency Ms */
+            latency_ms?: number | null;
+            /** Cost Usd */
+            cost_usd?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Ts */
+            ts?: string | null;
+        };
         /** RegisterIn */
         RegisterIn: {
             /** Email */
@@ -1148,6 +1300,16 @@ export interface components {
             rating?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Greenwashing Risk
+             * @description The Auditor's greenwashing risk; null when it was not assessed (no audit, or the Auditor fell back). Prefer this over auditor.greenwashing_risk.
+             */
+            greenwashing_risk?: ("low" | "medium" | "high") | null;
+            /**
+             * Run Id
+             * @description Rating run that produced this report (T27); null for seeds.
+             */
+            run_id?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -2256,6 +2418,96 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_rating_assets__asset_id__rate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatingRunAccepted"];
+                };
+            };
+            /** @description Asset not found in this world */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `run_in_progress` (Location: the active run) or `asset_is_draft` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `rating_rate_limited`: per-world run cap; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `rating_busy`: too many runs in progress; see Retry-After */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_rating_run_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatingRunOut"];
+                };
             };
             /** @description Validation Error */
             422: {
