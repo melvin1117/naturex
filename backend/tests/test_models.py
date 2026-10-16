@@ -227,15 +227,16 @@ def test_world_id_present_on_mutable_models() -> None:
 
 @requires_db
 def test_payout_lines_migration_downgrades_and_upgrades() -> None:
-    """T67 (0007): payout lines, the assets (world_id, id) key and the one-payout-per-quarter
+    """T67 (0008): payout lines, the assets (world_id, id) key and the one-payout-per-quarter
     ledger index come and go."""
     cfg = alembic_cfg()
     command.upgrade(cfg, "head")
-    command.downgrade(cfg, "0006")
+    command.downgrade(cfg, "0007")
     engine = create_engine(get_settings().database_url)
     try:
         inspector = inspect(engine)
         assert "payout_lines" not in inspector.get_table_names()
+        assert "auth_attempts" in inspector.get_table_names(), "0008 leaves T66 alone"
         assert "uq_assets_world_id_id" not in {
             c["name"] for c in inspector.get_unique_constraints("assets")
         }
