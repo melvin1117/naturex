@@ -162,9 +162,12 @@ create table users (
   email text,                          -- lower-cased; null for personas and treasuries
   password_hash text,                  -- argon2id (pwdlib); only for kind = 'person'
   is_admin boolean not null default false,  -- live world: set only by the operator CLI
-  unique (world_id, id)                -- target of composite foreign keys
+  unique (world_id, id),               -- target of composite foreign keys
+  check (kind = 'person' or (email is null and password_hash is null))  -- personas and treasuries never sign in
 );
 create unique index users_world_email on users (world_id, lower(email)) where email is not null;
+create unique index uq_users_world_persona_key on users (world_id, persona_key)
+  where persona_key is not null;      -- T56: a sandbox reset keeps persona IDs by key
 
 -- ADR-0005: accounts, communities and authorization (tasks T54, T56)
 create table sessions (
@@ -183,29 +186,39 @@ create table auth_attempts (           -- Postgres-backed rate limits (shared ac
   kind text not null check (kind in ('login','register')), created_at timestamptz default now()
 );
 create index on auth_attempts (bucket, key_hmac, created_at);  -- rows older than 24 h are pruned
-create table communities (
+create table communities (             -- T56 (migration 0009)
   id uuid primary key default gen_random_uuid(), world_id uuid not null references worlds(id),
   name text not null, country text, description text,
-  treasury_user_id uuid not null,      -- kind = 'treasury'; never signs in or trades
+  treasury_user_id uuid not null unique,  -- kind = 'treasury' (trigger); one treasury per community
   created_at timestamptz default now(),
   unique (world_id, id),
+  unique (world_id, id, treasury_user_id),  -- target of assets' community+treasury foreign key
   foreign key (world_id, treasury_user_id) references users (world_id, id)
 );
 create table community_members (       -- owner-only for the Must; stewards are a Should
   world_id uuid not null, community_id uuid not null, user_id uuid not null,
   role text not null check (role in ('owner','steward')),
+  created_at timestamptz default now(),
   primary key (community_id, user_id),
   foreign key (world_id, community_id) references communities (world_id, id),
   foreign key (world_id, user_id) references users (world_id, id)
 );
+create index on community_members (world_id, user_id);  -- "my communities"; insider-trading rule (T68)
+-- Treasury triggers (T56): a `treasury` user can't be in orders, sessions or community_members
+-- (reject_treasury_actor), and communities.treasury_user_id must name a treasury
+-- (require_treasury_user).
 create table assets (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   community_id uuid,                                  -- ADR-0005: the community that manages the listing
   community_user_id uuid,                             -- the community's treasury (kind = 'treasury'): retained stake, seeded at IPO, + its dividends (T41)
   verification_revoked_at timestamptz,                -- ADR-0006: set on revoke; while set, demo_auto can't approve; cleared only by a human admin approval
-  -- unique (world_id, id) (added by T67 for payout_lines); ADR-0005 (T56): foreign key (world_id, community_id) → communities (world_id, id);
-  --                 foreign key (world_id, community_user_id) → users (world_id, id)
+  -- unique (world_id, id) (added by T67 for payout_lines). As built (T56):
+  --   foreign key (world_id, community_id) → communities (world_id, id);
+  --   foreign key (world_id, community_user_id) → users (world_id, id);
+  --   foreign key (world_id, community_id, community_user_id) → communities (world_id, id, treasury_user_id),
+  --     so when both are set the treasury is the asset's own community's;
+  --   indexes on (world_id, community_id) and (world_id, community_user_id)
   country text, description text, cover_image_url text,
   geojson jsonb not null,
   area_ha numeric(12,2) not null,
@@ -430,7 +443,7 @@ Every route is scoped to the caller's world, which comes from the session: anony
 - **Rules:** orders always use the principal's user; community members can't trade their own asset, and a holder of its shares can't be added as a member (409 `member_has_holdings`); admins and treasury accounts never trade; the ledger tamper demo runs only in sandbox worlds.
 - **CSRF:** `SameSite=Lax` cookies plus an exact `Origin` (else `Referer`) allowlist (`ALLOWED_ORIGINS`) on every POST, PUT, PATCH and DELETE, uploads included; both missing, malformed or `null` → rejected; JSON routes require a JSON media type.
 
-**As built (T31), before ADR-0005.** T55 changes three things below: the `nx_world` cookie is replaced by the session; reset keeps persona user IDs (mapped by `persona_key`) instead of re-copying them with fresh IDs, so the session survives; pruning deletes a world's sessions first. The rest stays:
+**As built (T31), before ADR-0005.** Three things below have changed or will: T55 replaces the `nx_world` cookie with the session; T56 made reset keep persona user IDs (mapped by `persona_key`) instead of re-copying them with fresh IDs, so a session survives, and made pruning delete a world's sessions first (see "As built (T56)"). The rest stays:
 - **Only `GET /world` creates a world.** It reads the `nx_world` cookie (`HttpOnly`, `SameSite=Lax`, `Secure` unless `ENVIRONMENT` is explicitly development/test (fail closed since T54), 30 days, `Cache-Control: no-store`); a missing, malformed or unknown cookie, or one naming the **template** world, gets a fresh world.
 - New worlds are capped at `SANDBOX_MAX_NEW_WORLDS_PER_HOUR` (default 300) → 503 with `Retry-After`.
 - World-scoped routes use `CurrentWorld` (`app/deps.py`) and return **401 `world_required`** without a valid cookie; they never create worlds. The frontend calls `GET /world` first (T32). Today the ledger, world, orders/portfolio, assets and reports routes are scoped (T19 moved assets and reports off mocks); the other routers adopt `CurrentWorld` as they move off mocks.
@@ -448,7 +461,7 @@ Every route is scoped to the caller's world, which comes from the session: anony
 - **Rotation:** login and register always issue a new token and delete the session whose cookie the browser presented, so a fixated or old token dies; sessions on other devices stay valid until their own logout or expiry.
 - **Principal:** `OptionalPrincipal` / `CurrentPrincipal` (`app/deps.py`) resolve the cookie to `auth.Principal(user_id, world_id, session_id, session_kind, user_kind, is_admin)`; `CurrentPrincipal` returns 401 `auth_required`. T57 and T61 authorize against it. `CurrentWorld` (`nx_world`) is unchanged until T55.
 - **Schema:** `users.kind` (`person | persona | treasury`, existing users backfilled to `persona`), `email`, `password_hash`, `is_admin`; `users.role` stays NOT NULL as a label only (registered people get `investor`, CLI admins `admin`; authorization uses `kind`, `is_admin` and, later, memberships); `unique (world_id, id)`; `users_world_email` partial unique index on `(world_id, lower(email))`; a CHECK that only `person` rows may hold an email or password hash.
-- **The live world:** fixed ID `44444444-4444-4444-4444-444444444444`, label `live`, created by `make seed` (and on first register or login) with `sandbox.ensure_live_world`, idempotently. It copies the template's 3 curated sites (with reports, prices, ledger and the retained stake) and only the community persona that owns them (no password, so nobody can sign in as it); T56 swaps that for communities and treasuries. The live world is never pruned, reset, counted against the world cap or served from an `nx_world` cookie, and `GET /world` never lists password accounts.
+- **The live world:** fixed ID `44444444-4444-4444-4444-444444444444`, label `live`, created by `make seed` (and on first register or login) with `sandbox.ensure_live_world`, idempotently. It copies the template's 3 curated sites (with reports, prices, ledger and the retained stakes) and, since T56, their communities: each one's treasury (holding the stake) and its owner persona, Rosa (no password, so nobody can sign in as her). The live world is never pruned, reset, counted against the world cap or served from an `nx_world` cookie, and `GET /world` never lists password accounts.
 - **Admins:** `make create-admin EMAIL=… NAME=…` (`python -m app.cli create-admin`) creates a new live-world `person` with `is_admin = true`, reading the password twice with `getpass`; it refuses an email that already exists rather than promoting that account. Nothing logs an email, password or token.
 
 **As built (T66).** CSRF, rate limits and pruning (ADR-0005 section 1); new settings `ALLOWED_ORIGINS`, `TRUSTED_PROXY_HOPS` and `AUTH_RATE_LIMIT_SECRET`.
@@ -458,6 +471,13 @@ Every route is scoped to the caller's world, which comes from the session: anony
 - **Pruning:** `auth.prune_auth_data` deletes expired sessions and `auth_attempts` rows older than 24 hours. Auth requests run it at most every 10 minutes per process and never fail because of it. It is two unbounded deletes inside a request; if a many-IP attack makes the table large, move it to a scheduled job.
 - **Startup:** the API refuses to start without `AUTH_RATE_LIMIT_SECRET` or without an explicit `ALLOWED_ORIGINS` unless `ENVIRONMENT` is explicitly development or test (a fixed dev key and `http://localhost:3000` are used there), and refuses a bad `ALLOWED_ORIGINS`. The check runs in the app lifespan, so tools that only import the app (the OpenAPI export) need no secrets.
 - **Accepted risks:** (1) registration enumeration (no email verification): a duplicate registration is always 409 with the same generic body, in any letter case, and no permission depends on the email. (2) Every allowed attempt counts, successful ones included, so anyone can lock a named account out of login for 15 minutes by sending 10 requests for it, and users behind one shared address share one budget. Per-account limits always allow the first; the IP bucket is the one to raise if a demo room needs it.
+
+**As built (T56).** Communities, members and treasuries (ADR-0005 §3, §4; migration `0009`). T68 adds `authorize()` and the community routes on top; nothing here is exposed by a route yet.
+- **Tables:** `communities` and `community_members` (`owner | steward`) as in §5, both `world_id NOT NULL` with composite `(world_id, …_id)` foreign keys onto `unique (world_id, id)` on users, assets and communities, so a row can't link across worlds (tested per foreign key in `tests/test_tenancy.py`). `assets.community_id` is new; `assets.community_user_id` lost its plain foreign key for composite ones, and `fk_assets_community_treasury` makes it the asset's own community's treasury whenever both are set. Membership is queryable by `(world_id, user_id)` (`ix_community_members_world_id_user_id`) for T68's roles and insider-trading rule.
+- **Treasuries:** one `kind = 'treasury'` user per community (`treasury_user_id` unique; a trigger checks the kind), created with it: 0 cash, no email, password or persona key (the T54 CHECK), never an admin. It holds the community's retained stake and receives its dividends: `pay_quarter` (T41/T67) is unchanged because it pays `assets.community_user_id`. Triggers reject a treasury in `orders` ("can't trade"), `sessions` ("can't sign in") and `community_members`, and `auth.resolve_session` already refuses a treasury's session. The T17 orders route acts as the demo investor persona, so it never meets a treasury; T68's policy adds the 403s.
+- **Seed:** each curated site has its own community, `<site name> Community`, owned by Rosa, with a treasury `<site name> Community Treasury` holding the 510 000 retained shares (fixed IDs `55555555-…-5555555555NN` and `66666666-…-6666666666NN`). Rosa is a member, not a holder, so her cash only moves if she trades. Shares are still conserved: `total_shares = primary_shares_remaining + market_maker_shares + Σ holdings`.
+- **Sandbox:** clone copies users → communities → members → assets (community and treasury remapped) → the rest; the live world gets the communities with only their treasuries and members (plus those users' holdings). **Reset keeps every persona user's ID** (matched by `persona_key`, now unique per world) and restores its fields (cash, name, admin flag…) from the template, so sessions on personas survive; a persona the template lacks is deleted with its sessions; everything else, communities and treasuries included, is recreated with fresh IDs. `_DELETE_ORDER` starts with `sessions` (pruning deletes a world's sessions first) and deletes members, then communities, before users; a test checks it covers every world table, children first.
+- **Migration `0009`, deploy note: existing demo sandboxes are reset on upgrade.** It deletes every world except the template and the live world (sandbox cleanup order, with the ledger-delete opt-in switched on only around the deletes; LLM call logs kept, detached); visitors get a fresh sandbox on their next visit. It then backfills the template and the live world: per asset whose `community_user_id` is a persona, a new treasury takes over that persona's retained holding and becomes `community_user_id`, and the persona becomes the community's owner. The template uses the seed's fixed IDs, so a later `make seed` is a no-op. Payout lines already paid to Rosa stay hers and still verify; cash she received stays with her. Downgrading hands each treasury's holdings and cash back to its first owner, erases the treasury's payout lines to tombstones (commitments then verify as `ok_with_erasures`) and deletes it; a treasury without an owner is kept.
 
 Rating runs asynchronously: the API returns `202` + `run_id`, and progress arrives over SSE (`step: earth_obs → valuation → news → evidence → audit → done`).
 
@@ -785,7 +805,8 @@ A tick is triggered by `POST /admin/simulate/quarter`, by a scheduled job, or by
   largest-remainder allocation so payout cents sum exactly to revenue. Dividend ties are
   broken by stable holder key; primary float / market-maker shares are unheld and receive
   no dividends. The community's retained stake must be recorded as a positive holding for
-  `Asset.community_user_id`; that user's cash balance receives the retained-stake dividend,
+  `Asset.community_user_id` (since T56 the community's treasury, not the owner persona); that
+  user's cash balance receives the retained-stake dividend,
   while the 50% community fund is credited to `Asset.community_wallet`. The pure calculator
   can report a no-holders case, but `pay_quarter` refuses to apply one to the DB. `pay_quarter`
   is a thin transaction-scoped helper for T38/T44 and is not wired to `routers/market.py` while

@@ -1,9 +1,15 @@
 """Per-visitor sandbox worlds (demo-plan §3.5, T31).
 
 Every visitor gets a private copy of the template world, so judges never affect each other.
-Copies get fresh IDs, and every reference between them (asset → community persona,
-holdings, prices, reports, ledger entries…) is remapped to the copy. Ledger chains stay
-valid because an entry's hash covers its payload, kind, seq and previous hash, not its IDs.
+Copies get fresh IDs, and every reference between them (community → treasury, members, asset →
+community and treasury, holdings, prices, reports, ledger entries…) is remapped to the copy.
+Ledger chains stay valid because an entry's hash covers its payload, kind, seq and previous
+hash, not its IDs.
+
+A reset keeps the world's persona users and their IDs (matched by `persona_key`), restoring
+their fields from the template, so sessions that point at them survive (ADR-0005 §4, T56).
+Everything else, communities and treasuries included, is deleted and copied again with fresh
+IDs; nothing outside the world refers to those.
 
 The live world (ADR-0005 §2, T54) is built with the same copy, once, and is never served as a
 sandbox, reset or pruned.
@@ -15,6 +21,7 @@ commit their own transaction; call them with no other pending work in the sessio
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -26,6 +33,8 @@ from sqlmodel import Session, SQLModel, col, select
 from app.models import (
     Alert,
     Asset,
+    Community,
+    CommunityMember,
     DocChunk,
     Event,
     Holding,
@@ -54,8 +63,10 @@ VISITOR_LABEL = "visitor"
 # Never served as a sandbox, reset or pruned.
 PROTECTED_WORLDS: frozenset[UUID] = frozenset({TEMPLATE_WORLD_ID, LIVE_WORLD_ID})
 
-# Children before parents, so deletes never violate a foreign key.
+# Children before parents, so deletes never violate a foreign key. Sessions go first, so a
+# pruned world's sessions are gone before anything they could reach (ADR-0005 §4).
 _DELETE_ORDER: tuple[type[SQLModel], ...] = (
+    UserSession,
     LedgerEntry,
     PayoutLine,
     DocChunk,
@@ -68,7 +79,8 @@ _DELETE_ORDER: tuple[type[SQLModel], ...] = (
     Report,
     Metrics,
     Asset,
-    UserSession,
+    CommunityMember,
+    Community,
     User,
 )
 
@@ -108,15 +120,22 @@ def _ensure_template(session: Session) -> None:
 
 
 def _copy_world_rows(
-    session: Session, source: UUID, target: UUID, *, community_users_only: bool = False
+    session: Session,
+    source: UUID,
+    target: UUID,
+    *,
+    communities_only: bool = False,
+    keep_personas: dict[str, User] | None = None,
 ) -> None:
     """Copy every world-scoped row from `source` into `target`, remapping IDs.
 
     Inserts are flushed table by table in foreign-key order. Orders, sessions and LLM call logs
     are visitor activity, not template content, so they are not copied. Payouts are activity
-    too, and the source must hold none (T67). With
-    `community_users_only`, only the users that own an asset (and their holdings) are copied,
-    so demo investors and the demo admin persona never reach the live world.
+    too, and the source must hold none (T67). With `communities_only`, only the communities'
+    treasuries and members (and their holdings) are copied, so demo investors and the demo
+    admin persona never reach the live world. `keep_personas` maps `persona_key` to a persona
+    already in `target`: that user keeps its ID and gets the source persona's fields, so its
+    sessions survive a reset.
     """
     # A payout's leaf hashes cover its holders' user IDs, which a copy remaps, so copied lines
     # could never verify against the copied ledger commitment. Templates never pay out; payouts
@@ -126,11 +145,9 @@ def _copy_world_rows(
         raise RuntimeError(f"world {source} holds payouts, which can't be copied")
     ids: dict[UUID, UUID] = {}
     copied_users: set[UUID] | None = None
-    if community_users_only:
-        copied_users = {
-            a.community_user_id
-            for a in _rows(session, Asset, source)
-            if a.community_user_id is not None
+    if communities_only:
+        copied_users = {c.treasury_user_id for c in _rows(session, Community, source)} | {
+            m.user_id for m in _rows(session, CommunityMember, source)
         }
 
     def fk(old: UUID | None) -> UUID | None:
@@ -145,6 +162,13 @@ def _copy_world_rows(
         for row in _rows(session, model, source):
             if model is User and copied_users is not None and row.id not in copied_users:
                 continue
+            kept = keep_personas.get(row.persona_key) if model is User and keep_personas else None
+            if kept is not None:
+                for field, value in row.model_dump(exclude={"id", "world_id"}).items():
+                    setattr(kept, field, value)
+                ids[row.id] = kept.id
+                session.add(kept)
+                continue
             clone: Any = model(
                 **_clone(
                     row,
@@ -158,7 +182,21 @@ def _copy_world_rows(
         session.flush()
 
     copy_with_new_id(User)
-    copy_with_new_id(Asset, "community_user_id")
+    copy_with_new_id(Community, "treasury_user_id")
+    for member in _rows(session, CommunityMember, source):
+        session.add(
+            CommunityMember(
+                **_clone(
+                    member,
+                    {"world_id"},
+                    world_id=target,
+                    community_id=fk(member.community_id),
+                    user_id=fk(member.user_id),
+                )
+            )
+        )
+    session.flush()
+    copy_with_new_id(Asset, "community_id", "community_user_id")
     copy_with_new_id(Metrics, "asset_id")
     copy_with_new_id(Report, "asset_id", "metrics_id")
     copy_with_new_id(Event, "asset_id")
@@ -200,8 +238,10 @@ def _copy_world_rows(
     session.flush()
 
 
-def _delete_world_rows(session: Session, world_id: UUID, *, keep_world: bool) -> None:
-    """Delete every row a world owns, children first.
+def _delete_world_rows(
+    session: Session, world_id: UUID, *, keep_world: bool, keep_users: Collection[UUID] = ()
+) -> None:
+    """Delete every row a world owns, children first; `keep_users` and their sessions stay.
 
     LLM call logs are kept for the spend cap (LLM_BUDGET_USD); they are only detached from
     the rows being deleted. The ledger-delete opt-in is switched off again before returning,
@@ -216,10 +256,16 @@ def _delete_world_rows(session: Session, world_id: UUID, *, keep_world: bool) ->
         .where(or_(col(LlmCall.world_id) == world_id, col(LlmCall.asset_id).in_(world_assets)))
         .values(**detach)
     )
+    kept = list(keep_users)
     session.execute(text("SET LOCAL naturex.allow_ledger_delete = 'on'"))
     try:
         for model in _DELETE_ORDER:
-            session.execute(delete(model).where(_world_col(model) == world_id))
+            stmt = delete(model).where(_world_col(model) == world_id)
+            if kept and model is UserSession:
+                stmt = stmt.where(col(UserSession.user_id).not_in(kept))
+            elif kept and model is User:
+                stmt = stmt.where(col(User.id).not_in(kept))
+            session.execute(stmt)
     finally:
         session.execute(text("SET LOCAL naturex.allow_ledger_delete = 'off'"))
 
@@ -254,9 +300,14 @@ def create_world(session: Session, max_new_per_hour: int | None = None) -> World
 def reset_world(session: Session, world_id: UUID) -> World:
     """Restore a visitor world to the template state, keeping its ID (and so its cookie).
 
+    Persona users keep their IDs (matched by `persona_key`) and get the template's fields back
+    (cash included), so a session on any persona stays valid (ADR-0005 §4). A persona the
+    template no longer has is deleted with its sessions; every other row, communities and
+    treasuries included, is copied again with fresh IDs.
+
     The world row is locked first, so writes for this world wait for the reset. A write that
-    was waiting then fails on its now-deleted user or asset; callers (e.g. the trade API)
-    should turn that IntegrityError into a 409 "your demo was reset".
+    was waiting then finds its asset gone (assets get fresh IDs); callers (e.g. the trade API)
+    should answer 404 or 409 "your demo was reset".
     """
     if world_id in PROTECTED_WORLDS:
         raise ValueError("the template and live worlds can't be reset")
@@ -266,8 +317,16 @@ def reset_world(session: Session, world_id: UUID) -> World:
         raise LookupError(f"world {world_id} not found")
     if world.label == LIVE_LABEL:
         raise ValueError("the live world can't be reset")
-    _delete_world_rows(session, world_id, keep_world=True)
-    _copy_world_rows(session, TEMPLATE_WORLD_ID, world_id)
+    template_keys = {
+        u.persona_key for u in _rows(session, User, TEMPLATE_WORLD_ID) if u.persona_key
+    }
+    keep = {
+        u.persona_key: u
+        for u in _rows(session, User, world_id)
+        if u.kind == UserKind.PERSONA and u.persona_key in template_keys
+    }
+    _delete_world_rows(session, world_id, keep_world=True, keep_users={u.id for u in keep.values()})
+    _copy_world_rows(session, TEMPLATE_WORLD_ID, world_id, keep_personas=keep)
     world.last_seen_at = _now()
     session.add(world)
     session.commit()
@@ -328,9 +387,9 @@ def world_from_cookie(session: Session, value: str | None) -> World | None:
 def ensure_live_world(session: Session) -> World:
     """Create the live world once: the curated sites copied from the template (ADR-0005 §2).
 
-    Only the community persona that owns the sites comes along (no password, so nobody can
-    sign in as it); T56 replaces it with real communities and treasuries. Idempotent, and
-    safe when two processes run it at once.
+    Their communities come along with their treasuries (holding the retained stakes) and their
+    owner persona (no password, so nobody can sign in as it); demo investors and the demo admin
+    don't. Idempotent, and safe when two processes run it at once.
     """
     world = session.get(World, LIVE_WORLD_ID)
     if world is not None:
@@ -340,7 +399,7 @@ def ensure_live_world(session: Session) -> World:
         world = World(id=LIVE_WORLD_ID, label=LIVE_LABEL)
         session.add(world)
         session.flush()
-        _copy_world_rows(session, TEMPLATE_WORLD_ID, LIVE_WORLD_ID, community_users_only=True)
+        _copy_world_rows(session, TEMPLATE_WORLD_ID, LIVE_WORLD_ID, communities_only=True)
         session.commit()
     except IntegrityError:
         session.rollback()

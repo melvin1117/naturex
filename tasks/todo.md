@@ -323,9 +323,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`: forged-prefix origins, missing and `null` headers, concurrent attempts, both bucket dimensions · **Deps:** T54 · **Files:** `backend/app/auth.py`, `backend/app/middleware.py`, `backend/app/config.py`, `backend/tests/test_auth_hardening.py`
 
 ### T56 · Communities, treasury and tenant invariants (#99) — D1 · M · Must · A0 K3
-- [ ] `communities` and `community_members` (owner | steward) carry `world_id NOT NULL`; composite foreign keys `(world_id, …_id)` (unique `(world_id, id)` on users, assets, communities); a DB test shows cross-world inserts fail
-- [ ] One non-login, non-trading treasury user per community; `assets.community_id` set and `assets.community_user_id` = the treasury
-- [ ] Backfill the template and the live world (communities, owners and treasuries for the curated sites); discard pre-migration visitor sandboxes; `sandbox.py` clone, reset and prune cover the new tables; reset keeps persona user IDs (mapped by `persona_key`) so sessions survive; pruning deletes a world's sessions first
+- [x] `communities` and `community_members` (owner | steward) carry `world_id NOT NULL`; composite foreign keys `(world_id, …_id)` (unique `(world_id, id)` on users, assets, communities); a DB test shows cross-world inserts fail
+- [x] One non-login, non-trading treasury user per community; `assets.community_id` set and `assets.community_user_id` = the treasury
+- [x] Backfill the template and the live world (communities, owners and treasuries for the curated sites); discard pre-migration visitor sandboxes; `sandbox.py` clone, reset and prune cover the new tables; reset keeps persona user IDs (mapped by `persona_key`) so sessions survive; pruning deletes a world's sessions first
 
 **Verify:** `make test` · **Deps:** T54 · **Files:** `backend/app/models.py`, `backend/migrations/versions/*_communities.py`, `backend/app/sandbox.py`, `backend/app/seed.py`, `backend/tests/test_tenancy.py`
 

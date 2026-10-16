@@ -22,6 +22,9 @@ from app.market.revenue import pay_quarter
 from app.models import (
     Alert,
     Asset,
+    Community,
+    CommunityMember,
+    CommunityRole,
     DocChunk,
     Event,
     EventSource,
@@ -36,6 +39,7 @@ from app.models import (
     Price,
     Report,
     User,
+    UserKind,
     World,
 )
 from app.sandbox import (
@@ -90,6 +94,14 @@ def persona(session: Session, world_id: UUID, key: str) -> User:
     ).one()
 
 
+def treasuries(session: Session, world_id: UUID) -> set[UUID]:
+    """The world's community treasuries (T56), which hold the retained stakes."""
+    return {
+        c.treasury_user_id
+        for c in session.exec(select(Community).where(Community.world_id == world_id)).all()
+    }
+
+
 # --- Creating a world ------------------------------------------------------------------------
 
 
@@ -98,12 +110,16 @@ def test_new_world_copies_every_persona_and_demo_asset_with_fresh_ids(session: S
     world = create_world(session)
 
     copied_users = users(session, world.id)
+    copied_personas = [u for u in copied_users if u.kind == UserKind.PERSONA]
     copied_assets = assets(session, world.id)
-    assert {u.persona_key for u in copied_users} == {p.key for p in PERSONAS}
+    assert {u.persona_key for u in copied_personas} == {p.key for p in PERSONAS}
+    assert {u.id for u in copied_users} - {u.id for u in copied_personas} == treasuries(
+        session, world.id
+    )
     assert {a.site_key for a in copied_assets} == {s.key for s in DEMO_SITES}
-    assert not {u.id for u in copied_users} & {p.id for p in PERSONAS}
+    assert not {u.id for u in copied_users} & {u.id for u in users(session, WORLD_ID)}
     assert not {a.id for a in copied_assets} & {s.id for s in DEMO_SITES}
-    assert all(u.cash_balance == Decimal("10000.00") for u in copied_users)
+    assert all(u.cash_balance == Decimal("10000.00") for u in copied_personas)
 
 
 @requires_db
@@ -138,11 +154,21 @@ def test_seed_upgrades_demo_site_boundaries_in_visitor_worlds(session: Session) 
 
 
 @requires_db
-def test_copied_assets_point_at_the_copied_community_persona(session: Session) -> None:
+def test_copied_assets_point_at_the_copied_communities_and_treasuries(session: Session) -> None:
     world = create_world(session)
 
     rosa = persona(session, world.id, COMMUNITY_PERSONA.key)
-    assert {a.community_user_id for a in assets(session, world.id)} == {rosa.id}
+    communities = session.exec(select(Community).where(Community.world_id == world.id)).all()
+    members = session.exec(
+        select(CommunityMember).where(CommunityMember.world_id == world.id)
+    ).all()
+    by_id = {c.id: c for c in communities}
+    for asset in assets(session, world.id):
+        assert asset.community_id in by_id
+        assert asset.community_user_id == by_id[asset.community_id].treasury_user_id
+    assert sorted((m.community_id, m.user_id, m.role) for m in members) == sorted(
+        (c.id, rosa.id, CommunityRole.OWNER) for c in communities
+    )
 
 
 @requires_db
@@ -171,11 +197,11 @@ def test_template_holdings_prices_and_ledger_are_copied_and_remapped(session: Se
     wetland = session.exec(
         select(Asset).where(Asset.world_id == world.id, Asset.site_key == DEMO_SITES[0].key)
     ).one()
-    rosa = persona(session, world.id, COMMUNITY_PERSONA.key)
     holding = session.exec(
         select(Holding).where(Holding.world_id == world.id, Holding.asset_id == wetland.id)
     ).one()
-    assert (holding.user_id, holding.shares) == (rosa.id, 510_000)
+    assert (holding.user_id, holding.shares) == (wetland.community_user_id, 510_000)
+    assert holding.user_id in treasuries(session, world.id)
     world_assets = {a.id: a.site_key for a in assets(session, world.id)}
     template_assets = {a.id: a.site_key for a in assets(session, WORLD_ID)}
 
@@ -253,11 +279,11 @@ def test_reset_restores_the_template_state_and_keeps_the_world_id(session: Sessi
 
     assert restored.id == world.id
     assert persona(session, world.id, "arjun").cash_balance == Decimal("10000.00")
-    assert community_stake_only(session, world.id), "Arjun's holding is gone, Rosa's stake is back"
+    assert community_stake_only(session, world.id), "Arjun's holding is gone, the stakes are back"
     assert session.exec(select(Order).where(Order.world_id == world.id)).all() == []
     kinds = session.exec(select(LedgerEntry.kind).where(LedgerEntry.world_id == world.id)).all()
     assert kinds == [LedgerKind.REPORT] * len(DEMO_SITES), "only the template's report entries"
-    assert len(users(session, world.id)) == len(PERSONAS)
+    assert len(users(session, world.id)) == len(PERSONAS) + len(DEMO_SITES), "+ 3 treasuries"
     assert len(assets(session, world.id)) == len(DEMO_SITES)
 
 
@@ -384,10 +410,11 @@ def test_ledger_of_another_worlds_asset_is_not_visible(client: TestClient) -> No
 
 
 def community_stake_only(session: Session, world_id: UUID) -> bool:
-    """True when the world's holdings are exactly the template's: Rosa's retained stake."""
-    rosa = persona(session, world_id, COMMUNITY_PERSONA.key)
+    """True when the world's holdings are exactly the template's: each treasury's retained
+    stake in its own community's asset."""
     held = session.exec(select(Holding).where(Holding.world_id == world_id)).all()
-    return sorted((h.user_id, h.shares) for h in held) == [(rosa.id, 510_000)] * len(DEMO_SITES)
+    stakes = sorted((a.community_user_id, a.id, 510_000) for a in assets(session, world_id))
+    return sorted((h.user_id, h.asset_id, h.shares) for h in held) == stakes
 
 
 def world_count(session: Session) -> int:
@@ -400,10 +427,9 @@ def test_first_visit_gets_the_community_stake_so_shares_are_conserved(
 ) -> None:
     world_id = UUID(client.get("/world").json()["id"])
 
-    rosa = persona(session, world_id, COMMUNITY_PERSONA.key)
     for asset in assets(session, world_id):
         held = session.exec(select(Holding).where(Holding.asset_id == asset.id)).all()
-        assert [(h.user_id, h.shares) for h in held] == [(rosa.id, 510_000)]
+        assert [(h.user_id, h.shares) for h in held] == [(asset.community_user_id, 510_000)]
         assert asset.primary_shares_remaining + sum(h.shares for h in held) == asset.total_shares
 
 
@@ -591,7 +617,7 @@ def test_ledger_delete_opt_in_is_off_again_after_a_reset(session: Session) -> No
 
 
 def _pay_in(session: Session, world_id: UUID) -> None:
-    """One quarter's payout on the world's wetland, to Rosa's retained stake and Arjun."""
+    """One quarter's payout on the world's wetland, to its treasury's retained stake and Arjun."""
     wetland = session.exec(
         select(Asset).where(Asset.world_id == world_id, Asset.site_key == DEMO_SITES[0].key)
     ).one()
@@ -619,7 +645,7 @@ def test_reset_and_prune_delete_a_worlds_private_payout_lines(session: Session) 
     kept_id, pruned_id = kept.id, pruned.id
     for world_id in (kept_id, pruned_id):
         _pay_in(session, world_id)
-        assert payout_rows(session, world_id) == 2, "Rosa's and Arjun's lines"
+        assert payout_rows(session, world_id) == 2, "the treasury's and Arjun's lines"
     pruned.last_seen_at = datetime.now(UTC) - timedelta(days=30)
     session.commit()
 

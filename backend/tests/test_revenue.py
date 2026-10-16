@@ -45,13 +45,15 @@ from app.models import (
     UserRole,
     World,
 )
-from app.seed import COMMUNITY_PERSONA, DEMO_SITES, PERSONAS, WORLD_ID, seed
+from app.seed import COMMUNITY_PERSONA, DEMO_SITES, PERSONAS, SEED_COMMUNITIES, WORLD_ID, seed
 from tests.conftest import alembic_cfg, requires_db
 
 D = Decimal
 ASSET_ID = DEMO_SITES[0].id
 ARJUN_ID = PERSONAS[1].id
 MIA_ID = PERSONAS[2].id
+# The wetland community's treasury holds its retained stake (T56); Rosa is only its owner.
+TREASURY_ID = SEED_COMMUNITIES[0].treasury_id
 ARJUN_SHARES = 300_000
 MIA_SHARES = 190_000
 
@@ -222,13 +224,13 @@ def session() -> Iterator[Session]:
 def _add_holdings(session: Session) -> None:
     """Investor holdings on top of the community's retained stake, which seed() creates."""
     asset = session.get_one(Asset, ASSET_ID)
-    community = session.get_one(Holding, (WORLD_ID, COMMUNITY_PERSONA.id, ASSET_ID))
+    community = session.get_one(Holding, (WORLD_ID, TREASURY_ID, ASSET_ID))
     assert community.shares == asset.total_shares - asset.primary_shares_remaining
     _add_investor_holdings(session)
 
 
 def _remove_community_holding(session: Session) -> None:
-    session.delete(session.get_one(Holding, (WORLD_ID, COMMUNITY_PERSONA.id, ASSET_ID)))
+    session.delete(session.get_one(Holding, (WORLD_ID, TREASURY_ID, ASSET_ID)))
     session.flush()
 
 
@@ -281,13 +283,15 @@ def test_pay_quarter_credits_wallets_users_and_appends_a_verifiable_ledger_entry
     session.expire_all()
 
     asset = session.get_one(Asset, ASSET_ID)
-    community = session.get_one(User, COMMUNITY_PERSONA.id)
+    treasury = session.get_one(User, TREASURY_ID)
+    rosa = session.get_one(User, COMMUNITY_PERSONA.id)
     arjun = session.get_one(User, ARJUN_ID)
     mia = session.get_one(User, MIA_ID)
     entries = entries_for(session, ASSET_ID)
 
     assert asset.community_wallet == D("250.00")
-    assert community.cash_balance == D("10127.50")
+    assert treasury.cash_balance == D("127.50"), "the retained-stake dividend (from 0.00)"
+    assert rosa.cash_balance == D("10000.00"), "the owner is a member, not a holder"
     assert arjun.cash_balance == D("10075.00")
     assert mia.cash_balance == D("10047.50")
     assert result.payout.revenue == D("500.00")
@@ -516,7 +520,7 @@ def test_payout_lines_equal_the_per_holder_allocation_and_sum_to_the_dividends(
         (p.key, p.shares, p.amount) for p in result.payout.holder_payouts
     )
     assert {line.user_id: line.amount for line in lines} == {
-        COMMUNITY_PERSONA.id: D("127.50"),
+        TREASURY_ID: D("127.50"),
         ARJUN_ID: D("75.00"),
         MIA_ID: D("47.50"),
     }
@@ -676,7 +680,7 @@ def test_erasing_one_holder_leaves_a_tombstone_and_keeps_the_others_verifiable(
     [tombstone] = [line for line in _lines(session) if line.user_id is None]
     assert (tombstone.shares, tombstone.amount, tombstone.nonce) == (None, None, None)
     assert tombstone.leaf_hash == leaf_before, "only the unlinkable leaf hash is kept"
-    assert {line.user_id for line in _lines(session)} == {COMMUNITY_PERSONA.id, MIA_ID, None}
+    assert {line.user_id for line in _lines(session)} == {TREASURY_ID, MIA_ID, None}
     check = verify_payout_commitment(session, entry)
     assert (check.status, check.erased, check.valid) == ("ok_with_erasures", 1, True)
     stored_entries = entries_for(session, ASSET_ID)  # the seed's report v1 (T19), then the payout

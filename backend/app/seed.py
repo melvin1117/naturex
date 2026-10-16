@@ -1,4 +1,8 @@
-"""Idempotent seed: one template world, 4 personas, 3 demo assets and the community's stake."""
+"""Idempotent seed: one template world, 4 personas, 3 demo assets, their communities and stakes.
+
+Each curated site has its own community (ADR-0005 §3, T56): Rosa is the owner of all three, and
+each community's treasury account holds the site's retained stake and receives its dividends.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +16,19 @@ from sqlalchemy import update
 from sqlmodel import Session, col, select
 
 from app.db import engine
-from app.models import Asset, AssetStatus, Holding, Price, User, UserRole, World
+from app.models import (
+    Asset,
+    AssetStatus,
+    Community,
+    CommunityMember,
+    CommunityRole,
+    Holding,
+    Price,
+    User,
+    UserKind,
+    UserRole,
+    World,
+)
 from app.services.rating import (
     SiteRating,
     latest_report,
@@ -61,6 +77,7 @@ PERSONAS: tuple[Persona, ...] = (
     Persona(UUID("22222222-2222-2222-2222-222222222203"), "mia", "Mia", UserRole.INVESTOR),
     Persona(UUID("22222222-2222-2222-2222-222222222204"), "admin", "Demo Admin", UserRole.ADMIN),
 )
+# Owner of every seeded community (a member, not a holder: the treasuries hold the stakes).
 COMMUNITY_PERSONA = PERSONAS[0]
 
 
@@ -108,6 +125,33 @@ DEMO_SITES: tuple[DemoSite, ...] = (
         "Tropical forest recovering from 2021–2025 loss on the edge of Cañón del Sumidero "
         "National Park, Chiapas (demo).",
     ),
+)
+
+
+@dataclass(frozen=True)
+class SeedCommunity:
+    """A curated site's community and its treasury. Migration 0009 uses the same IDs."""
+
+    id: UUID
+    treasury_id: UUID
+    site: DemoSite
+
+    @property
+    def name(self) -> str:
+        return f"{self.site.name} Community"
+
+    @property
+    def treasury_name(self) -> str:
+        return f"{self.name} Treasury"
+
+
+SEED_COMMUNITIES: tuple[SeedCommunity, ...] = tuple(
+    SeedCommunity(
+        id=UUID(f"55555555-5555-5555-5555-5555555555{n:02d}"),
+        treasury_id=UUID(f"66666666-6666-6666-6666-6666666666{n:02d}"),
+        site=site,
+    )
+    for n, site in enumerate(DEMO_SITES, start=1)
 )
 
 DEMO_GEOJSON: dict[str, dict[str, Any]] = {
@@ -207,6 +251,47 @@ def _seed_ipo_prices(session: Session) -> None:
     session.commit()
 
 
+def _seed_communities(session: Session) -> None:
+    """Each curated site's community, its treasury and Rosa as owner, if missing.
+
+    Existing databases got them from migration 0009 with these same IDs, so this is a no-op
+    there.
+    """
+    for community in SEED_COMMUNITIES:
+        if session.get(Community, community.id) is None:
+            session.add(
+                User(
+                    id=community.treasury_id,
+                    world_id=WORLD_ID,
+                    name=community.treasury_name,
+                    role=UserRole.COMMUNITY,
+                    kind=UserKind.TREASURY,
+                    cash_balance=Decimal("0.00"),
+                )
+            )
+            session.flush()
+            session.add(
+                Community(
+                    id=community.id,
+                    world_id=WORLD_ID,
+                    name=community.name,
+                    country=community.site.country,
+                    treasury_user_id=community.treasury_id,
+                )
+            )
+            session.flush()
+        if session.get(CommunityMember, (community.id, COMMUNITY_PERSONA.id)) is None:
+            session.add(
+                CommunityMember(
+                    community_id=community.id,
+                    user_id=COMMUNITY_PERSONA.id,
+                    world_id=WORLD_ID,
+                    role=CommunityRole.OWNER,
+                )
+            )
+    session.commit()
+
+
 def seed(session: Session) -> None:
     """Insert template world, personas and demo assets if missing."""
     if session.get(World, WORLD_ID) is None:
@@ -230,8 +315,11 @@ def seed(session: Session) -> None:
             )
     session.commit()
 
+    _seed_communities(session)
+
     primary_shares = int(TOTAL_SHARES * (Decimal("100") - RETAINED_PCT) / Decimal("100"))
-    for site in DEMO_SITES:
+    for community in SEED_COMMUNITIES:
+        site = community.site
         existing_asset = session.exec(
             select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == site.key)
         ).first()
@@ -241,7 +329,8 @@ def seed(session: Session) -> None:
                     id=site.id,
                     world_id=WORLD_ID,
                     name=site.name,
-                    community_user_id=COMMUNITY_PERSONA.id,
+                    community_id=community.id,
+                    community_user_id=community.treasury_id,
                     country=site.country,
                     description=site.description,
                     geojson=DEMO_GEOJSON[site.key],
@@ -259,19 +348,18 @@ def seed(session: Session) -> None:
     session.commit()
     _upgrade_demo_site_content(session)
 
-    # The community keeps its retained stake as a holding, so shares are conserved:
+    # The treasury keeps the community's retained stake as a holding, so shares are conserved:
     # total_shares = primary_shares_remaining + market_maker_shares + sum(holdings) (dev-spec §8).
     retained = TOTAL_SHARES - primary_shares
     for site in DEMO_SITES:
-        asset = session.exec(
-            select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == site.key)
-        ).one()
-        holding = session.get(Holding, (WORLD_ID, COMMUNITY_PERSONA.id, asset.id))
-        if holding is None:
+        asset = _template_asset(session, site)
+        if asset.community_user_id is None:
+            raise RuntimeError(f"template asset {site.key} has no treasury")
+        if session.get(Holding, (WORLD_ID, asset.community_user_id, asset.id)) is None:
             session.add(
                 Holding(
                     world_id=WORLD_ID,
-                    user_id=COMMUNITY_PERSONA.id,
+                    user_id=asset.community_user_id,
                     asset_id=asset.id,
                     shares=retained,
                 )
@@ -290,8 +378,9 @@ def main() -> None:
         seed(session)
         ensure_live_world(session)
     print(
-        "Seed complete: template world, 4 personas, 3 demo assets, community holdings, "
-        "report v1 and IPO prices; live world with the 3 curated sites."
+        "Seed complete: template world, 4 personas, 3 demo assets with their communities, "
+        "treasuries and retained stakes, report v1 and IPO prices; live world with the 3 "
+        "curated sites."
     )
 
 
