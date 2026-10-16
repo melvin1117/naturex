@@ -345,6 +345,52 @@ def test_a_treasury_cannot_trade_sign_in_or_be_a_member(session: Session) -> Non
 
 
 @requires_db
+def test_a_communitys_treasury_cannot_stop_being_a_treasury(session: Session) -> None:
+    treasury = _treasury(session, WORLD_ID)
+
+    for kind in (UserKind.PERSONA, UserKind.PERSON):
+        with pytest.raises(IntegrityError, match="must stay a treasury"), session.begin_nested():
+            session.execute(update(User).where(col(User.id) == treasury.id).values(kind=kind))
+
+
+@requires_db
+def test_a_user_with_sessions_orders_or_memberships_cannot_become_a_treasury(
+    session: Session,
+) -> None:
+    world_id = create_world(session).id
+    rosa = persona(session, world_id, COMMUNITY_PERSONA.key)  # an owner
+    arjun = persona(session, world_id, "arjun")
+    mia = persona(session, world_id, "mia")
+    start_session(session, mia, SessionKind.DEMO)
+    session.add(
+        Order(
+            world_id=world_id,
+            user_id=arjun.id,
+            asset_id=site_asset(session, world_id).id,
+            side=OrderSide.BUY,
+            qty=1,
+            fill_price=D("1.0000"),
+        )
+    )
+    session.commit()
+
+    for user in (rosa, arjun, mia):
+        with (
+            pytest.raises(IntegrityError, match="can't become a treasury"),
+            session.begin_nested(),
+        ):
+            session.execute(
+                update(User).where(col(User.id) == user.id).values(kind=UserKind.TREASURY)
+            )
+
+    # A user with none of them can; a treasury no community names can become a persona again.
+    admin = persona(session, world_id, "admin")
+    session.execute(update(User).where(col(User.id) == admin.id).values(kind=UserKind.TREASURY))
+    session.execute(update(User).where(col(User.id) == admin.id).values(kind=UserKind.PERSONA))
+    session.flush()
+
+
+@requires_db
 def test_pay_quarter_pays_the_retained_dividend_to_the_treasury(session: Session) -> None:
     world_id = create_world(session).id
     wetland = site_asset(session, world_id)

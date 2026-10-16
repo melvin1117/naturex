@@ -9,8 +9,10 @@ Schema:
   (`fk_assets_community_treasury`).
 - A partial unique index on `users (world_id, persona_key)`, so a sandbox reset can keep persona
   user IDs by key and existing sessions survive.
-- Triggers: a treasury can't place orders, hold a session or be a community member, and a
-  community's `treasury_user_id` must name a `treasury` user.
+- Triggers: a treasury can't place orders, hold a session or be a community member, a
+  community's `treasury_user_id` must name a `treasury` user, and `users.kind` can't change to
+  get around either (a community's treasury stays one; a user with sessions, orders or
+  memberships can't become one).
 
 Data:
 - **Existing demo sandboxes are reset on upgrade:** every world except the template and the live
@@ -311,6 +313,35 @@ def upgrade() -> None:
         "BEFORE INSERT OR UPDATE OF treasury_user_id ON communities "
         "FOR EACH ROW EXECUTE FUNCTION require_treasury_user()"
     )
+    # Changing `kind` must not get around the triggers above (T56 review).
+    op.execute(
+        """
+        CREATE FUNCTION guard_treasury_kind_change() RETURNS trigger
+        LANGUAGE plpgsql AS $$
+        BEGIN
+            IF OLD.kind = 'treasury' AND NEW.kind <> 'treasury'
+               AND EXISTS (SELECT 1 FROM communities WHERE treasury_user_id = OLD.id) THEN
+                RAISE EXCEPTION 'a community''s treasury account must stay a treasury'
+                    USING ERRCODE = 'check_violation';
+            END IF;
+            IF NEW.kind = 'treasury' AND OLD.kind <> 'treasury' AND (
+                EXISTS (SELECT 1 FROM sessions WHERE user_id = OLD.id)
+                OR EXISTS (SELECT 1 FROM orders WHERE user_id = OLD.id)
+                OR EXISTS (SELECT 1 FROM community_members WHERE user_id = OLD.id)
+            ) THEN
+                RAISE EXCEPTION
+                    'a user with sessions, orders or memberships can''t become a treasury'
+                    USING ERRCODE = 'check_violation';
+            END IF;
+            RETURN NEW;
+        END;
+        $$
+        """
+    )
+    op.execute(
+        "CREATE TRIGGER users_treasury_kind BEFORE UPDATE OF kind ON users "
+        "FOR EACH ROW EXECUTE FUNCTION guard_treasury_kind_change()"
+    )
 
     _backfill_communities(bind)
 
@@ -398,6 +429,8 @@ def _return_stakes_to_owners(bind: sa.Connection) -> list[UUID]:
 
 def downgrade() -> None:
     bind = op.get_bind()
+    op.execute("DROP TRIGGER IF EXISTS users_treasury_kind ON users")
+    op.execute("DROP FUNCTION IF EXISTS guard_treasury_kind_change()")
     op.execute("DROP TRIGGER IF EXISTS communities_treasury_kind ON communities")
     op.execute("DROP FUNCTION IF EXISTS require_treasury_user()")
     for table, trigger in (
