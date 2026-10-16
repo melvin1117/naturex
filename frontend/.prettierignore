@@ -7,3 +7,6 @@ next-env.d.ts
 junit.xml
 src/lib/api/openapi.json
 src/lib/api/schema.d.ts
+
+# Generated from backend ratings by the prototype export; keep compact.
+src/lib/prototype/sites.json
