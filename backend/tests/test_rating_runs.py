@@ -24,7 +24,7 @@ import openai
 import pytest
 from alembic import command
 from fastapi.testclient import TestClient
-from sqlalchemy import Connection, create_engine, delete
+from sqlalchemy import Connection, create_engine, delete, text, update
 from sqlmodel import Session, col, func, select
 
 from app import mocks
@@ -49,8 +49,10 @@ from app.routers.runs import get_rating_runner
 from app.sandbox import _delete_world_rows, create_world
 from app.schemas import NewsScoutOutput, RatingRunStatus
 from app.seed import seed
+from app.services import rating_runs
 from app.services.rating import rate_site
 from app.services.rating_runs import (
+    GLOBAL_RUNS_LOCK_KEY,
     AssetInfo,
     RatingRunner,
     RunInProgress,
@@ -58,6 +60,7 @@ from app.services.rating_runs import (
     RunRateLimited,
     ToolFailed,
     get_run,
+    global_runs_queued,
     load_cached_metrics,
     news_runner,
 )
@@ -142,11 +145,12 @@ def harness(
     news: Callable[[Any, Any], NewsScoutOutput] = fixture_news,
     metrics_loader: Callable[[AssetInfo, ScenarioName], EarthObsMetrics] = load_cached_metrics,
     max_pending: int = 16,
+    spent: str = "0",
     **overrides: Any,
 ) -> Harness:
     cfg = settings(**{"use_mocks": False, **overrides})
     transport = FakeTransport(*script)
-    log = MemoryCallLog()
+    log = MemoryCallLog(spent)
     made: list[LLMClient] = []
 
     def llm_factory(wrap: Any) -> LLMClient:
@@ -791,6 +795,7 @@ def test_no_account_identifiers_in_ledger_report_or_events(db: Connection, site:
 
 @pytest.fixture
 def api(db: Connection) -> Iterator[tuple[TestClient, Deferred]]:
+    """Yields the client and the deferred executor; `api_session` holds the request session."""
     session = sessions(db)()
     deferred = Deferred()
     cfg = settings(use_mocks=True)
@@ -805,6 +810,7 @@ def api(db: Connection) -> Iterator[tuple[TestClient, Deferred]]:
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None, use_mocks=True)
     app.dependency_overrides[get_rating_runner] = lambda: runner
+    API_SESSION[:] = [session]
     with TestClient(app) as client:
         yield client, deferred
     app.dependency_overrides.clear()
@@ -814,6 +820,9 @@ def api(db: Connection) -> Iterator[tuple[TestClient, Deferred]]:
 def _hero(client: TestClient) -> str:
     world = client.get("/world").json()
     return str(next(a["id"] for a in world["assets"] if a["site_key"] == HERO))
+
+
+API_SESSION: list[Session] = []
 
 
 @requires_db
@@ -939,3 +948,151 @@ def test_run_completes_on_a_real_worker_thread() -> None:
             cleanup.execute(delete(World).where(col(World.id) == world_id))
             cleanup.commit()
         engine.dispose()
+
+
+# ----- review fixes: global cap, bounded lock waits, stale queued runs --------------------------
+
+
+def _queued_runs_now(conn: Connection) -> int:
+    with sessions(conn)() as session:
+        return len(global_runs_queued(session, session.exec(select(func.now())).one()))
+
+
+@requires_db
+def test_global_cap_spans_worlds(db: Connection, site: Site) -> None:
+    with sessions(db)() as session:
+        others = [create_world(session).id for _ in range(2)]
+        hero_of = {
+            world_id: session.exec(
+                select(Asset.id).where(Asset.world_id == world_id, Asset.site_key == HERO)
+            ).one()
+            for world_id in others
+        }
+    cap = _queued_runs_now(db) + 2
+    h = harness(db, executor=Deferred(), use_mocks=True, rating_runs_global_per_hour=cap)
+    h.runner.start(site.world_id, site.asset_id)
+    h.runner.start(others[0], hero_of[others[0]])
+    with pytest.raises(RunRateLimited) as exc:
+        h.runner.start(others[1], hero_of[others[1]])  # a fresh world doesn't reset it
+    assert exc.value.code == "rating_global_limit"
+    assert 1 <= exc.value.retry_after_s <= 3601
+    # A Time Machine override raises only the per-world cap, never the global one.
+    with pytest.raises(RunRateLimited):
+        h.runner.start(others[1], hero_of[others[1]], max_runs_per_hour=100)
+
+
+@requires_db
+def test_global_cap_is_a_distinct_429(api: tuple[TestClient, Deferred], db: Connection) -> None:
+    client, _ = api
+    world = client.get("/world").json()
+    first, second = (a["id"] for a in world["assets"][:2])
+    assert client.post(f"/assets/{first}/rate").status_code == 202
+    runner: RatingRunner = app.dependency_overrides[get_rating_runner]()
+    runner.settings = settings(use_mocks=True, rating_runs_global_per_hour=_queued_runs_now(db))
+    res = client.post(f"/assets/{second}/rate")
+    assert res.status_code == 429 and res.json()["detail"] == "rating_global_limit"
+    assert int(res.headers["retry-after"]) >= 1
+
+
+@requires_db
+def test_route_releases_its_connection_before_starting(
+    api: tuple[TestClient, Deferred],
+) -> None:
+    client, _ = api
+    hero = _hero(client)
+    session = API_SESSION[0]
+    seen: list[bool] = []
+    real: RatingRunner = app.dependency_overrides[get_rating_runner]()
+
+    class Probe:
+        def start(self, *args: Any, **kwargs: Any) -> UUID:
+            seen.append(session.in_transaction())
+            return real.start(*args, **kwargs)
+
+    app.dependency_overrides[get_rating_runner] = lambda: Probe()
+    assert client.post(f"/assets/{hero}/rate").status_code == 202
+    assert seen == [False]
+    assert client.post(f"/assets/{uuid4()}/rate").status_code == 404  # via _enqueue
+
+
+@requires_db
+def test_lock_timeout_maps_to_503(
+    api: tuple[TestClient, Deferred], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, _ = api
+    hero = _hero(client)
+    monkeypatch.setattr(rating_runs, "LOCK_TIMEOUT_MS", 100)
+    engine = create_engine(get_settings().database_url)
+    cfg = settings(use_mocks=True)
+    runner = RatingRunner(
+        session_factory=lambda: Session(engine),
+        settings=cfg,
+        executor=Deferred(),
+        llm_factory=lambda wrap: None,
+        news=news_runner(cfg),
+        today=lambda: RATING_DATE,
+    )
+    app.dependency_overrides[get_rating_runner] = lambda: runner
+    try:
+        with engine.connect() as holder:
+            holder.begin()
+            holder.execute(
+                text("SELECT pg_advisory_xact_lock(:key)"), {"key": GLOBAL_RUNS_LOCK_KEY}
+            )
+            begun = time.monotonic()
+            res = client.post(f"/assets/{hero}/rate")
+            assert time.monotonic() - begun < 5
+            holder.rollback()
+        assert res.status_code == 503 and res.json()["detail"] == "rating_busy"
+        assert int(res.headers["retry-after"]) >= 1
+        # The backlog slot taken for the attempt was given back.
+        assert runner._slots._value == runner.max_pending  # type: ignore[attr-defined]
+    finally:
+        engine.dispose()
+
+
+@requires_db
+def test_a_run_that_went_stale_in_the_queue_never_runs(db: Connection, site: Site) -> None:
+    deferred = Deferred()
+    h = harness(db, executor=deferred)  # live LLM path, but no scripted reply: none may be sent
+    run_id = h.runner.start(site.world_id, site.asset_id)
+    payload_col: Any = WorldEventRow.payload
+    with sessions(db)() as session:
+        session.execute(
+            update(WorldEventRow)
+            .where(payload_col["run_id"].astext == str(run_id))
+            .values(created_at=func.now() - timedelta(minutes=20))
+        )
+        session.commit()
+    newer = h.runner.start(site.world_id, site.asset_id)  # the stale run no longer blocks
+
+    deferred.jobs[0]()  # the stale run finally reaches a worker
+    assert h.transport.requests == []
+    events = progress(db, site.world_id, run_id)
+    assert steps(events) == ["queued", "done"]
+    assert events[-1]["status"] == "failed" and events[-1]["error"] == "stale"
+    status = run_status(db, site.world_id, run_id)
+    assert status.status is RatingRunStatus.FAILED and status.error == "stale"
+    with sessions(db)() as session:
+        versions = session.exec(
+            select(Report.version).where(Report.asset_id == site.asset_id)
+        ).all()
+    assert list(versions) == [1]
+    assert run_status(db, site.world_id, newer).status is RatingRunStatus.QUEUED
+
+
+@requires_db
+def test_api_runs_keep_off_the_llm_inside_the_reserve(db: Connection, site: Site) -> None:
+    h = harness(db, llm_budget_usd=6.0, llm_reserve_usd=5.0, spent="2")
+    run_id = h.runner.start(site.world_id, site.asset_id)
+    assert h.transport.requests == []
+    run = (run_report(db, site.world_id, run_id).auditor_json or {})["run"]
+    assert run["orchestrator"]["fallback_reason"] == "budget_reserve"
+
+    # Time Machine runs may still use the reserve.
+    tm = harness(db, *happy_script(), llm_budget_usd=6.0, llm_reserve_usd=5.0, spent="2")
+    tm_run = tm.runner.start(site.world_id, site.asset_id, trigger="time_machine")
+    assert [r["model"] for r in tm.transport.requests] == [SUPER] * 4 + [ULTRA]
+    assert (run_report(db, site.world_id, tm_run).auditor_json or {})["run"]["pipeline"] == (
+        "orchestrator"
+    )

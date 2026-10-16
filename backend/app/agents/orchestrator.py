@@ -79,6 +79,8 @@ class FallbackReason(StrEnum):
     LLM_UNAVAILABLE = "llm_unavailable"
     LLM_ERROR = "llm_error"
     BUDGET_EXHAUSTED = "budget_exhausted"
+    BUDGET_RESERVE = "budget_reserve"
+    """API runs stay off the LLM once the budget left is below LLM_RESERVE_USD."""
     UNKNOWN_TOOL = "unknown_tool"
     TOOL_UNAVAILABLE = "tool_unavailable"
     INVALID_ARGUMENTS = "invalid_arguments"

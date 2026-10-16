@@ -12,7 +12,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.deps import CurrentWorld, SessionDep
-from app.routers.assets import world_asset
 from app.schemas import RatingRunAccepted, RatingRunOut
 from app.services.rating_runs import (
     AssetNotRateable,
@@ -41,8 +40,11 @@ RunnerDep = Annotated[RatingRunner, Depends(get_rating_runner)]
     responses={
         404: {"description": "Asset not found in this world"},
         409: {"description": "`run_in_progress` (Location: the active run) or `asset_is_draft`"},
-        429: {"description": "`rating_rate_limited`: per-world run cap; see Retry-After"},
-        503: {"description": "`rating_busy`: too many runs in progress; see Retry-After"},
+        429: {
+            "description": "`rating_rate_limited` (per-world cap) or `rating_global_limit` "
+            "(all worlds); see Retry-After"
+        },
+        503: {"description": "`rating_busy`: too many runs, or the run lock is busy"},
     },
 )
 def start_rating(
@@ -53,9 +55,12 @@ def start_rating(
     response: Response,
 ) -> RatingRunAccepted:
     """Start an async rating run for the asset; follow it with `GET /runs/{run_id}`."""
-    world_asset(session, world.id, asset_id)
+    # End the request's read transaction so its pooled connection is free while the runner
+    # opens its own session and waits (bounded) on the run locks: one connection at a time.
+    world_id = world.id  # read before the commit expires the row
+    session.commit()
     try:
-        run_id = runner.start(world.id, asset_id, trigger="api")
+        run_id = runner.start(world_id, asset_id, trigger="api")
     except LookupError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found") from exc
     except AssetNotRateable as exc:
@@ -69,7 +74,7 @@ def start_rating(
     except RunRateLimited as exc:
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
-            "rating_rate_limited",
+            exc.code,
             headers={"Retry-After": str(exc.retry_after_s)},
         ) from exc
     except RunnerBusy as exc:

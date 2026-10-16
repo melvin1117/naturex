@@ -15,12 +15,19 @@ The `done` event is published in the same transaction as the report row and its 
 so "done" exists exactly when the sealed report does. Events are pruned after 24 h (T29); the
 report keeps the run record in `auditor_json["run"]`, so a finished run's status survives.
 
-**Caps.** One run per asset at a time (409 `run_in_progress`) and
-`RATING_RUNS_PER_WORLD_PER_HOUR` runs per world (429 with `Retry-After`) are checked under the
-world's publisher advisory lock, in the same transaction that publishes `queued`, so two
-workers can't both pass. A run with no event for `RUN_STALE_AFTER` counts as failed (e.g. its
-worker died), which frees the asset. At most `MAX_PENDING_RUNS` runs wait or run per process
-(503 `rating_busy`), and `LLM_BUDGET_USD` stays the global hard cap inside `llm.py`.
+**Caps.** One run per asset at a time (409 `run_in_progress`), `RATING_RUNS_PER_WORLD_PER_HOUR`
+runs per world (429 `rating_rate_limited`) and `RATING_RUNS_GLOBAL_PER_HOUR` runs across all
+worlds (429 `rating_global_limit`, so free visitor worlds can't drain `LLM_BUDGET_USD`) are
+checked in the same transaction that publishes `queued`, so two workers can't both pass.
+**Lock order:** the global run lock (`GLOBAL_RUNS_LOCK_KEY`) first, then the world's publisher
+lock; nothing else takes the global lock, so there is no cycle. Both waits are bounded by
+`lock_timeout` (`LOCK_TIMEOUT_MS`), and a timeout is 503 `rating_busy`, like T66's rate limits.
+A run with no event for `RUN_STALE_AFTER` counts as failed (e.g. its worker died), which frees
+the asset; a worker that picks up a run that went stale while it waited marks it failed and
+doesn't run it. At most `MAX_PENDING_RUNS` runs wait or run per process (503 `rating_busy`),
+and `LLM_BUDGET_USD` stays the global hard cap inside `llm.py`. With `LLM_RESERVE_USD` set,
+API-triggered runs use the fixed pipeline without any model once the remaining budget falls
+below the reserve, so Time Machine and listing runs keep it.
 """
 
 from __future__ import annotations
@@ -37,8 +44,8 @@ from typing import Any, Literal, Protocol, cast
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel
-from sqlalchemy import func
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import func, text
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlmodel import Session, col, select
 
 from app.agents.auditor import (
@@ -76,6 +83,9 @@ RUN_STALE_AFTER = timedelta(minutes=15)
 RUN_WORKERS = 4
 MAX_PENDING_RUNS = 16
 BUSY_RETRY_AFTER_S = 30
+LOCK_TIMEOUT_MS = 2000
+GLOBAL_RUNS_LOCK_KEY = 0x4E585252
+"""Advisory key ("NXRR") serialising the global run count; always taken before a world lock."""
 REQUIRED_TOOLS = frozenset({Tool.EARTH_OBS, Tool.VALUATION, Tool.AUDITOR})
 
 Trigger = Literal["api", "time_machine", "listing"]
@@ -98,9 +108,10 @@ class RunInProgress(RunError):
 
 
 class RunRateLimited(RunError):
-    def __init__(self, retry_after_s: int) -> None:
-        super().__init__(f"rating run limit reached; retry in {retry_after_s} s")
+    def __init__(self, retry_after_s: int, code: str = "rating_rate_limited") -> None:
+        super().__init__(f"{code}: retry in {retry_after_s} s")
         self.retry_after_s = retry_after_s
+        self.code = code
 
 
 class RunnerBusy(RunError):
@@ -703,35 +714,55 @@ class RatingRunner:
 
     def _enqueue(self, spec: RunSpec, cap: int) -> None:
         with self.session_factory() as session:
-            lock_world_publisher(session, spec.world_id)
-            asset = _world_asset(session, spec.world_id, spec.asset_id)
-            if asset is None:
-                raise LookupError(f"asset {spec.asset_id} not found in world {spec.world_id}")
-            if asset.status is AssetStatus.DRAFT:
-                raise AssetNotRateable("asset_is_draft")
-            now, recent = _recent_runs(session, spec.world_id)
-            for run in recent.values():
-                if run.asset_id == spec.asset_id and run.active(now):
-                    raise RunInProgress(run.run_id)
-            queued = sorted(run.queued_at for run in recent.values() if run.queued_at is not None)
-            if len(queued) >= cap:
-                retry_after = queued[len(queued) - cap] + RUN_WINDOW - now
-                raise RunRateLimited(max(1, int(retry_after.total_seconds()) + 1))
-            publish(
-                session,
-                spec.world_id,
-                StreamEventType.RATING_PROGRESS,
-                {
-                    "run_id": str(spec.run_id),
-                    "asset_id": str(spec.asset_id),
-                    "seq": 0,
-                    "step": "queued",
-                    "status": RatingRunStatus.QUEUED.value,
-                    "trigger": spec.trigger,
-                    "scenario": spec.scenario,
-                },
+            try:
+                self._enqueue_locked(session, spec, cap)
+            except OperationalError as exc:  # lock_timeout (or a lost connection)
+                session.rollback()
+                raise RunnerBusy() from exc
+
+    def _enqueue_locked(self, session: Session, spec: RunSpec, cap: int) -> None:
+        session.execute(
+            text("SELECT set_config('lock_timeout', :value, true)"),
+            {"value": f"{LOCK_TIMEOUT_MS}ms"},
+        )
+        # Lock order: global run lock, then the world's publisher lock (see module docstring).
+        session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": GLOBAL_RUNS_LOCK_KEY})
+        lock_world_publisher(session, spec.world_id)
+        asset = _world_asset(session, spec.world_id, spec.asset_id)
+        if asset is None:
+            raise LookupError(f"asset {spec.asset_id} not found in world {spec.world_id}")
+        if asset.status is AssetStatus.DRAFT:
+            raise AssetNotRateable("asset_is_draft")
+        now, recent = _recent_runs(session, spec.world_id)
+        for run in recent.values():
+            if run.asset_id == spec.asset_id and run.active(now):
+                raise RunInProgress(run.run_id)
+        queued = sorted(run.queued_at for run in recent.values() if run.queued_at is not None)
+        if len(queued) >= cap:
+            retry_after = queued[len(queued) - cap] + RUN_WINDOW - now
+            raise RunRateLimited(max(1, int(retry_after.total_seconds()) + 1))
+        global_cap = self.settings.rating_runs_global_per_hour
+        oldest = _global_cap_reached(session, now, global_cap)
+        if oldest is not None:
+            retry_after = oldest + RUN_WINDOW - now
+            raise RunRateLimited(
+                max(1, int(retry_after.total_seconds()) + 1), code="rating_global_limit"
             )
-            session.commit()
+        publish(
+            session,
+            spec.world_id,
+            StreamEventType.RATING_PROGRESS,
+            {
+                "run_id": str(spec.run_id),
+                "asset_id": str(spec.asset_id),
+                "seq": 0,
+                "step": "queued",
+                "status": RatingRunStatus.QUEUED.value,
+                "trigger": spec.trigger,
+                "scenario": spec.scenario,
+            },
+        )
+        session.commit()
 
     # --- executing ---
 
@@ -741,7 +772,9 @@ class RatingRunner:
         finally:
             self._slots.release()
 
-    def _client(self) -> tuple[LLMClient | None, FallbackReason | None, RecordingCallLog | None]:
+    def _client(
+        self, trigger: Trigger
+    ) -> tuple[LLMClient | None, FallbackReason | None, RecordingCallLog | None]:
         if self.settings.use_mocks:
             return None, FallbackReason.USE_MOCKS, None
         recorders: list[RecordingCallLog] = []
@@ -757,7 +790,13 @@ class RatingRunner:
             llm = None
         if llm is None:
             return None, FallbackReason.LLM_UNAVAILABLE, None
-        return llm, None, recorders[0] if recorders else None
+        recorder = recorders[0] if recorders else None
+        reserve = Decimal(str(self.settings.llm_reserve_usd))
+        if trigger == "api" and reserve > 0 and recorder is not None:
+            remaining = Decimal(str(self.settings.llm_budget_usd)) - recorder.spent_usd()
+            if remaining < reserve:
+                return None, FallbackReason.BUDGET_RESERVE, None
+        return llm, None, recorder
 
     def execute(self, spec: RunSpec) -> None:
         """Run the orchestration and store the sealed report. Never raises: a failure ends
@@ -766,13 +805,9 @@ class RatingRunner:
         started = time.perf_counter()
         try:
             asset = self._asset_info(spec)
-            llm, no_llm_reason, recorder = self._client()
-            progress.emit(
-                "started",
-                RatingRunStatus.RUNNING.value,
-                pipeline="fixed" if llm is None else "orchestrator",
-                reason=no_llm_reason.value if no_llm_reason else None,
-            )
+            llm, no_llm_reason, recorder = self._client(spec.trigger)
+            if not self._claim(spec, progress, llm, no_llm_reason, started):
+                return
             deps = RunDeps(
                 session_factory=self.session_factory,
                 settings=self.settings,
@@ -803,6 +838,48 @@ class RatingRunner:
         except Exception:
             log.exception("rating run %s failed", spec.run_id)
             self._fail(progress, "internal_error", started)
+
+    def _claim(
+        self,
+        spec: RunSpec,
+        progress: RunProgress,
+        llm: LLMClient | None,
+        no_llm_reason: FallbackReason | None,
+        started: float,
+    ) -> bool:
+        """Publish `started`, unless the run went stale while it waited for a worker.
+
+        Runs under the world's publisher lock, the lock `_enqueue` checks activity under, so
+        a run is either still active (and a new one for the asset gets 409) or it is closed
+        here as `failed: stale` before any model is called (and may already be replaced).
+        """
+        with self.session_factory() as session:
+            lock_world_publisher(session, spec.world_id)
+            now = _db_now(session)
+            run = _run_events(session, spec.world_id, spec.run_id)
+            if run is None or not run.active(now):
+                fields: dict[str, Any] = {
+                    "error": "stale",
+                    "latency_ms": int((time.perf_counter() - started) * 1000),
+                }
+                step, status = "done", RatingRunStatus.FAILED.value
+            else:
+                fields = {
+                    "pipeline": "fixed" if llm is None else "orchestrator",
+                    "reason": no_llm_reason.value if no_llm_reason else None,
+                }
+                step, status = "started", RatingRunStatus.RUNNING.value
+            publish(
+                session,
+                spec.world_id,
+                StreamEventType.RATING_PROGRESS,
+                progress.payload(step, status, **fields),
+            )
+            session.commit()
+        if step == "done":
+            log.warning("rating run %s went stale before a worker picked it up", spec.run_id)
+            return False
+        return True
 
     def _asset_info(self, spec: RunSpec) -> AssetInfo:
         with self.session_factory() as session:
@@ -980,6 +1057,28 @@ def _recent_runs(session: Session, world_id: UUID) -> tuple[datetime, dict[str, 
         .order_by(col(WorldEvent.id))
     ).all()
     return now, _group([(payload, ts) for payload, ts in rows])
+
+
+def global_runs_queued(session: Session, now: datetime) -> list[datetime]:
+    """When each run queued in the last `RUN_WINDOW`, across every world, newest first."""
+    payload_col = cast(Any, WorldEvent.payload)
+    return list(
+        session.exec(
+            select(WorldEvent.created_at)
+            .where(
+                WorldEvent.type == StreamEventType.RATING_PROGRESS,
+                col(WorldEvent.created_at) > now - RUN_WINDOW,
+                payload_col["step"].astext == "queued",
+            )
+            .order_by(col(WorldEvent.created_at).desc())
+        ).all()
+    )
+
+
+def _global_cap_reached(session: Session, now: datetime, cap: int) -> datetime | None:
+    """The queue time whose expiry frees a global slot, or None while under the cap."""
+    queued = global_runs_queued(session, now)
+    return queued[cap - 1] if len(queued) >= cap else None
 
 
 def _run_events(session: Session, world_id: UUID, run_id: UUID) -> _RunEvents | None:

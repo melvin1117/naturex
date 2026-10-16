@@ -2473,14 +2473,14 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description `rating_rate_limited`: per-world run cap; see Retry-After */
+            /** @description `rating_rate_limited` (per-world cap) or `rating_global_limit` (all worlds); see Retry-After */
             429: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description `rating_busy`: too many runs in progress; see Retry-After */
+            /** @description `rating_busy`: too many runs, or the run lock is busy */
             503: {
                 headers: {
                     [name: string]: unknown;
