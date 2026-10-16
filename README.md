@@ -22,7 +22,7 @@ docker compose up -d   # Postgres + pgvector (requires Docker)
 Needs Node 22 and Corepack (`corepack enable`), which installs the pinned pnpm.
 ```bash
 cd frontend && pnpm install
-pnpm dev               # http://localhost:3000 (/, /list, /asset/[id], /portfolio, /admin, /dev/ui)
+pnpm dev               # http://localhost:3000/judge (Exchange /, /asset/[id], /portfolio · Steward /steward, /steward/list · /admin · /login, /register · /dev/ui)
 
 # from repo root: lint (ESLint + Prettier), types, unit tests, build
 make fe-check

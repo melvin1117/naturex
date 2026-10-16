@@ -1,15 +1,29 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Hanken_Grotesk, Instrument_Serif } from "next/font/google";
 
-import { SandboxBanner } from "@/components/sandbox-banner";
-import { SiteHeader } from "@/components/site-header";
+import { AlertToaster } from "@/components/proto/alert-toaster";
+import { CopilotSheet } from "@/components/proto/copilot-sheet";
+import { DemoBar } from "@/components/proto/demo-bar";
+import { TourProvider } from "@/components/proto/tour";
+import { TraceSheet } from "@/components/proto/trace-sheet";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { WorldProvider } from "@/components/world-provider";
+import { PrototypeProvider } from "@/lib/prototype/store";
 
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const hanken = Hanken_Grotesk({
+  variable: "--font-hanken",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+});
+
+const instrument = Instrument_Serif({
+  variable: "--font-instrument",
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
 });
 
 const geistMono = Geist_Mono({
@@ -34,13 +48,22 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} flex min-h-dvh flex-col antialiased`}
+        className={`${hanken.variable} ${instrument.variable} ${geistMono.variable} flex min-h-dvh flex-col font-sans antialiased`}
       >
-        <SandboxBanner />
-        <SiteHeader />
-        <main className="flex-1">
-          <WorldProvider>{children}</WorldProvider>
-        </main>
+        <WorldProvider>
+          <PrototypeProvider>
+            <TooltipProvider delayDuration={200}>
+              <TourProvider>
+                <DemoBar />
+                <div className="flex flex-1 flex-col">{children}</div>
+                <TraceSheet />
+                <CopilotSheet />
+                <AlertToaster />
+                <Toaster position="top-right" offset={{ top: 64, right: 16 }} />
+              </TourProvider>
+            </TooltipProvider>
+          </PrototypeProvider>
+        </WorldProvider>
       </body>
     </html>
   );

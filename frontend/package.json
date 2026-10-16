@@ -24,7 +24,9 @@
     "openapi-fetch": "^0.17.0",
     "radix-ui": "^1.7.0",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "recharts": "^3.10.1",
+    "sonner": "^2.0.8"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

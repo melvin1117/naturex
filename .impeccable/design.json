@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-15T22:40:00Z",
+  "title": "Design System: NatureX",
+  "extensions": {
+    "colorMeta": {
+      "forest": { "role": "primary", "displayName": "Forest", "canonical": "oklch(0.31 0.062 148)" },
+      "lime": { "role": "secondary", "displayName": "Lime", "canonical": "oklch(0.86 0.135 126)" },
+      "lilac": { "role": "secondary", "displayName": "Lilac", "canonical": "oklch(0.79 0.075 312)" },
+      "clay": { "role": "tertiary", "displayName": "Clay", "canonical": "oklch(0.66 0.13 48)" },
+      "lichen-ground": { "role": "neutral", "displayName": "Lichen ground", "canonical": "oklch(0.932 0.012 128)" },
+      "machine": { "role": "neutral", "displayName": "Machine layer", "canonical": "oklch(0.215 0.035 158)" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page titles and the wordmark only." },
+      "numeral": { "displayName": "Numeral", "purpose": "Every price, score and value; light and tabular." },
+      "data": { "displayName": "Data", "purpose": "Hashes, JSON and model IDs only." }
+    },
+    "shadows": [
+      { "name": "soft", "value": "0 1px 2px oklch(0.3 0.05 145 / 0.05), 0 10px 30px -14px oklch(0.3 0.05 145 / 0.18)", "purpose": "Cards at rest." },
+      { "name": "lift", "value": "0 2px 4px oklch(0.3 0.05 145 / 0.06), 0 22px 48px -20px oklch(0.3 0.05 145 / 0.3)", "purpose": "Hover, feature cards, tour card, toasts." }
+    ],
+    "motion": [
+      { "name": "ease-out-expo", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Grade stamp, rise-in of new content." },
+      { "name": "pipeline-flow", "value": "1.4s linear infinite", "purpose": "Running line under the active agent step." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Grade badge",
+      "kind": "chip",
+      "refersTo": "grade-badge",
+      "description": "Grade letter on its ramp colour; pair with health and label on first mention.",
+      "html": "<span class=\"nx-grade\">A</span>",
+      "css": ".nx-grade { display:inline-flex; align-items:center; justify-content:center; height:28px; min-width:44px; padding:0 10px; border-radius:9999px; background:oklch(0.58 0.125 138); color:#fff; font:600 14px/1 'Hanken Grotesk', sans-serif; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Forest pill for the main action on light surfaces.",
+      "html": "<button class=\"nx-btn\">Back this site</button>",
+      "css": ".nx-btn { height:40px; padding:0 20px; border:0; border-radius:9999px; background:oklch(0.31 0.062 148); color:oklch(0.97 0.025 118); font:500 14px 'Hanken Grotesk', sans-serif; } .nx-btn:active { transform: translateY(1px); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Living land as a calm, credible instrument",
+    "overview": "The site's own satellite image is the ground of every key card; numbers sit on it like a field instrument's readout. A light land layer for browsing and backing sites, a dark machine layer for the AI's work.",
+    "keyCharacteristics": [
+      "Lichen ground, off-white cards, forest ink",
+      "Blurred Sentinel-2 imagery as card grounds",
+      "Light tabular numerals, serif names",
+      "Dotted radial health instrument",
+      "Dark machine layer for pipeline, trace and ledger"
+    ],
+    "rules": [
+      { "name": "Grade ramp, not traffic light", "body": "Greens through olive and mustard to clay; always with letter, score and label.", "section": "colors" },
+      { "name": "Serif for names, sans for numbers", "body": "Places and pages use Instrument Serif; every number is tabular Hanken Grotesk.", "section": "typography" },
+      { "name": "Glass only on photographs", "body": "Backdrop blur appears only over satellite imagery.", "section": "elevation" }
+    ],
+    "dos": [
+      "Show every value as a range with midpoint and confidence",
+      "Label replayed AI runs and sample news"
+    ],
+    "donts": [
+      "No red/green ticker or neon trading styling",
+      "No emoji icons, gradient text or coloured side borders"
+    ]
+  }
+}
