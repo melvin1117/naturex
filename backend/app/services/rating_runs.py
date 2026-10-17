@@ -579,6 +579,8 @@ class RunToolbox:
             "positive": sum(1 for event in relevant if event.direction == 1),
             "max_severity": max((event.severity for event in relevant), default=0),
             "impact_types": sorted({event.impact_type for event in relevant}),
+            "dropped_off_site": output.dropped_off_site,
+            "locality_unverified": output.locality_unverified,
         }
 
     def _field_evidence(self) -> dict[str, Any]:

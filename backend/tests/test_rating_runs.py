@@ -422,6 +422,8 @@ def test_news_reaches_the_orchestrator_as_counts_only(db: Connection, site: Site
         "positive": 0,
         "max_severity": 4,
         "impact_types": ["encroachment"],
+        "dropped_off_site": 0,
+        "locality_unverified": False,
     }
     text = json.dumps([r["messages"] for r in orchestrator_requests])
     item = FIXTURE[0]
