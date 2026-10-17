@@ -18,6 +18,7 @@ from app.config import Settings, get_settings
 from app.db import get_session
 from app.ledger import append, entries_for, verify
 from app.main import app
+from app.market.revenue import pay_quarter
 from app.models import (
     Alert,
     Asset,
@@ -31,6 +32,7 @@ from app.models import (
     Metrics,
     Order,
     OrderSide,
+    PayoutLine,
     Price,
     Report,
     User,
@@ -583,3 +585,67 @@ def test_ledger_delete_opt_in_is_off_again_after_a_reset(session: Session) -> No
 
     with pytest.raises(DBAPIError, match="append-only"), session.begin_nested():
         session.execute(text("DELETE FROM ledger_entries"))
+
+
+# --- Payouts (T67) ---------------------------------------------------------------------------
+
+
+def _pay_in(session: Session, world_id: UUID) -> None:
+    """One quarter's payout on the world's wetland, to Rosa's retained stake and Arjun."""
+    wetland = session.exec(
+        select(Asset).where(Asset.world_id == world_id, Asset.site_key == DEMO_SITES[0].key)
+    ).one()
+    arjun = persona(session, world_id, "arjun")
+    wetland.primary_shares_remaining -= 1_000
+    session.add(Holding(world_id=world_id, user_id=arjun.id, asset_id=wetland.id, shares=1_000))
+    session.flush()
+    pay_quarter(
+        session,
+        world_id=world_id,
+        asset_id=wetland.id,
+        value_mid=Decimal("100000.00"),
+        quarter_label="2026-Q4",
+    )
+    session.commit()
+
+
+def payout_rows(session: Session, world_id: UUID) -> int:
+    return len(session.exec(select(PayoutLine).where(PayoutLine.world_id == world_id)).all())
+
+
+@requires_db
+def test_reset_and_prune_delete_a_worlds_private_payout_lines(session: Session) -> None:
+    kept, pruned = create_world(session), create_world(session)
+    kept_id, pruned_id = kept.id, pruned.id
+    for world_id in (kept_id, pruned_id):
+        _pay_in(session, world_id)
+        assert payout_rows(session, world_id) == 2, "Rosa's and Arjun's lines"
+    pruned.last_seen_at = datetime.now(UTC) - timedelta(days=30)
+    session.commit()
+
+    reset_world(session, kept_id)
+    prune_stale_worlds(session, older_than=timedelta(days=7))
+
+    assert payout_rows(session, kept_id) == 0
+    assert payout_rows(session, pruned_id) == 0
+    assert session.get(World, pruned_id) is None
+
+
+@requires_db
+def test_payouts_in_a_visitor_world_never_reach_new_copies(session: Session) -> None:
+    visitor = create_world(session)
+    _pay_in(session, visitor.id)
+
+    fresh = create_world(session)
+
+    assert payout_rows(session, fresh.id) == 0
+    assert payout_rows(session, WORLD_ID) == 0
+
+
+@requires_db
+def test_a_template_holding_payouts_is_never_copied(session: Session) -> None:
+    """Copies remap user IDs, so copied lines couldn't verify against the copied commitment."""
+    _pay_in(session, WORLD_ID)
+
+    with pytest.raises(RuntimeError, match="holds payouts"):
+        create_world(session)
