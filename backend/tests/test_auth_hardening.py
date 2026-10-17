@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -408,6 +409,35 @@ def test_the_window_slides_and_retry_after_shrinks(session: Session) -> None:
     )
 
 
+WINDOW = auth.RATE_LIMITS[LOGIN].window
+TICK = timedelta(microseconds=1)
+
+
+@pytest.mark.parametrize(
+    ("oldest", "expected"),
+    [
+        (T0, 900),  # stamped this instant: the full window
+        (T0 - timedelta(seconds=100), 800),
+        (T0 - timedelta(seconds=99, milliseconds=1), 801),  # a sub-second remainder rounds up
+        (T0 - WINDOW + timedelta(milliseconds=500), 1),
+        (T0 - WINDOW + TICK, 1),  # a microsecond from the edge
+        (T0 - WINDOW, 1),  # exactly at the edge: never 0
+        (T0 + TICK, 900),  # stamped after now (a later clock): never more than the window
+        (T0 + timedelta(seconds=5), 900),
+    ],
+)
+def test_retry_after_is_whole_seconds_within_the_window(oldest: datetime, expected: int) -> None:
+    assert auth.retry_after_seconds(oldest, T0, WINDOW) == expected
+
+
+@requires_db
+def test_attempts_stamped_after_now_still_ask_for_at_most_the_window(session: Session) -> None:
+    for _ in range(10):
+        attempt(session, "1.1.1.1", "ro@example.org", now=T0 + timedelta(milliseconds=500))
+
+    assert attempt(session, "1.1.1.1", "ro@example.org", now=T0) == 900
+
+
 @requires_db
 def test_the_ip_bucket_limits_across_accounts(session: Session) -> None:
     for i in range(10):
@@ -505,7 +535,9 @@ def test_concurrent_attempts_cannot_slip_past_the_limit(committed_engine: Any) -
 
         assert results.count(None) == auth.RATE_LIMITS[LOGIN].attempts
         refused = [wait for wait in results if wait is not None]
-        assert len(refused) == 48 - 10 and all(1 <= wait <= 900 for wait in refused)
+        assert len(refused) == 48 - 10, f"refused {len(refused)}: {results}"
+        out_of_range = [wait for wait in refused if not 1 <= wait <= 900]
+        assert not out_of_range, f"retry-after outside [1, 900]: {out_of_range} of {refused}"
         with Session(committed_engine) as db:
             per_bucket = db.exec(
                 select(AuthAttempt.key_hmac, func.count())  # type: ignore[call-overload]
@@ -526,6 +558,55 @@ def test_overlapping_buckets_taken_in_opposite_order_do_not_deadlock(
         results = run_concurrently(committed_engine, keys, workers=32)  # a deadlock would raise
 
         assert results.count(None) == 10
+    finally:
+        forget(committed_engine, keys)
+
+
+@requires_db
+def test_the_clock_is_read_after_waiting_for_the_lock(
+    committed_engine: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A waiter's time can't predate attempts committed while it waited (issue #143)."""
+    keys = [ip_key(f"clock-{uuid4()}")]
+    bucket, key = keys[0]
+    clock = [T0]
+    monkeypatch.setattr(auth, "_now", lambda: clock[0])
+
+    def waiter() -> int | None:
+        with Session(committed_engine) as db:
+            return auth.consume_attempt(db, LOGIN, keys)
+
+    later = T0 + timedelta(seconds=1)
+    try:
+        with Session(committed_engine) as holder, ThreadPoolExecutor(max_workers=1) as pool:
+            holder.execute(
+                text("SELECT pg_advisory_xact_lock(hashtextextended(:name, 0))"),
+                {"name": auth.lock_name(LOGIN, bucket, key)},
+            )
+            result = pool.submit(waiter)
+            waiting = text(
+                "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted"
+                " AND database = (SELECT oid FROM pg_database WHERE datname = current_database())"
+            )
+            for _ in range(200):
+                if holder.execute(waiting).scalar_one():
+                    break
+                time.sleep(0.005)
+            else:
+                pytest.fail("the waiter never blocked on the bucket's lock")
+            clock[0] = later  # time passes while the waiter is blocked
+            holder.add_all(
+                AuthAttempt(bucket=bucket, key_hmac=key, kind=LOGIN, created_at=later)
+                for _ in range(9)
+            )
+            holder.commit()
+
+            assert result.result(timeout=10) is None
+        with Session(committed_engine) as db:
+            stamps = db.exec(
+                select(AuthAttempt.created_at).where(col(AuthAttempt.key_hmac) == key)
+            ).all()
+        assert sorted(stamps) == [later] * 10, "stamped when it got the lock, not when it asked"
     finally:
         forget(committed_engine, keys)
 

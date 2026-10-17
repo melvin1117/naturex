@@ -325,6 +325,22 @@ def bucket_key(secret: str, bucket: AuthBucket, value: str) -> str:
     return hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
 
 
+def lock_name(kind: AuthAttemptKind, bucket: AuthBucket, key_hmac: str) -> str:
+    """The advisory-lock name serialising attempts on one bucket."""
+    return f"auth_attempts|{kind.value}|{bucket.value}|{key_hmac}"
+
+
+def retry_after_seconds(oldest: datetime, now: datetime, window: timedelta) -> int:
+    """Whole seconds until the oldest counted attempt leaves the window, in [1, window].
+
+    Rounds up so a client that waits this long is let in. Clamped at both ends: an attempt
+    stamped after `now` (another server's clock, or an injected time) never asks for more than
+    the window, and one already at the edge still asks for a second rather than zero.
+    """
+    remaining = ceil((oldest + window - now).total_seconds())
+    return min(max(remaining, 1), ceil(window.total_seconds()))
+
+
 def consume_attempt(
     session: Session,
     kind: AuthAttemptKind,
@@ -342,8 +358,6 @@ def consume_attempt(
     its own lockout. Raises AttemptsBusy if a lock isn't free within `lock_timeout_ms`.
     """
     limit = RATE_LIMITS[kind]
-    moment = now or _now()
-    since = moment - limit.window
     ordered = sorted(set(keys), key=lambda item: (item[0].value, item[1]))
     try:
         session.execute(
@@ -353,11 +367,15 @@ def consume_attempt(
         for bucket, key_hmac in ordered:
             session.execute(
                 text("SELECT pg_advisory_xact_lock(hashtextextended(:name, 0))"),
-                {"name": f"auth_attempts|{kind.value}|{bucket.value}|{key_hmac}"},
+                {"name": lock_name(kind, bucket, key_hmac)},
             )
     except OperationalError as exc:
         session.rollback()
         raise AttemptsBusy from exc
+    # Read the clock only once the locks are held: a time read before waiting could predate
+    # attempts committed by whoever held the lock, giving a wait longer than the window.
+    moment = now or _now()
+    since = moment - limit.window
     retry_after = 0
     for bucket, key_hmac in ordered:
         count, oldest = session.execute(
@@ -369,8 +387,7 @@ def consume_attempt(
             )
         ).one()
         if count >= limit.attempts and oldest is not None:
-            wait = ceil((oldest + limit.window - moment).total_seconds())
-            retry_after = max(retry_after, wait, 1)
+            retry_after = max(retry_after, retry_after_seconds(oldest, moment, limit.window))
     if retry_after:
         session.rollback()  # releases the locks
         return retry_after
