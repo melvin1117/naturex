@@ -56,11 +56,17 @@ def recent_events(session: Session, asset: Asset, limit: int = 5) -> list[EventO
 
 def report_out(report: Report) -> ReportOut:
     """API view of a stored report. The deterministic snapshot is `auditor_json["rating"]`;
-    the Auditor's output, once T26 adds it, is `auditor_json["auditor"]`."""
+    the Auditor's output is `auditor_json["auditor"]`, how it was made `["audit"]` and the
+    rating run `["run"]` (T27)."""
     stored: dict[str, Any] = report.auditor_json or {}
     rating: dict[str, Any] | None = stored.get("rating")
     metrics: dict[str, Any] = (rating or {}).get("metrics") or {}
     auditor = stored.get("auditor")
+    audit: dict[str, Any] = stored.get("audit") or {}
+    run: dict[str, Any] = stored.get("run") or {}
+    greenwashing = (
+        audit.get("greenwashing_risk") if audit else (auditor or {}).get("greenwashing_risk")
+    )
     return ReportOut(
         id=report.id,
         asset_id=report.asset_id,
@@ -83,6 +89,8 @@ def report_out(report: Report) -> ReportOut:
         period=(rating or {}).get("period"),
         simulated=bool(metrics.get("simulated", False)),
         rating=rating,
+        greenwashing_risk=greenwashing,
+        run_id=run.get("run_id"),
         created_at=report.created_at,
     )
 

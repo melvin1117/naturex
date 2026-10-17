@@ -12,7 +12,19 @@ from fastapi.responses import JSONResponse, Response
 
 from app.config import Settings, get_settings, rate_limit_secret, secure_cookies
 from app.middleware import CsrfMiddleware, parse_allowed_origins
-from app.routers import admin, assets, auth, copilot, events, ledger, market, media, reports, world
+from app.routers import (
+    admin,
+    assets,
+    auth,
+    copilot,
+    events,
+    ledger,
+    market,
+    media,
+    reports,
+    runs,
+    world,
+)
 
 settings = get_settings()
 
@@ -79,6 +91,7 @@ app.include_router(admin.router)
 app.include_router(ledger.router)
 app.include_router(world.router)
 app.include_router(media.router)
+app.include_router(runs.router)
 
 
 @app.exception_handler(RequestValidationError)

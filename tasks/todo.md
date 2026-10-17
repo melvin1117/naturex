@@ -241,8 +241,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`; T25 eval injection resistance 3/3 · **Deps:** T24, T25 · **Files:** `backend/app/agents/news_scout.py`, `backend/tests/test_news_scout.py`
 
 ### T27 · Orchestrator and async rating runs (#39) — D3 · M · Must · A3
-- [ ] Nemotron 3 Super tool-calling over earth_obs, valuation, news_scout, field_evidence and auditor; fixed-pipeline fallback
-- [ ] `POST` returns `202` + `run_id`; progress events per step; report stored and sealed
+- [x] Nemotron 3 Super tool-calling over earth_obs, valuation, news_scout, field_evidence and auditor; fixed-pipeline fallback
+- [x] `POST` returns `202` + `run_id`; progress events per step; report stored and sealed
+- Handoff: `start_rating_run(..., scenario=, trigger=)` is the entry point for T38 (Time Machine; `/admin/simulate/quarter` is still the mock), T58 and T60; T28 builds the trace from the `rating_progress` events' `llm_calls`; T40 plugs in an `EvidenceProvider`. See dev-spec §6 and §7.1 "As built (T27)".
 
 **Verify:** `make test`; a live run on the hero site completes · **Deps:** T26, T19, T72 · **Files:** `backend/app/agents/orchestrator.py`, `backend/app/services/rating.py`
 
