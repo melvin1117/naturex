@@ -25,6 +25,9 @@ from app.db import get_session
 from app.main import app
 from app.models import (
     Asset,
+    Community,
+    CommunityMember,
+    CommunityRole,
     Holding,
     Price,
     SessionKind,
@@ -398,7 +401,8 @@ def test_personas_and_treasuries_can_never_hold_credentials(session: Session) ->
 @requires_db
 def test_template_personas_are_backfilled_as_personas(session: Session) -> None:
     users = session.exec(select(User).where(User.world_id == WORLD_ID)).all()
-    assert {u.kind for u in users} == {UserKind.PERSONA}
+    assert {u.kind for u in users if u.persona_key} == {UserKind.PERSONA}
+    assert {u.kind for u in users if not u.persona_key} == {UserKind.TREASURY}  # T56
     assert not any(u.email or u.password_hash or u.is_admin for u in users)
 
 
@@ -459,10 +463,17 @@ def test_live_world_holds_the_curated_sites_and_only_their_community(session: Se
         (COMMUNITY_PERSONA.key, UserKind.PERSONA)
     ], "no demo investors or demo admin in the live world"
     rosa = personas[0]
-    assert {a.community_user_id for a in sites} == {rosa.id}
-    holdings = session.exec(
-        select(Holding).where(Holding.world_id == LIVE_WORLD_ID, Holding.user_id == rosa.id)
+    # T56: each site's community comes along, owned by Rosa; its treasury holds the stake.
+    members = session.exec(
+        select(CommunityMember).where(CommunityMember.world_id == LIVE_WORLD_ID)
     ).all()
+    assert sorted((m.user_id, m.role) for m in members) == [(rosa.id, CommunityRole.OWNER)] * 3
+    communities = session.exec(select(Community).where(Community.world_id == LIVE_WORLD_ID)).all()
+    assert {a.community_id for a in sites} == {c.id for c in communities}
+    treasuries = {c.treasury_user_id for c in communities}
+    assert {a.community_user_id for a in sites} == treasuries
+    holdings = session.exec(select(Holding).where(Holding.world_id == LIVE_WORLD_ID)).all()
+    assert all(h.user_id in treasuries for h in holdings), "nobody else holds live shares yet"
     assert sorted(h.shares for h in holdings) == [510_000] * 3
     prices = session.exec(select(Price).where(Price.world_id == LIVE_WORLD_ID)).all()
     assert {p.asset_id for p in prices} == {a.id for a in sites}, "tradable from day one"
@@ -523,7 +534,9 @@ def test_world_listing_never_includes_password_accounts(
 def test_prune_deletes_expired_sessions_and_stale_worlds_with_sessions(session: Session) -> None:
     world = create_world(session)
     world_id = world.id
-    persona = session.exec(select(User).where(User.world_id == world_id)).first()
+    persona = session.exec(
+        select(User).where(User.world_id == world_id, User.kind == UserKind.PERSONA)
+    ).first()
     assert persona is not None
     now = datetime.now(UTC)
     session.add(

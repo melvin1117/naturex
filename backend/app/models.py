@@ -72,6 +72,13 @@ class SessionKind(StrEnum):
     DEMO = "demo"  # T55
 
 
+class CommunityRole(StrEnum):
+    """ADR-0005 §3: community roles come from membership, not from `users.role`."""
+
+    OWNER = "owner"
+    STEWARD = "steward"
+
+
 class AuthBucket(StrEnum):
     IP = "ip"
     ACCOUNT = "account"
@@ -139,6 +146,14 @@ class User(SQLModel, table=True):
             unique=True,
             postgresql_where=text("email IS NOT NULL"),
         ),
+        # One persona per key per world, so a sandbox reset can keep persona IDs by key (T56).
+        Index(
+            "uq_users_world_persona_key",
+            "world_id",
+            "persona_key",
+            unique=True,
+            postgresql_where=text("persona_key IS NOT NULL"),
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -200,15 +215,95 @@ class AuthAttempt(SQLModel, table=True):
     created_at: datetime = _created_at()
 
 
+class Community(SQLModel, table=True):
+    """A community that manages listings (ADR-0005 §3, T56). Roles come from `community_members`.
+
+    Every community has exactly one `treasury` account, created with it: it never signs in or
+    trades, holds the community's retained stake and receives its dividends (T41). Every
+    reference is a composite `(world_id, …)` foreign key, so nothing links across worlds.
+    """
+
+    __tablename__ = "communities"
+    __table_args__ = (
+        UniqueConstraint("world_id", "id", name="uq_communities_world_id_id"),
+        # Target of `fk_assets_community_treasury`: an asset's treasury is its community's.
+        UniqueConstraint(
+            "world_id", "id", "treasury_user_id", name="uq_communities_world_id_id_treasury"
+        ),
+        UniqueConstraint("treasury_user_id", name="uq_communities_treasury_user_id"),
+        ForeignKeyConstraint(
+            ["world_id", "treasury_user_id"],
+            ["users.world_id", "users.id"],
+            name="fk_communities_treasury_user",
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    world_id: UUID = Field(foreign_key="worlds.id")  # indexed by uq_communities_world_id_id
+    name: str
+    country: str | None = None
+    description: str | None = None
+    treasury_user_id: UUID  # kind = 'treasury' (DB trigger `communities_treasury_kind`)
+    created_at: datetime = _created_at()
+
+
+class CommunityMember(SQLModel, table=True):
+    """A user's role in a community (ADR-0005 §3). Treasuries can't be members (DB trigger)."""
+
+    __tablename__ = "community_members"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["world_id", "community_id"],
+            ["communities.world_id", "communities.id"],
+            name="fk_community_members_community",
+        ),
+        ForeignKeyConstraint(
+            ["world_id", "user_id"],
+            ["users.world_id", "users.id"],
+            name="fk_community_members_user",
+        ),
+        # "Which communities is this user a member of?" (T68 authorize, insider-trading rule).
+        Index("ix_community_members_world_id_user_id", "world_id", "user_id"),
+    )
+
+    community_id: UUID = Field(primary_key=True)
+    user_id: UUID = Field(primary_key=True)
+    world_id: UUID
+    role: CommunityRole = Field(sa_column=_enum_column(CommunityRole))
+    created_at: datetime = _created_at()
+
+
 class Asset(SQLModel, table=True):
     __tablename__ = "assets"
-    # Target of composite foreign keys, so private rows can't link across worlds (T67).
-    __table_args__ = (UniqueConstraint("world_id", "id", name="uq_assets_world_id_id"),)
+    __table_args__ = (
+        # Target of composite foreign keys, so private rows can't link across worlds (T67).
+        UniqueConstraint("world_id", "id", name="uq_assets_world_id_id"),
+        ForeignKeyConstraint(
+            ["world_id", "community_id"],
+            ["communities.world_id", "communities.id"],
+            name="fk_assets_community",
+        ),
+        ForeignKeyConstraint(
+            ["world_id", "community_user_id"],
+            ["users.world_id", "users.id"],
+            name="fk_assets_community_user",
+        ),
+        # When both are set, the asset's treasury must be its community's treasury (T56).
+        ForeignKeyConstraint(
+            ["world_id", "community_id", "community_user_id"],
+            ["communities.world_id", "communities.id", "communities.treasury_user_id"],
+            name="fk_assets_community_treasury",
+        ),
+        Index("ix_assets_world_id_community_id", "world_id", "community_id"),
+        Index("ix_assets_world_id_community_user_id", "world_id", "community_user_id"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     world_id: UUID = Field(foreign_key="worlds.id", index=True)
     name: str
-    community_user_id: UUID | None = Field(default=None, foreign_key="users.id")
+    community_id: UUID | None = None  # the community that manages the listing (ADR-0005)
+    # The community's treasury: holds the retained stake and receives its dividends (T41, T56).
+    community_user_id: UUID | None = None
     country: str | None = None
     description: str | None = None
     cover_image_url: str | None = None

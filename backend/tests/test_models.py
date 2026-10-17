@@ -11,7 +11,16 @@ from sqlalchemy.exc import DBAPIError
 from sqlmodel import Session, select
 
 from app.config import get_settings
-from app.models import Asset, LedgerEntry, LedgerKind, User, World
+from app.models import (
+    Asset,
+    Community,
+    CommunityMember,
+    LedgerEntry,
+    LedgerKind,
+    User,
+    UserKind,
+    World,
+)
 from app.seed import DEMO_GEOJSON, DEMO_SITES, PERSONAS, WORLD_ID, DemoSite, seed
 from app.tools.geometry import validate_polygon
 from tests.conftest import alembic_cfg, requires_db
@@ -32,6 +41,8 @@ EXPECTED_TABLES = {
     "llm_calls",
     "sessions",
     "payout_lines",
+    "communities",
+    "community_members",
 }
 
 
@@ -77,12 +88,18 @@ def test_seed_is_idempotent() -> None:
         worlds = session.exec(select(World).where(World.id == WORLD_ID)).all()
         users = session.exec(select(User).where(User.world_id == WORLD_ID)).all()
         assets = session.exec(select(Asset).where(Asset.world_id == WORLD_ID)).all()
+        communities = session.exec(select(Community).where(Community.world_id == WORLD_ID)).all()
+        members = session.exec(
+            select(CommunityMember).where(CommunityMember.world_id == WORLD_ID)
+        ).all()
 
     engine.dispose()
     assert len(worlds) == 1
-    assert len(users) == 4
-    assert len(assets) == 3
-    assert {u.persona_key for u in users} == {"rosa", "arjun", "mia", "admin"}
+    personas = [u for u in users if u.kind == UserKind.PERSONA]
+    treasuries = [u for u in users if u.kind == UserKind.TREASURY]
+    assert len(users) == len(personas) + len(treasuries) == 4 + 3
+    assert len(assets) == len(communities) == len(members) == 3
+    assert {u.persona_key for u in personas} == {"rosa", "arjun", "mia", "admin"}
     assert {a.site_key for a in assets} == {
         "wetland_mx",
         "mangrove_mx",
