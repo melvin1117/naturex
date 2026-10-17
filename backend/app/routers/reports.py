@@ -8,13 +8,14 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 from sqlmodel import Session, col, select
 
+from app.agents.auditor import inline_citations
 from app.agents.summary import SummaryContext, generate_report_summary
 from app.config import Settings
 from app.db import engine
 from app.deps import CurrentWorld, SessionDep, SettingsDep
 from app.llm import LLMClient, LLMError, get_llm_client
 from app.models import Asset, Event, Report
-from app.schemas import AuditorOutput, EventOut, ReportDiff, ReportOut
+from app.schemas import AuditorOutput, EventOut, ReportDiff, ReportOut, ReportSummarySource
 
 router = APIRouter(tags=["reports"])
 
@@ -95,9 +96,28 @@ def report_out(report: Report) -> ReportOut:
     )
 
 
+def auditor_summary(report: ReportOut) -> str | None:
+    """The stored summary when the Auditor wrote a non-empty one with inline [ID] citations
+    (T27), else None. The stored copy is preferred: it carries the sandbox note and is the
+    text the ledger hashes."""
+    auditor = report.auditor
+    if auditor is None or not auditor.summary_md.strip():
+        return None
+    if not inline_citations(auditor.summary_md):
+        return None
+    stored = report.summary_md
+    return stored if stored and stored.strip() else auditor.summary_md
+
+
 def summarize_report(
     report: ReportOut, settings: Settings, context: SummaryContext | None = None
 ) -> ReportOut:
+    """The Auditor's cited summary when there is one; otherwise T10's read-time summary."""
+    audited = auditor_summary(report)
+    if audited is not None:
+        return report.model_copy(
+            update={"summary_md": audited, "summary_source": ReportSummarySource.AUDITOR}
+        )
     summary = generate_report_summary(
         report,
         settings,
@@ -121,7 +141,7 @@ def summary_context(session: Session, asset: Asset) -> SummaryContext:
 
 
 def present_report(session: Session, report: Report, asset: Asset, settings: Settings) -> ReportOut:
-    """A stored report with T10's summary (live Nemotron, or the deterministic fallback)."""
+    """A stored report with its Auditor summary, or T10's (live Nemotron or the fallback)."""
     return summarize_report(report_out(report), settings, summary_context(session, asset))
 
 

@@ -23,7 +23,7 @@ from app.config import Settings, get_settings
 from app.llm import BudgetExceeded, CallRecord, DbCallLog, LLMClient, Tier
 from app.main import app
 from app.mocks import wetland_report
-from app.models import LlmCall, World
+from app.models import LlmCall, Report, World
 from app.routers import reports as reports_router
 from app.sandbox import _delete_world_rows
 from app.schemas import EventOut, ReportSummarySource
@@ -480,3 +480,142 @@ def test_a_new_event_gives_a_new_summary() -> None:
     generate_report_summary(wetland_report(), settings(), lambda: llm(transport), context=busy)
 
     assert len(transport.requests) == 2
+
+
+# ----- Auditor summaries (#145) -----
+
+AUDITED_SUMMARY = (
+    "Health holds steady [metric:natural_fraction]; encroachment news [event:fire-1] "
+    "is not yet visible from orbit.\n\nSandbox: play money only."
+)
+
+
+class CountingFactory:
+    """T10's client factory; records each call so tests can assert it was never used."""
+
+    def __init__(self, transport: FakeTransport) -> None:
+        self.transport = transport
+        self.calls = 0
+
+    def __call__(self, config: Settings) -> LLMClient:
+        self.calls += 1
+        return llm(self.transport, config)
+
+
+def _audited(summary_md: str, stored: str | None = None) -> Any:
+    report = wetland_report()
+    assert report.auditor is not None
+    auditor = report.auditor.model_copy(update={"summary_md": summary_md})
+    return report.model_copy(
+        update={"auditor": auditor, "summary_md": summary_md if stored is None else stored}
+    )
+
+
+def test_auditor_summary_is_returned_without_calling_t10(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory = CountingFactory(FakeTransport())
+    monkeypatch.setattr(reports_router, "_summary_client", factory)
+    report = _audited(AUDITED_SUMMARY)
+
+    out = reports_router.summarize_report(report, settings())
+
+    assert out.summary_md == AUDITED_SUMMARY
+    assert out.summary_source is ReportSummarySource.AUDITOR
+    assert factory.calls == 0
+    assert factory.transport.requests == []
+
+
+def test_stored_audited_summary_is_preferred_over_the_auditor_field(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The stored copy carries the sandbox note and is what the ledger hashes."""
+    factory = CountingFactory(FakeTransport())
+    monkeypatch.setattr(reports_router, "_summary_client", factory)
+    bare = "Health holds steady [metric:natural_fraction]."
+    report = _audited(bare, stored=f"{bare}\n\nSandbox: play money only.")
+
+    out = reports_router.summarize_report(report, settings())
+
+    assert out.summary_md == f"{bare}\n\nSandbox: play money only."
+    assert out.summary_source is ReportSummarySource.AUDITOR
+    assert factory.calls == 0
+
+
+def test_report_without_auditor_still_uses_t10(monkeypatch: pytest.MonkeyPatch) -> None:
+    factory = CountingFactory(FakeTransport(_live_reply()))
+    monkeypatch.setattr(reports_router, "_summary_client", factory)
+    report = wetland_report().model_copy(update={"auditor": None, "summary_md": "Stored."})
+
+    out = reports_router.summarize_report(report, settings())
+
+    assert out.summary_source is ReportSummarySource.LIVE
+    assert out.summary_md == "Health is 77.6 / 100 at 87% confidence."
+    assert factory.calls == 1
+
+
+@pytest.mark.parametrize(
+    "summary_md",
+    ["", "   \n", "Health holds steady; encroachment news is not yet visible."],
+    ids=["empty", "blank", "uncited"],
+)
+def test_empty_or_uncited_auditor_summary_falls_back_to_t10(
+    monkeypatch: pytest.MonkeyPatch, summary_md: str
+) -> None:
+    factory = CountingFactory(FakeTransport(_live_reply()))
+    monkeypatch.setattr(reports_router, "_summary_client", factory)
+    report = _audited(summary_md, stored=summary_md or None)
+
+    out = reports_router.summarize_report(report, settings())
+
+    assert out.summary_source is ReportSummarySource.LIVE
+    assert out.summary_md == "Health is 77.6 / 100 at 87% confidence."
+    assert factory.calls == 1
+
+
+def test_uncited_auditor_summary_in_mock_mode_uses_the_fallback() -> None:
+    report = _audited("Health holds steady.")
+
+    out = reports_router.summarize_report(report, settings(use_mocks=True))
+
+    assert out.summary_source is ReportSummarySource.FALLBACK
+    assert out.summary_md != "Health holds steady."
+
+
+@requires_db
+def test_report_and_asset_endpoints_return_the_stored_auditor_summary(
+    monkeypatch: pytest.MonkeyPatch, world_client: tuple[TestClient, Any]
+) -> None:
+    client, engine = world_client
+    hero = _hero(client)
+    report_id = UUID(hero["latest_report"]["id"])
+    auditor = wetland_report().auditor
+    assert auditor is not None
+    with Session(engine) as session:
+        row = session.get(Report, report_id)
+        assert row is not None
+        row.auditor_json = {
+            **(row.auditor_json or {}),
+            "auditor": auditor.model_copy(update={"summary_md": AUDITED_SUMMARY}).model_dump(
+                mode="json"
+            ),
+        }
+        row.summary_md = AUDITED_SUMMARY
+        session.add(row)
+        session.commit()
+    factory = CountingFactory(FakeTransport())
+    app.dependency_overrides[get_settings] = lambda: settings(use_mocks=False)
+    monkeypatch.setattr(reports_router, "_summary_client", factory)
+
+    report = client.get(f"/reports/{report_id}").json()
+    asset = client.get(f"/assets/{hero['id']}").json()
+    history = client.get(f"/assets/{hero['id']}/reports").json()
+
+    for body in (
+        report,
+        asset["latest_report"],
+        next(r for r in history if r["id"] == str(report_id)),
+    ):
+        assert body["summary_md"] == AUDITED_SUMMARY
+        assert body["summary_source"] == ReportSummarySource.AUDITOR.value
+    assert factory.calls == 0
