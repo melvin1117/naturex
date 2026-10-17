@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-17 06:07 UTC",
+  "generated_at": "2026-10-17 06:32 UTC",
   "tasks": [
     {
       "id": "P01",
@@ -1158,7 +1158,7 @@
       "deps": [
         "T54"
       ],
-      "status": "in_progress",
+      "status": "done",
       "assignees": [
         "melvin1117"
       ],
@@ -1168,7 +1168,7 @@
         "T68"
       ],
       "step": 5,
-      "chain": 9,
+      "chain": 0,
       "critical": false
     },
     {
@@ -1330,11 +1330,9 @@
         "T54",
         "T56"
       ],
-      "status": "blocked",
+      "status": "ready",
       "assignees": [],
-      "waiting_on": [
-        "T56"
-      ],
+      "waiting_on": [],
       "unlocks": [
         "T57",
         "T65"
@@ -1390,11 +1388,9 @@
       "deps": [
         "T56"
       ],
-      "status": "blocked",
+      "status": "ready",
       "assignees": [],
-      "waiting_on": [
-        "T56"
-      ],
+      "waiting_on": [],
       "unlocks": [
         "T38",
         "T57",
@@ -2253,6 +2249,7 @@
   "suggestions": {
     "PD": [],
     "D1": [
+      "T68",
       "T20"
     ],
     "D2": [
@@ -2260,23 +2257,24 @@
       "T40"
     ],
     "D3": [
+      "T55",
       "T28",
       "T39"
     ],
     "any": [
+      "T68",
+      "T55",
       "T28",
       "T39",
-      "T20",
-      "T37",
-      "T40"
+      "T20"
     ]
   },
   "counts": {
-    "done": 33,
-    "in_progress": 4,
+    "done": 34,
+    "in_progress": 3,
     "picked_early": 0,
-    "ready": 5,
-    "blocked": 36
+    "ready": 7,
+    "blocked": 34
   },
-  "data_hash": "ab63b47b2ca307cf"
+  "data_hash": "90dcc7fa98fe3377"
 }
