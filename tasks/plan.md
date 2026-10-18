@@ -47,6 +47,26 @@ The judge tour is a showcase; the product needs real flows. New tasks **T54–T6
 
 **Cut order if behind:** K5 delete account → community stewards (owner-only stays) → T71 AI document check (T69's deterministic checks, reviewer decision, ledger entry and public panel stay) → T60 live rating (fall back to the curated sites and mark new listings "awaiting satellite data").
 
+## Re-plan (Sun Oct 18): real end-to-end first, demo later
+The clickable prototype (#140) gives every screen of both apps, but it runs on a scripted world in the browser and makes no backend calls. The sign-in form only switches a persona. **Decision:** make both apps work end to end for **real accounts in the live world** first. Judge access, demo sessions, persona switch, the Time Machine and verification demo mode come after.
+
+**New tasks:** T73 world from the session (#166), T74 real-account E2E (#167), T75 monitoring loop (#168, *Should*), T76 verification demo mode (#169). Split out of existing tasks: T55 keeps demo sessions only (its world-from-session half is T73); T38 keeps the Time Machine (the real loop is T75); T69 and T70 ship review mode (demo mode is T76); T46 keeps the tour and demo path (the real-account path is T74).
+
+**The prototype is the design.** The wiring tasks (T22, T23, T18, T61, T62, T33, T63, T64, T70) no longer wait on T21, P05 or P06: they replace each screen's `usePrototype()` reads with the T32 hooks (`frontend/src/lib/prototype/README.md`). PD to confirm which design tasks (P02–P06, T12, T21) #140 completed and close them.
+
+| Phase | Tasks (in order) | Done when |
+|---|---|---|
+| 1 · Foundation | T73 → T68 → T57 (T73 and T68 in parallel) | Anonymous visitors read the live world; every route enforces ADR-0005 |
+| 2 · Exchange | T22, T23 (now) → T61 → T62 → T18 | A new account signs up and trades the 3 seeded sites for real |
+| 3 · Steward | T63, T58 → T60, T33 → T59 → T69 → T64, T70 | A new account takes land from listing to IPO, with an admin approving the documents |
+| 4 · Proof | T74 | `make e2e` runs both apps end to end on the real stack, in CI |
+| 5 · Then | T75, T28/T34/T37, T39/T44 | Alerts, agent trace and Copilot on real data |
+| Later | T55, T65, T38, T43, T76, T45, T46, T42 | The demo and judge experience on top of the real flows |
+
+**Critical path:** T73/T68 → T57 → T58 → T59 → T69 → T70 → T74.
+
+**Admin for the review queue:** the live-world IPO needs an admin-approved verification (ADR-0006). Admins are created from the CLI, never by sign-up.
+
 ## Team and ownership
 | Who | Role | Owns (long-term) | Weeks 1–2 focus | Weeks 3–5 focus |
 |---|---|---|---|---|
