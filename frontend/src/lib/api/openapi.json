@@ -3176,7 +3176,7 @@
           },
           "summary_source": {
             "$ref": "#/components/schemas/ReportSummarySource",
-            "description": "Whether summary_md came from a live Nemotron call or deterministic fallback.",
+            "description": "Where summary_md came from: the stored, cited Auditor summary (auditor), a live Nemotron call (live) or the deterministic fallback (fallback).",
             "default": "fallback"
           },
           "recommendations": {
@@ -3295,7 +3295,8 @@
         "type": "string",
         "enum": [
           "live",
-          "fallback"
+          "fallback",
+          "auditor"
         ],
         "title": "ReportSummarySource"
       },

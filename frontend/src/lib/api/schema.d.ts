@@ -1270,7 +1270,7 @@ export interface components {
             /** Summary Md */
             summary_md?: string | null;
             /**
-             * @description Whether summary_md came from a live Nemotron call or deterministic fallback.
+             * @description Where summary_md came from: the stored, cited Auditor summary (auditor), a live Nemotron call (live) or the deterministic fallback (fallback).
              * @default fallback
              */
             summary_source: components["schemas"]["ReportSummarySource"];
@@ -1320,7 +1320,7 @@ export interface components {
          * ReportSummarySource
          * @enum {string}
          */
-        ReportSummarySource: "live" | "fallback";
+        ReportSummarySource: "live" | "fallback" | "auditor";
         /** SimulateEventRequest */
         SimulateEventRequest: {
             /**
