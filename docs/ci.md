@@ -87,6 +87,8 @@ Do not add Token Factory / Tavily keys to PR workflows. Live AI evals will be a 
 | CodeQL analysis | Yes | Needs GitHub Advanced Security |
 | Secret scanning (GitHub native) | Yes (push protection optional) | Needs GitHub Advanced Security |
 
+**Dependabot** (`.github/dependabot.yml`) opens at most one grouped PR per ecosystem (Actions, backend, frontend) each month, with minor and patch updates only. Major upgrades, and minor bumps of the pinned `next` and `eslint-config-next`, are done by hand as planned work. Security updates still arrive as soon as an advisory is published.
+
 We run **gitleaks** ourselves so secret scanning works on private repos without GHAS. CodeQL and dependency-review are gated with `github.event.repository.visibility == 'public'`.
 
 ## Required status checks (branch protection on `main`)
