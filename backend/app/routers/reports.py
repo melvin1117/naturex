@@ -96,28 +96,43 @@ def report_out(report: Report) -> ReportOut:
     )
 
 
+def audit_fell_back(report: Report) -> bool:
+    """True when the stored audit is the Auditor's deterministic no-LLM template (T27)."""
+    audit: dict[str, Any] = (report.auditor_json or {}).get("audit") or {}
+    return bool(audit.get("fallback")) or audit.get("source") == "fallback"
+
+
 def auditor_summary(report: ReportOut) -> str | None:
-    """The stored summary when the Auditor wrote a non-empty one with inline [ID] citations
-    (T27), else None. The stored copy is preferred: it carries the sandbox note and is the
-    text the ledger hashes."""
+    """The Auditor's summary when it has inline [ID] citations (T27), else None.
+
+    Simulated reports return None: T10's deterministic fallback states in code that the
+    figures are a scenario, which neither the Auditor nor its template guarantees. The stored
+    copy is preferred when it extends the Auditor's text (it adds the sandbox note and is what
+    the ledger hashes)."""
     auditor = report.auditor
-    if auditor is None or not auditor.summary_md.strip():
-        return None
-    if not inline_citations(auditor.summary_md):
+    if report.simulated or auditor is None or not inline_citations(auditor.summary_md):
         return None
     stored = report.summary_md
-    return stored if stored and stored.strip() else auditor.summary_md
+    if stored and stored.startswith(auditor.summary_md.rstrip()):
+        return stored
+    return auditor.summary_md
 
 
 def summarize_report(
-    report: ReportOut, settings: Settings, context: SummaryContext | None = None
+    report: ReportOut,
+    settings: Settings,
+    context: SummaryContext | None = None,
+    *,
+    audit_fallback: bool = False,
 ) -> ReportOut:
-    """The Auditor's cited summary when there is one; otherwise T10's read-time summary."""
+    """The Auditor's cited summary when there is one; otherwise T10's read-time summary.
+
+    An Auditor summary from its no-LLM template (`audit_fallback`) keeps its text but is
+    labelled `fallback`, since it is a deterministic template, not a model's audit."""
     audited = auditor_summary(report)
     if audited is not None:
-        return report.model_copy(
-            update={"summary_md": audited, "summary_source": ReportSummarySource.AUDITOR}
-        )
+        source = ReportSummarySource.FALLBACK if audit_fallback else ReportSummarySource.AUDITOR
+        return report.model_copy(update={"summary_md": audited, "summary_source": source})
     summary = generate_report_summary(
         report,
         settings,
@@ -142,7 +157,12 @@ def summary_context(session: Session, asset: Asset) -> SummaryContext:
 
 def present_report(session: Session, report: Report, asset: Asset, settings: Settings) -> ReportOut:
     """A stored report with its Auditor summary, or T10's (live Nemotron or the fallback)."""
-    return summarize_report(report_out(report), settings, summary_context(session, asset))
+    return summarize_report(
+        report_out(report),
+        settings,
+        summary_context(session, asset),
+        audit_fallback=audit_fell_back(report),
+    )
 
 
 def _world_report(session: Session, world_id: UUID, report_id: UUID) -> Report:

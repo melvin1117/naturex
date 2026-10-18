@@ -619,3 +619,75 @@ def test_report_and_asset_endpoints_return_the_stored_auditor_summary(
         assert body["summary_md"] == AUDITED_SUMMARY
         assert body["summary_source"] == ReportSummarySource.AUDITOR.value
     assert factory.calls == 0
+
+
+TEMPLATE_SUMMARY = (
+    "## Ecological Performance Report — 2026Q4\n\n"
+    "Health is **68.8 out of 100 (grade BBB)** [score:base_health] [score:base_grade], the "
+    "deterministic score from satellite metrics and news. The AI Auditor was unavailable. "
+    "Sandbox prices are play money; nothing here is a real security."
+)
+
+
+def test_stored_summary_that_does_not_extend_the_auditor_text_is_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory = CountingFactory(FakeTransport())
+    monkeypatch.setattr(reports_router, "_summary_client", factory)
+    report = _audited(AUDITED_SUMMARY, stored="Edited by hand [metric:natural_fraction].")
+
+    out = reports_router.summarize_report(report, settings())
+
+    assert out.summary_md == AUDITED_SUMMARY
+    assert out.summary_source is ReportSummarySource.AUDITOR
+    assert factory.calls == 0
+
+
+@pytest.mark.parametrize(
+    ("summary_md", "audit_fallback"),
+    [(AUDITED_SUMMARY, False), (TEMPLATE_SUMMARY, True)],
+    ids=["model-written", "no-llm-template"],
+)
+def test_simulated_audited_report_states_it_is_simulated(
+    monkeypatch: pytest.MonkeyPatch, summary_md: str, audit_fallback: bool
+) -> None:
+    factory = CountingFactory(FakeTransport())
+    monkeypatch.setattr(reports_router, "_summary_client", factory)
+    report = _audited(summary_md).model_copy(update={"simulated": True, "period": "2026Q4"})
+
+    out = reports_router.summarize_report(report, settings(), audit_fallback=audit_fallback)
+
+    assert out.summary_source is ReportSummarySource.FALLBACK
+    assert "simulated Time Machine scenario" in out.summary_md
+    assert "not an observation" in out.summary_md
+    assert factory.transport.requests == []
+
+
+def test_auditor_no_llm_template_is_labelled_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    factory = CountingFactory(FakeTransport())
+    monkeypatch.setattr(reports_router, "_summary_client", factory)
+    report = _audited(TEMPLATE_SUMMARY)
+
+    out = reports_router.summarize_report(report, settings(), audit_fallback=True)
+
+    assert out.summary_md == TEMPLATE_SUMMARY
+    assert out.summary_source is ReportSummarySource.FALLBACK
+    assert factory.calls == 0
+
+
+@pytest.mark.parametrize(
+    ("audit", "expected"),
+    [
+        (None, False),
+        ({"source": "ultra", "fallback": False}, False),
+        ({"source": "fallback", "fallback": True}, True),
+        ({"source": "fallback"}, True),
+    ],
+)
+def test_audit_fell_back_reads_the_stored_audit(
+    audit: dict[str, Any] | None, expected: bool
+) -> None:
+    stored: dict[str, Any] = {"rating": {}} if audit is None else {"rating": {}, "audit": audit}
+    row = Report(world_id=uuid4(), asset_id=uuid4(), version=1, auditor_json=stored)
+
+    assert reports_router.audit_fell_back(row) is expected

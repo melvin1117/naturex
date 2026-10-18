@@ -1096,3 +1096,47 @@ def test_api_runs_keep_off_the_llm_inside_the_reserve(db: Connection, site: Site
     assert (run_report(db, site.world_id, tm_run).auditor_json or {})["run"]["pipeline"] == (
         "orchestrator"
     )
+
+
+@requires_db
+def test_mock_run_report_returns_the_stored_auditor_template_as_fallback(
+    api: tuple[TestClient, Deferred], db: Connection
+) -> None:
+    """End to end (#145): a real mock-mode run, then GET /reports/{id}."""
+    client, deferred = api
+    hero = _hero(client)
+    run_id = client.post(f"/assets/{hero}/rate").json()["run_id"]
+    deferred.run_all()
+    report_id = client.get(f"/runs/{run_id}").json()["report_id"]
+
+    body = client.get(f"/reports/{report_id}").json()
+
+    with sessions(db)() as session:
+        row = session.get(Report, UUID(report_id))
+        assert row is not None
+        stored_summary = row.summary_md
+    assert body["summary_source"] == "fallback"
+    assert body["summary_md"] == stored_summary
+    assert "[score:base_health]" in body["summary_md"]
+    assert body["auditor"]["summary_md"] in body["summary_md"]
+
+
+@requires_db
+def test_mock_scenario_run_report_states_it_is_simulated(
+    api: tuple[TestClient, Deferred],
+) -> None:
+    """End to end (#145): a Time Machine run's report keeps the code-written warning."""
+    client, deferred = api
+    hero = _hero(client)
+    world_id = UUID(client.get("/world").json()["id"])
+    runner: RatingRunner = app.dependency_overrides[get_rating_runner]()
+    run_id = runner.start(world_id, UUID(hero), scenario="encroachment", trigger="time_machine")
+    deferred.run_all()
+    report_id = client.get(f"/runs/{run_id}").json()["report_id"]
+
+    body = client.get(f"/reports/{report_id}").json()
+
+    assert body["simulated"] is True
+    assert body["summary_source"] == "fallback"
+    assert "simulated Time Machine scenario" in body["summary_md"]
+    assert "not an observation" in body["summary_md"]
