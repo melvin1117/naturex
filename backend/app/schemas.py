@@ -90,6 +90,7 @@ class AssetStatusOut(StrEnum):
 class ReportSummarySource(StrEnum):
     LIVE = "live"
     FALLBACK = "fallback"
+    AUDITOR = "auditor"
 
 
 class AssetCreate(BaseModel):
@@ -156,7 +157,8 @@ class ReportOut(BaseModel):
     summary_md: str | None = None
     summary_source: ReportSummarySource = Field(
         default=ReportSummarySource.FALLBACK,
-        description="Whether summary_md came from a live Nemotron call or deterministic fallback.",
+        description="Where summary_md came from: the stored, cited Auditor summary (auditor), "
+        "a live Nemotron call (live) or the deterministic fallback (fallback).",
     )
     recommendations: list[str] | None = None
     auditor: AuditorOutput | None = None
