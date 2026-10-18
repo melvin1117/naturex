@@ -412,21 +412,41 @@ class Price(SQLModel, table=True):
 
 class Holding(SQLModel, table=True):
     __tablename__ = "holdings"
+    __table_args__ = (
+        # A holding's user and asset are in its own world (ADR-0005 §3, #144).
+        ForeignKeyConstraint(
+            ["world_id", "user_id"], ["users.world_id", "users.id"], name="fk_holdings_user"
+        ),
+        ForeignKeyConstraint(
+            ["world_id", "asset_id"], ["assets.world_id", "assets.id"], name="fk_holdings_asset"
+        ),
+        # The primary key covers (world_id, user_id); this covers the asset key and holder lists.
+        Index("ix_holdings_world_id_asset_id", "world_id", "asset_id"),
+    )
 
     world_id: UUID = Field(foreign_key="worlds.id", primary_key=True)
-    user_id: UUID = Field(foreign_key="users.id", primary_key=True)
-    asset_id: UUID = Field(foreign_key="assets.id", primary_key=True)
+    user_id: UUID = Field(primary_key=True)
+    asset_id: UUID = Field(primary_key=True)
     shares: int = Field(default=0, sa_column=Column(BigInteger, nullable=False))
     avg_cost: Decimal | None = Field(default=None, max_digits=12, decimal_places=4)
 
 
 class Order(SQLModel, table=True):
     __tablename__ = "orders"
+    __table_args__ = (
+        # An order's user and asset are in its own world (ADR-0005 §3, #144).
+        ForeignKeyConstraint(
+            ["world_id", "user_id"], ["users.world_id", "users.id"], name="fk_orders_user"
+        ),
+        ForeignKeyConstraint(
+            ["world_id", "asset_id"], ["assets.world_id", "assets.id"], name="fk_orders_asset"
+        ),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     world_id: UUID = Field(foreign_key="worlds.id", index=True)
-    user_id: UUID = Field(foreign_key="users.id", index=True)
-    asset_id: UUID = Field(foreign_key="assets.id", index=True)
+    user_id: UUID = Field(index=True)
+    asset_id: UUID = Field(index=True)
     side: OrderSide = Field(sa_column=_enum_column(OrderSide))
     qty: int = Field(sa_column=Column(BigInteger, nullable=False))
     fill_price: Decimal | None = Field(default=None, max_digits=12, decimal_places=4)

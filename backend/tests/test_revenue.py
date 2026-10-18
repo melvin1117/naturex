@@ -348,10 +348,12 @@ def test_pay_quarter_is_world_scoped(session: Session) -> None:
         )
     )
     session.flush()
-    session.add(
-        Holding(world_id=other_world_id, user_id=other_user_id, asset_id=ASSET_ID, shares=900)
-    )
-    session.flush()
+    # Another world can't hold this world's asset at all (#144), so its holders are never paid.
+    with pytest.raises(IntegrityError, match="fk_holdings_asset"), session.begin_nested():
+        session.add(
+            Holding(world_id=other_world_id, user_id=other_user_id, asset_id=ASSET_ID, shares=900)
+        )
+        session.flush()
 
     pay_quarter(
         session,

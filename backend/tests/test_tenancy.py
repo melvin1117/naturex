@@ -12,7 +12,7 @@ from uuid import UUID
 
 import pytest
 from alembic import command
-from sqlalchemy import create_engine, func, text, update
+from sqlalchemy import create_engine, func, inspect, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, SQLModel, col, select
 
@@ -259,6 +259,47 @@ def test_a_community_cannot_use_another_worlds_treasury(session: Session) -> Non
         session.begin_nested(),
     ):
         session.add(Community(world_id=mine, name="Borrowed", treasury_user_id=spare.id))
+        session.flush()
+
+
+def _holding(world_id: UUID, user_id: UUID, asset_id: UUID) -> SQLModel:
+    return Holding(world_id=world_id, user_id=user_id, asset_id=asset_id, shares=1)
+
+
+def _order(world_id: UUID, user_id: UUID, asset_id: UUID) -> SQLModel:
+    return Order(
+        world_id=world_id,
+        user_id=user_id,
+        asset_id=asset_id,
+        side=OrderSide.BUY,
+        qty=1,
+        fill_price=D("1.0000"),
+    )
+
+
+@pytest.mark.parametrize(
+    ("make_row", "foreign", "constraint"),
+    [
+        (_holding, "user", "fk_holdings_user"),
+        (_holding, "asset", "fk_holdings_asset"),
+        (_order, "user", "fk_orders_user"),
+        (_order, "asset", "fk_orders_asset"),
+    ],
+)
+@requires_db
+def test_a_holding_or_order_cannot_reference_another_worlds_user_or_asset(
+    session: Session,
+    make_row: Callable[[UUID, UUID, UUID], SQLModel],
+    foreign: str,
+    constraint: str,
+) -> None:
+    mine, other = _two_worlds(session)
+    user_world, asset_world = (other, mine) if foreign == "user" else (mine, other)
+    user = persona(session, user_world, "mia")
+    asset = site_asset(session, asset_world)
+
+    with pytest.raises(IntegrityError, match=constraint), session.begin_nested():
+        session.add(make_row(mine, user.id, asset.id))
         session.flush()
 
 
@@ -538,11 +579,34 @@ def test_reset_after_a_payout_restores_the_treasury_stakes(session: Session) -> 
     assert_tenancy_invariants(session, world_id)
 
 
+def _trade(session: Session, world_id: UUID) -> None:
+    """Arjun buys 1 000 primary shares of the first site: an order and a holding to clean up."""
+    arjun, wetland = persona(session, world_id, "arjun"), site_asset(session, world_id)
+    wetland.primary_shares_remaining -= 1_000
+    session.add(_order(world_id, arjun.id, wetland.id))
+    session.add(Holding(world_id=world_id, user_id=arjun.id, asset_id=wetland.id, shares=1_000))
+    session.flush()
+
+
+@requires_db
+def test_reset_after_trading_clears_orders_and_investor_holdings(session: Session) -> None:
+    world_id = create_world(session).id
+    _trade(session, world_id)
+    session.commit()
+
+    reset_world(session, world_id)
+
+    assert rows(session, Order, world_id) == []
+    assert len(rows(session, Holding, world_id)) == len(rows(session, Holding, WORLD_ID))
+    assert_tenancy_invariants(session, world_id)
+
+
 @requires_db
 def test_prune_deletes_a_worlds_sessions_communities_and_treasuries(session: Session) -> None:
     world = create_world(session)
     world_id = world.id
     start_session(session, persona(session, world_id, "arjun"), SessionKind.DEMO)
+    _trade(session, world_id)
     world.last_seen_at = datetime.now(UTC) - timedelta(days=30)
     session.add(world)
     ensure_live_world(session)
@@ -701,6 +765,103 @@ def test_the_migration_round_trips_an_ownerless_treasury() -> None:
             ).all()
             assert members == []
             assert_tenancy_invariants(db, WORLD_ID)
+    finally:
+        engine.dispose()
+        command.downgrade(cfg, "base")
+        command.upgrade(cfg, "head")
+
+
+# --- Migration 0010 ----------------------------------------------------------------------------
+
+_WORLD_SCOPED_FKS = {
+    "holdings": {
+        "fk_holdings_user": (["world_id", "user_id"], "users"),
+        "fk_holdings_asset": (["world_id", "asset_id"], "assets"),
+        "holdings_world_id_fkey": (["world_id"], "worlds"),
+    },
+    "orders": {
+        "fk_orders_user": (["world_id", "user_id"], "users"),
+        "fk_orders_asset": (["world_id", "asset_id"], "assets"),
+        "orders_world_id_fkey": (["world_id"], "worlds"),
+    },
+}
+_PLAIN_FKS = {
+    "holdings": {
+        "holdings_user_id_fkey": (["user_id"], "users"),
+        "holdings_asset_id_fkey": (["asset_id"], "assets"),
+        "holdings_world_id_fkey": (["world_id"], "worlds"),
+    },
+    "orders": {
+        "orders_user_id_fkey": (["user_id"], "users"),
+        "orders_asset_id_fkey": (["asset_id"], "assets"),
+        "orders_world_id_fkey": (["world_id"], "worlds"),
+    },
+}
+
+
+def _foreign_keys(engine: Any) -> dict[str, dict[str, tuple[list[str], str]]]:
+    inspector = inspect(engine)
+    return {
+        table: {
+            fk["name"]: (fk["constrained_columns"], fk["referred_table"])
+            for fk in inspector.get_foreign_keys(table)
+        }
+        for table in ("holdings", "orders")
+    }
+
+
+def _trades(db: Session) -> tuple[set[tuple[Any, ...]], set[tuple[Any, ...]]]:
+    orders = {(o.world_id, o.user_id, o.asset_id, o.qty) for o in db.exec(select(Order)).all()}
+    holdings = {
+        (h.world_id, h.user_id, h.asset_id, h.shares) for h in db.exec(select(Holding)).all()
+    }
+    return orders, holdings
+
+
+@requires_db
+def test_the_holdings_and_orders_migration_round_trips_and_rejects_cross_world_rows() -> None:
+    cfg = alembic_cfg()
+    command.downgrade(cfg, "base")
+    command.upgrade(cfg, "head")
+    engine = create_engine(get_settings().database_url)
+    try:
+        with Session(engine) as db:
+            seed(db)
+            mine, other = create_world(db).id, create_world(db).id
+            _trade(db, mine)
+            db.commit()
+            before = _trades(db)
+            stranger = persona(db, other, "mia").id
+            wetland = site_asset(db, mine).id
+        assert _foreign_keys(engine) == _WORLD_SCOPED_FKS
+
+        command.downgrade(cfg, "0009")
+        assert _foreign_keys(engine) == _PLAIN_FKS
+        assert "ix_holdings_world_id_asset_id" not in {
+            i["name"] for i in inspect(engine).get_indexes("holdings")
+        }
+        # At 0009 only application code stops a cross-world row, so the upgrade must refuse it.
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO holdings (world_id, user_id, asset_id, shares) "
+                    "VALUES (:w, :u, :a, 1)"
+                ),
+                {"w": mine, "u": stranger, "a": wetland},
+            )
+        with pytest.raises(RuntimeError, match="1 holdings row"):
+            command.upgrade(cfg, "head")
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM holdings WHERE user_id = :u"), {"u": stranger})
+
+        command.upgrade(cfg, "head")
+        assert _foreign_keys(engine) == _WORLD_SCOPED_FKS
+        assert "ix_holdings_world_id_asset_id" in {
+            i["name"] for i in inspect(engine).get_indexes("holdings")
+        }
+        with Session(engine) as db:
+            assert _trades(db) == before, "orders and holdings survive the round trip"
+            assert_tenancy_invariants(db, mine, traded=True)
     finally:
         engine.dispose()
         command.downgrade(cfg, "base")
