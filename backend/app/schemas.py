@@ -50,6 +50,17 @@ class NewsScoutItem(BaseModel):
 
 class NewsScoutOutput(BaseModel):
     events: list[NewsScoutItem]
+    dropped_off_site: int = Field(
+        default=0,
+        ge=0,
+        description="Events the model labelled relevant but whose article names neither the "
+        "asset nor a geocoded place near it (locality gate, dev-spec §7.5).",
+    )
+    locality_unverified: bool = Field(
+        default=False,
+        description="True when the geocode gave no place names, so relevant events were kept "
+        "without the locality gate.",
+    )
 
 
 class AuditorFlag(BaseModel):
