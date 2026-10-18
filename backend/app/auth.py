@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import ipaddress
+import logging
 import re
 import secrets
 from collections.abc import Sequence
@@ -35,6 +36,8 @@ from app.models import (
     UserRole,
     UserSession,
 )
+
+log = logging.getLogger(__name__)
 
 SESSION_COOKIE = "nx_session"
 IDLE_TIMEOUT = timedelta(days=7)
@@ -333,12 +336,19 @@ def lock_name(kind: AuthAttemptKind, bucket: AuthBucket, key_hmac: str) -> str:
 def retry_after_seconds(oldest: datetime, now: datetime, window: timedelta) -> int:
     """Whole seconds until the oldest counted attempt leaves the window, in [1, window].
 
-    Rounds up so a client that waits this long is let in. Clamped at both ends: an attempt
-    stamped after `now` (another server's clock, or an injected time) never asks for more than
-    the window, and one already at the edge still asks for a second rather than zero.
+    Rounds up so a client that waits this long is let in. An attempt stamped after `now`
+    (another server's clock running ahead, or an injected time) is clamped to the window and
+    logged as `retry_after_clamped`, so clock skew stays visible. The lower bound is defensive
+    only: counted attempts are newer than `now - window`, so the wait is already at least 1.
     """
     remaining = ceil((oldest + window - now).total_seconds())
-    return min(max(remaining, 1), ceil(window.total_seconds()))
+    longest = ceil(window.total_seconds())
+    if remaining > longest:
+        log.warning(
+            "retry_after_clamped: oldest attempt is %.3fs after now; check clock skew",
+            (oldest - now).total_seconds(),
+        )
+    return min(max(remaining, 1), longest)
 
 
 def consume_attempt(

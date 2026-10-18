@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import sys
 import time
 from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
@@ -430,6 +431,30 @@ def test_retry_after_is_whole_seconds_within_the_window(oldest: datetime, expect
     assert auth.retry_after_seconds(oldest, T0, WINDOW) == expected
 
 
+REGISTER_WINDOW = auth.RATE_LIMITS[REGISTER].window
+
+
+@pytest.mark.parametrize(
+    ("oldest", "expected"),
+    [
+        (T0, 3600),
+        (T0 - REGISTER_WINDOW + timedelta(milliseconds=500), 1),
+        (T0 - REGISTER_WINDOW + TICK, 1),
+        (T0 + TICK, 3600),
+    ],
+)
+def test_register_retry_after_stays_within_its_hour(oldest: datetime, expected: int) -> None:
+    assert auth.retry_after_seconds(oldest, T0, REGISTER_WINDOW) == expected
+
+
+def test_a_clamped_retry_after_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        assert auth.retry_after_seconds(T0 + timedelta(seconds=2), T0, WINDOW) == 900
+        assert auth.retry_after_seconds(T0, T0, WINDOW) == 900  # not clamped, not logged
+
+    assert [r.getMessage().split(":")[0] for r in caplog.records] == ["retry_after_clamped"]
+
+
 @requires_db
 def test_attempts_stamped_after_now_still_ask_for_at_most_the_window(session: Session) -> None:
     for _ in range(10):
@@ -566,14 +591,21 @@ def test_overlapping_buckets_taken_in_opposite_order_do_not_deadlock(
 def test_the_clock_is_read_after_waiting_for_the_lock(
     committed_engine: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A waiter's time can't predate attempts committed while it waited (issue #143)."""
+    """A waiter's time can't predate attempts committed while it waited.
+
+    Regression test for #143: the clock was read before the lock, so a waiter saw attempts
+    stamped after its own time and answered a Retry-After of 901 for a 900-second window.
+    """
     keys = [ip_key(f"clock-{uuid4()}")]
     bucket, key = keys[0]
     clock = [T0]
     monkeypatch.setattr(auth, "_now", lambda: clock[0])
 
+    waiter_pid: Future[int] = Future()
+
     def waiter() -> int | None:
         with Session(committed_engine) as db:
+            waiter_pid.set_result(db.execute(text("SELECT pg_backend_pid()")).scalar_one())
             return auth.consume_attempt(db, LOGIN, keys)
 
     later = T0 + timedelta(seconds=1)
@@ -585,15 +617,15 @@ def test_the_clock_is_read_after_waiting_for_the_lock(
             )
             result = pool.submit(waiter)
             waiting = text(
-                "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted"
-                " AND database = (SELECT oid FROM pg_database WHERE datname = current_database())"
+                "SELECT count(*) FROM pg_locks"
+                " WHERE pid = :pid AND locktype = 'advisory' AND NOT granted"
             )
-            for _ in range(200):
-                if holder.execute(waiting).scalar_one():
-                    break
+            pid = waiter_pid.result(timeout=5)
+            deadline = time.monotonic() + 5
+            while not holder.execute(waiting, {"pid": pid}).scalar_one():
+                if time.monotonic() > deadline:
+                    pytest.fail("the waiter never blocked on the bucket's lock")
                 time.sleep(0.005)
-            else:
-                pytest.fail("the waiter never blocked on the bucket's lock")
             clock[0] = later  # time passes while the waiter is blocked
             holder.add_all(
                 AuthAttempt(bucket=bucket, key_hmac=key, kind=LOGIN, created_at=later)
