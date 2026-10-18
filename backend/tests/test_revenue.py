@@ -333,36 +333,25 @@ def test_pay_quarter_rejects_missing_community_retained_holding_without_changes(
 
 @requires_db
 def test_pay_quarter_is_world_scoped(session: Session) -> None:
+    """Paying an asset from another world finds no asset there and moves nothing."""
     _add_holdings(session)
     other_world_id = uuid.uuid4()
-    other_user_id = uuid.uuid4()
     session.add(World(id=other_world_id, label="other"))
     session.flush()
-    session.add(
-        User(
-            id=other_user_id,
+    cash_before = {u.id: u.cash_balance for u in session.exec(select(User)).all()}
+
+    with pytest.raises(LookupError, match=f"not found in world {other_world_id}"):
+        pay_quarter(
+            session,
             world_id=other_world_id,
-            name="Other investor",
-            role=UserRole.INVESTOR,
-            cash_balance=D("10000.00"),
+            asset_id=ASSET_ID,
+            value_mid=D("100000.00"),
+            quarter_label="2026-Q4",
         )
-    )
-    session.flush()
-    session.add(
-        Holding(world_id=other_world_id, user_id=other_user_id, asset_id=ASSET_ID, shares=900)
-    )
-    session.flush()
 
-    pay_quarter(
-        session,
-        world_id=WORLD_ID,
-        asset_id=ASSET_ID,
-        value_mid=D("100000.00"),
-        quarter_label="2026-Q4",
-    )
-    session.flush()
-
-    assert session.get_one(User, other_user_id).cash_balance == D("10000.00")
+    assert {u.id: u.cash_balance for u in session.exec(select(User)).all()} == cash_before
+    assert session.exec(select(PayoutLine)).all() == []
+    assert session.get_one(Asset, ASSET_ID).community_wallet == D("0.00")
 
 
 @requires_db

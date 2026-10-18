@@ -336,16 +336,22 @@ create table prices (
 );
 
 create table holdings (
-  user_id uuid references users(id), asset_id uuid references assets(id),
+  world_id uuid not null references worlds(id), user_id uuid not null, asset_id uuid not null,
   shares bigint not null default 0, avg_cost numeric(12,4),
-  primary key (user_id, asset_id)
+  primary key (world_id, user_id, asset_id),
+  -- #144 (migration 0010): composite keys, so a holding can't name another world's user or asset
+  foreign key (world_id, user_id) references users (world_id, id),
+  foreign key (world_id, asset_id) references assets (world_id, id)
 );
+create index on holdings (world_id, asset_id);  -- the asset key; holders of an asset (payouts)
 
 create table orders (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid references users(id), asset_id uuid references assets(id),
+  world_id uuid not null references worlds(id), user_id uuid not null, asset_id uuid not null,
   side text check (side in ('buy','sell')), qty bigint, fill_price numeric(12,4),
-  is_primary boolean default false, created_at timestamptz default now()
+  is_primary boolean default false, created_at timestamptz default now(),
+  foreign key (world_id, user_id) references users (world_id, id),   -- #144 (migration 0010)
+  foreign key (world_id, asset_id) references assets (world_id, id)
 );
 
 create table alerts (
@@ -478,7 +484,7 @@ Every route is scoped to the caller's world, which comes from the session: anony
 - **Accepted risks:** (1) registration enumeration (no email verification): a duplicate registration is always 409 with the same generic body, in any letter case, and no permission depends on the email. (2) Every allowed attempt counts, successful ones included, so anyone can lock a named account out of login for 15 minutes by sending 10 requests for it, and users behind one shared address share one budget. Per-account limits always allow the first; the IP bucket is the one to raise if a demo room needs it.
 
 **As built (T56).** Communities, members and treasuries (ADR-0005 §3, §4; migration `0009`). T68 adds `authorize()` and the community routes on top; nothing here is exposed by a route yet.
-- **Tables:** `communities` and `community_members` (`owner | steward`) as in §5, both `world_id NOT NULL` with composite `(world_id, …_id)` foreign keys onto `unique (world_id, id)` on users, assets and communities, so a row can't link across worlds (tested per foreign key in `tests/test_tenancy.py`). `assets.community_id` is new; `assets.community_user_id` lost its plain foreign key for composite ones, and `fk_assets_community_treasury` makes it the asset's own community's treasury whenever both are set. Membership is queryable by `(world_id, user_id)` (`ix_community_members_world_id_user_id`) for T68's roles and insider-trading rule.
+- **Tables:** `communities` and `community_members` (`owner | steward`) as in §5, both `world_id NOT NULL` with composite `(world_id, …_id)` foreign keys onto `unique (world_id, id)` on users, assets and communities, so a row can't link across worlds (tested per foreign key in `tests/test_tenancy.py`). `holdings` and `orders` kept plain user and asset foreign keys at first; migration `0010` (#144) made them composite too (`fk_holdings_user`, `fk_holdings_asset`, `fk_orders_user`, `fk_orders_asset`, plus `ix_holdings_world_id_asset_id`), so every reference to a user is now world-scoped, as are trading and payout references to an asset (metrics, events, reports, prices, alerts, doc chunks and ledger entries still use plain asset keys). Both tables already had `world_id NOT NULL`; the upgrade refuses to run if any existing row crosses worlds, and the downgrade restores the plain keys. `assets.community_id` is new; `assets.community_user_id` lost its plain foreign key for composite ones, and `fk_assets_community_treasury` makes it the asset's own community's treasury whenever both are set. Membership is queryable by `(world_id, user_id)` (`ix_community_members_world_id_user_id`) for T68's roles and insider-trading rule.
 - **Treasuries:** one `kind = 'treasury'` user per community (`treasury_user_id` unique; a trigger checks the kind), created with it: 0 cash, no email, password or persona key (the T54 CHECK), never an admin. It holds the community's retained stake and receives its dividends: `pay_quarter` (T41/T67) is unchanged because it pays `assets.community_user_id`. Triggers reject a treasury in `orders` ("can't trade"), `sessions` ("can't sign in") and `community_members`, and `users_treasury_kind` stops `users.kind` from changing to get around them (a community's treasury stays a treasury; a user with sessions, orders or memberships can't become one), and `auth.resolve_session` already refuses a treasury's session. The T17 orders route acts as the demo investor persona, so it never meets a treasury; T68's policy adds the 403s.
 - **Seed:** each curated site has its own community, `<site name> Community`, owned by Rosa, with a treasury `<site name> Community Treasury` holding the 510 000 retained shares (fixed IDs `55555555-…-5555555555NN` and `66666666-…-6666666666NN`). Rosa is a member, not a holder, so her cash only moves if she trades. Shares are still conserved: `total_shares = primary_shares_remaining + market_maker_shares + Σ holdings`.
 - **Sandbox:** clone copies users → communities → members → assets (community and treasury remapped) → the rest; the live world gets the communities with only their treasuries and members (plus those users' holdings). **Reset keeps every persona user's ID** (matched by `persona_key`, now unique per world) and restores its fields (cash, name, admin flag…) from the template, so sessions on personas survive; a persona the template lacks is deleted with its sessions; everything else, communities and treasuries included, is recreated with fresh IDs. `_DELETE_ORDER` starts with `sessions` (pruning deletes a world's sessions first) and deletes members, then communities, before users; a test checks it covers every world table, children first.
