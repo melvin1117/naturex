@@ -1,27 +1,50 @@
 # Keep GitHub Actions and app lockfiles current (no auto-deploy).
+# Low-noise on purpose: one grouped PR per ecosystem per month (at most 3 a month), minor and
+# patch only. Major upgrades (e.g. Next 16) are done by hand as planned work, not by a bot PR.
+# Security updates are separate: Dependabot still opens those as soon as an advisory lands.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 2
     groups:
-      # init, autobuild and analyze must always run the same CodeQL version.
-      codeql-action:
+      # One PR for every action; this also keeps CodeQL's init, autobuild and analyze in step.
+      actions:
         patterns:
-          - "github/codeql-action*"
+          - "*"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # Backend uses uv; the uv ecosystem keeps backend/uv.lock in sync.
   - package-ecosystem: uv
     directory: /backend
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      backend:
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
-  # pnpm projects use the npm ecosystem. Runs fail harmlessly until frontend/ exists (T05).
+  # pnpm projects use the npm ecosystem.
   - package-ecosystem: npm
     directory: /frontend
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      frontend:
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # Next is pinned to 15.5 with React 19; eslint-config-next must match Next's version.
+      - dependency-name: "next"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "eslint-config-next"
+        update-types: ["version-update:semver-minor"]
