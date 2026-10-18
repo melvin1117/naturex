@@ -612,6 +612,21 @@ def test_scenario_run_for_the_time_machine(db: Connection, site: Site) -> None:
 
 
 @requires_db
+def test_locality_gate_counts_reach_the_orchestrator(db: Connection, site: Site) -> None:
+    def gated(_asset: Any, _llm: Any) -> NewsScoutOutput:
+        return NewsScoutOutput(
+            events=mocks.news_scout_fixture(), dropped_off_site=2, locality_unverified=True
+        )
+
+    h = harness(db, *happy_script(), news=gated)
+    h.runner.start(site.world_id, site.asset_id)
+
+    last = [r for r in h.transport.requests if r.get("tools")][-1]["messages"]
+    news = json.loads(last[-1]["content"])
+    assert (news["dropped_off_site"], news["locality_unverified"]) == (2, True)
+
+
+@requires_db
 def test_optional_news_failure_is_retried_once_then_flagged(db: Connection, site: Site) -> None:
     attempts: list[int] = []
 

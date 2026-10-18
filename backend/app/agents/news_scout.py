@@ -92,13 +92,16 @@ _WORD_RE = re.compile(r"[^\W_]+")
 # Locality gate (#146): a place name shorter than this, or made only of these words, says too
 # little about where an article is to keep it.
 MIN_LOCALITY_TERM_CHARS = 4
+# A single word of the asset name this long (e.g. `sumidero`) is distinctive enough on its own.
+MIN_DISTINCTIVE_WORD_CHARS = 6
 GENERIC_PLACE_WORDS = frozenset(
     """
-    and area barrio bosque center central centro city ciudad colonia condado county de del
-    district distrito east el estado este forest humedal la lago lake las los manglar
-    mangrove mangroves municipality municipio nacional national new norte north nueva nuevo
-    oeste of parcel park parque protected pueblo region reserva reserve restoration river
-    san santa santo south state sur the town village west wetland wetlands y
+    and area barrio biosfera biosphere bosque canon canyon center central centro city ciudad
+    colonia condado county de del district distrito east el estado este forest humedal la
+    lago lake las los manglar mangrove mangroves municipality municipio nacional national new
+    norte north nueva nuevo oeste of parcel park parque protected pueblo region reserva
+    reserve restoration ria river san santa santo south state sur the town village west
+    wetland wetlands y
     """.split()  # noqa: SIM905
 )
 # Placed after the article blocks, where the model reads it last.
@@ -464,7 +467,11 @@ def run_news_scout(
         degraded = True
         place = GeocodedPlace(label=_fallback_place(asset))
     terms = _locality_terms(asset.name, place)
-    unverified = not terms
+    unverified = not _place_terms(place)
+    if unverified:
+        # Gated on the asset name alone: not worth caching for 24 h.
+        degraded = True
+        log.warning("News Scout has no geocoded place names; gating on the asset name only")
 
     found: list[NewsArticle] = []
     for query in build_queries(asset_name=asset.name, place=place.label):
@@ -504,15 +511,9 @@ def run_news_scout(
     except (LLMError, ValidationError, ValueError):
         return NewsScoutOutput(events=[], locality_unverified=unverified)
 
-    events = _post_check(result.value.events, articles, today=today)
-    dropped = 0
-    if terms:
-        events, dropped = _locality_gate(events, articles, terms)
-    elif events:
-        log.warning(
-            "News Scout kept %d relevant events without a locality check: no geocoded place names",
-            len(events),
-        )
+    events, dropped = _locality_gate(
+        _post_check(result.value.events, articles, today=today), articles, terms
+    )
     output = NewsScoutOutput(
         events=events, dropped_off_site=dropped, locality_unverified=unverified
     )
@@ -630,19 +631,33 @@ def _fold(text: str) -> str:
 
 
 def _locality_terms(asset_name: str, place: GeocodedPlace) -> tuple[str, ...]:
-    """Folded names an on-site article should mention. Empty when the geocode gave no place
-    names, so the caller skips the gate instead of dropping every article."""
-    if not place.place_names:
-        return ()
+    """Folded names an on-site article should mention: the geocoded places and the asset."""
+    return tuple(_unique([*_place_terms(place), *_asset_terms(asset_name, place.country)]))
+
+
+def _place_terms(place: GeocodedPlace) -> list[str]:
     country = _fold(place.country or "")
-    name_words = _fold(asset_name).split()
-    while name_words and _weak_word(name_words[-1]):
-        name_words.pop()
-    while name_words and _weak_word(name_words[0]):
-        name_words.pop(0)
-    candidates = [*(_fold(name) for name in place.place_names), _fold(asset_name)]
-    candidates.append(" ".join(name_words))
-    return tuple(_unique(term for term in candidates if _specific_term(term) and term != country))
+    names = (_fold(name) for name in place.place_names)
+    return [term for term in names if _specific_term(term) and term != country]
+
+
+def _asset_terms(asset_name: str, country_name: str | None) -> list[str]:
+    """The full name, the name without leading or trailing descriptors (`Xochimilco Wetland` →
+    `xochimilco`), and each distinctive word, so `Cañón del Sumidero` matches `Sumidero Canyon`."""
+    country = _fold(country_name or "")
+    words = _fold(asset_name).split()
+    core = list(words)
+    while core and _weak_word(core[-1]):
+        core.pop()
+    while core and _weak_word(core[0]):
+        core.pop(0)
+    distinctive = [
+        word
+        for word in words
+        if len(word) >= MIN_DISTINCTIVE_WORD_CHARS and word not in GENERIC_PLACE_WORDS
+    ]
+    candidates = [" ".join(words), " ".join(core), *distinctive]
+    return [term for term in candidates if _specific_term(term) and term != country]
 
 
 def _weak_word(word: str) -> bool:
@@ -651,8 +666,10 @@ def _weak_word(word: str) -> bool:
 
 def _specific_term(term: str) -> bool:
     words = term.split()
-    return len(term.replace(" ", "")) >= MIN_LOCALITY_TERM_CHARS and not all(
-        word in GENERIC_PLACE_WORDS for word in words
+    return (
+        len(term.replace(" ", "")) >= MIN_LOCALITY_TERM_CHARS
+        and not all(word in GENERIC_PLACE_WORDS for word in words)
+        and not all(word.isdigit() for word in words)
     )
 
 
@@ -677,7 +694,8 @@ def _locality_gate(
 
 def _mentions_any(article: NewsArticle, terms: Sequence[str]) -> bool:
     title = _redact_injection(article.title)[0] if article.title else ""
-    body = _redact_injection(_combined_article_text(article))[0]
+    # The same truncated body the prompt carries (`_article_text_for_prompt`, before escaping).
+    body = _redact_injection(_combined_article_text(article))[0][:ARTICLE_CHAR_LIMIT]
     text = f" {_fold(f'{title} {body}')} "
     return any(f" {term} " in text for term in terms)
 

@@ -40,6 +40,7 @@ from app.agents.news_scout import (
 from app.config import Settings
 from app.mocks import news_scout_fixture
 from app.schemas import NewsScoutOutput
+from app.seed import DEMO_SITES
 
 FIXTURES = Path(__file__).parent / "fixtures" / "news"
 ASSET = NewsScoutAsset(
@@ -1166,7 +1167,7 @@ def test_live_nominatim_fixture_yields_place_names_without_the_country() -> None
     assert _place_names(response) == ("Xochimilco", "Ciudad de México")
 
 
-def test_missing_geocode_keeps_model_relevance_but_flags_it(
+def test_missing_geocode_gates_on_the_asset_name_and_flags_it(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     class BrokenGeocoder:
@@ -1176,19 +1177,113 @@ def test_missing_geocode_keeps_model_relevance_but_flags_it(
     with caplog.at_level("WARNING", logger="app.agents.news_scout"):
         result = run_gate([ON_SITE, INDIANA], [relevant(1), relevant(2)], geocoder=BrokenGeocoder())
 
-    assert [event.url for event in result.events] == [ON_SITE.url, INDIANA.url]
-    assert result.dropped_off_site == 0
+    assert [event.url for event in result.events] == [ON_SITE.url]
+    assert result.dropped_off_site == 1
     assert result.locality_unverified is True
-    assert "locality" in caplog.text
+    assert "asset name only" in caplog.text
 
 
 def test_a_geocode_with_only_the_country_is_treated_as_missing() -> None:
-    place = GeocodedPlace(label="México", place_names=(), country="México")
+    place = GeocodedPlace(label="México", place_names=("México",), country="México")
 
-    result = run_gate([INDIANA], [relevant(1)], geocoder=FakeGeocoder(place))
+    result = run_gate([ON_SITE, INDIANA], [relevant(1), relevant(2)], geocoder=FakeGeocoder(place))
+
+    assert [event.url for event in result.events] == [ON_SITE.url]
+    assert result.dropped_off_site == 1
+    assert result.locality_unverified is True
+
+
+def test_a_result_gated_on_the_asset_name_only_is_not_cached() -> None:
+    place = GeocodedPlace(label="México", place_names=(), country="México")
+    geocoder = FakeGeocoder(place)
+    search = FakeNewsSearch([ON_SITE])
+    llm = FakeLLM(NewsScoutClassificationOutput(events=[relevant(1)]))
+    cache = NewsScoutCache()
+    settings = Settings(_env_file=None, use_mocks=False)
+
+    for _ in range(2):
+        run_news_scout(
+            ASSET, settings=settings, llm=llm, geocoder=geocoder, news_search=search, cache=cache
+        )
+
+    assert len(llm.calls) == 2
+
+
+def test_a_place_named_only_in_the_title_is_on_site() -> None:
+    article = scored_article(
+        "Xochimilco canal cleanup removes 40 tonnes of waste",
+        "Volunteers worked through the weekend along the canals.",
+        url="https://example.com/news/title-only",
+        score=0.9,
+    )
+
+    result = run_gate([article], [relevant(1)])
 
     assert len(result.events) == 1
-    assert result.locality_unverified is True
+
+
+def test_a_place_named_only_beyond_the_prompt_limit_is_off_site() -> None:
+    filler = "Officials discussed water policy at length in the capital region. " * 40
+    assert len(filler) > ARTICLE_CHAR_LIMIT
+    article = scored_article(
+        "Water policy debate",
+        f"{filler}Xochimilco was mentioned once at the end.",
+        url="https://example.com/news/long",
+        score=0.9,
+    )
+
+    result = run_gate([article], [relevant(1)])
+
+    assert result.events == []
+    assert result.dropped_off_site == 1
+
+
+DEMO_SITE_NEWS = {
+    "wetland_mx": (
+        ("San Gregorio Atlapulco",),
+        "Desazolve de canales en los humedales de Xochimilco tras la temporada de lluvias.",
+    ),
+    "mangrove_mx": (
+        ("Kinchil",),
+        "Denuncian tala ilegal en los manglares de Celestún.",
+    ),
+    "restoration_forest": (
+        ("Chiapa de Corzo",),
+        "Incendio en el Cañón del Sumidero consume varias hectáreas de selva.",
+    ),
+}
+
+
+@pytest.mark.parametrize("site", DEMO_SITES, ids=lambda site: site.key)
+def test_spanish_news_for_each_demo_site_is_on_site(site: Any) -> None:
+    place_names, text = DEMO_SITE_NEWS[site.key]
+    asset = NewsScoutAsset(
+        id=site.id,
+        name=site.name,
+        centroid_lat=site.centroid_lat,
+        centroid_lon=site.centroid_lon,
+        country=site.country,
+    )
+    geocoder = FakeGeocoder(
+        GeocodedPlace(label=place_names[0], place_names=place_names, country="México")
+    )
+    article = scored_article("Noticia local", text, url=f"https://example.com/{site.key}", score=1)
+
+    result = run_gate(
+        [article, INDIANA],
+        [relevant(1, impact_type="fire", direction=-1), relevant(2)],
+        geocoder=geocoder,
+        asset=asset,
+    )
+
+    assert [event.url for event in result.events] == [article.url]
+    assert result.dropped_off_site == 1
+
+
+def test_locality_terms_reject_digit_only_names() -> None:
+    place = GeocodedPlace(label="Xochimilco", place_names=("16000", "Xochimilco"), country="México")
+
+    assert "16000" not in _locality_terms("Xochimilco Wetland", place)
 
 
 def test_mock_fixture_output_reports_no_dropped_articles() -> None:
