@@ -15,6 +15,10 @@ worlds; there is no safe way to guess which side is right.
 
 Downgrading restores the plain foreign keys under their original names.
 
+The keys are added in one step, which locks and scans both tables; that is fine for the demo's
+small tables. On a busy hosted database (after T20), add them `NOT VALID` under a short
+`lock_timeout` and `VALIDATE CONSTRAINT` them in a later transaction instead.
+
 Revision ID: 0010
 Revises: 0009
 Create Date: 2026-10-17

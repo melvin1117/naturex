@@ -266,13 +266,13 @@ def _holding(world_id: UUID, user_id: UUID, asset_id: UUID) -> SQLModel:
     return Holding(world_id=world_id, user_id=user_id, asset_id=asset_id, shares=1)
 
 
-def _order(world_id: UUID, user_id: UUID, asset_id: UUID) -> SQLModel:
+def _order(world_id: UUID, user_id: UUID, asset_id: UUID, qty: int = 1) -> SQLModel:
     return Order(
         world_id=world_id,
         user_id=user_id,
         asset_id=asset_id,
         side=OrderSide.BUY,
-        qty=1,
+        qty=qty,
         fill_price=D("1.0000"),
     )
 
@@ -583,7 +583,7 @@ def _trade(session: Session, world_id: UUID) -> None:
     """Arjun buys 1 000 primary shares of the first site: an order and a holding to clean up."""
     arjun, wetland = persona(session, world_id, "arjun"), site_asset(session, world_id)
     wetland.primary_shares_remaining -= 1_000
-    session.add(_order(world_id, arjun.id, wetland.id))
+    session.add(_order(world_id, arjun.id, wetland.id, qty=1_000))
     session.add(Holding(world_id=world_id, user_id=arjun.id, asset_id=wetland.id, shares=1_000))
     session.flush()
 
@@ -819,7 +819,53 @@ def _trades(db: Session) -> tuple[set[tuple[Any, ...]], set[tuple[Any, ...]]]:
 
 
 @requires_db
-def test_the_holdings_and_orders_migration_round_trips_and_rejects_cross_world_rows() -> None:
+def test_the_holdings_and_orders_migration_round_trips() -> None:
+    cfg = alembic_cfg()
+    command.downgrade(cfg, "base")
+    command.upgrade(cfg, "head")
+    engine = create_engine(get_settings().database_url)
+    try:
+        with Session(engine) as db:
+            seed(db)
+            mine = create_world(db).id
+            _trade(db, mine)
+            db.commit()
+            before = _trades(db)
+        assert _foreign_keys(engine) == _WORLD_SCOPED_FKS
+
+        command.downgrade(cfg, "0009")
+        assert _foreign_keys(engine) == _PLAIN_FKS
+        assert "ix_holdings_world_id_asset_id" not in {
+            i["name"] for i in inspect(engine).get_indexes("holdings")
+        }
+        command.upgrade(cfg, "head")
+        assert _foreign_keys(engine) == _WORLD_SCOPED_FKS
+        assert "ix_holdings_world_id_asset_id" in {
+            i["name"] for i in inspect(engine).get_indexes("holdings")
+        }
+        with Session(engine) as db:
+            assert _trades(db) == before, "orders and holdings survive the round trip"
+            assert_tenancy_invariants(db, mine)
+    finally:
+        engine.dispose()
+        command.downgrade(cfg, "base")
+        command.upgrade(cfg, "head")
+
+
+_CROSS_WORLD_INSERTS = {
+    "holdings": "INSERT INTO holdings (world_id, user_id, asset_id, shares) VALUES (:w, :u, :a, 1)",
+    "orders": "INSERT INTO orders (id, world_id, user_id, asset_id, side, qty, is_primary) "
+    "VALUES (gen_random_uuid(), :w, :u, :a, 'buy', 1, false)",
+}
+
+
+@pytest.mark.parametrize("table", ["holdings", "orders"])
+@pytest.mark.parametrize("foreign", ["users", "assets"])
+@requires_db
+def test_the_holdings_and_orders_migration_rejects_cross_world_rows(
+    table: str, foreign: str
+) -> None:
+    """At 0009 only application code stops a cross-world row, so upgrading must refuse one."""
     cfg = alembic_cfg()
     command.downgrade(cfg, "base")
     command.upgrade(cfg, "head")
@@ -828,40 +874,20 @@ def test_the_holdings_and_orders_migration_round_trips_and_rejects_cross_world_r
         with Session(engine) as db:
             seed(db)
             mine, other = create_world(db).id, create_world(db).id
-            _trade(db, mine)
+            user_world, asset_world = (other, mine) if foreign == "users" else (mine, other)
+            row = {
+                "w": mine,
+                "u": persona(db, user_world, "mia").id,
+                "a": site_asset(db, asset_world).id,
+            }
             db.commit()
-            before = _trades(db)
-            stranger = persona(db, other, "mia").id
-            wetland = site_asset(db, mine).id
-        assert _foreign_keys(engine) == _WORLD_SCOPED_FKS
 
         command.downgrade(cfg, "0009")
-        assert _foreign_keys(engine) == _PLAIN_FKS
-        assert "ix_holdings_world_id_asset_id" not in {
-            i["name"] for i in inspect(engine).get_indexes("holdings")
-        }
-        # At 0009 only application code stops a cross-world row, so the upgrade must refuse it.
         with engine.begin() as conn:
-            conn.execute(
-                text(
-                    "INSERT INTO holdings (world_id, user_id, asset_id, shares) "
-                    "VALUES (:w, :u, :a, 1)"
-                ),
-                {"w": mine, "u": stranger, "a": wetland},
-            )
-        with pytest.raises(RuntimeError, match="1 holdings row"):
+            conn.execute(text(_CROSS_WORLD_INSERTS[table]), row)
+        with pytest.raises(RuntimeError, match=rf"1 {table} row\(s\) reference {foreign} "):
             command.upgrade(cfg, "head")
-        with engine.begin() as conn:
-            conn.execute(text("DELETE FROM holdings WHERE user_id = :u"), {"u": stranger})
-
-        command.upgrade(cfg, "head")
-        assert _foreign_keys(engine) == _WORLD_SCOPED_FKS
-        assert "ix_holdings_world_id_asset_id" in {
-            i["name"] for i in inspect(engine).get_indexes("holdings")
-        }
-        with Session(engine) as db:
-            assert _trades(db) == before, "orders and holdings survive the round trip"
-            assert_tenancy_invariants(db, mine, traded=True)
+        assert _foreign_keys(engine) == _PLAIN_FKS, "the failed upgrade changed nothing"
     finally:
         engine.dispose()
         command.downgrade(cfg, "base")
