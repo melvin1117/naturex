@@ -137,12 +137,12 @@ describe("AssetView", () => {
       within(sources).getByText("Imagery © Esri, Maxar, Earthstar Geographics"),
     ).toBeInTheDocument();
 
-    // Out of scope for now: trading, Copilot and the trace are disabled, not faked.
-    expect(screen.getByRole("button", { name: "Buy units" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Open Copilot" })).toBeDisabled();
+    // The real trade panel (T18): anonymous visitors are asked to sign in and come back here.
     expect(
-      screen.getByText(/Trading from this page is coming soon/),
-    ).toBeInTheDocument();
+      await screen.findByRole("link", { name: "Sign in to trade" }),
+    ).toHaveAttribute("href", "/login?next=%2Fasset%2Fx");
+    // Still out of scope: Copilot and the trace are disabled, not faked.
+    expect(screen.getByRole("button", { name: "Open Copilot" })).toBeDisabled();
   });
 
   it("says a value is not available instead of showing zero", async () => {

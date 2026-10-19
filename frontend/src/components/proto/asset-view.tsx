@@ -1,9 +1,9 @@
 "use client";
 
-import { ArrowLeft, Bot, Lock, MapPin, MessageCircle } from "lucide-react";
+import { ArrowLeft, Bot, MapPin, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 
 import { Delta, SiteBackdrop, ValueRange } from "@/components/proto/bits";
 import { PriceChart } from "@/components/proto/charts";
@@ -24,6 +24,7 @@ import { IMAGERY_ATTRIBUTION } from "@/components/proto/site-map";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TradePanel } from "@/components/trade-panel";
 import { WorldGate } from "@/components/world-provider";
 import type { ApiError } from "@/lib/api/errors";
 import type { AssetDetail, SiteImages } from "@/lib/api/types";
@@ -40,7 +41,6 @@ import type { LatLng } from "@/lib/prototype/data";
 import {
   GRADE_LABEL,
   ha,
-  int,
   price as fmtPrice,
   quarterLabel,
 } from "@/lib/prototype/format";
@@ -333,7 +333,9 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
           </Tabs>
 
           <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
-            <TradeComingSoon asset={asset} price={current} />
+            <Suspense fallback={null}>
+              <TradePanel assetId={asset.id} />
+            </Suspense>
             <section className="rounded-3xl bg-card p-6 shadow-soft">
               <h2 className="text-base font-semibold">Ask about this site</h2>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -460,58 +462,6 @@ function PricePanel({
         </p>
       )}
     </Panel>
-  );
-}
-
-function TradeComingSoon({
-  asset,
-  price,
-}: {
-  asset: AssetDetail;
-  price: number | null;
-}) {
-  return (
-    <section
-      className="rounded-3xl bg-card p-6 shadow-soft"
-      aria-labelledby="trade-title"
-    >
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 id="trade-title" className="text-base font-semibold">
-          Back this site
-        </h2>
-        <span className="text-xs text-muted-foreground">Play money only</span>
-      </div>
-      <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
-        <div>
-          <dt className="text-xs text-muted-foreground">Stake price</dt>
-          <dd className="tabular text-xl font-light">
-            {price === null ? "—" : fmtPrice(price)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">Opening units left</dt>
-          <dd className="tabular text-xl font-light">
-            {int(asset.primary_shares_remaining)}
-          </dd>
-          <dd className="text-xs text-muted-foreground">
-            of {int(asset.total_shares)}
-          </dd>
-        </div>
-      </dl>
-      <div className="mt-4 flex gap-3 rounded-2xl bg-secondary p-4 text-sm">
-        <Lock
-          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <p>
-          Trading from this page is coming soon. The guided tour shows a trade
-          on the scripted demo world.
-        </p>
-      </div>
-      <Button className="mt-4 w-full" disabled>
-        Buy units
-      </Button>
-    </section>
   );
 }
 

@@ -109,7 +109,7 @@ describe("PortfolioView", () => {
     ]);
     expect(within(row).getByRole("link")).toHaveAttribute(
       "href",
-      `/dev/trade?asset=${ASSET_ID}`,
+      `/asset/${ASSET_ID}`,
     );
     await waitFor(() =>
       expect(within(row).getByText("BBB")).toBeInTheDocument(),
@@ -161,7 +161,7 @@ describe("PortfolioView", () => {
     const card = within(list).getByRole("listitem");
     expect(within(card).getByRole("link")).toHaveAttribute(
       "href",
-      `/dev/trade?asset=${ASSET_ID}`,
+      `/asset/${ASSET_ID}`,
     );
     expect(card).toHaveTextContent("10 units · $20.00");
     expect(within(card).getByText("Value").nextSibling).toHaveTextContent(

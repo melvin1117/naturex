@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
 import type { QuoteOut } from "@/lib/api/types";
-import { devRoutesEnabled } from "@/lib/dev-routes";
 import {
   assetHref,
   decimal,
@@ -150,19 +149,7 @@ describe("formatting", () => {
 });
 
 describe("assetHref", () => {
-  it("points at the dev trade page until T22's asset page lands", () => {
-    expect(assetHref("a b")).toBe("/dev/trade?asset=a%20b");
-  });
-});
-
-describe("devRoutesEnabled", () => {
-  it.each([
-    [{ NODE_ENV: "development" }, true],
-    [{ NODE_ENV: "test" }, true],
-    [{ NODE_ENV: "production" }, false],
-    [{ NODE_ENV: "production", NATUREX_DEV_ROUTES: "false" }, false],
-    [{ NODE_ENV: "production", NATUREX_DEV_ROUTES: "true" }, true],
-  ])("%o → %s", (env, enabled) => {
-    expect(devRoutesEnabled(env)).toBe(enabled);
+  it("points at the real asset page", () => {
+    expect(assetHref("a b")).toBe("/asset/a%20b");
   });
 });

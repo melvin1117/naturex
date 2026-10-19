@@ -51,12 +51,9 @@ export function signedMoneyText(value: string | null | undefined): string {
   return `${n > 0 ? "+" : "−"}${money(Math.abs(n))}`;
 }
 
-/**
- * Where an asset's page is. Until T22's asset page (`/asset/<id>`) is merged, real assets are
- * traded on `/dev/trade`; switching this one line is part of the T22 integration.
- */
+/** Where a real asset's page is (T23): its report, charts, ledger and the trade panel. */
 export function assetHref(assetId: string): string {
-  return `/dev/trade?asset=${encodeURIComponent(assetId)}`;
+  return `/asset/${encodeURIComponent(assetId)}`;
 }
 
 /** Keep what can be part of a whole number of units: digits only. */

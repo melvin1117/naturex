@@ -6,7 +6,6 @@ import AssetPage from "@/app/(exchange)/asset/[id]/page";
 import MarketplacePage from "@/app/(exchange)/page";
 import PortfolioPage from "@/app/(exchange)/portfolio/page";
 import AdminPage from "@/app/admin/page";
-import DevTradePage from "@/app/dev/trade/page";
 import DevUiPage from "@/app/dev/ui/page";
 import JudgePage from "@/app/judge/page";
 import LoginPage from "@/app/login/page";
@@ -95,7 +94,6 @@ describe("routes", () => {
     ["/admin", AdminPage, "Time Machine"],
     ["/judge", JudgePage, "The bees never sent an invoice."],
     ["/dev/ui", DevUiPage, "UI kit"],
-    ["/dev/trade", DevTradePage, "Trade panel"],
     ["404", NotFound, "Page not found"],
   ])("%s renders its heading", (_path, Page, heading) => {
     render(<Page />, { wrapper: Providers });
