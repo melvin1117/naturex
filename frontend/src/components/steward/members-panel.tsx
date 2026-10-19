@@ -8,6 +8,16 @@ import { Panel } from "@/components/proto/report-panels";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
@@ -74,16 +84,11 @@ export function MembersPanel({
                   {COMMUNITY_ROLE_LABEL[member.role]}
                 </Badge>
                 {manage && member.role === "steward" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    aria-label={`Remove ${member.name}`}
-                    disabled={remove.isPending}
-                    onClick={() => void remove.mutate(member.user_id)}
-                  >
-                    <UserMinus aria-hidden="true" />
-                  </Button>
+                  <ConfirmRemove
+                    name={member.name}
+                    pending={remove.isPending}
+                    onConfirm={() => remove.mutate(member.user_id)}
+                  />
                 )}
               </span>
             </li>
@@ -98,6 +103,57 @@ export function MembersPanel({
       {manage && <AddSteward communityId={communityId} />}
       {footer}
     </Panel>
+  );
+}
+
+function ConfirmRemove({
+  name,
+  pending,
+  onConfirm,
+}: {
+  name: string;
+  pending: boolean;
+  onConfirm: () => Promise<unknown>;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          aria-label={`Remove ${name}`}
+          disabled={pending}
+        >
+          <UserMinus aria-hidden="true" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Remove {name}?</DialogTitle>
+          <DialogDescription>
+            They&apos;ll no longer manage this community&apos;s sites. You can
+            add them again with their account ID.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline">Cancel</Button>
+          </DialogClose>
+          <Button
+            variant="destructive"
+            disabled={pending}
+            onClick={() => {
+              setOpen(false);
+              void onConfirm();
+            }}
+          >
+            Remove steward
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -158,7 +214,11 @@ function AddSteward({ communityId }: { communityId: string }) {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : (
-        <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+        <p
+          id={`${id}-hint`}
+          aria-live="polite"
+          className="text-xs text-muted-foreground"
+        >
           {added ??
             "Stewards can list land and manage listings. Members can't trade their community's units."}
         </p>

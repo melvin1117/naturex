@@ -433,8 +433,8 @@ function Payouts({ summary }: { summary: CommunitySummary }) {
           units&apos; holders, the treasury included.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto" tabIndex={0}>
+          <table className="w-full min-w-[34rem] text-sm">
             <caption className="sr-only">
               The latest quarterly payouts, play money
             </caption>
@@ -443,16 +443,16 @@ function Payouts({ summary }: { summary: CommunitySummary }) {
                 <th scope="col" className="pb-2 font-normal">
                   Quarter
                 </th>
-                <th scope="col" className="pb-2 font-normal">
+                <th scope="col" className="pb-2 pl-4 font-normal">
                   Site
                 </th>
-                <th scope="col" className="pb-2 text-right font-normal">
+                <th scope="col" className="pb-2 pl-4 text-right font-normal">
                   Revenue
                 </th>
-                <th scope="col" className="pb-2 text-right font-normal">
+                <th scope="col" className="pb-2 pl-4 text-right font-normal">
                   To the fund
                 </th>
-                <th scope="col" className="pb-2 text-right font-normal">
+                <th scope="col" className="pb-2 pl-4 text-right font-normal">
                   Retained-stake dividend
                 </th>
               </tr>
@@ -468,12 +468,14 @@ function Payouts({ summary }: { summary: CommunitySummary }) {
                       {date(p.paid_at)}
                     </span>
                   </td>
-                  <td className="py-2">{p.asset_name}</td>
-                  <td className="py-2 text-right">{moneyText(p.revenue)}</td>
-                  <td className="py-2 text-right">
+                  <td className="py-2 pl-4">{p.asset_name}</td>
+                  <td className="py-2 pl-4 text-right">
+                    {moneyText(p.revenue)}
+                  </td>
+                  <td className="py-2 pl-4 text-right">
                     {moneyText(p.community_fund)}
                   </td>
-                  <td className="py-2 text-right">
+                  <td className="py-2 pl-4 text-right">
                     {moneyText(p.retained_dividend)}
                   </td>
                 </tr>
@@ -534,7 +536,11 @@ function Supporters({ listings }: { listings: ListingSummary[] }) {
                           Supporter {holder.rank}
                         </span>
                         <span className="tabular text-muted-foreground">
-                          {units(holder.shares)} units · {holder.pct_of_shares}%
+                          {units(holder.shares)} units ·{" "}
+                          {holder.pct_of_shares === "0.00"
+                            ? "<0.01"
+                            : holder.pct_of_shares}
+                          %
                         </span>
                       </li>
                     ))}

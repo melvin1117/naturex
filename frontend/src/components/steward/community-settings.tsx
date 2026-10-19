@@ -135,7 +135,10 @@ function YourAccountId({ id }: { id: string }) {
         To be added to another community, give its owner this ID.
       </p>
       <div className="mt-3 flex items-center gap-2">
-        <code className="min-w-0 flex-1 truncate rounded-lg bg-secondary px-2 py-1.5 font-mono text-xs">
+        <code
+          translate="no"
+          className="min-w-0 flex-1 truncate rounded-lg bg-secondary px-2 py-1.5 font-mono text-xs"
+        >
           {id}
         </code>
         <Button

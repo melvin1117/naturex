@@ -110,7 +110,7 @@ function CommunityFields({
         />
         {hint(
           "name",
-          `Up to ${NAME_MAX} characters. Investors see it on your listings.`,
+          `Up to ${NAME_MAX} characters. Supporters see it on your sites.`,
         )}
       </div>
       <div className="space-y-2">

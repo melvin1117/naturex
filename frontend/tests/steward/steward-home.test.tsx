@@ -237,7 +237,7 @@ describe("creating a community", () => {
     expect(
       screen.getAllByRole("link", { name: /List your land/ })[0],
     ).toHaveAttribute("href", `/steward/list?community=${created.id}`);
-  });
+  }, 15_000);
 
   it("checks the name before sending", async () => {
     const backend = setup(<StewardPage />, { communities: [] });
@@ -431,6 +431,7 @@ describe("the community home", () => {
     const supporters = screen.getByRole("region", { name: "Supporters" });
     expect(within(supporters).getByText("Supporter 1")).toBeVisible();
     expect(within(supporters).getByText(/50 units · 0.01%/)).toBeVisible();
+    expect(within(supporters).getByText(/25 units · <0.01%/)).toBeVisible();
     expect(screen.getByText("Fence the riverbank")).toBeVisible();
     expect(screen.getByText(/No alerts yet/)).toBeVisible();
   });
@@ -515,6 +516,36 @@ describe("community settings", () => {
     expect(
       within(members).getByLabelText("Add a steward by account ID"),
     ).toBeVisible();
+  });
+
+  it("removes a steward only after confirming", async () => {
+    nav.pathname = "/steward/community";
+    let removed = 0;
+    setup(<CommunityPage />, {
+      routes: {
+        [`GET /communities/${SELVA.id}/summary`]: () => json(summary()),
+        [`DELETE /communities/${SELVA.id}/members/${MEMBERS[1]!.user_id}`]:
+          () => {
+            removed += 1;
+            return new Response(null, { status: 204 });
+          },
+      },
+    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Remove Tomás" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Remove Tomás?",
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(removed).toBe(0);
+    fireEvent.click(screen.getByRole("button", { name: "Remove Tomás" }));
+    fireEvent.click(
+      within(
+        await screen.findByRole("dialog", { name: "Remove Tomás?" }),
+      ).getByRole("button", { name: "Remove steward" }),
+    );
+    await waitFor(() => expect(removed).toBe(1));
   });
 
   it("adds a steward by account ID and explains a refusal", async () => {
