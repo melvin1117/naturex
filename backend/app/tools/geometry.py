@@ -7,6 +7,8 @@ equal-area projection centred on the polygon, so hectares stay accurate at any l
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -15,7 +17,7 @@ from uuid import UUID
 from pyproj import CRS, Transformer
 from shapely import make_valid
 from shapely.errors import GEOSException
-from shapely.geometry import MultiPolygon, Polygon, shape
+from shapely.geometry import MultiPolygon, Point, Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import transform
 from shapely.validation import explain_validity
@@ -107,40 +109,20 @@ def _area_ha(geom: BaseGeometry, centre: tuple[float, float]) -> float:
     return float(transform(to_laea.transform, geom).area) / M2_PER_HA
 
 
-def validate_polygon(
-    geojson: Mapping[str, Any],
-    existing: Sequence[tuple[UUID, Mapping[str, Any]]] = (),
-) -> PolygonCheck:
-    """Check a drawn listing area; report every problem at once so the UI can show them all.
-
-    `existing` holds (asset_id, geojson) for listings it must not overlap. Unreadable
-    existing geometries are skipped: one bad stored row shouldn't block every new listing.
-    """
+def _measure(geojson: Mapping[str, Any]) -> tuple[PolygonCheck, Area | None]:
     geometry = geojson.get("geometry") if geojson.get("type") == "Feature" else geojson
     coordinates = geometry.get("coordinates") if isinstance(geometry, Mapping) else None
     if _vertex_count(coordinates, MAX_VERTICES) > MAX_VERTICES:
-        return PolygonCheck(
-            problems=[
-                Problem(
-                    "too_complex",
-                    f"The boundary has more than {MAX_VERTICES:,} points. Simplify it.",
-                )
-            ]
-        )
+        too_many = f"The boundary has more than {MAX_VERTICES:,} points. Simplify it."
+        return PolygonCheck(problems=[Problem("too_complex", too_many)]), None
     try:
         geom = _parse(geojson)
     except _InvalidGeoJSON as exc:
-        return PolygonCheck(problems=[Problem("invalid_geojson", str(exc))])
+        return PolygonCheck(problems=[Problem("invalid_geojson", str(exc))]), None
     if not geom.is_valid:
         reason = explain_validity(geom)
-        return PolygonCheck(
-            problems=[
-                Problem(
-                    "self_intersection",
-                    f"The boundary crosses itself or is malformed ({reason}). Redraw it.",
-                )
-            ]
-        )
+        crossing = f"The boundary crosses itself or is malformed ({reason}). Redraw it."
+        return PolygonCheck(problems=[Problem("self_intersection", crossing)]), None
 
     centroid = geom.centroid
     centre = (float(centroid.x), float(centroid.y))
@@ -154,7 +136,30 @@ def validate_polygon(
         problems.append(
             Problem("too_large", f"The area is {area:,.0f} ha; the maximum is {MAX_AREA_HA:,} ha.")
         )
+    check = PolygonCheck(
+        problems=problems, area_ha=area, centroid_lat=centre[1], centroid_lon=centre[0]
+    )
+    return check, geom
 
+
+def check_shape(geojson: Mapping[str, Any]) -> PolygonCheck:
+    """Every check but overlap: readable GeoJSON, at most `MAX_VERTICES` points, no
+    self-intersection, 10–50,000 ha (equal-area). Cheap enough to run before taking locks."""
+    return _measure(geojson)[0]
+
+
+def overlapping(
+    geojson: Mapping[str, Any], existing: Sequence[tuple[UUID, Mapping[str, Any]]]
+) -> list[UUID]:
+    """The IDs in `existing` whose area overlaps this one by more than the tolerance.
+
+    Unreadable existing geometries are skipped: one bad stored row shouldn't block every new
+    listing. Returns [] for an area that can't be measured (check_shape reports it).
+    """
+    check, geom = _measure(geojson)
+    if geom is None or check.centroid_lat is None or check.centroid_lon is None:
+        return []
+    centre = (check.centroid_lon, check.centroid_lat)
     overlaps: list[UUID] = []
     for asset_id, other_geojson in existing:
         try:
@@ -167,13 +172,70 @@ def validate_polygon(
             _area_ha(geom.intersection(other), centre) > OVERLAP_TOLERANCE_HA
         ):
             overlaps.append(asset_id)
-    if overlaps:
-        problems.append(Problem("overlap", "This area overlaps another listing. Redraw around it."))
+    return overlaps
 
+
+OVERLAP_PROBLEM = Problem("overlap", "This area overlaps another listing. Redraw around it.")
+
+
+def validate_polygon(
+    geojson: Mapping[str, Any],
+    existing: Sequence[tuple[UUID, Mapping[str, Any]]] = (),
+) -> PolygonCheck:
+    """Check a drawn listing area; report every problem at once so the UI can show them all.
+
+    `existing` holds (asset_id, geojson) for listings it must not overlap.
+    """
+    check, geom = _measure(geojson)
+    if geom is None:
+        return check
+    overlaps = overlapping(geojson, existing)
     return PolygonCheck(
-        problems=problems,
-        area_ha=area,
-        centroid_lat=centre[1],
-        centroid_lon=centre[0],
+        problems=[*check.problems, OVERLAP_PROBLEM] if overlaps else check.problems,
+        area_ha=check.area_ha,
+        centroid_lat=check.centroid_lat,
+        centroid_lon=check.centroid_lon,
         overlaps=overlaps,
     )
+
+
+BBox = tuple[float, float, float, float]
+"""(west, south, east, north) in degrees."""
+
+
+def geometry_bbox(geojson: Mapping[str, Any]) -> BBox | None:
+    """The area's bounding box, or None if it can't be read."""
+    try:
+        west, south, east, north = _parse(geojson).bounds
+    except _InvalidGeoJSON:
+        return None
+    return float(west), float(south), float(east), float(north)
+
+
+def geometry_sha256(geojson: Mapping[str, Any]) -> str:
+    """A commitment to the bare geometry (canonical JSON), for ledger entries of drafts."""
+    canonical = json.dumps(bare_geometry(geojson), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+METRICS_AREA_TOLERANCE = 0.10
+
+
+def metrics_match_polygon(
+    geojson: Mapping[str, Any],
+    *,
+    area_ha: float,
+    metrics_area_ha: float,
+    metrics_lat: float,
+    metrics_lon: float,
+) -> bool:
+    """Whether Earth observation metrics plausibly describe this polygon: their centroid lies in
+    its convex hull (a concave polygon's centroid can fall outside the polygon itself, never
+    outside its hull) and their area is within ±10 % of the listing's."""
+    try:
+        hull = _parse(geojson).convex_hull
+    except _InvalidGeoJSON:
+        return False
+    if area_ha <= 0 or abs(metrics_area_ha - area_ha) > METRICS_AREA_TOLERANCE * area_ha:
+        return False
+    return bool(hull.covers(Point(metrics_lon, metrics_lat)))

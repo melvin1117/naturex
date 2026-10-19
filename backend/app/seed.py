@@ -36,6 +36,7 @@ from app.services.rating import (
     rate_site,
 )
 from app.tools.earth_obs import DATA_DIR, EarthObsMetrics, load_site_metrics
+from app.tools.geometry import geometry_bbox
 from app.tools.scoring import is_wetland_from_landcover
 
 # Re-exported: many callers import the fixed worlds from here.
@@ -153,6 +154,13 @@ DEMO_GEOJSON: dict[str, dict[str, Any]] = {
 }
 
 
+def _bbox_values(geojson: dict[str, Any]) -> dict[str, float | None]:
+    """The listing overlap prefilter's bounding box columns (T58)."""
+    box = geometry_bbox(geojson)
+    west, south, east, north = box if box else (None, None, None, None)
+    return {"bbox_west": west, "bbox_south": south, "bbox_east": east, "bbox_north": north}
+
+
 def _upgrade_demo_site_content(session: Session) -> None:
     """Refresh demo-site content in every world, visitor copies included.
 
@@ -171,6 +179,7 @@ def _upgrade_demo_site_content(session: Session) -> None:
                 area_ha=site.area_ha,
                 centroid_lat=site.centroid_lat,
                 centroid_lon=site.centroid_lon,
+                **_bbox_values(DEMO_GEOJSON[site.key]),
             )
         )
     session.commit()

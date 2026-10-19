@@ -96,6 +96,7 @@ class AssetStatus(StrEnum):
     INELIGIBLE = "ineligible"
     LISTED = "listed"
     SUSPENDED = "suspended"
+    WITHDRAWN = "withdrawn"
 
 
 class EventSource(StrEnum):
@@ -326,6 +327,13 @@ class Asset(SQLModel, table=True):
     status_reason: str | None = Field(default=None, max_length=200)
     # When the community attested it may list this land (T58); NULL for curated sites.
     attested_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    # The last submit for rating, for the resubmit cooldown (T58).
+    submitted_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    # The polygon's bounding box, so the overlap check only parses nearby listings (T58).
+    bbox_west: float | None = None
+    bbox_south: float | None = None
+    bbox_east: float | None = None
+    bbox_north: float | None = None
     site_key: str | None = Field(default=None, index=True)
     created_at: datetime = _created_at()
 
@@ -378,6 +386,9 @@ class WorldEvent(SQLModel, table=True):
     world_id: UUID = Field(foreign_key="worlds.id")
     type: StreamEventType = Field(sa_column=_enum_column(StreamEventType))
     payload: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
+    # NULL: public to the world. Otherwise only this community's members and same-world admins
+    # receive the event (listings under review, T58); the nil UUID means admins only.
+    audience_community_id: UUID | None = None
     created_at: datetime = _created_at()
 
 
