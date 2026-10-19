@@ -70,6 +70,17 @@ const prices = useApiQuery(queryKeys.prices(id), (api, signal) =>
 
 Use the keys in `queryKeys` (`data-layer.tsx`) so mutations and live events refresh your data.
 
+## Signing in (T61)
+
+```tsx
+const signIn = useSignIn(); // also useRegister(), useSignOut()
+await signIn.mutateAsync({ email, password }); // then world.me is the account
+```
+
+Each calls the auth route, then re-reads `GET /world` (`session.reload()`) and resets the cache (`QueryCache.reset()`), so `useWorld().world.me` and every query follow the new account and nothing from the previous one stays on screen. The session is the HttpOnly `nx_session` cookie only; never store a token or `me` in browser storage.
+
+`lib/auth.ts` has the pure helpers: `safeReturnPath(next)` (same-origin relative paths only; use it for every `?next=`), `loginHref(path)`, `validateAuthInput` and `authFailure` (form messages for 401, 409, 422, 429, 403, 503 and network errors). Wrap a page that needs an account in `<RequireAccount>` (`<RequireAccount admin>` for platform admins); the backend still authorizes every request.
+
 ## Errors
 
 Every failure is an `ApiError` (`api/errors.ts`): `status` (0 = offline), `code` (e.g. `auth_required`, `owner_only`), `message` (safe to show; friendly text for 401, 403, 404, 409, 422 and 503), `detail` (raw, e.g. 422 field errors) and `retryAfterSeconds`.
@@ -98,6 +109,7 @@ It forwards only the session cookie, never calls `GET /world` (the browser owns 
 | `api/server.ts`                       | Server-only client with cookie forwarding.                                                                                                             |
 | `api/errors.ts`, `api/types.ts`       | `ApiError`, `unwrap()`, schema type aliases.                                                                                                           |
 | `session.ts`                          | World bootstrap (single-flight), the forwarded cookie, "expired" codes. Session changes (T55 demo sessions) belong here.                               |
-| `query.ts`                            | The small query cache behind the hooks.                                                                                                                |
+| `query.ts`                            | The small query cache behind the hooks; `reset()` when the account changes.                                                                            |
 | `events.ts`                           | SSE with polling fallback.                                                                                                                             |
 | `data-layer.tsx`, `hooks.ts`          | React context, cache wiring for live events, and the hooks.                                                                                            |
+| `auth.ts`                             | Sign-in helpers: safe return paths, the protected-route rule, form validation and error messages (T61).                                                |
