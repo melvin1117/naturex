@@ -520,7 +520,8 @@ export interface paths {
         put?: never;
         /**
          * Tamper Demo
-         * @description DEMO_MODE only: edit a copy of one entry and show verification failing. Writes nothing.
+         * @description DEMO_MODE and demo sandboxes only: edit a copy of one entry and show verification
+         *     failing. Writes nothing.
          */
         post: operations["tamper_demo_admin_tamper_demo_post"];
         delete?: never;
@@ -2667,6 +2668,13 @@ export interface operations {
                     "application/json": components["schemas"]["SimulateQuarterResponse"];
                 };
             };
+            /** @description `admin_only`: only an admin can do this in the live world */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     simulate_event_admin_simulate_event_post: {
@@ -2690,6 +2698,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SimulateEventResponse"];
                 };
+            };
+            /** @description `admin_only`: only an admin can do this in the live world */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2816,6 +2831,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TamperDemoOut"];
                 };
+            };
+            /** @description `sandbox_only`: never in the live world */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3015,6 +3037,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RatingRunAccepted"];
                 };
+            };
+            /** @description `admin_only`: only an admin can rate in the live world */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Asset not found in this world */
             404: {

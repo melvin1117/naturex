@@ -1127,6 +1127,9 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "`admin_only`: only an admin can do this in the live world"
           }
         }
       }
@@ -1159,6 +1162,9 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "`admin_only`: only an admin can do this in the live world"
           },
           "422": {
             "description": "Validation Error",
@@ -1319,7 +1325,7 @@
           "ledger"
         ],
         "summary": "Tamper Demo",
-        "description": "DEMO_MODE only: edit a copy of one entry and show verification failing. Writes nothing.",
+        "description": "DEMO_MODE and demo sandboxes only: edit a copy of one entry and show verification\nfailing. Writes nothing.",
         "operationId": "tamper_demo_admin_tamper_demo_post",
         "requestBody": {
           "content": {
@@ -1341,6 +1347,9 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "`sandbox_only`: never in the live world"
           },
           "422": {
             "description": "Validation Error",
@@ -1575,6 +1584,9 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "`admin_only`: only an admin can rate in the live world"
           },
           "404": {
             "description": "Asset not found in this world"
