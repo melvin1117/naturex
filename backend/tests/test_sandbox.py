@@ -367,6 +367,7 @@ def test_a_demo_session_reads_its_own_sandbox(session: Session, client: TestClie
 @pytest.mark.parametrize("cookie", ["not-a-uuid", str(uuid4()), str(WORLD_ID), "sandbox"])
 @requires_db
 def test_an_nx_world_cookie_is_ignored(session: Session, client: TestClient, cookie: str) -> None:
+    ensure_live_world(session)
     sandbox = create_world(session)
     client.cookies.set("nx_world", str(sandbox.id) if cookie == "sandbox" else cookie)
 

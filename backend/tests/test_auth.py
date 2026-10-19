@@ -87,9 +87,14 @@ def login(client: TestClient, email: str = EMAIL, password: str = PASSWORD) -> A
     return client.post("/auth/login", json={"email": email, "password": password})
 
 
-def session_rows(session: Session) -> list[UserSession]:
+def session_rows(session: Session, *user_ids: UUID) -> list[UserSession]:
+    """Session rows, only for `user_ids` when given, so rows other tests committed to the shared
+    test database never matter."""
     session.expire_all()
-    return list(session.exec(select(UserSession)).all())
+    stmt = select(UserSession)
+    if user_ids:
+        stmt = stmt.where(col(UserSession.user_id).in_(user_ids))
+    return list(session.exec(stmt).all())
 
 
 def row_for(session: Session, token: str) -> UserSession:
@@ -271,7 +276,7 @@ def test_each_login_issues_a_new_token_and_revokes_the_one_presented(
 def test_expired_sessions_get_401_and_are_deleted(
     session: Session, client: TestClient, limit: str
 ) -> None:
-    register(client)
+    user_id = UUID(register(client).json()["id"])
     row = row_for(session, client.cookies["nx_session"])
     now = datetime.now(UTC)
     if limit == "idle":
@@ -284,7 +289,7 @@ def test_expired_sessions_get_401_and_are_deleted(
     res = client.get("/me")
 
     assert (res.status_code, res.json()["detail"]) == (401, "auth_required")
-    assert session_rows(session) == []
+    assert session_rows(session, user_id) == []
 
 
 @requires_db
@@ -329,7 +334,7 @@ def test_last_seen_is_bumped_at_most_every_few_minutes(
 
 @requires_db
 def test_logout_deletes_the_row_and_clears_the_cookie(session: Session, client: TestClient) -> None:
-    register(client)
+    user_id = UUID(register(client).json()["id"])
     token = client.cookies["nx_session"]
 
     res = client.post("/auth/logout")
@@ -338,7 +343,7 @@ def test_logout_deletes_the_row_and_clears_the_cookie(session: Session, client: 
     cookie = res.headers["set-cookie"].lower()
     assert cookie.startswith("nx_session=") and "max-age=0" in cookie and "path=/" in cookie
     assert "nx_session" not in client.cookies
-    assert session_rows(session) == []
+    assert session_rows(session, user_id) == []
     assert TestClient(app, cookies={"nx_session": token}).get("/me").status_code == 401
     assert TestClient(app).post("/auth/logout").status_code == 204, "idempotent"
 
@@ -552,6 +557,7 @@ def test_prune_deletes_expired_sessions_and_stale_worlds_with_sessions(session: 
         select(User).where(User.world_id == world_id, User.kind == UserKind.PERSONA)
     ).first()
     assert persona is not None
+    persona_id = persona.id
     now = datetime.now(UTC)
     session.add(
         UserSession(
@@ -583,7 +589,7 @@ def test_prune_deletes_expired_sessions_and_stale_worlds_with_sessions(session: 
     prune_stale_worlds(session, older_than=timedelta(days=7))
 
     assert session.get(World, world_id) is None
-    assert session_rows(session) == []
+    assert session_rows(session, persona_id, live_person_id) == []
     assert session.get(User, live_person_id) is not None
 
 

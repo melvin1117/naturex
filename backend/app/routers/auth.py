@@ -39,6 +39,7 @@ from app.deps import (
     SessionDep,
     SettingsDep,
     prune_auth_data_now_and_then,
+    prune_stale_worlds_now_and_then,
 )
 from app.models import AuthAttemptKind, AuthBucket, User
 from app.sandbox import ensure_live_world
@@ -93,6 +94,7 @@ def _throttle(
     exists, so the response never says which emails are registered.
     """
     prune_auth_data_now_and_then(session)
+    prune_stale_worlds_now_and_then(session)
     secret = rate_limit_secret(settings)
     ip = client_ip(
         request.headers.getlist("x-forwarded-for"),

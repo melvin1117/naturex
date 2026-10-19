@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Query
 
 from app import mocks
-from app.deps import CurrentWorld, SessionDep, current_principal
+from app.deps import (
+    ADMIN_ONLY,
+    CurrentPrincipal,
+    CurrentWorld,
+    SessionDep,
+    require_sandbox_or_admin,
+)
 from app.routers.assets import world_asset
 from app.schemas import (
     EventOut,
@@ -22,12 +28,16 @@ from app.schemas import (
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
+ADMIN_ONLY_RESPONSE: dict[int | str, dict[str, Any]] = {
+    403: {"description": f"`{ADMIN_ONLY}`: only an admin can do this in the live world"}
+}
+
+
 @router.post(
-    "/simulate/quarter",
-    response_model=SimulateQuarterResponse,
-    dependencies=[Depends(current_principal)],
+    "/simulate/quarter", response_model=SimulateQuarterResponse, responses=ADMIN_ONLY_RESPONSE
 )
-def simulate_quarter() -> SimulateQuarterResponse:
+def simulate_quarter(world: CurrentWorld, principal: CurrentPrincipal) -> SimulateQuarterResponse:
+    require_sandbox_or_admin(world, principal)
     return SimulateQuarterResponse(
         data_version="sim-1",
         assets_rerated=3,
@@ -35,11 +45,15 @@ def simulate_quarter() -> SimulateQuarterResponse:
     )
 
 
-@router.post("/simulate/event", response_model=SimulateEventResponse)
+@router.post("/simulate/event", response_model=SimulateEventResponse, responses=ADMIN_ONLY_RESPONSE)
 def simulate_event(
-    body: SimulateEventRequest, world: CurrentWorld, session: SessionDep
+    body: SimulateEventRequest,
+    world: CurrentWorld,
+    principal: CurrentPrincipal,
+    session: SessionDep,
 ) -> SimulateEventResponse:
     """Stub event for an asset in the caller's world (T38 persists it and re-rates)."""
+    require_sandbox_or_admin(world, principal)
     world_asset(session, world.id, body.asset_id)
     event = EventOut(
         id=uuid4(),

@@ -26,7 +26,7 @@ from app.models import World, WorldEvent
 from app.sandbox import create_world, ensure_live_world, prune_stale_worlds
 from app.seed import seed
 from tests.conftest import alembic_cfg, requires_db
-from tests.worlds import start_demo
+from tests.worlds import drop_worlds, start_demo
 
 
 @pytest.fixture
@@ -138,6 +138,7 @@ def test_same_world_publish_ids_follow_commit_order() -> None:
         if trans_a.is_active:
             trans_a.rollback()
         tx_a.close()
+        drop_worlds(engine, [world_id])
 
 
 @requires_db
@@ -240,16 +241,22 @@ def test_sse_stream_releases_request_db_connection_between_polls(
     monkeypatch.setattr(events, "STREAM_POLL_INTERVAL_SECONDS", 0.1)
     monkeypatch.setattr(events, "HEARTBEAT_INTERVAL_SECONDS", 10.0)
     client = TestClient(app)
-    assert client.get("/world").status_code == 200
-    assert engine.pool.checkedout() == 0
-
-    with client.stream("GET", "/events/stream") as res:
-        assert res.status_code == 200
-        assert next(res.iter_lines()) == "retry: 3000"
-        deadline = time.monotonic() + 1
-        while time.monotonic() < deadline and engine.pool.checkedout() != 0:
-            time.sleep(0.01)
+    with Session(engine) as setup:
+        seed(setup)
+        world_id = start_demo(client, setup).id
+    try:
+        assert client.get("/world").status_code == 200
         assert engine.pool.checkedout() == 0
+
+        with client.stream("GET", "/events/stream") as res:
+            assert res.status_code == 200
+            assert next(res.iter_lines()) == "retry: 3000"
+            deadline = time.monotonic() + 1
+            while time.monotonic() < deadline and engine.pool.checkedout() != 0:
+                time.sleep(0.01)
+            assert engine.pool.checkedout() == 0
+    finally:
+        drop_worlds(engine, [world_id])
 
 
 async def test_event_stream_response_releases_slot_when_response_fails_before_body(
@@ -308,19 +315,22 @@ def test_sse_stream_never_replays_another_worlds_event_after_last_event_id(
         seed(setup)
         mine_world = start_demo(mine, setup).id
         other_world = start_demo(other, setup).id
-    assert UUID(mine.get("/world").json()["id"]) == mine_world
+    try:
+        assert UUID(mine.get("/world").json()["id"]) == mine_world
 
-    with Session(engine) as session:
-        own_event = events.publish(session, mine_world, "alert", {"message": "mine"})
-        other_event = events.publish(session, other_world, "alert", {"message": "not mine"})
-        session.commit()
+        with Session(engine) as session:
+            own_event = events.publish(session, mine_world, "alert", {"message": "mine"})
+            other_event = events.publish(session, other_world, "alert", {"message": "not mine"})
+            session.commit()
 
-    res = mine.get("/events/stream", headers={"Last-Event-ID": str(other_event.id - 1)})
+        res = mine.get("/events/stream", headers={"Last-Event-ID": str(other_event.id - 1)})
 
-    assert res.status_code == 200
-    assert "not mine" not in res.text
-    assert f"id: {other_event.id}" not in res.text
-    assert f"id: {own_event.id}" not in res.text
+        assert res.status_code == 200
+        assert "not mine" not in res.text
+        assert f"id: {other_event.id}" not in res.text
+        assert f"id: {own_event.id}" not in res.text
+    finally:
+        drop_worlds(engine, [mine_world, other_world])
 
 
 @requires_db

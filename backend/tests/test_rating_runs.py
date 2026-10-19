@@ -46,7 +46,7 @@ from app.main import app
 from app.models import Asset, AssetStatus, LedgerEntry, Report, StreamEventType, User, World
 from app.models import WorldEvent as WorldEventRow
 from app.routers.runs import get_rating_runner
-from app.sandbox import _delete_world_rows, create_world
+from app.sandbox import _delete_world_rows, create_world, ensure_live_world
 from app.schemas import NewsScoutOutput, RatingRunStatus
 from app.seed import seed
 from app.services import rating_runs
@@ -880,6 +880,7 @@ def test_rate_and_runs_are_world_scoped(api: tuple[TestClient, Deferred]) -> Non
         _hero(other)
         assert other.get(f"/runs/{run_id}").status_code == 404
         assert other.post(f"/assets/{hero}/rate").status_code == 404
+    ensure_live_world(API_SESSION[0])
     with TestClient(app) as anonymous:
         assert anonymous.get(f"/runs/{run_id}").status_code == 404, "reads the live world"
         rate = anonymous.post(f"/assets/{hero}/rate")

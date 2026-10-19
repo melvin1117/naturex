@@ -8,24 +8,42 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlmodel import Session, select
+from sqlalchemy import create_engine, delete
+from sqlalchemy.exc import OperationalError
+from sqlmodel import Session, col, select
 
+from app.auth import Principal
 from app.config import get_settings
 from app.db import get_session
-from app.main import app
+from app.deps import world_for
+from app.main import app, prepare_live_world
 from app.middleware import SAFE_METHODS
-from app.models import Asset, AssetStatus, Holding, Order, User, UserKind, UserRole, World
-from app.sandbox import create_world, ensure_live_world, prune_stale_worlds
+from app.models import (
+    Asset,
+    AssetStatus,
+    Holding,
+    Order,
+    SessionKind,
+    User,
+    UserKind,
+    UserRole,
+    UserSession,
+    World,
+)
+from app.routers.runs import get_rating_runner
+from app.sandbox import _delete_world_rows, create_world, ensure_live_world, prune_stale_worlds
 from app.seed import LIVE_WORLD_ID, seed
+from app.seed import WORLD_ID as TEMPLATE_WORLD_ID
 from tests.conftest import alembic_cfg, requires_db
 from tests.worlds import sign_in, start_demo
 
@@ -43,6 +61,7 @@ def session() -> Iterator[Session]:
         outer = conn.begin()
         db = Session(bind=conn, join_transaction_mode="create_savepoint")
         seed(db)
+        ensure_live_world(db)
         yield db
         db.close()
         outer.rollback()
@@ -243,3 +262,186 @@ def test_pruning_stale_sandboxes_never_touches_the_live_world(
 
     assert session.get(World, LIVE_WORLD_ID) is not None
     assert client.get("/me").status_code == 200, "live sessions survive the prune"
+
+
+# --- Live-world writes that need more than an account (T73 review; T57 adds the role matrix) ---
+
+
+class RecordingRunner:
+    """Stands in for the rating runner: records starts, runs nothing, spends nothing."""
+
+    def __init__(self) -> None:
+        self.started: list[tuple[UUID, UUID]] = []
+
+    def start(self, world_id: UUID, asset_id: UUID, **_: object) -> UUID:
+        self.started.append((world_id, asset_id))
+        return uuid4()
+
+
+@pytest.fixture
+def runner() -> Iterator[RecordingRunner]:
+    fake = RecordingRunner()
+    app.dependency_overrides[get_rating_runner] = lambda: fake
+    yield fake
+    app.dependency_overrides.pop(get_rating_runner, None)
+
+
+def live_person(session: Session, *, is_admin: bool) -> User:
+    user = User(
+        world_id=LIVE_WORLD_ID,
+        name="Admin" if is_admin else "Person",
+        role=UserRole.ADMIN if is_admin else UserRole.INVESTOR,
+        kind=UserKind.PERSON,
+        email=f"{uuid4().hex[:8]}@example.org",
+        password_hash="$argon2id$x",
+        is_admin=is_admin,
+    )
+    session.add(user)
+    session.commit()
+    return user
+
+
+@requires_db
+def test_an_account_cannot_rate_simulate_or_tamper_in_the_live_world(
+    session: Session, client: TestClient, runner: RecordingRunner
+) -> None:
+    register(client)
+    asset = str(live_listed_asset(session).id)
+
+    rate = client.post(f"/assets/{asset}/rate")
+    event = client.post("/admin/simulate/event", json={"asset_id": asset, "preset": "fire"})
+    quarter = client.post("/admin/simulate/quarter")
+    tamper = client.post("/admin/tamper-demo", json={"asset_id": asset})
+
+    for res in (rate, event, quarter):
+        assert (res.status_code, res.json()["detail"]) == (403, "admin_only")
+    assert (tamper.status_code, tamper.json()["detail"]) == (403, "sandbox_only")
+    assert runner.started == []
+
+
+@requires_db
+def test_an_admin_can_rate_in_the_live_world_but_never_tamper(
+    session: Session, client: TestClient, runner: RecordingRunner
+) -> None:
+    sign_in(client, session, live_person(session, is_admin=True))
+    asset = live_listed_asset(session).id
+
+    rate = client.post(f"/assets/{asset}/rate")
+    tamper = client.post("/admin/tamper-demo", json={"asset_id": str(asset)})
+
+    assert rate.status_code == 202, rate.text
+    assert runner.started == [(LIVE_WORLD_ID, asset)]
+    assert (tamper.status_code, tamper.json()["detail"]) == (403, "sandbox_only")
+
+
+@requires_db
+def test_a_demo_session_can_rate_and_simulate_in_its_own_sandbox(
+    session: Session, client: TestClient, runner: RecordingRunner
+) -> None:
+    sandbox = start_demo(client, session)
+    asset = session.exec(select(Asset).where(Asset.world_id == sandbox.id)).first()
+    assert asset is not None
+
+    assert client.post(f"/assets/{asset.id}/rate").status_code == 202
+    assert client.post(
+        "/admin/simulate/event", json={"asset_id": str(asset.id), "preset": "fire"}
+    ).is_success
+    assert runner.started == [(sandbox.id, asset.id)]
+
+
+# --- Sessions that must never be served --------------------------------------------------------
+
+
+def principal(world_id: UUID, kind: SessionKind) -> Principal:
+    return Principal(
+        user_id=uuid4(),
+        world_id=world_id,
+        session_id=uuid4(),
+        session_kind=kind,
+        user_kind=UserKind.PERSONA,
+        is_admin=False,
+    )
+
+
+@requires_db
+def test_a_demo_session_on_the_template_is_refused(session: Session, client: TestClient) -> None:
+    start_demo(client, session, session.get_one(World, TEMPLATE_WORLD_ID))
+
+    res = client.get("/world")
+
+    assert (res.status_code, res.json()["detail"]) == (401, "auth_required")
+
+
+@requires_db
+@pytest.mark.parametrize(
+    "bound",
+    [
+        (SessionKind.DEMO, "deleted"),
+        (SessionKind.DEMO, "live"),
+        (SessionKind.PASSWORD, "sandbox"),
+        (cast(SessionKind, "sso"), "live"),
+    ],
+)
+def test_sessions_bound_to_the_wrong_world_or_of_an_unknown_kind_are_refused(
+    session: Session, bound: tuple[SessionKind, str]
+) -> None:
+    kind, where = bound
+    world_id = {
+        "deleted": uuid4(),
+        "live": LIVE_WORLD_ID,
+        "sandbox": create_world(session).id,
+    }[where]
+
+    with pytest.raises(HTTPException) as refused:
+        world_for(session, principal(world_id, kind))
+
+    assert (refused.value.status_code, refused.value.detail) == (401, "auth_required")
+
+
+@requires_db
+def test_a_session_whose_account_was_deleted_reads_the_live_world_anonymously(
+    session: Session, client: TestClient
+) -> None:
+    user = live_person(session, is_admin=False)
+    sign_in(client, session, user)
+    session.execute(delete(UserSession).where(col(UserSession.user_id) == user.id))
+    session.execute(delete(User).where(col(User.id) == user.id))
+    session.commit()
+
+    world = client.get("/world")
+
+    assert world.status_code == 200
+    assert (UUID(world.json()["id"]), world.json()["me"]) == (LIVE_WORLD_ID, None)
+    assert client.get("/portfolio").status_code == 401
+
+
+# --- The live world is created ahead of requests -----------------------------------------------
+
+
+@requires_db
+def test_reads_get_503_when_the_live_world_is_missing(session: Session, client: TestClient) -> None:
+    _delete_world_rows(session, LIVE_WORLD_ID, keep_world=False)
+    session.execute(delete(World).where(col(World.id) == LIVE_WORLD_ID))
+    session.flush()
+
+    res = client.get("/world")
+
+    assert (res.status_code, res.json()["detail"]) == (503, "world_unavailable")
+    assert session.get(World, LIVE_WORLD_ID) is None, "a request never creates the live world"
+
+
+@requires_db
+def test_startup_creates_the_live_world_and_never_fails(session: Session) -> None:
+    @contextmanager
+    def same_session() -> Iterator[Session]:
+        yield session
+
+    assert prepare_live_world(same_session) is True
+    assert session.get(World, LIVE_WORLD_ID) is not None
+
+    @contextmanager
+    def broken() -> Iterator[Session]:
+        raise OperationalError("SELECT 1", {}, Exception("database is down"))
+        yield session
+
+    assert prepare_live_world(broken) is False

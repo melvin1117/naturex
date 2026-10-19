@@ -15,7 +15,6 @@ from app.deps import (
     CurrentWorld,
     OptionalPrincipal,
     SessionDep,
-    prune_stale_worlds_now_and_then,
 )
 from app.models import SessionKind, User, World
 from app.sandbox import reset_world, world_contents
@@ -42,9 +41,7 @@ def _world_out(session: SessionDep, world: World, principal: Principal | None) -
 def get_world(world: CurrentWorld, principal: OptionalPrincipal, session: SessionDep) -> WorldOut:
     """The session's world: the live world when anonymous or signed in with a password, the
     demo sandbox for a demo session. `me` is the signed-in account, or null."""
-    out = _world_out(session, world, principal)
-    prune_stale_worlds_now_and_then(session)
-    return out
+    return _world_out(session, world, principal)
 
 
 @router.post(

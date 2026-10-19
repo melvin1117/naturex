@@ -38,6 +38,9 @@ os.environ.setdefault("ENVIRONMENT", "test")
 # State-changing requests need an allowed Origin (T66); TestClient's default host is `testserver`.
 TEST_ORIGIN = "http://testserver"
 os.environ["ALLOWED_ORIGINS"] = TEST_ORIGIN
+# Tests create the live world in their own (rolled-back) transactions; startup must not commit
+# one to the shared test database. `prepare_live_world` is tested directly.
+os.environ["LIVE_WORLD_ON_STARTUP"] = "false"
 get_settings.cache_clear()
 
 _testclient_init = TestClient.__init__

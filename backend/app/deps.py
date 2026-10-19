@@ -20,7 +20,7 @@ from app.config import Settings, get_settings
 from app.db import get_session
 from app.middleware import SAFE_METHODS
 from app.models import SessionKind, World
-from app.sandbox import ensure_live_world, is_sandbox, prune_stale_worlds
+from app.sandbox import is_sandbox, prune_stale_worlds
 from app.seed import LIVE_WORLD_ID
 
 log = logging.getLogger(__name__)
@@ -32,6 +32,9 @@ SettingsDep = Annotated[Settings, Depends(get_settings)]
 TOUCH_EVERY = timedelta(minutes=5)
 PRUNE_EVERY = timedelta(minutes=10)
 AUTH_REQUIRED = "auth_required"
+ADMIN_ONLY = "admin_only"
+SANDBOX_ONLY = "sandbox_only"
+WORLD_UNAVAILABLE = "world_unavailable"
 _last_prune: datetime | None = None
 _last_auth_prune: datetime | None = None
 
@@ -39,7 +42,8 @@ _last_auth_prune: datetime | None = None
 def prune_stale_worlds_now_and_then(session: Session) -> None:
     """Prune stale sandbox worlds at most every PRUNE_EVERY per process; never fail the request.
 
-    Never touches the template or the live world (`prune_stale_worlds`).
+    Runs on the session-creating paths (register and login today, T55's `POST /demo/start`
+    next), never on anonymous reads. Never touches the template or the live world.
     """
     global _last_prune
     now = datetime.now(UTC)
@@ -99,23 +103,35 @@ OptionalPrincipal = Annotated[Principal | None, Depends(optional_principal)]
 CurrentPrincipal = Annotated[Principal, Depends(current_principal)]
 
 
+def live_world(session: Session) -> World:
+    """The live world, which `make seed`, the app's startup, `create-admin` and register/login
+    create (`sandbox.ensure_live_world`); requests never build it. 503 `world_unavailable` if
+    it doesn't exist yet."""
+    world = session.get(World, LIVE_WORLD_ID)
+    if world is None:
+        log.error("the live world is missing; run `make seed`")
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, WORLD_UNAVAILABLE)
+    return world
+
+
 def world_for(session: Session, principal: Principal | None) -> World:
     """The world a principal acts in (ADR-0005 §2): no session or a password session → the
     live world; a demo session → its own sandbox world.
 
-    A session bound to any other world (e.g. a demo session on the live world) is refused with
-    401 `auth_required` rather than served, so a sandbox is reachable only through its own demo
+    Anything else (a demo session on the live world, the template or a deleted world, a password
+    session outside the live world, an unknown session kind) is refused with 401
+    `auth_required` rather than served, so a sandbox is reachable only through its own demo
     session and the live world only through password sessions or none.
     """
     if principal is None:
-        return ensure_live_world(session)
+        return live_world(session)
     world = session.get(World, principal.world_id)
-    if principal.session_kind == SessionKind.DEMO:
-        if world is not None and is_sandbox(world):
+    match principal.session_kind:
+        case SessionKind.PASSWORD if world is not None and world.id == LIVE_WORLD_ID:
+            return world
+        case SessionKind.DEMO if world is not None and is_sandbox(world):
             _touch(session, world)
             return world
-    elif world is not None and world.id == LIVE_WORLD_ID:
-        return world
     log.warning("session %s is bound to an unexpected world; refused", principal.session_id)
     raise HTTPException(status.HTTP_401_UNAUTHORIZED, AUTH_REQUIRED)
 
@@ -137,3 +153,20 @@ def current_world(
 
 
 CurrentWorld = Annotated[World, Depends(current_world)]
+
+
+def require_sandbox_or_admin(world: World, principal: Principal) -> None:
+    """Rating and the Time Machine write reports and spend LLM budget: anyone in their own demo
+    sandbox, only an admin in the live world (403 `admin_only`; ADR-0005 §3).
+
+    TODO(T57): replaced by `authz.require()` (T68), with the full role matrix.
+    """
+    if not is_sandbox(world) and not principal.is_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, ADMIN_ONLY)
+
+
+def require_sandbox(world: World) -> None:
+    """Demo-only tools (the ledger tamper demo) never run in the live world (403
+    `sandbox_only`). TODO(T57): replaced by `authz.require()` (T68)."""
+    if not is_sandbox(world):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, SANDBOX_ONLY)

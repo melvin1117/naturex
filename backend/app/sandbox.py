@@ -391,11 +391,12 @@ def ensure_live_world(session: Session) -> World:
         session.commit()
     except IntegrityError:
         session.rollback()
+        # Only a concurrent creator's committed world explains this; anything else (a failed
+        # copy) is a real error and is raised as is.
+        if session.get(World, LIVE_WORLD_ID) is None:
+            raise
         log.info("live world was created concurrently")
-    live = session.get(World, LIVE_WORLD_ID)
-    if live is None:
-        raise RuntimeError("the live world could not be created")
-    return live
+    return session.get_one(World, LIVE_WORLD_ID)
 
 
 def world_contents(session: Session, world_id: UUID) -> tuple[list[User], list[Asset]]:

@@ -9,11 +9,11 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from app.deps import current_principal
+from app.deps import current_principal, current_world
 from app.main import app
 from app.mocks import WETLAND_ID, news_scout_fixture, wetland_report
 from app.schemas import AuditorOutput, NewsScoutItem, NewsScoutOutput
-from tests.worlds import stub_principal
+from tests.worlds import stub_principal, stub_sandbox
 
 client = TestClient(app)
 
@@ -22,6 +22,7 @@ client = TestClient(app)
 def signed_in() -> Iterator[None]:
     """Stub routes need a signed-in principal (T73); no database needed for that here."""
     app.dependency_overrides[current_principal] = stub_principal
+    app.dependency_overrides[current_world] = stub_sandbox
     yield
     app.dependency_overrides.clear()
 

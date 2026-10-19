@@ -184,7 +184,7 @@ def place_order(
 
 @router.get("/portfolio", response_model=PortfolioOut)
 def get_portfolio(
-    world: CurrentWorld, principal: CurrentPrincipal, session: SessionDep
+    principal: CurrentPrincipal, world: CurrentWorld, session: SessionDep
 ) -> PortfolioOut:
     """The signed-in user's cash and holdings."""
     actor = _actor(session, world.id, principal)

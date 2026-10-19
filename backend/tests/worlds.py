@@ -7,14 +7,16 @@ a private sandbox create one plus a DEMO session for a persona in it, standing i
 
 from __future__ import annotations
 
-from uuid import uuid4
+from collections.abc import Iterable
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
+from sqlalchemy import Engine, delete
+from sqlmodel import Session, col, select
 
 from app.auth import SESSION_COOKIE, Principal, start_session
 from app.models import SessionKind, User, UserKind, World
-from app.sandbox import create_world
+from app.sandbox import _delete_world_rows, create_world
 
 
 def start_demo(
@@ -38,9 +40,24 @@ def start_demo(
     return found
 
 
+def drop_worlds(engine: Engine, world_ids: Iterable[UUID]) -> None:
+    """Delete committed sandboxes with every row they own, their sessions included, so tests
+    that commit through `Session(engine)` leave the shared test database as they found it."""
+    with Session(engine) as session:
+        for world_id in world_ids:
+            _delete_world_rows(session, world_id, keep_world=False)
+            session.execute(delete(World).where(col(World.id) == world_id))
+        session.commit()
+
+
 def sign_in(client: TestClient, session: Session, user: User) -> None:
     """Sign `client` in as `user` with a password-kind session (no password check)."""
     client.cookies.set(SESSION_COOKIE, start_session(session, user, SessionKind.PASSWORD))
+
+
+def stub_sandbox() -> World:
+    """A demo sandbox world for DB-free tests of stub routes (override `current_world`)."""
+    return World(id=uuid4(), label="visitor")
 
 
 def stub_principal() -> Principal:

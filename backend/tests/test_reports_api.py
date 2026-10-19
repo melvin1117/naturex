@@ -22,7 +22,7 @@ from app.llm import LLMClient
 from app.main import app
 from app.models import Asset, Report
 from app.routers import reports as reports_router
-from app.sandbox import create_world
+from app.sandbox import create_world, ensure_live_world
 from app.schemas import ReportSummarySource
 from app.seed import DEMO_SITES, LIVE_WORLD_ID, WORLD_ID, seed
 from app.services.rating import latest_report, rate_asset
@@ -268,6 +268,7 @@ def test_reports_and_assets_of_other_worlds_are_not_found(
 def test_anonymous_reads_see_the_live_world_only(client: TestClient, session: Session) -> None:
     report = latest_report(session, WORLD_ID, _world_asset(session, WORLD_ID).id)
     assert report is not None
+    ensure_live_world(session)
     anonymous = TestClient(app)
 
     for path in (f"/assets/{report.asset_id}", f"/reports/{report.id}"):

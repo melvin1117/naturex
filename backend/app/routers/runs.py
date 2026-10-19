@@ -1,7 +1,8 @@
 """Rating runs (T27): `POST /assets/{asset_id}/rate` → 202 + `run_id`; `GET /runs/{run_id}`.
 
 Both are scoped to the session's world (404 for another world's asset or run); starting a run
-needs a signed-in session (401 `auth_required`). Progress also streams as `rating_progress`
+needs a signed-in session (401 `auth_required`) and, in the live world, an admin (403
+`admin_only`; T57 replaces this with the role matrix). Progress also streams as `rating_progress`
 events (`GET /events/stream`).
 """
 
@@ -12,7 +13,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from app.deps import CurrentWorld, SessionDep
+from app.deps import (
+    ADMIN_ONLY,
+    CurrentPrincipal,
+    CurrentWorld,
+    SessionDep,
+    require_sandbox_or_admin,
+)
 from app.schemas import RatingRunAccepted, RatingRunOut
 from app.services.rating_runs import (
     AssetNotRateable,
@@ -39,6 +46,7 @@ RunnerDep = Annotated[RatingRunner, Depends(get_rating_runner)]
     response_model=RatingRunAccepted,
     status_code=status.HTTP_202_ACCEPTED,
     responses={
+        403: {"description": f"`{ADMIN_ONLY}`: only an admin can rate in the live world"},
         404: {"description": "Asset not found in this world"},
         409: {"description": "`run_in_progress` (Location: the active run) or `asset_is_draft`"},
         429: {
@@ -51,11 +59,13 @@ RunnerDep = Annotated[RatingRunner, Depends(get_rating_runner)]
 def start_rating(
     asset_id: UUID,
     world: CurrentWorld,
+    principal: CurrentPrincipal,
     session: SessionDep,
     runner: RunnerDep,
     response: Response,
 ) -> RatingRunAccepted:
     """Start an async rating run for the asset; follow it with `GET /runs/{run_id}`."""
+    require_sandbox_or_admin(world, principal)
     # End the request's read transaction so its pooled connection is free while the runner
     # opens its own session and waits (bounded) on the run locks: one connection at a time.
     world_id = world.id  # read before the commit expires the row

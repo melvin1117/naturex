@@ -22,7 +22,7 @@ from sqlmodel import Session, col, select
 from app import auth, deps
 from app.config import Settings, get_settings
 from app.db import get_session
-from app.deps import current_principal
+from app.deps import current_principal, current_world
 from app.main import app, validate_auth_settings
 from app.middleware import (
     canonical_origin,
@@ -33,7 +33,7 @@ from app.middleware import (
 from app.models import AuthAttempt, AuthAttemptKind, AuthBucket, UserSession
 from app.seed import seed
 from tests.conftest import alembic_cfg, requires_db
-from tests.worlds import stub_principal
+from tests.worlds import stub_principal, stub_sandbox
 
 ALLOWED = ["https://app.example.com", "http://localhost:3000"]
 
@@ -159,8 +159,10 @@ def client() -> TestClient:
 def signed_in() -> Iterator[None]:
     """The CSRF tests post to stub routes, which need a session since T73."""
     app.dependency_overrides[current_principal] = stub_principal
+    app.dependency_overrides[current_world] = stub_sandbox
     yield
     app.dependency_overrides.pop(current_principal, None)
+    app.dependency_overrides.pop(current_world, None)
 
 
 def bare_client() -> TestClient:
