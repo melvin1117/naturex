@@ -18,6 +18,7 @@ import { useTour } from "@/components/proto/tour";
 import { Button } from "@/components/ui/button";
 import { money } from "@/lib/prototype/format";
 import { usePrototype } from "@/lib/prototype/store";
+import { MAIN_ID } from "@/components/shell/skip-link";
 import { latestReport, PERSONAS, type PersonaKey } from "@/lib/prototype/world";
 
 const ENTRIES: {
@@ -80,7 +81,11 @@ export function JudgeLanding() {
         </nav>
       </header>
 
-      <main className="mx-auto grid w-full max-w-7xl flex-1 items-center gap-12 px-4 pb-16 sm:px-6 lg:grid-cols-[1.2fr_1fr]">
+      <main
+        id={MAIN_ID}
+        tabIndex={-1}
+        className="mx-auto grid w-full max-w-7xl flex-1 items-center gap-12 px-4 pb-16 outline-none sm:px-6 lg:grid-cols-[1.2fr_1fr]"
+      >
         <div>
           <h1 className="font-serif text-6xl leading-[0.95] tracking-tight text-balance sm:text-7xl lg:text-[5.5rem]">
             The bees never sent an <em className="italic">invoice.</em>

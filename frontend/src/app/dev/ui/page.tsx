@@ -15,6 +15,7 @@ import { VerificationBadge } from "@/components/proto/verification";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MAIN_ID } from "@/components/shell/skip-link";
 import { Separator } from "@/components/ui/separator";
 import { GRADE_ORDER } from "@/lib/prototype/format";
 
@@ -70,7 +71,11 @@ function Section({
 
 export default function DevUiPage() {
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-10 px-4 py-10 sm:px-6">
+    <main
+      id={MAIN_ID}
+      tabIndex={-1}
+      className="mx-auto w-full max-w-6xl space-y-10 px-4 py-10 outline-none sm:px-6"
+    >
       <header>
         <h1 className="font-serif text-5xl">UI kit</h1>
         <p className="mt-2 text-muted-foreground">

@@ -967,7 +967,7 @@ Both reuse the backend code with a different entrypoint:
 ## 11. Frontend pages & key components
 | Page | Components | Notes |
 |---|---|---|
-| **Two apps in one Next.js app** (ADR-0005) | Route groups `(exchange)` at `/` and `(steward)` at `/steward`, each with its own shell and nav; AppSwitcher for community members; DemoBar in demo sessions | Shared design system, generated client and session |
+| **Two apps in one Next.js app** (ADR-0005) | The `(exchange)` route group at `/` and `app/steward/` at `/steward`, each with its own shell and nav; an app switcher following the account's roles (T62); DemoBar in demo sessions | Shared design system, generated client and session |
 | Sign in `/login`, `/register` | AuthForm, AccountMenu | Protected routes redirect here and back |
 | Judge `/judge` | Three one-click demo entries, "Create a real account" | Starts `POST /demo/start` |
 | Exchange · Marketplace `/` | AssetCard grid, filters, SandboxBanner | Sort by grade / change / value |

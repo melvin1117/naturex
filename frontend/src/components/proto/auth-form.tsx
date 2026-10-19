@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Wordmark } from "@/components/proto/bits";
 import { PasswordField } from "@/components/proto/password-field";
 import { useTour } from "@/components/proto/tour";
+import { MAIN_ID } from "@/components/shell/skip-link";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -150,7 +151,11 @@ export function AuthForm({
   });
 
   return (
-    <div className="flex flex-1 items-center justify-center px-4 py-16">
+    <main
+      id={MAIN_ID}
+      tabIndex={-1}
+      className="flex flex-1 items-center justify-center px-4 py-16 outline-none"
+    >
       <div className="w-full max-w-md">
         <Link href="/judge" className="mx-auto block w-fit">
           <Wordmark />
@@ -254,7 +259,7 @@ export function AuthForm({
           . Play money only.
         </p>
       </div>
-    </div>
+    </main>
   );
 }
 

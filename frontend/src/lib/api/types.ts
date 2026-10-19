@@ -5,6 +5,7 @@ type Schemas = components["schemas"];
 
 export type AssetCard = Schemas["AssetCard"];
 export type AssetDetail = Schemas["AssetDetail"];
+export type CommunityRole = Schemas["CommunityRole"];
 export type EventOut = Schemas["EventOut"];
 export type HoldingOut = Schemas["HoldingOut"];
 export type LedgerEntry = Schemas["LedgerEntryOut"];
@@ -12,6 +13,7 @@ export type LegendEntry = Schemas["LegendEntry"];
 export type LedgerVerify = Schemas["LedgerVerifyOut"];
 export type LoginIn = Schemas["LoginIn"];
 export type MeOut = Schemas["MeOut"];
+export type MyCommunity = Schemas["MyCommunityOut"];
 export type OrderCreate = Schemas["OrderCreate"];
 export type OrderOut = Schemas["OrderOut"];
 export type Persona = Schemas["PersonaOut"];

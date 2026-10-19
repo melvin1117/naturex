@@ -74,19 +74,20 @@ function DemoControls() {
       className="bg-primary text-primary-foreground"
     >
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 text-sm sm:px-6">
-        <p className="flex min-w-0 items-center gap-2">
+        <p className="flex min-w-0 items-start gap-2">
           <FlaskConical
-            className="size-4 shrink-0 text-lime"
+            className="mt-0.5 size-4 shrink-0 text-lime"
             aria-hidden="true"
           />
-          <span className="font-medium whitespace-nowrap">
-            Demo mode · private sandbox.
-          </span>
-          <span className="whitespace-nowrap text-primary-foreground/75 md:hidden">
-            Play money only.
-          </span>
-          <span className="hidden text-primary-foreground/75 md:inline">
-            {SANDBOX_NOTICE} Prototype with scripted data.
+          <span className="min-w-0">
+            <span className="font-medium">Demo mode · private sandbox.</span>{" "}
+            <span className="text-primary-foreground/75">
+              {SANDBOX_NOTICE}
+              <span className="hidden md:inline">
+                {" "}
+                Prototype with scripted data.
+              </span>
+            </span>
           </span>
         </p>
         <div className="ml-auto flex flex-wrap items-center gap-2">

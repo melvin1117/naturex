@@ -50,6 +50,7 @@ export function TradePanel({ id }: { id: string }) {
 | `useLedger(id)` / `useVerifyLedger(id)`            | `LedgerEntry[]` / `mutate()` → `LedgerVerify`                                        | Verify asks the backend to recompute the chain, then the entries refetch.                                    |
 | `useSiteImages(siteKey)`                           | `SiteImages`                                                                         | A demo site's overlay bounds, legend, date windows and attributions; skips without a key.                    |
 | `usePortfolio()`                                   | `PortfolioOut`                                                                       | Live: refetches on `price_tick`.                                                                             |
+| `useMyCommunities()`                               | `MyCommunity[]` (id, name, role `owner` \| `steward`)                                | `GET /me/communities`; idle for anonymous visitors. The shells use it to pick the apps to offer.             |
 | `usePlaceOrder()`                                  | `mutate(order)`, `data` (`OrderOut`), `error`, `isPending`                           | Refetches the portfolio, the asset, its prices, its quotes and the market list. Never retried.               |
 | `useQuote(id, side, qty)`                          | `QuoteOut`                                                                           | The backend's price for an order now (T18). Skips until `qty` is a positive integer. Live: `price_tick`.     |
 | `useLiveEvent(type, handler)`                      |                                                                                      | Runs `handler` for each new `rating_progress`, `price_tick` or `alert`.                                      |
@@ -86,6 +87,25 @@ Each calls the auth route, then re-reads `GET /world` (`session.reload()`) and r
 
 `lib/auth.ts` has the pure helpers: `safeReturnPath(next)` (same-origin relative paths only; use it for every `?next=`), `loginHref(path)`, `validateAuthInput` and `authFailure` (form messages for 401, 409, 422, 429, 403, 503 and network errors). Wrap a page that needs an account in `<RequireAccount>` (`<RequireAccount admin>` for platform admins; `allowPrototypeDemo` only for prototype screens that the scripted demo must keep open until T65, never `/admin`); the backend still authorizes every request.
 
+## App shells and roles (T62)
+
+`app/(exchange)`, `app/steward` and `app/admin` each have a layout with the shell header (`components/shell/app-header.tsx`; the prototype's Copilot, Agent Trace and alerts go in its `tools` slot from `components/proto/header-tools.tsx`) and a `<main id="main">` that the skip link in `app/layout.tsx` jumps to (standalone pages such as `/login` and `/judge` have one too). The root layout also holds the demo bar slot (T65): the sandbox notice on every page, plus the scripted demo's controls for anonymous visitors.
+
+What the header offers comes from `appAccess()` in `navigation.ts` (pure, unit-tested), through `useAppAccess()` (`components/shell/app-switcher.tsx`):
+
+| Visitor                    | Apps offered                                | Also                                                                                 |
+| -------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Anonymous                  | Exchange                                    | Steward app too in the scripted prototype demo (T61)                                 |
+| Signed in, no community    | Exchange                                    | "Create a community" → `/steward`, whose empty state explains it (T63 adds the form) |
+| Community owner or steward | Exchange, Steward app                       | Community switcher in the Steward header if more than one                            |
+| Platform admin             | Exchange, Admin (+ Steward app if a member) | "Create a community" without one                                                     |
+
+Nothing that depends on `/me/communities` shows until it answers; if it fails, signed-in accounts still get the Steward app link, whose error screen explains and retries. This only decides what the UI shows: the backend authorizes every request (a non-admin on `/admin` gets `RequireAccount`'s 403 message, and every admin route checks `is_admin`).
+
+Steward pages read the community they show with `useStewardCommunity()` (`components/shell/steward-community.tsx`): `{ communities, active, select(id), href(path) }`. The `?community=<id>` URL parameter wins, then the one remembered for this account (`localStorage` key `nx-steward-community:<account id>`, only the ID, cleared on sign-out; `lib/active-community.ts`), then the account's first community; each only if `/me/communities` lists it. `select` puts the choice in the URL and remembers it; build Steward links with `href("/steward/...")` so they keep the parameter, which lets pages link to a community and keeps two tabs from disagreeing. `<StewardGate>` shows a signed-in account without a community the "Start a community" empty state instead of the pages.
+
+`useMyCommunities()` is cached per account (`queryKeys.myCommunities(me.id)`) and never fetched while signed out. **Roles change only when this query refetches:** anything that creates, joins or leaves a community (T63's create form, adding or removing a steward) must invalidate it, e.g. `onSuccess: (_d, _v, { cache }) => cache.invalidate(queryKeys.myCommunities(meId))`, or the header keeps the old roles until the next page load.
+
 ## Errors
 
 Every failure is an `ApiError` (`api/errors.ts`): `status` (0 = offline), `code` (e.g. `auth_required`, `owner_only`), `message` (safe to show; friendly text for 401, 403, 404, 409, 422 and 503), `detail` (raw, e.g. 422 field errors) and `retryAfterSeconds`.
@@ -118,6 +138,7 @@ It forwards only the session cookie, never calls `GET /world` (the browser owns 
 | `events.ts`                           | SSE with polling fallback.                                                                                                                                                                  |
 | `data-layer.tsx`, `hooks.ts`          | React context, cache wiring for live events, and the hooks.                                                                                                                                 |
 | `auth.ts`                             | Sign-in helpers: safe return paths, the protected-route rule, form validation and error messages (T61).                                                                                     |
+| `navigation.ts`                       | The apps, their navigation and `appAccess()`: which apps a visitor is offered (T62).                                                                                                        |
 | `trade.ts`                            | Trade panel helpers (T18): units input, validation against the quote and portfolio, order error messages, money and per-unit formatting, `assetHref`. Parses API decimals for display only. |
 | `report-facts.ts`                     | `reportFacts(ReportOut)`: the report card's numbers from the stored report and its `rating` snapshot (null when missing, never made up).                                                    |
 | `market-cards.ts`, `asset-detail.ts`  | Marketplace cards (sort, grade filter, media-route thumbnails) and asset-page helpers (boundary, prices, events).                                                                           |

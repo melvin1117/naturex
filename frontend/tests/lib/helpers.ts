@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 
-import type { WorldOut } from "@/lib/api/types";
+import type { MyCommunity, WorldOut } from "@/lib/api/types";
 
 export const BASE = "http://test.local/api";
 
@@ -44,6 +44,32 @@ export const SIGNED_IN_WORLD: WorldOut = {
 
 export const authRequired = () =>
   json({ detail: "auth_required" }, { status: 401 });
+
+/** WORLD as seen by a platform admin. */
+export const ADMIN_WORLD: WorldOut = {
+  ...WORLD,
+  me: {
+    id: "55555555-5555-4555-8555-555555555555",
+    name: "Ops",
+    email: "ops@example.org",
+    kind: "person",
+    is_admin: true,
+    world_id: WORLD.id,
+  },
+};
+
+/** One row of `GET /me/communities`. */
+export function community(overrides: Partial<MyCommunity> = {}): MyCommunity {
+  return {
+    id: "66666666-6666-4666-8666-666666666666",
+    name: "Selva Viva",
+    country: "MX",
+    description: null,
+    created_at: "2026-10-18T00:00:00Z",
+    role: "owner",
+    ...overrides,
+  };
+}
 
 type Handler = (request: Request) => Response | Promise<Response>;
 
