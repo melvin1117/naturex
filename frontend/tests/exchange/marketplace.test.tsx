@@ -14,17 +14,37 @@ import { FakeEventSource, json, sequence } from "../lib/helpers";
 import cards from "./fixtures/assets.json";
 import { renderExchange, stubBrowserApis } from "./render";
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
-  usePathname: () => "/",
-  useSearchParams: () => new URLSearchParams(),
-}));
+// Like Next.js, useSearchParams follows window.history.replaceState.
+vi.mock("next/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
+  const listeners = new Set<() => void>();
+  const replaceState = window.history.replaceState.bind(window.history);
+  window.history.replaceState = (...args) => {
+    replaceState(...args);
+    listeners.forEach((listener) => listener());
+  };
+  const subscribe = (listener: () => void) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  };
+  return {
+    useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+    usePathname: () => "/",
+    useSearchParams: () =>
+      new URLSearchParams(
+        useSyncExternalStore(subscribe, () => window.location.search),
+      ),
+  };
+});
 
 const CARDS = cards as AssetCard[];
 const WETLAND = CARDS.find((c) => c.site_key === "wetland_mx")!;
 
 beforeAll(stubBrowserApis);
-beforeEach(() => FakeEventSource.reset());
+beforeEach(() => {
+  FakeEventSource.reset();
+  window.history.replaceState(null, "", "/");
+});
 
 function grid() {
   return screen.getByRole("region", { name: "All sites" });
@@ -104,8 +124,25 @@ describe("Marketplace", () => {
     expect(
       await screen.findByText("No sites rated BBB–BB yet."),
     ).toBeInTheDocument();
+    expect(window.location.search).toBe("?grade=b");
     fireEvent.click(screen.getByRole("radio", { name: "AAA–A" }));
     expect(within(grid()).getAllByRole("link")).toHaveLength(3);
+  });
+
+  it("reads the filter and sort from the URL", async () => {
+    window.history.replaceState(null, "", "/?grade=a&sort=value");
+    renderExchange(<Marketplace />, { "GET /assets": () => json(CARDS) });
+    await screen.findByRole("region", { name: "All sites" });
+
+    expect(screen.getByRole("radio", { name: "AAA–A" })).toBeChecked();
+    expect(
+      screen.getByRole("combobox", { name: "Sort sites" }),
+    ).toHaveTextContent("Sort: Annual value");
+    const names = within(grid())
+      .getAllByRole("link")
+      .map((l) => l.querySelector("h3")?.textContent);
+    expect(names[0]).toBe("Ría Celestún Mangrove");
+    expect(names[1]).toBe("Xochimilco Wetland");
   });
 
   it("updates prices live on price_tick", async () => {

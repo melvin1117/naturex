@@ -2,7 +2,8 @@
 
 import { Compass, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useMemo } from "react";
 
 import { Stat } from "@/components/proto/bits";
 import { FeatureSiteCard, SiteCard } from "@/components/proto/site-card";
@@ -26,6 +27,7 @@ import {
   SORTS,
   type GradeBand,
   type MarketCard,
+  type SortKey,
 } from "@/lib/market-cards";
 import { ha, money } from "@/lib/prototype/format";
 
@@ -99,10 +101,37 @@ function MarketStats() {
   );
 }
 
+function isBand(v: string | null): v is GradeBand {
+  return v !== null && v in GRADE_BANDS;
+}
+
+function isSort(v: string | null): v is SortKey {
+  return v !== null && v in SORTS;
+}
+
 export function MarketBoard() {
   const { cards, error, refetch, isFetching } = useMarketCards();
-  const [band, setBand] = useState<GradeBand>("all");
-  const [sort, setSort] = useState<keyof typeof SORTS>("grade");
+  const params = useSearchParams();
+  const pathname = usePathname();
+  const gradeParam = params.get("grade");
+  const sortParam = params.get("sort");
+  const band: GradeBand = isBand(gradeParam) ? gradeParam : "all";
+  const sort: SortKey = isSort(sortParam) ? sortParam : "grade";
+  // Filters live in the URL (shareable, survive reload); the History API updates
+  // useSearchParams without a server round trip.
+  const setParam = (key: "grade" | "sort", value: string, fallback: string) => {
+    const next = new URLSearchParams(params.toString());
+    if (value === fallback) next.delete(key);
+    else next.set(key, value);
+    const query = next.toString();
+    window.history.replaceState(
+      null,
+      "",
+      query ? `${pathname}?${query}` : pathname,
+    );
+  };
+  const setBand = (v: GradeBand) => setParam("grade", v, "all");
+  const setSort = (v: SortKey) => setParam("sort", v, "grade");
   const shown = useMemo(
     () => (cards ? shownCards(cards, band, sort) : []),
     [cards, band, sort],
@@ -155,7 +184,7 @@ export function MarketBoard() {
             <ToggleGroup
               type="single"
               value={band}
-              onValueChange={(v) => v && setBand(v as GradeBand)}
+              onValueChange={(v) => isBand(v) && setBand(v)}
               className="rounded-full bg-card p-1 shadow-soft"
               aria-label="Filter by grade"
             >
@@ -169,15 +198,12 @@ export function MarketBoard() {
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
-            <Select
-              value={sort}
-              onValueChange={(v) => setSort(v as keyof typeof SORTS)}
-            >
+            <Select value={sort} onValueChange={(v) => isSort(v) && setSort(v)}>
               <SelectTrigger className="w-44" aria-label="Sort sites">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(SORTS) as (keyof typeof SORTS)[]).map((k) => (
+                {(Object.keys(SORTS) as SortKey[]).map((k) => (
                   <SelectItem key={k} value={k}>
                     Sort: {SORTS[k].label}
                   </SelectItem>
