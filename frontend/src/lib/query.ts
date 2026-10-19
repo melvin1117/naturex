@@ -149,6 +149,27 @@ export class QueryCache {
   }
 
   /**
+   * Forget every answer, e.g. when the account changes: unlike `invalidate`, nothing old stays
+   * on screen. Fetches in flight are aborted; watched queries load again from scratch and
+   * unwatched ones are dropped.
+   */
+  reset() {
+    for (const [hash, entry] of this.#entries) {
+      entry.controller?.abort();
+      entry.controller = undefined;
+      entry.promise = undefined;
+      entry.stale = false;
+      if (entry.listeners.size === 0) {
+        this.#entries.delete(hash);
+        continue;
+      }
+      entry.state = IDLE_QUERY;
+      if (entry.fetcher) void this.fetch(entry.key, entry.fetcher);
+      else this.#set(entry, IDLE_QUERY);
+    }
+  }
+
+  /**
    * Mark matching queries out of date. Watched ones refetch (once, even if invalidated many
    * times while a fetch is in flight); unwatched ones are dropped and refetch on next use.
    */

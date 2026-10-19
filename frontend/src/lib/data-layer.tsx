@@ -148,12 +148,13 @@ export function DataLayerProvider({
 
   // Cached answers belong to one (world, account) pair: the live world is shared by anonymous
   // visitors and every account, so signing in or out (or a session ending) makes them wrong
-  // too, not only a different world.
+  // too, not only a different world. Reset, not invalidate: the previous account's data must
+  // not stay on screen while the new answers load.
   useEffect(() => {
     let viewer = viewerKey(layer.session.getSnapshot().world);
     return layer.session.subscribe(() => {
       const next = viewerKey(layer.session.getSnapshot().world);
-      if (viewer && next && next !== viewer) layer.cache.invalidate();
+      if (viewer && next && next !== viewer) layer.cache.reset();
       viewer = next ?? viewer;
     });
   }, [layer]);

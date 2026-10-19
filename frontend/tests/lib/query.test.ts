@@ -123,6 +123,35 @@ describe("QueryCache", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it("reset forgets every answer: aborts, refetches watched from scratch, drops unwatched", async () => {
+    const cache = new QueryCache();
+    cache.subscribe(KEY, () => {});
+    await cache.fetch(KEY, async () => "rosa's");
+    await cache.fetch(["portfolio"], async () => "unwatched");
+    let inflight: AbortSignal | undefined;
+    void cache.fetch(KEY, (signal) => {
+      inflight = signal;
+      return new Promise<string>(() => {});
+    });
+    // Joins the fetch in flight, and becomes the fetcher the next fetch uses.
+    const gate = deferred<string>();
+    const fresh = vi.fn(() => gate.promise);
+    void cache.fetch(KEY, fresh);
+
+    cache.reset();
+
+    expect(inflight?.aborted).toBe(true);
+    expect(fresh).toHaveBeenCalledTimes(1);
+    expect(cache.getState(KEY)).toMatchObject({
+      status: "loading",
+      data: undefined,
+      isFetching: true,
+    });
+    expect(cache.getState(["portfolio"]).status).toBe("idle");
+    gate.resolve("anonymous");
+    await vi.waitFor(() => expect(cache.getState(KEY).data).toBe("anonymous"));
+  });
+
   it("patches cached data with setData and ignores missing entries", async () => {
     const cache = new QueryCache();
     const listener = vi.fn();

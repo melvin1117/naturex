@@ -7,7 +7,7 @@ import {
   type CookieReader,
 } from "@/lib/session";
 
-import { WORLD } from "./helpers";
+import { SIGNED_IN_WORLD, WORLD } from "./helpers";
 
 const store = (values: Record<string, string>): CookieReader => ({
   get: (name) => (name in values ? { value: values[name]! } : undefined),
@@ -98,5 +98,40 @@ describe("createSessionBootstrap", () => {
       status: "ready",
       world: WORLD,
     });
+  });
+});
+
+describe("reload (T61: after sign-in, sign-up or sign-out)", () => {
+  it("never reuses a request sent with the old cookie", async () => {
+    let resolveStale!: (world: typeof WORLD) => void;
+    const load = vi
+      .fn()
+      .mockImplementationOnce(
+        () => new Promise<typeof WORLD>((r) => (resolveStale = r)),
+      )
+      .mockResolvedValueOnce(SIGNED_IN_WORLD);
+    const session = createSessionBootstrap(load);
+
+    const stale = session.ensure();
+    const fresh = session.reload();
+    resolveStale(WORLD);
+    await stale;
+
+    await expect(fresh).resolves.toEqual(SIGNED_IN_WORLD);
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(session.getSnapshot().world?.me?.name).toBe("Rosa");
+  });
+
+  it("still reloads when the stale request failed", async () => {
+    const load = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("offline"))
+      .mockResolvedValueOnce(WORLD);
+    const session = createSessionBootstrap(load);
+
+    const stale = session.ensure().catch(() => undefined);
+    await expect(session.reload()).resolves.toEqual(WORLD);
+    await stale;
+    expect(load).toHaveBeenCalledTimes(2);
   });
 });

@@ -27,6 +27,31 @@ describe("apiErrorFromResponse", () => {
   });
 
   it.each([
+    ["admin_only", "Only a platform admin can do that."],
+    ["sandbox_only", "That only works in a demo sandbox."],
+  ])("explains the 403 reason %s (T61)", (code, message) => {
+    expect(apiErrorFromResponse(res(403), { detail: code }).message).toBe(
+      message,
+    );
+  });
+
+  it("shows login's generic 401 and the auth rate limit's wait (T61)", () => {
+    expect(
+      apiErrorFromResponse(res(401), {
+        detail: "Email or password is incorrect",
+      }).message,
+    ).toBe("Email or password is incorrect");
+    expect(apiErrorFromResponse(res(401), undefined).message).toMatch(
+      /session has expired/,
+    );
+    const limited = apiErrorFromResponse(res(429, { "Retry-After": "120" }), {
+      detail: "too_many_attempts",
+    });
+    expect(limited.retryAfterSeconds).toBe(120);
+    expect(limited.message).toBe("Too many attempts. Try again in 2 minutes.");
+  });
+
+  it.each([
     [404, "Asset not found"],
     [409, "Asset has no price yet"],
     [400, "Not enough cash"],

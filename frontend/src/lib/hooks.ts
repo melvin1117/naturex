@@ -18,13 +18,21 @@ import { toApiError, unwrap, type ApiError } from "./api/errors";
 import type {
   AssetCard,
   AssetDetail,
+  LoginIn,
+  MeOut,
   OrderCreate,
   OrderOut,
   PortfolioOut,
+  RegisterIn,
   ReportOut,
   WorldOut,
 } from "./api/types";
-import { queryKeys, useDataLayer, type DataLayer } from "./data-layer";
+import {
+  queryKeys,
+  useDataLayer,
+  viewerKey,
+  type DataLayer,
+} from "./data-layer";
 import type { LiveEventHandler, LiveEventType, Transport } from "./events";
 import {
   hashKey,
@@ -337,6 +345,47 @@ export function usePlaceOrder(): MutationResult<OrderCreate, OrderOut> {
       },
     },
   );
+}
+
+/**
+ * After the session cookie changed: read `GET /world` again (so `world.me` updates) and drop
+ * every cached answer, which belonged to the previous account. `DataLayerProvider` resets the
+ * cache when the viewer changes; if it didn't (the re-read failed), reset here. A failed
+ * re-read leaves the old world in place with its error; the sign-in itself still succeeded.
+ */
+async function afterSessionChange({ session, cache }: DataLayer) {
+  const before = viewerKey(session.getSnapshot().world);
+  await session.reload().catch(() => undefined);
+  if (viewerKey(session.getSnapshot().world) === before) cache.reset();
+}
+
+/** `POST /auth/login`, then the world and cache follow the new account. */
+export function useSignIn(): MutationResult<LoginIn, MeOut> {
+  const layer = useDataLayer();
+  return useApiMutation(async (api, body: LoginIn) => {
+    const me = await unwrap(api.POST("/auth/login", { body }));
+    await afterSessionChange(layer);
+    return me;
+  });
+}
+
+/** `POST /auth/register` (signs in too), then the world and cache follow the new account. */
+export function useRegister(): MutationResult<RegisterIn, MeOut> {
+  const layer = useDataLayer();
+  return useApiMutation(async (api, body: RegisterIn) => {
+    const me = await unwrap(api.POST("/auth/register", { body }));
+    await afterSessionChange(layer);
+    return me;
+  });
+}
+
+/** `POST /auth/logout`, then the world (`me` becomes null) and the cache reset. */
+export function useSignOut(): MutationResult<void, void> {
+  const layer = useDataLayer();
+  return useApiMutation(async (api) => {
+    await unwrap(api.POST("/auth/logout"));
+    await afterSessionChange(layer);
+  });
 }
 
 export type { QueryStatus };
