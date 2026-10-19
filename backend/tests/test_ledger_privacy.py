@@ -26,6 +26,7 @@ import app
 from app.communities import create_community
 from app.config import get_settings
 from app.ledger import LedgerPrivacyError, append, canonical, check_public_payload, entries_for
+from app.market.offering import Offering
 from app.market.revenue import pay_quarter
 from app.models import (
     Asset,
@@ -42,7 +43,7 @@ from app.models import (
     UserRole,
 )
 from app.seed import DEMO_SITES, PERSONAS, WORLD_ID, seed
-from app.services.ipo import Offering, launch
+from app.services.ipo import launch, preview
 from app.services.lifecycle import SuspensionReason
 from app.services.listings import (
     ListingDetails,
@@ -278,7 +279,8 @@ def _produce_price_anchor(session: Session) -> None:
     listing.status = AssetStatus.LISTED
     session.add(listing)
     session.flush()
-    launch(session, WORLD_ID, listing.id, Offering())
+    price = preview(session, WORLD_ID, listing.id, Offering()).terms.price
+    launch(session, WORLD_ID, listing.id, Offering(), expected_price=price)
 
 
 # The real producer to run for each kind with one in `app/`. Kinds whose producer already ran

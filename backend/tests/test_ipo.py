@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 import threading
+import time
+from collections.abc import Callable
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
 import pytest
 from alembic import command
-from sqlalchemy import func
+from fastapi import HTTPException
+from sqlalchemy import func, text
 from sqlmodel import Session, col, select
 
 from app.ledger import verify
 from app.market.engine import ipo_terms
+from app.market.offering import InvalidOffering, Offering
 from app.models import (
     Asset,
     AssetStatus,
@@ -26,21 +31,26 @@ from app.models import (
     User,
     WorldEvent,
 )
+from app.models import World as WorldRow
+from app.routers import ipo as ipo_router
+from app.routers.market import place_order
+from app.schemas import OrderCreate
 from app.seed import COMMUNITY_PERSONA
 from app.services import ipo as ipo_service
 from app.services.ipo import (
     ALREADY_LAUNCHED,
     NO_RATING,
     NOT_LISTED,
+    PRICE_TOO_HIGH,
     PRICE_TOO_LOW,
-    FairValueInputs,
-    InvalidOffering,
     IpoRefused,
-    Offering,
-    fair_value_inputs,
+    is_trading,
     launch,
     quote,
 )
+from app.services.lifecycle import SuspensionReason
+from app.services.listings import RUN_IN_PROGRESS, suspend
+from app.services.rating import FairValueInputs, fair_value_inputs, report_fair_value_total
 from tests import test_lifecycle as lifecycle
 from tests.conftest import alembic_cfg, requires_db
 from tests.test_lifecycle import (
@@ -48,12 +58,15 @@ from tests.test_lifecycle import (
     Committed,
     World_,
     _committed_draft,
+    _race,
     client_as,
     curated,
     draft,
     square,
     submit,
 )
+from tests.test_lifecycle import _slow_publish as _slow_listing_publish
+from tests.test_market_api import _as
 
 # The listing lifecycle's fixtures: a sandbox world in a rolled-back transaction, and a
 # committed one for concurrency tests.
@@ -128,12 +141,44 @@ def test_the_quote_is_the_engines_ipo_terms_of_the_report() -> None:
     assert q.report_version == 3
 
 
+def _snapshot(**fair_value: str) -> dict[str, Any]:
+    return {"rating": {"fair_value": fair_value}}
+
+
 def test_the_quote_prefers_the_reports_unrounded_snapshot() -> None:
-    snapshot = {"value_mid": "1000000.004", "health": "80.04", "confidence": "59.996"}
-    report = _report(auditor_json={"rating": {"fair_value": snapshot}})
+    report = _report(
+        auditor_json=_snapshot(value_mid="1000000.004", health="80.04", confidence="59.996")
+    )
 
     assert fair_value_inputs(report) == FairValueInputs(D("1000000.004"), D("80.04"), D("59.996"))
-    assert fair_value_inputs(_report()) == FairValueInputs(D("1000000.00"), D("80.00"), D("60.00"))
+
+
+def test_without_a_snapshot_the_inputs_are_the_stored_columns() -> None:
+    expected = FairValueInputs(D("1000000.00"), D("80.00"), D("60.00"))
+    assert fair_value_inputs(_report()) == expected
+    assert fair_value_inputs(_report(auditor_json={"rating": {}})) == expected
+    # An incomplete snapshot never mixes with the columns: all three come from one source.
+    partial = _report(auditor_json=_snapshot(value_mid="5", health="10"))
+    assert fair_value_inputs(partial) == expected
+
+
+def test_a_snapshot_health_of_zero_is_a_value_not_a_gap() -> None:
+    report = _report(auditor_json=_snapshot(value_mid="1000000", health="0", confidence="0"))
+
+    assert fair_value_inputs(report) == FairValueInputs(D("1000000"), D("0"), D("0"))
+    terms = quote(_asset(), report, Offering()).terms
+    assert (terms.health_factor, terms.confidence_factor) == (D("0.5"), D("0.7"))
+
+
+def test_a_price_above_a_new_accounts_cash_is_quoted_but_blocked() -> None:
+    # 2e9 × 10 × 1 × 1 = 2e10 over 1M shares: 20,000 a share, more than the 10,000 starting cash.
+    rich = _report(value_mid=D("2000000000.00"), health_score=D("100"), confidence=D("100"))
+
+    blocked = quote(_asset(), rich, Offering())
+    assert (blocked.terms.price, blocked.launchable) == (D("20000.0000"), False)
+    assert blocked.blocked_reason == PRICE_TOO_HIGH
+    fine = quote(_asset(), rich, Offering(total_shares=2_000_000))
+    assert (fine.terms.price, fine.launchable) == (D("10000.0000"), True)
 
 
 @pytest.mark.parametrize(
@@ -170,7 +215,25 @@ def preview(w: World_, asset_id: str, user: User | None = None, **params: Any) -
 
 
 def launch_ipo(w: World_, asset_id: str, user: User | None = None, **body: Any) -> Any:
+    """POST the launch; `expected_price` defaults to the owner's preview of the same offering
+    (a placeholder when there's no preview)."""
+    if "expected_price" not in body:
+        params = {k: body[k] for k in ("total_shares", "retained_pct") if k in body}
+        shown = preview(w, asset_id, **params)
+        body["expected_price"] = shown.json()["ipo_price"] if shown.status_code == 200 else "1"
     return client_as(w, user or w.owner).post(f"/assets/{asset_id}/ipo", json=body)
+
+
+def set_fair_value(w: World_, asset_id: str, value_mid: str, health: str, confidence: str) -> None:
+    """Make the latest report price the IPO from these inputs (its rating snapshot's)."""
+    report = report_of(w, asset_id)
+    auditor_json = dict(report.auditor_json or {})
+    rating = dict(auditor_json.get("rating") or {})
+    rating["fair_value"] = {"value_mid": value_mid, "health": health, "confidence": confidence}
+    auditor_json["rating"] = rating
+    report.auditor_json = auditor_json
+    w.session.add(report)
+    w.session.commit()
 
 
 def buy(w: World_, asset_id: str, qty: int) -> Any:
@@ -180,7 +243,11 @@ def buy(w: World_, asset_id: str, qty: int) -> Any:
 
 
 def report_of(w: World_, asset_id: str) -> Report:
-    return w.session.exec(select(Report).where(Report.asset_id == UUID(asset_id))).one()
+    report = w.session.exec(
+        select(Report).where(Report.asset_id == UUID(asset_id)).order_by(col(Report.version).desc())
+    ).first()
+    assert report is not None
+    return report
 
 
 def written(w: World_, asset_id: str) -> tuple[int, int, int, int]:
@@ -223,6 +290,7 @@ def test_the_owner_previews_every_term_of_the_formula(world: World_) -> None:
     body = response.json()
     report = report_of(world, asset["id"])
     inputs = fair_value_inputs(report)
+    assert inputs is not None
     terms = ipo_terms(
         value_mid=inputs.value_mid,
         health=inputs.health,
@@ -245,6 +313,7 @@ def test_the_owner_previews_every_term_of_the_formula(world: World_) -> None:
         510_000,
     )
     assert "health_factor" in body["formula"] and "retained_pct" in body["formula"]
+    assert (body["launchable"], body["blocked_reason"]) == (True, None)
     assert written(world, asset["id"])[:2] == (0, 0)  # a preview writes nothing
 
 
@@ -311,6 +380,9 @@ def test_the_launch_prices_seeds_the_stake_records_and_opens_the_float(world: Wo
         c for c in client_as(world, world.outsider).get("/assets").json() if c["id"] == asset["id"]
     )
     assert (card_before["trading"], card_before["price"]) == (False, None)
+    detail_before = client_as(world, world.outsider).get(f"/assets/{asset['id']}").json()
+    assert (detail_before["total_shares"], detail_before["retained_pct"]) == (None, None)
+    assert (detail_before["ipo_at"], detail_before["primary_shares_remaining"]) == (None, 0)
 
     response = launch_ipo(
         world,
@@ -323,7 +395,10 @@ def test_the_launch_prices_seeds_the_stake_records_and_opens_the_float(world: Wo
     assert response.status_code == 201, response.text
     assert response.headers["cache-control"] == "no-store"
     body = response.json()
-    assert {k: v for k, v in body.items() if k != "launched_at"} == shown
+    preview_only = {"launched_at", "launchable", "blocked_reason"}
+    assert {k: v for k, v in body.items() if k not in preview_only} == {
+        k: v for k, v in shown.items() if k not in preview_only
+    }
     world.session.expire_all()
     row = world.session.get_one(Asset, asset_id)
     assert row.ipo_at is not None
@@ -386,6 +461,7 @@ def test_the_launch_prices_seeds_the_stake_records_and_opens_the_float(world: Wo
     detail = outsider.get(f"/assets/{asset['id']}").json()
     assert detail["trading"] is True and detail["ipo_at"] is not None
     assert detail["primary_shares_remaining"] == 1_200_000
+    assert (detail["total_shares"], detail["retained_pct"]) == (2_000_000, "40.00")
 
 
 @requires_db
@@ -468,8 +544,10 @@ def test_a_stale_confirmed_price_is_refused(world: World_) -> None:
 def test_the_launch_gate_is_checked_inside_the_transaction(
     world: World_, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The T69 seam: a gate refusal (e.g. not verified) rolls everything back."""
+    """The T69 seam: the preview says why the launch is blocked, and a gate refusal inside the
+    launch transaction (e.g. not verified) rolls everything back."""
     asset = listed(world)
+    price = preview(world, asset["id"]).json()["ipo_price"]
     seen: list[AssetStatus] = []
 
     def gate(session: Session, locked: Asset) -> None:
@@ -477,10 +555,12 @@ def test_the_launch_gate_is_checked_inside_the_transaction(
         raise IpoRefused("verification_required")
 
     monkeypatch.setattr(ipo_service, "check_gate", gate)
-    response = launch_ipo(world, asset["id"])
+    shown = preview(world, asset["id"]).json()
+    assert (shown["launchable"], shown["blocked_reason"]) == (False, "verification_required")
+    response = launch_ipo(world, asset["id"], expected_price=price)
 
     assert (response.status_code, response.json()["detail"]) == (409, "verification_required")
-    assert seen == [AssetStatus.LISTED]
+    assert seen == [AssetStatus.LISTED, AssetStatus.LISTED]  # the preview's, then the launch's
     assert written(world, asset["id"])[:2] == (0, 0)
     world.session.expire_all()
     assert world.session.get_one(Asset, UUID(asset["id"])).ipo_at is None
@@ -547,23 +627,176 @@ def test_shares_are_conserved_through_primary_and_secondary_trades(world: World_
 
 
 @requires_db
-def test_two_concurrent_launches_open_one_ipo(committed: Committed) -> None:
-    asset_id = _committed_draft(committed)
-    with Session(committed.engine) as setup:
+def test_a_listing_the_caller_cant_see_is_not_found(world: World_) -> None:
+    """A draft is private to its community (T58): outsiders get 404, never a 403 that would
+    tell them it exists."""
+    unlisted = draft(world)
+    for user in (world.outsider, world.other_steward):
+        for response in (
+            preview(world, unlisted["id"], user),
+            launch_ipo(world, unlisted["id"], user),
+        ):
+            assert (response.status_code, response.json()["detail"]) == (404, "not_found")
+    # Those who can see it get the policy's answer.
+    for user, expected in [
+        (world.steward, (403, "owner_only")),
+        (world.admin, (403, "owner_only")),
+        (world.owner, (409, NOT_LISTED)),
+    ]:
+        response = preview(world, unlisted["id"], user)
+        assert (response.status_code, response.json()["detail"]) == expected
+    anonymous = client_as(world, None)
+    assert anonymous.get(f"/assets/{unlisted['id']}/ipo/preview").status_code == 401
+
+
+@requires_db
+def test_an_asset_removed_meanwhile_is_not_found(
+    world: World_, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A "Reset my demo" can delete the asset between authorization and the launch's lock."""
+    asset = listed(world)
+
+    def gone(*args: Any, **kwargs: Any) -> Any:
+        raise LookupError("asset not found")
+
+    monkeypatch.setattr(ipo_service, "lock_asset", gone)
+    monkeypatch.setattr(ipo_router, "preview", gone)
+
+    for response in (
+        preview(world, asset["id"]),
+        launch_ipo(world, asset["id"], expected_price="1"),
+    ):
+        assert (response.status_code, response.json()["detail"]) == (404, "Asset not found")
+    assert written(world, asset["id"])[:2] == (0, 0)
+
+
+@requires_db
+def test_a_launch_is_refused_while_a_rating_run_is_queued(world: World_) -> None:
+    asset = listed(world)
+    world.runner.start(world.id, UUID(asset["id"]))  # queued; the Deferred executor holds it
+
+    shown = preview(world, asset["id"]).json()
+    assert (shown["launchable"], shown["blocked_reason"]) == (False, RUN_IN_PROGRESS)
+    refused = launch_ipo(world, asset["id"], expected_price=shown["ipo_price"])
+    assert (refused.status_code, refused.json()["detail"]) == (409, RUN_IN_PROGRESS)
+    assert written(world, asset["id"])[:2] == (0, 0)
+
+    world.executor.run_all()
+    assert preview(world, asset["id"]).json()["launchable"] is True
+    assert launch_ipo(world, asset["id"]).status_code == 201
+
+
+@requires_db
+def test_a_launch_is_refused_while_a_rating_run_is_running(world: World_) -> None:
+    asset = listed(world)
+    attempts: list[Any] = []
+    saved = world.runner.metrics_loader
+
+    def load_and_try_to_launch(info: Any, scenario: Any) -> Any:
+        attempts.append(launch_ipo(world, asset["id"]))  # mid-run: the run is active
+        return saved(info, scenario)
+
+    world.runner.metrics_loader = load_and_try_to_launch
+    world.runner.start(world.id, UUID(asset["id"]))
+    world.executor.run_all()
+
+    assert [(r.status_code, r.json()["detail"]) for r in attempts] == [(409, RUN_IN_PROGRESS)]
+    world.session.expire_all()
+    assert world.session.get_one(Asset, UUID(asset["id"])).ipo_at is None
+
+
+@requires_db
+def test_a_report_sealed_after_a_launch_uses_the_new_share_count(world: World_) -> None:
+    """Defence in depth: the run's report reads `total_shares` from the locked asset when it
+    stores, not from the start of the run."""
+    asset = listed(world)
+    world.runner.start(world.id, UUID(asset["id"]))
+    row = world.session.get_one(Asset, UUID(asset["id"]))
+    row.total_shares = 2_000_000  # as if a launch had landed while the run was in flight
+    world.session.add(row)
+    world.session.commit()
+
+    world.executor.run_all()
+
+    report = report_of(world, asset["id"])
+    total = report_fair_value_total(report)
+    assert report.version == 2 and total is not None
+    assert report.fair_value_per_share == (total / 2_000_000).quantize(D("0.0001"))
+
+
+@requires_db
+def test_the_report_diff_compares_total_fair_value_across_the_launch(world: World_) -> None:
+    asset = listed(world)
+    first = report_of(world, asset["id"])
+    assert launch_ipo(world, asset["id"], total_shares=2_000_000).status_code == 201
+    world.runner.start(world.id, UUID(asset["id"]))
+    world.executor.run_all()
+    second = report_of(world, asset["id"])
+    assert second.fair_value_per_share != first.fair_value_per_share  # half: twice the shares
+
+    diff = client_as(world, world.outsider).get(f"/reports/{second.id}/diff/{first.id}")
+
+    changes = diff.json()["changes"]
+    assert not any(change.startswith("fair_value_per_share") for change in changes)
+    total = report_fair_value_total(second)
+    assert f"fair_value_total unchanged: {total}" in changes
+
+
+@requires_db
+def test_a_price_nobody_can_afford_is_blocked_until_more_shares_are_issued(
+    world: World_,
+) -> None:
+    asset = listed(world)
+    set_fair_value(world, asset["id"], "2000000000", "100", "100")
+
+    shown = preview(world, asset["id"]).json()
+    assert (shown["ipo_price"], shown["launchable"], shown["blocked_reason"]) == (
+        "20000.0000",
+        False,
+        PRICE_TOO_HIGH,
+    )
+    refused = launch_ipo(world, asset["id"], expected_price=shown["ipo_price"])
+    assert (refused.status_code, refused.json()["detail"]) == (409, PRICE_TOO_HIGH)
+    assert written(world, asset["id"])[:2] == (0, 0)
+
+    more = preview(world, asset["id"], total_shares=4_000_000).json()
+    assert (more["ipo_price"], more["launchable"]) == ("5000.0000", True)
+    assert launch_ipo(world, asset["id"], total_shares=4_000_000).status_code == 201
+
+
+@requires_db
+def test_the_confirmed_price_may_drop_trailing_zeros(world: World_) -> None:
+    asset = listed(world)
+    set_fair_value(world, asset["id"], "1000000", "80", "60")
+    assert preview(world, asset["id"]).json()["ipo_price"] == "7.9200"
+
+    assert launch_ipo(world, asset["id"], expected_price="7.92").status_code == 201
+
+
+@requires_db
+def test_the_confirmed_price_is_required(world: World_) -> None:
+    asset = listed(world)
+    response = client_as(world, world.owner).post(f"/assets/{asset['id']}/ipo", json={})
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "expected_price"]
+    assert written(world, asset["id"])[:2] == (0, 0)
+
+
+def _committed_listed(c: Committed, lat: float = LAT) -> tuple[UUID, Decimal]:
+    """A committed listing in `listed` with a report v1 (the curated wetland's numbers), and
+    its IPO price for the default offering."""
+    asset_id = _committed_draft(c, lat=lat)
+    with Session(c.engine) as setup:
         site = setup.exec(
-            select(Report).where(
-                Report.world_id == committed.world_id,
-                col(Report.asset_id).in_(
-                    select(Asset.id).where(
-                        Asset.world_id == committed.world_id, Asset.site_key == "wetland_mx"
-                    )
-                ),
-            )
+            select(Report)
+            .join(Asset, col(Asset.id) == col(Report.asset_id))
+            .where(Asset.world_id == c.world_id, Asset.site_key == "wetland_mx")
         ).first()
         assert site is not None
         setup.add(
             Report(
-                world_id=committed.world_id,
+                world_id=c.world_id,
                 asset_id=asset_id,
                 version=1,
                 value_mid=site.value_mid,
@@ -575,20 +808,48 @@ def test_two_concurrent_launches_open_one_ipo(committed: Committed) -> None:
         asset.status = AssetStatus.LISTED
         setup.add(asset)
         setup.commit()
+        price = ipo_service.preview(setup, c.world_id, asset_id, Offering()).terms.price
+    return asset_id, price
 
-    barrier = threading.Barrier(2)
-    outcomes: list[str] = []
 
-    def go() -> None:
-        with Session(committed.engine) as session:
-            barrier.wait(timeout=10)
+def _launch_job(c: Committed, asset_id: UUID, price: Decimal) -> Callable[[], str]:
+    def job() -> str:
+        with Session(c.engine) as session:
             try:
-                launch(session, committed.world_id, asset_id, Offering())
+                launch(session, c.world_id, asset_id, Offering(), expected_price=price)
                 session.commit()
-                outcomes.append("launched")
+                return "launched"
             except IpoRefused as exc:
                 session.rollback()
-                outcomes.append(exc.code)
+                return exc.code
+
+    return job
+
+
+def _slow_ipo_publish(monkeypatch: pytest.MonkeyPatch, held: threading.Event) -> None:
+    """In the thread named `holder`, pause the launch just before it publishes, holding the
+    world, asset and publisher locks."""
+    real = ipo_service.publish
+
+    def publish(*args: Any, **kwargs: Any) -> Any:
+        if threading.current_thread().name == "holder":
+            held.set()
+            time.sleep(0.5)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(ipo_service, "publish", publish)
+
+
+@requires_db
+def test_two_concurrent_launches_open_one_ipo(committed: Committed) -> None:
+    asset_id, price = _committed_listed(committed)
+    barrier = threading.Barrier(2)
+    outcomes: list[str] = []
+    job = _launch_job(committed, asset_id, price)
+
+    def go() -> None:
+        barrier.wait(timeout=10)
+        outcomes.append(job())
 
     threads = [threading.Thread(target=go) for _ in range(2)]
     for thread in threads:
@@ -603,19 +864,183 @@ def test_two_concurrent_launches_open_one_ipo(committed: Committed) -> None:
         assert_conserved(check, asset_id)
 
 
-# ----- migration --------------------------------------------------------------------------------
+@requires_db
+def test_an_order_waits_for_a_launch_in_progress_then_trades(
+    committed: Committed, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asset_id, price = _committed_listed(committed)
+    held = threading.Event()
+    _slow_ipo_publish(monkeypatch, held)
+
+    with Session(committed.engine) as setup:
+        buyer = _as(lifecycle._person(setup, committed.world_id, "Buyer"))
+
+    def order() -> int:
+        with Session(committed.engine) as session:
+            current = session.get_one(WorldRow, committed.world_id)
+            try:
+                place_order(
+                    OrderCreate(asset_id=asset_id, side="buy", qty=10), current, buyer, session
+                )
+                return 200
+            except HTTPException as exc:
+                session.rollback()
+                return exc.status_code
+
+    launched, ordered = _race(_launch_job(committed, asset_id, price), order, held)
+
+    assert (launched, ordered) == ("launched", 200)
+    with Session(committed.engine) as check:
+        reasons = check.exec(
+            select(Price.reason).where(Price.asset_id == asset_id).order_by(col(Price.ts))
+        ).all()
+        assert list(reasons) == ["ipo", "order"]
+        assert check.get_one(Asset, asset_id).primary_shares_remaining == 490_000 - 10
+        assert_conserved(check, asset_id)
 
 
 @requires_db
-def test_the_migration_backfills_launches_and_downgrades() -> None:
-    cfg = alembic_cfg()
-    command.upgrade(cfg, "head")
-    command.downgrade(cfg, "0012")
-    command.upgrade(cfg, "head")
-    from app.db import engine
+def test_a_suspend_waits_for_a_launch_in_progress(
+    committed: Committed, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asset_id, price = _committed_listed(committed)
+    held = threading.Event()
+    _slow_ipo_publish(monkeypatch, held)
 
-    with Session(engine) as check:
-        priced = check.exec(
-            select(Asset).where(col(Asset.id).in_(select(Price.asset_id).distinct()))
-        ).all()
-        assert all(asset.ipo_at is not None for asset in priced)
+    def suspend_it() -> AssetStatus:
+        with Session(committed.engine) as session:
+            asset = suspend(session, committed.world_id, asset_id, SuspensionReason.MODERATION)
+            session.commit()
+            return asset.status
+
+    launched, suspended = _race(_launch_job(committed, asset_id, price), suspend_it, held)
+
+    assert (launched, suspended) == ("launched", AssetStatus.SUSPENDED)
+    with Session(committed.engine) as check:
+        asset = check.get_one(Asset, asset_id)
+        assert asset.ipo_at is not None and not is_trading(asset)
+
+
+@requires_db
+def test_a_launch_waits_for_a_suspend_in_progress_and_is_refused(
+    committed: Committed, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asset_id, price = _committed_listed(committed)
+    held = threading.Event()
+    _slow_listing_publish(monkeypatch, held)
+
+    def suspend_it() -> AssetStatus:
+        with Session(committed.engine) as session:
+            asset = suspend(session, committed.world_id, asset_id, SuspensionReason.MODERATION)
+            session.commit()
+            return asset.status
+
+    suspended, launched = _race(suspend_it, _launch_job(committed, asset_id, price), held)
+
+    assert (suspended, launched) == (AssetStatus.SUSPENDED, NOT_LISTED)
+    with Session(committed.engine) as check:
+        assert check.get_one(Asset, asset_id).ipo_at is None
+        assert check.exec(select(Price).where(Price.asset_id == asset_id)).all() == []
+
+
+# ----- migration --------------------------------------------------------------------------------
+
+
+def _sql(c: Committed, statement: str, **params: Any) -> list[Any]:
+    with c.engine.begin() as connection:
+        result = connection.execute(text(statement), params)
+        return list(result.all()) if result.returns_rows else []
+
+
+@requires_db
+def test_the_migration_backfills_launches_and_zeroes_unissued_floats(
+    committed: Committed,
+) -> None:
+    cfg = alembic_cfg()
+    unpriced = _committed_draft(committed, lat=LAT)
+    held = _committed_draft(committed, lat=LAT + 1)
+    priced = _committed_draft(committed, lat=LAT + 2)
+    curated_launched = _sql(
+        committed,
+        "SELECT id, ipo_at FROM assets WHERE world_id = :w AND site_key IS NOT NULL",
+        w=committed.world_id,
+    )
+    assert curated_launched and all(ipo_at is not None for _, ipo_at in curated_launched)
+    try:
+        command.downgrade(cfg, "0012")
+        ids = [unpriced, held, priced]
+        _sql(
+            committed,
+            "UPDATE assets SET primary_shares_remaining = 490000 WHERE id = ANY(:ids)",
+            ids=ids,
+        )
+        _sql(
+            committed,
+            "INSERT INTO holdings (world_id, user_id, asset_id, shares) "
+            "SELECT world_id, community_user_id, id, 510000 FROM assets WHERE id = :a",
+            a=held,
+        )
+        first, later = datetime(2026, 10, 1, tzinfo=UTC), datetime(2026, 10, 2, tzinfo=UTC)
+        for ts, reason in ((later, "order"), (first, "ipo")):
+            _sql(
+                committed,
+                "INSERT INTO prices (world_id, asset_id, ts, price, reason) "
+                "VALUES (:w, :a, :ts, 7.92, :r)",
+                w=committed.world_id,
+                a=priced,
+                ts=ts,
+                r=reason,
+            )
+
+        command.upgrade(cfg, "head")
+
+        rows = {
+            asset_id: (ipo_at, primary)
+            for asset_id, ipo_at, primary in _sql(
+                committed,
+                "SELECT id, ipo_at, primary_shares_remaining FROM assets WHERE id = ANY(:ids)",
+                ids=ids,
+            )
+        }
+        assert rows[unpriced] == (None, 0)  # no prices: unlaunched, no shares issued
+        assert rows[held] == (None, 490_000)  # holdings: left alone (and warned about)
+        assert rows[priced] == (first, 490_000)  # launched at its first price
+        backfilled = _sql(
+            committed,
+            "SELECT id, ipo_at FROM assets WHERE world_id = :w AND site_key IS NOT NULL",
+            w=committed.world_id,
+        )
+        assert sorted(backfilled) == sorted(curated_launched)  # the first price's ts again
+    finally:
+        command.upgrade(cfg, "head")
+
+
+@requires_db
+def test_the_migration_refuses_an_asset_with_two_ipo_prices(committed: Committed) -> None:
+    cfg = alembic_cfg()
+    asset_id = _committed_draft(committed)
+    try:
+        command.downgrade(cfg, "0012")
+        for day in (1, 2):
+            _sql(
+                committed,
+                "INSERT INTO prices (world_id, asset_id, ts, price, reason) "
+                "VALUES (:w, :a, :ts, 7.92, 'ipo')",
+                w=committed.world_id,
+                a=asset_id,
+                ts=datetime(2026, 10, day, tzinfo=UTC),
+            )
+
+        with pytest.raises(RuntimeError, match="1 assets have more than one 'ipo' price"):
+            command.upgrade(cfg, "head")
+
+        assert _sql(committed, "SELECT version_num FROM alembic_version") == [("0012",)]
+        _sql(
+            committed,
+            "DELETE FROM prices WHERE asset_id = :a AND ts = :ts",
+            a=asset_id,
+            ts=datetime(2026, 10, 2, tzinfo=UTC),
+        )
+    finally:
+        command.upgrade(cfg, "head")
+    assert _sql(committed, "SELECT version_num FROM alembic_version") == [("0013",)]

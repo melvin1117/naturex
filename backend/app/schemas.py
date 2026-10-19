@@ -19,6 +19,14 @@ from app.auth import (
     normalize_email,
 )
 from app.communities import clean_country, clean_description, clean_name
+from app.market.offering import (
+    DEFAULT_RETAINED_PCT,
+    DEFAULT_TOTAL_SHARES,
+    MAX_RETAINED_PCT,
+    MAX_TOTAL_SHARES,
+    MIN_RETAINED_PCT,
+    MIN_TOTAL_SHARES,
+)
 from app.models import (
     AssetStatus,
     CommunityRole,
@@ -339,8 +347,14 @@ class AssetDetail(BaseModel):
     centroid_lat: float | None = None
     centroid_lon: float | None = None
     geojson: dict[str, Any]
-    total_shares: int
-    retained_pct: Decimal
+    total_shares: int | None = Field(
+        default=None,
+        description="Shares issued at the IPO; null before it (ratings until then quote a fair "
+        "value per share at 1,000,000 reference shares; T59).",
+    )
+    retained_pct: Decimal | None = Field(
+        default=None, description="% the community's treasury kept at the IPO; null before it."
+    )
     primary_shares_remaining: int
     community_wallet: Decimal
     site_key: str | None = None
@@ -363,29 +377,28 @@ class IpoLaunch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     total_shares: int = Field(
-        default=1_000_000,
-        ge=10_000,
-        le=10_000_000,
+        default=DEFAULT_TOTAL_SHARES,
+        ge=MIN_TOTAL_SHARES,
+        le=MAX_TOTAL_SHARES,
         description="Shares issued at the IPO; the shares offered (the primary float) are "
         "total_shares × (1 − retained_pct/100), rounded down.",
     )
     retained_pct: Decimal = Field(
-        default=Decimal("51.00"),
-        ge=10,
-        le=90,
+        default=DEFAULT_RETAINED_PCT,
+        ge=MIN_RETAINED_PCT,
+        le=MAX_RETAINED_PCT,
         decimal_places=2,
         description="Percent of the shares the community's treasury keeps (10–90).",
     )
-    expected_price: Decimal | None = Field(
-        default=None,
+    expected_price: Decimal = Field(
         gt=0,
         decimal_places=4,
-        description="The price per share the owner confirmed in the preview: 409 "
-        "ipo_price_changed if a newer report moved it.",
+        description="The price per share the owner confirmed in the preview (`ipo_price`; "
+        "trailing zeros don't matter): 409 ipo_price_changed if a newer report moved it.",
     )
 
 
-class IpoPreviewOut(BaseModel):
+class IpoTermsOut(BaseModel):
     """The IPO price with every term of dev-spec §8's formula (play money, sandbox only)."""
 
     asset_id: UUID
@@ -410,7 +423,17 @@ class IpoPreviewOut(BaseModel):
     retained_shares: int = Field(description="Held by the community's treasury.")
 
 
-class IpoOut(IpoPreviewOut):
+class IpoPreviewOut(IpoTermsOut):
+    launchable: bool = Field(description="Whether POST /assets/{id}/ipo would go ahead now.")
+    blocked_reason: str | None = Field(
+        default=None,
+        description="Why not, as the code the launch would return: ipo_price_too_high (a "
+        "share costs more than a new account's starting cash: issue more shares), "
+        "run_in_progress, or a verification code (T69).",
+    )
+
+
+class IpoOut(IpoTermsOut):
     launched_at: datetime
 
 

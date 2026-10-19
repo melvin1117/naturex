@@ -6,56 +6,86 @@
 
 Both are the community owner's (`LAUNCH_IPO`, ADR-0005 matrix row 6). Stewards get 403
 `owner_only` on the preview too: it is the first step of the launch, which the matrix keeps
-from them, and every input it shows is already public in the asset's report. Admins, other
-users and treasuries get 403, anonymous callers 401, and assets outside the session's world 404.
-A refused launch is 409 with a code; nothing is written.
+from them, and every input it shows is already public in the asset's report. Anonymous callers
+get 401. An asset the caller can't see is 404, as on every other asset route (T58's
+`visible_to`): one outside the session's world, or a listing that isn't public and isn't the
+caller's community's, so a draft's existence never leaks. Other users who can see it (any
+public asset) and same-world admins get 403. A refused launch is 409 with a code; nothing is
+written. An asset deleted meanwhile (a "Reset my demo") is 404.
 """
 
 from __future__ import annotations
 
 from decimal import Decimal
 from typing import Annotated, Any
+from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, HTTPException, Path, Query, Response, status
+from sqlmodel import select
 
-from app.authz import Action, AssetRef, Granted, asset_ref, require
+from app.authz import Action, AssetRef, Granted, OptionalActor, acting_world, require
 from app.deps import SessionDep
-from app.schemas import IpoLaunch, IpoOut, IpoPreviewOut
-from app.services.ipo import (
-    ALREADY_LAUNCHED,
+from app.market.offering import (
     DEFAULT_RETAINED_PCT,
     DEFAULT_TOTAL_SHARES,
     MAX_RETAINED_PCT,
     MAX_TOTAL_SHARES,
     MIN_RETAINED_PCT,
     MIN_TOTAL_SHARES,
+    Offering,
+)
+from app.models import Asset
+from app.schemas import IpoLaunch, IpoOut, IpoPreviewOut
+from app.services.ipo import (
+    ALREADY_LAUNCHED,
     NO_RATING,
     NOT_LISTED,
     PRICE_CHANGED,
+    PRICE_TOO_HIGH,
     PRICE_TOO_LOW,
     IpoQuote,
     IpoRefused,
-    Offering,
     launch,
     preview,
 )
+from app.services.listings import RUN_IN_PROGRESS, visible_to
 
 router = APIRouter(tags=["ipo"])
 
 NO_STORE = "no-store"
 PRIVATE_NO_STORE = "private, no-store"
 Responses = dict[int | str, dict[str, Any]]
-LaunchIpo = Annotated[Granted, require(Action.LAUNCH_IPO, asset_ref)]
+
+
+def visible_asset_ref(
+    asset_id: Annotated[UUID, Path()], actor: OptionalActor, session: SessionDep
+) -> AssetRef | None:
+    """The asset in the actor's world if the actor may see it (T58's `visible_to`), else None
+    (a 404), so a non-member can't tell a draft exists from a 403."""
+    world_id = acting_world(actor)
+    asset = session.exec(
+        select(Asset).where(Asset.world_id == world_id, Asset.id == asset_id)
+    ).first()
+    if asset is None or not visible_to(actor, asset):
+        return None
+    return AssetRef(world_id, asset.id, asset.community_id)
+
+
+LaunchIpo = Annotated[Granted, require(Action.LAUNCH_IPO, visible_asset_ref)]
 
 _COMMON: Responses = {
     401: {"description": "auth_required"},
     403: {"description": "owner_only (stewards too), treasury_cannot_act"},
-    404: {"description": "Not found in the session's world"},
+    404: {"description": "Not found in the session's world, or not visible to the caller"},
 }
 _REFUSED = (
     f"`{ALREADY_LAUNCHED}`, `{NOT_LISTED}` (draft, under review, suspended…), `{NO_RATING}` "
     f"(no usable report) or `{PRICE_TOO_LOW}` (the price per share rounds to zero: issue "
     "fewer shares)"
+)
+_BLOCKED = (
+    f"`{PRICE_TOO_HIGH}` (a share would cost more than a new account's starting cash: issue "
+    f"more shares), `{RUN_IN_PROGRESS}` (a rating run is active) or a verification code (T69)"
 )
 
 
@@ -70,7 +100,13 @@ def _refused(exc: IpoRefused) -> HTTPException:
     return HTTPException(status.HTTP_409_CONFLICT, exc.code, headers={"Cache-Control": NO_STORE})
 
 
-def _preview_out(q: IpoQuote) -> dict[str, Any]:
+def _missing() -> HTTPException:
+    return HTTPException(
+        status.HTTP_404_NOT_FOUND, "Asset not found", headers={"Cache-Control": NO_STORE}
+    )
+
+
+def _terms_out(q: IpoQuote) -> dict[str, Any]:
     terms = q.terms
     return {
         "asset_id": q.asset_id,
@@ -108,15 +144,18 @@ def preview_ipo(
     ] = DEFAULT_RETAINED_PCT,
 ) -> IpoPreviewOut:
     """The price the owner would launch at now: every term of `ipo_price =
-    fair_value_per_share`, computed by the market engine from the latest report. Writes
-    nothing; a later report can change it (confirm with `expected_price`)."""
+    fair_value_per_share`, computed by the market engine from the latest report, and whether
+    the launch would go ahead (`launchable`, else `blocked_reason`). Writes nothing; a later
+    report can change it, so the launch confirms it with `expected_price`."""
     ref = _ref(granted)
     try:
         q = preview(session, ref.world_id, ref.asset_id, Offering(total_shares, retained_pct))
     except IpoRefused as exc:
         raise _refused(exc) from None
+    except LookupError:
+        raise _missing() from None
     response.headers["Cache-Control"] = PRIVATE_NO_STORE
-    return IpoPreviewOut(**_preview_out(q))
+    return IpoPreviewOut(**_terms_out(q), launchable=q.launchable, blocked_reason=q.blocked_reason)
 
 
 @router.post(
@@ -125,7 +164,10 @@ def preview_ipo(
     status_code=status.HTTP_201_CREATED,
     responses={
         **_COMMON,
-        409: {"description": f"{_REFUSED}, or `{PRICE_CHANGED}` (`expected_price` is stale)"},
+        409: {
+            "description": f"{_REFUSED}, {_BLOCKED}, or `{PRICE_CHANGED}` (`expected_price` "
+            "is stale)"
+        },
         422: {
             "description": "total_shares outside 10,000–10,000,000 or retained_pct outside 10–90"
         },
@@ -134,7 +176,8 @@ def preview_ipo(
 def launch_ipo(
     body: IpoLaunch, granted: LaunchIpo, session: SessionDep, response: Response
 ) -> IpoOut:
-    """Launch the IPO of a `listed` asset, once: in one transaction the first `prices` row
+    """Launch the IPO of a `listed` asset, once, at the previewed price (`expected_price`):
+    in one transaction the first `prices` row
     (`reason: ipo`), the community treasury's retained holding, a `price_anchor` ledger entry
     with every term and the primary float open for sale; a public `price_tick` follows. Play
     money only: shares are sandbox units, not securities."""
@@ -150,7 +193,10 @@ def launch_ipo(
     except IpoRefused as exc:
         session.rollback()
         raise _refused(exc) from None
+    except LookupError:
+        session.rollback()
+        raise _missing() from None
     session.commit()
     response.headers["Cache-Control"] = NO_STORE
     response.headers["Location"] = f"/assets/{ref.asset_id}"
-    return IpoOut(**_preview_out(done.quote), launched_at=done.launched_at)
+    return IpoOut(**_terms_out(done.quote), launched_at=done.launched_at)

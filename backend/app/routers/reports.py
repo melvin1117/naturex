@@ -24,6 +24,7 @@ from app.schemas import (
     ReportSummarySource,
 )
 from app.services.listings import visible_to
+from app.services.rating import report_fair_value_total
 from app.tools.earth_obs import NdviPoint
 
 router = APIRouter(tags=["reports"])
@@ -250,10 +251,11 @@ def diff_reports(
             _change("grade", previous.grade, current.grade),
             _change("confidence", previous.confidence, current.confidence),
             _change("value_mid", previous.value_mid, current.value_mid),
+            # The total, not per share: the share count changes at the IPO (T59).
             _change(
-                "fair_value_per_share",
-                previous.fair_value_per_share,
-                current.fair_value_per_share,
+                "fair_value_total",
+                report_fair_value_total(previous),
+                report_fair_value_total(current),
             ),
         ],
     )

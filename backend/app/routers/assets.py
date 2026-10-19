@@ -239,8 +239,9 @@ def asset_detail(session: Session, asset: Asset, settings: SettingsDep) -> Asset
         centroid_lat=asset.centroid_lat,
         centroid_lon=asset.centroid_lon,
         geojson=asset.geojson,
-        total_shares=asset.total_shares,
-        retained_pct=asset.retained_pct,
+        # Shares exist from the IPO on; until then the column is only the rating's reference.
+        total_shares=asset.total_shares if asset.ipo_at else None,
+        retained_pct=asset.retained_pct if asset.ipo_at else None,
         primary_shares_remaining=asset.primary_shares_remaining,
         community_wallet=asset.community_wallet,
         site_key=asset.site_key,

@@ -10,13 +10,14 @@ rounded down; the community's treasury keeps the rest as a holding.
 
 1. locks the world row `FOR KEY SHARE` (waits behind "Reset my demo", like orders), then the
    asset row `FOR UPDATE` (serializes with orders, payouts, suspend/resume and a second launch);
-2. checks the asset is `listed`, not launched yet and passes the launch gate (`check_gate`:
-   the T69 verification seam);
+2. checks the asset is `listed` and not launched yet, passes the launch gate (`check_gate`:
+   the T69 verification seam), has no active rating run (under the publisher lock, as T58's
+   withdraw: a run started before the launch would seal its report at the old share count),
+   and that the price is the one the owner confirmed and one a new account can afford;
 3. sets the asset's share terms and `ipo_at`, seeds the treasury's retained holding, writes the
    first `prices` row (`reason='ipo'`) and appends a `price_anchor` ledger entry with every term
    (no account identifiers, T67);
-4. publishes a public `price_tick` (`reason: "ipo"`) under the world's publisher lock, so the
-   marketplace refreshes.
+4. publishes a public `price_tick` (`reason: "ipo"`), so the marketplace refreshes.
 
 Lock order: world → asset → publisher, as in `app.services.listings` and the order route.
 
@@ -27,46 +28,34 @@ market-maker inventory at launch. Before the IPO no shares exist: no holdings, n
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from app.events import publish
+from app.auth import STARTING_CASH
+from app.events import lock_world_publisher, publish
 from app.ledger import append
 from app.market.engine import IpoTerms, ipo, ipo_terms
-from app.models import (
-    Asset,
-    AssetStatus,
-    Holding,
-    LedgerKind,
-    Price,
-    Report,
-    StreamEventType,
-    World,
-)
-from app.services.listings import lock_asset
-from app.services.rating import latest_report
-
-MIN_RETAINED_PCT = Decimal("10")
-MAX_RETAINED_PCT = Decimal("90")
-DEFAULT_RETAINED_PCT = Decimal("51.00")
-MIN_TOTAL_SHARES = 10_000
-"""Below this the order cap (1% of the shares) would be under 100 shares."""
-MAX_TOTAL_SHARES = 10_000_000
-DEFAULT_TOTAL_SHARES = 1_000_000
+from app.market.offering import Offering
+from app.models import Asset, AssetStatus, Holding, LedgerKind, Price, Report, StreamEventType
+from app.services.listings import RUN_IN_PROGRESS, lock_asset, lock_world_key_share
+from app.services.rating import fair_value_inputs, latest_report
+from app.services.rating_runs import run_active
 
 ALREADY_LAUNCHED = "ipo_already_launched"
 NOT_LISTED = "asset_not_listed"
 NO_RATING = "no_rating"
 PRICE_CHANGED = "ipo_price_changed"
 PRICE_TOO_LOW = "ipo_price_too_low"
+PRICE_TOO_HIGH = "ipo_price_too_high"
 NOT_TRADING = "not_trading"
+MAX_IPO_PRICE = STARTING_CASH
+"""A share must be affordable from a new account's starting cash, or nobody could buy one."""
 
 
 class IpoRefused(Exception):
@@ -77,45 +66,23 @@ class IpoRefused(Exception):
         self.code = code
 
 
-class InvalidOffering(ValueError):
-    """Shares issued or retained % out of range (HTTP 422)."""
-
-
-@dataclass(frozen=True, slots=True)
-class Offering:
-    """What the owner chooses: the shares issued and the % the community keeps."""
-
-    total_shares: int = DEFAULT_TOTAL_SHARES
-    retained_pct: Decimal = DEFAULT_RETAINED_PCT
-
-    def __post_init__(self) -> None:
-        if not MIN_TOTAL_SHARES <= self.total_shares <= MAX_TOTAL_SHARES:
-            raise InvalidOffering(
-                f"total_shares must be between {MIN_TOTAL_SHARES} and {MAX_TOTAL_SHARES}"
-            )
-        if not MIN_RETAINED_PCT <= self.retained_pct <= MAX_RETAINED_PCT:
-            raise InvalidOffering(
-                f"retained_pct must be between {MIN_RETAINED_PCT} and {MAX_RETAINED_PCT}"
-            )
-        if self.retained_pct != self.retained_pct.quantize(Decimal("0.01")):
-            raise InvalidOffering("retained_pct has at most 2 decimal places")
-
-
-@dataclass(frozen=True, slots=True)
-class FairValueInputs:
-    value_mid: Decimal
-    health: Decimal
-    confidence: Decimal
-
-
 @dataclass(frozen=True, slots=True)
 class IpoQuote:
-    """The IPO price with every formula term, priced from one sealed report."""
+    """The IPO price with every formula term, priced from one sealed report.
+
+    `blocked_reason` says why a launch would be refused now even though the price exists
+    (the T69 gate, `run_in_progress`, `ipo_price_too_high`); None when it would go ahead.
+    """
 
     asset_id: UUID
     report_id: UUID
     report_version: int
     terms: IpoTerms
+    blocked_reason: str | None = None
+
+    @property
+    def launchable(self) -> bool:
+        return self.blocked_reason is None
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,38 +97,13 @@ def is_trading(asset: Asset) -> bool:
     return asset.status is AssetStatus.LISTED and asset.ipo_at is not None
 
 
-def _decimal(value: Any) -> Decimal | None:
-    try:
-        return None if value is None else Decimal(str(value))
-    except InvalidOperation:
-        return None
-
-
-def fair_value_inputs(report: Report) -> FairValueInputs:
-    """The fair value inputs a sealed report was priced from.
-
-    Prefers the exact inputs in the report's rating snapshot (`auditor_json.rating.fair_value`,
-    unrounded), so with the report's own share count the IPO price equals the report's
-    `fair_value_per_share`; falls back to the stored columns. Raises IpoRefused(`no_rating`)
-    if the report has no value, health or confidence.
-    """
-    snapshot: Mapping[str, Any] = ((report.auditor_json or {}).get("rating") or {}).get(
-        "fair_value"
-    ) or {}
-    value_mid = _decimal(snapshot.get("value_mid")) or report.value_mid
-    health = _decimal(snapshot.get("health")) or report.health_score
-    confidence = _decimal(snapshot.get("confidence")) or report.confidence
-    if value_mid is None or health is None or confidence is None:
-        raise IpoRefused(NO_RATING)
-    return FairValueInputs(value_mid=value_mid, health=health, confidence=confidence)
-
-
 def quote(asset: Asset, report: Report | None, offering: Offering) -> IpoQuote:
     """Price the offering from the report (pure). Raises IpoRefused: `no_rating`, or
-    `ipo_price_too_low` when the price per share would round to zero (fewer shares fixes it)."""
-    if report is None:
+    `ipo_price_too_low` when the price per share would round to zero (fewer shares fixes it).
+    A price above `MAX_IPO_PRICE` is quoted with `blocked_reason` `ipo_price_too_high`."""
+    inputs = None if report is None else fair_value_inputs(report)
+    if report is None or inputs is None:
         raise IpoRefused(NO_RATING)
-    inputs = fair_value_inputs(report)
     try:
         terms = ipo_terms(
             value_mid=inputs.value_mid,
@@ -174,7 +116,8 @@ def quote(asset: Asset, report: Report | None, offering: Offering) -> IpoQuote:
         raise IpoRefused(NO_RATING) from exc
     if terms.price <= 0:
         raise IpoRefused(PRICE_TOO_LOW)
-    return IpoQuote(asset.id, report.id, report.version, terms)
+    blocked = PRICE_TOO_HIGH if terms.price > MAX_IPO_PRICE else None
+    return IpoQuote(asset.id, report.id, report.version, terms, blocked)
 
 
 def check_launchable(asset: Asset) -> None:
@@ -186,7 +129,8 @@ def check_launchable(asset: Asset) -> None:
 
 
 def check_gate(session: Session, asset: Asset) -> None:
-    """The launch gate beyond `listed`, inside the launch transaction with the asset locked.
+    """The launch gate beyond `listed`, in the preview and inside the launch transaction (with
+    the asset locked).
 
     **T69 seam (ADR-0006 §"The IPO is gated"):** in the live world the current verification run
     must be `verified` with an input fingerprint matching the listing (and, in review mode, a
@@ -196,8 +140,18 @@ def check_gate(session: Session, asset: Asset) -> None:
     _ = (session, asset)
 
 
+def _blocker(session: Session, asset: Asset) -> str | None:
+    """Why a launch would be refused now, before pricing: the gate, then an active run."""
+    try:
+        check_gate(session, asset)
+    except IpoRefused as exc:
+        return exc.code
+    return RUN_IN_PROGRESS if run_active(session, asset.world_id, asset.id) else None
+
+
 def preview(session: Session, world_id: UUID, asset_id: UUID, offering: Offering) -> IpoQuote:
-    """The IPO price an owner would launch at now, with every term. Read-only, no locks.
+    """The IPO price an owner would launch at now, with every term and whether the launch would
+    go ahead (`blocked_reason`). Read-only, no locks, so an active run is advisory here.
 
     Raises LookupError, or IpoRefused (`ipo_already_launched`, `asset_not_listed`,
     `no_rating`, `ipo_price_too_low`)."""
@@ -207,13 +161,9 @@ def preview(session: Session, world_id: UUID, asset_id: UUID, offering: Offering
     if asset is None:
         raise LookupError(f"asset {asset_id} not found in world {world_id}")
     check_launchable(asset)
-    return quote(asset, latest_report(session, world_id, asset_id), offering)
-
-
-def _lock_world(session: Session, world_id: UUID) -> None:
-    session.exec(
-        select(World.id).where(World.id == world_id).with_for_update(read=True, key_share=True)
-    ).one()
+    priced = quote(asset, latest_report(session, world_id, asset_id), offering)
+    blocked = _blocker(session, asset) or priced.blocked_reason
+    return IpoQuote(priced.asset_id, priced.report_id, priced.report_version, priced.terms, blocked)
 
 
 def _ledger_payload(asset: Asset, q: IpoQuote) -> dict[str, Any]:
@@ -245,21 +195,28 @@ def launch(
     asset_id: UUID,
     offering: Offering,
     *,
-    expected_price: Decimal | None = None,
+    expected_price: Decimal,
     now: datetime | None = None,
 ) -> Launched:
     """Launch the IPO (see the module docstring). The caller authorized `LAUNCH_IPO` and
-    commits. Raises LookupError, or IpoRefused: `ipo_already_launched`, `asset_not_listed`,
-    `no_rating`, `ipo_price_too_low`, or `ipo_price_changed` when `expected_price` (the price
-    the owner confirmed in the preview) differs from the price now."""
+    commits. `expected_price` is the price the owner confirmed in the preview (any number of
+    decimals: 21.47 equals 21.4700). Raises LookupError, or IpoRefused:
+    `ipo_already_launched`, `asset_not_listed`, the gate's code (T69), `run_in_progress`,
+    `no_rating`, `ipo_price_too_low`, `ipo_price_changed` or `ipo_price_too_high`."""
     launched_at = now or datetime.now(UTC)
-    _lock_world(session, world_id)
+    lock_world_key_share(session, world_id)
     asset = lock_asset(session, world_id, asset_id)
     check_launchable(asset)
     check_gate(session, asset)
+    # Run activity is decided under the publisher lock (see rating_runs), after the asset's.
+    lock_world_publisher(session, world_id)
+    if run_active(session, world_id, asset_id):
+        raise IpoRefused(RUN_IN_PROGRESS)
     q = quote(asset, latest_report(session, world_id, asset_id), offering)
-    if expected_price is not None and expected_price != q.terms.price:
+    if expected_price != q.terms.price:
         raise IpoRefused(PRICE_CHANGED)
+    if q.blocked_reason is not None:
+        raise IpoRefused(q.blocked_reason)
     if asset.community_user_id is None:
         raise RuntimeError(f"asset {asset.id} has no community treasury to hold its stake")
     held = session.exec(
