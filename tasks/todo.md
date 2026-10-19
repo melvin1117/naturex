@@ -356,9 +356,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`; ledger verify still passes · **Deps:** T30, T41 · **Files:** `backend/app/market/revenue.py`, `backend/app/ledger.py`, `backend/app/models.py`, `backend/app/sandbox.py`, `backend/migrations/versions/*_payout_lines.py`, `backend/tests/test_revenue.py`, `backend/tests/test_ledger_privacy.py`
 
 ### T58 · Listing lifecycle (#101) — D2 · M · Must · A3 A5 A6
-- [ ] Pure state machine: draft → rating → listed | needs_evidence | ineligible; needs_evidence → rating after evidence; listed ↔ suspended (admin). The listing gate applies at listing time only; invalid transitions are rejected
-- [ ] `POST /assets` creates a draft in the principal's community (attestation required, polygon validated by T36, no overlap within the world); `POST /assets/{id}/submit` starts a rating through the rating service, whose result sets the status
-- [ ] Every transition appends a ledger entry and publishes an event
+- [x] Pure state machine: draft → rating → listed | needs_evidence | ineligible; needs_evidence → rating after evidence; listed ↔ suspended (admin). The listing gate applies at listing time only; invalid transitions are rejected
+- [x] `POST /assets` creates a draft in the principal's community (attestation required, polygon validated by T36, no overlap within the world); `POST /assets/{id}/submit` starts a rating through the rating service, whose result sets the status
+- [x] Every transition appends a ledger entry and publishes an event
 
 **Verify:** `make test` · **Deps:** T19, T68, T36, T29, T30 · **Files:** `backend/app/services/lifecycle.py`, `backend/app/routers/assets.py`, `backend/tests/test_lifecycle.py`
 
