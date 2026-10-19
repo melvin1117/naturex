@@ -43,11 +43,13 @@ from app.seed import DEMO_SITES, PERSONAS, WORLD_ID, seed
 from app.services.lifecycle import SuspensionReason
 from app.services.listings import (
     ListingDetails,
+    ListingSubmit,
     create_draft,
     resume,
-    submit_transition,
+    revise,
     suspend,
     update_draft,
+    withdraw,
 )
 from tests.conftest import alembic_cfg, requires_db
 
@@ -207,8 +209,9 @@ def _ledger_producers() -> dict[LedgerKind | None, list[str]]:
 
 
 def _produce_listing(session: Session) -> None:
-    """A draft whose description and GeoJSON properties name a person, edited, submitted, plus
-    a suspend and resume of a curated asset: every `listing` transition the API writes."""
+    """A draft whose description and GeoJSON properties name a person, edited, submitted,
+    revised, resubmitted and withdrawn, plus a suspend and resume of a curated asset: every
+    `listing` transition the API writes but `rated` (covered by test_lifecycle's scan)."""
     community_id = session.exec(
         select(Community.id).where(Community.world_id == WORLD_ID).order_by(col(Community.name))
     ).first()
@@ -224,7 +227,11 @@ def _produce_listing(session: Session) -> None:
     )
     draft = create_draft(session, world_id=WORLD_ID, community_id=community_id, details=details)
     update_draft(session, WORLD_ID, draft.id, {"description": "Ada Lovelace's family land."})
-    submit_transition(session, draft, uuid4())
+    submit = ListingSubmit(metrics_version=None)
+    submit.lock(session, WORLD_ID, draft.id)
+    submit(session, draft, uuid4())
+    revise(session, WORLD_ID, draft.id, run_active=lambda *_: False)
+    withdraw(session, WORLD_ID, draft.id, run_active=lambda *_: False)
     suspend(session, WORLD_ID, ASSET_ID, SuspensionReason.MODERATION)
     resume(session, WORLD_ID, ASSET_ID)
 

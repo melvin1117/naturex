@@ -213,31 +213,11 @@ export interface paths {
         /**
          * Create Listing
          * @description Create a **draft** listing in a community the caller owns or stewards, in the session's
-         *     world. Needs `attestation: true`; the polygon must pass T36's checks and not overlap any
-         *     other listing in the world (ineligible ones excepted). Nothing is public until it's listed.
+         *     world. Needs `attestation: true`; the polygon must pass T36's checks and not overlap a
+         *     submitted listing in the world or one of the community's own drafts. Nothing is public
+         *     until it's listed.
          */
         post: operations["create_listing_assets_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/communities/{community_id}/assets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Community Assets
-         * @description The community's listings at every status, drafts included (its members and same-world
-         *     admins only): the Steward app's listing flow.
-         */
-        get: operations["list_community_assets_communities__community_id__assets_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -260,72 +240,10 @@ export interface paths {
         head?: never;
         /**
          * Edit Listing
-         * @description Edit a draft (its community's owner or stewards). Only the fields sent change.
+         * @description Edit a draft (its community's owner or stewards). Only the fields sent change; a body
+         *     that changes nothing is 400 and writes nothing.
          */
         patch: operations["edit_listing_assets__asset_id__patch"];
-        trace?: never;
-    };
-    "/assets/{asset_id}/submit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Submit Listing
-         * @description Submit a draft for rating (or resubmit: a `needs_evidence` listing with new evidence,
-         *     or a `rating` listing whose run failed). The move to `rating`, its ledger entry and the
-         *     queued run commit together; the run's sealed report then sets `listed`, `needs_evidence`
-         *     or `ineligible`. Follow it with `GET /runs/{run_id}` or `listing_status` events.
-         */
-        post: operations["submit_listing_assets__asset_id__submit_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/assets/{asset_id}/suspend": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Suspend Listing
-         * @description Suspend trading on a listed asset (admins, never on their own community's asset).
-         */
-        post: operations["suspend_listing_admin_assets__asset_id__suspend_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/assets/{asset_id}/resume": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Resume Listing
-         * @description Resume trading on a suspended asset (admins, never on their own community's asset).
-         */
-        post: operations["resume_listing_admin_assets__asset_id__resume_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/assets/{asset_id}/evidence": {
@@ -380,6 +298,134 @@ export interface paths {
         get: operations["list_prices_assets__asset_id__prices_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/communities/{community_id}/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Community Assets
+         * @description The community's listings at every status, drafts included (its members and same-world
+         *     admins only): the Steward app's listing flow.
+         */
+        get: operations["list_community_assets_communities__community_id__assets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{asset_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Listing
+         * @description Submit a draft for rating, or resubmit: a `needs_evidence` listing with new evidence or
+         *     newer satellite data, or a `rating` listing whose run failed (at most every 10 minutes).
+         *     The move to `rating`, its ledger entry and the queued run commit together; the run's
+         *     sealed report then sets `listed`, `needs_evidence` or `ineligible`. Follow it with
+         *     `GET /runs/{run_id}` or `listing_status` events.
+         */
+        post: operations["submit_listing_assets__asset_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{asset_id}/revise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revise Listing
+         * @description Return a `needs_evidence` listing, or a `rating` one with no active run, to `draft`, so
+         *     the community can redraw and resubmit it.
+         */
+        post: operations["revise_listing_assets__asset_id__revise_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{asset_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Listing
+         * @description Withdraw a listing that was never listed (draft, needs_evidence, or rating with no
+         *     active run). `withdrawn` is final; it frees the land and the community's open-listing
+         *     slot, and the listing stays visible to its community only.
+         */
+        post: operations["withdraw_listing_assets__asset_id__withdraw_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/assets/{asset_id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suspend Listing
+         * @description Suspend trading on a listed asset (admins, never on their own community's asset).
+         */
+        post: operations["suspend_listing_admin_assets__asset_id__suspend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/assets/{asset_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Listing
+         * @description Resume trading on a suspended asset (admins, never on their own community's asset).
+         */
+        post: operations["resume_listing_admin_assets__asset_id__resume_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -781,6 +827,7 @@ export interface paths {
         /**
          * Get Rating Run
          * @description The run's status and steps, rebuilt from its progress events (any worker can answer).
+         *     A run of a listing under review is its community's and same-world admins' only (T58).
          */
         get: operations["get_rating_run_runs__run_id__get"];
         put?: never;
@@ -849,9 +896,15 @@ export interface components {
             status: components["schemas"]["AssetStatusOut"];
             /**
              * Status Reason
-             * @description Why the listing is in its status, as a code: listing gate failures (e.g. confidence_below_70), a suspension reason, no_satellite_metrics or rating_failed:<error> while rating (T58).
+             * @description Why the listing is in its status, as a code: listing gate failures (e.g. confidence_below_70), a suspension reason, no_satellite_metrics or rating_failed:<error> or rating_stale while rating (T58).
              */
             status_reason?: string | null;
+            /**
+             * Mock
+             * @description True when the latest report was rated from USE_MOCKS placeholder metrics (T58), not observed satellite data: show it as mock data.
+             * @default false
+             */
+            mock: boolean;
             /** Area Ha */
             area_ha: string;
             /**
@@ -965,6 +1018,12 @@ export interface components {
             community_wallet: string;
             /** Site Key */
             site_key?: string | null;
+            /**
+             * Mock
+             * @description True when the latest report was rated from USE_MOCKS placeholder metrics (T58), not observed satellite data: show it as mock data.
+             * @default false
+             */
+            mock: boolean;
             latest_report?: components["schemas"]["ReportOut"] | null;
             /** Recent Events */
             recent_events?: components["schemas"]["EventOut"][];
@@ -980,12 +1039,12 @@ export interface components {
          * AssetStatus
          * @enum {string}
          */
-        AssetStatus: "draft" | "rating" | "needs_evidence" | "ineligible" | "listed" | "suspended";
+        AssetStatus: "draft" | "rating" | "needs_evidence" | "ineligible" | "listed" | "suspended" | "withdrawn";
         /**
          * AssetStatusOut
          * @enum {string}
          */
-        AssetStatusOut: "draft" | "rating" | "needs_evidence" | "ineligible" | "listed" | "suspended";
+        AssetStatusOut: "draft" | "rating" | "needs_evidence" | "ineligible" | "listed" | "suspended" | "withdrawn";
         /**
          * AssetSubmitted
          * @description A listing submitted for rating: follow the run with `GET /runs/{run_id}`.
@@ -2675,58 +2734,6 @@ export interface operations {
             };
         };
     };
-    list_community_assets_communities__community_id__assets_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                community_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssetCard"][];
-                };
-            };
-            /** @description auth_required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description A reason code, e.g. members_only or admin_only */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not found in the caller's world */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_asset_assets__asset_id__get: {
         parameters: {
             query?: never;
@@ -2789,6 +2796,13 @@ export interface operations {
                     "application/json": components["schemas"]["AssetDetail"];
                 };
             };
+            /** @description `no_changes`: the body changes nothing */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description auth_required */
             401: {
                 headers: {
@@ -2823,6 +2837,160 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description `edit_rate_limited`; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    upload_evidence_assets__asset_id__evidence_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reports_assets__asset_id__reports_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_prices_assets__asset_id__prices_get: {
+        parameters: {
+            query?: {
+                range?: string;
+            };
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricePoint"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_community_assets_communities__community_id__assets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                community_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetCard"][];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A reason code, e.g. members_only or admin_only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the caller's world */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -2867,7 +3035,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description `cannot_submit_<status>`, `evidence_required` (needs_evidence with no new field evidence) or `run_in_progress` (Location: the active run) */
+            /** @description `cannot_submit_<status>`, `overlap` (a listing submitted first claims the land), `evidence_required` (needs_evidence with no new evidence or newer data), `metrics_unavailable` (still no metrics for the polygon) or `run_in_progress` (Location: the active run) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2883,7 +3051,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description `rating_rate_limited` or `rating_global_limit`; see Retry-After */
+            /** @description `resubmit_cooldown`, `rating_rate_limited` or `rating_global_limit`; see Retry-After */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2896,6 +3064,124 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    revise_listing_assets__asset_id__revise_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A reason code, e.g. members_only or admin_only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the caller's world */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `cannot_<event>_<status>` or `run_in_progress` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_listing_assets__asset_id__withdraw_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A reason code, e.g. members_only or admin_only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the caller's world */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `cannot_<event>_<status>` or `run_in_progress` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -3009,101 +3295,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upload_evidence_assets__asset_id__evidence_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                asset_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EvidenceResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_reports_assets__asset_id__reports_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                asset_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReportOut"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_prices_assets__asset_id__prices_get: {
-        parameters: {
-            query?: {
-                range?: string;
-            };
-            header?: never;
-            path: {
-                asset_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PricePoint"][];
-                };
             };
             /** @description Validation Error */
             422: {
@@ -3809,7 +4000,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description `run_in_progress` (Location: the active run) or `asset_is_draft` */
+            /** @description `run_in_progress` (Location: the active run), `asset_is_draft` or `asset_not_listed` (listings under review are rated through `/submit`; T58) */
             409: {
                 headers: {
                     [name: string]: unknown;

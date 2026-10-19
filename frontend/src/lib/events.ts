@@ -29,11 +29,24 @@ export interface PriceTickPayload {
   reason: string;
 }
 
-/** `listing_status` payload as published by backend/app/services/listings.py (T58). */
+/**
+ * `listing_status` payload as published by backend/app/services/listings.py (T58). Events
+ * about a listing under review reach only its community and admins; `rating_failed` is not a
+ * transition (the listing stays in `rating`) but says why it is stuck.
+ */
 export interface ListingStatusPayload {
   asset_id: string;
   community_id: string | null;
-  transition: "create" | "edit" | "submit" | "rated" | "suspend" | "resume";
+  transition:
+    | "create"
+    | "edit"
+    | "submit"
+    | "rated"
+    | "revise"
+    | "withdraw"
+    | "suspend"
+    | "resume"
+    | "rating_failed";
   from: string | null;
   to: string;
   /** A code such as `confidence_below_70`; null when the status needs no explanation. */

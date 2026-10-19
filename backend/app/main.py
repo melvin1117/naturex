@@ -11,7 +11,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from sqlmodel import Session
 
-from app.config import Settings, get_settings, rate_limit_secret, secure_cookies
+from app.config import (
+    Settings,
+    get_settings,
+    rate_limit_secret,
+    secure_cookies,
+    validate_mock_settings,
+)
 from app.db import engine
 from app.middleware import CsrfMiddleware, parse_allowed_origins
 from app.routers import (
@@ -22,6 +28,7 @@ from app.routers import (
     copilot,
     events,
     ledger,
+    listings,
     market,
     media,
     reports,
@@ -87,6 +94,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     validate_auth_settings(settings)
     if settings.live_world_on_startup:
         prepare_live_world()
+    validate_mock_settings(settings)
     yield
 
 
@@ -104,6 +112,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(communities.router)
 app.include_router(assets.router)
+app.include_router(listings.router)
 app.include_router(reports.router)
 app.include_router(market.router)
 app.include_router(copilot.router)

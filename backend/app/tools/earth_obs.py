@@ -213,6 +213,8 @@ def is_curated_site(site_key: str) -> bool:
 
 MOCK_SITE_KEY = "mock_listing"
 MOCK_DATA_VERSION_PREFIX = "mock-"
+MOCK_FLAG = "mock_metrics"
+"""Report flag type for a rating made from mock metrics."""
 MOCK_ATTRIBUTION = (
     "Mock metrics (USE_MOCKS=true): deterministic placeholders for a new polygon, not observed "
     "data. Live Earth Engine metrics for new listings arrive with T60."

@@ -105,6 +105,13 @@ class AssetStatusOut(StrEnum):
     INELIGIBLE = "ineligible"
     LISTED = "listed"
     SUSPENDED = "suspended"
+    WITHDRAWN = "withdrawn"
+
+
+_MOCK_DESCRIPTION = (
+    "True when the latest report was rated from USE_MOCKS placeholder metrics (T58), not "
+    "observed satellite data: show it as mock data."
+)
 
 
 class ReportSummarySource(StrEnum):
@@ -219,8 +226,9 @@ class AssetCard(BaseModel):
         default=None,
         description="Why the listing is in its status, as a code: listing gate failures "
         "(e.g. confidence_below_70), a suspension reason, no_satellite_metrics or "
-        "rating_failed:<error> while rating (T58).",
+        "rating_failed:<error> or rating_stale while rating (T58).",
     )
+    mock: bool = Field(default=False, description=_MOCK_DESCRIPTION)
     area_ha: Decimal
     price: Decimal | None = Field(default=None, description="Latest sandbox price (play money).")
     price_change_pct: float | None = Field(
@@ -331,6 +339,7 @@ class AssetDetail(BaseModel):
     primary_shares_remaining: int
     community_wallet: Decimal
     site_key: str | None = None
+    mock: bool = Field(default=False, description=_MOCK_DESCRIPTION)
     latest_report: ReportOut | None = None
     recent_events: list[EventOut] = Field(default_factory=list)
     price: Decimal | None = None

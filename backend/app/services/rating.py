@@ -41,6 +41,7 @@ from app.market.engine import fair_value_per_share, fair_value_total
 from app.models import Asset, LedgerKind, Metrics, Report
 from app.tools.earth_obs import (
     MOCK_ATTRIBUTION,
+    MOCK_FLAG,
     EarthObsMetrics,
     is_mock_metrics,
     load_site_metrics,
@@ -131,7 +132,7 @@ class SiteRating:
         out: list[dict[str, str]] = []
         metrics = self.metrics
         if is_mock_metrics(metrics):
-            out.append(_flag("mock_metrics", "data", MOCK_ATTRIBUTION))
+            out.append(_flag(MOCK_FLAG, "data", MOCK_ATTRIBUTION))
         if metrics.simulated:
             out.append(
                 _flag(
