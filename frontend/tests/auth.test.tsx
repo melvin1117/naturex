@@ -32,6 +32,7 @@ import { PrototypeProvider, usePrototype } from "@/lib/prototype/store";
 
 import {
   BASE,
+  community,
   fakeBackend,
   json,
   sequence,
@@ -536,13 +537,16 @@ describe("protected layouts", () => {
     },
   );
 
-  it("/steward shows its children to a signed-in account", async () => {
+  it("/steward shows its children to a community member", async () => {
     nav.pathname = "/steward";
     setup(
       <StewardLayout>
         <Child />
       </StewardLayout>,
-      { "GET /world": () => json(SIGNED_IN_WORLD) },
+      {
+        "GET /world": () => json(SIGNED_IN_WORLD),
+        "GET /me/communities": () => json([community()]),
+      },
     );
     expect(await screen.findByText("Protected content")).toBeVisible();
   });

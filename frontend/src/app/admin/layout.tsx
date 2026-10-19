@@ -1,7 +1,9 @@
 import { AppHeader } from "@/components/proto/app-header";
 import { SiteFooter } from "@/components/proto/site-footer";
 import { RequireAccount } from "@/components/require-account";
+import { MAIN_ID } from "@/components/skip-link";
 
+/** The control room (`/admin`): platform admins only (ADR-0005 §5). */
 export default function AdminLayout({
   children,
 }: {
@@ -10,7 +12,7 @@ export default function AdminLayout({
   return (
     <>
       <AppHeader app="admin" />
-      <main className="flex-1">
+      <main id={MAIN_ID} tabIndex={-1} className="flex-1 outline-none">
         <RequireAccount admin>{children}</RequireAccount>
       </main>
       <SiteFooter />

@@ -82,11 +82,12 @@ function DemoControls() {
           <span className="font-medium whitespace-nowrap">
             Demo mode · private sandbox.
           </span>
-          <span className="whitespace-nowrap text-primary-foreground/75 md:hidden">
-            Play money only.
-          </span>
-          <span className="hidden text-primary-foreground/75 md:inline">
-            {SANDBOX_NOTICE} Prototype with scripted data.
+          <span className="text-primary-foreground/75">
+            {SANDBOX_NOTICE}
+            <span className="hidden md:inline">
+              {" "}
+              Prototype with scripted data.
+            </span>
           </span>
         </p>
         <div className="ml-auto flex flex-wrap items-center gap-2">
