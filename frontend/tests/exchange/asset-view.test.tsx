@@ -186,7 +186,8 @@ describe("AssetView", () => {
     const v2 = {
       ...v1,
       id: "55555555-5555-4555-8555-555555555555",
-      version: 2,
+      // v2 was never stored (e.g. a failed run): "previous" is the next-older report.
+      version: 3,
       health_score: "87.10",
       grade: "AA",
       summary_md: "**Better.** <b>not html</b> [score:base_health]",
@@ -209,7 +210,7 @@ describe("AssetView", () => {
     );
 
     expect(
-      await screen.findByText("Ecological Performance Report · v2"),
+      await screen.findByText("Ecological Performance Report · v3"),
     ).toBeInTheDocument();
     expect(screen.getByText("Better.").tagName).toBe("STRONG");
     expect(screen.getByText(/<b>not html<\/b>/)).toBeInTheDocument();
@@ -218,6 +219,27 @@ describe("AssetView", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("What changed since v1")).toBeInTheDocument();
     expect(screen.getByText("Was A in report v1")).toBeInTheDocument();
+    expect(
+      screen.getByText("Fair price per unit").parentElement,
+    ).toHaveTextContent("$21.47");
+  });
+
+  it("shows a very small p-value as p < 0.01", async () => {
+    const report = structuredClone(ASSET.latest_report!) as unknown as {
+      rating: {
+        metrics: { ndvi_trend_details: { mann_kendall_p_value: number } };
+      };
+    };
+    report.rating.metrics.ndvi_trend_details.mann_kendall_p_value = 0.003;
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /assets/${ID}`]: () => json({ ...ASSET, latest_report: report }),
+      }),
+    );
+    expect(
+      await screen.findByText(/Mann–Kendall p < 0.01/),
+    ).toBeInTheDocument();
   });
 
   it("charts the price history with a text summary", async () => {

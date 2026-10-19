@@ -90,15 +90,22 @@ export function Marketplace() {
 function MarketStats() {
   const { cards } = useMarketCards();
   if (!cards || cards.length === 0) return null;
-  const value = cards.reduce((sum, c) => sum + (c.valueMid ?? 0), 0);
+  const rated = cards.filter((c) => c.grade !== null);
+  const valued = rated.flatMap((c) =>
+    c.valueMid === null ? [] : [c.valueMid],
+  );
   return (
     <dl className="grid grid-cols-3 gap-6 rounded-3xl bg-card px-6 py-4 shadow-soft">
       <Stat label="Sites listed" value={cards.length} />
       <Stat
         label="Land rated"
-        value={ha(cards.reduce((sum, c) => sum + c.areaHa, 0))}
+        value={ha(rated.reduce((sum, c) => sum + c.areaHa, 0))}
       />
-      <Stat label="Nature's value" value={money(value)} sub="a year, mid" />
+      <Stat
+        label="Nature's value"
+        value={valued.length ? money(valued.reduce((a, b) => a + b)) : "—"}
+        sub="a year, mid, rated sites"
+      />
     </dl>
   );
 }

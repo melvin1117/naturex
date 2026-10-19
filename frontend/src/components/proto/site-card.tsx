@@ -84,15 +84,19 @@ function place(card: MarketCard) {
 }
 
 export function TrendText({
-  trend,
+  card,
   className,
 }: {
-  trend: MarketCard["trend"];
+  card: Pick<MarketCard, "trend" | "grade">;
   className?: string;
 }) {
   return (
     <span className={className}>
-      {trend ? `${TREND_TEXT[trend]} since last report` : "First rating"}
+      {card.grade === null
+        ? "Awaiting rating"
+        : card.trend
+          ? `${TREND_TEXT[card.trend]} since last report`
+          : "First rating"}
     </span>
   );
 }
@@ -167,7 +171,7 @@ export function SiteCard({ card }: { card: MarketCard }) {
                 {money(card.valueLow)}–{money(card.valueHigh)} /yr
               </span>
             )}
-            <TrendText trend={card.trend} className="block text-xs" />
+            <TrendText card={card} className="block text-xs" />
           </span>
           <span className="inline-flex shrink-0 items-center gap-1 font-medium">
             View site
@@ -214,7 +218,7 @@ export function FeatureSiteCard({ card }: { card: MarketCard }) {
               {card.name}
             </h2>
             <TrendText
-              trend={card.trend}
+              card={card}
               className="mt-2 block text-sm text-white/80"
             />
           </div>

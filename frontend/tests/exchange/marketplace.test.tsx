@@ -115,6 +115,38 @@ describe("Marketplace", () => {
     expect(screen.getByText("Sites listed").nextSibling).toHaveTextContent("3");
   });
 
+  it("marks an unrated site and leaves it out of the rated totals", async () => {
+    const pending = {
+      ...WETLAND,
+      id: "66666666-6666-4666-8666-666666666666",
+      name: "New Wetland",
+      status: "rating" as const,
+      area_ha: "1000.00",
+      grade: null,
+      confidence: null,
+      health_score: null,
+      value_low: null,
+      value_mid: null,
+      value_high: null,
+      trend: null,
+    };
+    renderExchange(<Marketplace />, {
+      "GET /assets": () => json([...CARDS, pending]),
+    });
+    const card = await screen.findByRole("link", { name: /New Wetland/ });
+
+    expect(within(card).getByText("Awaiting rating")).toBeInTheDocument();
+    expect(within(card).getByText("Not rated yet")).toBeInTheDocument();
+    expect(screen.getByText("Sites listed").nextSibling).toHaveTextContent("4");
+    // 206.70 + 457.88 + 400.21 ha: the unrated 1,000 ha isn't "rated".
+    expect(screen.getByText("Land rated").nextSibling).toHaveTextContent(
+      "1,065 ha",
+    );
+    expect(screen.getByText("Nature's value").nextSibling).toHaveTextContent(
+      "$38.9M",
+    );
+  });
+
   it("filters by grade band", async () => {
     renderExchange(<Marketplace />, { "GET /assets": () => json(CARDS) });
     await screen.findByRole("region", { name: "All sites" });

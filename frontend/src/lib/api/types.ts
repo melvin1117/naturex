@@ -8,6 +8,7 @@ export type AssetDetail = Schemas["AssetDetail"];
 export type EventOut = Schemas["EventOut"];
 export type HoldingOut = Schemas["HoldingOut"];
 export type LedgerEntry = Schemas["LedgerEntryOut"];
+export type LegendEntry = Schemas["LegendEntry"];
 export type LedgerVerify = Schemas["LedgerVerifyOut"];
 export type LoginIn = Schemas["LoginIn"];
 export type MeOut = Schemas["MeOut"];

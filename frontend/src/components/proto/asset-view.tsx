@@ -140,9 +140,11 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
     });
     return listed.length ? listed : latest ? [latest] : [];
   }, [reports.data, latest]);
-  const prev = latest
-    ? versions.find((r) => r.version === latest.version - 1)
-    : undefined;
+  // Versions are newest first: the previous report is the one after the latest.
+  const latestIndex = latest
+    ? versions.findIndex((r) => r.id === latest.id)
+    : -1;
+  const prev = latestIndex >= 0 ? versions[latestIndex + 1] : undefined;
   const points = useMemo(() => chartPrices(prices.data), [prices.data]);
   const current = num(asset.price);
   const change = num(asset.price_change_pct);

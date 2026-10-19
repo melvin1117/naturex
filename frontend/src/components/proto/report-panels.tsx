@@ -33,7 +33,13 @@ import {
   SERVICE_GROUPS,
   type LatLng,
 } from "@/lib/prototype/data";
-import { date, money, quarterLabel, signed } from "@/lib/prototype/format";
+import {
+  date,
+  price as fmtPrice,
+  money,
+  quarterLabel,
+  signed,
+} from "@/lib/prototype/format";
 import { documentChecks, type Site } from "@/lib/prototype/world";
 import type { ReportFacts, SummarySource } from "@/lib/report-facts";
 
@@ -407,7 +413,7 @@ function diffRows(report: ReportFacts, prev?: ReportFacts): DiffRow[] {
       "Fair price per unit",
       report.fairValuePerUnit,
       prev?.fairValuePerUnit,
-      (v) => `$${v.toFixed(2)}`,
+      (v) => fmtPrice(v),
     ],
   ];
 }
@@ -415,9 +421,14 @@ function diffRows(report: ReportFacts, prev?: ReportFacts): DiffRow[] {
 /** Report versions, newest first; the picker shows any version and what changed from the one before. */
 export function ReportTab({ versions }: { versions: ReportFacts[] }) {
   const [picked, setPicked] = useState<string | null>(null);
-  const report = versions.find((r) => r.id === picked) ?? versions[0];
+  const index = Math.max(
+    0,
+    versions.findIndex((r) => r.id === picked),
+  );
+  const report = versions[index];
   if (!report) return null;
-  const prev = versions.find((r) => r.version === report.version - 1);
+  // Versions are newest first: the previous report is the next item, whatever its number.
+  const prev = versions[index + 1];
   return (
     <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
       <Panel
@@ -565,8 +576,8 @@ export function ReportTab({ versions }: { versions: ReportFacts[] }) {
             </p>
           ) : (
             <ul className="space-y-2.5 text-sm">
-              {report.recommendations.map((r) => (
-                <li key={r} className="flex gap-2.5">
+              {report.recommendations.map((r, i) => (
+                <li key={`${i}-${r}`} className="flex gap-2.5">
                   <Check
                     className="mt-0.5 size-4 shrink-0 text-lime-ink"
                     aria-hidden="true"
