@@ -15,6 +15,7 @@ from collections.abc import Callable, Iterator
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from alembic import command
@@ -27,6 +28,7 @@ from app.ledger import LedgerPrivacyError, append, canonical, check_public_paylo
 from app.market.revenue import pay_quarter
 from app.models import (
     Asset,
+    Community,
     Event,
     EventSource,
     Holding,
@@ -38,6 +40,17 @@ from app.models import (
     UserRole,
 )
 from app.seed import DEMO_SITES, PERSONAS, WORLD_ID, seed
+from app.services.lifecycle import SuspensionReason
+from app.services.listings import (
+    ListingDetails,
+    ListingSubmit,
+    create_draft,
+    resume,
+    revise,
+    suspend,
+    update_draft,
+    withdraw,
+)
 from tests.conftest import alembic_cfg, requires_db
 
 ASSET_ID = DEMO_SITES[0].id
@@ -195,6 +208,34 @@ def _ledger_producers() -> dict[LedgerKind | None, list[str]]:
     return found
 
 
+def _produce_listing(session: Session) -> None:
+    """A draft whose description and GeoJSON properties name a person, edited, submitted,
+    revised, resubmitted and withdrawn, plus a suspend and resume of a curated asset: every
+    `listing` transition the API writes but `rated` (covered by test_lifecycle's scan)."""
+    community_id = session.exec(
+        select(Community.id).where(Community.world_id == WORLD_ID).order_by(col(Community.name))
+    ).first()
+    assert community_id is not None
+    ring = [[-84.1, 9.9], [-84.09, 9.9], [-84.09, 9.91], [-84.1, 9.91], [-84.1, 9.9]]
+    feature = {
+        "type": "Feature",
+        "properties": {"steward": "Ada Lovelace", "contact": "ada.lovelace@example.org"},
+        "geometry": {"type": "Polygon", "coordinates": [ring]},
+    }
+    details = ListingDetails(
+        name="Bosque Vivo", country="CR", description="Kept by Ada Lovelace.", geojson=feature
+    )
+    draft = create_draft(session, world_id=WORLD_ID, community_id=community_id, details=details)
+    update_draft(session, WORLD_ID, draft.id, {"description": "Ada Lovelace's family land."})
+    submit = ListingSubmit(metrics_version=None)
+    submit.lock(session, WORLD_ID, draft.id)
+    submit(session, draft, uuid4())
+    revise(session, WORLD_ID, draft.id, run_active=lambda *_: False)
+    withdraw(session, WORLD_ID, draft.id, run_active=lambda *_: False)
+    suspend(session, WORLD_ID, ASSET_ID, SuspensionReason.MODERATION)
+    resume(session, WORLD_ID, ASSET_ID)
+
+
 def _produce_payout(session: Session) -> None:
     pay_quarter(
         session,
@@ -209,6 +250,7 @@ def _produce_payout(session: Session) -> None:
 # during `seed()` (e.g. T19's reports) are covered by the seeded entries instead.
 _REAL_PRODUCERS: dict[LedgerKind, Callable[[Session], None]] = {
     LedgerKind.PAYOUT: _produce_payout,
+    LedgerKind.LISTING: _produce_listing,
 }
 
 
@@ -227,16 +269,6 @@ def _spec_payload(session: Session, kind: LedgerKind) -> dict[str, Any]:
     sites = _ledger_producers().get(kind)
     if sites:
         raise AssertionError(f"{kind} has a real producer ({', '.join(sites)}); scan that")
-    asset = session.get_one(Asset, ASSET_ID)
-    if kind is LedgerKind.LISTING:
-        return {
-            "name": asset.name,
-            "country": asset.country,
-            "area_ha": asset.area_ha,
-            "geojson": asset.geojson,
-            "total_shares": asset.total_shares,
-            "retained_pct": asset.retained_pct,
-        }
     if kind is LedgerKind.REPORT:
         return {
             "version": 1,
@@ -276,7 +308,7 @@ def _spec_payload(session: Session, kind: LedgerKind) -> dict[str, Any]:
 
 
 # Keys that suggest a person or an account. `holder_count` is an aggregate, and a listing's
-# `name` (also in its GeoJSON properties) is the public site name, not a person's.
+# `name` is the public site name, not a person's (its GeoJSON properties are dropped; T58).
 _SUSPECT_KEY = re.compile(
     r"email|(^|_)(user|users|holder|holders|person|persona|owner|member|members|account"
     r"|name|names)(_|$)",
@@ -285,7 +317,6 @@ _SUSPECT_KEY = re.compile(
 _ALLOWED_KEYS = {
     (None, "$.holder_count"),
     (LedgerKind.LISTING, "$.name"),
-    (LedgerKind.LISTING, "$.geojson.properties.name"),
 }
 
 

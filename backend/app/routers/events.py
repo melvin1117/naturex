@@ -1,4 +1,9 @@
-"""World-scoped live events over SSE plus polling fallback."""
+"""World-scoped live events over SSE plus polling fallback.
+
+Events about a listing under review carry an audience community (T58): only its members and
+same-world admins receive them; everyone else, anonymous visitors included, gets public events
+only. The viewer is resolved once per request (per stream for SSE).
+"""
 
 from __future__ import annotations
 
@@ -9,6 +14,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, R
 from sqlmodel import Session
 
 from app import events as event_bus
+from app.auth import SESSION_COOKIE, resolve_session
+from app.authz import memberships
 from app.db import get_session
 from app.deps import CurrentWorld, SessionDep, SettingsDep, current_world, optional_principal
 from app.models import World
@@ -29,6 +36,14 @@ def current_world_for_stream(
 CurrentWorldForStream = Annotated[World, Depends(current_world_for_stream)]
 
 
+def _viewer(request: Request, session: Session, world_id: object) -> event_bus.Viewer:
+    principal = resolve_session(session, request.cookies.get(SESSION_COOKIE))
+    if principal is None or principal.world_id != world_id:
+        return event_bus.PUBLIC_VIEWER
+    communities = memberships(session, principal.world_id, principal.user_id)
+    return event_bus.Viewer(is_admin=principal.is_admin, communities=frozenset(communities))
+
+
 def _parse_last_event_id(value: str | None) -> int | None:
     if value in (None, ""):
         return None
@@ -43,6 +58,7 @@ def _parse_last_event_id(value: str | None) -> int | None:
 
 @router.get("/events", response_model=list[StreamEvent])
 def poll_events(
+    request: Request,
     world: CurrentWorld,
     session: SessionDep,
     since: Annotated[datetime | None, Query()] = None,
@@ -51,13 +67,17 @@ def poll_events(
         event_bus.REPLAY_BATCH_LIMIT
     ),
 ) -> list[StreamEvent]:
-    return event_bus.replay(session, world.id, since_id=since_id, since=since, limit=limit)
+    viewer = _viewer(request, session, world.id)
+    return event_bus.replay(
+        session, world.id, since_id=since_id, since=since, limit=limit, viewer=viewer
+    )
 
 
 @router.get("/events/stream")
 async def stream_events(
     request: Request,
     world: CurrentWorldForStream,
+    session: StreamSessionDep,
     settings: SettingsDep,
     last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
     since_id: Annotated[int | None, Query(ge=0)] = None,
@@ -68,4 +88,5 @@ async def stream_events(
         request,
         cursor,
         settings.event_stream_max_concurrent,
+        _viewer(request, session, world.id),
     )

@@ -23,7 +23,7 @@ from sqlmodel import Session, select
 
 from app.auth import Principal
 from app.deps import OptionalPrincipal, SessionDep, SettingsDep
-from app.models import Community, CommunityMember, CommunityRole, SessionKind, UserKind
+from app.models import Asset, Community, CommunityMember, CommunityRole, SessionKind, UserKind
 from app.worlds import LIVE_WORLD_ID, is_sandbox_world
 
 
@@ -391,6 +391,17 @@ def member_ref(
     """A membership slot `(community, user)` in the actor's world; None if the community isn't."""
     community = community_ref(community_id, actor, session)
     return None if community is None else MemberRef(community.world_id, community_id, user_id)
+
+
+def asset_ref(
+    asset_id: Annotated[UUID, Path()], actor: OptionalActor, session: SessionDep
+) -> AssetRef | None:
+    """The asset by `(world_id, id)` in the actor's world, with its community, or None (a 404)."""
+    world_id = acting_world(actor)
+    found = session.exec(
+        select(Asset.id, Asset.community_id).where(Asset.world_id == world_id, Asset.id == asset_id)
+    ).first()
+    return None if found is None else AssetRef(world_id, found[0], found[1])
 
 
 @dataclass(frozen=True)

@@ -74,6 +74,17 @@ def secure_cookies(settings: Settings) -> bool:
     return not (explicit and settings.environment in INSECURE_COOKIE_ENVIRONMENTS)
 
 
+PRODUCTION_ENVIRONMENT = "production"
+
+
+def validate_mock_settings(settings: Settings) -> None:
+    """Refuse to start a production deployment with `USE_MOCKS=true` (T58): mock metrics would
+    rate real listings with placeholder numbers. Development, test and CI may use mocks, in
+    the live world too (the real-account E2E, T74, lists land with them)."""
+    if settings.environment == PRODUCTION_ENVIRONMENT and settings.use_mocks:
+        raise RuntimeError("USE_MOCKS=true is not allowed with ENVIRONMENT=production")
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()

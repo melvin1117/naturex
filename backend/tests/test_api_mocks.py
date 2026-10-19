@@ -27,17 +27,18 @@ def signed_in() -> Iterator[None]:
     app.dependency_overrides.clear()
 
 
-@pytest.mark.usefixtures("signed_in")
-def test_create_asset_accepted() -> None:
+def test_create_asset_needs_a_signed_in_member() -> None:
+    """Drafts are real since T58 (test_lifecycle.py): anonymous callers get 401."""
     res = client.post(
         "/assets",
         json={
+            "community_id": str(WETLAND_ID),
             "name": "Test Parcel",
             "geojson": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
+            "attestation": True,
         },
     )
-    assert res.status_code == 202
-    assert "run_id" in res.json()
+    assert res.status_code == 401
 
 
 @pytest.mark.usefixtures("signed_in")

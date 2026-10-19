@@ -1,26 +1,32 @@
-"""Asset listing and marketplace routes, read from the caller's world (T19).
+"""Asset reads: the marketplace and asset pages (T19), with T58's visibility rules.
 
-`POST /assets` and `POST /assets/{id}/evidence` still answer with stubs until T58 and the
-field-evidence agent land.
+**Visibility (T58).** `listed` and `suspended` assets are public within their world: the
+marketplace, asset pages, reports, prices and the ledger. A listing in any other status (draft,
+rating, needs_evidence, ineligible, withdrawn) belongs to its community: only its members and
+same-world admins see it (`VIEW_COMMUNITY_DATA`); everyone else gets 404, as if it didn't exist.
+The lifecycle's writes are in `app.routers.listings`.
+
+`POST /assets/{id}/evidence` still answers with a stub until the field-evidence agent (T40).
 """
 
 from __future__ import annotations
 
+from collections.abc import Collection, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import func
 from sqlmodel import Session, col, select
 
-from app.deps import CurrentWorld, SessionDep, SettingsDep, current_principal
+from app.authz import Actor, OptionalActor
+from app.deps import CurrentWorld, SessionDep, SettingsDep
 from app.models import Asset, AssetStatus, Price, Report
 from app.routers.reports import present_report, recent_events
 from app.schemas import (
     AssetCard,
-    AssetCreate,
-    AssetCreateResponse,
     AssetDetail,
     AssetStatusOut,
     EventOut,
@@ -28,39 +34,53 @@ from app.schemas import (
     PricePoint,
     ReportOut,
 )
+from app.services.lifecycle import PUBLIC_STATUSES
+from app.services.listings import RATING_STALE, visible_to
+from app.services.rating_runs import assets_with_active_runs
+from app.tools.earth_obs import MOCK_FLAG
 
 router = APIRouter(tags=["assets"])
 
+PRIVATE_NO_STORE = "private, no-store"
+Responses = dict[int | str, dict[str, Any]]
+_MISSING: Responses = {404: {"description": "Not found in the caller's world"}}
 
 _HUNDRED = Decimal(100)
 # Marketplace sparkline length: the latest prices per card, oldest first.
 SPARKLINE_POINTS = 30
 
 
-def world_asset(session: Session, world_id: UUID, asset_id: UUID) -> Asset:
-    """The asset if it's in this world; 404 otherwise (another world's or the template's)."""
+def world_asset(
+    session: Session, world_id: UUID, asset_id: UUID, actor: Actor | None = None
+) -> Asset:
+    """The asset if it's in this world and `actor` may see it (T58); 404 otherwise: another
+    world's, the template's, or a listing that isn't public and isn't the actor's community's."""
     asset = session.exec(
         select(Asset).where(Asset.world_id == world_id, Asset.id == asset_id)
     ).first()
-    if asset is None:
+    if asset is None or not visible_to(actor, asset):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found")
     return asset
 
 
-def _price_per_asset(session: Session, world_id: UUID, *, latest: bool) -> dict[UUID, Decimal]:
-    """The latest (or first, i.e. IPO) price of every asset in the world."""
+def _price_per_asset(
+    session: Session, world_id: UUID, asset_ids: Collection[UUID], *, latest: bool
+) -> dict[UUID, Decimal]:
+    """The latest (or first, i.e. IPO) price of each of these assets."""
     ts = col(Price.ts).desc() if latest else col(Price.ts).asc()
     rows = session.exec(
         select(col(Price.asset_id), col(Price.price))
-        .where(Price.world_id == world_id)
+        .where(Price.world_id == world_id, col(Price.asset_id).in_(asset_ids))
         .order_by(col(Price.asset_id), ts)
         .distinct(col(Price.asset_id))
     ).all()
     return {asset_id: price for asset_id, price in rows}
 
 
-def _sparklines(session: Session, world_id: UUID) -> dict[UUID, list[Decimal]]:
-    """The last `SPARKLINE_POINTS` prices of every asset in the world, oldest first (one query)."""
+def _sparklines(
+    session: Session, world_id: UUID, asset_ids: Collection[UUID]
+) -> dict[UUID, list[Decimal]]:
+    """The last `SPARKLINE_POINTS` prices of each of these assets, oldest first (one query)."""
     ranked = (
         select(
             col(Price.asset_id).label("asset_id"),
@@ -70,7 +90,7 @@ def _sparklines(session: Session, world_id: UUID) -> dict[UUID, list[Decimal]]:
             .over(partition_by=col(Price.asset_id), order_by=col(Price.ts).desc())
             .label("rank"),
         )
-        .where(Price.world_id == world_id)
+        .where(Price.world_id == world_id, col(Price.asset_id).in_(asset_ids))
         .subquery()
     )
     rows = session.exec(
@@ -84,11 +104,13 @@ def _sparklines(session: Session, world_id: UUID) -> dict[UUID, list[Decimal]]:
     return out
 
 
-def _latest_two_reports(session: Session, world_id: UUID) -> dict[UUID, list[Report]]:
+def _latest_two_reports(
+    session: Session, world_id: UUID, asset_ids: Collection[UUID]
+) -> dict[UUID, list[Report]]:
     """Each asset's latest report and the one before it (for the trend)."""
     rows = session.exec(
         select(Report)
-        .where(Report.world_id == world_id)
+        .where(Report.world_id == world_id, col(Report.asset_id).in_(asset_ids))
         .order_by(col(Report.asset_id), col(Report.version).desc())
     ).all()
     out: dict[UUID, list[Report]] = {}
@@ -127,32 +149,57 @@ def _asset_price(session: Session, asset: Asset, *, latest: bool) -> Decimal | N
     ).first()
 
 
+def is_mock_report(report: Report | None) -> bool:
+    """A report rated from `USE_MOCKS` placeholder metrics (T58), never observed data."""
+    return report is not None and any(
+        isinstance(flag, dict) and flag.get("type") == MOCK_FLAG for flag in report.flags or []
+    )
+
+
+def shown_status_reason(asset: Asset, active: Collection[UUID]) -> str | None:
+    """The stored reason, or `rating_stale` for a listing in `rating` whose run died (a
+    worker crash leaves no failure to record)."""
+    if asset.status is AssetStatus.RATING and asset.status_reason is None:
+        return None if asset.id in active else RATING_STALE
+    return asset.status_reason
+
+
 @router.get("/assets", response_model=list[AssetCard])
 def list_assets(world: CurrentWorld, session: SessionDep) -> list[AssetCard]:
-    """Marketplace cards for every asset in the world except drafts."""
+    """Marketplace cards for the world's public assets: listed and suspended (T58)."""
     assets = session.exec(
         select(Asset)
-        .where(Asset.world_id == world.id, Asset.status != AssetStatus.DRAFT)
+        .where(Asset.world_id == world.id, col(Asset.status).in_(PUBLIC_STATUSES))
         .order_by(col(Asset.created_at), col(Asset.name))
     ).all()
-    reports = _latest_two_reports(session, world.id)
-    latest_prices = _price_per_asset(session, world.id, latest=True)
-    ipo_prices = _price_per_asset(session, world.id, latest=False)
-    sparklines = _sparklines(session, world.id)
-    cards: list[AssetCard] = []
+    return cards(session, world.id, assets)
+
+
+def cards(session: Session, world_id: UUID, assets: Sequence[Asset]) -> list[AssetCard]:
+    """Marketplace cards for these assets (reports and prices loaded for them only)."""
+    ids = [asset.id for asset in assets]
+    reports = _latest_two_reports(session, world_id, ids)
+    latest_prices = _price_per_asset(session, world_id, ids, latest=True)
+    ipo_prices = _price_per_asset(session, world_id, ids, latest=False)
+    reviewing = any(asset.status is AssetStatus.RATING for asset in assets)
+    active = assets_with_active_runs(session, world_id) if reviewing else set()
+    sparklines = _sparklines(session, world_id, ids)
+    out: list[AssetCard] = []
     for asset in assets:
         headlines = reports.get(asset.id, [])
         latest = headlines[0] if headlines else None
         price = latest_prices.get(asset.id)
-        cards.append(
+        out.append(
             AssetCard(
                 id=asset.id,
                 name=asset.name,
                 country=asset.country,
                 status=AssetStatusOut(asset.status.value),
+                status_reason=shown_status_reason(asset, active),
                 area_ha=asset.area_ha,
                 price=price,
                 price_change_pct=_change_pct(price, ipo_prices.get(asset.id)),
+                mock=is_mock_report(latest),
                 grade=latest.grade if latest else None,
                 trend=_trend(headlines),
                 confidence=latest.confidence if latest else None,
@@ -165,60 +212,27 @@ def list_assets(world: CurrentWorld, session: SessionDep) -> list[AssetCard]:
                 sparkline=sparklines.get(asset.id, []),
             )
         )
-    return cards
+    return out
 
 
-@router.post(
-    "/assets",
-    response_model=AssetCreateResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    dependencies=[Depends(current_principal)],
-)
-def create_asset(body: AssetCreate) -> AssetCreateResponse:
-    asset_id = uuid4()
-    run_id = uuid4()
-    total = body.total_shares
-    primary = int(total * (Decimal("100") - body.retained_pct) / Decimal("100"))
-    detail = AssetDetail(
-        id=asset_id,
-        name=body.name,
-        country=body.country,
-        description=body.description,
-        status=AssetStatusOut.RATING,
-        area_ha=Decimal("100.00"),
-        centroid_lat=None,
-        centroid_lon=None,
-        geojson=body.geojson,
-        total_shares=total,
-        retained_pct=body.retained_pct,
-        primary_shares_remaining=primary,
-        community_wallet=Decimal("0.00"),
-        site_key=None,
-        latest_report=None,
-        recent_events=[],
-        price=None,
-    )
-    return AssetCreateResponse(asset=detail, run_id=run_id)
-
-
-@router.get("/assets/{asset_id}", response_model=AssetDetail)
-def get_asset(
-    asset_id: UUID, world: CurrentWorld, session: SessionDep, settings: SettingsDep
-) -> AssetDetail:
-    asset = world_asset(session, world.id, asset_id)
+def asset_detail(session: Session, asset: Asset, settings: SettingsDep) -> AssetDetail:
     report = session.exec(
         select(Report)
-        .where(Report.world_id == world.id, Report.asset_id == asset.id)
+        .where(Report.world_id == asset.world_id, Report.asset_id == asset.id)
         .order_by(col(Report.version).desc())
         .limit(1)
     ).first()
     price = _asset_price(session, asset, latest=True)
+    reviewing = asset.status is AssetStatus.RATING
+    active = assets_with_active_runs(session, asset.world_id) if reviewing else set()
     return AssetDetail(
         id=asset.id,
         name=asset.name,
         country=asset.country,
         description=asset.description,
+        community_id=asset.community_id,
         status=AssetStatusOut(asset.status.value),
+        status_reason=shown_status_reason(asset, active),
         area_ha=asset.area_ha,
         centroid_lat=asset.centroid_lat,
         centroid_lon=asset.centroid_lon,
@@ -228,6 +242,7 @@ def get_asset(
         primary_shares_remaining=asset.primary_shares_remaining,
         community_wallet=asset.community_wallet,
         site_key=asset.site_key,
+        mock=is_mock_report(report),
         latest_report=present_report(session, report, asset, settings) if report else None,
         recent_events=recent_events(session, asset),
         price=price,
@@ -235,9 +250,26 @@ def get_asset(
     )
 
 
+@router.get("/assets/{asset_id}", response_model=AssetDetail, responses=_MISSING)
+def get_asset(
+    asset_id: UUID,
+    world: CurrentWorld,
+    actor: OptionalActor,
+    session: SessionDep,
+    settings: SettingsDep,
+    response: Response,
+) -> AssetDetail:
+    asset = world_asset(session, world.id, asset_id, actor)
+    if asset.status not in PUBLIC_STATUSES:
+        response.headers["Cache-Control"] = PRIVATE_NO_STORE
+    return asset_detail(session, asset, settings)
+
+
 @router.post("/assets/{asset_id}/evidence", response_model=EvidenceResponse)
-def upload_evidence(asset_id: UUID, world: CurrentWorld, session: SessionDep) -> EvidenceResponse:
-    world_asset(session, world.id, asset_id)
+def upload_evidence(
+    asset_id: UUID, world: CurrentWorld, actor: OptionalActor, session: SessionDep
+) -> EvidenceResponse:
+    world_asset(session, world.id, asset_id, actor)
     event = EventOut(
         id=uuid4(),
         asset_id=asset_id,
@@ -256,11 +288,15 @@ def upload_evidence(asset_id: UUID, world: CurrentWorld, session: SessionDep) ->
 
 @router.get("/assets/{asset_id}/reports", response_model=list[ReportOut])
 def list_reports(
-    asset_id: UUID, world: CurrentWorld, session: SessionDep, settings: SettingsDep
+    asset_id: UUID,
+    world: CurrentWorld,
+    actor: OptionalActor,
+    session: SessionDep,
+    settings: SettingsDep,
 ) -> list[ReportOut]:
     """Every report of the asset, newest first. Versions leave out `ndvi_series` (the chart
     is for the latest report: `GET /assets/{id}` or `GET /reports/{id}`)."""
-    asset = world_asset(session, world.id, asset_id)
+    asset = world_asset(session, world.id, asset_id, actor)
     reports = session.exec(
         select(Report)
         .where(Report.world_id == world.id, Report.asset_id == asset.id)
@@ -271,11 +307,15 @@ def list_reports(
 
 @router.get("/assets/{asset_id}/prices", response_model=list[PricePoint])
 def list_prices(
-    asset_id: UUID, world: CurrentWorld, session: SessionDep, range: str = "90d"
+    asset_id: UUID,
+    world: CurrentWorld,
+    actor: OptionalActor,
+    session: SessionDep,
+    range: str = "90d",
 ) -> list[PricePoint]:
     """Price history, oldest first. `range` is accepted but not applied yet (T43)."""
     _ = range  # TODO(T43): apply the range filter (7d, 30d, 90d, all).
-    asset = world_asset(session, world.id, asset_id)
+    asset = world_asset(session, world.id, asset_id, actor)
     prices = session.exec(
         select(Price)
         .where(Price.world_id == world.id, Price.asset_id == asset.id)

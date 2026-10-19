@@ -7,13 +7,14 @@ import json
 import time
 from collections.abc import AsyncIterator, Callable, Iterator, Mapping
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID
 
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, StreamingResponse
-from sqlalchemy import Connection, delete, insert, text
+from sqlalchemy import Connection, delete, insert, or_, text
 from sqlalchemy.engine import CursorResult
 from sqlmodel import Session, col, select
 from starlette.concurrency import run_in_threadpool
@@ -34,6 +35,23 @@ SSE_RETRY_MS = 3000
 EVENT_RETENTION = timedelta(hours=24)
 _stream_semaphore_limit = 0
 _stream_semaphore = asyncio.BoundedSemaphore(1)
+
+
+ADMINS_ONLY = UUID(int=0)
+"""Audience for an event no community may see, only same-world admins (T58)."""
+
+
+@dataclass(frozen=True)
+class Viewer:
+    """Who reads a world's events (T58): every viewer gets public events (no audience); scoped
+    events go to members of their audience community and to same-world admins. Callers build it
+    only for a principal in the world being read; anyone else is `PUBLIC_VIEWER`."""
+
+    is_admin: bool = False
+    communities: frozenset[UUID] = field(default_factory=frozenset)
+
+
+PUBLIC_VIEWER = Viewer()
 
 
 async def _empty_stream() -> AsyncIterator[str]:
@@ -85,8 +103,13 @@ def publish(
     world_id: UUID,
     type: StreamEventType | str,
     payload: Mapping[str, Any],
+    *,
+    audience: UUID | None = None,
 ) -> StreamEvent:
     """Persist an event in the caller's transaction and return its stream contract shape.
+
+    `audience` scopes the event to one community's members and same-world admins (T58: a
+    listing under review); None publishes it to everyone in the world.
 
     Same-world publishers take a transaction-level advisory lock before inserting, so the
     monotonic id cursor matches commit visibility for one world. Keep publishing
@@ -96,7 +119,12 @@ def publish(
     event_payload = _payload(payload)
     lock_world_publisher(session_or_conn, world_id)
     if isinstance(session_or_conn, Session):
-        row = WorldEvent(world_id=world_id, type=event_type, payload=event_payload)
+        row = WorldEvent(
+            world_id=world_id,
+            type=event_type,
+            payload=event_payload,
+            audience_community_id=audience,
+        )
         session_or_conn.add(row)
         session_or_conn.flush()
         return _to_stream_event(row)
@@ -104,7 +132,12 @@ def publish(
     table = cast(Any, WorldEvent).__table__
     result = session_or_conn.execute(
         insert(table)
-        .values(world_id=world_id, type=event_type.value, payload=event_payload)
+        .values(
+            world_id=world_id,
+            type=event_type.value,
+            payload=event_payload,
+            audience_community_id=audience,
+        )
         .returning(table.c.id, table.c.created_at)
     ).one()
     return StreamEvent(
@@ -122,13 +155,21 @@ def replay(
     since_id: int | None = None,
     since: datetime | None = None,
     limit: int = REPLAY_BATCH_LIMIT,
+    viewer: Viewer = PUBLIC_VIEWER,
 ) -> list[StreamEvent]:
-    """Return persisted events for one world, ordered by monotonic event id."""
+    """Return the events of one world `viewer` may see, ordered by monotonic event id."""
     capped_limit = max(0, min(limit, REPLAY_BATCH_LIMIT))
     if capped_limit == 0:
         return []
 
     stmt = select(WorldEvent).where(WorldEvent.world_id == world_id)
+    if not viewer.is_admin:
+        audience = col(WorldEvent.audience_community_id)
+        stmt = stmt.where(
+            or_(audience.is_(None), audience.in_(viewer.communities))
+            if viewer.communities
+            else audience.is_(None)
+        )
     if since_id is not None:
         stmt = stmt.where(col(WorldEvent.id) > since_id)
     elif since is not None:
@@ -162,13 +203,14 @@ def heartbeat() -> StreamEvent:
     return StreamEvent(id=None, type=StreamEventType.HEARTBEAT, payload={}, ts=datetime.now(UTC))
 
 
-def _poll_once(world_id: UUID, cursor: int | None) -> list[StreamEvent]:
+def _poll_once(world_id: UUID, cursor: int | None, viewer: Viewer) -> list[StreamEvent]:
     with session_scope() as session:
         return replay(
             session,
             world_id,
             since_id=cursor,
             limit=STREAM_REPLAY_BATCH_LIMIT,
+            viewer=viewer,
         )
 
 
@@ -212,8 +254,10 @@ class EventStreamResponse(StreamingResponse):
         request: Request,
         since_id: int | None,
         max_concurrent: int,
+        viewer: Viewer = PUBLIC_VIEWER,
     ) -> None:
         self.world_id = world_id
+        self.viewer = viewer
         self.request = request
         self.since_id = since_id
         self.max_concurrent = max_concurrent
@@ -237,7 +281,9 @@ class EventStreamResponse(StreamingResponse):
                 headers={"Retry-After": str(SSE_RETRY_MS // 1000)},
             )(scope, receive, send)
             return
-        self.body_iterator = stream(self.world_id, self.request, self.since_id, release_slot)
+        self.body_iterator = stream(
+            self.world_id, self.request, self.since_id, release_slot, self.viewer
+        )
         try:
             await super().__call__(scope, receive, send)
         finally:
@@ -249,6 +295,7 @@ async def stream(
     request: Request,
     since_id: int | None = None,
     release_slot: Callable[[], None] | None = None,
+    viewer: Viewer = PUBLIC_VIEWER,
 ) -> AsyncIterator[str]:
     """Yield a finite SSE stream with replay, DB polling and heartbeat keep-alives."""
     cursor = since_id
@@ -261,7 +308,7 @@ async def stream(
             if await request.is_disconnected():
                 break
 
-            batch = await run_in_threadpool(_poll_once, world_id, cursor)
+            batch = await run_in_threadpool(_poll_once, world_id, cursor, viewer)
 
             if batch:
                 for event in batch:

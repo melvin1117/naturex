@@ -202,3 +202,96 @@ def load_site_metrics(site_key: str, scenario: ScenarioName = "baseline") -> Ear
             f"not {site_key!r}/{scenario!r}."
         )
     return metrics
+
+
+def is_curated_site(site_key: str) -> bool:
+    """True for a committed demo site (T11/T13). A new listing must never be rated with one."""
+    return bool(_KEY_RE.fullmatch(site_key)) and (DATA_DIR / f"{site_key}.json").exists()
+
+
+# ----- mock metrics for new polygons (USE_MOCKS=true only; T58) --------------------------------
+
+MOCK_SITE_KEY = "mock_listing"
+MOCK_DATA_VERSION_PREFIX = "mock-"
+MOCK_FLAG = "mock_metrics"
+"""Report flag type for a rating made from mock metrics."""
+MOCK_ATTRIBUTION = (
+    "Mock metrics (USE_MOCKS=true): deterministic placeholders for a new polygon, not observed "
+    "data. Live Earth Engine metrics for new listings arrive with T60."
+)
+_MOCK_OBSERVED_UNTIL = "2026-10-01"
+_MOCK_LANDCOVER = {
+    "water": 0.08,
+    "trees": 0.55,
+    "grass": 0.12,
+    "flooded_vegetation": 0.05,
+    "crops": 0.06,
+    "shrub_and_scrub": 0.10,
+    "built": 0.03,
+    "bare": 0.01,
+    "snow_and_ice": 0.0,
+}
+_MOCK_NATURAL = ("water", "trees", "grass", "flooded_vegetation", "shrub_and_scrub")
+
+
+def is_mock_metrics(metrics: EarthObsMetrics) -> bool:
+    return metrics.data_version.startswith(MOCK_DATA_VERSION_PREFIX)
+
+
+def mock_listing_metrics(
+    *, area_ha: float, centroid_lat: float, centroid_lon: float
+) -> EarthObsMetrics:
+    """Deterministic, clearly labelled stand-in metrics for any polygon (tests and E2E).
+
+    Only the area and centroid come from the polygon; every other number is a fixed healthy
+    profile, so the result never borrows a real site's observations. The data version starts
+    with `mock-` and the attribution says it is mock data, so reports carry a `mock_metrics`
+    flag. Never used unless `USE_MOCKS=true`.
+    """
+    months = [f"{2021 + (9 + i) // 12}-{(9 + i) % 12 + 1:02d}" for i in range(60)]
+    series = tuple(
+        NdviPoint(
+            month=month, ndvi=round(0.68 + 0.04 * ((i % 12) - 5.5) / 5.5, 4), cloud_free_obs=6
+        )
+        for i, month in enumerate(months)
+    )
+    last_12 = [point.ndvi for point in series[-12:]]
+    window = DateWindow(start="2025-10-01", end=_MOCK_OBSERVED_UNTIL)
+    return EarthObsMetrics(
+        site_key=MOCK_SITE_KEY,
+        data_version=f"{MOCK_DATA_VERSION_PREFIX}2026Q3",
+        computed_at_utc=f"{_MOCK_OBSERVED_UNTIL}T00:00:00Z",
+        area_ha=area_ha,
+        centroid=Centroid(lat=centroid_lat, lon=centroid_lon),
+        landcover=dict(_MOCK_LANDCOVER),
+        natural_fraction=round(sum(_MOCK_LANDCOVER[key] for key in _MOCK_NATURAL), 4),
+        ndvi_series=series,
+        ndvi_mean=round(sum(last_12) / len(last_12), 4),
+        ndvi_trend=0.004,
+        ndvi_trend_details=NdviTrendDetails(
+            sens_slope_per_year=0.004,
+            mann_kendall_tau=0.05,
+            mann_kendall_p_value=0.5,
+            significant_05=False,
+            mean_last_12_months=round(sum(last_12) / len(last_12), 4),
+        ),
+        water_change=0.0,
+        forest_loss_ha=0.0,
+        forest_loss_last_12m_ha=0.0,
+        biomass_t_ha=120.0,
+        biomass_source="mock",
+        mangrove_fraction=0.0,
+        soc_t_c_ha=60.0,
+        cloud_free_obs=72,
+        cloud_free_months_5y=60,
+        date_windows={
+            "cloud_free_obs": window,
+            "land_cover": window,
+            "ndvi": DateWindow(start="2021-10-01", end=_MOCK_OBSERVED_UNTIL),
+            "hansen_forest_loss": DateWindow(start="2021-01-01", end="2025-12-31"),
+            "hansen_forest_loss_last_12m": DateWindow(start="2025-01-01", end="2025-12-31"),
+        },
+        thresholds={"mock": "USE_MOCKS=true"},
+        datasets=(),
+        attributions=(MOCK_ATTRIBUTION,),
+    )

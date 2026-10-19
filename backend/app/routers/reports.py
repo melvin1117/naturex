@@ -10,6 +10,7 @@ from sqlmodel import Session, col, select
 
 from app.agents.auditor import inline_citations
 from app.agents.summary import SummaryContext, generate_report_summary
+from app.authz import Actor, OptionalActor
 from app.config import Settings
 from app.db import engine
 from app.deps import CurrentWorld, SessionDep, SettingsDep
@@ -22,6 +23,7 @@ from app.schemas import (
     ReportOut,
     ReportSummarySource,
 )
+from app.services.listings import visible_to
 from app.tools.earth_obs import NdviPoint
 
 router = APIRouter(tags=["reports"])
@@ -196,23 +198,34 @@ def present_report(
     return presented.model_copy(update={"ndvi_series": ndvi_series(session, report)})
 
 
-def _world_report(session: Session, world_id: UUID, report_id: UUID) -> Report:
+def _world_report(
+    session: Session, world_id: UUID, report_id: UUID, actor: Actor | None
+) -> tuple[Report, Asset]:
+    """The report and its asset; 404 unless the asset is visible to the actor (T58)."""
     report = session.exec(
         select(Report).where(Report.world_id == world_id, Report.id == report_id)
     ).first()
-    if report is None:
+    asset = (
+        None
+        if report is None
+        else session.exec(
+            select(Asset).where(Asset.world_id == world_id, Asset.id == report.asset_id)
+        ).one()
+    )
+    if report is None or asset is None or not visible_to(actor, asset):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found")
-    return report
+    return report, asset
 
 
 @router.get("/reports/{report_id}", response_model=ReportOut)
 def get_report(
-    report_id: UUID, world: CurrentWorld, session: SessionDep, settings: SettingsDep
+    report_id: UUID,
+    world: CurrentWorld,
+    actor: OptionalActor,
+    session: SessionDep,
+    settings: SettingsDep,
 ) -> ReportOut:
-    report = _world_report(session, world.id, report_id)
-    asset = session.exec(
-        select(Asset).where(Asset.world_id == world.id, Asset.id == report.asset_id)
-    ).one()
+    report, asset = _world_report(session, world.id, report_id, actor)
     return present_report(session, report, asset, settings)
 
 
@@ -222,11 +235,11 @@ def _change(label: str, before: object, after: object) -> str:
 
 @router.get("/reports/{report_id}/diff/{prev}", response_model=ReportDiff)
 def diff_reports(
-    report_id: UUID, prev: UUID, world: CurrentWorld, session: SessionDep
+    report_id: UUID, prev: UUID, world: CurrentWorld, actor: OptionalActor, session: SessionDep
 ) -> ReportDiff:
     """Headline changes between two reports of one asset (deterministic; T37 extends it)."""
-    current = _world_report(session, world.id, report_id)
-    previous = _world_report(session, world.id, prev)
+    current, _ = _world_report(session, world.id, report_id, actor)
+    previous, _ = _world_report(session, world.id, prev, actor)
     if current.asset_id != previous.asset_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Reports belong to different assets")
     return ReportDiff(
