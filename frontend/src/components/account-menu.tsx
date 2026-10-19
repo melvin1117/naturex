@@ -66,10 +66,10 @@ export function AccountMenu() {
           >
             {initials(me.name)}
           </span>
-          <span className="hidden truncate sm:inline">{me.name}</span>
+          <span className="hidden min-w-0 truncate sm:inline">{me.name}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="end" className="w-64 rounded-2xl p-1.5">
         <DropdownMenuLabel className="font-normal">
           <span className="block truncate text-sm font-medium">{me.name}</span>
           {me.email && (

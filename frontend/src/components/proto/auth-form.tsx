@@ -192,7 +192,7 @@ export function AuthForm({
             />
           </div>
           {formError && (
-            <Alert variant="destructive" className="mt-4">
+            <Alert variant="destructive" className="mt-4 rounded-xl">
               <TriangleAlertIcon aria-hidden="true" />
               <AlertDescription>{formError}</AlertDescription>
             </Alert>

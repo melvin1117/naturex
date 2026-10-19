@@ -119,7 +119,7 @@ export interface AuthInput {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export const PASSWORD_RULE = `${PASSWORD_MIN_LENGTH}–${PASSWORD_MAX_LENGTH} characters.`;
+export const PASSWORD_RULE = `Use ${PASSWORD_MIN_LENGTH} to ${PASSWORD_MAX_LENGTH} characters.`;
 
 const MESSAGES = {
   nameMissing: "Enter a display name.",
