@@ -50,6 +50,10 @@ export const queryKeys = {
     ["quote", assetId, side, qty] as const,
   /** Per account: a sign-out or account switch never reuses another account's answer. */
   myCommunities: (meId: string | null) => ["me", meId, "communities"] as const,
+  /** Every IPO preview of one asset (a prefix, for invalidation; T64). */
+  ipoPreviews: (assetId: string) => ["ipo-preview", assetId] as const,
+  ipoPreview: (assetId: string, totalShares: number, retainedPct: string) =>
+    ["ipo-preview", assetId, totalShares, retainedPct] as const,
 };
 
 export interface CreateDataLayerOptions {
@@ -147,6 +151,7 @@ export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
       queue(queryKeys.ledger(assetId));
       queue(queryKeys.prices(assetId));
       queue(queryKeys.assets());
+      queue(queryKeys.ipoPreviews(assetId));
     },
     { retain: false },
   );
