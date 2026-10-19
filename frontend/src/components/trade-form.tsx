@@ -20,6 +20,7 @@ import {
   orderFailure,
   orderProblem,
   parseUnits,
+  tradeBlockedMessage,
   unitsInput,
   type OrderFailure,
   type Side,
@@ -86,8 +87,12 @@ export function TradeForm({
     !current && quote.error && quotedUnits === units
       ? orderFailure(quote.error, { order: false })
       : null;
-  const fieldMessage = problem ?? quoteFailure?.message ?? null;
-  const ready = settled && !problem && portfolio.data !== undefined;
+  // The backend's own TRADE decision (insider, admin, treasury): explain it, never offer it.
+  const blocked = (current ?? quote.data)?.trade_blocked_reason ?? null;
+  const fieldMessage = blocked
+    ? tradeBlockedMessage(blocked)
+    : (problem ?? quoteFailure?.message ?? null);
+  const ready = settled && !blocked && !problem && portfolio.data !== undefined;
   const pending = placeOrder.isPending;
 
   function change(next: string) {
@@ -160,7 +165,7 @@ export function TradeForm({
               autoComplete="off"
               value={unitsText}
               onChange={(event) => change(event.target.value)}
-              aria-invalid={fieldMessage ? true : undefined}
+              aria-invalid={fieldMessage && !blocked ? true : undefined}
               aria-describedby={fieldMessage ? messageId : undefined}
               className="tabular text-lg"
             />

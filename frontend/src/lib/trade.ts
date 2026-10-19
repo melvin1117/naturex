@@ -121,6 +121,22 @@ export type OrderFailure = {
   uncertain?: boolean;
 };
 
+type TradeBlockedReason = NonNullable<QuoteOut["trade_blocked_reason"]>;
+
+const TRADE_BLOCKED: Record<TradeBlockedReason, string> = {
+  insider_trading_blocked:
+    "Members of this site's community can't trade its units. Your community earns from its retained stake instead.",
+  admins_cannot_trade:
+    "Admin accounts can't trade. Use a separate investor account to back sites.",
+  treasury_cannot_act: "Community treasury accounts can't trade.",
+};
+
+/** Why this account can't trade the asset at all: a quote's `trade_blocked_reason`, or the
+ * same code on a refused order (T57). */
+export function tradeBlockedMessage(reason: TradeBlockedReason): string {
+  return TRADE_BLOCKED[reason];
+}
+
 /** A failed quote or order as a message for the trade panel (every status the API returns). */
 export function orderFailure(
   error: ApiError,
@@ -133,15 +149,9 @@ export function orderFailure(
         signIn: true,
       };
     case "insider_trading_blocked":
-      return {
-        message:
-          "Members of this site's community can't trade its units. Your community earns from its retained stake instead.",
-      };
     case "admins_cannot_trade":
-      return {
-        message:
-          "Admin accounts can't trade. Use a separate investor account to back sites.",
-      };
+    case "treasury_cannot_act":
+      return { message: tradeBlockedMessage(error.code) };
     case "not_trading":
       return {
         message:
