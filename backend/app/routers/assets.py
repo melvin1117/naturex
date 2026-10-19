@@ -12,6 +12,7 @@ The lifecycle's writes are in `app.routers.listings`.
 from __future__ import annotations
 
 from collections.abc import Collection, Sequence
+from dataclasses import asdict
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -29,11 +30,13 @@ from app.schemas import (
     AssetCard,
     AssetDetail,
     AssetStatusOut,
+    CachedExample,
     EventOut,
     EvidenceResponse,
     PricePoint,
     ReportOut,
 )
+from app.services.earth_obs_live import cached_example
 from app.services.ipo import is_trading
 from app.services.lifecycle import PUBLIC_STATUSES
 from app.services.listings import RATING_STALE, visible_to
@@ -257,7 +260,17 @@ def asset_detail(session: Session, asset: Asset, settings: SettingsDep) -> Asset
         price_change_pct=_change_pct(price, _asset_price(session, asset, latest=False)),
         trading=is_trading(asset),
         ipo_at=asset.ipo_at,
+        cached_example=_cached_example(session, asset, active),
     )
+
+
+def _cached_example(
+    session: Session, asset: Asset, active: Collection[UUID]
+) -> CachedExample | None:
+    if asset.id in active:  # a retry is running
+        return None
+    example = cached_example(session, asset)
+    return None if example is None else CachedExample(**asdict(example))
 
 
 @router.get(

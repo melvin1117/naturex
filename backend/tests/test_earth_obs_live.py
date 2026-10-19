@@ -7,7 +7,7 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -30,8 +30,11 @@ from app.services.earth_obs_live import (
     LiveQuota,
     LiveQuotaExceeded,
     build_live_earth_obs,
+    cached_example,
+    distance_km,
     live_site_key,
     reserve_live_rating,
+    waiting_for_satellite_metrics,
 )
 from app.services.lifecycle import NO_SATELLITE_METRICS
 from app.services.rating_runs import (
@@ -44,6 +47,7 @@ from app.services.rating_runs import (
 from app.tools import earth_engine as eng
 from app.tools.earth_obs import EarthObsMetrics, is_curated_site, is_mock_metrics
 from app.tools.geometry import geometry_sha256, validate_polygon
+from app.worlds import LIVE_WORLD_ID
 from tests import test_lifecycle as lifecycle
 from tests.conftest import requires_db
 from tests.test_earth_engine import LAND_COVER, ndvi_fixture
@@ -528,3 +532,58 @@ def test_a_live_listing_never_shows_another_sites_data(live_world: World_) -> No
     row = w.session.get_one(Asset, UUID(asset["id"]))
     assert row.status is AssetStatus.RATING
     assert w.session.exec(select(Report).where(Report.asset_id == row.id)).first() is None
+
+
+# ----- demo worlds: the "cached example" ----------------------------------------------------------
+
+
+def test_distance_is_great_circle_kilometres() -> None:
+    assert distance_km(0, 0, 0, 1) == pytest.approx(111.2, abs=0.1)
+    assert distance_km(LAT, LON, LAT, LON) == 0
+
+
+def test_the_live_world_never_shows_a_cached_example() -> None:
+    waiting = Asset(
+        world_id=LIVE_WORLD_ID,
+        name="New",
+        status=AssetStatus.RATING,
+        status_reason=f"rating_failed:earth_obs_failed:{EARTH_ENGINE_TIMEOUT}",
+        centroid_lat=LAT,
+        centroid_lon=LON,
+        geojson=POLYGON,
+    )
+    assert waiting_for_satellite_metrics(waiting)
+    assert cached_example(cast(Session, None), waiting) is None  # no query at all
+
+
+@requires_db
+def test_a_demo_world_points_a_failed_listing_to_the_nearest_cached_example(
+    live_world: World_,
+) -> None:
+    w, fake = live_world, FakeEarthEngine(fail=RuntimeError("Computation timed out."))
+    go_live(w, fake)
+    asset = draft(w)
+    submit(w, asset["id"])
+    w.executor.run_all()
+
+    detail = client_as(w, w.steward).get(f"/assets/{asset['id']}").json()
+    sites = w.session.exec(
+        select(Asset).where(Asset.world_id == w.id, col(Asset.site_key).is_not(None))
+    ).all()
+    nearest = min(
+        sites, key=lambda s: distance_km(LAT, LON, s.centroid_lat or 0, s.centroid_lon or 0)
+    )
+    example = detail["cached_example"]
+    assert example["asset_id"] == str(nearest.id) and example["site_key"] == nearest.site_key
+    assert example["notice"].startswith("Cached example:")
+    assert "not this land" in example["notice"]
+    assert detail["latest_report"] is None and detail["status"] == "rating"  # nothing borrowed
+
+    age_submission(w, asset["id"])
+    fake.fail = None
+    assert submit(w, asset["id"]).status_code == 202
+    retrying = client_as(w, w.steward).get(f"/assets/{asset['id']}").json()
+    assert retrying["cached_example"] is None
+    w.executor.run_all()
+    listed = client_as(w, w.steward).get(f"/assets/{asset['id']}").json()
+    assert listed["status"] == "listed" and listed["cached_example"] is None

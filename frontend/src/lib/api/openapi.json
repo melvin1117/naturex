@@ -899,7 +899,7 @@
           "listings"
         ],
         "summary": "Submit Listing",
-        "description": "Submit a draft for rating, or resubmit: a `needs_evidence` listing with new evidence or\nnewer satellite data, or a `rating` listing whose run failed (at most every 10 minutes).\nThe move to `rating`, its ledger entry and the queued run commit together; the run's\nsealed report then sets `listed`, `needs_evidence` or `ineligible`. Follow it with\n`GET /runs/{run_id}` or `listing_status` events.",
+        "description": "Submit a draft for rating, or resubmit: a `needs_evidence` listing with new evidence or\nnewer satellite data, or a `rating` listing whose run failed (at most every 10 minutes).\nA new polygon's metrics are computed live on Earth Engine when that is on (T60); such a\nsubmit counts against the live-rating quotas, while a polygon already computed is free.\nThe move to `rating`, its ledger entry and the queued run commit together; the run's\nsealed report then sets `listed`, `needs_evidence` or `ineligible`. Follow it with\n`GET /runs/{run_id}` or `listing_status` events.",
         "operationId": "submit_listing_assets__asset_id__submit_post",
         "parameters": [
           {
@@ -937,7 +937,7 @@
             "description": "`cannot_submit_<status>`, `overlap` (a listing submitted first claims the land), `evidence_required` (needs_evidence with no new evidence or newer data), `metrics_unavailable` (still no metrics for the polygon) or `run_in_progress` (Location: the active run)"
           },
           "429": {
-            "description": "`resubmit_cooldown`, `rating_rate_limited` or `rating_global_limit`; see Retry-After"
+            "description": "`resubmit_cooldown`, `rating_rate_limited`, `rating_global_limit`, or, when the run must compute the polygon's satellite metrics live, `live_rating_quota` (per account per day) or `live_rating_global_limit`; see Retry-After"
           },
           "503": {
             "description": "`rating_busy`; see Retry-After"
@@ -2842,6 +2842,17 @@
             ],
             "title": "Ipo At",
             "description": "When the IPO opened trading; null before the IPO (T59)."
+          },
+          "cached_example": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CachedExample"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Demo worlds only: a listing waiting in `rating` because its satellite metrics are missing or their live computation failed points to the nearest precomputed demo site, labelled as a cached example (T60). Always null in the live world."
           }
         },
         "type": "object",
@@ -3063,6 +3074,41 @@
         ],
         "title": "AuditorOutput",
         "description": "Nemotron Ultra auditor JSON (dev-spec \u00a77.7)."
+      },
+      "CachedExample": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "site_key": {
+            "type": "string",
+            "title": "Site Key"
+          },
+          "distance_km": {
+            "type": "number",
+            "title": "Distance Km"
+          },
+          "notice": {
+            "type": "string",
+            "title": "Notice"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "name",
+          "site_key",
+          "distance_km",
+          "notice"
+        ],
+        "title": "CachedExample",
+        "description": "Demo worlds only (T60): the nearest precomputed demo site, shown with its notice next to\na listing whose live satellite rating failed. Never the listing's own data."
       },
       "CommunityCreate": {
         "properties": {

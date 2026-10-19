@@ -30,7 +30,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -39,9 +39,11 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlmodel import Session, col, select
 
 from app.config import Settings
-from app.models import EarthObsCache, LiveRatingRequest
+from app.models import Asset, AssetStatus, EarthObsCache, LiveRatingRequest
+from app.services.lifecycle import NO_SATELLITE_METRICS, PUBLIC_STATUSES, RATING_FAILED_PREFIX
 from app.tools.earth_obs import EarthObsMetrics
 from app.tools.geometry import bare_geometry, check_shape, geometry_sha256, metrics_match_polygon
+from app.worlds import LIVE_WORLD_ID
 
 log = logging.getLogger(__name__)
 
@@ -293,3 +295,77 @@ def reserve_live_rating(session: Session, quota: LiveQuota, now: datetime) -> No
         )
     )
     session.flush()
+
+
+# ----- the demo-world "cached example" ------------------------------------------------------------
+
+EARTH_OBS_FAILED = f"{RATING_FAILED_PREFIX}earth_obs_failed:"
+EARTH_RADIUS_KM = 6371.0088
+
+
+@dataclass(frozen=True, slots=True)
+class CachedExample:
+    asset_id: UUID
+    name: str
+    site_key: str
+    distance_km: float
+    notice: str
+
+
+def distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle (haversine) distance."""
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lon2 - lon1)
+    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(h))
+
+
+def waiting_for_satellite_metrics(asset: Asset) -> bool:
+    """A new listing whose rating failed for lack of satellite metrics (none, or a failed live
+    computation) and is still in `rating`."""
+    reason = asset.status_reason or ""
+    return (
+        asset.site_key is None
+        and asset.status is AssetStatus.RATING
+        and (reason == NO_SATELLITE_METRICS or reason.startswith(EARTH_OBS_FAILED))
+    )
+
+
+def cached_example(session: Session, asset: Asset) -> CachedExample | None:
+    """In demo worlds only: the nearest precomputed demo site of the same world, as an explicit
+    "cached example" for a listing whose live rating failed. It is shown next to the listing,
+    never as its data: the listing keeps no report and stays in `rating`. Never in the live
+    world."""
+    if asset.world_id == LIVE_WORLD_ID or not waiting_for_satellite_metrics(asset):
+        return None
+    if asset.centroid_lat is None or asset.centroid_lon is None:
+        return None
+    sites = session.exec(
+        select(Asset).where(
+            Asset.world_id == asset.world_id,
+            col(Asset.site_key).is_not(None),
+            col(Asset.status).in_(PUBLIC_STATUSES),
+            col(Asset.centroid_lat).is_not(None),
+            col(Asset.centroid_lon).is_not(None),
+        )
+    ).all()
+    lat, lon = asset.centroid_lat, asset.centroid_lon
+    ranked = sorted(
+        (distance_km(lat, lon, cast(float, s.centroid_lat), cast(float, s.centroid_lon)), s)
+        for s in sites
+        if s.site_key is not None
+    )
+    if not ranked:
+        return None
+    km, site = ranked[0]
+    return CachedExample(
+        asset_id=site.id,
+        name=site.name,
+        site_key=cast(str, site.site_key),
+        distance_km=round(km, 1),
+        notice=(
+            f"Cached example: live satellite metrics for this listing aren't available yet. "
+            f"{site.name}, a precomputed demo site {km:,.0f} km away, shows what a rating looks "
+            f"like. Its numbers describe that site, not this land."
+        ),
+    )
