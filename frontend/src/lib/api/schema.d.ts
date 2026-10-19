@@ -338,8 +338,9 @@ export interface paths {
          * Submit Listing
          * @description Submit a draft for rating, or resubmit: a `needs_evidence` listing with new evidence or
          *     newer satellite data, or a `rating` listing whose run failed (at most every 10 minutes).
-         *     A new polygon's metrics are computed live on Earth Engine when that is on (T60); such a
-         *     submit counts against the live-rating quotas, while a polygon already computed is free.
+         *     In the live world, a new polygon's metrics are computed live on Earth Engine when that is on
+         *     (T60); such a submit counts against the live-rating quotas, while a polygon already computed
+         *     is free. Demo sandboxes never compute live.
          *     The move to `rating`, its ledger entry and the queued run commit together; the run's
          *     sealed report then sets `listed`, `needs_evidence` or `ineligible`. Follow it with
          *     `GET /runs/{run_id}` or `listing_status` events.
@@ -3308,7 +3309,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description `cannot_submit_<status>`, `overlap` (a listing submitted first claims the land), `evidence_required` (needs_evidence with no new evidence or newer data), `metrics_unavailable` (still no metrics for the polygon) or `run_in_progress` (Location: the active run) */
+            /** @description `cannot_submit_<status>`, `overlap` (a listing submitted first claims the land), `evidence_required` (needs_evidence with no new evidence or newer data), `metrics_unavailable` (still no metrics for the polygon), `live_area_too_large` (too large to compute its satellite metrics live) or `run_in_progress` (Location: the active run) */
             409: {
                 headers: {
                     [name: string]: unknown;

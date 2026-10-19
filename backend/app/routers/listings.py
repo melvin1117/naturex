@@ -45,6 +45,7 @@ from app.schemas import (
     AssetUpdate,
     SuspendRequest,
 )
+from app.services.earth_obs_live import LIVE_AREA_TOO_LARGE
 from app.services.lifecycle import (
     EVIDENCE_REQUIRED,
     METRICS_UNAVAILABLE,
@@ -259,7 +260,8 @@ def edit_listing(
         409: {
             "description": f"`cannot_submit_<status>`, `{OVERLAP}` (a listing submitted first "
             f"claims the land), `{EVIDENCE_REQUIRED}` (needs_evidence with no new evidence or "
-            f"newer data), `{METRICS_UNAVAILABLE}` (still no metrics for the polygon) or "
+            f"newer data), `{METRICS_UNAVAILABLE}` (still no metrics for the polygon), "
+            f"`{LIVE_AREA_TOO_LARGE}` (too large to compute its satellite metrics live) or "
             f"`{RUN_IN_PROGRESS}` (Location: the active run)"
         },
         429: {
@@ -276,14 +278,17 @@ def submit_listing(
 ) -> AssetSubmitted:
     """Submit a draft for rating, or resubmit: a `needs_evidence` listing with new evidence or
     newer satellite data, or a `rating` listing whose run failed (at most every 10 minutes).
-    A new polygon's metrics are computed live on Earth Engine when that is on (T60); such a
-    submit counts against the live-rating quotas, while a polygon already computed is free.
+    In the live world, a new polygon's metrics are computed live on Earth Engine when that is on
+    (T60); such a submit counts against the live-rating quotas, while a polygon already computed
+    is free. Demo sandboxes never compute live.
     The move to `rating`, its ledger entry and the queued run commit together; the run's
     sealed report then sets `listed`, `needs_evidence` or `ineligible`. Follow it with
     `GET /runs/{run_id}` or `listing_status` events."""
     asset = _listing(session, granted)
     world_id, asset_id = asset.world_id, asset.id
     probe = runner.metrics_probe(asset)  # before any lock; never computes anything
+    if probe.live_compute and not runner.live_area_allowed(asset):
+        raise _refused(LIVE_AREA_TOO_LARGE)
     live_quota = runner.live_quota(asset, granted.signed_in.user_id) if probe.live_compute else None
     hook = ListingSubmit(probe.version, live_quota=live_quota)
     # End the read transaction: the runner uses its own session and waits on run locks.

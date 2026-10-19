@@ -65,8 +65,12 @@ class Settings(BaseSettings):
     # Wait at most this long for a free slot, then at most this long for the computation; twice
     # the cap stays under the 15 minutes after which a silent rating run counts as stale.
     earth_engine_timeout_s: float = Field(default=120.0, gt=0, le=400)
+    # Per API process; the daily live-rating quotas below are global (in the database).
     earth_engine_max_concurrent: int = Field(default=1, ge=1, le=4)
-    # Live ratings (submits that need a computation; cache hits are free), rolling 24 hours.
+    # Larger polygons are never computed live (409 `live_area_too_large` at submit).
+    earth_engine_live_max_ha: float = Field(default=5_000.0, gt=0)
+    # Live-world live ratings (submits that need a computation; cache hits are free; demo
+    # sandboxes never compute), rolling 24 hours.
     live_ratings_per_user_per_day: int = Field(default=2, ge=0)
     live_ratings_global_per_day: int = Field(default=50, ge=0)
 

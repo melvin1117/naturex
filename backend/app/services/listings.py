@@ -540,7 +540,7 @@ class ListingSubmit:
             raise TransitionRefused(OVERLAP)
         if self.live_quota is not None:
             try:
-                reserve_live_rating(session, self.live_quota, now)
+                reserve_live_rating(session, self.live_quota, now, run_id)
             except LiveQuotaExceeded as exc:
                 raise TooSoon(exc.code, exc.retry_after_s) from exc
         locked.submitted_at = now

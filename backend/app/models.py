@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
+    CheckConstraint,
     Column,
     DateTime,
     ForeignKeyConstraint,
@@ -601,6 +602,11 @@ class EarthObsCache(SQLModel, table=True):
     are stored (no world, account or listing identifiers)."""
 
     __tablename__ = "earth_obs_cache"
+    __table_args__ = (
+        CheckConstraint(
+            "length(geometry_sha256) = 64", name="ck_earth_obs_cache_geometry_sha256_len"
+        ),
+    )
 
     geometry_sha256: str = Field(sa_column=Column(String(64), primary_key=True))
     data_version: str = Field(sa_column=Column(String, primary_key=True))
@@ -619,6 +625,10 @@ class LiveRatingRequest(SQLModel, table=True):
     __table_args__ = (
         Index("ix_live_rating_requests_user_id_created_at", "user_id", "created_at"),
         Index("ix_live_rating_requests_created_at", "created_at"),
+        Index("ix_live_rating_requests_run_id", "run_id"),
+        CheckConstraint(
+            "length(geometry_sha256) = 64", name="ck_live_rating_requests_geometry_sha256_len"
+        ),
     )
 
     id: int | None = Field(
@@ -627,4 +637,6 @@ class LiveRatingRequest(SQLModel, table=True):
     )
     user_id: UUID
     geometry_sha256: str = Field(sa_column=Column(String(64), nullable=False))
+    run_id: UUID | None = None
+    """The rating run it was counted for; refunded if that run never reached Earth Engine."""
     created_at: datetime = _created_at()

@@ -182,14 +182,32 @@ def _no_checkpoint() -> None:
 
 
 def service_account_key(setting: str) -> tuple[dict[str, Any], str | None]:
-    """The key of `EE_SERVICE_ACCOUNT_JSON` (a file path or inline JSON) and its file path."""
-    value = setting.strip()
+    """The key of `EE_SERVICE_ACCOUNT_JSON` (a file path or inline JSON) and its file path.
+
+    Surrounding quotes and a byte-order mark are stripped, so a quoted inline key is never
+    mistaken for a path. Errors never contain the setting or the file's content.
+    """
+    value = setting.strip().lstrip("\ufeff").strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        value = value[1:-1].strip()
     if not value:
         raise ValueError("EE_SERVICE_ACCOUNT_JSON is not set")
+    path: Path | None = None
     if value.startswith("{"):
-        return json.loads(value), None
-    path = Path(value).expanduser()
-    return json.loads(path.read_text()), str(path)
+        text = value
+    else:
+        path = Path(value).expanduser()
+        try:
+            text = path.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError):
+            raise ValueError("EE_SERVICE_ACCOUNT_JSON is not a readable key file") from None
+    try:
+        key = json.loads(text)
+    except json.JSONDecodeError:
+        raise ValueError("EE_SERVICE_ACCOUNT_JSON does not hold valid JSON") from None
+    if not isinstance(key, dict) or not key.get("client_email") or not key.get("project_id"):
+        raise ValueError("EE_SERVICE_ACCOUNT_JSON lacks client_email or project_id")
+    return key, None if path is None else str(path)
 
 
 def init_ee(setting: str) -> None:
@@ -667,9 +685,9 @@ def compute_polygon_metrics(
 
 class EarthEngineApi:
     """Live Earth Engine for the API (T60): initialised once per process, on first use, with a
-    per-request deadline and few retries so a stuck request can't hold a worker for long."""
+    per-request deadline and no retries, so a stuck request can't hold a slot for long."""
 
-    def __init__(self, key_setting: str, *, request_timeout_s: float, max_retries: int = 1):
+    def __init__(self, key_setting: str, *, request_timeout_s: float, max_retries: int = 0):
         self._key_setting = key_setting
         self._request_timeout_ms = int(request_timeout_s * 1000)
         self._max_retries = max_retries

@@ -46,6 +46,7 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), sa.Identity(), nullable=False),
         sa.Column("user_id", sa.Uuid(), nullable=False),
         sa.Column("geometry_sha256", sa.String(length=64), nullable=False),
+        sa.Column("run_id", sa.Uuid(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -53,6 +54,9 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
+        sa.CheckConstraint(
+            "length(geometry_sha256) = 64", name="ck_live_rating_requests_geometry_sha256_len"
+        ),
     )
     op.create_index(
         "ix_live_rating_requests_user_id_created_at",
@@ -60,9 +64,11 @@ def upgrade() -> None:
         ["user_id", "created_at"],
     )
     op.create_index("ix_live_rating_requests_created_at", "live_rating_requests", ["created_at"])
+    op.create_index("ix_live_rating_requests_run_id", "live_rating_requests", ["run_id"])
 
 
 def downgrade() -> None:
+    op.drop_index("ix_live_rating_requests_run_id", table_name="live_rating_requests")
     op.drop_index("ix_live_rating_requests_created_at", table_name="live_rating_requests")
     op.drop_index("ix_live_rating_requests_user_id_created_at", table_name="live_rating_requests")
     op.drop_table("live_rating_requests")

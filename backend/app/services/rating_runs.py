@@ -73,10 +73,12 @@ from app.llm import CallLog, CallRecord, LLMClient, LLMError, LLMResult
 from app.models import Asset, AssetStatus, Report, StreamEventType, World, WorldEvent
 from app.schemas import NewsScoutOutput, RatingRunOut, RatingRunStatus, RatingRunStep
 from app.services.earth_obs_live import (
+    EARTH_ENGINE_BUSY,
     LiveEarthObs,
     LiveMetricsError,
     LiveQuota,
     build_live_earth_obs,
+    refund_live_rating,
 )
 from app.services.lifecycle import is_public
 from app.services.listings import apply_rating_result, lock_asset, note_rating_failure
@@ -91,6 +93,7 @@ from app.tools.earth_obs import (
     mock_listing_metrics,
 )
 from app.tools.geometry import geometry_sha256, metrics_match_polygon
+from app.worlds import LIVE_WORLD_ID
 
 log = logging.getLogger(__name__)
 
@@ -105,6 +108,8 @@ GLOBAL_RUNS_LOCK_KEY = 0x4E585252
 """Advisory key ("NXRR") serialising the global run count; always taken before a world lock."""
 REQUIRED_TOOLS = frozenset({Tool.EARTH_OBS, Tool.VALUATION, Tool.AUDITOR})
 NO_CACHED_METRICS = "no_cached_metrics"
+NOT_COMPUTED = frozenset({"stale", f"earth_obs_failed:{EARTH_ENGINE_BUSY}"})
+"""Run failures that never reached Earth Engine, so their live rating is refunded (T60)."""
 LIVE_METRICS_PENDING = "live_metrics_pending"
 """Live Earth Engine is on but this polygon isn't computed yet, and the run may not compute it
 (only a listing submit, which counts against the live-rating quota, may)."""
@@ -251,16 +256,19 @@ def _new_polygon_metrics(
 ) -> EarthObsMetrics:
     lat, lon, area = asset.centroid_lat, asset.centroid_lon, asset.area_ha
     if live is not None and asset.geojson is not None:
-        # Live Earth Engine is on: a new polygon is rated with its own observations, never mocks.
-        cached = live.cached(asset.geojson)
+        cached = live.cached(asset.geojson)  # any world may reuse a computed polygon
         if cached is not None:
             return cached
-        if not compute_live:
-            raise ToolFailed(LIVE_METRICS_PENDING, retryable=False)
-        try:
-            return live.compute(asset.geojson)
-        except LiveMetricsError as exc:
-            raise ToolFailed(exc.code, retryable=False) from exc
+        if asset.world_id == LIVE_WORLD_ID:
+            # Live world: rated with its own observations, never mocks. Demo sandboxes never
+            # compute (they would spend the live world's capacity): they fall through to mocks
+            # or `no_cached_metrics`, and the cached example (T60).
+            if not compute_live:
+                raise ToolFailed(LIVE_METRICS_PENDING, retryable=False)
+            try:
+                return live.compute(asset.geojson)
+            except LiveMetricsError as exc:
+                raise ToolFailed(exc.code, retryable=False) from exc
     if not use_mocks or lat is None or lon is None or area is None:
         raise missing
     return mock_listing_metrics(area_ha=area, centroid_lat=lat, centroid_lon=lon)
@@ -1078,10 +1086,10 @@ class RatingRunner:
             return MetricsProbe(None)
         return MetricsProbe(metrics.data_version)
 
-    def metrics_version(self, asset: Asset) -> str | None:
-        """The data version the run's metrics would have for `asset` now, or None if there are
-        none (T58: resubmitting a listing)."""
-        return self.metrics_probe(asset).version
+    def live_area_allowed(self, asset: Asset) -> bool:
+        """Whether `asset` is small enough to compute live (`EARTH_ENGINE_LIVE_MAX_HA`)."""
+        live = self.live_metrics
+        return live is None or live.area_allowed(float(asset.area_ha))
 
     def live_quota(self, asset: Asset, user_id: UUID) -> LiveQuota:
         """The live rating a submit of `asset` by `user_id` counts (T60)."""
@@ -1211,7 +1219,10 @@ class RatingRunner:
     def _note_listing_failure(self, spec: RunSpec, code: str) -> None:
         try:
             with self.session_factory() as session:
-                if note_rating_failure(session, spec.world_id, spec.asset_id, code):
+                changed = note_rating_failure(session, spec.world_id, spec.asset_id, code)
+                # A run that never reached Earth Engine gives its live rating back (T60).
+                refunded = code in NOT_COMPUTED and refund_live_rating(session, spec.run_id)
+                if changed or refunded:
                     session.commit()
         except SQLAlchemyError:
             log.exception("could not record why a listing's rating run failed")

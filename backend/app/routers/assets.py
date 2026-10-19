@@ -36,7 +36,7 @@ from app.schemas import (
     PricePoint,
     ReportOut,
 )
-from app.services.earth_obs_live import cached_example
+from app.services.cached_example import cached_example
 from app.services.ipo import is_trading
 from app.services.lifecycle import PUBLIC_STATUSES
 from app.services.listings import RATING_STALE, visible_to
