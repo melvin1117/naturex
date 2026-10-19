@@ -1,0 +1,126 @@
+{
+  "site_key": "wetland_mx",
+  "data_version": "2026Q3",
+  "scenario": "baseline",
+  "scenario_note": "Images show the observed baseline only. Time Machine scenarios shift land-cover fractions by scripted deltas without a per-pixel map, so no scenario overlay exists.",
+  "overlay": {
+    "file": "wetland_mx.overlay.png",
+    "media_type": "image/png",
+    "width": 1024,
+    "height": 946,
+    "bounds": [
+      [19.2802, -99.1056],
+      [19.2945, -99.0892]
+    ],
+    "crs": "EPSG:3857",
+    "dataset_id": "GOOGLE/DYNAMICWORLD/V1",
+    "band": "label",
+    "method": "Per-pixel mode of the Dynamic World V1 label over the date window (the same mode as the landcover metrics), clipped to the polygon and sampled nearest-neighbour onto a Web Mercator grid; outside the polygon is transparent.",
+    "date_window": {
+      "start": "2025-10-01",
+      "end": "2026-10-01"
+    },
+    "palette": [
+      "#419bdf",
+      "#397d49",
+      "#88b053",
+      "#7a87c6",
+      "#e49635",
+      "#dfc35a",
+      "#c4281b",
+      "#a59b8f",
+      "#b39fe1"
+    ],
+    "legend": [
+      {
+        "value": 0,
+        "key": "water",
+        "label": "Water",
+        "color": "#419bdf"
+      },
+      {
+        "value": 1,
+        "key": "trees",
+        "label": "Trees",
+        "color": "#397d49"
+      },
+      {
+        "value": 2,
+        "key": "grass",
+        "label": "Grass",
+        "color": "#88b053"
+      },
+      {
+        "value": 3,
+        "key": "flooded_vegetation",
+        "label": "Flooded vegetation",
+        "color": "#7a87c6"
+      },
+      {
+        "value": 4,
+        "key": "crops",
+        "label": "Crops",
+        "color": "#e49635"
+      },
+      {
+        "value": 5,
+        "key": "shrub_and_scrub",
+        "label": "Shrub and scrub",
+        "color": "#dfc35a"
+      },
+      {
+        "value": 6,
+        "key": "built",
+        "label": "Built area",
+        "color": "#c4281b"
+      },
+      {
+        "value": 7,
+        "key": "bare",
+        "label": "Bare ground",
+        "color": "#a59b8f"
+      },
+      {
+        "value": 8,
+        "key": "snow_and_ice",
+        "label": "Snow and ice",
+        "color": "#b39fe1"
+      }
+    ],
+    "attributions": [
+      "Dynamic World: This dataset is produced for the Dynamic World Project by Google in partnership with National Geographic Society and the World Resources Institute.",
+      "Contains modified Copernicus Sentinel data 2025-2026."
+    ]
+  },
+  "thumbnail": {
+    "file": "wetland_mx.thumbnail.webp",
+    "media_type": "image/webp",
+    "width": 640,
+    "height": 400,
+    "bounds": [
+      [19.278412412, -99.112550329],
+      [19.296287412, -99.082249671]
+    ],
+    "crs": "EPSG:3857",
+    "dataset_ids": [
+      "COPERNICUS/S2_SR_HARMONIZED",
+      "GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED"
+    ],
+    "method": "Median true-colour composite (B4, B3, B2) of Sentinel-2 SR Harmonized scenes over the date window, each masked where Cloud Score+ cs_cdf < 0.60; the polygon outline is drawn on top.",
+    "date_window": {
+      "start": "2025-10-01",
+      "end": "2026-10-01"
+    },
+    "visualization": {
+      "bands": ["B4", "B3", "B2"],
+      "min": 0.0,
+      "max": 2500.0,
+      "gamma": 1.1
+    },
+    "outline_color": "#ffffff",
+    "attributions": [
+      "Contains modified Copernicus Sentinel data 2025-2026.",
+      "Cloud Score+: Pasquarella, V. J., Brown, C. F., Czerwinski, W., & Rucklidge, W. J. (2023). Comprehensive quality assessment of optical satellite imagery using weakly supervised video learning."
+    ]
+  }
+}

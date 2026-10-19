@@ -1,0 +1,36 @@
+[
+  {
+    "seq": 0,
+    "kind": "report",
+    "ref_id": "0bbdd7d6-8165-4a6a-98fd-041ecfd68a7e",
+    "payload": {
+      "as_of": "2026-10-01",
+      "flags": ["low_bound_fallback:shrubland", "auditor_pending"],
+      "grade": "A",
+      "version": 1,
+      "simulated": false,
+      "value_low": "2121067",
+      "value_mid": "2669511",
+      "confidence": "71.0",
+      "value_high": "2669511",
+      "data_version": "2026Q3",
+      "health_score": "76.2",
+      "method_version": "naturex-rating/1.0 (T19)",
+      "summary_sha256": "341dffee2dad2dc954233458652d4323be0d0e8bd598108cccefec84094bba6e",
+      "value_breakdown": {
+        "water_supply": 461645,
+        "climate_regulation": 78398,
+        "food_and_materials": 119266,
+        "pollution_and_soil": 186468,
+        "existence_and_bequest": 608919,
+        "recreation_and_culture": 554083,
+        "habitat_and_biodiversity": 112589,
+        "flood_and_hazard_regulation": 548143
+      },
+      "fair_value_per_share": "21.4723"
+    },
+    "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "hash": "4a8a4d8acc85ce0f55e8c597f6ff938602d3627281aa53c6e99b8bbb4281d083",
+    "created_at": "2026-10-19T00:04:24.225792Z"
+  }
+]

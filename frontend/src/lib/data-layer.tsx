@@ -40,6 +40,9 @@ export const queryKeys = {
   asset: (id: string) => ["asset", id] as const,
   prices: (assetId: string) => ["prices", assetId] as const,
   report: (id: string) => ["report", id] as const,
+  reports: (assetId: string) => ["reports", assetId] as const,
+  ledger: (assetId: string) => ["ledger", assetId] as const,
+  siteImages: (siteKey: string) => ["site-images", siteKey] as const,
   portfolio: () => ["portfolio"] as const,
   /** Every quote of one asset (a prefix, for invalidation). */
   quotes: (assetId: string) => ["quote", assetId] as const,
@@ -122,6 +125,11 @@ export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
       queue(queryKeys.portfolio());
       queue(queryKeys.prices(payload.asset_id));
       queue(queryKeys.quotes(payload.asset_id));
+      // A re-rate comes with a new report version and its ledger entry.
+      if (payload.reason === "rerate") {
+        queue(queryKeys.reports(payload.asset_id));
+        queue(queryKeys.ledger(payload.asset_id));
+      }
     },
     { retain: false },
   );

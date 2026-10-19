@@ -18,14 +18,18 @@ import { toApiError, unwrap, type ApiError } from "./api/errors";
 import type {
   AssetCard,
   AssetDetail,
+  LedgerEntry,
+  LedgerVerify,
   LoginIn,
   MeOut,
   OrderCreate,
   OrderOut,
   PortfolioOut,
+  PricePoint,
   QuoteOut,
   RegisterIn,
   ReportOut,
+  SiteImages,
   WorldOut,
 } from "./api/types";
 import {
@@ -322,6 +326,95 @@ export function useReport(id: string | undefined): QueryResult<ReportOut> {
         }),
       ),
     { enabled: Boolean(id) },
+  );
+}
+
+/** Every report version of one asset, newest first. Live: refetches after a re-rate. */
+export function useAssetReports(
+  id: string | undefined,
+): QueryResult<ReportOut[]> {
+  return useApiQuery(
+    queryKeys.reports(id ?? ""),
+    (api, signal) =>
+      unwrap(
+        api.GET("/assets/{asset_id}/reports", {
+          params: { path: { asset_id: id ?? "" } },
+          signal,
+        }),
+      ),
+    { enabled: Boolean(id) },
+  );
+}
+
+/** One asset's price history, oldest first. Live: refetches on `price_tick`. */
+export function useAssetPrices(
+  id: string | undefined,
+): QueryResult<PricePoint[]> {
+  useLiveConnection(Boolean(id));
+  return useApiQuery(
+    queryKeys.prices(id ?? ""),
+    (api, signal) =>
+      unwrap(
+        api.GET("/assets/{asset_id}/prices", {
+          params: { path: { asset_id: id ?? "" } },
+          signal,
+        }),
+      ),
+    { enabled: Boolean(id) },
+  );
+}
+
+/** One asset's Nature Ledger entries, oldest first. */
+export function useLedger(
+  id: string | undefined,
+  { enabled = true }: { enabled?: boolean } = {},
+): QueryResult<LedgerEntry[]> {
+  return useApiQuery(
+    queryKeys.ledger(id ?? ""),
+    (api, signal) =>
+      unwrap(
+        api.GET("/ledger/{asset_id}", {
+          params: { path: { asset_id: id ?? "" } },
+          signal,
+        }),
+      ),
+    { enabled: enabled && Boolean(id) },
+  );
+}
+
+/** Ask the backend to recompute the asset's hash chain; the entries refetch alongside. */
+export function useVerifyLedger(
+  id: string,
+): MutationResult<void, LedgerVerify> {
+  return useApiMutation(
+    (api) =>
+      unwrap(
+        api.GET("/ledger/{asset_id}/verify", {
+          params: { path: { asset_id: id } },
+        }),
+      ),
+    {
+      onSuccess: (_result, _vars, { cache }) =>
+        cache.invalidate(queryKeys.ledger(id)),
+    },
+  );
+}
+
+/** A demo site's overlay and thumbnail metadata (bounds, legend, date windows, attributions). */
+export function useSiteImages(
+  siteKey: string | null | undefined,
+): QueryResult<SiteImages> {
+  return useApiQuery(
+    queryKeys.siteImages(siteKey ?? ""),
+    async (api, signal) =>
+      // openapi-fetch widens the generated `bounds` tuples to number[][]; the schema is the same.
+      (await unwrap(
+        api.GET("/media/demo-sites/{site_key}/images.json", {
+          params: { path: { site_key: siteKey ?? "" } },
+          signal,
+        }),
+      )) as SiteImages,
+    { enabled: Boolean(siteKey) },
   );
 }
 

@@ -1,0 +1,774 @@
+{
+  "id": "35df5b9e-90ff-4205-a82e-9ca6e0e06729",
+  "name": "Xochimilco Wetland",
+  "country": "MX",
+  "description": "Hero inland wetland near Mexico City (demo).",
+  "status": "listed",
+  "area_ha": "206.70",
+  "centroid_lat": 19.2873,
+  "centroid_lon": -99.0976,
+  "geojson": {
+    "type": "Feature",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [-99.1048, 19.2811],
+          [-99.1028, 19.2802],
+          [-99.0995, 19.2805],
+          [-99.0964, 19.2812],
+          [-99.0935, 19.282],
+          [-99.0912, 19.2838],
+          [-99.0896, 19.2865],
+          [-99.0892, 19.2891],
+          [-99.0901, 19.2916],
+          [-99.0925, 19.2934],
+          [-99.0957, 19.2945],
+          [-99.0991, 19.2941],
+          [-99.1022, 19.2928],
+          [-99.104, 19.2904],
+          [-99.105, 19.2874],
+          [-99.1056, 19.2842],
+          [-99.1048, 19.2811]
+        ]
+      ]
+    },
+    "properties": {
+      "name": "Xochimilco Wetland",
+      "method": "Hand-digitised from Dynamic World natural and water pixels in the Xochimilco Ecological Park wetland area identified by ADR-0004; no OpenStreetMap or share-alike boundary data copied.",
+      "created_date": "2026-10-06"
+    }
+  },
+  "total_shares": 1000000,
+  "retained_pct": "51.00",
+  "primary_shares_remaining": 490000,
+  "community_wallet": "0.00",
+  "site_key": "wetland_mx",
+  "latest_report": {
+    "id": "0bbdd7d6-8165-4a6a-98fd-041ecfd68a7e",
+    "asset_id": "35df5b9e-90ff-4205-a82e-9ca6e0e06729",
+    "version": 1,
+    "health_score": "76.20",
+    "grade": "A",
+    "confidence": "71.00",
+    "value_low": "2121067.00",
+    "value_mid": "2669511.00",
+    "value_high": "2669511.00",
+    "value_breakdown": {
+      "water_supply": 461645,
+      "climate_regulation": 78398,
+      "food_and_materials": 119266,
+      "pollution_and_soil": 186468,
+      "existence_and_bequest": 608919,
+      "recreation_and_culture": 554083,
+      "habitat_and_biodiversity": 112589,
+      "flood_and_hazard_regulation": 548143
+    },
+    "fair_value_per_share": "21.4723",
+    "flags": [
+      {
+        "type": "low_bound_fallback:shrubland",
+        "detail": "Low bound uses a fallback median/mean ratio for this biome.",
+        "source": "valuation"
+      },
+      {
+        "type": "auditor_pending",
+        "detail": "No Auditor review yet: satellite/news agreement defaults to 0.5.",
+        "source": "scoring"
+      }
+    ],
+    "summary_md": "## Ecological Performance Report — Q3 2026\n\nHealth 76.2 / 100 (grade A) is based on deterministic satellite metrics for 207 ha. The annual value range is $2.1M-$2.7M /yr · mid $2.7M · 71% confidence. Sandbox pricing is play money only; nothing here is a real security or investment.",
+    "summary_source": "fallback",
+    "recommendations": [],
+    "auditor": null,
+    "data_version": "2026Q3",
+    "period": "2026Q3",
+    "simulated": false,
+    "rating": {
+      "as_of": "2026-10-01",
+      "score": {
+        "gate": {
+          "passed": true,
+          "reasons": [],
+          "forest_loss_basis": "last_12m",
+          "forest_loss_used_ha": "0.0",
+          "forest_loss_limit_ha": "2.066995"
+        },
+        "grade": "A",
+        "health": "76.2",
+        "weights": {
+          "habitat_loss": "0.20",
+          "natural_cover": "0.25",
+          "threat_pressure": "0.10",
+          "water_stability": "0.15",
+          "vegetation_vigor": "0.30"
+        },
+        "components": {
+          "habitat_loss": "1.0000",
+          "natural_cover": "0.8389",
+          "threat_pressure": "1.0000",
+          "water_stability": "0.4340",
+          "vegetation_vigor": "0.6255"
+        },
+        "confidence": "71.0",
+        "is_wetland": true,
+        "base_health": "76.2",
+        "method_version": "naturex-scoring/1.0 (dev-spec §7.4)",
+        "ndvi_trend_used": "0",
+        "agreement_source": "default",
+        "adjustment_reason": null,
+        "auditor_adjustment": 0,
+        "confidence_weights": {
+          "recency": "0.1",
+          "coverage": "0.4",
+          "evidence": "0.2",
+          "agreement": "0.3"
+        },
+        "confidence_components": {
+          "recency": "1.0000",
+          "coverage": "1.0000",
+          "evidence": "0.3000",
+          "agreement": "0.5000"
+        },
+        "negative_severity_sum": 0
+      },
+      "period": "2026Q3",
+      "metrics": {
+        "period": null,
+        "area_ha": 206.6995,
+        "based_on": null,
+        "centroid": {
+          "lat": 19.2873,
+          "lon": -99.0976
+        },
+        "scenario": "baseline",
+        "site_key": "wetland_mx",
+        "landcover": {
+          "bare": 0.0,
+          "built": 0.1288,
+          "crops": 0.0323,
+          "grass": 0.1024,
+          "trees": 0.3574,
+          "water": 0.2484,
+          "snow_and_ice": 0.0,
+          "shrub_and_scrub": 0.1011,
+          "flooded_vegetation": 0.0296
+        },
+        "ndvi_mean": 0.6008,
+        "simulated": false,
+        "ndvi_trend": 0.0097,
+        "soc_t_c_ha": 55.4083,
+        "thresholds": {
+          "gmw_mangrove_epoch": "2020",
+          "gedi_biomass_scale_m": 1000,
+          "gmw_mangrove_scale_m": 10,
+          "soilgrids_soc_scale_m": 250,
+          "sentinel2_ndvi_scale_m": 10,
+          "soilgrids_soc_depth_cm": "0-30",
+          "cloud_score_plus_cs_cdf": 0.6,
+          "esa_cci_biomass_scale_m": 100,
+          "hansen_forest_loss_years": "2021-2025",
+          "jrc_water_change_scale_m": 30,
+          "dynamic_world_mode_scale_m": 10,
+          "hansen_forest_loss_scale_m": 30,
+          "hansen_forest_loss_last_12m_year": "2025",
+          "hansen_treecover2000_min_percent": 30,
+          "cloud_free_scene_min_clear_fraction": 0.5
+        },
+        "attributions": [
+          "Dynamic World: This dataset is produced for the Dynamic World Project by Google in partnership with National Geographic Society and the World Resources Institute.",
+          "Contains modified Copernicus Sentinel data 2021-2026.",
+          "Cloud Score+: Pasquarella, V. J., Brown, C. F., Czerwinski, W., & Rucklidge, W. J. (2023). Comprehensive quality assessment of optical satellite imagery using weakly supervised video learning.",
+          "JRC Global Surface Water: EC JRC/Google; Pekel et al. (2016), High-resolution mapping of global surface water and its long-term changes, Nature.",
+          "Hansen Global Forest Change: Hansen et al. (2013), High-Resolution Global Maps of 21st-Century Forest Cover Change, Science.",
+          "GEDI L4B: Dubayah et al. (2022), GEDI L4B Gridded Aboveground Biomass Density, Version 2, ORNL DAAC.",
+          "ESA CCI Biomass: Santoro, M.; Cartus, O. (2025), ESA Biomass Climate Change Initiative (Biomass_cci): Global datasets of forest above-ground biomass, v6.0, NERC EDS Centre for Environmental Data Analysis, doi:10.5285/95913ffb6467447ca72c4e9d8cf30501.",
+          "Global Mangrove Watch v3.0 (CC BY 4.0): Bunting et al. (2022), Global Mangrove Extent Change 1996-2020: Global Mangrove Watch Version 3.0, Remote Sensing 14(15), 3657; dataset doi:10.5281/zenodo.6894273.",
+          "SoilGrids 2.0 (CC BY 4.0): ISRIC - World Soil Information; Poggio et al. (2021), SoilGrids 2.0: producing soil information for the globe with quantified spatial uncertainty, SOIL 7, 217-240."
+        ],
+        "biomass_t_ha": 17.7435,
+        "data_version": "2026Q3",
+        "date_windows": {
+          "ndvi": {
+            "end": "2026-10-01",
+            "start": "2021-10-01"
+          },
+          "land_cover": {
+            "end": "2026-10-01",
+            "start": "2025-10-01"
+          },
+          "cloud_free_obs": {
+            "end": "2026-10-01",
+            "start": "2025-10-01"
+          },
+          "esa_cci_biomass": {
+            "end": "2022-12-31",
+            "start": "2022-01-01"
+          },
+          "gedi_l4b_biomass": {
+            "end": "2021-08-04",
+            "start": "2019-04-18"
+          },
+          "jrc_water_change": {
+            "end": "2021-12-31",
+            "start": "1984-03-16"
+          },
+          "hansen_forest_loss": {
+            "end": "2025-12-31",
+            "start": "2021-01-01"
+          },
+          "gmw_mangrove_extent": {
+            "end": "2020-12-31",
+            "start": "2020-01-01"
+          },
+          "hansen_forest_loss_last_12m": {
+            "end": "2025-12-31",
+            "start": "2025-01-01"
+          }
+        },
+        "water_change": -6.6021,
+        "biomass_source": "esa_cci_biomass",
+        "cloud_free_obs": 73,
+        "forest_loss_ha": 0.0,
+        "computed_at_utc": "2026-10-06T07:54:37Z",
+        "provenance_note": null,
+        "scenario_deltas": null,
+        "natural_fraction": 0.8389,
+        "biomass_gedi_t_ha": 9.4681,
+        "mangrove_fraction": 0.0,
+        "ndvi_trend_details": {
+          "significant_05": false,
+          "mann_kendall_tau": 0.1469,
+          "mean_last_12_months": 0.6008,
+          "sens_slope_per_year": 0.0097,
+          "mann_kendall_p_value": 0.0986
+        },
+        "cloud_free_months_5y": 60,
+        "observed_data_version": null,
+        "forest_loss_last_12m_ha": 0.0
+      },
+      "valuation": {
+        "unit": "Int$2020/yr",
+        "flags": ["low_bound_fallback:shrubland"],
+        "carbon": {
+          "soc_included": true,
+          "soc_stock_tco2": 1243,
+          "carbon_fraction": "0.47",
+          "wetland_area_ha": "6.1183",
+          "root_shoot_ratio": "0.2000",
+          "total_stock_tco2": 8828,
+          "biomass_stock_tco2": 7585,
+          "sequestration_tco2_yr": 306,
+          "root_shoot_ratio_basis": "woody"
+        },
+        "classes": [
+          {
+            "share": "0.248400",
+            "biome_id": "lake_river",
+            "dw_class": "water",
+            "coeff_low": "30868",
+            "coeff_mid": "33447",
+            "value_low": 1584891,
+            "value_mid": 1717308,
+            "coeff_high": "33447",
+            "value_high": 1717308,
+            "biome_label": "Lakes / rivers"
+          },
+          {
+            "share": "0.357400",
+            "biome_id": "tropical_forest",
+            "dw_class": "trees",
+            "coeff_low": "3653",
+            "coeff_mid": "8166",
+            "value_low": 269863,
+            "value_mid": 603258,
+            "coeff_high": "8166",
+            "value_high": 603258,
+            "biome_label": "Tropical & sub-tropical forest"
+          },
+          {
+            "share": "0.102400",
+            "biome_id": "grassland",
+            "dw_class": "grass",
+            "coeff_low": "5576",
+            "coeff_mid": "5934",
+            "value_low": 118022,
+            "value_mid": 125599,
+            "coeff_high": "5934",
+            "value_high": 125599,
+            "biome_label": "Rangeland, natural grassland & savanna"
+          },
+          {
+            "share": "0.029600",
+            "biome_id": "swamp_floodplain",
+            "dw_class": "flooded_vegetation",
+            "coeff_low": "21901",
+            "coeff_mid": "34018",
+            "value_low": 133997,
+            "value_mid": 208133,
+            "coeff_high": "34018",
+            "value_high": 208133,
+            "biome_label": "Swamps / floodplains (inland wetlands)"
+          },
+          {
+            "share": "0.032300",
+            "biome_id": "not_valued",
+            "dw_class": "crops",
+            "coeff_low": "0",
+            "coeff_mid": "0",
+            "value_low": 0,
+            "value_mid": 0,
+            "coeff_high": "0",
+            "value_high": 0,
+            "biome_label": "Not valued as natural capital"
+          },
+          {
+            "share": "0.101100",
+            "biome_id": "shrubland",
+            "dw_class": "shrub_and_scrub",
+            "coeff_low": "684",
+            "coeff_mid": "728",
+            "value_low": 14294,
+            "value_mid": 15213,
+            "coeff_high": "728",
+            "value_high": 15213,
+            "biome_label": "Shrubland & shrubby woodland"
+          },
+          {
+            "share": "0.128800",
+            "biome_id": "not_valued",
+            "dw_class": "built",
+            "coeff_low": "0",
+            "coeff_mid": "0",
+            "value_low": 0,
+            "value_mid": 0,
+            "coeff_high": "0",
+            "value_high": 0,
+            "biome_label": "Not valued as natural capital"
+          },
+          {
+            "share": "0.000000",
+            "biome_id": "not_valued",
+            "dw_class": "bare",
+            "coeff_low": "0",
+            "coeff_mid": "0",
+            "value_low": 0,
+            "value_mid": 0,
+            "coeff_high": "0",
+            "value_high": 0,
+            "biome_label": "Not valued as natural capital"
+          },
+          {
+            "share": "0.000000",
+            "biome_id": "not_valued",
+            "dw_class": "snow_and_ice",
+            "coeff_low": "0",
+            "coeff_mid": "0",
+            "value_low": 0,
+            "value_mid": 0,
+            "coeff_high": "0",
+            "value_high": 0,
+            "biome_label": "Not valued as natural capital"
+          },
+          {
+            "share": "0.000000",
+            "biome_id": "mangrove",
+            "dw_class": "gmw_mangrove",
+            "coeff_low": "4890",
+            "coeff_mid": "77928",
+            "value_low": 0,
+            "value_mid": 0,
+            "coeff_high": "77928",
+            "value_high": 0,
+            "biome_label": "Mangrove"
+          }
+        ],
+        "coastal": {
+          "source": "Natural Earth 1:10m coastline v5.1.2 (public domain)",
+          "is_coastal": false,
+          "distance_km": "253.354",
+          "threshold_km": "5.0"
+        },
+        "mangrove": {
+          "capped": false,
+          "source": "Global Mangrove Watch v3 (Bunting, P. et al. 2022, Remote Sensing 14:3657, doi:10.3390/rs14153657, CC BY 4.0)",
+          "applied": "0.000000",
+          "from_trees": "0.000000",
+          "mangrove_fraction": "0.0",
+          "from_flooded_vegetation": "0.000000"
+        },
+        "services": [
+          {
+            "group": "food_and_materials",
+            "value_mid": 119266
+          },
+          {
+            "group": "water_supply",
+            "value_mid": 461645
+          },
+          {
+            "group": "climate_regulation",
+            "value_mid": 78398
+          },
+          {
+            "group": "flood_and_hazard_regulation",
+            "value_mid": 548143
+          },
+          {
+            "group": "pollution_and_soil",
+            "value_mid": 186468
+          },
+          {
+            "group": "habitat_and_biodiversity",
+            "value_mid": 112589
+          },
+          {
+            "group": "recreation_and_culture",
+            "value_mid": 554083
+          },
+          {
+            "group": "existence_and_bequest",
+            "value_mid": 608919
+          }
+        ],
+        "value_low": 2121067,
+        "value_mid": 2669511,
+        "source_ids": [
+          "brander2024",
+          "costanza2014",
+          "gmw_v3",
+          "ipcc2006_v4",
+          "naturalearth_10m",
+          "soilgrids"
+        ],
+        "value_high": 2669511,
+        "price_basis": "Int$2020/ha/yr",
+        "range_basis": "mid = high = Brander et al. 2024 Table 1 biome mean; low = indicative median-equivalent (mean x median/mean ratio from Costanza et al. 2014 Table 4)",
+        "landcover_sum": "1.0000",
+        "methods_version": "naturex-valuation/1.1.0 (T14)",
+        "context_multiplier": "1",
+        "landcover_renormalised": false,
+        "carbon_included_in_value": false
+      },
+      "fair_value": {
+        "health": "76.2",
+        "formula": "value_mid × 10 × (0.5 + 0.5 × health/100) × (0.7 + 0.3 × confidence/100) / total_shares",
+        "value_mid": "2669511",
+        "confidence": "71.0",
+        "total_shares": 1000000,
+        "fair_value_total": "21472291.81",
+        "fair_value_per_share": "21.4723"
+      },
+      "is_wetland": true,
+      "data_age_days": 0,
+      "method_version": "naturex-rating/1.0 (T19)"
+    },
+    "greenwashing_risk": null,
+    "run_id": null,
+    "ndvi_series": [
+      {
+        "month": "2021-10",
+        "ndvi": 0.649,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2021-11",
+        "ndvi": 0.6173,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2021-12",
+        "ndvi": 0.5586,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2022-01",
+        "ndvi": 0.4993,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2022-02",
+        "ndvi": 0.4728,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2022-03",
+        "ndvi": 0.4704,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2022-04",
+        "ndvi": 0.4778,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2022-05",
+        "ndvi": 0.5591,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2022-06",
+        "ndvi": 0.5636,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2022-07",
+        "ndvi": 0.6054,
+        "cloud_free_obs": 3
+      },
+      {
+        "month": "2022-08",
+        "ndvi": 0.6676,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2022-09",
+        "ndvi": 0.6842,
+        "cloud_free_obs": 1
+      },
+      {
+        "month": "2022-10",
+        "ndvi": 0.6661,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2022-11",
+        "ndvi": 0.6221,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2022-12",
+        "ndvi": 0.5725,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2023-01",
+        "ndvi": 0.5054,
+        "cloud_free_obs": 7
+      },
+      {
+        "month": "2023-02",
+        "ndvi": 0.4668,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2023-03",
+        "ndvi": 0.4791,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2023-04",
+        "ndvi": 0.5014,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2023-05",
+        "ndvi": 0.5412,
+        "cloud_free_obs": 7
+      },
+      {
+        "month": "2023-06",
+        "ndvi": 0.5958,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2023-07",
+        "ndvi": 0.4849,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2023-08",
+        "ndvi": 0.6455,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2023-09",
+        "ndvi": 0.6546,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2023-10",
+        "ndvi": 0.6387,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2023-11",
+        "ndvi": 0.6162,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2023-12",
+        "ndvi": 0.5572,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2024-01",
+        "ndvi": 0.5037,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2024-02",
+        "ndvi": 0.4682,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2024-03",
+        "ndvi": 0.4629,
+        "cloud_free_obs": 7
+      },
+      {
+        "month": "2024-04",
+        "ndvi": 0.4841,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2024-05",
+        "ndvi": 0.5541,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2024-06",
+        "ndvi": 0.5749,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2024-07",
+        "ndvi": 0.6761,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2024-08",
+        "ndvi": 0.6773,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2024-09",
+        "ndvi": 0.6893,
+        "cloud_free_obs": 3
+      },
+      {
+        "month": "2024-10",
+        "ndvi": 0.6272,
+        "cloud_free_obs": 3
+      },
+      {
+        "month": "2024-11",
+        "ndvi": 0.5988,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2024-12",
+        "ndvi": 0.487,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2025-01",
+        "ndvi": 0.4819,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2025-02",
+        "ndvi": 0.5027,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2025-03",
+        "ndvi": 0.502,
+        "cloud_free_obs": 7
+      },
+      {
+        "month": "2025-04",
+        "ndvi": 0.4835,
+        "cloud_free_obs": 9
+      },
+      {
+        "month": "2025-05",
+        "ndvi": 0.5069,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2025-06",
+        "ndvi": 0.5894,
+        "cloud_free_obs": 3
+      },
+      {
+        "month": "2025-07",
+        "ndvi": 0.6684,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2025-08",
+        "ndvi": 0.6899,
+        "cloud_free_obs": 7
+      },
+      {
+        "month": "2025-09",
+        "ndvi": 0.6505,
+        "cloud_free_obs": 2
+      },
+      {
+        "month": "2025-10",
+        "ndvi": 0.6519,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2025-11",
+        "ndvi": 0.5961,
+        "cloud_free_obs": 8
+      },
+      {
+        "month": "2025-12",
+        "ndvi": 0.5347,
+        "cloud_free_obs": 7
+      },
+      {
+        "month": "2026-01",
+        "ndvi": 0.567,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2026-02",
+        "ndvi": 0.5267,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2026-03",
+        "ndvi": 0.4992,
+        "cloud_free_obs": 8
+      },
+      {
+        "month": "2026-04",
+        "ndvi": 0.5754,
+        "cloud_free_obs": 7
+      },
+      {
+        "month": "2026-05",
+        "ndvi": 0.6229,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2026-06",
+        "ndvi": 0.6606,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2026-07",
+        "ndvi": 0.6785,
+        "cloud_free_obs": 8
+      },
+      {
+        "month": "2026-08",
+        "ndvi": 0.6752,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2026-09",
+        "ndvi": 0.621,
+        "cloud_free_obs": 5
+      }
+    ],
+    "created_at": "2026-10-19T00:04:24.216288Z"
+  },
+  "recent_events": [],
+  "price": "21.4723"
+}
