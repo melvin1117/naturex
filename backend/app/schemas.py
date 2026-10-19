@@ -35,7 +35,6 @@ from app.models import (
     UserKind,
     UserRole,
 )
-from app.services.community_summary import NextAction
 from app.tools.earth_obs import NdviPoint
 
 # ----- Agent outputs (contract-tested later) -----
@@ -905,6 +904,18 @@ class CommunityMemberAdd(BaseModel):
 
 
 # ----- Steward home (T63) -----
+
+
+class NextAction(StrEnum):
+    """What the Steward home offers to do next with a listing."""
+
+    CONTINUE_LISTING = "continue_listing"
+    RATING_IN_PROGRESS = "rating_in_progress"
+    ADD_EVIDENCE = "add_evidence"
+    LAUNCH_IPO = "launch_ipo"
+    AWAITING_IPO = "awaiting_ipo"
+    VIEW_ON_EXCHANGE = "view_on_exchange"
+    NONE = "none"
 
 
 class WalletOut(BaseModel):

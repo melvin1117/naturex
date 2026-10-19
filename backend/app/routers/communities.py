@@ -55,7 +55,6 @@ from app.models import (
     User,
     World,
 )
-from app.routers.assets import cards
 from app.schemas import (
     CommunityCreate,
     CommunityMemberAdd,
@@ -71,6 +70,7 @@ from app.schemas import (
     TopHolderOut,
     WalletOut,
 )
+from app.services.asset_cards import cards, latest_reports
 from app.services.community_summary import Wallet, summarize
 
 log = logging.getLogger(__name__)
@@ -368,8 +368,19 @@ def summary(granted: CommunityData, session: SessionDep, response: Response) -> 
         .order_by(col(Asset.created_at), col(Asset.name))
     ).all()
     role = actor.role_in(community.id)
-    facts = summarize(session, community.world_id, assets, can_launch=role == CommunityRole.OWNER)
-    card_of = {card.id: card for card in cards(session, community.world_id, assets)}
+    ids = [asset.id for asset in assets]
+    # The latest two reports (the cards' trend), loaded once for the cards and the summary.
+    reports = latest_reports(session, community.world_id, ids, per_asset=2)
+    facts = summarize(
+        session,
+        community.world_id,
+        assets,
+        latest={asset_id: versions[0] for asset_id, versions in reports.items()},
+        can_launch=role == CommunityRole.OWNER,
+    )
+    card_of = {
+        card.id: card for card in cards(session, community.world_id, assets, reports=reports)
+    }
     names = {asset.id: asset.name for asset in assets}
     _no_store(response, PRIVATE_NO_STORE)
     return CommunitySummaryOut(

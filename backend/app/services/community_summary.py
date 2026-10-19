@@ -31,7 +31,6 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
@@ -49,6 +48,7 @@ from app.models import (
     PayoutLine,
     Report,
 )
+from app.schemas import NextAction
 
 TOP_HOLDERS = 5
 RECENT_PAYOUTS = 12
@@ -56,23 +56,11 @@ _ZERO = Decimal("0.00")
 _HUNDRED = Decimal("100")
 
 
-class NextAction(StrEnum):
-    """What the Steward home offers to do next with a listing."""
-
-    CONTINUE_LISTING = "continue_listing"
-    RATING_IN_PROGRESS = "rating_in_progress"
-    ADD_EVIDENCE = "add_evidence"
-    LAUNCH_IPO = "launch_ipo"
-    AWAITING_IPO = "awaiting_ipo"
-    VIEW_ON_EXCHANGE = "view_on_exchange"
-    NONE = "none"
-
-
 def next_action(status: AssetStatus, *, launched: bool, can_launch: bool) -> NextAction:
     """draft → continue listing; rating → rating in progress; needs_evidence → add evidence;
     listed before its IPO → launch it (the owner) or wait for the owner (stewards, admins);
-    listed and launched, or suspended (public, trading paused) → view on the Exchange;
-    ineligible and withdrawn are closed → none."""
+    listed and launched, or suspended after its IPO (public, trading paused) → view on the
+    Exchange; suspended before its IPO, ineligible and withdrawn → none (nothing to open)."""
     match status:
         case AssetStatus.DRAFT:
             return NextAction.CONTINUE_LISTING
@@ -82,7 +70,7 @@ def next_action(status: AssetStatus, *, launched: bool, can_launch: bool) -> Nex
             return NextAction.ADD_EVIDENCE
         case AssetStatus.LISTED if not launched:
             return NextAction.LAUNCH_IPO if can_launch else NextAction.AWAITING_IPO
-        case AssetStatus.LISTED | AssetStatus.SUSPENDED:
+        case AssetStatus.LISTED | AssetStatus.SUSPENDED if launched:
             return NextAction.VIEW_ON_EXCHANGE
         case _:
             return NextAction.NONE
@@ -297,23 +285,16 @@ def _holdings(
     ]
 
 
-def _latest_reports(
-    session: Session, world_id: UUID, asset_ids: Sequence[UUID]
-) -> dict[UUID, Report]:
-    out: dict[UUID, Report] = {}
-    for report in session.exec(
-        select(Report)
-        .where(Report.world_id == world_id, col(Report.asset_id).in_(asset_ids))
-        .order_by(col(Report.asset_id), col(Report.version).desc())
-    ).all():
-        out.setdefault(report.asset_id, report)
-    return out
-
-
 def summarize(
-    session: Session, world_id: UUID, assets: Sequence[Asset], *, can_launch: bool
+    session: Session,
+    world_id: UUID,
+    assets: Sequence[Asset],
+    *,
+    latest: Mapping[UUID, Report],
+    can_launch: bool,
 ) -> CommunitySummary:
-    """The home's numbers for these listings (one community's, loaded by the caller)."""
+    """The home's numbers for these listings (one community's) and their latest reports, both
+    loaded by the caller (the reports with the cards', so they're read once)."""
     ids = [asset.id for asset in assets]
     if not ids:
         return CommunitySummary((), EMPTY_WALLET, 0, (), 0)
@@ -322,7 +303,6 @@ def summarize(
     entries = _payout_entries(session, world_id, ids)
     retained = _treasury_lines(session, world_id, treasuries)
     holdings = _holdings(session, world_id, ids)
-    reports = _latest_reports(session, world_id, ids)
 
     credits: dict[UUID, Decimal] = defaultdict(lambda: _ZERO)
     payouts: list[Payout] = []
@@ -359,7 +339,7 @@ def summarize(
     listings: list[ListingFacts] = []
     for asset in assets:
         launched = asset.ipo_at is not None
-        report = reports.get(asset.id)
+        report = latest.get(asset.id)
         listings.append(
             ListingFacts(
                 asset=asset,

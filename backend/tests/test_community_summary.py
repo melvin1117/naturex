@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -10,13 +11,14 @@ from uuid import UUID
 import pytest
 from alembic import command
 from fastapi.testclient import TestClient
-from sqlalchemy import Connection, create_engine
+from sqlalchemy import Connection, create_engine, event
 from sqlmodel import Session, select
 
 from app.auth import SESSION_COOKIE, start_session
 from app.communities import add_member
 from app.config import get_settings
 from app.db import get_session
+from app.ledger import append
 from app.main import app
 from app.market.revenue import pay_quarter
 from app.models import (
@@ -24,6 +26,8 @@ from app.models import (
     AssetStatus,
     Community,
     CommunityRole,
+    Holding,
+    LedgerKind,
     PayoutLine,
     Report,
     SessionKind,
@@ -32,9 +36,10 @@ from app.models import (
     UserRole,
 )
 from app.sandbox import create_world, ensure_live_world
+from app.schemas import NextAction
 from app.seed import LIVE_WORLD_ID, seed
 from app.services.community_summary import (
-    NextAction,
+    RECENT_PAYOUTS,
     Wallet,
     holder_summary,
     ipo_proceeds,
@@ -59,6 +64,7 @@ from tests.test_geometry import square
         (AssetStatus.LISTED, False, False, NextAction.AWAITING_IPO),
         (AssetStatus.LISTED, True, True, NextAction.VIEW_ON_EXCHANGE),
         (AssetStatus.SUSPENDED, True, False, NextAction.VIEW_ON_EXCHANGE),
+        (AssetStatus.SUSPENDED, False, True, NextAction.NONE),
         (AssetStatus.INELIGIBLE, False, True, NextAction.NONE),
         (AssetStatus.WITHDRAWN, False, True, NextAction.NONE),
     ],
@@ -155,6 +161,14 @@ def sign_in(client: TestClient, session: Session, user: User | None) -> TestClie
     return client
 
 
+def owned_community(client: TestClient, session: Session, owner: User) -> Community:
+    created = sign_in(client, session, owner).post("/communities", json={"name": "Bosque Dos"})
+    assert created.status_code == 201, created.text
+    community = session.get(Community, UUID(created.json()["id"]))
+    assert community is not None
+    return community
+
+
 def summary_of(client: TestClient, community_id: UUID) -> Any:
     return client.get(f"/communities/{community_id}/summary")
 
@@ -170,8 +184,16 @@ def seeded_live(session: Session) -> tuple[Community, Asset]:
     return community, asset
 
 
-def draft(session: Session, community: Community, name: str, status: AssetStatus) -> Asset:
+def draft(
+    session: Session,
+    community: Community,
+    name: str,
+    status: AssetStatus,
+    *,
+    launched: bool = False,
+) -> Asset:
     asset = Asset(
+        ipo_at=datetime.now(UTC) if launched else None,
         world_id=community.world_id,
         name=name,
         community_id=community.id,
@@ -295,6 +317,26 @@ def test_listings_show_their_next_action_per_role(session: Session, client: Test
     listed = next(item for item in body["listings"] if item["asset"]["status"] == "listed")
     assert listed["next_action"] == "awaiting_ipo"
 
+    # A same-world admin reads it too, and can't launch: the owner does.
+    admin = person(session, "Ops", is_admin=True)
+    body = summary_of(sign_in(client, session, admin), community.id).json()
+    listed = next(item for item in body["listings"] if item["asset"]["status"] == "listed")
+    assert listed["next_action"] == "awaiting_ipo"
+
+
+@DB
+def test_suspended_listings_offer_the_exchange_only_once_launched(
+    session: Session, client: TestClient
+) -> None:
+    owner = person(session, "Owner")
+    community = owned_community(client, session, owner)
+    launched = draft(session, community, "Launched", AssetStatus.SUSPENDED, launched=True)
+    unlaunched = draft(session, community, "Unlaunched", AssetStatus.SUSPENDED)
+
+    body = summary_of(sign_in(client, session, owner), community.id).json()
+    actions = {item["asset"]["id"]: item["next_action"] for item in body["listings"]}
+    assert actions == {str(launched.id): "view_on_exchange", str(unlaunched.id): "none"}
+
 
 @DB
 def test_totals_come_from_orders_payouts_and_the_treasurys_lines(
@@ -376,3 +418,141 @@ def test_totals_come_from_orders_payouts_and_the_treasurys_lines(
         assert str(investor.id) not in response.text
         assert investor.name not in response.text
     assert str(asset.community_user_id) not in response.text
+
+
+def buy(client: TestClient, asset: Asset, qty: int, side: str = "buy") -> Any:
+    response = client.post("/orders", json={"asset_id": str(asset.id), "side": side, "qty": qty})
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+@DB
+def test_a_secondary_trade_leaves_the_ipo_proceeds_alone(
+    session: Session, client: TestClient
+) -> None:
+    community, asset = seeded_live(session)
+    steward = person(session, "Steward")
+    add_member(session, community, steward.id, CommunityRole.STEWARD)
+    session.commit()
+    investor = person(session, "Investor")
+    paid = Decimal(buy(sign_in(client, session, investor), asset, 3)["community_amount"])
+
+    sold = buy(client, asset, 2, side="sell")
+    assert sold["is_primary"] is False
+    assert Decimal(sold["community_amount"]) == 0
+
+    wallet = summary_of(sign_in(client, session, steward), community.id).json()["wallet"]
+    assert Decimal(wallet["ipo_proceeds"]) == paid
+    assert Decimal(wallet["balance"]) == paid
+
+
+@DB
+def test_payouts_are_capped_newest_first_and_all_counted(
+    session: Session, client: TestClient
+) -> None:
+    community, asset = seeded_live(session)
+    steward = person(session, "Steward")
+    add_member(session, community, steward.id, CommunityRole.STEWARD)
+    session.commit()
+    quarters = [f"{2023 + i // 4}Q{i % 4 + 1}" for i in range(RECENT_PAYOUTS + 2)]
+    credit = Decimal("0.00")
+    for quarter in quarters:
+        applied = pay_quarter(
+            session,
+            world_id=LIVE_WORLD_ID,
+            asset_id=asset.id,
+            value_mid=Decimal("1000000.00"),
+            quarter_label=quarter,
+        )
+        credit += applied.payout.community_wallet_credit
+        session.commit()
+
+    body = summary_of(sign_in(client, session, steward), community.id).json()
+    assert body["payouts_count"] == len(quarters)
+    assert [p["quarter_label"] for p in body["payouts"]] == quarters[::-1][:RECENT_PAYOUTS]
+    # The totals cover every payout, not only the ones listed.
+    assert Decimal(body["wallet"]["community_fund_payouts"]) == credit
+
+
+@DB
+def test_an_investor_in_two_listings_counts_once(session: Session, client: TestClient) -> None:
+    owner = person(session, "Owner")
+    community = owned_community(client, session, owner)
+    first = draft(session, community, "First", AssetStatus.LISTED, launched=True)
+    second = draft(session, community, "Second", AssetStatus.LISTED, launched=True)
+    both, one = person(session, "Both"), person(session, "One")
+    for user, asset, shares in ((both, first, 30), (both, second, 5), (one, second, 10)):
+        session.add(
+            Holding(world_id=LIVE_WORLD_ID, user_id=user.id, asset_id=asset.id, shares=shares)
+        )
+    session.commit()
+
+    body = summary_of(sign_in(client, session, owner), community.id).json()
+    assert body["holder_count"] == 2
+    holders = {item["asset"]["name"]: item["holders"] for item in body["listings"]}
+    assert holders["First"]["count"] == 1
+    assert holders["Second"]["count"] == 2
+    assert [t["shares"] for t in holders["Second"]["top"]] == [10, 5]
+
+
+@DB
+def test_an_older_payout_entry_counts_its_community_fund(
+    session: Session, client: TestClient
+) -> None:
+    owner = person(session, "Owner")
+    community = owned_community(client, session, owner)
+    asset = draft(session, community, "Old", AssetStatus.LISTED, launched=True)
+    # Before T41's `community_wallet_credit`, payout entries recorded `community_fund` only.
+    append(
+        session,
+        world_id=LIVE_WORLD_ID,
+        asset_id=asset.id,
+        kind=LedgerKind.PAYOUT,
+        payload={"quarter_label": "2025Q4", "revenue": "10.01", "community_fund": "5.01"},
+    )
+    session.commit()
+
+    body = summary_of(sign_in(client, session, owner), community.id).json()
+    assert body["wallet"]["community_fund_payouts"] == "5.01"
+    (payout,) = body["payouts"]
+    assert (payout["revenue"], payout["community_fund"], payout["holder_count"]) == (
+        "10.01",
+        "5.01",
+        0,
+    )
+
+
+@DB
+def test_the_number_of_queries_does_not_grow_with_listings(
+    session: Session, client: TestClient, conn: Connection
+) -> None:
+    owner = person(session, "Owner")
+    community = owned_community(client, session, owner)
+    sign_in(client, session, owner)
+    investor = person(session, "Investor")
+
+    def queries_for(listings: int) -> int:
+        while (
+            len(session.exec(select(Asset).where(Asset.community_id == community.id)).all())
+            < listings
+        ):
+            asset = draft(session, community, f"Site {listings}", AssetStatus.LISTED, launched=True)
+            session.add(
+                Holding(world_id=LIVE_WORLD_ID, user_id=investor.id, asset_id=asset.id, shares=1)
+            )
+            session.commit()
+        statements: list[str] = []
+
+        def count(*_: Any) -> None:
+            statements.append("x")
+
+        event.listen(conn, "before_cursor_execute", count)
+        try:
+            assert summary_of(client, community.id).status_code == 200
+        finally:
+            event.remove(conn, "before_cursor_execute", count)
+        return len(statements)
+
+    two = queries_for(2)
+    assert two > 0
+    assert queries_for(5) == two

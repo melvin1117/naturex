@@ -22,10 +22,10 @@ from app.llm import LLMClient
 from app.main import app
 from app.models import Asset, Report
 from app.routers import reports as reports_router
-from app.routers.assets import SPARKLINE_POINTS
 from app.sandbox import create_world, ensure_live_world
 from app.schemas import ReportSummarySource
 from app.seed import DEMO_SITES, LIVE_WORLD_ID, WORLD_ID, seed
+from app.services.asset_cards import SPARKLINE_POINTS
 from app.services.rating import latest_report, rate_asset
 from app.tools.earth_obs import load_site_metrics
 from tests.conftest import alembic_cfg, requires_db
