@@ -137,12 +137,88 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
               </Button>
             </div>
           ) : (
-            <HoldingsTable holdings={data.holdings} cards={cards} />
+            <Holdings holdings={data.holdings} cards={cards} />
           )}
         </Panel>
         <ImpactCard data={data} />
       </div>
     </>
+  );
+}
+
+/** Phones get a card per holding (site, units, value, P&L); wider screens get the table. */
+function Holdings({
+  holdings,
+  cards,
+}: {
+  holdings: HoldingOut[];
+  cards: Map<string, AssetCard>;
+}) {
+  return (
+    <>
+      <ul className="divide-y divide-border sm:hidden" aria-label="Holdings">
+        {holdings.map((h) => (
+          <HoldingCard
+            key={h.asset_id}
+            holding={h}
+            card={cards.get(h.asset_id)}
+          />
+        ))}
+      </ul>
+      <div className="-mx-6 hidden overflow-x-auto px-6 sm:block">
+        <HoldingsTable holdings={holdings} cards={cards} />
+      </div>
+    </>
+  );
+}
+
+function HoldingCard({
+  holding: h,
+  card,
+}: {
+  holding: HoldingOut;
+  card: AssetCard | undefined;
+}) {
+  const pnlPct = decimal(h.unrealized_pnl_pct);
+  return (
+    <li className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+      <SiteIcon card={card} />
+      <div className="min-w-0 flex-1">
+        <Link
+          href={assetHref(h.asset_id)}
+          className="font-medium hover:underline"
+        >
+          {h.asset_name}
+        </Link>
+        <p className="tabular text-xs text-muted-foreground">
+          {int(h.shares)} {h.shares === 1 ? "unit" : "units"} ·{" "}
+          {unitPriceText(h.mark_price)}
+        </p>
+      </div>
+      <dl className="text-right">
+        <dt className="sr-only">Value</dt>
+        <dd className="tabular font-medium">{moneyText(h.market_value)}</dd>
+        <dt className="sr-only">Unrealised profit and loss</dt>
+        <dd className="tabular text-xs">
+          {signedMoneyText(h.unrealized_pnl)}
+          {pnlPct !== null && <Delta value={pnlPct} className="ml-1 text-xs" />}
+        </dd>
+      </dl>
+    </li>
+  );
+}
+
+function SiteIcon({ card }: { card: AssetCard | undefined }) {
+  return card?.site_key ? (
+    <SiteThumb
+      siteKey={card.site_key}
+      alt=""
+      className="size-10 shrink-0 rounded-xl"
+    />
+  ) : (
+    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-lichen">
+      <Leaf className="size-4 text-lime-ink" aria-hidden="true" />
+    </span>
   );
 }
 
@@ -154,86 +230,66 @@ function HoldingsTable({
   cards: Map<string, AssetCard>;
 }) {
   return (
-    <div className="-mx-6 overflow-x-auto px-6">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Site</TableHead>
-            <TableHead className="hidden sm:table-cell">Grade</TableHead>
-            <TableHead className="text-right">Units</TableHead>
-            <TableHead className="hidden text-right sm:table-cell">
-              Avg cost
-            </TableHead>
-            <TableHead className="text-right">Price</TableHead>
-            <TableHead className="text-right">Value</TableHead>
-            <TableHead className="text-right">
-              <span aria-hidden="true">P&amp;L</span>
-              <span className="sr-only">Profit and loss, unrealised</span>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {holdings.map((h) => {
-            const card = cards.get(h.asset_id);
-            const grade = asGrade(card?.grade);
-            const pnlPct = decimal(h.unrealized_pnl_pct);
-            return (
-              <TableRow key={h.asset_id}>
-                <TableCell>
-                  <Link
-                    href={assetHref(h.asset_id)}
-                    className="flex items-center gap-3 font-medium hover:underline"
-                  >
-                    {card?.site_key ? (
-                      <SiteThumb
-                        siteKey={card.site_key}
-                        alt=""
-                        className="size-10 shrink-0 rounded-xl"
-                      />
-                    ) : (
-                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-lichen">
-                        <Leaf
-                          className="size-4 text-lime-ink"
-                          aria-hidden="true"
-                        />
-                      </span>
-                    )}
-                    {h.asset_name}
-                  </Link>
-                </TableCell>
-                <TableCell className="hidden sm:table-cell">
-                  {grade ? (
-                    <GradeBadge grade={grade} size="sm" />
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="tabular text-right">
-                  {int(h.shares)}
-                </TableCell>
-                <TableCell className="tabular hidden text-right sm:table-cell">
-                  {unitPriceText(h.avg_cost)}
-                </TableCell>
-                <TableCell className="tabular text-right">
-                  {unitPriceText(h.mark_price)}
-                </TableCell>
-                <TableCell className="tabular text-right">
-                  {moneyText(h.market_value)}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="tabular">
-                    {signedMoneyText(h.unrealized_pnl)}
-                  </div>
-                  {pnlPct !== null && (
-                    <Delta value={pnlPct} className="text-xs" />
-                  )}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Site</TableHead>
+          <TableHead>Grade</TableHead>
+          <TableHead className="text-right">Units</TableHead>
+          <TableHead className="text-right">Avg cost</TableHead>
+          <TableHead className="text-right">Price</TableHead>
+          <TableHead className="text-right">Value</TableHead>
+          <TableHead className="text-right">Profit and loss</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {holdings.map((h) => {
+          const card = cards.get(h.asset_id);
+          const grade = asGrade(card?.grade);
+          const pnlPct = decimal(h.unrealized_pnl_pct);
+          return (
+            <TableRow key={h.asset_id}>
+              <TableCell>
+                <Link
+                  href={assetHref(h.asset_id)}
+                  className="flex items-center gap-3 font-medium hover:underline"
+                >
+                  <SiteIcon card={card} />
+                  {h.asset_name}
+                </Link>
+              </TableCell>
+              <TableCell>
+                {grade ? (
+                  <GradeBadge grade={grade} size="sm" />
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
+              <TableCell className="tabular text-right">
+                {int(h.shares)}
+              </TableCell>
+              <TableCell className="tabular text-right">
+                {unitPriceText(h.avg_cost)}
+              </TableCell>
+              <TableCell className="tabular text-right">
+                {unitPriceText(h.mark_price)}
+              </TableCell>
+              <TableCell className="tabular text-right">
+                {moneyText(h.market_value)}
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="tabular">
+                  {signedMoneyText(h.unrealized_pnl)}
+                </div>
+                {pnlPct !== null && (
+                  <Delta value={pnlPct} className="text-xs" />
+                )}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }
 
