@@ -18,7 +18,15 @@ from app.auth import (
     is_valid_email,
     normalize_email,
 )
-from app.models import AssetStatus, LedgerKind, StreamEventType, UserKind, UserRole
+from app.communities import clean_country, clean_description, clean_name
+from app.models import (
+    AssetStatus,
+    CommunityRole,
+    LedgerKind,
+    StreamEventType,
+    UserKind,
+    UserRole,
+)
 
 # ----- Agent outputs (contract-tested later) -----
 
@@ -504,3 +512,91 @@ class MeOut(BaseModel):
     kind: UserKind
     is_admin: bool
     world_id: UUID
+
+
+# ----- Communities (ADR-0005 §3, T68) -----
+
+
+class CommunityCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(max_length=200)
+    country: str | None = Field(default=None, max_length=10)
+    description: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str) -> str:
+        return clean_name(value)
+
+    @field_validator("country")
+    @classmethod
+    def _country(cls, value: str | None) -> str | None:
+        return clean_country(value)
+
+    @field_validator("description")
+    @classmethod
+    def _description(cls, value: str | None) -> str | None:
+        return clean_description(value)
+
+
+class CommunityUpdate(BaseModel):
+    """Only the fields sent change; `null` clears `country` or `description`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, max_length=200)
+    country: str | None = Field(default=None, max_length=10)
+    description: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str | None) -> str:
+        if value is None:
+            raise ValueError("A community needs a name")
+        return clean_name(value)
+
+    @field_validator("country")
+    @classmethod
+    def _country(cls, value: str | None) -> str | None:
+        return clean_country(value)
+
+    @field_validator("description")
+    @classmethod
+    def _description(cls, value: str | None) -> str | None:
+        return clean_description(value)
+
+
+class CommunityOut(BaseModel):
+    """A community's public profile: no member or treasury identifiers."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    country: str | None
+    description: str | None
+    created_at: datetime
+
+
+class MyCommunityOut(CommunityOut):
+    """A community the caller belongs to, with the caller's role in it."""
+
+    role: CommunityRole
+
+
+class CommunityMemberOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: UUID
+    name: str
+    role: CommunityRole
+    created_at: datetime
+
+
+class CommunityMemberAdd(BaseModel):
+    """Add a steward by account ID (not email: emails are never a claim of identity)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: UUID

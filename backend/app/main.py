@@ -16,6 +16,7 @@ from app.routers import (
     admin,
     assets,
     auth,
+    communities,
     copilot,
     events,
     ledger,
@@ -82,6 +83,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(communities.router)
 app.include_router(assets.router)
 app.include_router(reports.router)
 app.include_router(market.router)

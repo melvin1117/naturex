@@ -15,17 +15,16 @@ from uuid import UUID
 from sqlalchemy import update
 from sqlmodel import Session, col, select
 
+from app.communities import add_member, create_community, get_member
 from app.db import engine
 from app.models import (
     Asset,
     AssetStatus,
     Community,
-    CommunityMember,
     CommunityRole,
     Holding,
     Price,
     User,
-    UserKind,
     UserRole,
     World,
 )
@@ -139,10 +138,6 @@ class SeedCommunity:
     @property
     def name(self) -> str:
         return f"{self.site.name} Community"
-
-    @property
-    def treasury_name(self) -> str:
-        return f"{self.name} Treasury"
 
 
 SEED_COMMUNITIES: tuple[SeedCommunity, ...] = tuple(
@@ -258,37 +253,19 @@ def _seed_communities(session: Session) -> None:
     there.
     """
     for community in SEED_COMMUNITIES:
-        if session.get(Community, community.id) is None:
-            session.add(
-                User(
-                    id=community.treasury_id,
-                    world_id=WORLD_ID,
-                    name=community.treasury_name,
-                    role=UserRole.COMMUNITY,
-                    kind=UserKind.TREASURY,
-                    cash_balance=Decimal("0.00"),
-                )
+        existing = session.get(Community, community.id)
+        if existing is None:
+            create_community(
+                session,
+                WORLD_ID,
+                community.name,
+                COMMUNITY_PERSONA.id,
+                country=community.site.country,
+                community_id=community.id,
+                treasury_id=community.treasury_id,
             )
-            session.flush()
-            session.add(
-                Community(
-                    id=community.id,
-                    world_id=WORLD_ID,
-                    name=community.name,
-                    country=community.site.country,
-                    treasury_user_id=community.treasury_id,
-                )
-            )
-            session.flush()
-        if session.get(CommunityMember, (community.id, COMMUNITY_PERSONA.id)) is None:
-            session.add(
-                CommunityMember(
-                    community_id=community.id,
-                    user_id=COMMUNITY_PERSONA.id,
-                    world_id=WORLD_ID,
-                    role=CommunityRole.OWNER,
-                )
-            )
+        elif get_member(session, existing, COMMUNITY_PERSONA.id) is None:
+            add_member(session, existing, COMMUNITY_PERSONA.id, CommunityRole.OWNER)
     session.commit()
 
 
