@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -12,13 +13,21 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import ExchangeLayout from "@/app/(exchange)/layout";
 import AdminLayout from "@/app/admin/layout";
 import RootLayout from "@/app/layout";
+import DevUiPage from "@/app/dev/ui/page";
+import JudgePage from "@/app/judge/page";
 import LoginPage from "@/app/login/page";
+import NotFound from "@/app/not-found";
+import RegisterPage from "@/app/register/page";
 import StewardLayout from "@/app/steward/layout";
 import { DemoBar } from "@/components/proto/demo-bar";
 import { TourProvider } from "@/components/proto/tour";
+import {
+  StewardCommunityProvider,
+  useStewardCommunity,
+} from "@/components/shell/steward-community";
 import { WorldProvider } from "@/components/world-provider";
 import type { MyCommunity, WorldOut } from "@/lib/api/types";
-import { createDataLayer } from "@/lib/data-layer";
+import { createDataLayer, queryKeys, type DataLayer } from "@/lib/data-layer";
 import { PrototypeProvider } from "@/lib/prototype/store";
 
 import {
@@ -27,21 +36,23 @@ import {
   community,
   fakeBackend,
   json,
+  sequence,
   SIGNED_IN_WORLD,
   WORLD,
 } from "./lib/helpers";
 
-const nav = vi.hoisted(() => ({ pathname: "/" }));
+const nav = vi.hoisted(() => ({ pathname: "/", search: "" }));
+const router = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  back: vi.fn(),
+  prefetch: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    back: vi.fn(),
-    prefetch: vi.fn(),
-  }),
+  useRouter: () => router,
   usePathname: () => nav.pathname,
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(nav.search),
 }));
 vi.mock("next/font/google", () => {
   const font = () => ({ variable: "font", className: "font" });
@@ -61,7 +72,9 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  vi.clearAllMocks();
   nav.pathname = "/";
+  nav.search = "";
   window.localStorage.clear();
   window.sessionStorage.clear();
 });
@@ -73,16 +86,22 @@ const RIO = community({
   role: "steward",
 });
 
+type Routes = Parameters<typeof fakeBackend>[0];
+
 function setup(
   ui: ReactNode,
   world: WorldOut,
   communities: MyCommunity[] = [],
+  routes: Routes = {},
+  prepare?: (layer: DataLayer) => void,
 ) {
   const backend = fakeBackend({
     "GET /world": () => json(world),
     "GET /me/communities": () => json(communities),
+    ...routes,
   });
   const layer = createDataLayer({ baseUrl: BASE, fetch: backend.fetch });
+  prepare?.(layer);
   render(
     <WorldProvider dataLayer={layer}>
       <PrototypeProvider>
@@ -90,8 +109,11 @@ function setup(
       </PrototypeProvider>
     </WorldProvider>,
   );
-  return { backend };
+  return { backend, layer };
 }
+
+const ROSA_ID = SIGNED_IN_WORLD.me!.id;
+const REMEMBERED = `nx-steward-community:${ROSA_ID}`;
 
 const Page = () => <p>Page content</p>;
 
@@ -250,7 +272,7 @@ describe("Steward shell", () => {
       [SELVA, RIO],
     );
     const trigger = await screen.findByRole("button", {
-      name: "Community: Selva Viva. Switch community",
+      name: "Selva Viva, switch community",
     });
     fireEvent.keyDown(trigger, { key: "Enter" });
     const items = await screen.findAllByRole("menuitemradio");
@@ -263,14 +285,18 @@ describe("Steward shell", () => {
 
     expect(
       await screen.findByRole("button", {
-        name: "Community: Río Claro. Switch community",
+        name: "Río Claro, switch community",
       }),
     ).toBeVisible();
-    expect(window.localStorage.getItem("nx-steward-community")).toBe(RIO.id);
+    expect(window.localStorage.getItem(REMEMBERED)).toBe(RIO.id);
+    expect(router.replace).toHaveBeenCalledWith(
+      `/steward?community=${RIO.id}`,
+      { scroll: false },
+    );
   });
 
   it("opens on the remembered community, if still a member", async () => {
-    window.localStorage.setItem("nx-steward-community", RIO.id);
+    window.localStorage.setItem(REMEMBERED, RIO.id);
     nav.pathname = "/steward";
     setup(
       <StewardLayout>
@@ -281,9 +307,101 @@ describe("Steward shell", () => {
     );
     expect(
       await screen.findByRole("button", {
-        name: "Community: Río Claro. Switch community",
+        name: "Río Claro, switch community",
       }),
     ).toBeVisible();
+  });
+
+  it("keeps the shown community in Steward links", async () => {
+    nav.pathname = "/steward";
+    setup(
+      <StewardLayout>
+        <Page />
+      </StewardLayout>,
+      SIGNED_IN_WORLD,
+      [SELVA, RIO],
+    );
+    await screen.findByRole("button", { name: "Selva Viva, switch community" });
+    const pages = screen.getByRole("navigation", {
+      name: "Steward navigation",
+    });
+    expect(
+      within(pages).getByRole("link", { name: "List land" }),
+    ).toHaveAttribute("href", `/steward/list?community=${SELVA.id}`);
+    expect(
+      screen.getByRole("link", { name: /^NatureX\s*Steward$/ }),
+    ).toHaveAttribute("href", `/steward?community=${SELVA.id}`);
+  });
+
+  it("lets the URL win over the remembered community", async () => {
+    window.localStorage.setItem(REMEMBERED, SELVA.id);
+    nav.pathname = "/steward";
+    nav.search = `community=${RIO.id}`;
+    setup(
+      <StewardLayout>
+        <Page />
+      </StewardLayout>,
+      SIGNED_IN_WORLD,
+      [SELVA, RIO],
+    );
+    expect(
+      await screen.findByRole("button", {
+        name: "Río Claro, switch community",
+      }),
+    ).toBeVisible();
+  });
+
+  it.each([
+    ["a tampered remembered ID", "", "not-a-member"],
+    ["a community in the URL the account isn't in", "community=other", ""],
+  ])("falls back to the first community for %s", async (_case, search, id) => {
+    if (id) window.localStorage.setItem(REMEMBERED, id);
+    nav.pathname = "/steward";
+    nav.search = search;
+    setup(
+      <StewardLayout>
+        <Page />
+      </StewardLayout>,
+      SIGNED_IN_WORLD,
+      [SELVA, RIO],
+    );
+    expect(
+      await screen.findByRole("button", {
+        name: "Selva Viva, switch community",
+      }),
+    ).toBeVisible();
+  });
+
+  it("shows the remembered community from the first render", async () => {
+    window.localStorage.setItem(REMEMBERED, RIO.id);
+    nav.pathname = "/steward";
+    const seen: (string | null)[] = [];
+    function Probe() {
+      seen.push(useStewardCommunity().active?.id ?? null);
+      return <p>Probe</p>;
+    }
+    // Arriving from another page: the world and the communities are already known.
+    const backend = fakeBackend({
+      "GET /world": () => json(SIGNED_IN_WORLD),
+      "GET /me/communities": () => json([SELVA, RIO]),
+    });
+    const layer = createDataLayer({ baseUrl: BASE, fetch: backend.fetch });
+    layer.session.set(SIGNED_IN_WORLD);
+    await layer.cache.fetch(queryKeys.myCommunities(ROSA_ID), () =>
+      Promise.resolve([SELVA, RIO]),
+    );
+    render(
+      <WorldProvider dataLayer={layer}>
+        <PrototypeProvider>
+          <StewardCommunityProvider>
+            <Probe />
+          </StewardCommunityProvider>
+        </PrototypeProvider>
+      </WorldProvider>,
+    );
+    await waitFor(() => expect(seen).toContain(RIO.id));
+    expect(seen[0]).toBe(RIO.id);
+    expect(new Set(seen)).toEqual(new Set([RIO.id]));
   });
 
   it("shows an account without a community how to start one", async () => {
@@ -361,6 +479,26 @@ describe("Admin shell", () => {
       ).getByRole("link", { name: "Time Machine" }),
     ).toHaveAttribute("aria-current", "page");
   });
+
+  it("shows a non-admin the 403 message and no Admin link", async () => {
+    nav.pathname = "/admin";
+    setup(
+      <AdminLayout>
+        <Page />
+      </AdminLayout>,
+      SIGNED_IN_WORLD,
+      [SELVA],
+    );
+    expect(
+      await screen.findByText("The control room is for platform admins"),
+    ).toBeVisible();
+    expect(screen.queryByText("Page content")).not.toBeInTheDocument();
+    await screen.findByRole("link", { name: "Steward app" });
+    expect(await switchLinks()).toEqual([
+      ["Exchange", "/"],
+      ["Steward app", "/steward"],
+    ]);
+  });
 });
 
 describe("mobile menu", () => {
@@ -383,7 +521,7 @@ describe("mobile menu", () => {
     ).toHaveAttribute("aria-current", "page");
     expect(
       within(sheet).getByRole("button", {
-        name: "Community: Selva Viva. Switch community",
+        name: "Selva Viva, switch community",
       }),
     ).toBeVisible();
     const apps = within(sheet).getByRole("navigation", { name: "Switch app" });
@@ -417,6 +555,123 @@ describe("mobile menu", () => {
   });
 });
 
+describe("when the account changes", () => {
+  async function signOut() {
+    fireEvent.keyDown(
+      await screen.findByRole("button", { name: /^Account: / }),
+      { key: "Enter" },
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: /sign out/i }));
+    await screen.findByRole("link", { name: "Sign in" });
+  }
+
+  it.each([
+    ["a member", [SELVA], "Steward app"],
+    ["an investor", [], "Create a community"],
+  ])(
+    "signing out %s never asks for communities anonymously",
+    async (_who, communities, link) => {
+      window.localStorage.setItem(REMEMBERED, SELVA.id);
+      const { backend } = setup(
+        <ExchangeLayout>
+          <Page />
+        </ExchangeLayout>,
+        SIGNED_IN_WORLD,
+        communities,
+        {
+          "GET /world": sequence(
+            () => json(SIGNED_IN_WORLD),
+            () => json(WORLD),
+          ),
+          "POST /auth/logout": () => new Response(null, { status: 204 }),
+        },
+      );
+      expect(
+        (await screen.findAllByRole("link", { name: link }))[0],
+      ).toBeVisible();
+      expect(backend.calls("GET /me/communities")).toBe(1);
+
+      await signOut();
+      expect(
+        screen.queryByRole("link", { name: link }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("navigation", { name: "Switch app" }),
+      ).not.toBeInTheDocument();
+      // Give any stray refetch time to land.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(backend.calls("GET /me/communities")).toBe(1);
+      expect(window.localStorage.getItem(REMEMBERED)).toBeNull();
+    },
+  );
+
+  it("never shows a member's communities to the next account", async () => {
+    const INVESTOR: WorldOut = {
+      ...SIGNED_IN_WORLD,
+      me: {
+        ...SIGNED_IN_WORLD.me!,
+        id: "88888888-8888-4888-8888-888888888888",
+        name: "Ines",
+      },
+    };
+    let answerInvestor!: (response: Response) => void;
+    const { backend, layer } = setup(
+      <ExchangeLayout>
+        <Page />
+      </ExchangeLayout>,
+      SIGNED_IN_WORLD,
+      [],
+      {
+        "GET /world": sequence(
+          () => json(SIGNED_IN_WORLD),
+          () => json(INVESTOR),
+        ),
+        "GET /me/communities": sequence(
+          () => json([SELVA]),
+          () => new Promise<Response>((resolve) => (answerInvestor = resolve)),
+        ),
+      },
+    );
+    expect(
+      await screen.findByRole("link", { name: "Steward app" }),
+    ).toBeVisible();
+
+    await act(() => layer.session.reload());
+    await screen.findByRole("button", { name: "Account: Ines" });
+    // Ines's answer hasn't come back: nothing from Rosa, nothing guessed.
+    await waitFor(() => expect(backend.calls("GET /me/communities")).toBe(2));
+    expect(
+      screen.queryByRole("link", { name: "Steward app" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Create a community")).not.toBeInTheDocument();
+
+    await act(async () => answerInvestor(json([])));
+    expect(
+      (await screen.findAllByRole("link", { name: "Create a community" }))[0],
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("link", { name: "Steward app" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("still offers the Steward app when the communities can't be read", async () => {
+    setup(
+      <ExchangeLayout>
+        <Page />
+      </ExchangeLayout>,
+      SIGNED_IN_WORLD,
+      [],
+      {
+        "GET /me/communities": () => json({ detail: "boom" }, { status: 503 }),
+      },
+    );
+    expect(
+      await screen.findByRole("link", { name: "Steward app" }),
+    ).toHaveAttribute("href", "/steward");
+    expect(screen.queryByText("Create a community")).not.toBeInTheDocument();
+  });
+});
+
 describe("sandbox banner", () => {
   const NOTICE = "Sandbox: play money, not a real security.";
 
@@ -430,9 +685,24 @@ describe("sandbox banner", () => {
       const html = renderToString(<RootLayout>{shell}</RootLayout>);
       expect(html).toContain(NOTICE);
       expect(html).toContain('href="#main"');
-      expect(html).toContain('id="main"');
+      expect(html.match(/id="main"/g)).toHaveLength(1);
     },
   );
+
+  it.each([
+    ["/login", async () => LoginPage({ searchParams: Promise.resolve({}) })],
+    [
+      "/register",
+      async () => RegisterPage({ searchParams: Promise.resolve({}) }),
+    ],
+    ["/judge", async () => <JudgePage />],
+    ["/dev/ui", async () => <DevUiPage />],
+    ["404", async () => <NotFound />],
+  ])("%s has one #main skip target", async (_path, page) => {
+    const html = renderToString(<RootLayout>{await page()}</RootLayout>);
+    expect(html).toContain('href="#main"');
+    expect(html.match(/id="main"/g)).toHaveLength(1);
+  });
 
   it("pages outside the shells get it too", async () => {
     const page = await LoginPage({ searchParams: Promise.resolve({}) });

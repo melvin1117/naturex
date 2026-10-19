@@ -4,7 +4,7 @@ import { Geist_Mono, Hanken_Grotesk, Instrument_Serif } from "next/font/google";
 import { AlertToaster } from "@/components/proto/alert-toaster";
 import { CopilotSheet } from "@/components/proto/copilot-sheet";
 import { DemoBar } from "@/components/proto/demo-bar";
-import { SkipLink } from "@/components/skip-link";
+import { SkipLink } from "@/components/shell/skip-link";
 import { TourProvider } from "@/components/proto/tour";
 import { TraceSheet } from "@/components/proto/trace-sheet";
 import { Toaster } from "@/components/ui/sonner";

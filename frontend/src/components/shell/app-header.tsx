@@ -1,28 +1,23 @@
 "use client";
 
-import { Bell, Bot, Menu, MessageCircle } from "lucide-react";
+import { Menu } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { cn } from "cn";
 
 import { AccountMenu } from "@/components/account-menu";
+import { Wordmark } from "@/components/proto/bits";
 import {
   AppSwitcher,
   CreateCommunityLink,
   useAppAccess,
-} from "@/components/app-switcher";
-import { Wordmark } from "@/components/proto/bits";
+} from "@/components/shell/app-switcher";
 import {
   CommunitySwitcher,
   useOptionalStewardCommunity,
-} from "@/components/steward-community";
+} from "@/components/shell/steward-community";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Sheet,
   SheetContent,
@@ -38,38 +33,27 @@ import {
   type AppAccess,
   type AppKey,
 } from "@/lib/navigation";
-import { date } from "@/lib/prototype/format";
-import { usePrototype } from "@/lib/prototype/store";
-import {
-  actingTrader,
-  markAlertsRead,
-  type TraderKey,
-} from "@/lib/prototype/world";
-
-export type { AppKey };
 
 /**
  * The shell header of the Exchange, the Steward app and the control room (T62). Navigation
  * follows the signed-in account's roles (`useAppAccess`); from `lg` down, the pages, the app
- * switcher and the community switcher move into a menu sheet.
+ * switcher and the community switcher move into a menu sheet. `tools` holds app-specific
+ * buttons (today the prototype's Copilot, Agent Trace and alerts).
  */
-export function AppHeader({ app }: { app: AppKey }) {
+export function AppHeader({ app, tools }: { app: AppKey; tools?: ReactNode }) {
   const pathname = usePathname();
-  const { world, openCopilot, openTrace } = usePrototype();
   const access = useAppAccess();
   const steward = useOptionalStewardCommunity();
-  // Alerts follow the persona you're viewing as, the same account that trades.
-  const trader: TraderKey | null =
-    app === "admin" ? null : actingTrader(world.persona);
   const offerCreate = access.canCreateCommunity && app !== "steward";
   // An account without a community gets the Steward app's empty state on every page there.
   const showPages = !(app === "steward" && access.canCreateCommunity);
+  const href = steward?.href ?? ((path: string) => path);
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-x-3 px-4 sm:px-6 lg:gap-x-6">
         <div className="flex min-w-0 shrink-0 items-center gap-3">
-          <Link href={APPS[app].href} className="shrink-0 rounded-md">
+          <Link href={href(APPS[app].href)} className="shrink-0 rounded-md">
             <Wordmark app={APPS[app].name} />
           </Link>
           {app === "steward" && steward?.active && (
@@ -82,36 +66,15 @@ export function AppHeader({ app }: { app: AppKey }) {
           )}
         </div>
         {showPages && (
-          <AppNav app={app} pathname={pathname} className="hidden lg:block" />
+          <AppNav
+            app={app}
+            pathname={pathname}
+            href={href}
+            className="hidden lg:block"
+          />
         )}
         <div className="ml-auto flex items-center gap-1.5">
-          {app === "exchange" && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                openCopilot(
-                  pathname.startsWith("/asset/")
-                    ? pathname.split("/")[2]
-                    : null,
-                )
-              }
-              data-tour="copilot-button"
-            >
-              <MessageCircle aria-hidden="true" />
-              <span className="sr-only xl:not-sr-only">Copilot</span>
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => openTrace()}
-            data-tour="trace-button"
-          >
-            <Bot aria-hidden="true" />
-            <span className="sr-only xl:not-sr-only">Agent Trace</span>
-          </Button>
-          {trader && <AlertsBell trader={trader} />}
+          {tools}
           <AppSwitcher
             current={app}
             access={access}
@@ -125,6 +88,7 @@ export function AppHeader({ app }: { app: AppKey }) {
             app={app}
             access={access}
             pathname={pathname}
+            href={href}
             offerCreate={offerCreate}
             showPages={showPages}
           />
@@ -137,12 +101,14 @@ export function AppHeader({ app }: { app: AppKey }) {
 function AppNav({
   app,
   pathname,
+  href,
   layout = "row",
   className,
   onNavigate,
 }: {
   app: AppKey;
   pathname: string;
+  href: (path: string) => string;
   layout?: "row" | "stack";
   className?: string;
   onNavigate?: () => void;
@@ -160,7 +126,7 @@ function AppNav({
           return (
             <li key={item.href}>
               <Link
-                href={item.href}
+                href={href(item.href)}
                 data-tour={layout === "row" ? item.tour : undefined}
                 aria-current={active ? "page" : undefined}
                 onClick={onNavigate}
@@ -187,12 +153,14 @@ function MobileMenu({
   app,
   access,
   pathname,
+  href,
   offerCreate,
   showPages,
 }: {
   app: AppKey;
   access: AppAccess;
   pathname: string;
+  href: (path: string) => string;
   offerCreate: boolean;
   showPages: boolean;
 }) {
@@ -202,7 +170,7 @@ function MobileMenu({
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon-sm" className="lg:hidden">
+        <Button variant="ghost" size="icon" className="size-11 lg:hidden">
           <Menu aria-hidden="true" />
           <span className="sr-only">Open menu</span>
         </Button>
@@ -226,6 +194,7 @@ function MobileMenu({
             <AppNav
               app={app}
               pathname={pathname}
+              href={href}
               layout="stack"
               onNavigate={close}
             />
@@ -257,85 +226,21 @@ function MenuSection({
   children,
 }: {
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
+  const id = useId();
   return (
-    <div className="space-y-2 border-t border-border/70 px-2 pt-4 first:border-t-0 first:pt-0">
-      <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-        {title}
-      </p>
-      {children}
-    </div>
-  );
-}
-
-function AlertsBell({ trader }: { trader: TraderKey }) {
-  const { world, act } = usePrototype();
-  const alerts = world.alerts.filter((a) => a.persona === trader);
-  const unread = alerts.filter((a) => !a.read).length;
-  return (
-    <Popover
-      onOpenChange={(open) =>
-        !open && unread && act((w) => markAlertsRead(w, trader))
-      }
+    <section
+      aria-labelledby={id}
+      className="space-y-2 border-t border-border/70 px-2 pt-4 first:border-t-0 first:pt-0"
     >
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="relative"
-          data-tour="alerts-bell"
-        >
-          <Bell aria-hidden="true" />
-          <span className="sr-only">
-            Alerts{unread ? `, ${unread} unread` : ""}
-          </span>
-          {unread > 0 && (
-            <span className="tabular absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-clay px-1 text-[10px] font-semibold text-white">
-              {unread}
-            </span>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 rounded-2xl p-0">
-        <div className="border-b px-4 py-3 text-sm font-semibold">Alerts</div>
-        {alerts.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-muted-foreground">
-            No alerts yet. You&apos;ll hear here when a site you back is
-            re-rated.
-          </p>
-        ) : (
-          <ul className="max-h-80 divide-y overflow-auto">
-            {alerts.map((a) => (
-              <li key={a.id}>
-                <Link
-                  href={`/asset/${a.siteId}`}
-                  className="block px-4 py-3 hover:bg-accent"
-                >
-                  <div className="flex items-start gap-2">
-                    <span
-                      className={cn(
-                        "mt-1.5 size-2 shrink-0 rounded-full",
-                        a.severity === "critical" ? "bg-clay" : "bg-lime-ink",
-                      )}
-                      aria-hidden="true"
-                    />
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium">{a.title}</div>
-                      <div className="mt-0.5 text-xs text-muted-foreground">
-                        {a.message}
-                      </div>
-                      <div className="mt-1 text-[11px] text-muted-foreground">
-                        {date(a.date)}
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </PopoverContent>
-    </Popover>
+      <h2
+        id={id}
+        className="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+      >
+        {title}
+      </h2>
+      {children}
+    </section>
   );
 }

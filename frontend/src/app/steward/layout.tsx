@@ -1,11 +1,12 @@
-import { AppHeader } from "@/components/proto/app-header";
+import { PrototypeHeaderTools } from "@/components/proto/header-tools";
 import { SiteFooter } from "@/components/proto/site-footer";
 import { RequireAccount } from "@/components/require-account";
-import { MAIN_ID } from "@/components/skip-link";
+import { AppHeader } from "@/components/shell/app-header";
+import { MAIN_ID } from "@/components/shell/skip-link";
 import {
   StewardCommunityProvider,
   StewardGate,
-} from "@/components/steward-community";
+} from "@/components/shell/steward-community";
 
 /**
  * NatureX Steward (`/steward`): for community owners and stewards (ADR-0005 §5). A signed-in
@@ -18,7 +19,7 @@ export default function StewardLayout({
 }) {
   return (
     <StewardCommunityProvider>
-      <AppHeader app="steward" />
+      <AppHeader app="steward" tools={<PrototypeHeaderTools app="steward" />} />
       <main id={MAIN_ID} tabIndex={-1} className="flex-1 outline-none">
         <RequireAccount allowPrototypeDemo>
           <StewardGate>{children}</StewardGate>

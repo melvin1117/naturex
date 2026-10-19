@@ -7,13 +7,14 @@ import {
   TriangleAlertIcon,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   createContext,
+  Suspense,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
-  useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { cn } from "cn";
@@ -30,12 +31,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  COMMUNITY_PARAM,
+  readRememberedCommunity,
+  rememberCommunity,
+  subscribeRememberedCommunity,
+} from "@/lib/active-community";
 import type { MyCommunity } from "@/lib/api/types";
 import { useMyCommunities, useWorld, type QueryResult } from "@/lib/hooks";
-import { COMMUNITY_ROLE_LABEL, pickCommunity } from "@/lib/navigation";
-
-/** Only the community ID, never account data; checked against `/me/communities` on read. */
-const STORAGE_KEY = "nx-steward-community";
+import {
+  COMMUNITY_ROLE_LABEL,
+  pickCommunity,
+  withCommunity,
+} from "@/lib/navigation";
 
 interface StewardCommunityValue {
   query: QueryResult<MyCommunity[]>;
@@ -43,62 +51,92 @@ interface StewardCommunityValue {
   communities: MyCommunity[];
   /** The community the Steward app shows; null until loaded, without one, or when anonymous. */
   active: MyCommunity | null;
+  /** Show another community: puts it in the URL and remembers it for this account. */
   select: (id: string) => void;
+  /** A Steward app link that keeps the shown community (`?community=<id>`). */
+  href: (path: string) => string;
 }
 
 const StewardCommunityContext = createContext<StewardCommunityValue | null>(
   null,
 );
 
-function readPreferred(): string | null {
-  try {
-    return window.localStorage.getItem(STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
 /**
- * The Steward app's communities (`GET /me/communities`) and the one it shows. The choice is
- * remembered in this browser; a community the account no longer belongs to falls back to the
- * first. T63, T33 and T64 read it with `useStewardCommunity()`.
+ * The Steward app's communities (`GET /me/communities`) and the one it shows: the
+ * `?community=` parameter, else the one remembered for this account, else the first; any of
+ * them only if the account is still a member. T63, T33 and T64 read it with
+ * `useStewardCommunity()`.
  */
 export function StewardCommunityProvider({
   children,
 }: {
   children: ReactNode;
 }) {
-  const { world } = useWorld();
-  const query = useMyCommunities();
-  const [preferred, setPreferred] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Storage isn't readable during server rendering; read it once on the client.
-    setPreferred(readPreferred());
-  }, []);
-
-  const select = useCallback((id: string) => {
-    setPreferred(id);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, id);
-    } catch {
-      // Storage blocked: the choice lasts until the page reloads.
-    }
-  }, []);
-
-  const signedIn = world?.me != null;
-  const communities = useMemo(
-    () => (signedIn && query.status === "success" ? (query.data ?? []) : []),
-    [signedIn, query.status, query.data],
+  // useSearchParams opts a static page out of server rendering up to the nearest Suspense
+  // boundary: the server renders the same shell without the parameter instead.
+  return (
+    <Suspense
+      fallback={
+        <CommunityProvider communityParam={null}>{children}</CommunityProvider>
+      }
+    >
+      <CommunityProviderFromUrl>{children}</CommunityProviderFromUrl>
+    </Suspense>
   );
+}
+
+function CommunityProviderFromUrl({ children }: { children: ReactNode }) {
+  const communityParam = useSearchParams().get(COMMUNITY_PARAM);
+  return (
+    <CommunityProvider communityParam={communityParam}>
+      {children}
+    </CommunityProvider>
+  );
+}
+
+function CommunityProvider({
+  communityParam,
+  children,
+}: {
+  communityParam: string | null;
+  children: ReactNode;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { world } = useWorld();
+  const meId = world?.me?.id ?? null;
+  const query = useMyCommunities();
+  // Read during render (null on the server), so the first client render already shows it.
+  const remembered = useSyncExternalStore(
+    subscribeRememberedCommunity,
+    () => (meId ? readRememberedCommunity(meId) : null),
+    () => null,
+  );
+
+  const communities = useMemo(
+    () => (meId ? (query.data ?? []) : []),
+    [meId, query.data],
+  );
+  const active = pickCommunity(communities, [communityParam, remembered]);
+  const activeId = active?.id ?? null;
+
+  const select = useCallback(
+    (id: string) => {
+      if (meId) rememberCommunity(meId, id);
+      const params = new URLSearchParams(window.location.search);
+      params.set(COMMUNITY_PARAM, id);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [meId, pathname, router],
+  );
+  const href = useCallback(
+    (path: string) => withCommunity(path, activeId),
+    [activeId],
+  );
+
   const value = useMemo<StewardCommunityValue>(
-    () => ({
-      query,
-      communities,
-      active: pickCommunity(communities, preferred),
-      select,
-    }),
-    [query, communities, preferred, select],
+    () => ({ query, communities, active, select, href }),
+    [query, communities, active, select, href],
   );
 
   return (
@@ -156,7 +194,7 @@ export function CommunitySwitcher({ className }: { className?: string }) {
           variant="ghost"
           size="sm"
           className={cn("max-w-56 min-w-0 justify-between", className)}
-          aria-label={`Community: ${active.name}. Switch community`}
+          aria-label={`${active.name}, switch community`}
         >
           <span className="truncate">{active.name}</span>
           <ChevronsUpDown

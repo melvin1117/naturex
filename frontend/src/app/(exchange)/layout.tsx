@@ -1,6 +1,7 @@
-import { AppHeader } from "@/components/proto/app-header";
+import { PrototypeHeaderTools } from "@/components/proto/header-tools";
 import { SiteFooter } from "@/components/proto/site-footer";
-import { MAIN_ID } from "@/components/skip-link";
+import { AppHeader } from "@/components/shell/app-header";
+import { MAIN_ID } from "@/components/shell/skip-link";
 
 /** NatureX Exchange (`/`): for investors and everyone (ADR-0005 §5). */
 export default function ExchangeLayout({
@@ -10,7 +11,10 @@ export default function ExchangeLayout({
 }) {
   return (
     <>
-      <AppHeader app="exchange" />
+      <AppHeader
+        app="exchange"
+        tools={<PrototypeHeaderTools app="exchange" />}
+      />
       <main id={MAIN_ID} tabIndex={-1} className="flex-1 outline-none">
         {children}
       </main>

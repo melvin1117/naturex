@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { MAIN_ID } from "@/components/skip-link";
+import { MAIN_ID } from "@/components/shell/skip-link";
 import { Button } from "@/components/ui/button";
 
 export default function NotFound() {

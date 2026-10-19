@@ -13,6 +13,7 @@ import {
   useSyncExternalStore,
 } from "react";
 
+import { forgetCommunity } from "./active-community";
 import type { ApiClient } from "./api/client";
 import { toApiError, unwrap, type ApiError } from "./api/errors";
 import type {
@@ -432,11 +433,21 @@ export function usePortfolio(): QueryResult<PortfolioOut> {
  * the shells know which apps to offer (T62). Idle for anonymous visitors, who have none.
  */
 export function useMyCommunities(): QueryResult<MyCommunity[]> {
+  const { session } = useDataLayer();
   const { world } = useWorld();
+  const meId = world?.me?.id ?? null;
+  // Signed out, the key has no fetcher, so nothing ever asks for it.
   return useApiQuery(
-    queryKeys.myCommunities(),
-    (api, signal) => unwrap(api.GET("/me/communities", { signal })),
-    { enabled: world?.me != null },
+    queryKeys.myCommunities(meId),
+    (api, signal) => {
+      // `cache.reset()` on sign-out refetches watched queries before screens re-render with
+      // the new key: never ask as someone else.
+      if (session.getSnapshot().world?.me?.id !== meId) {
+        return Promise.reject(new Error("The account changed."));
+      }
+      return unwrap(api.GET("/me/communities", { signal }));
+    },
+    { enabled: meId != null },
   );
 }
 
@@ -530,7 +541,9 @@ export function useRegister(): MutationResult<RegisterIn, MeOut> {
 export function useSignOut(): MutationResult<void, void> {
   const layer = useDataLayer();
   return useApiMutation(async (api) => {
+    const meId = layer.session.getSnapshot().world?.me?.id;
     await unwrap(api.POST("/auth/logout"));
+    if (meId) forgetCommunity(meId);
     await afterSessionChange(layer, null);
   });
 }

@@ -15,7 +15,7 @@ import { VerificationBadge } from "@/components/proto/verification";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MAIN_ID } from "@/components/skip-link";
+import { MAIN_ID } from "@/components/shell/skip-link";
 import { Separator } from "@/components/ui/separator";
 import { GRADE_ORDER } from "@/lib/prototype/format";
 

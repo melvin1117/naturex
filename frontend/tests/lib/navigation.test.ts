@@ -6,6 +6,7 @@ import {
   isActive,
   pickCommunity,
   switchTargets,
+  withCommunity,
 } from "@/lib/navigation";
 
 const person: MeOut = {
@@ -87,6 +88,20 @@ describe("appAccess", () => {
     });
   });
 
+  it("still offers the Steward app when the communities can't be read", () => {
+    expect(
+      appAccess({
+        me: person,
+        communities: undefined,
+        communitiesFailed: true,
+      }),
+    ).toEqual({ apps: ["exchange", "steward"], canCreateCommunity: false });
+    // Known communities win over a failed refetch.
+    expect(
+      appAccess({ me: person, communities: [], communitiesFailed: true }),
+    ).toEqual({ apps: ["exchange"], canCreateCommunity: true });
+  });
+
   it("ignores the scripted demo once signed in", () => {
     expect(
       appAccess({ me: person, communities: [], prototypeDemo: true }).apps,
@@ -112,13 +127,27 @@ describe("switchTargets", () => {
 
 describe("pickCommunity", () => {
   const list = [community("a", "owner"), community("b", "steward")];
-  it("keeps the remembered community while still a member", () => {
-    expect(pickCommunity(list, "b")?.id).toBe("b");
+  it("takes the first preferred community the account still belongs to", () => {
+    expect(pickCommunity(list, ["b", "a"])?.id).toBe("b");
+    expect(pickCommunity(list, [null, "b"])?.id).toBe("b");
+    expect(pickCommunity(list, ["gone", "b"])?.id).toBe("b");
   });
   it("falls back to the first otherwise", () => {
-    expect(pickCommunity(list, "gone")?.id).toBe("a");
-    expect(pickCommunity(list, null)?.id).toBe("a");
-    expect(pickCommunity([], "a")).toBeNull();
+    expect(pickCommunity(list, ["gone", "tampered"])?.id).toBe("a");
+    expect(pickCommunity(list, [null, undefined])?.id).toBe("a");
+    expect(pickCommunity([], ["a"])).toBeNull();
+  });
+});
+
+describe("withCommunity", () => {
+  it("keeps the shown community in Steward links", () => {
+    expect(withCommunity("/steward/list", "c1")).toBe(
+      "/steward/list?community=c1",
+    );
+    expect(withCommunity("/steward?tab=x", "c1")).toBe(
+      "/steward?tab=x&community=c1",
+    );
+    expect(withCommunity("/steward", null)).toBe("/steward");
   });
 });
 

@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { Wordmark } from "@/components/proto/bits";
 import { PasswordField } from "@/components/proto/password-field";
 import { useTour } from "@/components/proto/tour";
-import { MAIN_ID } from "@/components/skip-link";
+import { MAIN_ID } from "@/components/shell/skip-link";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

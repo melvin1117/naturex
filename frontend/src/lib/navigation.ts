@@ -3,6 +3,7 @@
  * visitor is offered. Pure, so the role rules are unit-tested. This only decides what the UI
  * shows; the backend authorizes every request.
  */
+import { COMMUNITY_PARAM } from "./active-community";
 import type { MeOut, MyCommunity } from "./api/types";
 
 export type AppKey = "exchange" | "steward" | "admin";
@@ -56,15 +57,18 @@ export interface AppAccess {
  * - a community owner or steward: the Exchange and the Steward app;
  * - a platform admin: also Admin.
  * `communities` is undefined until `GET /me/communities` answers; until then nothing that
- * depends on it shows, so the header never offers the wrong thing.
+ * depends on it shows, so the header never offers the wrong thing. If it failed
+ * (`communitiesFailed`), the Steward app is still offered: its error screen explains and retries.
  */
 export function appAccess({
   me,
   communities,
+  communitiesFailed = false,
   prototypeDemo = false,
 }: {
   me: MeOut | null | undefined;
   communities: readonly MyCommunity[] | undefined;
+  communitiesFailed?: boolean;
   prototypeDemo?: boolean;
 }): AppAccess {
   if (!me) {
@@ -74,7 +78,8 @@ export function appAccess({
     };
   }
   const apps: AppKey[] = ["exchange"];
-  if (communities?.length) apps.push("steward");
+  if (communities?.length || (communities === undefined && communitiesFailed))
+    apps.push("steward");
   if (me.is_admin) apps.push("admin");
   return { apps, canCreateCommunity: communities?.length === 0 };
 }
@@ -84,16 +89,31 @@ export function switchTargets(current: AppKey, access: AppAccess): AppKey[] {
   return access.apps.filter((app) => app !== current);
 }
 
-/** The community the Steward app shows: the remembered one if still a member, else the first. */
+/**
+ * The community the Steward app shows: the first preferred ID the account is still a member of
+ * (the `?community=` parameter, then the remembered one), else its first community.
+ */
 export function pickCommunity(
   communities: readonly MyCommunity[],
-  preferredId: string | null,
+  preferredIds: readonly (string | null | undefined)[],
 ): MyCommunity | null {
-  return (
-    communities.find((community) => community.id === preferredId) ??
-    communities[0] ??
-    null
-  );
+  for (const id of preferredIds) {
+    const match = id ? communities.find((c) => c.id === id) : undefined;
+    if (match) return match;
+  }
+  return communities[0] ?? null;
+}
+
+/** A Steward app link that keeps the shown community (`?community=<id>`). */
+export function withCommunity(
+  href: string,
+  communityId: string | null,
+): string {
+  if (!communityId) return href;
+  const [path, query = ""] = href.split("?");
+  const params = new URLSearchParams(query);
+  params.set(COMMUNITY_PARAM, communityId);
+  return `${path}?${params.toString()}`;
 }
 
 export const COMMUNITY_ROLE_LABEL: Record<MyCommunity["role"], string> = {

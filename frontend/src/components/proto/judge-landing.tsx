@@ -18,7 +18,7 @@ import { useTour } from "@/components/proto/tour";
 import { Button } from "@/components/ui/button";
 import { money } from "@/lib/prototype/format";
 import { usePrototype } from "@/lib/prototype/store";
-import { MAIN_ID } from "@/components/skip-link";
+import { MAIN_ID } from "@/components/shell/skip-link";
 import { latestReport, PERSONAS, type PersonaKey } from "@/lib/prototype/world";
 
 const ENTRIES: {

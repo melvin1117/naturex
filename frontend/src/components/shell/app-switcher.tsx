@@ -17,8 +17,9 @@ import { usePrototype } from "@/lib/prototype/store";
 
 /**
  * Which apps this visitor is offered (`appAccess`): from `world.me` and `GET /me/communities`,
- * or the scripted demo for anonymous visitors who chose it (T61). The UI hides what the
- * account can't do; the backend still refuses it.
+ * or the scripted demo for anonymous visitors who chose it (T61). If the communities can't be
+ * read, the Steward app is still offered; its error screen explains and retries. The UI hides
+ * what the account can't do; the backend still refuses it.
  */
 export function useAppAccess(): AppAccess {
   const { world } = useWorld();
@@ -27,8 +28,8 @@ export function useAppAccess(): AppAccess {
   const me = world?.me;
   return appAccess({
     me,
-    communities:
-      me && communities.status === "success" ? communities.data : undefined,
+    communities: me ? communities.data : undefined,
+    communitiesFailed: communities.status === "error",
     prototypeDemo: demo,
   });
 }
