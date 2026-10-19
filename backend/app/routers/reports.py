@@ -14,8 +14,15 @@ from app.config import Settings
 from app.db import engine
 from app.deps import CurrentWorld, SessionDep, SettingsDep
 from app.llm import LLMClient, LLMError, get_llm_client
-from app.models import Asset, Event, Report
-from app.schemas import AuditorOutput, EventOut, ReportDiff, ReportOut, ReportSummarySource
+from app.models import Asset, Event, Metrics, Report
+from app.schemas import (
+    AuditorOutput,
+    EventOut,
+    ReportDiff,
+    ReportOut,
+    ReportSummarySource,
+)
+from app.tools.earth_obs import NdviPoint
 
 router = APIRouter(tags=["reports"])
 
@@ -155,14 +162,38 @@ def summary_context(session: Session, asset: Asset) -> SummaryContext:
     )
 
 
-def present_report(session: Session, report: Report, asset: Asset, settings: Settings) -> ReportOut:
-    """A stored report with its Auditor summary, or T10's (live Nemotron or the fallback)."""
-    return summarize_report(
+def ndvi_series(session: Session, report: Report) -> list[NdviPoint]:
+    """The monthly NDVI stored with the report's metrics row (same world), oldest first."""
+    if report.metrics_id is None:
+        return []
+    series = session.exec(
+        select(Metrics.ndvi_series).where(
+            Metrics.world_id == report.world_id, Metrics.id == report.metrics_id
+        )
+    ).first()
+    points = [NdviPoint.model_validate(point) for point in series or []]
+    return sorted(points, key=lambda point: point.month)
+
+
+def present_report(
+    session: Session,
+    report: Report,
+    asset: Asset,
+    settings: Settings,
+    *,
+    with_ndvi: bool = True,
+) -> ReportOut:
+    """A stored report with its Auditor summary, or T10's (live Nemotron or the fallback),
+    and (unless `with_ndvi` is off, as in the version list) the NDVI series behind its trend."""
+    presented = summarize_report(
         report_out(report),
         settings,
         summary_context(session, asset),
         audit_fallback=audit_fell_back(report),
     )
+    if not with_ndvi:
+        return presented
+    return presented.model_copy(update={"ndvi_series": ndvi_series(session, report)})
 
 
 def _world_report(session: Session, world_id: UUID, report_id: UUID) -> Report:

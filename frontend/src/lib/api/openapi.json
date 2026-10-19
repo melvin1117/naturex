@@ -661,7 +661,7 @@
           "assets"
         ],
         "summary": "List Reports",
-        "description": "Every report of the asset, newest first.",
+        "description": "Every report of the asset, newest first. Versions leave out `ndvi_series` (the chart\nis for the latest report: `GET /assets/{id}` or `GET /reports/{id}`).",
         "operationId": "list_reports_assets__asset_id__reports_get",
         "parameters": [
           {
@@ -1951,6 +1951,15 @@
               }
             ],
             "title": "Site Key"
+          },
+          "sparkline": {
+            "items": {
+              "type": "string",
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+            },
+            "type": "array",
+            "title": "Sparkline",
+            "description": "The latest prices (up to 30), oldest first, for the card's sparkline."
           }
         },
         "type": "object",
@@ -2170,6 +2179,18 @@
               }
             ],
             "title": "Price"
+          },
+          "price_change_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Change Pct",
+            "description": "Latest price vs the IPO price, in percent (2 dp); as on cards."
           }
         },
         "type": "object",
@@ -3116,6 +3137,31 @@
         ],
         "title": "MyCommunityOut",
         "description": "A community the caller belongs to, with the caller's role in it."
+      },
+      "NdviPoint": {
+        "properties": {
+          "month": {
+            "type": "string",
+            "title": "Month",
+            "description": "Calendar month, YYYY-MM."
+          },
+          "ndvi": {
+            "type": "number",
+            "title": "Ndvi"
+          },
+          "cloud_free_obs": {
+            "type": "integer",
+            "title": "Cloud Free Obs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "month",
+          "ndvi",
+          "cloud_free_obs"
+        ],
+        "title": "NdviPoint",
+        "description": "One month of cloud-masked Sentinel-2 NDVI (monthly median); also served on reports."
       },
       "OrderCreate": {
         "properties": {
@@ -4232,6 +4278,14 @@
             ],
             "title": "Run Id",
             "description": "Rating run that produced this report (T27); null for seeds."
+          },
+          "ndvi_series": {
+            "items": {
+              "$ref": "#/components/schemas/NdviPoint"
+            },
+            "type": "array",
+            "title": "Ndvi Series",
+            "description": "Monthly NDVI behind the report's trend, oldest first (the rating's metrics row). Served on a single report (GET /reports/{id}, AssetDetail.latest_report); empty in the version list and when the report has none."
           },
           "created_at": {
             "type": "string",

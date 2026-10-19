@@ -599,6 +599,12 @@ export function siteById(world: World, id: string) {
   return world.sites.find((s) => s.id === id);
 }
 
+/** Percent change of the stake price since the site opened. */
+export function changeSinceOpen(site: Site) {
+  const first = site.prices[0]?.price;
+  return first ? ((site.price - first) / first) * 100 : 0;
+}
+
 export function latestReport(site: Site): Report | undefined {
   return site.reports[site.reports.length - 1];
 }

@@ -261,7 +261,8 @@ export interface paths {
         };
         /**
          * List Reports
-         * @description Every report of the asset, newest first.
+         * @description Every report of the asset, newest first. Versions leave out `ndvi_series` (the chart
+         *     is for the latest report: `GET /assets/{id}` or `GET /reports/{id}`).
          */
         get: operations["list_reports_assets__asset_id__reports_get"];
         put?: never;
@@ -789,6 +790,11 @@ export interface components {
             cover_image_url?: string | null;
             /** Site Key */
             site_key?: string | null;
+            /**
+             * Sparkline
+             * @description The latest prices (up to 30), oldest first, for the card's sparkline.
+             */
+            sparkline?: string[];
         };
         /** AssetCreate */
         AssetCreate: {
@@ -867,6 +873,11 @@ export interface components {
             recent_events?: components["schemas"]["EventOut"][];
             /** Price */
             price?: string | null;
+            /**
+             * Price Change Pct
+             * @description Latest price vs the IPO price, in percent (2 dp); as on cards.
+             */
+            price_change_pct?: number | null;
         };
         /**
          * AssetStatus
@@ -1223,6 +1234,21 @@ export interface components {
              */
             created_at: string;
             role: components["schemas"]["CommunityRole"];
+        };
+        /**
+         * NdviPoint
+         * @description One month of cloud-masked Sentinel-2 NDVI (monthly median); also served on reports.
+         */
+        NdviPoint: {
+            /**
+             * Month
+             * @description Calendar month, YYYY-MM.
+             */
+            month: string;
+            /** Ndvi */
+            ndvi: number;
+            /** Cloud Free Obs */
+            cloud_free_obs: number;
         };
         /** OrderCreate */
         OrderCreate: {
@@ -1696,6 +1722,11 @@ export interface components {
              * @description Rating run that produced this report (T27); null for seeds.
              */
             run_id?: string | null;
+            /**
+             * Ndvi Series
+             * @description Monthly NDVI behind the report's trend, oldest first (the rating's metrics row). Served on a single report (GET /reports/{id}, AssetDetail.latest_report); empty in the version list and when the report has none.
+             */
+            ndvi_series?: components["schemas"]["NdviPoint"][];
             /**
              * Created At
              * Format: date-time

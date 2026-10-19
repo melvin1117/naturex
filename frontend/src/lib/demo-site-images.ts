@@ -1,8 +1,5 @@
-import type { components } from "@/lib/api";
-
 /** Sidecar metadata for a demo site's land-cover overlay and thumbnail (T35). */
-export type SiteImages = components["schemas"]["SiteImages"];
-export type LegendEntry = components["schemas"]["LegendEntry"];
+export type { LegendEntry, SiteImages } from "@/lib/api/types";
 
 export const DEMO_SITES = [
   { key: "wetland_mx", name: "Xochimilco Wetland" },

@@ -6,7 +6,6 @@ import AssetPage from "@/app/(exchange)/asset/[id]/page";
 import MarketplacePage from "@/app/(exchange)/page";
 import PortfolioPage from "@/app/(exchange)/portfolio/page";
 import AdminPage from "@/app/admin/page";
-import DevTradePage from "@/app/dev/trade/page";
 import DevUiPage from "@/app/dev/ui/page";
 import JudgePage from "@/app/judge/page";
 import LoginPage from "@/app/login/page";
@@ -19,7 +18,13 @@ import { WorldProvider } from "@/components/world-provider";
 import { createDataLayer } from "@/lib/data-layer";
 import { PrototypeProvider } from "@/lib/prototype/store";
 
-import { BASE, fakeBackend, json, WORLD } from "./lib/helpers";
+import {
+  BASE,
+  createFakeEventSource,
+  fakeBackend,
+  json,
+  WORLD,
+} from "./lib/helpers";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -59,9 +64,15 @@ beforeAll(() => {
 });
 
 function Providers({ children }: { children: ReactNode }) {
+  // Like app/layout.tsx: wired screens read an (empty) world from a fake backend.
+  const backend = fakeBackend({
+    "GET /world": () => json(WORLD),
+    "GET /assets": () => json([]),
+  });
   const layer = createDataLayer({
     baseUrl: BASE,
-    fetch: fakeBackend({ "GET /world": () => json(WORLD) }).fetch,
+    fetch: backend.fetch,
+    createEventSource: createFakeEventSource,
   });
   return (
     <WorldProvider dataLayer={layer}>
@@ -83,7 +94,6 @@ describe("routes", () => {
     ["/admin", AdminPage, "Time Machine"],
     ["/judge", JudgePage, "The bees never sent an invoice."],
     ["/dev/ui", DevUiPage, "UI kit"],
-    ["/dev/trade", DevTradePage, "Trade panel"],
     ["404", NotFound, "Page not found"],
   ])("%s renders its heading", (_path, Page, heading) => {
     render(<Page />, { wrapper: Providers });
@@ -102,7 +112,7 @@ describe("routes", () => {
     ).toBeInTheDocument();
   });
 
-  it("/asset/[id] shows the site from the sandbox", async () => {
+  it("/asset/[id] shows a prototype site from the scripted sandbox", async () => {
     render(
       await AssetPage({ params: Promise.resolve({ id: "sumidero-forest" }) }),
       {
@@ -117,10 +127,22 @@ describe("routes", () => {
     ).toBeInTheDocument();
   });
 
-  it("/asset/[id] explains an unknown site", async () => {
+  it("/asset/[id] explains an unknown prototype site", async () => {
     render(await AssetPage({ params: Promise.resolve({ id: "nope" }) }), {
       wrapper: Providers,
     });
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Site not found" }),
+    ).toBeInTheDocument();
+  });
+
+  it("/asset/[id] with a real asset ID reads the API", async () => {
+    render(
+      await AssetPage({
+        params: Promise.resolve({ id: "44444444-4444-4444-8444-444444444444" }),
+      }),
+      { wrapper: Providers },
+    );
     expect(
       await screen.findByRole("heading", { level: 1, name: "Site not found" }),
     ).toBeInTheDocument();

@@ -3,7 +3,7 @@
 import "leaflet/dist/leaflet.css";
 
 import type { Map as LeafletMap } from "leaflet";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
 import type { LatLng } from "@/lib/prototype/data";
@@ -28,56 +28,72 @@ export function SiteMap({
   others?: LatLng[][];
 }) {
   const container = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<LeafletMap | null>(null);
+  const [map, setMap] = useState<{
+    L: typeof import("leaflet");
+    map: LeafletMap;
+  } | null>(null);
   const overlayRef = useRef<import("leaflet").ImageOverlay | null>(null);
   const key = JSON.stringify(polygon);
 
   useEffect(() => {
     let cancelled = false;
+    let created: LeafletMap | null = null;
     void import("leaflet").then((L) => {
       if (cancelled || !container.current) return;
-      const map = L.map(container.current, {
+      created = L.map(container.current, {
         scrollWheelZoom: false,
         attributionControl: true,
       });
-      mapRef.current = map;
       L.tileLayer(IMAGERY_URL, {
         maxZoom: 18,
         attribution: IMAGERY_ATTRIBUTION,
-      }).addTo(map);
+      }).addTo(created);
       for (const other of others)
         L.polygon(other, {
           color: "#ffffff",
           weight: 1,
           dashArray: "4 4",
           fillOpacity: 0.05,
-        }).addTo(map);
+        }).addTo(created);
       const shape = L.polygon(polygon, {
         color: "#d6f28a",
         weight: 2.5,
         fillOpacity: 0.08,
-      }).addTo(map);
-      if (overlay) {
-        overlayRef.current = L.imageOverlay(overlay.url, overlay.bounds, {
-          opacity: overlay.visible ? 0.75 : 0,
-          alt: `${label} land-cover overlay`,
-          attribution: "Land cover: Dynamic World",
-        }).addTo(map);
-      }
-      map.fitBounds(shape.getBounds(), { padding: [24, 24] });
+      }).addTo(created);
+      created.fitBounds(shape.getBounds(), { padding: [24, 24] });
+      setMap({ L, map: created });
     });
     return () => {
       cancelled = true;
-      mapRef.current?.remove();
-      mapRef.current = null;
+      created?.remove();
+      setMap(null);
     };
     // Rebuild only when the boundary changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
+  // The overlay may arrive after the map (its bounds come from the API).
+  const overlayUrl = overlay?.url;
+  const boundsKey = JSON.stringify(overlay?.bounds ?? null);
   useEffect(() => {
-    overlayRef.current?.setOpacity(overlay?.visible ? 0.75 : 0);
-  }, [overlay?.visible]);
+    if (!map || !overlayUrl) return;
+    const bounds = JSON.parse(boundsKey) as [LatLng, LatLng];
+    const layer = map.L.imageOverlay(overlayUrl, bounds, {
+      opacity: 0,
+      alt: `${label} land-cover overlay`,
+      attribution: "Land cover: Dynamic World",
+    }).addTo(map.map);
+    overlayRef.current = layer;
+    return () => {
+      layer.remove();
+      overlayRef.current = null;
+    };
+  }, [map, overlayUrl, boundsKey, label]);
+
+  const visible = overlay?.visible ?? false;
+  useEffect(() => {
+    overlayRef.current?.setOpacity(visible ? 0.75 : 0);
+  }, [visible, map, overlayUrl, boundsKey]);
 
   return (
     <div

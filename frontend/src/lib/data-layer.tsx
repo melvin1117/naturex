@@ -40,6 +40,9 @@ export const queryKeys = {
   asset: (id: string) => ["asset", id] as const,
   prices: (assetId: string) => ["prices", assetId] as const,
   report: (id: string) => ["report", id] as const,
+  reports: (assetId: string) => ["reports", assetId] as const,
+  ledger: (assetId: string) => ["ledger", assetId] as const,
+  siteImages: (siteKey: string) => ["site-images", siteKey] as const,
   portfolio: () => ["portfolio"] as const,
   /** Every quote of one asset (a prefix, for invalidation). */
   quotes: (assetId: string) => ["quote", assetId] as const,
@@ -95,7 +98,7 @@ export function getBrowserDataLayer(): DataLayer {
  * Keep caches in step with live events. The asset's price is patched at once from the event
  * payload (the backend's number); the asset and everything derived from the price (P&L,
  * % change, history, quotes) are then refetched, coalesced so a burst of ticks costs one request
- * per query.
+ * per query. A finished rating run refetches the asset's reports, ledger and prices.
  */
 export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
   const queued = new Map<string, QueryKey>();
@@ -122,11 +125,32 @@ export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
       queue(queryKeys.portfolio());
       queue(queryKeys.prices(payload.asset_id));
       queue(queryKeys.quotes(payload.asset_id));
+      // A re-rate comes with a new report version and its ledger entry.
+      if (payload.reason === "rerate") {
+        queue(queryKeys.reports(payload.asset_id));
+        queue(queryKeys.ledger(payload.asset_id));
+      }
+    },
+    { retain: false },
+  );
+  // A rating run's final event (step "done": succeeded, degraded or failed) means a new
+  // report, its ledger entry and possibly a re-anchored price. Replays just refetch again.
+  const unsubscribeRuns = events.subscribe(
+    "rating_progress",
+    ({ payload }) => {
+      const assetId = payload.asset_id;
+      if (payload.step !== "done" || typeof assetId !== "string") return;
+      queue(queryKeys.asset(assetId));
+      queue(queryKeys.reports(assetId));
+      queue(queryKeys.ledger(assetId));
+      queue(queryKeys.prices(assetId));
+      queue(queryKeys.assets());
     },
     { retain: false },
   );
   return () => {
     unsubscribe();
+    unsubscribeRuns();
     if (timer) clearTimeout(timer);
   };
 }

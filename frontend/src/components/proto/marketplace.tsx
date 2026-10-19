@@ -1,16 +1,14 @@
 "use client";
 
-import { Compass, Sprout } from "lucide-react";
+import { Compass, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useMemo } from "react";
 
 import { Stat } from "@/components/proto/bits";
-import {
-  changeSinceOpen,
-  FeatureSiteCard,
-  SiteCard,
-} from "@/components/proto/site-card";
+import { FeatureSiteCard, SiteCard } from "@/components/proto/site-card";
 import { useTour } from "@/components/proto/tour";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -20,59 +18,32 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { GRADE_ORDER, ha, money } from "@/lib/prototype/format";
-import { usePrototype } from "@/lib/prototype/store";
-import { HERO_ID, latestReport, type Site } from "@/lib/prototype/world";
+import { WorldGate } from "@/components/world-provider";
+import { useAssets } from "@/lib/hooks";
+import {
+  GRADE_BANDS,
+  isBand,
+  isSort,
+  marketCard,
+  shownCards,
+  SORTS,
+  type GradeBand,
+  type MarketCard,
+  type SortKey,
+} from "@/lib/market-cards";
+import { ha, money } from "@/lib/prototype/format";
 
-type SortKey = "grade" | "change" | "confidence" | "value";
-
-const SORTS: Record<
-  SortKey,
-  { label: string; fn: (a: Site, b: Site) => number }
-> = {
-  grade: {
-    label: "Best grade",
-    fn: (a, b) =>
-      GRADE_ORDER.indexOf(latestReport(a)!.grade) -
-        GRADE_ORDER.indexOf(latestReport(b)!.grade) ||
-      latestReport(b)!.health - latestReport(a)!.health,
-  },
-  change: {
-    label: "Price change",
-    fn: (a, b) => changeSinceOpen(b) - changeSinceOpen(a),
-  },
-  confidence: {
-    label: "Confidence",
-    fn: (a, b) => latestReport(b)!.confidence - latestReport(a)!.confidence,
-  },
-  value: {
-    label: "Annual value",
-    fn: (a, b) => latestReport(b)!.valueMid - latestReport(a)!.valueMid,
-  },
-};
+function useMarketCards() {
+  const query = useAssets();
+  const cards = useMemo(
+    () => (query.data ? query.data.map(marketCard) : undefined),
+    [query.data],
+  );
+  return { ...query, cards };
+}
 
 export function Marketplace() {
-  const { world } = usePrototype();
   const tour = useTour();
-  const [eco, setEco] = useState("all");
-  const [sort, setSort] = useState<SortKey>("grade");
-  const listed = world.sites.filter(
-    (s) => s.status !== "draft" && latestReport(s),
-  );
-  const hero = world.sites.find((s) => s.id === HERO_ID);
-  const featured =
-    hero && hero.status !== "draft"
-      ? hero
-      : [...listed].sort(SORTS.grade.fn)[0];
-  const shown = useMemo(
-    () =>
-      listed
-        .filter((s) => eco === "all" || s.ecosystem === eco)
-        .sort(SORTS[sort].fn),
-    [listed, eco, sort],
-  );
-  const funds = world.sites.reduce((sum, s) => sum + s.communityFund, 0);
-
   return (
     <div className="mx-auto max-w-7xl px-4 pt-10 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-6">
@@ -85,14 +56,7 @@ export function Marketplace() {
             site with play money and follow its health every quarter.
           </p>
         </div>
-        <dl className="grid grid-cols-3 gap-6 rounded-3xl bg-card px-6 py-4 shadow-soft">
-          <Stat label="Sites listed" value={listed.length} />
-          <Stat
-            label="Land rated"
-            value={ha(listed.reduce((s, x) => s + x.areaHa, 0))}
-          />
-          <Stat label="Community funds" value={money(funds)} sub="play money" />
-        </dl>
+        <MarketStats />
       </div>
 
       {!tour.active && (
@@ -101,7 +65,7 @@ export function Marketplace() {
           <span>
             <span className="font-medium">New here?</span> The guided tour walks
             through listing, rating, backing and monitoring in about seven
-            minutes.
+            minutes, on a scripted demo world.
           </span>
           <div className="ml-auto flex gap-2">
             <Button size="sm" variant="ghost" asChild>
@@ -114,30 +78,104 @@ export function Marketplace() {
         </div>
       )}
 
-      {featured && (
-        <div className="mt-8">
-          <FeatureSiteCard site={featured} />
-        </div>
-      )}
+      <div className="mt-8">
+        <WorldGate>
+          <MarketBoard />
+        </WorldGate>
+      </div>
+    </div>
+  );
+}
 
-      {hero?.status === "draft" && (
-        <div className="mt-6 flex flex-wrap items-center gap-4 rounded-3xl border border-dashed border-input px-5 py-4">
-          <span className="grid size-10 place-items-center rounded-2xl bg-lime/30 text-lime-ink">
-            <Sprout className="size-5" aria-hidden="true" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="font-medium">Coming soon: {hero.name}</div>
-            <p className="text-sm text-muted-foreground">
-              {hero.community} is preparing its listing. It opens here once
-              it&apos;s rated.
-            </p>
-          </div>
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/steward/list">See the listing flow</Link>
+function MarketStats() {
+  const { cards } = useMarketCards();
+  if (!cards || cards.length === 0) return null;
+  const rated = cards.filter((c) => c.grade !== null);
+  const valued = rated.flatMap((c) =>
+    c.valueMid === null ? [] : [c.valueMid],
+  );
+  return (
+    <dl className="grid grid-cols-3 gap-6 rounded-3xl bg-card px-6 py-4 shadow-soft">
+      <Stat label="Sites listed" value={cards.length} />
+      <Stat
+        label="Land rated"
+        value={ha(rated.reduce((sum, c) => sum + c.areaHa, 0))}
+      />
+      <Stat
+        label="Nature's value"
+        value={valued.length ? money(valued.reduce((a, b) => a + b)) : "—"}
+        sub="a year, mid, rated sites"
+      />
+    </dl>
+  );
+}
+
+export function MarketBoard() {
+  const { cards, error, refetch, isFetching } = useMarketCards();
+  const params = useSearchParams();
+  const pathname = usePathname();
+  const gradeParam = params.get("grade");
+  const sortParam = params.get("sort");
+  const band: GradeBand = isBand(gradeParam) ? gradeParam : "all";
+  const sort: SortKey = isSort(sortParam) ? sortParam : "grade";
+  // Filters live in the URL (shareable, survive reload); the History API updates
+  // useSearchParams without a server round trip.
+  const setParam = (key: "grade" | "sort", value: string, fallback: string) => {
+    const next = new URLSearchParams(params.toString());
+    if (value === fallback) next.delete(key);
+    else next.set(key, value);
+    const query = next.toString();
+    window.history.replaceState(
+      null,
+      "",
+      query ? `${pathname}?${query}` : pathname,
+    );
+  };
+  const setBand = (v: GradeBand) => setParam("grade", v, "all");
+  const setSort = (v: SortKey) => setParam("sort", v, "grade");
+  const shown = useMemo(
+    () => (cards ? shownCards(cards, band, sort) : []),
+    [cards, band, sort],
+  );
+
+  if (!cards && error)
+    return (
+      <Alert variant="destructive">
+        <TriangleAlertIcon aria-hidden="true" />
+        <AlertTitle>We couldn&apos;t load the marketplace</AlertTitle>
+        <AlertDescription>
+          <p>{error.message}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2"
+            disabled={isFetching}
+            onClick={() => void refetch()}
+          >
+            <RefreshCwIcon aria-hidden="true" />
+            Try again
           </Button>
-        </div>
-      )}
+        </AlertDescription>
+      </Alert>
+    );
 
+  if (!cards) return <MarketSkeleton />;
+
+  if (cards.length === 0)
+    return (
+      <p className="rounded-3xl bg-card px-6 py-10 text-center text-muted-foreground shadow-soft">
+        No sites are listed yet. Communities&apos; sites appear here once
+        they&apos;re rated.
+      </p>
+    );
+
+  const featured: MarketCard | undefined = [...cards]
+    .filter((c) => c.grade !== null)
+    .sort(SORTS.grade.fn)[0];
+
+  return (
+    <>
+      {featured && <FeatureSiteCard card={featured} />}
       <section aria-labelledby="all-sites" className="mt-12">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h2 id="all-sites" className="text-xl font-semibold">
@@ -146,22 +184,22 @@ export function Marketplace() {
           <div className="flex flex-wrap items-center gap-3">
             <ToggleGroup
               type="single"
-              value={eco}
-              onValueChange={(v) => v && setEco(v)}
+              value={band}
+              onValueChange={(v) => isBand(v) && setBand(v)}
               className="rounded-full bg-card p-1 shadow-soft"
-              aria-label="Filter by ecosystem"
+              aria-label="Filter by grade"
             >
-              {["all", "Wetland", "Mangrove", "Forest"].map((v) => (
+              {(Object.keys(GRADE_BANDS) as GradeBand[]).map((v) => (
                 <ToggleGroupItem
                   key={v}
                   value={v}
                   className="rounded-full px-3.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                 >
-                  {v === "all" ? "All" : v}
+                  {GRADE_BANDS[v].label}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
-            <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+            <Select value={sort} onValueChange={(v) => isSort(v) && setSort(v)}>
               <SelectTrigger className="w-44" aria-label="Sort sites">
                 <SelectValue />
               </SelectTrigger>
@@ -175,18 +213,44 @@ export function Marketplace() {
             </Select>
           </div>
         </div>
+        <p className="sr-only" aria-live="polite">
+          {shown.length} of {cards.length} sites shown
+        </p>
         {shown.length === 0 ? (
           <p className="mt-6 rounded-3xl bg-card px-6 py-10 text-center text-muted-foreground shadow-soft">
-            No {eco.toLowerCase()} sites are listed yet.
+            No sites rated {GRADE_BANDS[band].label} yet.
           </p>
         ) : (
           <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {shown.map((s) => (
-              <SiteCard key={s.id} site={s} />
+            {shown.map((c) => (
+              <SiteCard key={c.id} card={c} />
             ))}
           </div>
         )}
       </section>
+    </>
+  );
+}
+
+function MarketSkeleton() {
+  return (
+    <div role="status" aria-live="polite">
+      <span className="sr-only">Loading sites…</span>
+      <div
+        className="h-72 animate-pulse rounded-[2rem] bg-card shadow-soft motion-reduce:animate-none"
+        aria-hidden="true"
+      />
+      <div
+        className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+        aria-hidden="true"
+      >
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="h-96 animate-pulse rounded-3xl bg-card shadow-soft motion-reduce:animate-none"
+          />
+        ))}
+      </div>
     </div>
   );
 }

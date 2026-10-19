@@ -21,6 +21,14 @@ work before the agents, SSE and auth are wired in.
 Copilot wording and eval results (shown as "Pending"). Grades, values, confidence and land cover
 come from the backend's deterministic code.
 
+**Wired so far (T22, T23):** the Marketplace (`/`) and the asset page for real asset IDs
+(`/asset/<uuid>`, `components/proto/asset-view.tsx`) read the API. The report panels in
+`report-panels.tsx` take plain `ReportFacts` (`src/lib/report-facts.ts`): `reportFacts()` builds them
+from the API and `prototypeFacts()` from this world. Prototype slugs (`/asset/xochimilco-wetland`,
+used by the tour, Steward, Portfolio and the Control room) still render `prototype-asset-view.tsx` on
+this world, with its trade panel, Copilot, Agent Trace and tamper demo. On the wired page those are
+disabled with a "coming soon" note until T18 and later tasks wire them.
+
 **Wiring to the API:** swap each screen's `usePrototype()` reads for the T32 hooks in
 `src/lib/hooks.ts` (`useAssets`, `useAsset`, `usePortfolio`, `usePlaceOrder`, …). The components in
 `src/components/proto/` take plain props, so most swaps happen in the page-level views
