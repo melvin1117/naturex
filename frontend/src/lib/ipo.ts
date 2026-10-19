@@ -7,6 +7,7 @@
  */
 import type { ApiError } from "./api/errors";
 import type { AssetDetail } from "./api/types";
+import { int } from "./prototype/format";
 
 export const MIN_TOTAL_SHARES = 10_000;
 export const MAX_TOTAL_SHARES = 10_000_000;
@@ -17,17 +18,12 @@ export const DEFAULT_RETAINED_PCT = 51;
 /** Wait this long after the last keystroke before asking for a new preview. */
 export const PREVIEW_DEBOUNCE_MS = 400;
 
-const int = (n: number) => n.toLocaleString("en-US");
-
 export const SHARES_HINT = `Between ${int(MIN_TOTAL_SHARES)} and ${int(MAX_TOTAL_SHARES)} units. More units means a lower price per unit.`;
 export const RETAINED_HINT = `Between ${MIN_RETAINED_PCT}% and ${MAX_RETAINED_PCT}%, up to 2 decimals. Keeping more than half keeps your community the majority holder.`;
 
-/** Keep what can be part of a whole number of units: digits only (commas and spaces dropped). */
-export function sharesInput(text: string): string {
-  return text
-    .replace(/\D/g, "")
-    .replace(/^0+(?=\d)/, "")
-    .slice(0, 9);
+/** The digits typed so far with thousands separators ("2500000" → "2,500,000"). */
+export function sharesDisplay(digits: string): string {
+  return /^\d+$/.test(digits) ? int(Number(digits)) : digits;
 }
 
 /** The units to issue, or null when not a whole number within the bounds. */
@@ -72,6 +68,25 @@ export function previewMatches(
   );
 }
 
+/**
+ * An API decimal string without trailing zeros ("0.9250" → "0.925", "71.00" → "71"). Never
+ * re-rounds, so the terms shown multiply out exactly as the backend's did.
+ */
+export function trimDecimal(value: string): string {
+  return value.includes(".")
+    ? value.replace(/0+$/, "").replace(/\.$/, "")
+    : value;
+}
+
+/**
+ * The constants of dev-spec §8's formula, for the step labels. The response carries only the
+ * resulting terms, so tests check these against the OpenAPI schema's `formula` default and
+ * the factor descriptions (`IpoPreviewOut`, `IpoOut`).
+ */
+export const FORMULA_YEARS = "10";
+export const HEALTH_FACTOR_FORMULA = "0.5 + 0.5 × health/100";
+export const CONFIDENCE_FACTOR_FORMULA = "0.7 + 0.3 × confidence/100";
+
 export interface Explanation {
   title: string;
   body: string;
@@ -106,7 +121,7 @@ export function blockedExplanation(code: string): Explanation {
     default:
       return {
         title: "The opening offer can't launch right now",
-        body: "Something about this listing blocks the launch. Refresh the preview and try again.",
+        body: "Something about this listing blocks the launch for now. Check again in a moment.",
       };
   }
 }
@@ -202,6 +217,24 @@ export function ipoRefusal(error: ApiError): IpoRefusal {
     }
   }
   return { kind: "error", message: error.message };
+}
+
+/** The refusals that replace the form with an explanation (nothing to change or retry). */
+export type PageRefusal = Extract<
+  IpoRefusal,
+  { kind: "launched" | "not_listed" | "no_rating" | "owner_only" | "not_found" }
+>;
+
+const PAGE_KINDS: ReadonlySet<IpoRefusal["kind"]> = new Set([
+  "launched",
+  "not_listed",
+  "no_rating",
+  "owner_only",
+  "not_found",
+]);
+
+export function isPageRefusal(refusal: IpoRefusal): refusal is PageRefusal {
+  return PAGE_KINDS.has(refusal.kind);
 }
 
 export const PRICE_CHANGED: Explanation = {

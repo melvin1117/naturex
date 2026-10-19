@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { IpoLaunch } from "@/components/ipo-launch";
+import { IpoLaunchScreen } from "@/components/ipo-launch-screen";
 import { RequireAccount } from "@/components/require-account";
 
 export const metadata: Metadata = { title: "Launch the opening offer" };
@@ -17,7 +17,7 @@ export default async function IpoPage({
   const { id } = await params;
   return (
     <RequireAccount>
-      <IpoLaunch assetId={id} />
+      <IpoLaunchScreen assetId={id} />
     </RequireAccount>
   );
 }

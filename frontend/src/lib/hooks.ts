@@ -551,8 +551,6 @@ export function useSignOut(): MutationResult<void, void> {
   });
 }
 
-export type { QueryStatus };
-
 /**
  * The opening offer (IPO) an owner would launch now (T64): every term of the price formula,
  * `launchable` and `blocked_reason`, priced by the backend (`GET /assets/{id}/ipo/preview`).
@@ -612,3 +610,5 @@ export function useLaunchIpo(
     },
   );
 }
+
+export type { QueryStatus };

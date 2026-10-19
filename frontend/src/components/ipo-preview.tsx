@@ -1,22 +1,14 @@
 import { cn } from "cn";
 
 import type { IpoPreview } from "@/lib/api/types";
-import { decimal, moneyText, unitPriceText } from "@/lib/trade";
-
-const int = (n: number) => n.toLocaleString("en-US");
-
-/** A formula term as the API wrote it, trimmed for reading ("0.8920" → "0.892"). */
-function plain(value: string): string {
-  const n = decimal(value);
-  return n === null
-    ? value
-    : n.toLocaleString("en-US", { maximumFractionDigits: 4 });
-}
-
-function score(value: string, digits: number): string {
-  const n = decimal(value);
-  return n === null ? value : n.toFixed(digits);
-}
+import {
+  CONFIDENCE_FACTOR_FORMULA,
+  FORMULA_YEARS,
+  HEALTH_FACTOR_FORMULA,
+  trimDecimal,
+} from "@/lib/ipo";
+import { int } from "@/lib/prototype/format";
+import { moneyText, unitPriceText } from "@/lib/trade";
 
 function Step({
   label,
@@ -65,14 +57,17 @@ export function IpoPriceSteps({
             label="Yearly value of the site's nature (midpoint of the report's range)"
             value={`${moneyText(preview.value_mid)}/yr`}
           />
-          <Step label="× 10 years of that value" value="× 10" />
           <Step
-            label={`× health factor: 0.5 + 0.5 × health ${score(preview.health, 1)}/100`}
-            value={`× ${plain(preview.health_factor)}`}
+            label={`× ${FORMULA_YEARS} years of that value`}
+            value={`× ${FORMULA_YEARS}`}
           />
           <Step
-            label={`× confidence factor: 0.7 + 0.3 × confidence ${score(preview.confidence, 0)}/100`}
-            value={`× ${plain(preview.confidence_factor)}`}
+            label={`× health factor (${HEALTH_FACTOR_FORMULA}, health ${trimDecimal(preview.health)})`}
+            value={`× ${trimDecimal(preview.health_factor)}`}
+          />
+          <Step
+            label={`× confidence factor (${CONFIDENCE_FACTOR_FORMULA}, confidence ${trimDecimal(preview.confidence)})`}
+            value={`× ${trimDecimal(preview.confidence_factor)}`}
           />
           <Step
             label="= Fair value of the whole site"
@@ -112,7 +107,7 @@ export function IpoPriceSteps({
         </div>
         <div className="rounded-2xl border p-3">
           <dt className="text-xs text-muted-foreground">
-            Your community keeps ({plain(preview.retained_pct)}%)
+            Your community keeps ({trimDecimal(preview.retained_pct)}%)
           </dt>
           <dd className="tabular text-lg font-light">
             {int(preview.retained_shares)} units

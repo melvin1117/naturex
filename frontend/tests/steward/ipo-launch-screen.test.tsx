@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -8,7 +9,7 @@ import {
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import IpoPage from "@/app/steward/assets/[id]/ipo/page";
-import { IpoLaunch } from "@/components/ipo-launch";
+import { IpoLaunchScreen } from "@/components/ipo-launch-screen";
 import { WorldProvider } from "@/components/world-provider";
 import type {
   AssetDetail,
@@ -16,7 +17,7 @@ import type {
   IpoPreview,
   WorldOut,
 } from "@/lib/api/types";
-import { createDataLayer } from "@/lib/data-layer";
+import { createDataLayer, queryKeys } from "@/lib/data-layer";
 import { PrototypeProvider } from "@/lib/prototype/store";
 
 import {
@@ -146,7 +147,7 @@ function renderLaunch(routes: Routes = {}, world: WorldOut = SIGNED_IN_WORLD) {
   });
   render(
     <WorldProvider dataLayer={layer}>
-      <IpoLaunch assetId={ASSET_ID} />
+      <IpoLaunchScreen assetId={ASSET_ID} />
     </WorldProvider>,
   );
   return { backend, layer };
@@ -172,7 +173,7 @@ async function confirmLaunch() {
   );
 }
 
-describe("IPO launch screen", () => {
+describe("IpoLaunchScreen", () => {
   it("shows every term of the backend's price formula, labelled", async () => {
     const { backend } = renderLaunch();
 
@@ -180,9 +181,9 @@ describe("IPO launch screen", () => {
     const text = list.textContent ?? "";
     expect(text).toContain("$1,234,567.00/yr");
     expect(text).toContain("× 10");
-    expect(text).toContain("health 78.4/100");
+    expect(text).toContain("0.5 + 0.5 × health/100, health 78.4");
     expect(text).toContain("× 0.892");
-    expect(text).toContain("confidence 85/100");
+    expect(text).toContain("0.7 + 0.3 × confidence/100, confidence 85");
     expect(text).toContain("× 0.955");
     expect(text).toContain("$10,517,290.12");
     expect(text).toContain("÷ 1,000,000");
@@ -211,7 +212,7 @@ describe("IPO launch screen", () => {
     fireEvent.change(screen.getByLabelText("Community keeps"), {
       target: { value: "60.5" },
     });
-    expect(shares).toHaveValue("2000000");
+    expect(shares).toHaveValue("2,000,000");
     // The stale preview stays, dimmed, and can't be launched.
     expect(screen.getByText("Updating the preview…")).toBeInTheDocument();
     expect(launchButton()).toBeDisabled();
@@ -402,23 +403,204 @@ describe("IPO launch screen", () => {
     ["ipo_price_too_high", /Issue more units/],
     ["ipo_price_too_low", /Issue fewer units/],
     ["verification_required", /land documents are verified/],
-  ])("explains a launch refused with %s", async (code, message) => {
-    renderLaunch({ [LAUNCH]: () => refused(409, code) });
+  ])(
+    "explains a launch refused with %s, focused, until a newer preview",
+    async (code, message) => {
+      renderLaunch({ [LAUNCH]: () => refused(409, code) });
+      await steps();
+      await confirmLaunch();
+
+      const alert = (await screen.findByText(message)).closest("[role=alert]");
+      await waitFor(() => expect(alert).toHaveFocus());
+      expect(screen.getByLabelText("Units to issue")).toBeEnabled();
+      // Not again until the owner checks: the refusal is newer than the preview.
+      expect(launchButton()).toBeDisabled();
+
+      // The newer preview says it would go ahead now: the refusal goes.
+      fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+      await waitFor(() =>
+        expect(screen.queryByText(message)).not.toBeInTheDocument(),
+      );
+      await waitFor(() => expect(launchButton()).toBeEnabled());
+    },
+  );
+
+  it("keeps a launch refusal the newer preview agrees with, once", async () => {
+    renderLaunch({
+      [PREVIEW]: sequence(
+        (request) => previewFor(request),
+        (request) =>
+          previewFor(request, {
+            launchable: false,
+            blocked_reason: "run_in_progress",
+          }),
+      ),
+      [LAUNCH]: () => refused(409, "run_in_progress"),
+    });
     await steps();
     await confirmLaunch();
+    await screen.findByText("A rating is running");
 
-    expect(await screen.findByText(message)).toBeInTheDocument();
-    expect(screen.getByLabelText("Units to issue")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await waitFor(() =>
+      expect(screen.getAllByText("A rating is running")).toHaveLength(1),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(screen.getAllByText("A rating is running")).toHaveLength(1);
+    expect(launchButton()).toBeDisabled();
   });
 
-  it("explains a launch that fails for another reason", async () => {
+  it("clears a launch refusal when the offer changes", async () => {
+    renderLaunch({ [LAUNCH]: () => refused(409, "ipo_price_too_high") });
+    await steps();
+    await confirmLaunch();
+    await screen.findByText(/Issue more units/);
+
+    fireEvent.change(screen.getByLabelText("Units to issue"), {
+      target: { value: "2000000" },
+    });
+    expect(screen.queryByText(/Issue more units/)).not.toBeInTheDocument();
+    await waitFor(() => expect(launchButton()).toBeEnabled());
+  });
+
+  it("explains a launch that fails for another reason until the offer changes", async () => {
     renderLaunch({ [LAUNCH]: () => json({}, { status: 500 }) });
     await steps();
     await confirmLaunch();
 
+    const title = await screen.findByText("The opening offer didn't launch");
+    await waitFor(() => expect(title.closest("[role=alert]")).toHaveFocus());
+    // The owner may try again straight away.
+    expect(launchButton()).toBeEnabled();
+
+    fireEvent.change(screen.getByLabelText("Community keeps"), {
+      target: { value: "52" },
+    });
     expect(
-      await screen.findByText("The opening offer didn't launch"),
+      screen.queryByText("The opening offer didn't launch"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("locks the offer while the launch is in flight", async () => {
+    let finish: (response: Response) => void = () => {};
+    renderLaunch({
+      [LAUNCH]: () => new Promise<Response>((resolve) => (finish = resolve)),
+    });
+    await steps();
+    await confirmLaunch();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Units to issue")).toBeDisabled(),
+    );
+    expect(screen.getByLabelText("Community keeps")).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Launching/ })).toBeDisabled();
+    finish(json(launched(), { status: 201 }));
+    await screen.findByText(/is open to supporters/);
+  });
+
+  it("posts once on a double click or a repeated Enter", async () => {
+    const { backend } = renderLaunch();
+    await steps();
+    await waitFor(() => expect(launchButton()).toBeEnabled());
+    fireEvent.click(launchButton());
+    const dialog = await screen.findByRole("dialog");
+    const submit = within(dialog).getByRole("button", {
+      name: /^Launch at .* per unit$/,
+    });
+    const form = submit.closest("form")!;
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+    fireEvent.submit(form);
+    // The trigger is disabled while the launch runs.
+    const trigger = screen.getByRole("button", { name: /Launching/ });
+    expect(trigger).toBeDisabled();
+    fireEvent.click(trigger);
+
+    await screen.findByText(/is open to supporters/);
+    expect(backend.calls(LAUNCH)).toBe(1);
+  });
+
+  it("confirms the preview it showed when a newer one arrives meanwhile", async () => {
+    const { backend } = renderLaunch({
+      [PREVIEW]: sequence(
+        () => json(preview()),
+        () => json(preview({ ipo_price: "11.0021" })),
+      ),
+      [LAUNCH]: () => refused(409, "ipo_price_changed"),
+    });
+    await steps();
+    await waitFor(() => expect(launchButton()).toBeEnabled());
+    fireEvent.click(launchButton());
+    const dialog = await screen.findByRole("dialog");
+
+    // A rating run ends while the dialog is open: the preview refetches.
+    const source = FakeEventSource.latest();
+    act(() => source.open());
+    act(() =>
+      source.emit("rating_progress", 1, {
+        asset_id: ASSET_ID,
+        step: "done",
+        status: "succeeded",
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("ipo-price")).toHaveTextContent("$11.0021"),
+    );
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("$10.5173");
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: /^Launch at \$10\.5173/ }),
+    );
+
+    expect(
+      await screen.findByText("The opening price changed"),
     ).toBeInTheDocument();
+    const post = backend.requests.find((r) => r.method === "POST")!;
+    expect((await post.json()).expected_price).toBe("10.5173");
+  });
+
+  it("refetches the preview when the site's rating run ends", async () => {
+    const { backend } = renderLaunch();
+    await steps();
+    const before = backend.calls(PREVIEW);
+    const source = FakeEventSource.latest();
+    act(() => source.open());
+    act(() =>
+      source.emit("rating_progress", 1, {
+        asset_id: ASSET_ID,
+        step: "done",
+        status: "succeeded",
+      }),
+    );
+    await waitFor(() => expect(backend.calls(PREVIEW)).toBe(before + 1));
+  });
+
+  it("refetches the asset after the launch, which is now trading", async () => {
+    const { backend, layer } = renderLaunch({
+      [ASSET]: sequence(
+        () => json(unlaunched()),
+        () =>
+          json(
+            assetFixture({
+              name: "Río Claro Forest",
+              trading: true,
+              ipo_at: "2026-10-19T00:00:00Z",
+            }),
+          ),
+      ),
+    });
+    await steps();
+    const before = backend.calls(ASSET);
+    await confirmLaunch();
+    await screen.findByText(/is open to supporters/);
+
+    await waitFor(() => expect(backend.calls(ASSET)).toBe(before + 1));
+    await waitFor(() =>
+      expect(
+        layer.cache.getState<AssetDetail>(queryKeys.asset(ASSET_ID)).data
+          ?.trading,
+      ).toBe(true),
+    );
   });
 
   it.each([
@@ -510,7 +692,7 @@ describe("IPO launch screen", () => {
     const layer = createDataLayer({ baseUrl: BASE, fetch: backend.fetch });
     render(
       <WorldProvider dataLayer={layer}>
-        <IpoLaunch assetId="not-a-uuid" />
+        <IpoLaunchScreen assetId="not-a-uuid" />
       </WorldProvider>,
     );
     expect(

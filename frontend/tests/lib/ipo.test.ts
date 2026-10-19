@@ -4,6 +4,12 @@ import openapi from "@/lib/api/openapi.json";
 import { ApiError } from "@/lib/api/errors";
 import {
   blockedExplanation,
+  CONFIDENCE_FACTOR_FORMULA,
+  FORMULA_YEARS,
+  HEALTH_FACTOR_FORMULA,
+  isPageRefusal,
+  sharesDisplay,
+  trimDecimal,
   DEFAULT_RETAINED_PCT,
   DEFAULT_TOTAL_SHARES,
   ipoRefusal,
@@ -15,8 +21,8 @@ import {
   parseTotalShares,
   previewMatches,
   retainedInput,
-  sharesInput,
 } from "@/lib/ipo";
+import { unitsInput } from "@/lib/trade";
 
 type Bound = { minimum?: number; maximum?: number; default?: unknown };
 
@@ -36,6 +42,48 @@ describe("offering bounds", () => {
     ]);
     expect(Number(launch.retained_pct.default)).toBe(DEFAULT_RETAINED_PCT);
   });
+
+  it("match the preview's query parameters", () => {
+    const params = openapi.paths["/assets/{asset_id}/ipo/preview"].get
+      .parameters as { name: string; schema: Bound & { anyOf?: Bound[] } }[];
+    const shares = params.find((p) => p.name === "total_shares")!.schema;
+    const retained = params.find((p) => p.name === "retained_pct")!.schema;
+    expect([shares.minimum, shares.maximum, shares.default]).toEqual([
+      MIN_TOTAL_SHARES,
+      MAX_TOTAL_SHARES,
+      DEFAULT_TOTAL_SHARES,
+    ]);
+    expect([retained.anyOf![0]!.minimum, retained.anyOf![0]!.maximum]).toEqual([
+      MIN_RETAINED_PCT,
+      MAX_RETAINED_PCT,
+    ]);
+    expect(Number(retained.default)).toBe(DEFAULT_RETAINED_PCT);
+  });
+});
+
+describe("formula labels", () => {
+  it.each(["IpoPreviewOut", "IpoOut"] as const)(
+    "match %s's formula and factor descriptions",
+    (name) => {
+      const terms = openapi.components.schemas[name].properties;
+      expect(terms.formula.default).toContain(
+        `fair_value_total = value_mid × ${FORMULA_YEARS} × health_factor × confidence_factor`,
+      );
+      expect(terms.health_factor.description).toBe(HEALTH_FACTOR_FORMULA);
+      expect(terms.confidence_factor.description).toBe(
+        CONFIDENCE_FACTOR_FORMULA,
+      );
+    },
+  );
+
+  it("shows API decimals without re-rounding", () => {
+    expect(trimDecimal("0.92550")).toBe("0.9255");
+    expect(trimDecimal("0.9999999")).toBe("0.9999999");
+    expect(trimDecimal("71.00")).toBe("71");
+    expect(trimDecimal("85.10")).toBe("85.1");
+    expect(trimDecimal("5166929")).toBe("5166929");
+    expect(trimDecimal("100")).toBe("100");
+  });
 });
 
 describe("parseTotalShares", () => {
@@ -51,9 +99,11 @@ describe("parseTotalShares", () => {
     expect(parseTotalShares(text)).toBe(expected);
   });
 
-  it("keeps digits only as the owner types", () => {
-    expect(sharesInput("1,000,000")).toBe("1000000");
-    expect(sharesInput("0012 000")).toBe("12000");
+  it("keeps digits only as the owner types, shown with separators", () => {
+    expect(unitsInput("1,000,000")).toBe("1000000");
+    expect(unitsInput("0012 000")).toBe("12000");
+    expect(sharesDisplay("2500000")).toBe("2,500,000");
+    expect(sharesDisplay("")).toBe("");
   });
 });
 
@@ -111,6 +161,22 @@ describe("ipoRefusal", () => {
     [500, null, "error"],
   ])("%s %s → %s", (status, code, kind) => {
     expect(ipoRefusal(error(status, code)).kind).toBe(kind);
+  });
+
+  it("tells refusals that replace the form from ones the owner can fix", () => {
+    const kinds = (
+      [
+        [409, "ipo_already_launched"],
+        [409, "asset_not_listed"],
+        [409, "no_rating"],
+        [403, "owner_only"],
+        [404, "not_found"],
+        [409, "ipo_price_changed"],
+        [409, "run_in_progress"],
+        [500, null],
+      ] as const
+    ).map(([status, code]) => isPageRefusal(ipoRefusal(error(status, code))));
+    expect(kinds).toEqual([true, true, true, true, true, false, false, false]);
   });
 
   it("never shows a code to the owner", () => {
