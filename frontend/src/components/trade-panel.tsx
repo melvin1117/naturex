@@ -2,7 +2,7 @@
 
 import { Lock, LogIn, RefreshCwIcon } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { TradeForm } from "@/components/trade-form";
@@ -10,18 +10,22 @@ import { Button } from "@/components/ui/button";
 import type { AssetDetail } from "@/lib/api/types";
 import { loginHref } from "@/lib/auth";
 import { useAsset, useWorld } from "@/lib/hooks";
-import { int, price as fmtPrice } from "@/lib/prototype/format";
-import { decimal } from "@/lib/trade";
+import { int } from "@/lib/prototype/format";
+import { decimal, unitPriceText } from "@/lib/trade";
 
 /**
  * Buy and sell one asset's units with play money (T18, story C2). Self-contained: give it the
  * asset's id and it reads the asset (`useAsset`), the account (`useWorld`), and, signed in,
- * the portfolio and a backend quote. Anonymous visitors get "Sign in to trade".
+ * the portfolio and a backend quote. Anonymous visitors get "Sign in to trade", which comes
+ * back to this page with its query string (`useSearchParams`, so render it inside `<Suspense>`
+ * on a statically rendered route).
  */
 export function TradePanel({ assetId }: { assetId: string }) {
   const asset = useAsset(assetId);
   const { status, world, error: sessionError, retry } = useWorld();
   const pathname = usePathname();
+  const search = useSearchParams().toString();
+  const signInHref = loginHref(search ? `${pathname}?${search}` : pathname);
 
   let body: ReactNode;
   if (!asset.data) {
@@ -65,7 +69,7 @@ export function TradePanel({ assetId }: { assetId: string }) {
         <>
           <PriceSummary asset={asset.data} />
           <Button asChild className="mt-4 w-full" size="lg">
-            <Link href={loginHref(pathname)}>
+            <Link href={signInHref}>
               <LogIn aria-hidden="true" />
               Sign in to trade
             </Link>
@@ -83,7 +87,7 @@ export function TradePanel({ assetId }: { assetId: string }) {
         </>
       );
     } else {
-      body = <TradeForm asset={asset.data} />;
+      body = <TradeForm asset={asset.data} signInHref={signInHref} />;
     }
   }
 
@@ -120,13 +124,12 @@ function lockReason(
 }
 
 function PriceSummary({ asset }: { asset: AssetDetail }) {
-  const current = decimal(asset.price);
   return (
     <dl className="grid grid-cols-2 gap-4 text-sm">
       <div>
         <dt className="text-xs text-muted-foreground">Price per unit</dt>
         <dd className="tabular text-xl font-light">
-          {current === null ? "—" : fmtPrice(current)}
+          {unitPriceText(asset.price)}
         </dd>
       </div>
       <div>

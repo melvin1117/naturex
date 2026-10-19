@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
 import type { QuoteOut } from "@/lib/api/types";
+import { devRoutesEnabled } from "@/lib/dev-routes";
 import {
+  assetHref,
   decimal,
+  money,
   orderFailure,
   orderProblem,
   parseUnits,
+  signedMoneyText,
+  unitPrice,
   unitsInput,
 } from "@/lib/trade";
 import { price } from "@/lib/prototype/format";
@@ -125,5 +130,39 @@ describe("orderFailure", () => {
     expect(orderFailure(new ApiError(403, "x")).message).toBe(
       "Your account can't trade this site.",
     );
+  });
+});
+
+describe("formatting", () => {
+  it("shows per-unit prices to 4 decimals and money to cents", () => {
+    expect(unitPrice(21.4723)).toBe("$21.4723");
+    expect(unitPrice(20)).toBe("$20.00");
+    expect(unitPrice(19.98)).toBe("$19.98");
+    expect(money(1234.5)).toBe("$1,234.50");
+  });
+
+  it("spells out the sign of an amount with a true minus", () => {
+    expect(signedMoneyText("-1.50")).toBe("\u2212$1.50");
+    expect(signedMoneyText("12.34")).toBe("+$12.34");
+    expect(signedMoneyText("0.00")).toBe("$0.00");
+    expect(signedMoneyText(null)).toBe("—");
+  });
+});
+
+describe("assetHref", () => {
+  it("points at the dev trade page until T22's asset page lands", () => {
+    expect(assetHref("a b")).toBe("/dev/trade?asset=a%20b");
+  });
+});
+
+describe("devRoutesEnabled", () => {
+  it.each([
+    [{ NODE_ENV: "development" }, true],
+    [{ NODE_ENV: "test" }, true],
+    [{ NODE_ENV: "production" }, false],
+    [{ NODE_ENV: "production", NATUREX_DEV_ROUTES: "false" }, false],
+    [{ NODE_ENV: "production", NATUREX_DEV_ROUTES: "true" }, true],
+  ])("%o → %s", (env, enabled) => {
+    expect(devRoutesEnabled(env)).toBe(enabled);
   });
 });

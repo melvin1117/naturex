@@ -1,22 +1,22 @@
 "use client";
 
-import { ArrowRight, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
+import { announce, QuoteTable, Receipt } from "@/components/trade-summary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ApiError } from "@/lib/api/errors";
-import type { AssetDetail, OrderOut, QuoteOut } from "@/lib/api/types";
-import { loginHref } from "@/lib/auth";
+import type { AssetDetail, OrderCreate, OrderOut } from "@/lib/api/types";
 import { queryKeys, useDataLayer } from "@/lib/data-layer";
 import { usePlaceOrder, usePortfolio, useQuote } from "@/lib/hooks";
-import { int, price as fmtPrice } from "@/lib/prototype/format";
+import { int } from "@/lib/prototype/format";
 import {
   decimal,
+  money,
   orderFailure,
   orderProblem,
   parseUnits,
@@ -38,9 +38,15 @@ function useDebounced<T>(value: T, delayMs: number): T {
 }
 
 /** The signed-in buy/sell form: validation, a backend quote, the order and its receipt. */
-export function TradeForm({ asset }: { asset: AssetDetail }) {
+export function TradeForm({
+  asset,
+  signInHref,
+}: {
+  asset: AssetDetail;
+  /** Sign-in that comes back to this page, query string included. */
+  signInHref: string;
+}) {
   const ids = useId();
-  const pathname = usePathname();
   const { cache } = useDataLayer();
   const portfolio = usePortfolio();
   const placeOrder = usePlaceOrder();
@@ -64,20 +70,24 @@ export function TradeForm({ asset }: { asset: AssetDetail }) {
     quote.data && quote.data.side === side && quote.data.qty === units
       ? quote.data
       : undefined;
+  // Only a settled quote for exactly what's on screen can be confirmed: never one that's
+  // being refreshed after a price tick, since the user hasn't seen the new total yet.
+  const settled =
+    current !== undefined && !quote.isFetching && quote.status === "success";
   const problem = orderProblem({
     side,
     units,
     held,
     cash,
     quote: current,
-    formatMoney: fmtPrice,
+    formatMoney: money,
   });
   const quoteFailure =
     !current && quote.error && quotedUnits === units
       ? orderFailure(quote.error, { order: false })
       : null;
   const fieldMessage = problem ?? quoteFailure?.message ?? null;
-  const ready = Boolean(current) && !problem && portfolio.data !== undefined;
+  const ready = settled && !problem && portfolio.data !== undefined;
   const pending = placeOrder.isPending;
 
   function change(next: string) {
@@ -87,13 +97,16 @@ export function TradeForm({ asset }: { asset: AssetDetail }) {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (inFlight.current || !ready || units === null) return;
+    if (inFlight.current || !ready || units === null || !current) return;
     inFlight.current = true;
     setFailure(null);
+    // The total the user saw: the backend refuses a worse fill (409 price_moved).
+    const order: OrderCreate =
+      side === "buy"
+        ? { asset_id: asset.id, side, qty: units, max_total: current.total }
+        : { asset_id: asset.id, side, qty: units, min_total: current.total };
     try {
-      setReceipt(
-        await placeOrder.mutateAsync({ asset_id: asset.id, side, qty: units }),
-      );
+      setReceipt(await placeOrder.mutateAsync(order));
     } catch (error) {
       setFailure(orderFailure(error as ApiError));
       // Cash, holdings, supply or the price may have moved: show the backend's numbers now.
@@ -108,12 +121,20 @@ export function TradeForm({ asset }: { asset: AssetDetail }) {
   const unitsId = `${ids}-units`;
   const messageId = `${ids}-units-message`;
   const maxQty = current?.max_qty ?? quote.data?.max_qty ?? null;
+  // Radix points every trigger at its panel, but only the active side's panel is rendered.
+  const noPanel = { "aria-controls": undefined };
 
   return (
     <Tabs value={side} onValueChange={(value) => setSide(value as Side)}>
       <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="buy">Buy units</TabsTrigger>
-        <TabsTrigger value="sell" disabled={held === 0}>
+        <TabsTrigger value="buy" {...(side === "buy" ? {} : noPanel)}>
+          Buy units
+        </TabsTrigger>
+        <TabsTrigger
+          value="sell"
+          disabled={held === 0}
+          {...(side === "sell" ? {} : noPanel)}
+        >
           Sell units
         </TabsTrigger>
       </TabsList>
@@ -125,7 +146,7 @@ export function TradeForm({ asset }: { asset: AssetDetail }) {
               <span className="tabular text-xs text-muted-foreground">
                 {portfolio.data
                   ? side === "buy"
-                    ? `${cash === null ? "—" : fmtPrice(cash)} available`
+                    ? `${cash === null ? "—" : money(cash)} available`
                     : `${int(held)} held`
                   : portfolio.error
                     ? "Balance unavailable"
@@ -143,11 +164,14 @@ export function TradeForm({ asset }: { asset: AssetDetail }) {
               aria-describedby={fieldMessage ? messageId : undefined}
               className="tabular text-lg"
             />
-            {fieldMessage && (
-              <p id={messageId} className="text-sm text-destructive">
-                {fieldMessage}
-              </p>
-            )}
+            {/* Always rendered so a quote error arriving later is announced. */}
+            <p
+              id={messageId}
+              aria-live="polite"
+              className="text-sm text-destructive"
+            >
+              {fieldMessage}
+            </p>
             <div className="flex flex-wrap gap-1.5">
               {PRESETS.map((n) => (
                 <Button
@@ -178,6 +202,7 @@ export function TradeForm({ asset }: { asset: AssetDetail }) {
             side={side}
             quote={current}
             loading={units !== null && !current && !quoteFailure}
+            refreshing={current !== undefined && quote.isFetching}
             fallbackPrice={decimal(asset.price)}
           />
           <div role="alert">
@@ -186,7 +211,7 @@ export function TradeForm({ asset }: { asset: AssetDetail }) {
                 <p>{failure.message}</p>
                 {failure.signIn && (
                   <Link
-                    href={loginHref(pathname)}
+                    href={signInHref}
                     className="mt-1 inline-block font-medium underline"
                   >
                     Sign in again
@@ -220,137 +245,14 @@ export function TradeForm({ asset }: { asset: AssetDetail }) {
             <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
             Sandbox: play money, not a real security. Units are a share of the
             rating&apos;s sandbox market, not of the land. The order fills at
-            the price when you confirm.
+            the price when you confirm, never worse than the total shown.
           </p>
         </form>
       </TabsContent>
       <p className="sr-only" role="status">
         {receipt ? announce(receipt) : ""}
       </p>
-      {receipt && (
-        <Receipt order={receipt} cash={cash} community={asset.name} />
-      )}
+      {receipt && <Receipt order={receipt} community={asset.name} />}
     </Tabs>
-  );
-}
-
-/** What screen readers hear once an order fills (the visible receipt isn't a live region). */
-function announce(order: OrderOut): string {
-  const total = decimal(order.total);
-  const fill = decimal(order.fill_price);
-  const verb = order.side === "buy" ? "Bought" : "Sold";
-  return `${verb} ${int(order.qty)} units at ${fill === null ? "—" : fmtPrice(fill)} each. ${
-    order.side === "buy" ? "You paid" : "You received"
-  } ${total === null ? "—" : fmtPrice(total)}.`;
-}
-
-function QuoteTable({
-  side,
-  quote,
-  loading,
-  fallbackPrice,
-}: {
-  side: Side;
-  quote: QuoteOut | undefined;
-  loading: boolean;
-  fallbackPrice: number | null;
-}) {
-  const show = (value: string | undefined) => {
-    const n = decimal(value);
-    return n === null ? "—" : fmtPrice(n);
-  };
-  const unitPrice = decimal(quote?.price) ?? fallbackPrice;
-  const slippage = decimal(quote?.slippage_pct);
-  return (
-    <dl
-      className="space-y-1.5 rounded-2xl bg-secondary p-4 text-sm"
-      aria-busy={loading || undefined}
-      aria-label="Quote"
-    >
-      <div className="flex justify-between gap-3">
-        <dt className="text-muted-foreground">Price per unit</dt>
-        <dd className="tabular">
-          {unitPrice === null ? "—" : fmtPrice(unitPrice)}
-        </dd>
-      </div>
-      <div className="flex justify-between gap-3">
-        <dt className="text-muted-foreground">
-          Fill price incl. slippage
-          {slippage !== null && (
-            <span className="tabular">
-              {" "}
-              ({slippage > 0 ? "+" : slippage < 0 ? "−" : ""}
-              {Math.abs(slippage).toFixed(2)}%)
-            </span>
-          )}
-        </dt>
-        <dd className="tabular">{loading ? "…" : show(quote?.fill_price)}</dd>
-      </div>
-      {quote && quote.primary_qty > 0 && (
-        <div className="flex justify-between gap-3">
-          <dt className="text-muted-foreground">To the community fund</dt>
-          <dd className="tabular text-lime-ink">
-            {show(quote.community_amount)}
-          </dd>
-        </div>
-      )}
-      <div className="flex justify-between gap-3 border-t border-border pt-1.5 font-medium">
-        <dt>{side === "buy" ? "Total" : "You receive"}</dt>
-        <dd className="tabular">{loading ? "…" : show(quote?.total)}</dd>
-      </div>
-    </dl>
-  );
-}
-
-function Receipt({
-  order,
-  cash,
-  community,
-}: {
-  order: OrderOut;
-  cash: number | null;
-  community: string;
-}) {
-  const total = decimal(order.total);
-  const toCommunity = decimal(order.community_amount);
-  const fill = decimal(order.fill_price);
-  const bought = order.side === "buy";
-  return (
-    <div
-      className="nx-rise mt-5 rounded-2xl border border-lime/60 bg-lime/10 p-4"
-      data-tour="trade-receipt"
-    >
-      <p className="text-sm font-medium">
-        {bought ? "Stake added" : "Stake reduced"}: {int(order.qty)} units at{" "}
-        {fill === null ? "—" : fmtPrice(fill)}
-      </p>
-      <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-xl bg-card p-3">
-          <dt className="text-xs text-muted-foreground">
-            {bought ? "You paid" : "You received"}
-          </dt>
-          <dd className="tabular mt-1 font-semibold">
-            {total === null ? "—" : fmtPrice(total)}
-          </dd>
-        </div>
-        <div className="rounded-xl bg-card p-3">
-          <dt className="text-xs text-muted-foreground">Play money now</dt>
-          <dd className="tabular mt-1 flex items-center gap-1 font-semibold">
-            <ArrowRight
-              className="size-3.5 text-muted-foreground"
-              aria-hidden="true"
-            />
-            {cash === null ? "—" : fmtPrice(cash)}
-          </dd>
-        </div>
-      </dl>
-      {order.primary_qty > 0 && toCommunity !== null && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          {int(order.primary_qty)} opening units: {fmtPrice(toCommunity)} went
-          straight to the community behind {community}. The land stays with the
-          community.
-        </p>
-      )}
-    </div>
   );
 }

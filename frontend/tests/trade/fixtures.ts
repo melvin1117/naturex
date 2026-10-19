@@ -53,6 +53,8 @@ export function portfolio(overrides: Partial<PortfolioOut> = {}): PortfolioOut {
     cost_basis: "0.00",
     unrealized_pnl: "0.00",
     unrealized_pnl_pct: null,
+    starting_cash: "10000.00",
+    since_start: "0.00",
     impact: {
       ha_protected: "0.00",
       t_co2_stored: "0.00",

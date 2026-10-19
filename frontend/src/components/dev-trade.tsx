@@ -5,8 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 import { TradePanel } from "@/components/trade-panel";
 import { useAssets } from "@/lib/hooks";
-import { price } from "@/lib/prototype/format";
-import { decimal } from "@/lib/trade";
+import { assetHref, unitPriceText } from "@/lib/trade";
 
 /** `/dev/trade?asset=<id>`: pick a real asset, trade it with the real panel. */
 export function DevTrade() {
@@ -29,23 +28,20 @@ export function DevTrade() {
           </p>
         )}
         <ul className="mt-6 divide-y rounded-2xl bg-card text-sm shadow-soft">
-          {(assets.data ?? []).map((asset) => {
-            const current = decimal(asset.price);
-            return (
-              <li key={asset.id}>
-                <Link
-                  href={`/dev/trade?asset=${asset.id}`}
-                  aria-current={asset.id === assetId ? "page" : undefined}
-                  className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-accent aria-[current=page]:font-semibold"
-                >
-                  <span>{asset.name}</span>
-                  <span className="tabular text-muted-foreground">
-                    {asset.status} · {current === null ? "—" : price(current)}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
+          {(assets.data ?? []).map((asset) => (
+            <li key={asset.id}>
+              <Link
+                href={assetHref(asset.id)}
+                aria-current={asset.id === assetId ? "page" : undefined}
+                className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-accent aria-[current=page]:font-semibold"
+              >
+                <span>{asset.name}</span>
+                <span className="tabular text-muted-foreground">
+                  {asset.status} · {unitPriceText(asset.price)}
+                </span>
+              </Link>
+            </li>
+          ))}
         </ul>
       </section>
       <div className="lg:sticky lg:top-24 lg:self-start">

@@ -19,15 +19,17 @@ import {
   fakeBackend,
   FakeEventSource,
   json,
+  sequence,
   SIGNED_IN_WORLD,
   WORLD,
 } from "../lib/helpers";
 import { ASSET_ID, asset, holding, portfolio, quoteFor } from "./fixtures";
 
+const nav = vi.hoisted(() => ({ search: "" }));
 vi.mock("next/navigation", () => ({
   usePathname: () => `/asset/${ASSET_ID}`,
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(nav.search),
 }));
 
 const ASSET = `GET /assets/${ASSET_ID}`;
@@ -45,6 +47,8 @@ const filled = (side: "buy" | "sell", qty: number) => ({
   community_amount: side === "buy" ? "200.20" : "0.00",
   is_primary: side === "buy",
   created_at: "2026-10-18T00:00:00Z",
+  cash_balance: side === "buy" ? "9799.80" : "10099.90",
+  shares_held: side === "buy" ? 10 : 0,
 });
 
 type Routes = Parameters<typeof fakeBackend>[0];
@@ -80,7 +84,10 @@ async function quoted(total = "$200.20") {
   );
 }
 
-beforeEach(() => FakeEventSource.reset());
+beforeEach(() => {
+  FakeEventSource.reset();
+  nav.search = "";
+});
 
 describe("TradePanel", () => {
   it("asks anonymous visitors to sign in and come back here", async () => {
@@ -94,6 +101,17 @@ describe("TradePanel", () => {
     expect(screen.queryByLabelText("Units")).not.toBeInTheDocument();
     expect(backend.calls("GET /portfolio")).toBe(0);
     expect(backend.calls(QUOTE)).toBe(0);
+  });
+
+  it("keeps the query string in the sign-in link", async () => {
+    nav.search = "asset=abc&tab=trade";
+    renderPanel({}, WORLD);
+
+    const link = await screen.findByRole("link", { name: /sign in to trade/i });
+    expect(link).toHaveAttribute(
+      "href",
+      `/login?next=${encodeURIComponent(`/asset/${ASSET_ID}?asset=abc&tab=trade`)}`,
+    );
   });
 
   it.each([
@@ -218,20 +236,151 @@ describe("TradePanel", () => {
     const status = await screen.findByRole("status");
     await waitFor(() =>
       expect(status).toHaveTextContent(
-        "Bought 10 units at $20.02 each. You paid $200.20.",
+        "Bought 10 units at $20.02 each. You paid $200.20. Play money now $9,799.80; 10 units held.",
       ),
     );
     expect(backend.calls(ORDER)).toBe(1);
     const body = (await backend.requests
       .find((r) => r.method === "POST")!
       .json()) as unknown;
-    expect(body).toEqual({ asset_id: ASSET_ID, side: "buy", qty: 10 });
+    // The quoted total caps the fill: a worse price is refused, not filled.
+    expect(body).toEqual({
+      asset_id: ASSET_ID,
+      side: "buy",
+      qty: 10,
+      max_total: "200.20",
+    });
     expect(await screen.findByText("$9,799.80 available")).toBeInTheDocument();
     expect(
       screen.getByText(/went straight to the community/),
     ).toHaveTextContent(
       "10 opening units: $200.20 went straight to the community",
     );
+  });
+
+  it("shows the balance and holding the order returned, not the cached portfolio", async () => {
+    // The portfolio refetch is slow and still answers with the old balance.
+    renderPanel({
+      "GET /portfolio": sequence(
+        () => json(portfolio({ cash_balance: "10000.00" })),
+        () => new Promise<Response>(() => undefined),
+      ),
+      [ORDER]: () =>
+        json({
+          ...filled("buy", 10),
+          cash_balance: "9799.80",
+          shares_held: 15,
+        }),
+    });
+    await quoted();
+
+    fireEvent.click(buyButton());
+
+    const receipt = (await screen.findByText(/Stake added/)).parentElement!;
+    expect(
+      within(receipt).getByText("Play money now").nextSibling,
+    ).toHaveTextContent("$9,799.80");
+    expect(
+      within(receipt).getByText("Units held").nextSibling,
+    ).toHaveTextContent("15");
+  });
+
+  it("sends the quoted proceeds as the floor of a sell", async () => {
+    const { backend } = renderPanel({
+      "GET /portfolio": () =>
+        json(portfolio({ holdings: [holding({ shares: 5 })] })),
+      [ORDER]: () => json(filled("sell", 5)),
+    });
+    const sellTab = await screen.findByRole("tab", { name: "Sell units" });
+    await waitFor(() => expect(sellTab).toBeEnabled());
+    fireEvent.mouseDown(sellTab);
+    fireEvent.change(units(), { target: { value: "5" } });
+    const sell = await screen.findByRole("button", { name: "Sell 5 units" });
+    await waitFor(() => expect(sell).toBeEnabled());
+
+    fireEvent.click(sell);
+
+    await screen.findByText(/Stake reduced/);
+    const body = (await backend.requests
+      .find((r) => r.method === "POST")!
+      .json()) as unknown;
+    expect(body).toEqual({
+      asset_id: ASSET_ID,
+      side: "sell",
+      qty: 5,
+      min_total: "99.90",
+    });
+  });
+
+  it("can't confirm while the quote is being refreshed", async () => {
+    let release: (response: Response) => void = () => undefined;
+    let slow = false;
+    const { backend, layer } = renderPanel({
+      [QUOTE]: (request) =>
+        slow
+          ? new Promise<Response>((resolve) => {
+              release = resolve;
+            })
+          : quoteFor(request),
+    });
+    await quoted();
+    expect(buyButton()).toBeEnabled();
+
+    slow = true;
+    act(() => layer.cache.invalidate(["quote", ASSET_ID]));
+
+    await waitFor(() => expect(buyButton()).toBeDisabled());
+    // The old numbers stay on screen, marked busy, until the new quote arrives.
+    expect(screen.getByLabelText("Quote")).toHaveAttribute("aria-busy", "true");
+    fireEvent.submit(units().closest("form")!);
+    expect(backend.calls(ORDER)).toBe(0);
+
+    await act(async () =>
+      release(
+        quoteFor(
+          new Request(`${BASE}/assets/${ASSET_ID}/quote?side=buy&qty=10`),
+          {
+            total: "210.00",
+          },
+        ),
+      ),
+    );
+    await quoted("$210.00");
+    expect(buyButton()).toBeEnabled();
+  });
+
+  it("explains insufficient cash from the order and re-reads the balance", async () => {
+    const { backend } = renderPanel({
+      [ORDER]: () => json({ detail: "insufficient_cash" }, { status: 409 }),
+    });
+    await quoted();
+    const portfolioReads = backend.calls("GET /portfolio");
+
+    fireEvent.click(buyButton());
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "You don't have enough play money for this order now. Try fewer units.",
+      ),
+    );
+    await waitFor(() =>
+      expect(backend.calls("GET /portfolio")).toBeGreaterThan(portfolioReads),
+    );
+    expect(screen.queryByText(/Stake added/)).not.toBeInTheDocument();
+  });
+
+  it("points only the active tab at a panel", async () => {
+    renderPanel({
+      "GET /portfolio": () =>
+        json(portfolio({ holdings: [holding({ shares: 5 })] })),
+    });
+    const sellTab = await screen.findByRole("tab", { name: "Sell units" });
+    await waitFor(() => expect(sellTab).toBeEnabled());
+    const buyTab = screen.getByRole("tab", { name: "Buy units" });
+
+    const panel = screen.getByRole("tabpanel");
+    expect(buyTab).toHaveAttribute("aria-controls", panel.id);
+    expect(sellTab).not.toHaveAttribute("aria-controls");
   });
 
   it("never submits twice while an order is pending", async () => {
@@ -266,6 +415,7 @@ describe("TradePanel", () => {
     [409, "insufficient_cash", /enough play money/, null],
     [409, "insufficient_shares", /more units than you hold/, null],
     [409, "insufficient_supply", /Not enough units are available/, null],
+    [409, "price_moved", /price moved since your quote/, null],
     [409, "Asset is not listed for trading", /isn't open for trading/, null],
     [400, "order_too_large", /too large/, null],
     [
@@ -340,6 +490,9 @@ describe("TradePanel", () => {
         "That order is too large. Try fewer units.",
       ),
     );
+    expect(
+      screen.getByText("That order is too large. Try fewer units."),
+    ).toHaveAttribute("aria-live", "polite");
     expect(buyButton()).toBeDisabled();
   });
 

@@ -15,6 +15,50 @@ export function decimal(value: string | null | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/** Money: "$1,234.56". */
+export function money(value: number): string {
+  return `$${value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+/** Per-unit prices keep the API's 4 decimals where they matter: "$21.4744", "$20.00". */
+export function unitPrice(value: number): string {
+  return `$${value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  })}`;
+}
+
+/** An API decimal string as money, "—" when missing. */
+export function moneyText(value: string | null | undefined): string {
+  const n = decimal(value);
+  return n === null ? "—" : money(n);
+}
+
+/** An API decimal string as a per-unit price, "—" when missing. */
+export function unitPriceText(value: string | null | undefined): string {
+  const n = decimal(value);
+  return n === null ? "—" : unitPrice(n);
+}
+
+/** "+$12.34", "−$5.00" or "$0.00": the API's signed amount with its sign spelt out. */
+export function signedMoneyText(value: string | null | undefined): string {
+  const n = decimal(value);
+  if (n === null) return "—";
+  if (n === 0) return money(0);
+  return `${n > 0 ? "+" : "−"}${money(Math.abs(n))}`;
+}
+
+/**
+ * Where an asset's page is. Until T22's asset page (`/asset/<id>`) is merged, real assets are
+ * traded on `/dev/trade`; switching this one line is part of the T22 integration.
+ */
+export function assetHref(assetId: string): string {
+  return `/dev/trade?asset=${encodeURIComponent(assetId)}`;
+}
+
 /** Keep what can be part of a whole number of units: digits only. */
 export function unitsInput(text: string): string {
   return text
@@ -120,6 +164,11 @@ export function orderFailure(
       };
     case "order_too_large":
       return { message: "That order is too large. Try fewer units." };
+    case "price_moved":
+      return {
+        message:
+          "The price moved since your quote, so nothing was traded. Check the new total and confirm again.",
+      };
   }
   if (error.isNetworkError || error.status >= 500) {
     return order
