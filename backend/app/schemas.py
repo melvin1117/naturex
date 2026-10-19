@@ -160,6 +160,12 @@ class EventOut(BaseModel):
     created_at: datetime
 
 
+class NdviPointOut(BaseModel):
+    month: str = Field(description="Calendar month, YYYY-MM.")
+    ndvi: float = Field(description="Cloud-masked Sentinel-2 NDVI, monthly median.")
+    cloud_free_obs: int
+
+
 class ReportOut(BaseModel):
     id: UUID
     asset_id: UUID
@@ -203,6 +209,11 @@ class ReportOut(BaseModel):
     )
     run_id: UUID | None = Field(
         default=None, description="Rating run that produced this report (T27); null for seeds."
+    )
+    ndvi_series: list[NdviPointOut] = Field(
+        default_factory=list,
+        description="Monthly NDVI behind the report's trend, oldest first (the rating's metrics "
+        "row); empty when the report has none.",
     )
     created_at: datetime
 

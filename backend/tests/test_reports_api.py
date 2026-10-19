@@ -202,6 +202,42 @@ def test_report_history_lists_every_version_newest_first(
 
 
 @requires_db
+def test_reports_carry_the_ndvi_series_of_their_own_metrics(
+    client: TestClient, session: Session
+) -> None:
+    world = _world(client)
+    observed = [p.model_dump() for p in load_site_metrics(HERO).ndvi_series]
+    simulated = [p.model_dump() for p in load_site_metrics(HERO, "restoration").ndvi_series]
+    _rate_restoration(session, UUID(world["id"]))
+
+    reports = client.get(f"/assets/{_asset_id(world)}/reports").json()
+
+    assert [r["version"] for r in reports] == [2, 1]
+    assert reports[1]["ndvi_series"] == observed
+    assert reports[0]["ndvi_series"] == simulated
+    assert [p["month"] for p in observed] == sorted(p["month"] for p in observed)
+    assert len(observed) >= 48
+
+
+@requires_db
+def test_reports_without_metrics_have_an_empty_ndvi_series(
+    client: TestClient, session: Session
+) -> None:
+    world = _world(client)
+    world_id = UUID(world["id"])
+    report = latest_report(session, world_id, _world_asset(session, world_id).id)
+    assert report is not None
+    report.metrics_id = None
+    session.add(report)
+    session.commit()
+
+    res = client.get(f"/reports/{report.id}")
+
+    assert res.status_code == 200
+    assert res.json()["ndvi_series"] == []
+
+
+@requires_db
 def test_get_report_and_diff(client: TestClient, session: Session) -> None:
     world = _world(client)
     first = client.get(f"/assets/{_asset_id(world)}").json()["latest_report"]
