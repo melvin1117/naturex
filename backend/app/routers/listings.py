@@ -25,14 +25,11 @@ from app.authz import (
     Action,
     AssetRef,
     CommunityRef,
-    Deny,
-    DenyReason,
     Granted,
     OptionalActor,
     acting_world,
     asset_ref,
     community_ref,
-    deny_error,
     require,
 )
 from app.deps import SessionDep, SettingsDep
@@ -103,7 +100,8 @@ def new_listing_ref(
             Community.world_id == world_id, Community.id == body.community_id
         )
     ).first()
-    return None if community is None else AssetRef(world_id, uuid4(), community, public=False)
+    # Nothing exists yet to hide, and the community is public: an outsider learns `members_only`.
+    return None if community is None else AssetRef(world_id, uuid4(), community, public=True)
 
 
 NEW_LISTING = require(Action.MANAGE_LISTING, new_listing_ref)
@@ -168,8 +166,6 @@ def list_community_assets(
     "/assets",
     response_model=AssetDetail,
     status_code=status.HTTP_201_CREATED,
-    # `require` answers 401 before the body is validated, so anonymous callers never get 422.
-    dependencies=[NEW_LISTING],
     responses={
         **_AUTH,
         **_DENIED,
@@ -180,7 +176,7 @@ def list_community_assets(
 )
 def create_listing(
     body: AssetCreate,
-    actor: OptionalActor,
+    granted: Annotated[Granted, NEW_LISTING],
     session: SessionDep,
     settings: SettingsDep,
     response: Response,
@@ -189,8 +185,7 @@ def create_listing(
     world. Needs `attestation: true`; the polygon must pass T36's checks and not overlap a
     submitted listing in the world or one of the community's own drafts. Nothing is public
     until it's listed."""
-    if actor is None:  # pragma: no cover - `NEW_LISTING` already answered 401
-        raise deny_error(Deny(DenyReason.AUTH_REQUIRED))
+    actor = granted.signed_in
     community = body.community_id
     details = ListingDetails(
         name=body.name, country=body.country, description=body.description, geojson=body.geojson

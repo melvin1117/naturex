@@ -263,9 +263,9 @@ def place_order(
     # After a concurrent reset the world has fresh asset ids, so a stale id is a 404.
     asset = _locked_asset(session, world.id, body.asset_id)
     actor = _actor(session, world.id, principal, lock=True)
-    # Re-check with memberships read under the trader's lock (see the module docstring), and the
-    # locked asset's status: a listing under review the trader can't see is a 404 (T58), never
-    # revealed by `not_listed`.
+    # Re-check with memberships read under the trader's lock (see the module docstring); the
+    # locked asset's status is re-checked too, as defence in depth (`require(TRADE)` already hid
+    # a listing the trader can't see), so it's a 404, never revealed by `not_trading`.
     enforce(fresh_actor(session, principal), Action.TRADE, asset_ref_of(asset))
     market = _tradable_market(session, asset)
     holding = _holding(session, world.id, actor.id, asset.id)
@@ -349,7 +349,8 @@ def get_quote(
     asset = session.exec(
         select(Asset).where(Asset.world_id == world.id, Asset.id == asset_id)
     ).first()
-    # The BROWSE loader already hid listings under review from outsiders (T58).
+    # Defence in depth: `require(BROWSE)` already answered 404 for a listing the caller can't
+    # see (T58); this re-checks the row the quote is priced from.
     if asset is None or not visible_to(actor, asset):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
     blocked = _trade_blocked(actor, asset_ref_of(asset))

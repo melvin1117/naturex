@@ -141,7 +141,8 @@ class _Area:
 
 def visible_to(actor: Actor | None, asset: Asset) -> bool:
     """Listed and suspended assets are public; any other status only to the listing's community
-    members and same-world admins (`VIEW_COMMUNITY_DATA`). Routes answer 404 otherwise."""
+    members and same-world admins. The rule is the policy's (`authz.can_see`), which already
+    answers 404 to anyone else for every action on the asset; handlers re-check with this."""
     return can_see(actor, asset_ref_of(asset))
 
 
