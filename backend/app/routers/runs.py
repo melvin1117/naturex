@@ -12,7 +12,9 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlmodel import select
 
+from app.authz import OptionalActor
 from app.deps import (
     ADMIN_ONLY,
     CurrentPrincipal,
@@ -20,7 +22,9 @@ from app.deps import (
     SessionDep,
     require_sandbox_or_admin,
 )
+from app.models import Asset
 from app.schemas import RatingRunAccepted, RatingRunOut
+from app.services.listings import visible_to
 from app.services.rating_runs import (
     AssetNotRateable,
     RatingRunner,
@@ -48,7 +52,10 @@ RunnerDep = Annotated[RatingRunner, Depends(get_rating_runner)]
     responses={
         403: {"description": f"`{ADMIN_ONLY}`: only an admin can rate in the live world"},
         404: {"description": "Asset not found in this world"},
-        409: {"description": "`run_in_progress` (Location: the active run) or `asset_is_draft`"},
+        409: {
+            "description": "`run_in_progress` (Location: the active run), `asset_is_draft` or "
+            "`asset_not_listed` (listings under review are rated through `/submit`; T58)"
+        },
         429: {
             "description": "`rating_rate_limited` (per-world cap) or `rating_global_limit` "
             "(all worlds); see Retry-After"
@@ -99,9 +106,19 @@ def start_rating(
 
 
 @router.get("/runs/{run_id}", response_model=RatingRunOut)
-def get_rating_run(run_id: UUID, world: CurrentWorld, session: SessionDep) -> RatingRunOut:
-    """The run's status and steps, rebuilt from its progress events (any worker can answer)."""
+def get_rating_run(
+    run_id: UUID, world: CurrentWorld, actor: OptionalActor, session: SessionDep
+) -> RatingRunOut:
+    """The run's status and steps, rebuilt from its progress events (any worker can answer).
+    A run of a listing under review is its community's and same-world admins' only (T58)."""
     run = get_run(session, world.id, run_id)
-    if run is None:
+    asset = (
+        None
+        if run is None
+        else session.exec(
+            select(Asset).where(Asset.world_id == world.id, Asset.id == run.asset_id)
+        ).first()
+    )
+    if run is None or asset is None or not visible_to(actor, asset):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Run not found")
     return run
