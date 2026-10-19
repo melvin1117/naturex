@@ -1026,17 +1026,17 @@ export interface components {
              */
             world_id: string;
         };
-        /** NdviPointOut */
-        NdviPointOut: {
+        /**
+         * NdviPoint
+         * @description One month of cloud-masked Sentinel-2 NDVI (monthly median); also served on reports.
+         */
+        NdviPoint: {
             /**
              * Month
              * @description Calendar month, YYYY-MM.
              */
             month: string;
-            /**
-             * Ndvi
-             * @description Cloud-masked Sentinel-2 NDVI, monthly median.
-             */
+            /** Ndvi */
             ndvi: number;
             /** Cloud Free Obs */
             cloud_free_obs: number;
@@ -1517,7 +1517,7 @@ export interface components {
              * Ndvi Series
              * @description Monthly NDVI behind the report's trend, oldest first (the rating's metrics row). Served on a single report (GET /reports/{id}, AssetDetail.latest_report); empty in the version list and when the report has none.
              */
-            ndvi_series?: components["schemas"]["NdviPointOut"][];
+            ndvi_series?: components["schemas"]["NdviPoint"][];
             /**
              * Created At
              * Format: date-time

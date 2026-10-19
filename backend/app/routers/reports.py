@@ -18,11 +18,11 @@ from app.models import Asset, Event, Metrics, Report
 from app.schemas import (
     AuditorOutput,
     EventOut,
-    NdviPointOut,
     ReportDiff,
     ReportOut,
     ReportSummarySource,
 )
+from app.tools.earth_obs import NdviPoint
 
 router = APIRouter(tags=["reports"])
 
@@ -162,7 +162,7 @@ def summary_context(session: Session, asset: Asset) -> SummaryContext:
     )
 
 
-def ndvi_series(session: Session, report: Report) -> list[NdviPointOut]:
+def ndvi_series(session: Session, report: Report) -> list[NdviPoint]:
     """The monthly NDVI stored with the report's metrics row (same world), oldest first."""
     if report.metrics_id is None:
         return []
@@ -171,7 +171,7 @@ def ndvi_series(session: Session, report: Report) -> list[NdviPointOut]:
             Metrics.world_id == report.world_id, Metrics.id == report.metrics_id
         )
     ).first()
-    points = [NdviPointOut.model_validate(point) for point in series or []]
+    points = [NdviPoint.model_validate(point) for point in series or []]
     return sorted(points, key=lambda point: point.month)
 
 

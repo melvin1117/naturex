@@ -27,6 +27,7 @@ from app.models import (
     UserKind,
     UserRole,
 )
+from app.tools.earth_obs import NdviPoint
 
 # ----- Agent outputs (contract-tested later) -----
 
@@ -164,12 +165,6 @@ class EventOut(BaseModel):
     created_at: datetime
 
 
-class NdviPointOut(BaseModel):
-    month: str = Field(description="Calendar month, YYYY-MM.")
-    ndvi: float = Field(description="Cloud-masked Sentinel-2 NDVI, monthly median.")
-    cloud_free_obs: int
-
-
 class ReportOut(BaseModel):
     id: UUID
     asset_id: UUID
@@ -214,7 +209,7 @@ class ReportOut(BaseModel):
     run_id: UUID | None = Field(
         default=None, description="Rating run that produced this report (T27); null for seeds."
     )
-    ndvi_series: list[NdviPointOut] = Field(
+    ndvi_series: list[NdviPoint] = Field(
         default_factory=list,
         description="Monthly NDVI behind the report's trend, oldest first (the rating's metrics "
         "row). Served on a single report (GET /reports/{id}, AssetDetail.latest_report); empty "

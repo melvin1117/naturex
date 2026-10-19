@@ -34,9 +34,11 @@ class DatasetUse(BaseModel):
 
 
 class NdviPoint(BaseModel):
+    """One month of cloud-masked Sentinel-2 NDVI (monthly median); also served on reports."""
+
     model_config = ConfigDict(frozen=True)
 
-    month: str
+    month: str = Field(description="Calendar month, YYYY-MM.")
     ndvi: float
     cloud_free_obs: int
 

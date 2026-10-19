@@ -2529,7 +2529,7 @@
         "title": "MeOut",
         "description": "The signed-in account. Never includes the password hash."
       },
-      "NdviPointOut": {
+      "NdviPoint": {
         "properties": {
           "month": {
             "type": "string",
@@ -2538,8 +2538,7 @@
           },
           "ndvi": {
             "type": "number",
-            "title": "Ndvi",
-            "description": "Cloud-masked Sentinel-2 NDVI, monthly median."
+            "title": "Ndvi"
           },
           "cloud_free_obs": {
             "type": "integer",
@@ -2552,7 +2551,8 @@
           "ndvi",
           "cloud_free_obs"
         ],
-        "title": "NdviPointOut"
+        "title": "NdviPoint",
+        "description": "One month of cloud-masked Sentinel-2 NDVI (monthly median); also served on reports."
       },
       "OrderCreate": {
         "properties": {
@@ -3672,7 +3672,7 @@
           },
           "ndvi_series": {
             "items": {
-              "$ref": "#/components/schemas/NdviPointOut"
+              "$ref": "#/components/schemas/NdviPoint"
             },
             "type": "array",
             "title": "Ndvi Series",
