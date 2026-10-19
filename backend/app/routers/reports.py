@@ -175,15 +175,24 @@ def ndvi_series(session: Session, report: Report) -> list[NdviPointOut]:
     return sorted(points, key=lambda point: point.month)
 
 
-def present_report(session: Session, report: Report, asset: Asset, settings: Settings) -> ReportOut:
+def present_report(
+    session: Session,
+    report: Report,
+    asset: Asset,
+    settings: Settings,
+    *,
+    with_ndvi: bool = True,
+) -> ReportOut:
     """A stored report with its Auditor summary, or T10's (live Nemotron or the fallback),
-    and the NDVI series behind its trend."""
+    and (unless `with_ndvi` is off, as in the version list) the NDVI series behind its trend."""
     presented = summarize_report(
         report_out(report),
         settings,
         summary_context(session, asset),
         audit_fallback=audit_fell_back(report),
     )
+    if not with_ndvi:
+        return presented
     return presented.model_copy(update={"ndvi_series": ndvi_series(session, report)})
 
 

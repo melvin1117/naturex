@@ -144,6 +144,10 @@ class AssetCard(BaseModel):
     value_high: Decimal | None = None
     cover_image_url: str | None = None
     site_key: str | None = None
+    sparkline: list[Decimal] = Field(
+        default_factory=list,
+        description="The latest prices (up to 30), oldest first, for the card's sparkline.",
+    )
 
 
 class EventOut(BaseModel):
@@ -213,7 +217,8 @@ class ReportOut(BaseModel):
     ndvi_series: list[NdviPointOut] = Field(
         default_factory=list,
         description="Monthly NDVI behind the report's trend, oldest first (the rating's metrics "
-        "row); empty when the report has none.",
+        "row). Served on a single report (GET /reports/{id}, AssetDetail.latest_report); empty "
+        "in the version list and when the report has none.",
     )
     created_at: datetime
 
@@ -236,6 +241,9 @@ class AssetDetail(BaseModel):
     latest_report: ReportOut | None = None
     recent_events: list[EventOut] = Field(default_factory=list)
     price: Decimal | None = None
+    price_change_pct: float | None = Field(
+        default=None, description="Latest price vs the IPO price, in percent (2 dp); as on cards."
+    )
 
 
 class AssetCreateResponse(BaseModel):

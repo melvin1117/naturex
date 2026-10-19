@@ -151,7 +151,8 @@ export interface paths {
         };
         /**
          * List Reports
-         * @description Every report of the asset, newest first.
+         * @description Every report of the asset, newest first. Versions leave out `ndvi_series` (the chart
+         *     is for the latest report: `GET /assets/{id}` or `GET /reports/{id}`).
          */
         get: operations["list_reports_assets__asset_id__reports_get"];
         put?: never;
@@ -679,6 +680,11 @@ export interface components {
             cover_image_url?: string | null;
             /** Site Key */
             site_key?: string | null;
+            /**
+             * Sparkline
+             * @description The latest prices (up to 30), oldest first, for the card's sparkline.
+             */
+            sparkline?: string[];
         };
         /** AssetCreate */
         AssetCreate: {
@@ -757,6 +763,11 @@ export interface components {
             recent_events?: components["schemas"]["EventOut"][];
             /** Price */
             price?: string | null;
+            /**
+             * Price Change Pct
+             * @description Latest price vs the IPO price, in percent (2 dp); as on cards.
+             */
+            price_change_pct?: number | null;
         };
         /**
          * AssetStatus
@@ -1504,7 +1515,7 @@ export interface components {
             run_id?: string | null;
             /**
              * Ndvi Series
-             * @description Monthly NDVI behind the report's trend, oldest first (the rating's metrics row); empty when the report has none.
+             * @description Monthly NDVI behind the report's trend, oldest first (the rating's metrics row). Served on a single report (GET /reports/{id}, AssetDetail.latest_report); empty in the version list and when the report has none.
              */
             ndvi_series?: components["schemas"]["NdviPointOut"][];
             /**

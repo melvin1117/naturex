@@ -11,6 +11,7 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlmodel import Session, col, select
 
 from app.deps import CurrentWorld, SessionDep, SettingsDep, current_principal
@@ -32,6 +33,8 @@ router = APIRouter(tags=["assets"])
 
 
 _HUNDRED = Decimal(100)
+# Marketplace sparkline length: the latest prices per card, oldest first.
+SPARKLINE_POINTS = 30
 
 
 def world_asset(session: Session, world_id: UUID, asset_id: UUID) -> Asset:
@@ -54,6 +57,31 @@ def _price_per_asset(session: Session, world_id: UUID, *, latest: bool) -> dict[
         .distinct(col(Price.asset_id))
     ).all()
     return {asset_id: price for asset_id, price in rows}
+
+
+def _sparklines(session: Session, world_id: UUID) -> dict[UUID, list[Decimal]]:
+    """The last `SPARKLINE_POINTS` prices of every asset in the world, oldest first (one query)."""
+    ranked = (
+        select(
+            col(Price.asset_id).label("asset_id"),
+            col(Price.price).label("price"),
+            col(Price.ts).label("ts"),
+            func.row_number()
+            .over(partition_by=col(Price.asset_id), order_by=col(Price.ts).desc())
+            .label("rank"),
+        )
+        .where(Price.world_id == world_id)
+        .subquery()
+    )
+    rows = session.exec(
+        select(ranked.c.asset_id, ranked.c.price)
+        .where(ranked.c.rank <= SPARKLINE_POINTS)
+        .order_by(ranked.c.asset_id, ranked.c.ts)
+    ).all()
+    out: dict[UUID, list[Decimal]] = {}
+    for asset_id, price in rows:
+        out.setdefault(asset_id, []).append(price)
+    return out
 
 
 def _latest_two_reports(session: Session, world_id: UUID) -> dict[UUID, list[Report]]:
@@ -88,11 +116,13 @@ def _change_pct(latest: Decimal | None, ipo: Decimal | None) -> float | None:
     return float(((latest - ipo) / ipo * _HUNDRED).quantize(Decimal("0.01")))
 
 
-def _latest_price(session: Session, asset: Asset) -> Decimal | None:
+def _asset_price(session: Session, asset: Asset, *, latest: bool) -> Decimal | None:
+    """The asset's latest (or first, i.e. IPO) price."""
+    ts = col(Price.ts).desc() if latest else col(Price.ts).asc()
     return session.exec(
         select(col(Price.price))
         .where(Price.world_id == asset.world_id, Price.asset_id == asset.id)
-        .order_by(col(Price.ts).desc())
+        .order_by(ts)
         .limit(1)
     ).first()
 
@@ -108,6 +138,7 @@ def list_assets(world: CurrentWorld, session: SessionDep) -> list[AssetCard]:
     reports = _latest_two_reports(session, world.id)
     latest_prices = _price_per_asset(session, world.id, latest=True)
     ipo_prices = _price_per_asset(session, world.id, latest=False)
+    sparklines = _sparklines(session, world.id)
     cards: list[AssetCard] = []
     for asset in assets:
         headlines = reports.get(asset.id, [])
@@ -131,6 +162,7 @@ def list_assets(world: CurrentWorld, session: SessionDep) -> list[AssetCard]:
                 value_high=latest.value_high if latest else None,
                 cover_image_url=asset.cover_image_url,
                 site_key=asset.site_key,
+                sparkline=sparklines.get(asset.id, []),
             )
         )
     return cards
@@ -180,6 +212,7 @@ def get_asset(
         .order_by(col(Report.version).desc())
         .limit(1)
     ).first()
+    price = _asset_price(session, asset, latest=True)
     return AssetDetail(
         id=asset.id,
         name=asset.name,
@@ -197,7 +230,8 @@ def get_asset(
         site_key=asset.site_key,
         latest_report=present_report(session, report, asset, settings) if report else None,
         recent_events=recent_events(session, asset),
-        price=_latest_price(session, asset),
+        price=price,
+        price_change_pct=_change_pct(price, _asset_price(session, asset, latest=False)),
     )
 
 
@@ -224,14 +258,15 @@ def upload_evidence(asset_id: UUID, world: CurrentWorld, session: SessionDep) ->
 def list_reports(
     asset_id: UUID, world: CurrentWorld, session: SessionDep, settings: SettingsDep
 ) -> list[ReportOut]:
-    """Every report of the asset, newest first."""
+    """Every report of the asset, newest first. Versions leave out `ndvi_series` (the chart
+    is for the latest report: `GET /assets/{id}` or `GET /reports/{id}`)."""
     asset = world_asset(session, world.id, asset_id)
     reports = session.exec(
         select(Report)
         .where(Report.world_id == world.id, Report.asset_id == asset.id)
         .order_by(col(Report.version).desc())
     ).all()
-    return [present_report(session, report, asset, settings) for report in reports]
+    return [present_report(session, report, asset, settings, with_ndvi=False) for report in reports]
 
 
 @router.get("/assets/{asset_id}/prices", response_model=list[PricePoint])

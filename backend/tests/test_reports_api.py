@@ -22,6 +22,7 @@ from app.llm import LLMClient
 from app.main import app
 from app.models import Asset, Report
 from app.routers import reports as reports_router
+from app.routers.assets import SPARKLINE_POINTS
 from app.sandbox import create_world, ensure_live_world
 from app.schemas import ReportSummarySource
 from app.seed import DEMO_SITES, LIVE_WORLD_ID, WORLD_ID, seed
@@ -116,6 +117,7 @@ def test_marketplace_cards_carry_real_report_and_price_numbers(client: TestClien
     assert D(hero["price"]) == D("21.4723")
     assert hero["price_change_pct"] == 0.0
     assert hero["trend"] is None
+    assert [D(p) for p in hero["sparkline"]] == [D("21.4723")]
     assert (cards["mangrove_mx"]["grade"], D(cards["mangrove_mx"]["price"])) == (
         "AA",
         D("285.1519"),
@@ -140,6 +142,38 @@ def test_marketplace_price_change_and_trend_follow_trades_and_new_reports(
 
     assert hero["price_change_pct"] > 0
     assert (hero["grade"], hero["trend"]) == ("AA", "improving")
+
+
+@requires_db
+def test_card_sparklines_keep_the_latest_prices_oldest_first(client: TestClient) -> None:
+    world = _world(client)
+    asset_id = _asset_id(world)
+    for _ in range(SPARKLINE_POINTS + 2):
+        assert client.post(
+            "/orders", json={"asset_id": asset_id, "side": "buy", "qty": 1}
+        ).is_success
+    history = [D(p["price"]) for p in client.get(f"/assets/{asset_id}/prices").json()]
+    assert len(history) == SPARKLINE_POINTS + 3
+
+    cards = {c["site_key"]: c for c in client.get("/assets").json()}
+
+    assert [D(p) for p in cards[HERO]["sparkline"]] == history[-SPARKLINE_POINTS:]
+    assert [D(p) for p in cards["mangrove_mx"]["sparkline"]] == [D("285.1519")]
+
+
+@requires_db
+def test_asset_detail_carries_the_change_since_the_ipo(client: TestClient) -> None:
+    world = _world(client)
+    asset_id = _asset_id(world)
+    assert client.get(f"/assets/{asset_id}").json()["price_change_pct"] == 0.0
+    assert client.post("/orders", json={"asset_id": asset_id, "side": "buy", "qty": 100}).is_success
+
+    detail = client.get(f"/assets/{asset_id}").json()
+    card = next(c for c in client.get("/assets").json() if c["id"] == asset_id)
+
+    assert detail["price_change_pct"] > 0
+    assert detail["price_change_pct"] == card["price_change_pct"]
+    assert D(detail["price"]) == D(card["price"])
 
 
 @requires_db
@@ -202,21 +236,35 @@ def test_report_history_lists_every_version_newest_first(
 
 
 @requires_db
-def test_reports_carry_the_ndvi_series_of_their_own_metrics(
+def test_single_reports_carry_the_ndvi_series_of_their_own_metrics(
     client: TestClient, session: Session
 ) -> None:
     world = _world(client)
     observed = [p.model_dump() for p in load_site_metrics(HERO).ndvi_series]
     simulated = [p.model_dump() for p in load_site_metrics(HERO, "restoration").ndvi_series]
+    first = client.get(f"/assets/{_asset_id(world)}").json()["latest_report"]
+    assert first["ndvi_series"] == observed
+    assert [p["month"] for p in observed] == sorted(p["month"] for p in observed)
+    assert len(observed) >= 48
+
+    second = _rate_restoration(session, UUID(world["id"]))
+
+    latest = client.get(f"/assets/{_asset_id(world)}").json()["latest_report"]
+    assert (latest["id"], latest["ndvi_series"]) == (str(second.id), simulated)
+    assert client.get(f"/reports/{first['id']}").json()["ndvi_series"] == observed
+
+
+@requires_db
+def test_the_report_version_list_leaves_out_the_ndvi_series(
+    client: TestClient, session: Session
+) -> None:
+    world = _world(client)
     _rate_restoration(session, UUID(world["id"]))
 
     reports = client.get(f"/assets/{_asset_id(world)}/reports").json()
 
     assert [r["version"] for r in reports] == [2, 1]
-    assert reports[1]["ndvi_series"] == observed
-    assert reports[0]["ndvi_series"] == simulated
-    assert [p["month"] for p in observed] == sorted(p["month"] for p in observed)
-    assert len(observed) >= 48
+    assert [r["ndvi_series"] for r in reports] == [[], []]
 
 
 @requires_db
@@ -235,6 +283,24 @@ def test_reports_without_metrics_have_an_empty_ndvi_series(
 
     assert res.status_code == 200
     assert res.json()["ndvi_series"] == []
+
+
+@requires_db
+def test_a_metrics_row_of_another_world_is_never_served(
+    client: TestClient, session: Session
+) -> None:
+    world = _world(client)
+    world_id = UUID(world["id"])
+    report = latest_report(session, world_id, _world_asset(session, world_id).id)
+    template = latest_report(session, WORLD_ID, _world_asset(session, WORLD_ID).id)
+    assert report is not None and template is not None and template.metrics_id is not None
+    report.metrics_id = template.metrics_id
+    session.add(report)
+    session.commit()
+
+    assert client.get(f"/reports/{report.id}").json()["ndvi_series"] == []
+    detail = client.get(f"/assets/{_asset_id(world)}").json()
+    assert detail["latest_report"]["ndvi_series"] == []
 
 
 @requires_db
