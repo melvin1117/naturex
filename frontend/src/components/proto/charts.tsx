@@ -14,7 +14,6 @@ import {
 } from "recharts";
 
 import { price as fmtPrice, shortDate } from "@/lib/prototype/format";
-import type { NewsEvent, PricePoint } from "@/lib/prototype/world";
 
 const AXIS = { fontSize: 11, fill: "var(--muted-foreground)" };
 
@@ -23,16 +22,18 @@ function ChartTooltip({
   payload,
   label,
   format,
+  labelOf = (l) => String(l ?? ""),
 }: {
   active?: boolean;
   payload?: { value: number }[];
-  label?: string;
+  label?: string | number;
   format: (v: number) => string;
+  labelOf?: (label: string | number | undefined) => string;
 }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-xl bg-card px-3 py-2 text-xs shadow-lift ring-1 ring-border">
-      <div className="text-muted-foreground">{label}</div>
+      <div className="text-muted-foreground">{labelOf(label)}</div>
       <div className="tabular mt-0.5 text-sm font-medium">
         {format(payload[0].value)}
       </div>
@@ -40,33 +41,61 @@ function ChartTooltip({
   );
 }
 
+export type ChartPrice = {
+  /** ISO date or timestamp. */
+  t: string;
+  price: number;
+  reason?: string | null;
+};
+
+export type ChartEvent = { id: string; date: string; direction: number | null };
+
+function timeLabel(iso: string) {
+  return new Date(iso).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function PriceChart({
   prices,
   events,
   height = 280,
+  perDay = true,
 }: {
-  prices: PricePoint[];
-  events: NewsEvent[];
+  prices: ChartPrice[];
+  events: ChartEvent[];
   height?: number;
+  /** Keep one point per day (the last); off shows every recorded price. */
+  perDay?: boolean;
 }) {
-  // One point per day: the last price recorded that day.
-  const byDay = new Map<string, PricePoint>();
-  for (const p of prices) byDay.set(p.t, p);
-  const data = [...byDay.values()].map((p) => ({
+  const points = perDay
+    ? [...new Map(prices.map((p) => [p.t.slice(0, 10), p])).values()]
+    : prices;
+  const days = new Set(points.map((p) => p.t.slice(0, 10))).size;
+  const data = points.map((p, i) => ({
+    i,
     t: p.t,
-    label: shortDate(p.t),
+    label:
+      days > 1 || p.t.length <= 10
+        ? shortDate(p.t)
+        : `${shortDate(p.t)} ${timeLabel(p.t)}`,
     price: p.price,
     reason: p.reason,
   }));
+  const labelOf = (i: string | number | undefined) =>
+    data[Number(i)]?.label ?? "";
   const rerates = data.filter(
     (d) => d.reason === "rerate" || d.reason === "ipo",
   );
   const marks = events
     .map((e) => {
-      const point = data.find((d) => d.t >= e.date) ?? data[data.length - 1];
+      const point =
+        data.find((d) => d.t.slice(0, 10) >= e.date.slice(0, 10)) ??
+        data[data.length - 1];
       return point ? { ...point, event: e } : null;
     })
-    .filter(Boolean) as ((typeof data)[number] & { event: NewsEvent })[];
+    .filter(Boolean) as ((typeof data)[number] & { event: ChartEvent })[];
 
   return (
     <div style={{ height }} className="w-full">
@@ -83,11 +112,12 @@ export function PriceChart({
           </defs>
           <CartesianGrid vertical={false} stroke="var(--border)" />
           <XAxis
-            dataKey="label"
+            dataKey="i"
             tick={AXIS}
             tickLine={false}
             axisLine={false}
             minTickGap={40}
+            tickFormatter={labelOf}
           />
           <YAxis
             tick={AXIS}
@@ -98,7 +128,7 @@ export function PriceChart({
             tickFormatter={(v: number) => fmtPrice(v)}
           />
           <Tooltip
-            content={<ChartTooltip format={fmtPrice} />}
+            content={<ChartTooltip format={fmtPrice} labelOf={labelOf} />}
             cursor={{ stroke: "var(--ring)" }}
           />
           <Area
@@ -111,8 +141,8 @@ export function PriceChart({
           />
           {rerates.map((d) => (
             <ReferenceDot
-              key={`r-${d.t}`}
-              x={d.label}
+              key={`r-${d.i}`}
+              x={d.i}
               y={d.price}
               r={4}
               fill="var(--card)"
@@ -123,10 +153,12 @@ export function PriceChart({
           {marks.map((m) => (
             <ReferenceDot
               key={`e-${m.event.id}`}
-              x={m.label}
+              x={m.i}
               y={m.price}
               r={6}
-              fill={m.event.direction < 0 ? "var(--clay)" : "var(--lime-ink)"}
+              fill={
+                (m.event.direction ?? 0) < 0 ? "var(--clay)" : "var(--lime-ink)"
+              }
               stroke="var(--card)"
               strokeWidth={2}
             />
@@ -174,6 +206,7 @@ export function NdviChart({
             tickLine={false}
             axisLine={false}
             minTickGap={36}
+            ticks={data.filter((d) => d.m.endsWith("-01")).map((d) => d.m)}
             tickFormatter={(m: string) => m.slice(0, 4)}
           />
           <YAxis
@@ -181,7 +214,10 @@ export function NdviChart({
             tickLine={false}
             axisLine={false}
             width={36}
-            domain={[0.3, 1]}
+            domain={[
+              (min: number) => Math.min(0.3, Math.floor(min * 10) / 10),
+              1,
+            ]}
           />
           <Tooltip
             content={<ChartTooltip format={(v) => `NDVI ${v.toFixed(3)}`} />}

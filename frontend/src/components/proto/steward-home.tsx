@@ -16,7 +16,6 @@ import { Delta, SiteBackdrop, Stat } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
 import { Panel } from "@/components/proto/report-panels";
-import { changeSinceOpen } from "@/components/proto/site-card";
 import { VerificationBadge } from "@/components/proto/verification";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +24,7 @@ import { date, ha, int, money, price } from "@/lib/prototype/format";
 import { usePrototype } from "@/lib/prototype/store";
 import {
   addEvidence,
+  changeSinceOpen,
   HERO_ID,
   latestReport,
   previousReport,

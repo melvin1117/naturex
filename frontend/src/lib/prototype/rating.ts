@@ -3,7 +3,9 @@
  * bounded overlay (agreement, field evidence, ±10 adjustment) using the dev-spec §7.4 and §8
  * formulas, so every number on screen is traceable to a formula.
  */
+import type { ReportFacts } from "../report-facts";
 import {
+  SCORE_COMPONENTS,
   siteDataFor,
   type Grade,
   type LandcoverKey,
@@ -315,4 +317,71 @@ const RECOMMENDATIONS: Record<string, Record<ScenarioKey, string[]>> = {
 
 function recommendationsFor(siteKey: string, scenario: ScenarioKey) {
   return RECOMMENDATIONS[siteKey]?.[scenario] ?? [];
+}
+
+const CONFIDENCE_WEIGHTS = {
+  coverage: 0.4,
+  agreement: 0.3,
+  evidence: 0.2,
+  recency: 0.1,
+} as const;
+
+/** The prototype's report in the shared shape the report panels render (see report-facts.ts). */
+export function prototypeFacts(
+  report: Report,
+  id = `v${report.version}`,
+): ReportFacts {
+  return {
+    id,
+    version: report.version,
+    period: report.period,
+    createdAt: report.createdAt,
+    simulated: report.scenario !== "baseline",
+    health: report.health,
+    grade: report.grade,
+    confidence: report.confidence,
+    valueLow: report.valueLow,
+    valueMid: report.valueMid,
+    valueHigh: report.valueHigh,
+    fairValuePerUnit: report.fairValuePerUnit,
+    baseHealth: report.baseHealth,
+    adjustment: report.adjustment,
+    adjustmentReason: report.adjustmentReason || null,
+    adjustmentNote: report.scriptedAuditor ? "scripted in prototype" : null,
+    components: SCORE_COMPONENTS.map((c) => ({
+      key: c.key,
+      label: c.label,
+      weight: c.weight,
+      value: report.components[c.key] ?? 0,
+    })),
+    confidenceParts: (
+      Object.keys(CONFIDENCE_WEIGHTS) as (keyof typeof CONFIDENCE_WEIGHTS)[]
+    ).map((key) => ({
+      key,
+      label: key[0]!.toUpperCase() + key.slice(1),
+      weight: CONFIDENCE_WEIGHTS[key],
+      value: report.confidenceComponents[key],
+    })),
+    services: report.services,
+    carbonStock: report.carbon.stock,
+    landcover: report.landcover,
+    ndvi: report.ndvi,
+    ndviTrend: report.ndviTrend,
+    ndviP: report.ndviP,
+    trendLabel:
+      report.ndviTrend > 0.005
+        ? "Improving"
+        : report.ndviTrend < -0.005
+          ? "Declining"
+          : "Stable",
+    waterChange: report.waterChange,
+    builtShare: report.landcover.built,
+    flags: report.flags,
+    citations: report.citations,
+    citationsNote: report.scriptedAuditor ? "scripted in this prototype" : null,
+    summary: report.summary,
+    summarySource: "scripted",
+    recommendations: report.recommendations,
+    attributions: [],
+  };
 }

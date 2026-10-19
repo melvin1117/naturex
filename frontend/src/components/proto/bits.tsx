@@ -110,33 +110,44 @@ export function SampleTag({
   );
 }
 
+/** The prototype's static copy of a demo site's thumbnail, unless `src` is given. */
+function thumbnailUrl(siteKey?: string | null, src?: string | null) {
+  return src ?? (siteKey ? `/demo-sites/${siteKey}.thumbnail.webp` : null);
+}
+
 /** The site's own Sentinel-2 thumbnail, blurred, as the ground of a card. */
 export function SiteBackdrop({
   siteKey,
+  src,
   blur = "strong",
   className,
 }: {
-  siteKey: string;
+  siteKey?: string | null;
+  /** Image URL, e.g. the backend's media route; defaults to the prototype's copy. */
+  src?: string | null;
   blur?: "strong" | "soft" | "none";
   className?: string;
 }) {
+  const url = thumbnailUrl(siteKey, src);
   return (
     <div
-      className={cn("absolute inset-0 overflow-hidden", className)}
+      className={cn("absolute inset-0 overflow-hidden bg-primary", className)}
       aria-hidden="true"
     >
-      <Image
-        src={`/demo-sites/${siteKey}.thumbnail.webp`}
-        alt=""
-        fill
-        sizes="(min-width: 1024px) 66vw, 100vw"
-        unoptimized
-        className={cn(
-          "object-cover",
-          blur === "strong" && "scale-125 blur-2xl saturate-[1.15]",
-          blur === "soft" && "scale-110 blur-md",
-        )}
-      />
+      {url && (
+        <Image
+          src={url}
+          alt=""
+          fill
+          sizes="(min-width: 1024px) 66vw, 100vw"
+          unoptimized
+          className={cn(
+            "object-cover",
+            blur === "strong" && "scale-125 blur-2xl saturate-[1.15]",
+            blur === "soft" && "scale-110 blur-md",
+          )}
+        />
+      )}
       <div
         className={cn(
           "absolute inset-0",
@@ -151,23 +162,29 @@ export function SiteBackdrop({
 
 export function SiteThumb({
   siteKey,
+  src,
   alt,
   className,
 }: {
-  siteKey: string;
+  siteKey?: string | null;
+  /** Image URL, e.g. the backend's media route; defaults to the prototype's copy. */
+  src?: string | null;
   alt: string;
   className?: string;
 }) {
+  const url = thumbnailUrl(siteKey, src);
   return (
     <div className={cn("relative overflow-hidden bg-lichen", className)}>
-      <Image
-        src={`/demo-sites/${siteKey}.thumbnail.webp`}
-        alt={alt}
-        fill
-        sizes="(min-width: 1024px) 33vw, 100vw"
-        unoptimized
-        className="object-cover"
-      />
+      {url && (
+        <Image
+          src={url}
+          alt={alt}
+          fill
+          sizes="(min-width: 1024px) 33vw, 100vw"
+          unoptimized
+          className="object-cover"
+        />
+      )}
     </div>
   );
 }

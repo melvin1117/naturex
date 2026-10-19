@@ -14,12 +14,12 @@ import {
   NewsList,
   Panel,
   ReportTab,
+  type NewsItem,
   ScorePanel,
   ServicesPanel,
   TrendPanel,
   VerificationTab,
 } from "@/components/proto/report-panels";
-import { changeSinceOpen } from "@/components/proto/site-card";
 import { TradePanel } from "@/components/proto/trade-panel";
 import { VerificationBadge } from "@/components/proto/verification";
 import { Button } from "@/components/ui/button";
@@ -31,8 +31,15 @@ import {
   price,
   quarterLabel,
 } from "@/lib/prototype/format";
+import { siteDataFor } from "@/lib/prototype/data";
+import { prototypeFacts } from "@/lib/prototype/rating";
 import { usePrototype } from "@/lib/prototype/store";
-import { latestReport, previousReport } from "@/lib/prototype/world";
+import {
+  changeSinceOpen,
+  latestReport,
+  previousReport,
+  type NewsEvent,
+} from "@/lib/prototype/world";
 
 const TABS = [
   "overview",
@@ -44,7 +51,23 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number];
 
-export function AssetView({ id }: { id: string }) {
+function newsItem(e: NewsEvent): NewsItem {
+  return {
+    ...e,
+    kind: e.kind,
+    sourceLabel:
+      e.source === "time_machine"
+        ? "Injected by Time Machine"
+        : "Found by News Scout",
+    sample: true,
+  };
+}
+
+/**
+ * The asset page on the prototype's scripted world, for prototype site IDs (the guided tour,
+ * Steward, Portfolio and Control room still link here). Real asset IDs render `AssetView`.
+ */
+export function PrototypeAssetView({ id }: { id: string }) {
   const { world, openCopilot, openTrace } = usePrototype();
   const router = useRouter();
   const pathname = usePathname();
@@ -221,11 +244,20 @@ export function AssetView({ id }: { id: string }) {
             </div>
             <TabsContent value="overview" className="space-y-6">
               <div className="grid gap-6 xl:grid-cols-2">
-                <ServicesPanel report={report} />
-                <ScorePanel report={report} />
+                <ServicesPanel facts={prototypeFacts(report)} />
+                <ScorePanel facts={prototypeFacts(report)} />
               </div>
-              <LandPanel site={site} report={report} />
-              <TrendPanel report={report} />
+              <LandPanel
+                polygon={site.polygon}
+                label={site.name}
+                overlay={{
+                  url: `/demo-sites/${site.key}.overlay.png`,
+                  bounds: siteDataFor(site.key).overlayBounds,
+                }}
+                landcover={report.landcover}
+                simulated={report.scenario !== "baseline"}
+              />
+              <TrendPanel facts={prototypeFacts(report)} />
             </TabsContent>
             <TabsContent value="price">
               <Panel
@@ -272,11 +304,15 @@ export function AssetView({ id }: { id: string }) {
               </Panel>
             </TabsContent>
             <TabsContent value="report">
-              <ReportTab site={site} />
+              <ReportTab
+                versions={[...site.reports]
+                  .reverse()
+                  .map((r) => prototypeFacts(r))}
+              />
             </TabsContent>
             <TabsContent value="news">
               <Panel title="News and evidence near this site">
-                <NewsList events={events} />
+                <NewsList events={[...events].reverse().map(newsItem)} />
               </Panel>
             </TabsContent>
             <TabsContent value="ledger">

@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   Check,
   CircleSlash,
+  ExternalLink,
   Flag,
   Layers,
   ShieldCheck,
@@ -14,6 +15,7 @@ import {
 import { useState } from "react";
 import { cn } from "cn";
 
+import { MarkdownText } from "@/components/markdown-text";
 import { SampleTag } from "@/components/proto/bits";
 import { NdviChart } from "@/components/proto/charts";
 import { GradeBadge } from "@/components/proto/grade";
@@ -31,20 +33,14 @@ import { Switch } from "@/components/ui/switch";
 import {
   LANDCOVER,
   LANDCOVER_ORDER,
-  SCORE_COMPONENTS,
   SERVICE_GROUPS,
-  siteDataFor,
+  type LatLng,
 } from "@/lib/prototype/data";
 import { date, money, quarterLabel, signed } from "@/lib/prototype/format";
 import { verify, type VerifyResult } from "@/lib/prototype/ledger";
-import type { Report } from "@/lib/prototype/rating";
 import { usePrototype } from "@/lib/prototype/store";
-import {
-  documentChecks,
-  tamperLedger,
-  type NewsEvent,
-  type Site,
-} from "@/lib/prototype/world";
+import { documentChecks, tamperLedger, type Site } from "@/lib/prototype/world";
+import type { ReportFacts, SummarySource } from "@/lib/report-facts";
 
 export function Panel({
   title,
@@ -72,12 +68,12 @@ export function Panel({
   );
 }
 
-export function ServicesPanel({ report }: { report: Report }) {
+export function ServicesPanel({ facts }: { facts: ReportFacts }) {
   const groups = SERVICE_GROUPS.map((g) => ({
     ...g,
-    value: g.parts.reduce((sum, k) => sum + report.services[k], 0),
+    value: g.parts.reduce((sum, k) => sum + (facts.services[k] ?? 0), 0),
   })).sort((a, b) => b.value - a.value);
-  const max = Math.max(...groups.map((g) => g.value));
+  const max = Math.max(1, ...groups.map((g) => g.value));
   return (
     <Panel title="What the land does each year">
       <ul className="space-y-3">
@@ -102,7 +98,9 @@ export function ServicesPanel({ report }: { report: Report }) {
         <div>
           <div className="text-xs text-muted-foreground">Carbon stored</div>
           <div className="tabular text-xl font-light">
-            {report.carbon.stock.toLocaleString("en-US")} tCO₂
+            {facts.carbonStock === null
+              ? "—"
+              : `${facts.carbonStock.toLocaleString("en-US")} tCO₂`}
           </div>
           <div className="text-xs text-muted-foreground">
             Shown separately, not in the $ value
@@ -111,7 +109,7 @@ export function ServicesPanel({ report }: { report: Report }) {
         <div>
           <div className="text-xs text-muted-foreground">Mid estimate</div>
           <div className="tabular text-xl font-light">
-            {money(report.valueMid)} /yr
+            {money(facts.valueMid)} /yr
           </div>
           <div className="text-xs text-muted-foreground">
             Int$ at 2020 prices
@@ -122,40 +120,57 @@ export function ServicesPanel({ report }: { report: Report }) {
   );
 }
 
+function landcoverClasses(landcover: ReportFacts["landcover"]) {
+  const known = LANDCOVER_ORDER.filter((k) => (landcover[k] ?? 0) > 0.001).map(
+    (k) => ({ key: k, share: landcover[k]!, ...LANDCOVER[k] }),
+  );
+  const other = Object.entries(landcover)
+    .filter(
+      ([k, v]) =>
+        !(LANDCOVER_ORDER as string[]).includes(k) && (v ?? 0) > 0.001,
+    )
+    .map(([k, v]) => ({
+      key: k,
+      share: v!,
+      label: k[0]!.toUpperCase() + k.slice(1).replaceAll("_", " "),
+      color: "#b39fe1",
+    }));
+  return [...known, ...other];
+}
+
 export function LandcoverBar({
   landcover,
 }: {
-  landcover: Report["landcover"];
+  landcover: ReportFacts["landcover"];
 }) {
+  const classes = landcoverClasses(landcover);
   return (
     <div>
       <div
         className="flex h-4 overflow-hidden rounded-full"
         role="img"
-        aria-label="Land cover composition"
+        aria-label={`Land cover composition: ${classes
+          .map((c) => `${c.label} ${(c.share * 100).toFixed(1)}%`)
+          .join(", ")}`}
       >
-        {LANDCOVER_ORDER.filter((k) => landcover[k] > 0.001).map((k) => (
+        {classes.map((c) => (
           <div
-            key={k}
-            style={{
-              width: `${landcover[k] * 100}%`,
-              background: LANDCOVER[k].color,
-            }}
-            title={`${LANDCOVER[k].label} ${(landcover[k] * 100).toFixed(1)}%`}
+            key={c.key}
+            style={{ width: `${c.share * 100}%`, background: c.color }}
           />
         ))}
       </div>
       <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm sm:grid-cols-4">
-        {LANDCOVER_ORDER.filter((k) => landcover[k] > 0.001).map((k) => (
-          <li key={k} className="flex items-center gap-2">
+        {classes.map((c) => (
+          <li key={c.key} className="flex items-center gap-2">
             <span
               className="size-2.5 shrink-0 rounded-full"
-              style={{ background: LANDCOVER[k].color }}
+              style={{ background: c.color }}
               aria-hidden="true"
             />
-            <span className="truncate">{LANDCOVER[k].label}</span>
+            <span className="truncate">{c.label}</span>
             <span className="tabular ml-auto text-muted-foreground">
-              {(landcover[k] * 100).toFixed(1)}%
+              {(c.share * 100).toFixed(1)}%
             </span>
           </li>
         ))}
@@ -164,157 +179,178 @@ export function LandcoverBar({
   );
 }
 
-export function LandPanel({ site, report }: { site: Site; report: Report }) {
-  const [overlay, setOverlay] = useState(true);
-  const data = siteDataFor(site.key);
+export function LandPanel({
+  polygon,
+  label,
+  overlay,
+  landcover,
+  simulated = false,
+  caption,
+}: {
+  polygon: LatLng[];
+  label: string;
+  /** The Dynamic World overlay image and its bounds; null while unavailable. */
+  overlay: { url: string; bounds: [LatLng, LatLng] } | null;
+  landcover: ReportFacts["landcover"];
+  simulated?: boolean;
+  caption?: React.ReactNode;
+}) {
+  const [visible, setVisible] = useState(true);
   return (
     <Panel
       title="Land cover"
       action={
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Layers className="size-4" aria-hidden="true" />
-          Dynamic World overlay
-          <Switch checked={overlay} onCheckedChange={setOverlay} />
-        </label>
+        overlay && (
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Layers className="size-4" aria-hidden="true" />
+            Dynamic World overlay
+            <Switch checked={visible} onCheckedChange={setVisible} />
+          </label>
+        )
       }
     >
-      <SiteMap
-        polygon={site.polygon}
-        label={site.name}
-        overlay={{
-          url: `/demo-sites/${site.key}.overlay.png`,
-          bounds: data.overlayBounds,
-          visible: overlay,
-        }}
-      />
+      {polygon.length > 2 ? (
+        <SiteMap
+          polygon={polygon}
+          label={label}
+          overlay={overlay ? { ...overlay, visible } : undefined}
+        />
+      ) : (
+        <p className="rounded-2xl bg-secondary p-6 text-center text-sm text-muted-foreground">
+          No boundary to map for this site.
+        </p>
+      )}
       <div className="mt-5">
-        <LandcoverBar landcover={report.landcover} />
+        <LandcoverBar landcover={landcover} />
       </div>
-      {report.scenario !== "baseline" && (
+      {simulated && (
         <p className="mt-3 text-xs text-muted-foreground">
           The map shows the latest real imagery; the composition above includes
           this quarter&apos;s simulated change.
+        </p>
+      )}
+      {caption && (
+        <div className="mt-3 text-xs text-muted-foreground">{caption}</div>
+      )}
+    </Panel>
+  );
+}
+
+export function TrendPanel({ facts }: { facts: ReportFacts }) {
+  const label = facts.trendLabel;
+  return (
+    <Panel
+      title="Vegetation over five years"
+      action={
+        label && (
+          <span
+            className={cn(
+              "rounded-full px-2.5 py-1 text-xs font-medium",
+              label === "Declining"
+                ? "bg-clay/15 text-clay-ink"
+                : "bg-lime/30 text-lime-ink",
+            )}
+          >
+            {label}
+          </span>
+        )
+      }
+    >
+      {facts.ndvi.length > 1 ? (
+        <NdviChart series={facts.ndvi} />
+      ) : (
+        <p className="py-10 text-center text-sm text-muted-foreground">
+          No monthly NDVI series is stored with this report.
+        </p>
+      )}
+      {facts.ndviTrend !== null && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Monthly Sentinel-2 NDVI, cloud-masked. Trend{" "}
+          {facts.ndviTrend >= 0 ? "+" : ""}
+          {facts.ndviTrend.toFixed(4)} a year (Sen&apos;s slope
+          {facts.ndviP !== null &&
+            `, Mann–Kendall p = ${facts.ndviP.toFixed(2)}`}
+          ). Dashed line is a visual guide.
         </p>
       )}
     </Panel>
   );
 }
 
-export function TrendPanel({ report }: { report: Report }) {
-  const label =
-    report.ndviTrend > 0.005
-      ? "Improving"
-      : report.ndviTrend < -0.005
-        ? "Declining"
-        : "Stable";
-  return (
-    <Panel
-      title="Vegetation over five years"
-      action={
-        <span
-          className={cn(
-            "rounded-full px-2.5 py-1 text-xs font-medium",
-            label === "Declining"
-              ? "bg-clay/15 text-clay-ink"
-              : "bg-lime/30 text-lime-ink",
-          )}
-        >
-          {label}
-        </span>
-      }
-    >
-      <NdviChart series={report.ndvi} />
-      <p className="mt-3 text-xs text-muted-foreground">
-        Monthly Sentinel-2 NDVI, cloud-masked. Trend{" "}
-        {report.ndviTrend >= 0 ? "+" : ""}
-        {report.ndviTrend.toFixed(4)} a year (Sen&apos;s slope, Mann–Kendall p ={" "}
-        {report.ndviP.toFixed(2)}). Dashed line is a visual guide.
-      </p>
-    </Panel>
-  );
-}
-
-export function ScorePanel({ report }: { report: Report }) {
-  const c = report.confidenceComponents;
+export function ScorePanel({ facts }: { facts: ReportFacts }) {
   return (
     <Panel title="How the score is built">
       <ul className="space-y-3">
-        {SCORE_COMPONENTS.map((s) => {
-          const v = report.components[s.key] ?? 0;
-          return (
-            <li key={s.key}>
-              <div className="flex items-baseline justify-between gap-3 text-sm">
-                <span>
-                  {s.label}{" "}
-                  <span className="text-muted-foreground">
-                    · weight {Math.round(s.weight * 100)}%
-                  </span>
+        {facts.components.map((s) => (
+          <li key={s.key}>
+            <div className="flex items-baseline justify-between gap-3 text-sm">
+              <span>
+                {s.label}{" "}
+                <span className="text-muted-foreground">
+                  · weight {Math.round(s.weight * 100)}%
                 </span>
-                <span className="tabular text-muted-foreground">
-                  {(v * 100).toFixed(0)} / 100
-                </span>
-              </div>
-              <div className="mt-1.5 h-2 rounded-full bg-foreground/6">
-                <div
-                  className={cn(
-                    "h-full rounded-full",
-                    v < 0.5 ? "bg-clay" : "bg-grade-aa",
-                  )}
-                  style={{ width: `${v * 100}%` }}
-                />
-              </div>
-            </li>
-          );
-        })}
+              </span>
+              <span className="tabular text-muted-foreground">
+                {(s.value * 100).toFixed(0)} / 100
+              </span>
+            </div>
+            <div className="mt-1.5 h-2 rounded-full bg-foreground/6">
+              <div
+                className={cn(
+                  "h-full rounded-full",
+                  s.value < 0.5 ? "bg-clay" : "bg-grade-aa",
+                )}
+                style={{ width: `${s.value * 100}%` }}
+              />
+            </div>
+          </li>
+        ))}
       </ul>
       <div className="mt-5 rounded-2xl bg-secondary p-4 text-sm">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <span>Formula health</span>
-          <span className="tabular">{report.baseHealth.toFixed(1)}</span>
-        </div>
+        {facts.baseHealth !== null && (
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span>Formula health</span>
+            <span className="tabular">{facts.baseHealth.toFixed(1)}</span>
+          </div>
+        )}
         <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
           <span>
             Auditor adjustment (±10 max)
-            {report.scriptedAuditor && (
+            {facts.adjustmentNote && (
               <span className="text-muted-foreground">
                 {" "}
-                · scripted in prototype
+                · {facts.adjustmentNote}
               </span>
             )}
           </span>
           <span
-            className={cn("tabular", report.adjustment < 0 && "text-clay-ink")}
+            className={cn("tabular", facts.adjustment < 0 && "text-clay-ink")}
           >
-            {signed(report.adjustment)}
+            {signed(facts.adjustment)}
           </span>
         </div>
         <div className="mt-2 flex flex-wrap items-baseline justify-between gap-2 border-t border-border pt-2 font-medium">
           <span>Health</span>
-          <span className="tabular">{report.health.toFixed(1)}</span>
+          <span className="tabular">{facts.health.toFixed(1)}</span>
         </div>
-        {report.adjustmentReason && (
+        {facts.adjustmentReason && (
           <p className="mt-2 text-xs text-muted-foreground">
-            {report.adjustmentReason}
+            {facts.adjustmentReason}
           </p>
         )}
       </div>
       <div className="mt-5">
         <div className="text-sm font-medium">
-          Confidence {report.confidence.toFixed(0)}%
+          Confidence {facts.confidence.toFixed(0)}%
         </div>
         <dl className="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-          {[
-            ["Coverage", c.coverage, "40%"],
-            ["Agreement", c.agreement, "30%"],
-            ["Evidence", c.evidence, "20%"],
-            ["Recency", c.recency, "10%"],
-          ].map(([k, v, w]) => (
-            <div key={k as string} className="rounded-2xl border px-3 py-2">
+          {facts.confidenceParts.map((c) => (
+            <div key={c.key} className="rounded-2xl border px-3 py-2">
               <dt className="text-xs text-muted-foreground">
-                {k as string} · {w as string}
+                {c.label} · {Math.round(c.weight * 100)}%
               </dt>
               <dd className="tabular text-lg font-light">
-                {Math.round((v as number) * 100)}%
+                {Math.round(c.value * 100)}%
               </dd>
             </div>
           ))}
@@ -324,28 +360,22 @@ export function ScorePanel({ report }: { report: Report }) {
   );
 }
 
-function renderSummary(text: string) {
-  return text.split("\n\n").map((para, i) => (
-    <p key={i}>
-      {para.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
-        part.startsWith("**") ? (
-          <strong key={j} className="font-semibold">
-            {part.slice(2, -2)}
-          </strong>
-        ) : (
-          <span key={j}>{part}</span>
-        ),
-      )}
-    </p>
-  ));
-}
+const SUMMARY_SOURCE: Record<SummarySource, string> = {
+  auditor: "Written by the Auditor (Nemotron), with cited facts",
+  live: "Written by Nemotron from this report's numbers",
+  fallback: "Template summary from this report's numbers (no AI)",
+  scripted: "Scripted in this prototype",
+};
 
-export function ReportTab({ site }: { site: Site }) {
-  const versions = [...site.reports].reverse();
-  const [picked, setPicked] = useState<number | null>(null);
-  const report = versions.find((r) => r.version === picked) ?? versions[0];
-  const prev = site.reports.find((r) => r.version === report.version - 1);
-  const rows: [string, number, number | undefined, (v: number) => string][] = [
+type DiffRow = [
+  string,
+  number | null,
+  number | null | undefined,
+  (v: number) => string,
+];
+
+function diffRows(report: ReportFacts, prev?: ReportFacts): DiffRow[] {
+  return [
     ["Health", report.health, prev?.health, (v) => v.toFixed(1)],
     [
       "Confidence",
@@ -356,8 +386,8 @@ export function ReportTab({ site }: { site: Site }) {
     ["Value (mid, /yr)", report.valueMid, prev?.valueMid, (v) => money(v)],
     [
       "Built-up land",
-      report.landcover.built * 100,
-      prev ? prev.landcover.built * 100 : undefined,
+      report.builtShare === null ? null : report.builtShare * 100,
+      prev && prev.builtShare !== null ? prev.builtShare * 100 : undefined,
       (v) => `${v.toFixed(1)}%`,
     ],
     [
@@ -374,22 +404,28 @@ export function ReportTab({ site }: { site: Site }) {
       (v) => `$${v.toFixed(2)}`,
     ],
   ];
+}
+
+/** Report versions, newest first; the picker shows any version and what changed from the one before. */
+export function ReportTab({ versions }: { versions: ReportFacts[] }) {
+  const [picked, setPicked] = useState<string | null>(null);
+  const report = versions.find((r) => r.id === picked) ?? versions[0];
+  if (!report) return null;
+  const prev = versions.find((r) => r.version === report.version - 1);
   return (
     <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
       <Panel
         title={`Ecological Performance Report · v${report.version}`}
         action={
-          <Select
-            value={String(report.version)}
-            onValueChange={(v) => setPicked(Number(v))}
-          >
+          <Select value={report.id} onValueChange={setPicked}>
             <SelectTrigger className="w-52" aria-label="Report version">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {versions.map((r) => (
-                <SelectItem key={r.version} value={String(r.version)}>
-                  v{r.version} · {quarterLabel(r.period)} · {r.grade}
+                <SelectItem key={r.id} value={r.id}>
+                  v{r.version}
+                  {r.period ? ` · ${quarterLabel(r.period)}` : ""} · {r.grade}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -406,17 +442,26 @@ export function ReportTab({ site }: { site: Site }) {
           <span className="text-sm text-muted-foreground">
             Issued {date(report.createdAt)}
           </span>
+          {report.simulated && (
+            <span className="rounded-full bg-lilac/30 px-2.5 py-0.5 text-xs font-medium">
+              Simulated scenario
+            </span>
+          )}
         </div>
-        <div className="mt-4 max-w-prose space-y-3 text-[15px] leading-relaxed">
-          {renderSummary(report.summary)}
-        </div>
+        <MarkdownText
+          text={report.summary}
+          className="mt-4 max-w-prose space-y-3 text-[15px] leading-relaxed"
+        />
+        <p className="mt-3 text-xs text-muted-foreground">
+          {SUMMARY_SOURCE[report.summarySource]}
+        </p>
         {report.flags.length > 0 && (
           <div className="mt-5">
             <h4 className="text-sm font-medium">Data and method flags</h4>
             <ul className="mt-2 space-y-1.5">
-              {report.flags.map((f) => (
+              {report.flags.map((f, i) => (
                 <li
-                  key={f.code}
+                  key={`${f.code}-${i}`}
                   className="flex gap-2 text-sm text-muted-foreground"
                 >
                   <Flag
@@ -433,7 +478,7 @@ export function ReportTab({ site }: { site: Site }) {
           <div className="mt-5">
             <h4 className="text-sm font-medium">
               Auditor cited
-              {report.scriptedAuditor ? " (scripted in this prototype)" : ""}
+              {report.citationsNote ? ` (${report.citationsNote})` : ""}
             </h4>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {report.citations.map((c) => (
@@ -470,13 +515,18 @@ export function ReportTab({ site }: { site: Site }) {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {rows.map(([label, now, before, f]) => {
-                  const diff = before === undefined ? 0 : now - before;
+                {diffRows(report, prev).map(([label, now, before, f]) => {
+                  const diff =
+                    now === null || before === null || before === undefined
+                      ? 0
+                      : now - before;
                   return (
                     <tr key={label}>
                       <td className="py-2">{label}</td>
                       <td className="tabular py-2 text-right text-muted-foreground">
-                        {before === undefined ? "—" : f(before)}
+                        {before === null || before === undefined
+                          ? "—"
+                          : f(before)}
                       </td>
                       <td className="tabular py-2 text-right">
                         <span className="inline-flex items-center gap-1">
@@ -492,7 +542,7 @@ export function ReportTab({ site }: { site: Site }) {
                                 aria-label="down"
                               />
                             ))}
-                          {f(now)}
+                          {now === null ? "—" : f(now)}
                         </span>
                       </td>
                     </tr>
@@ -503,28 +553,60 @@ export function ReportTab({ site }: { site: Site }) {
           )}
         </Panel>
         <Panel title="Stewardship actions">
-          <ul className="space-y-2.5 text-sm">
-            {report.recommendations.map((r) => (
-              <li key={r} className="flex gap-2.5">
-                <Check
-                  className="mt-0.5 size-4 shrink-0 text-lime-ink"
-                  aria-hidden="true"
-                />
-                {r}
-              </li>
-            ))}
-          </ul>
+          {report.recommendations.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No actions were recommended in this report.
+            </p>
+          ) : (
+            <ul className="space-y-2.5 text-sm">
+              {report.recommendations.map((r) => (
+                <li key={r} className="flex gap-2.5">
+                  <Check
+                    className="mt-0.5 size-4 shrink-0 text-lime-ink"
+                    aria-hidden="true"
+                  />
+                  {r}
+                </li>
+              ))}
+            </ul>
+          )}
         </Panel>
       </div>
     </div>
   );
 }
 
+export type NewsItem = {
+  id: string;
+  title: string;
+  summary: string | null;
+  date: string;
+  direction: number | null;
+  severity: number | null;
+  kind: string | null;
+  sourceLabel: string;
+  url?: string | null;
+  /** Illustrative prototype content, tagged "Sample". */
+  sample?: boolean;
+};
+
+function safeHref(url: string | null | undefined) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:"
+      ? parsed.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export function NewsList({
   events,
   empty,
 }: {
-  events: NewsEvent[];
+  events: NewsItem[];
   empty?: string;
 }) {
   if (events.length === 0)
@@ -535,104 +617,136 @@ export function NewsList({
     );
   return (
     <ul className="divide-y">
-      {[...events].reverse().map((e) => (
-        <li key={e.id} className="flex gap-4 py-4 first:pt-0 last:pb-0">
-          <span
-            className={cn(
-              "grid size-9 shrink-0 place-items-center rounded-2xl",
-              e.direction < 0
-                ? "bg-clay/15 text-clay-ink"
-                : "bg-lime/30 text-lime-ink",
-            )}
-            aria-hidden="true"
-          >
-            {e.direction < 0 ? (
-              <ArrowDownRight className="size-4" />
-            ) : (
-              <ArrowUpRight className="size-4" />
-            )}
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{e.title}</span>
-              <SampleTag />
+      {events.map((e) => {
+        const href = safeHref(e.url);
+        const negative = (e.direction ?? 0) < 0;
+        return (
+          <li key={e.id} className="flex gap-4 py-4 first:pt-0 last:pb-0">
+            <span
+              className={cn(
+                "grid size-9 shrink-0 place-items-center rounded-2xl",
+                negative
+                  ? "bg-clay/15 text-clay-ink"
+                  : "bg-lime/30 text-lime-ink",
+              )}
+              aria-hidden="true"
+            >
+              {negative ? (
+                <ArrowDownRight className="size-4" />
+              ) : (
+                <ArrowUpRight className="size-4" />
+              )}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium break-words">{e.title}</span>
+                {e.sample && <SampleTag />}
+              </div>
+              {e.summary && (
+                <p className="mt-1 text-sm break-words text-muted-foreground">
+                  {e.summary}
+                </p>
+              )}
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <span>{date(e.date)}</span>
+                {e.kind && (
+                  <span className="capitalize">
+                    {e.kind.replaceAll("_", " ")}
+                  </span>
+                )}
+                <span>
+                  {negative
+                    ? "Negative"
+                    : (e.direction ?? 0) > 0
+                      ? "Positive"
+                      : "Neutral"}
+                  {e.severity !== null && ` · severity ${e.severity} of 5`}
+                </span>
+                <span>{e.sourceLabel}</span>
+                {href && (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className="inline-flex items-center gap-0.5 underline underline-offset-2 hover:text-foreground"
+                  >
+                    Source
+                    <ExternalLink className="size-3" aria-hidden="true" />
+                    <span className="sr-only"> (opens in a new tab)</span>
+                  </a>
+                )}
+              </div>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">{e.summary}</p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <span>{date(e.date)}</span>
-              <span className="capitalize">{e.kind}</span>
-              <span>
-                {e.direction < 0
-                  ? "Negative"
-                  : e.direction > 0
-                    ? "Positive"
-                    : "Neutral"}{" "}
-                · severity {e.severity} of 5
-              </span>
-              <span>
-                {e.source === "time_machine"
-                  ? "Injected by Time Machine"
-                  : "Found by News Scout"}
-              </span>
-            </div>
-          </div>
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
-export function LedgerTab({ site }: { site: Site }) {
-  const { world, act } = usePrototype();
-  const chain = world.ledger[site.id] ?? [];
-  const [result, setResult] = useState<VerifyResult | null>(null);
-  const tamperedAt = world.tampered[site.id];
+export type LedgerRow = {
+  seq: number;
+  kind: string;
+  date: string;
+  hash: string;
+  payload: Record<string, unknown>;
+};
+
+export type LedgerCheck = {
+  valid: boolean;
+  entries: number;
+  brokenAt: number | null;
+  /** Where the hashes were recomputed, or why the chain can't be trusted. */
+  note: string;
+};
+
+function payloadText(payload: Record<string, unknown>) {
+  return Object.entries(payload)
+    .map(
+      ([k, v]) =>
+        `${k}: ${typeof v === "object" && v !== null ? JSON.stringify(v) : String(v)}`,
+    )
+    .join(" · ");
+}
+
+/** The Nature Ledger: entries newest first, the verify result and the caller's actions. */
+export function LedgerPanel({
+  entries,
+  check,
+  actions,
+  tamperedAt,
+  empty = "No ledger entries yet.",
+}: {
+  entries: LedgerRow[];
+  check: LedgerCheck | null;
+  actions: React.ReactNode;
+  tamperedAt?: number;
+  empty?: string;
+}) {
   return (
-    <div className="space-y-6">
-      <section className="rounded-3xl bg-machine p-6 text-machine-ink shadow-soft">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-xl">
-            <h3 className="font-serif text-3xl">Nature Ledger</h3>
-            <p className="mt-1 text-sm text-machine-muted">
-              Append-only and hash-chained. Each entry stores sha256 of its
-              content, kind, sequence number and the previous entry&apos;s hash,
-              so changing any old entry breaks every link after it. No tokens,
-              no trading: it&apos;s a public record.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              className="bg-lime text-machine hover:bg-lime/90"
-              onClick={() => setResult(verify(chain))}
-              data-tour="ledger-verify"
-            >
-              <ShieldCheck aria-hidden="true" />
-              Verify chain
-            </Button>
-            <Button
-              variant="outline"
-              className="border-machine-line bg-transparent text-machine-ink hover:bg-machine-raised hover:text-machine-ink"
-              onClick={() => {
-                act((w) => tamperLedger(w, site.id));
-                setResult(null);
-              }}
-              disabled={tamperedAt !== undefined}
-              data-tour="ledger-tamper"
-            >
-              <AlertTriangle aria-hidden="true" />
-              Tamper demo
-            </Button>
-          </div>
+    <section className="rounded-3xl bg-machine p-6 text-machine-ink shadow-soft">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-xl">
+          <h3 className="font-serif text-3xl">Nature Ledger</h3>
+          <p className="mt-1 text-sm text-machine-muted">
+            Append-only and hash-chained. Each entry stores sha256 of its
+            content, kind, sequence number and the previous entry&apos;s hash,
+            so changing any old entry breaks every link after it. No tokens, no
+            trading: it&apos;s a public record.
+          </p>
         </div>
-        {result && (
+        <div className="flex flex-wrap gap-2">{actions}</div>
+      </div>
+      <div aria-live="polite">
+        {check && (
           <div
             role="status"
             className={cn(
               "nx-rise mt-5 flex items-start gap-3 rounded-2xl p-4",
-              result.valid ? "bg-lime/15" : "bg-clay/25",
+              check.valid ? "bg-lime/15" : "bg-clay/25",
             )}
           >
-            {result.valid ? (
+            {check.valid ? (
               <ShieldCheck
                 className="mt-0.5 size-5 text-lime"
                 aria-hidden="true"
@@ -642,20 +756,24 @@ export function LedgerTab({ site }: { site: Site }) {
             )}
             <div className="text-sm">
               <div className="font-medium">
-                {result.valid
-                  ? `Chain intact: all ${result.entries} entries verified.`
-                  : `Tampering detected at entry #${result.brokenAt}.`}
+                {check.valid
+                  ? check.entries === 1
+                    ? "Chain intact: its 1 entry verified."
+                    : `Chain intact: all ${check.entries} entries verified.`
+                  : check.brokenAt !== null
+                    ? `Tampering detected at entry #${check.brokenAt}.`
+                    : "The chain doesn't verify."}
               </div>
-              <div className="text-machine-muted">
-                {result.valid
-                  ? "Every hash was recomputed in your browser and matches."
-                  : `${result.reason} This entry and every entry after it can't be trusted.`}
-              </div>
+              <div className="text-machine-muted">{check.note}</div>
             </div>
           </div>
         )}
+      </div>
+      {entries.length === 0 ? (
+        <p className="mt-5 text-sm text-machine-muted">{empty}</p>
+      ) : (
         <ol className="mt-5 space-y-2">
-          {[...chain].reverse().map((e) => (
+          {[...entries].reverse().map((e) => (
             <li
               key={e.seq}
               className={cn(
@@ -668,7 +786,7 @@ export function LedgerTab({ site }: { site: Site }) {
                   #{e.seq}
                 </span>
                 <span className="font-medium capitalize">
-                  {e.kind.replace("_", " ")}
+                  {e.kind.replaceAll("_", " ")}
                 </span>
                 <span className="text-xs text-machine-muted">
                   {date(e.date)}
@@ -686,17 +804,74 @@ export function LedgerTab({ site }: { site: Site }) {
                 </span>
               </div>
               <div className="mt-1.5 font-mono text-[11px] break-all text-machine-muted">
-                {Object.entries(e.payload)
-                  .map(
-                    ([k, v]) =>
-                      `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`,
-                  )
-                  .join(" · ")}
+                {payloadText(e.payload)}
               </div>
             </li>
           ))}
         </ol>
-      </section>
+      )}
+    </section>
+  );
+}
+
+export const LEDGER_PRIMARY = "bg-lime text-machine hover:bg-lime/90";
+export const LEDGER_OUTLINE =
+  "border-machine-line bg-transparent text-machine-ink hover:bg-machine-raised hover:text-machine-ink";
+
+function prototypeCheck(result: VerifyResult): LedgerCheck {
+  return result.valid
+    ? {
+        valid: true,
+        entries: result.entries,
+        brokenAt: null,
+        note: "Every hash was recomputed in your browser and matches.",
+      }
+    : {
+        valid: false,
+        entries: result.entries,
+        brokenAt: result.brokenAt,
+        note: `${result.reason} This entry and every entry after it can't be trusted.`,
+      };
+}
+
+/** The prototype's ledger, verified in the browser, with the tamper demo. */
+export function LedgerTab({ site }: { site: Site }) {
+  const { world, act } = usePrototype();
+  const chain = world.ledger[site.id] ?? [];
+  const [result, setResult] = useState<VerifyResult | null>(null);
+  const tamperedAt = world.tampered[site.id];
+  return (
+    <div className="space-y-6">
+      <LedgerPanel
+        entries={chain}
+        check={result && prototypeCheck(result)}
+        tamperedAt={tamperedAt}
+        actions={
+          <>
+            <Button
+              className={LEDGER_PRIMARY}
+              onClick={() => setResult(verify(chain))}
+              data-tour="ledger-verify"
+            >
+              <ShieldCheck aria-hidden="true" />
+              Verify chain
+            </Button>
+            <Button
+              variant="outline"
+              className={LEDGER_OUTLINE}
+              onClick={() => {
+                act((w) => tamperLedger(w, site.id));
+                setResult(null);
+              }}
+              disabled={tamperedAt !== undefined}
+              data-tour="ledger-tamper"
+            >
+              <AlertTriangle aria-hidden="true" />
+              Tamper demo
+            </Button>
+          </>
+        }
+      />
     </div>
   );
 }
