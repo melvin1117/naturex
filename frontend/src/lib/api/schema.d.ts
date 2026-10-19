@@ -177,6 +177,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/communities/{community_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Summary
+         * @description The Steward home (T63; the community's members and same-world admins): its listings with
+         *     their status and next action, the community wallet (IPO proceeds and community-fund
+         *     payouts), the treasury's retained-stake dividends, holders (counted and ranked, never
+         *     named), recent quarterly payouts and the latest reports' stewardship recommendations.
+         *     Every number comes from stored rows (`app.services.community_summary`). Play money.
+         */
+        get: operations["summary_communities__community_id__summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/communities": {
         parameters: {
             query?: never;
@@ -1282,6 +1306,31 @@ export interface components {
          */
         CommunityRole: "owner" | "steward";
         /**
+         * CommunitySummaryOut
+         * @description The Steward home (T63): members and same-world admins only. Play money; holders are
+         *     counted and ranked without names or account IDs.
+         */
+        CommunitySummaryOut: {
+            community: components["schemas"]["CommunityOut"];
+            /** @description The caller's role; null for an admin. */
+            role: components["schemas"]["CommunityRole"] | null;
+            /** Listings */
+            listings: components["schemas"]["ListingSummaryOut"][];
+            wallet: components["schemas"]["WalletOut"];
+            /**
+             * Holder Count
+             * @description Distinct investors holding any of its listings.
+             */
+            holder_count: number;
+            /**
+             * Payouts
+             * @description The latest quarterly payouts, newest first.
+             */
+            payouts: components["schemas"]["PayoutSummaryOut"][];
+            /** Payouts Count */
+            payouts_count: number;
+        };
+        /**
          * CommunityUpdate
          * @description Only the fields sent change; `null` clears `country` or `description`.
          */
@@ -1365,6 +1414,18 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HoldersOut */
+        HoldersOut: {
+            /** Count */
+            count: number;
+            /**
+             * Shares Held
+             * @description Shares investors hold; the retained stake excluded.
+             */
+            shares_held: number;
+            /** Top */
+            top: components["schemas"]["TopHolderOut"][];
         };
         /** HoldingOut */
         HoldingOut: {
@@ -1630,6 +1691,25 @@ export interface components {
             /** Color */
             color: string;
         };
+        /** ListingSummaryOut */
+        ListingSummaryOut: {
+            asset: components["schemas"]["AssetCard"];
+            /** @description continue_listing (draft), rating_in_progress, add_evidence (needs_evidence), launch_ipo (listed, not launched; owner), awaiting_ipo (the same for stewards and admins), view_on_exchange (trading or suspended), none (ineligible, withdrawn). */
+            next_action: components["schemas"]["NextAction"];
+            /** Ipo At */
+            ipo_at: string | null;
+            wallet: components["schemas"]["WalletOut"];
+            holders: components["schemas"]["HoldersOut"];
+            /** @description None before the IPO: no shares exist yet. */
+            shares: components["schemas"]["SharesOut"] | null;
+            /**
+             * Recommendations
+             * @description The Auditor's stewardship recommendations from the latest report.
+             */
+            recommendations: string[];
+            /** Report Version */
+            report_version: number | null;
+        };
         /** LoginIn */
         LoginIn: {
             /** Email */
@@ -1701,6 +1781,12 @@ export interface components {
             /** Cloud Free Obs */
             cloud_free_obs: number;
         };
+        /**
+         * NextAction
+         * @description What the Steward home offers to do next with a listing.
+         * @enum {string}
+         */
+        NextAction: "continue_listing" | "rating_in_progress" | "add_evidence" | "launch_ipo" | "awaiting_ipo" | "view_on_exchange" | "none";
         /** OrderCreate */
         OrderCreate: {
             /**
@@ -1827,6 +1913,39 @@ export interface components {
             legend: components["schemas"]["LegendEntry"][];
             /** Attributions */
             attributions: string[];
+        };
+        /** PayoutSummaryOut */
+        PayoutSummaryOut: {
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /** Asset Name */
+            asset_name: string;
+            /** Quarter Label */
+            quarter_label: string;
+            /** Revenue */
+            revenue: string;
+            /**
+             * Community Fund
+             * @description Credited to the community wallet.
+             */
+            community_fund: string;
+            /** Dividends Total */
+            dividends_total: string;
+            /**
+             * Retained Dividend
+             * @description The treasury's share of the dividends.
+             */
+            retained_dividend: string;
+            /** Holder Count */
+            holder_count: number;
+            /**
+             * Paid At
+             * Format: date-time
+             */
+            paid_at: string;
         };
         /** PersonaOut */
         PersonaOut: {
@@ -2194,6 +2313,18 @@ export interface components {
          * @enum {string}
          */
         ReportSummarySource: "live" | "fallback" | "auditor";
+        /** SharesOut */
+        SharesOut: {
+            /** Shares Offered */
+            shares_offered: number;
+            /**
+             * Shares Sold
+             * @description Bought from the IPO float so far.
+             */
+            shares_sold: number;
+            /** Retained Shares */
+            retained_shares: number;
+        };
         /** SimulateEventRequest */
         SimulateEventRequest: {
             /**
@@ -2340,6 +2471,21 @@ export interface components {
             /** Attributions */
             attributions: string[];
         };
+        /**
+         * TopHolderOut
+         * @description An investor ranked by shares, without a name or account ID.
+         */
+        TopHolderOut: {
+            /** Rank */
+            rank: number;
+            /** Shares */
+            shares: number;
+            /**
+             * Pct Of Shares
+             * @description Of the listing's total shares, 2 dp.
+             */
+            pct_of_shares: string;
+        };
         /** TraceOut */
         TraceOut: {
             /** Asset Id */
@@ -2403,6 +2549,33 @@ export interface components {
             max: number;
             /** Gamma */
             gamma: number;
+        };
+        /**
+         * WalletOut
+         * @description Play money. `balance` is the community wallet (`community_wallet`) and equals
+         *     `ipo_proceeds + community_fund_payouts`; `retained_dividends` went to the treasury for its
+         *     retained stake. `total_received` is all three: the wallet plus those dividends.
+         */
+        WalletOut: {
+            /** Balance */
+            balance: string;
+            /**
+             * Ipo Proceeds
+             * @description Σ primary-float purchases (qty × IPO-float price).
+             */
+            ipo_proceeds: string;
+            /**
+             * Community Fund Payouts
+             * @description Σ `community_wallet_credit` of the quarterly payouts.
+             */
+            community_fund_payouts: string;
+            /**
+             * Retained Dividends
+             * @description Dividends paid to the treasury for its retained stake.
+             */
+            retained_dividends: string;
+            /** Total Received */
+            total_received: string;
         };
         /** WorldAssetOut */
         WorldAssetOut: {
@@ -2879,6 +3052,58 @@ export interface operations {
             };
             /** @description owner_cannot_be_removed */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    summary_communities__community_id__summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                community_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunitySummaryOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A reason code, e.g. owner_only or members_only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the caller's world */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

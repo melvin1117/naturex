@@ -475,6 +475,59 @@
         }
       }
     },
+    "/communities/{community_id}/summary": {
+      "get": {
+        "tags": [
+          "communities"
+        ],
+        "summary": "Summary",
+        "description": "The Steward home (T63; the community's members and same-world admins): its listings with\ntheir status and next action, the community wallet (IPO proceeds and community-fund\npayouts), the treasury's retained-stake dividends, holders (counted and ranked, never\nnamed), recent quarterly payouts and the latest reports' stewardship recommendations.\nEvery number comes from stored rows (`app.services.community_summary`). Play money.",
+        "operationId": "summary_communities__community_id__summary_get",
+        "parameters": [
+          {
+            "name": "community_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Community Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunitySummaryOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "A reason code, e.g. owner_only or members_only"
+          },
+          "404": {
+            "description": "Not found in the caller's world"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/communities": {
       "get": {
         "tags": [
@@ -3253,6 +3306,63 @@
         "title": "CommunityRole",
         "description": "ADR-0005 \u00a73: community roles come from membership, not from `users.role`."
       },
+      "CommunitySummaryOut": {
+        "properties": {
+          "community": {
+            "$ref": "#/components/schemas/CommunityOut"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CommunityRole"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The caller's role; null for an admin."
+          },
+          "listings": {
+            "items": {
+              "$ref": "#/components/schemas/ListingSummaryOut"
+            },
+            "type": "array",
+            "title": "Listings"
+          },
+          "wallet": {
+            "$ref": "#/components/schemas/WalletOut"
+          },
+          "holder_count": {
+            "type": "integer",
+            "title": "Holder Count",
+            "description": "Distinct investors holding any of its listings."
+          },
+          "payouts": {
+            "items": {
+              "$ref": "#/components/schemas/PayoutSummaryOut"
+            },
+            "type": "array",
+            "title": "Payouts",
+            "description": "The latest quarterly payouts, newest first."
+          },
+          "payouts_count": {
+            "type": "integer",
+            "title": "Payouts Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "community",
+          "role",
+          "listings",
+          "wallet",
+          "holder_count",
+          "payouts",
+          "payouts_count"
+        ],
+        "title": "CommunitySummaryOut",
+        "description": "The Steward home (T63): members and same-world admins only. Play money; holders are\ncounted and ranked without names or account IDs."
+      },
       "CommunityUpdate": {
         "properties": {
           "name": {
@@ -3516,6 +3626,33 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HoldersOut": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "shares_held": {
+            "type": "integer",
+            "title": "Shares Held",
+            "description": "Shares investors hold; the retained stake excluded."
+          },
+          "top": {
+            "items": {
+              "$ref": "#/components/schemas/TopHolderOut"
+            },
+            "type": "array",
+            "title": "Top"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "shares_held",
+          "top"
+        ],
+        "title": "HoldersOut"
       },
       "HoldingOut": {
         "properties": {
@@ -4075,6 +4212,77 @@
         ],
         "title": "LegendEntry"
       },
+      "ListingSummaryOut": {
+        "properties": {
+          "asset": {
+            "$ref": "#/components/schemas/AssetCard"
+          },
+          "next_action": {
+            "$ref": "#/components/schemas/NextAction",
+            "description": "continue_listing (draft), rating_in_progress, add_evidence (needs_evidence), launch_ipo (listed, not launched; owner), awaiting_ipo (the same for stewards and admins), view_on_exchange (trading or suspended), none (ineligible, withdrawn)."
+          },
+          "ipo_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipo At"
+          },
+          "wallet": {
+            "$ref": "#/components/schemas/WalletOut"
+          },
+          "holders": {
+            "$ref": "#/components/schemas/HoldersOut"
+          },
+          "shares": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SharesOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "None before the IPO: no shares exist yet."
+          },
+          "recommendations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Recommendations",
+            "description": "The Auditor's stewardship recommendations from the latest report."
+          },
+          "report_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset",
+          "next_action",
+          "ipo_at",
+          "wallet",
+          "holders",
+          "shares",
+          "recommendations",
+          "report_version"
+        ],
+        "title": "ListingSummaryOut"
+      },
       "LoginIn": {
         "properties": {
           "email": {
@@ -4223,6 +4431,20 @@
         ],
         "title": "NdviPoint",
         "description": "One month of cloud-masked Sentinel-2 NDVI (monthly median); also served on reports."
+      },
+      "NextAction": {
+        "type": "string",
+        "enum": [
+          "continue_listing",
+          "rating_in_progress",
+          "add_evidence",
+          "launch_ipo",
+          "awaiting_ipo",
+          "view_on_exchange",
+          "none"
+        ],
+        "title": "NextAction",
+        "description": "What the Steward home offers to do next with a listing."
       },
       "OrderCreate": {
         "properties": {
@@ -4487,6 +4709,67 @@
         ],
         "title": "OverlayImage",
         "description": "Leaflet ``ImageOverlay`` input: the PNG spans ``bounds`` in Web Mercator."
+      },
+      "PayoutSummaryOut": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "asset_name": {
+            "type": "string",
+            "title": "Asset Name"
+          },
+          "quarter_label": {
+            "type": "string",
+            "title": "Quarter Label"
+          },
+          "revenue": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Revenue"
+          },
+          "community_fund": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Community Fund",
+            "description": "Credited to the community wallet."
+          },
+          "dividends_total": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Dividends Total"
+          },
+          "retained_dividend": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Retained Dividend",
+            "description": "The treasury's share of the dividends."
+          },
+          "holder_count": {
+            "type": "integer",
+            "title": "Holder Count"
+          },
+          "paid_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Paid At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "asset_name",
+          "quarter_label",
+          "revenue",
+          "community_fund",
+          "dividends_total",
+          "retained_dividend",
+          "holder_count",
+          "paid_at"
+        ],
+        "title": "PayoutSummaryOut"
       },
       "PersonaOut": {
         "properties": {
@@ -5389,6 +5672,30 @@
         ],
         "title": "ReportSummarySource"
       },
+      "SharesOut": {
+        "properties": {
+          "shares_offered": {
+            "type": "integer",
+            "title": "Shares Offered"
+          },
+          "shares_sold": {
+            "type": "integer",
+            "title": "Shares Sold",
+            "description": "Bought from the IPO float so far."
+          },
+          "retained_shares": {
+            "type": "integer",
+            "title": "Retained Shares"
+          }
+        },
+        "type": "object",
+        "required": [
+          "shares_offered",
+          "shares_sold",
+          "retained_shares"
+        ],
+        "title": "SharesOut"
+      },
       "SimulateEventRequest": {
         "properties": {
           "asset_id": {
@@ -5723,6 +6030,32 @@
         ],
         "title": "ThumbnailImage"
       },
+      "TopHolderOut": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "shares": {
+            "type": "integer",
+            "title": "Shares"
+          },
+          "pct_of_shares": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Pct Of Shares",
+            "description": "Of the listing's total shares, 2 dp."
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "shares",
+          "pct_of_shares"
+        ],
+        "title": "TopHolderOut",
+        "description": "An investor ranked by shares, without a name or account ID."
+      },
       "TraceOut": {
         "properties": {
           "asset_id": {
@@ -5889,6 +6222,48 @@
           "gamma"
         ],
         "title": "VisParams"
+      },
+      "WalletOut": {
+        "properties": {
+          "balance": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Balance"
+          },
+          "ipo_proceeds": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ipo Proceeds",
+            "description": "\u03a3 primary-float purchases (qty \u00d7 IPO-float price)."
+          },
+          "community_fund_payouts": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Community Fund Payouts",
+            "description": "\u03a3 `community_wallet_credit` of the quarterly payouts."
+          },
+          "retained_dividends": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Retained Dividends",
+            "description": "Dividends paid to the treasury for its retained stake."
+          },
+          "total_received": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Received"
+          }
+        },
+        "type": "object",
+        "required": [
+          "balance",
+          "ipo_proceeds",
+          "community_fund_payouts",
+          "retained_dividends",
+          "total_received"
+        ],
+        "title": "WalletOut",
+        "description": "Play money. `balance` is the community wallet (`community_wallet`) and equals\n`ipo_proceeds + community_fund_payouts`; `retained_dividends` went to the treasury for its\nretained stake. `total_received` is all three: the wallet plus those dividends."
       },
       "WorldAssetOut": {
         "properties": {
