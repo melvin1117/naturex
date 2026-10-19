@@ -24,12 +24,13 @@ from app.models import Asset, Report
 from app.routers import reports as reports_router
 from app.sandbox import create_world
 from app.schemas import ReportSummarySource
-from app.seed import DEMO_SITES, WORLD_ID, seed
+from app.seed import DEMO_SITES, LIVE_WORLD_ID, WORLD_ID, seed
 from app.services.rating import latest_report, rate_asset
 from app.tools.earth_obs import load_site_metrics
 from tests.conftest import alembic_cfg, requires_db
 from tests.test_summary import FakeTransport, MemoryCallLog, reply
 from tests.test_summary import settings as summary_settings
+from tests.worlds import start_demo
 
 HERO = "wetland_mx"
 D = Decimal
@@ -57,12 +58,14 @@ def client(session: Session) -> Iterator[TestClient]:
     app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None, use_mocks=True)
     clear_summary_cache()
     with TestClient(app) as test_client:
+        start_demo(test_client, session)
         yield test_client
     app.dependency_overrides.clear()
     clear_summary_cache()
 
 
 def _world(client: TestClient) -> dict[str, Any]:
+    """The client's demo sandbox and its contents."""
     res = client.get("/world")
     assert res.status_code == 200
     body: dict[str, Any] = res.json()
@@ -262,13 +265,17 @@ def test_reports_and_assets_of_other_worlds_are_not_found(
 
 
 @requires_db
-def test_world_scoped_routes_need_a_world(client: TestClient, session: Session) -> None:
+def test_anonymous_reads_see_the_live_world_only(client: TestClient, session: Session) -> None:
     report = latest_report(session, WORLD_ID, _world_asset(session, WORLD_ID).id)
     assert report is not None
+    anonymous = TestClient(app)
 
-    for path in ("/assets", f"/assets/{report.asset_id}", f"/reports/{report.id}"):
-        res = client.get(path)
-        assert (res.status_code, res.json()["detail"]) == (401, "world_required"), path
+    for path in (f"/assets/{report.asset_id}", f"/reports/{report.id}"):
+        assert anonymous.get(path).status_code == 404, path
+    listed = anonymous.get("/assets")
+    assert listed.status_code == 200
+    live = {a.id for a in session.exec(select(Asset).where(Asset.world_id == LIVE_WORLD_ID))}
+    assert {UUID(card["id"]) for card in listed.json()} == live
 
 
 @requires_db
@@ -287,6 +294,7 @@ def test_two_worlds_share_one_live_summary_per_report(
     first_world = _world(client)
     first = client.get(f"/assets/{_asset_id(first_world)}").json()["latest_report"]
     client.cookies.clear()
+    start_demo(client, session)
     second_world = _world(client)
     second = client.get(f"/assets/{_asset_id(second_world)}").json()["latest_report"]
 
@@ -302,13 +310,13 @@ def test_simulate_event_is_scoped_to_the_callers_world(
 ) -> None:
     template_asset = _world_asset(session, WORLD_ID)
     body = {"asset_id": str(template_asset.id), "preset": "encroachment"}
-    no_world = client.post("/admin/simulate/event", json=body)
+    no_world = TestClient(app).post("/admin/simulate/event", json=body)
     world = _world(client)
     other_asset = _world_asset(session, create_world(session).id)
 
     own = client.post("/admin/simulate/event", json={**body, "asset_id": _asset_id(world)})
 
-    assert (no_world.status_code, no_world.json()["detail"]) == (401, "world_required")
+    assert (no_world.status_code, no_world.json()["detail"]) == (401, "auth_required")
     assert own.status_code == 200
     assert own.json()["event"]["asset_id"] == _asset_id(world)
     for asset_id in (template_asset.id, other_asset.id):

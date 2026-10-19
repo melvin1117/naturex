@@ -40,12 +40,13 @@ from app.models import (
 from app.sandbox import (
     create_world,
     ensure_live_world,
+    is_sandbox,
     prune_stale_worlds,
     reset_world,
-    world_from_cookie,
 )
 from app.seed import COMMUNITY_PERSONA, DEMO_SITES, LIVE_WORLD_ID, WORLD_ID, seed
 from tests.conftest import alembic_cfg, requires_db
+from tests.worlds import start_demo
 
 PASSWORD = "correct horse battery"
 EMAIL = "rosa.ok@example.org"
@@ -509,10 +510,16 @@ def test_live_world_is_never_pruned_reset_or_served_as_a_sandbox(
 
     with pytest.raises(ValueError):
         reset_world(session, LIVE_WORLD_ID)
-    assert world_from_cookie(session, str(LIVE_WORLD_ID)) is None
-    client.cookies.set("nx_world", str(LIVE_WORLD_ID))
-    served = client.get("/world").json()
-    assert UUID(served["id"]) not in {LIVE_WORLD_ID, WORLD_ID}
+    assert not is_sandbox(live)
+    # A demo session bound to the live world (never issued; T55 binds them to sandboxes) is
+    # refused rather than served or allowed to reset it.
+    owner = session.exec(
+        select(User).where(User.world_id == LIVE_WORLD_ID, User.kind == UserKind.PERSONA)
+    ).first()
+    assert owner is not None
+    client.cookies.set(auth.SESSION_COOKIE, auth.start_session(session, owner, SessionKind.DEMO))
+    assert client.get("/world").status_code == 401
+    assert client.post("/world/reset").status_code == 401
 
 
 @requires_db
@@ -522,12 +529,19 @@ def test_world_listing_never_includes_password_accounts(
     world = create_world(session)
     session.add(_person(world.id, "hidden@example.org"))
     session.commit()
-    client.cookies.set("nx_world", str(world.id))
+    start_demo(client, session, world)
 
     personas = client.get("/world").json()["personas"]
 
     assert "hidden@example.org" not in str(personas)
     assert len(personas) == 4
+
+    client.cookies.clear()
+    assert register(client).status_code == 201
+    live = client.get("/world").json()
+    assert UUID(live["id"]) == LIVE_WORLD_ID
+    assert EMAIL not in str(live["personas"])
+    assert live["me"]["email"] == EMAIL
 
 
 @requires_db

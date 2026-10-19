@@ -23,9 +23,10 @@ from app.config import get_settings
 from app.db import engine, get_session
 from app.main import app
 from app.models import World, WorldEvent
-from app.sandbox import COOKIE_NAME, create_world, prune_stale_worlds
+from app.sandbox import create_world, ensure_live_world, prune_stale_worlds
 from app.seed import seed
 from tests.conftest import alembic_cfg, requires_db
+from tests.worlds import start_demo
 
 
 @pytest.fixture
@@ -52,10 +53,6 @@ def client(session: Session, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestCl
     monkeypatch.setattr(events, "session_scope", same_session_scope)
     yield TestClient(app)
     app.dependency_overrides.clear()
-
-
-def set_world_cookie(client: TestClient, world_id: UUID) -> None:
-    client.cookies.set(COOKIE_NAME, str(world_id))
 
 
 def migrate() -> None:
@@ -144,10 +141,16 @@ def test_same_world_publish_ids_follow_commit_order() -> None:
 
 
 @requires_db
-def test_polling_endpoint_requires_an_existing_world_cookie(client: TestClient) -> None:
+def test_anonymous_polling_reads_the_live_world_only(session: Session, client: TestClient) -> None:
+    live = ensure_live_world(session)
+    live_event = events.publish(session, live.id, "alert", {"message": "live"})
+    events.publish(session, create_world(session).id, "alert", {"message": "sandbox"})
+    session.flush()
+
     res = client.get("/events")
 
-    assert (res.status_code, res.json()["detail"]) == (401, "world_required")
+    assert res.status_code == 200
+    assert [event["id"] for event in res.json()] == [live_event.id]
 
 
 @requires_db
@@ -158,7 +161,7 @@ def test_polling_endpoint_returns_world_events_after_since_id(
     first = events.publish(session, world.id, "rating_progress", {"step": "earth_obs"})
     second = events.publish(session, world.id, "alert", {"message": "Watchlist changed"})
     session.flush()
-    set_world_cookie(client, world.id)
+    start_demo(client, session, world)
 
     res = client.get("/events", params={"since_id": first.id})
 
@@ -175,7 +178,7 @@ def test_polling_endpoint_keeps_since_datetime_backward_compatible(
     world = create_world(session)
     event = events.publish(session, world.id, "rating_progress", {"step": "done"})
     session.flush()
-    set_world_cookie(client, world.id)
+    start_demo(client, session, world)
 
     future = datetime.now(UTC) + timedelta(seconds=1)
     res = client.get("/events", params={"since": future.isoformat()})
@@ -193,7 +196,7 @@ def test_sse_stream_replays_from_last_event_id(
     first = events.publish(session, world.id, "rating_progress", {"step": "earth_obs"})
     second = events.publish(session, world.id, "price_tick", {"price": "8.00"})
     session.flush()
-    set_world_cookie(client, world.id)
+    start_demo(client, session, world)
     monkeypatch.setattr(events, "STREAM_MAX_SECONDS", 0.03)
     monkeypatch.setattr(events, "STREAM_POLL_INTERVAL_SECONDS", 0.01)
 
@@ -213,7 +216,7 @@ def test_sse_stream_emits_heartbeats_when_idle(
     session: Session, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     world = create_world(session)
-    set_world_cookie(client, world.id)
+    start_demo(client, session, world)
     monkeypatch.setattr(events, "STREAM_MAX_SECONDS", 0.03)
     monkeypatch.setattr(events, "STREAM_POLL_INTERVAL_SECONDS", 0.01)
     monkeypatch.setattr(events, "HEARTBEAT_INTERVAL_SECONDS", 0.0)
@@ -298,8 +301,11 @@ def test_sse_stream_never_replays_another_worlds_event_after_last_event_id(
     monkeypatch.setattr(events, "HEARTBEAT_INTERVAL_SECONDS", 0.0)
     mine = TestClient(app)
     other = TestClient(app)
-    mine_world = UUID(mine.get("/world").json()["id"])
-    other_world = UUID(other.get("/world").json()["id"])
+    with Session(engine) as setup:
+        seed(setup)
+        mine_world = start_demo(mine, setup).id
+        other_world = start_demo(other, setup).id
+    assert UUID(mine.get("/world").json()["id"]) == mine_world
 
     with Session(engine) as session:
         own_event = events.publish(session, mine_world, "alert", {"message": "mine"})

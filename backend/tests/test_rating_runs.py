@@ -68,6 +68,7 @@ from app.tools.earth_obs import EarthObsMetrics, ScenarioName, load_site_metrics
 from tests.conftest import alembic_cfg, requires_db
 from tests.test_auditor import answer, quiet_answer, raw
 from tests.test_llm import SUPER, ULTRA, FakeTransport, MemoryCallLog, reply, settings
+from tests.worlds import start_demo
 
 HERO = "wetland_mx"
 RATING_DATE = date(2026, 10, 7)
@@ -829,6 +830,7 @@ def api(db: Connection) -> Iterator[tuple[TestClient, Deferred]]:
     app.dependency_overrides[get_rating_runner] = lambda: runner
     API_SESSION[:] = [session]
     with TestClient(app) as client:
+        start_demo(client, session)
         yield client, deferred
     app.dependency_overrides.clear()
     session.close()
@@ -874,12 +876,14 @@ def test_rate_and_runs_are_world_scoped(api: tuple[TestClient, Deferred]) -> Non
     run_id = client.post(f"/assets/{hero}/rate").json()["run_id"]
 
     with TestClient(app) as other:
+        start_demo(other, API_SESSION[0])
         _hero(other)
         assert other.get(f"/runs/{run_id}").status_code == 404
         assert other.post(f"/assets/{hero}/rate").status_code == 404
     with TestClient(app) as anonymous:
-        assert anonymous.get(f"/runs/{run_id}").status_code == 401
-        assert anonymous.post(f"/assets/{hero}/rate").status_code == 401
+        assert anonymous.get(f"/runs/{run_id}").status_code == 404, "reads the live world"
+        rate = anonymous.post(f"/assets/{hero}/rate")
+        assert (rate.status_code, rate.json()["detail"]) == (401, "auth_required")
     assert client.get(f"/runs/{uuid4()}").status_code == 404
 
 
