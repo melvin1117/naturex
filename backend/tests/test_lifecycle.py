@@ -45,8 +45,9 @@ from app.models import (
     WorldEvent,
 )
 from app.models import World as WorldRow
+from app.routers.market import NOT_LISTED
 from app.routers.runs import get_rating_runner
-from app.sandbox import COOKIE_NAME, _delete_world_rows, create_world, reset_world
+from app.sandbox import _delete_world_rows, create_world, ensure_live_world, reset_world
 from app.seed import seed
 from app.services import listings
 from app.services.lifecycle import (
@@ -389,6 +390,7 @@ def world(conn: Connection) -> Iterator[World_]:
     steward, an outsider and an admin."""
     session = _sessions(conn)()
     seed(session)
+    ensure_live_world(session)  # anonymous visitors read the live world (T73)
     sandbox = create_world(session)
     owner = _person(session, sandbox.id, "Owner")
     steward = _person(session, sandbox.id, "Steward")
@@ -422,9 +424,9 @@ def world(conn: Connection) -> Iterator[World_]:
 
 
 def client_as(w: World_, user: User | None) -> TestClient:
-    """A client in the world's sandbox, signed in as `user` (None: anonymous)."""
-    client = TestClient(app)
-    client.cookies.set(COOKIE_NAME, str(w.id))
+    """A client signed in as `user` in the world's sandbox (None: anonymous, so the live
+    world)."""
+    client = TestClient(app)  # the world comes from the session (T73)
     if user is not None:
         client.cookies.set(SESSION_COOKIE, start_session(w.session, user, SessionKind.DEMO))
     return client
@@ -1465,3 +1467,17 @@ def test_overlap_candidates_are_prefiltered_by_bounding_box(world: World_) -> No
     }
     assert near["id"] in found and unknown["id"] in found  # no stored box: always checked
     assert far["id"] not in found
+
+
+@requires_db
+def test_quotes_and_orders_never_reveal_a_private_listing(world: World_) -> None:
+    asset = draft(world)
+    quote = f"/assets/{asset['id']}/quote?side=buy&qty=1"
+    for user in (None, world.outsider, world.other_steward):
+        assert client_as(world, user).get(quote).status_code == 404
+    outsider = client_as(world, world.outsider)
+    order = outsider.post("/orders", json={"asset_id": asset["id"], "side": "buy", "qty": 1})
+    assert order.status_code == 404
+    # The community sees its own listing isn't tradable (yet).
+    mine = client_as(world, world.steward).get(quote)
+    assert (mine.status_code, mine.json()["detail"]) == (409, NOT_LISTED)

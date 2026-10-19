@@ -358,6 +358,7 @@ def sandbox_asset(session: Session, client: TestClient) -> uuid.UUID:
         geojson={"type": "Polygon", "coordinates": []},
         area_ha=Decimal("500.00"),
         primary_shares_remaining=490_000,
+        status=AssetStatus.LISTED,  # public, so its ledger is readable (T58)
     )
     session.add(asset)
     session.commit()

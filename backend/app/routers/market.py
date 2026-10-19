@@ -19,6 +19,7 @@ from sqlmodel import Session, col, select
 
 from app import events
 from app.auth import STARTING_CASH, Principal
+from app.authz import fresh_actor
 from app.deps import (
     AUTH_REQUIRED,
     CurrentPrincipal,
@@ -57,6 +58,7 @@ from app.schemas import (
     PortfolioOut,
     QuoteOut,
 )
+from app.services.listings import visible_to
 
 router = APIRouter(tags=["market"])
 
@@ -109,6 +111,14 @@ def _locked_asset(session: Session, world_id: UUID, asset_id: UUID) -> Asset:
     if asset is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found")
     return asset
+
+
+def _require_visible(session: Session, principal: Principal | None, asset: Asset) -> None:
+    """404 for a listing under review the caller may not see (T58), as if it didn't exist,
+    instead of revealing it with `not_listed`."""
+    actor = None if principal is None else fresh_actor(session, principal)
+    if not visible_to(actor, asset):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found")
 
 
 def _latest_price(session: Session, asset: Asset) -> Decimal | None:
@@ -195,6 +205,7 @@ def place_order(
     _lock_world(session, world.id)
     # After a concurrent reset the world has fresh asset ids, so a stale id is a 404.
     asset = _locked_asset(session, world.id, body.asset_id)
+    _require_visible(session, principal, asset)
     actor = _actor(session, world.id, principal, lock=True)
     # TODO(T57): re-check TRADE after locking the user (T68 review):
     # `enforce(fresh_actor(session, principal), Action.TRADE, AssetRef(...))`, so a membership
@@ -275,6 +286,7 @@ def get_quote(
     ).first()
     if asset is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found")
+    _require_visible(session, principal, asset)
     order_side = OrderSide(side)
     # Only a signed-in buyer's max_qty needs the market maker's inventory (the supply).
     buyer = principal is not None and order_side is OrderSide.BUY

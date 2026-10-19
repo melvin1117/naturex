@@ -55,14 +55,18 @@ def verify_ledger(
     responses={403: {"description": f"`{SANDBOX_ONLY}`: never in the live world"}},
 )
 def tamper_demo(
-    body: TamperDemoIn, settings: SettingsDep, world: CurrentWorld, session: SessionDep
+    body: TamperDemoIn,
+    settings: SettingsDep,
+    world: CurrentWorld,
+    actor: OptionalActor,
+    session: SessionDep,
 ) -> TamperDemoOut:
     """DEMO_MODE and demo sandboxes only: edit a copy of one entry and show verification
     failing. Writes nothing."""
     if not settings.demo_mode:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
     require_sandbox(world)
-    _require_asset(session, world, body.asset_id)
+    _require_asset(session, world, body.asset_id, actor)
     entries = entries_for(session, body.asset_id)
     if not entries:
         raise HTTPException(status.HTTP_409_CONFLICT, "This asset has no ledger entries yet")

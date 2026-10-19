@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlmodel import Session, col, select
 
 from app.authz import (
@@ -35,7 +35,7 @@ from app.authz import (
     enforce,
     require,
 )
-from app.deps import SessionDep, SettingsDep
+from app.deps import SessionDep, SettingsDep, current_principal
 from app.models import Asset, Community
 from app.routers.assets import asset_detail, cards
 from app.routers.runs import RunnerDep
@@ -151,6 +151,8 @@ def list_community_assets(
     "/assets",
     response_model=AssetDetail,
     status_code=status.HTTP_201_CREATED,
+    # A session before the body is validated: anonymous callers get 401, not 422 (T73).
+    dependencies=[Depends(current_principal)],
     responses={
         **_AUTH,
         **_DENIED,
