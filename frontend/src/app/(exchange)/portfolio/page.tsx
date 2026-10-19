@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { Portfolio } from "@/components/proto/portfolio";
+import { PortfolioScreen } from "@/components/portfolio-view";
 
 export const metadata: Metadata = { title: "Your stakes" };
 
 export default function PortfolioPage() {
-  return <Portfolio />;
+  return <PortfolioScreen />;
 }
