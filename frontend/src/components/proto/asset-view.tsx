@@ -494,8 +494,8 @@ function PricePanel({
       {facts.fairValuePerUnit !== null && (
         <p className="mt-4 text-xs text-muted-foreground">
           The price moves with orders and drifts toward the fair price set by
-          each rating ({fmtPrice(facts.fairValuePerUnit)} now). On a re-rate it
-          moves 35% of the way at once. Play money only.
+          each rating ({fmtPrice(facts.fairValuePerUnit)} now); a re-rate moves
+          it part of the way there at once. Play money only.
         </p>
       )}
     </Panel>

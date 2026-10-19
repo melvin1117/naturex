@@ -98,7 +98,7 @@ export function getBrowserDataLayer(): DataLayer {
  * Keep caches in step with live events. The asset's price is patched at once from the event
  * payload (the backend's number); the asset and everything derived from the price (P&L,
  * % change, history, quotes) are then refetched, coalesced so a burst of ticks costs one request
- * per query.
+ * per query. A finished rating run refetches the asset's reports, ledger and prices.
  */
 export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
   const queued = new Map<string, QueryKey>();
@@ -133,8 +133,24 @@ export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
     },
     { retain: false },
   );
+  // A rating run's final event (step "done": succeeded, degraded or failed) means a new
+  // report, its ledger entry and possibly a re-anchored price. Replays just refetch again.
+  const unsubscribeRuns = events.subscribe(
+    "rating_progress",
+    ({ payload }) => {
+      const assetId = payload.asset_id;
+      if (payload.step !== "done" || typeof assetId !== "string") return;
+      queue(queryKeys.asset(assetId));
+      queue(queryKeys.reports(assetId));
+      queue(queryKeys.ledger(assetId));
+      queue(queryKeys.prices(assetId));
+      queue(queryKeys.assets());
+    },
+    { retain: false },
+  );
   return () => {
     unsubscribe();
+    unsubscribeRuns();
     if (timer) clearTimeout(timer);
   };
 }
