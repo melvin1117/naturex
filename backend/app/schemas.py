@@ -262,8 +262,36 @@ class OrderOut(BaseModel):
     side: Literal["buy", "sell"]
     qty: int
     fill_price: Decimal
+    total: Decimal = Field(description="qty × fill_price in cents: what a buy paid or a sell got.")
+    primary_qty: int = Field(description="Shares a buy took from the opening offer.")
+    community_amount: Decimal = Field(
+        description="The part of `total` paid to the community (primary shares × fill price)."
+    )
     is_primary: bool
     created_at: datetime
+
+
+class QuoteOut(BaseModel):
+    """The price of an order now, before confirming it (play money). Nothing is reserved: the
+    order fills at the price when it's placed."""
+
+    asset_id: UUID
+    side: Literal["buy", "sell"]
+    qty: int
+    price: Decimal = Field(description="Latest price per share, before slippage.")
+    fill_price: Decimal = Field(description="Price per share including slippage.")
+    total: Decimal = Field(description="qty × fill_price in cents: the cost or the proceeds.")
+    slippage_pct: Decimal = Field(description="Fill vs latest price, in percent (2 dp).")
+    primary_qty: int = Field(description="Shares a buy takes from the opening offer.")
+    community_amount: Decimal = Field(
+        description="The part of a buy's total paid to the community (primary shares)."
+    )
+    max_qty: int | None = Field(
+        default=None,
+        description="The largest order on this side the signed-in user can place now (cash "
+        "or holding, supply, size cap); null without a session.",
+    )
+    max_order_qty: int = Field(description="The size cap for one order on this asset.")
 
 
 class HoldingOut(BaseModel):
@@ -272,7 +300,12 @@ class HoldingOut(BaseModel):
     shares: int
     avg_cost: Decimal | None = None
     mark_price: Decimal | None = None
-    unrealized_pnl: Decimal | None = None
+    market_value: Decimal | None = Field(default=None, description="shares × mark_price.")
+    cost_basis: Decimal | None = Field(default=None, description="shares × avg_cost.")
+    unrealized_pnl: Decimal | None = Field(default=None, description="market_value − cost_basis.")
+    unrealized_pnl_pct: Decimal | None = Field(
+        default=None, description="unrealized_pnl as a percentage of cost_basis (2 dp)."
+    )
 
 
 class ImpactSummary(BaseModel):
@@ -284,6 +317,13 @@ class ImpactSummary(BaseModel):
 class PortfolioOut(BaseModel):
     cash_balance: Decimal
     holdings: list[HoldingOut]
+    holdings_value: Decimal = Field(description="Sum of the priced holdings' market_value.")
+    total_value: Decimal = Field(description="cash_balance + holdings_value.")
+    cost_basis: Decimal = Field(description="Sum of the priced holdings' cost_basis.")
+    unrealized_pnl: Decimal = Field(description="holdings_value − cost_basis.")
+    unrealized_pnl_pct: Decimal | None = Field(
+        default=None, description="unrealized_pnl as a percentage of cost_basis; null if 0."
+    )
     impact: ImpactSummary
 
 

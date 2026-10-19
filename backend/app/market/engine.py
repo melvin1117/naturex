@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 from app.models import OrderSide
 
@@ -45,23 +45,29 @@ class PriceReason(StrEnum):
 
 
 class MarketError(ValueError):
-    """An order the market can't fill; the caller reports it to the user."""
+    """An order the market can't fill; the caller reports it to the user by `code`."""
+
+    code: ClassVar[str] = "order_rejected"
 
 
 class InvalidOrder(MarketError):
-    pass
+    code = "invalid_order"
+
+
+class OrderTooLarge(InvalidOrder):
+    code = "order_too_large"
 
 
 class InsufficientCash(MarketError):
-    pass
+    code = "insufficient_cash"
 
 
 class InsufficientShares(MarketError):
-    pass
+    code = "insufficient_shares"
 
 
 class InsufficientSupply(MarketError):
-    pass
+    code = "insufficient_supply"
 
 
 class NoiseSource(Protocol):
@@ -207,7 +213,7 @@ def execute(market: MarketState, trader: Position, side: OrderSide, qty: int) ->
         raise InvalidOrder(f"quantity must be positive, got {qty}")
     limit = max_order_qty(market.total_shares)
     if qty > limit:
-        raise InvalidOrder(f"orders are limited to {limit} shares")
+        raise OrderTooLarge(f"orders are limited to {limit} shares")
 
     fill_price = quote(price=market.price, side=side, qty=qty, total_shares=market.total_shares)
     cash_amount = _cash(fill_price * qty)
@@ -256,6 +262,68 @@ def execute(market: MarketState, trader: Position, side: OrderSide, qty: int) ->
         primary_qty=primary_qty,
         price_change=PriceChange(new_price, PriceReason.ORDER),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class OrderPreview:
+    """What `execute` would charge or pay for an order now, without checking cash or holdings."""
+
+    fill_price: Decimal
+    cash_amount: Decimal
+    """qty × fill_price, rounded to cents: the cost of a buy or the proceeds of a sell."""
+    slippage_pct: Decimal
+    """Fill price vs the current price, in percent (2 dp); negative for sells."""
+    primary_qty: int
+    """Shares a buy would take from the primary float; 0 for sells."""
+    community_amount: Decimal
+    """The part of `cash_amount` paid to the community wallet (primary shares × fill price)."""
+
+
+def preview(market: MarketState, side: OrderSide, qty: int) -> OrderPreview:
+    """Price an order the way `execute` fills it (the quote shown before confirming).
+
+    Raises InvalidOrder for a non-positive quantity or one above the size cap. Cash, holdings
+    and supply are the trader's problem at `execute` time; `max_fillable_qty` reports them.
+    """
+    if qty <= 0:
+        raise InvalidOrder(f"quantity must be positive, got {qty}")
+    limit = max_order_qty(market.total_shares)
+    if qty > limit:
+        raise OrderTooLarge(f"orders are limited to {limit} shares")
+    fill_price = quote(price=market.price, side=side, qty=qty, total_shares=market.total_shares)
+    primary_qty = min(qty, market.primary_shares_remaining) if side is OrderSide.BUY else 0
+    slippage = ((fill_price - market.price) / market.price * _HUNDRED).quantize(
+        _CASH, rounding=ROUND_HALF_UP
+    )
+    return OrderPreview(
+        fill_price=fill_price,
+        cash_amount=_cash(fill_price * qty),
+        slippage_pct=slippage,
+        primary_qty=primary_qty,
+        community_amount=_cash(fill_price * primary_qty),
+    )
+
+
+def max_fillable_qty(market: MarketState, trader: Position, side: OrderSide) -> int:
+    """The largest order `execute` would fill for this trader now (0 if none).
+
+    Sells: the holding, up to the size cap. Buys: the most shares the trader's cash pays for
+    at the slipped fill price, within the size cap and the shares available to buy.
+    """
+    limit = max_order_qty(market.total_shares)
+    if side is OrderSide.SELL:
+        return max(0, min(trader.shares, limit))
+    high = min(limit, market.primary_shares_remaining + market.market_maker_shares)
+    low = 0
+    # The cost of q shares grows with q (more shares, each at a higher fill), so bisect.
+    while low < high:
+        mid = (low + high + 1) // 2
+        fill = quote(price=market.price, side=side, qty=mid, total_shares=market.total_shares)
+        if _cash(fill * mid) <= trader.cash:
+            low = mid
+        else:
+            high = mid - 1
+    return low
 
 
 def reanchor(

@@ -24,6 +24,13 @@ from app.auth import Principal
 from app.config import get_settings
 from app.db import get_session
 from app.main import app
+from app.market.engine import (
+    InsufficientCash,
+    InsufficientShares,
+    InsufficientSupply,
+    MarketError,
+    OrderTooLarge,
+)
 from app.models import (
     Asset,
     AssetStatus,
@@ -37,7 +44,7 @@ from app.models import (
     WorldEvent,
 )
 from app.routers import market as market_router
-from app.routers.market import place_order
+from app.routers.market import get_quote, place_order
 from app.sandbox import _delete_world_rows, create_world, reset_world
 from app.schemas import OrderCreate
 from app.seed import WORLD_ID, demo_ipo_price, seed
@@ -151,6 +158,7 @@ def test_primary_buy_persists_cash_float_wallet_order_price_and_event(
     cost = cents(fill * 100)
     assert fill > ipo_price
     assert body["is_primary"] is True
+    assert (D(body["total"]), body["primary_qty"], D(body["community_amount"])) == (cost, 100, cost)
 
     session.expire_all()
     asset = session.exec(select(Asset).where(Asset.id == UUID(asset_id))).one()
@@ -188,6 +196,8 @@ def test_sell_fills_below_and_credits_cash_without_touching_the_wallet(
     assert res.status_code == 200
     fill = D(res.json()["fill_price"])
     assert fill < D(buy["fill_price"])
+    assert D(res.json()["total"]) == cents(fill * 40)
+    assert (res.json()["primary_qty"], D(res.json()["community_amount"])) == (0, D("0"))
     session.expire_all()
     asset = session.exec(select(Asset).where(Asset.id == UUID(asset_id))).one()
     assert asset.community_wallet == wallet_after_buy.community_wallet
@@ -242,7 +252,7 @@ def test_insufficient_cash_is_rejected_without_changes(
 
     res = _buy(client, mangrove, 100)
 
-    assert res.status_code == 400
+    assert (res.status_code, res.json()["detail"]) == (409, "insufficient_cash")
     session.expire_all()
     assert _investor(session, UUID(world["id"])).cash_balance == STARTING_CASH
     assert session.exec(select(Order).where(Order.asset_id == UUID(mangrove))).all() == []
@@ -253,7 +263,14 @@ def test_sell_without_a_holding_is_rejected(client: TestClient) -> None:
     world = _world(client)
     res = client.post("/orders", json={"asset_id": _asset_id(world), "side": "sell", "qty": 1})
 
-    assert res.status_code == 400
+    assert (res.status_code, res.json()["detail"]) == (409, "insufficient_shares")
+
+
+@requires_db
+def test_order_above_the_size_cap_is_400_order_too_large(client: TestClient) -> None:
+    res = _buy(client, _asset_id(_world(client)), 10_001)
+
+    assert (res.status_code, res.json()["detail"]) == (400, "order_too_large")
 
 
 @requires_db
@@ -309,6 +326,142 @@ def test_orders_and_portfolio_need_a_session(session: Session) -> None:
                 assert (res.status_code, res.json()["detail"]) == (401, "auth_required")
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize(
+    ("exc", "status_code", "code"),
+    [
+        (OrderTooLarge("too big"), 400, "order_too_large"),
+        (InsufficientCash("cash"), 409, "insufficient_cash"),
+        (InsufficientShares("shares"), 409, "insufficient_shares"),
+        (InsufficientSupply("supply"), 409, "insufficient_supply"),
+    ],
+)
+def test_engine_rejections_map_to_stable_codes(
+    exc: MarketError, status_code: int, code: str
+) -> None:
+    http = market_router._rejected(exc)
+
+    assert (http.status_code, http.detail) == (status_code, code)
+
+
+# --- Quotes (T18) ----------------------------------------------------------------------------
+
+
+def _quote(client: TestClient, asset_id: str, side: str, qty: int) -> Any:
+    return client.get(f"/assets/{asset_id}/quote", params={"side": side, "qty": qty})
+
+
+@requires_db
+def test_quote_matches_the_fill_of_the_order_placed_right_after(client: TestClient) -> None:
+    asset_id = _asset_id(_world(client))
+
+    quote = _quote(client, asset_id, "buy", 10)
+    order = _buy(client, asset_id, 10)
+
+    assert quote.status_code == 200 and order.status_code == 200
+    body = quote.json()
+    assert D(body["fill_price"]) == D(order.json()["fill_price"])
+    assert D(body["fill_price"]) > D(body["price"])
+    assert D(body["total"]) == cents(D(body["fill_price"]) * 10)
+    assert body["primary_qty"] == 10
+    assert D(body["community_amount"]) == D(body["total"])
+    assert D(body["slippage_pct"]) > 0
+    assert body["max_order_qty"] == 10_000
+
+
+@requires_db
+def test_quote_reports_the_largest_order_the_user_can_place(client: TestClient) -> None:
+    asset_id = _asset_id(_world(client), "mangrove_mx")  # ≈ $285/share
+
+    buy = _quote(client, asset_id, "buy", 1).json()
+    sell = _quote(client, asset_id, "sell", 1).json()
+
+    assert 0 < buy["max_qty"] < 100
+    assert _buy(client, asset_id, buy["max_qty"]).status_code == 200
+    assert sell["max_qty"] == 0
+    assert _quote(client, asset_id, "sell", 1).json()["max_qty"] == buy["max_qty"]
+
+
+@requires_db
+def test_quote_without_a_session_has_no_max_qty(client: TestClient, session: Session) -> None:
+    world = _world(client)
+    sandbox = session.get(World, UUID(world["id"]))
+    assert sandbox is not None
+
+    quote = get_quote(UUID(_asset_id(world)), sandbox, None, session, side="buy", qty=1)
+
+    assert quote.max_qty is None and quote.fill_price > quote.price
+
+
+@requires_db
+@pytest.mark.parametrize(
+    ("params", "status_code"),
+    [
+        ({"side": "buy", "qty": 0}, 422),
+        ({"side": "hold", "qty": 1}, 422),
+        ({"side": "buy"}, 422),
+        ({"side": "buy", "qty": 10_001}, 400),
+    ],
+)
+def test_quote_validates_side_and_quantity(
+    client: TestClient, params: dict[str, Any], status_code: int
+) -> None:
+    res = client.get(f"/assets/{_asset_id(_world(client))}/quote", params=params)
+
+    assert res.status_code == status_code
+
+
+@requires_db
+def test_quote_refuses_unlisted_unpriced_and_other_worlds_assets(
+    client: TestClient, session: Session
+) -> None:
+    world = _world(client)
+    wetland, forest = UUID(_asset_id(world)), UUID(_asset_id(world, "restoration_forest"))
+    template = session.exec(
+        select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == HERO)
+    ).one()
+    session.execute(update(Asset).where(col(Asset.id) == wetland).values(status=AssetStatus.RATING))
+    session.execute(delete(Price).where(col(Price.asset_id) == forest))
+    session.commit()
+
+    assert _quote(client, str(wetland), "buy", 1).status_code == 409
+    assert _quote(client, str(forest), "buy", 1).status_code == 409
+    assert _quote(client, str(template.id), "buy", 1).status_code == 404
+
+
+# --- Portfolio valuation (T18) ---------------------------------------------------------------
+
+
+@requires_db
+def test_portfolio_values_holdings_and_totals_at_the_latest_price(client: TestClient) -> None:
+    asset_id = _asset_id(_world(client))
+    fill = D(_buy(client, asset_id, 100).json()["fill_price"])
+
+    body = client.get("/portfolio").json()
+
+    holding = next(h for h in body["holdings"] if h["asset_id"] == asset_id)
+    mark, avg = D(holding["mark_price"]), D(holding["avg_cost"])
+    assert avg == fill
+    assert D(holding["market_value"]) == cents(mark * 100)
+    assert D(holding["cost_basis"]) == cents(fill * 100)
+    assert D(holding["unrealized_pnl"]) == D(holding["market_value"]) - D(holding["cost_basis"])
+    pnl_pct = D(holding["unrealized_pnl"]) / D(holding["cost_basis"]) * 100
+    assert D(holding["unrealized_pnl_pct"]) == pnl_pct.quantize(D("0.01"), ROUND_HALF_UP)
+    assert D(body["holdings_value"]) == D(holding["market_value"])
+    assert D(body["total_value"]) == D(body["cash_balance"]) + D(body["holdings_value"])
+    assert D(body["unrealized_pnl"]) == D(holding["unrealized_pnl"])
+    assert D(body["unrealized_pnl_pct"]) == D(holding["unrealized_pnl_pct"])
+
+
+@requires_db
+def test_empty_portfolio_totals_are_cash_only(client: TestClient) -> None:
+    body = client.get("/portfolio").json()
+
+    assert body["holdings"] == []
+    assert D(body["total_value"]) == D(body["cash_balance"]) == STARTING_CASH
+    assert D(body["holdings_value"]) == D(body["unrealized_pnl"]) == D("0")
+    assert body["unrealized_pnl_pct"] is None
 
 
 @requires_db

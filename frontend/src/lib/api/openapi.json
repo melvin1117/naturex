@@ -887,6 +887,91 @@
               }
             }
           },
+          "400": {
+            "description": "`order_too_large`: above the per-order size cap"
+          },
+          "404": {
+            "description": "Asset not in the session's world"
+          },
+          "409": {
+            "description": "Asset not listed or without a price; `insufficient_cash`, `insufficient_shares` or `insufficient_supply`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assets/{asset_id}/quote": {
+      "get": {
+        "tags": [
+          "market"
+        ],
+        "summary": "Get Quote",
+        "description": "What an order would cost or pay now, slippage included (`engine.preview`), and with a\nsession the largest order the user can place. Read-only: nothing is reserved, and the\norder fills at the price when it's placed. Errors match `POST /orders` for the asset and\nthe size; cash and holdings are checked when ordering (see `max_qty`).",
+        "operationId": "get_quote_assets__asset_id__quote_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          },
+          {
+            "name": "side",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "buy",
+                "sell"
+              ],
+              "type": "string",
+              "title": "Side"
+            }
+          },
+          {
+            "name": "qty",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Qty"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`order_too_large`: above the per-order size cap"
+          },
+          "404": {
+            "description": "Asset not in the session's world"
+          },
+          "409": {
+            "description": "Asset not listed or without a price; `insufficient_cash`, `insufficient_shares` or `insufficient_supply`"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -2672,6 +2757,32 @@
             ],
             "title": "Mark Price"
           },
+          "market_value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Value",
+            "description": "shares \u00d7 mark_price."
+          },
+          "cost_basis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Basis",
+            "description": "shares \u00d7 avg_cost."
+          },
           "unrealized_pnl": {
             "anyOf": [
               {
@@ -2682,7 +2793,21 @@
                 "type": "null"
               }
             ],
-            "title": "Unrealized Pnl"
+            "title": "Unrealized Pnl",
+            "description": "market_value \u2212 cost_basis."
+          },
+          "unrealized_pnl_pct": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unrealized Pnl Pct",
+            "description": "unrealized_pnl as a percentage of cost_basis (2 dp)."
           }
         },
         "type": "object",
@@ -3050,6 +3175,23 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Fill Price"
           },
+          "total": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total",
+            "description": "qty \u00d7 fill_price in cents: what a buy paid or a sell got."
+          },
+          "primary_qty": {
+            "type": "integer",
+            "title": "Primary Qty",
+            "description": "Shares a buy took from the opening offer."
+          },
+          "community_amount": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Community Amount",
+            "description": "The part of `total` paid to the community (primary shares \u00d7 fill price)."
+          },
           "is_primary": {
             "type": "boolean",
             "title": "Is Primary"
@@ -3067,6 +3209,9 @@
           "side",
           "qty",
           "fill_price",
+          "total",
+          "primary_qty",
+          "community_amount",
           "is_primary",
           "created_at"
         ],
@@ -3244,6 +3389,43 @@
             "type": "array",
             "title": "Holdings"
           },
+          "holdings_value": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Holdings Value",
+            "description": "Sum of the priced holdings' market_value."
+          },
+          "total_value": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Value",
+            "description": "cash_balance + holdings_value."
+          },
+          "cost_basis": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cost Basis",
+            "description": "Sum of the priced holdings' cost_basis."
+          },
+          "unrealized_pnl": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unrealized Pnl",
+            "description": "holdings_value \u2212 cost_basis."
+          },
+          "unrealized_pnl_pct": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unrealized Pnl Pct",
+            "description": "unrealized_pnl as a percentage of cost_basis; null if 0."
+          },
           "impact": {
             "$ref": "#/components/schemas/ImpactSummary"
           }
@@ -3252,6 +3434,10 @@
         "required": [
           "cash_balance",
           "holdings",
+          "holdings_value",
+          "total_value",
+          "cost_basis",
+          "unrealized_pnl",
           "impact"
         ],
         "title": "PortfolioOut"
@@ -3286,6 +3472,94 @@
           "price"
         ],
         "title": "PricePoint"
+      },
+      "QuoteOut": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          },
+          "price": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Price",
+            "description": "Latest price per share, before slippage."
+          },
+          "fill_price": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fill Price",
+            "description": "Price per share including slippage."
+          },
+          "total": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total",
+            "description": "qty \u00d7 fill_price in cents: the cost or the proceeds."
+          },
+          "slippage_pct": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Slippage Pct",
+            "description": "Fill vs latest price, in percent (2 dp)."
+          },
+          "primary_qty": {
+            "type": "integer",
+            "title": "Primary Qty",
+            "description": "Shares a buy takes from the opening offer."
+          },
+          "community_amount": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Community Amount",
+            "description": "The part of a buy's total paid to the community (primary shares)."
+          },
+          "max_qty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Qty",
+            "description": "The largest order on this side the signed-in user can place now (cash or holding, supply, size cap); null without a session."
+          },
+          "max_order_qty": {
+            "type": "integer",
+            "title": "Max Order Qty",
+            "description": "The size cap for one order on this asset."
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "side",
+          "qty",
+          "price",
+          "fill_price",
+          "total",
+          "slippage_pct",
+          "primary_qty",
+          "community_amount",
+          "max_order_qty"
+        ],
+        "title": "QuoteOut",
+        "description": "The price of an order now, before confirming it (play money). Nothing is reserved: the\norder fills at the price when it's placed."
       },
       "RatingRunAccepted": {
         "properties": {

@@ -249,9 +249,14 @@ def portfolio() -> PortfolioOut:
                 shares=0,
                 avg_cost=None,
                 mark_price=Decimal("99.7000"),
+                market_value=Decimal("0.00"),
                 unrealized_pnl=Decimal("0.00"),
             )
         ],
+        holdings_value=Decimal("0.00"),
+        total_value=Decimal("10000.00"),
+        cost_basis=Decimal("0.00"),
+        unrealized_pnl=Decimal("0.00"),
         impact=ImpactSummary(
             ha_protected=Decimal("0.00"),
             t_co2_stored=Decimal("0.00"),

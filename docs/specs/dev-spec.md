@@ -421,8 +421,9 @@ create table llm_calls (
 | `POST /assets/{id}/evidence` | Upload photos (audio post-hackathon) → field_evidence agent → event + re-rate |
 | `GET /assets/{id}/reports` · `GET /reports/{id}` · `GET /reports/{id}/diff/{prev}` | Report history & diffs |
 | `GET /assets/{id}/prices?range=` | Price history |
+| `GET /assets/{id}/quote?side=&qty=` | Price of an order now, slippage included (`engine.preview`); `max_qty` with a session (T18) |
 | `POST /orders` | `{asset_id, side, qty}` → Market Engine → fill |
-| `GET /portfolio` | Holdings, P&L, impact |
+| `GET /portfolio` | Holdings, values, P&L, impact |
 | `POST /copilot` | `{question, asset_id?}` → grounded answer + citations (streamed) |
 | `GET /events/stream` | SSE: price ticks, alerts, rating progress (polling fallback `GET /events?since=` or `?since_id=`) |
 | `POST /admin/simulate/quarter` | Trigger re-rate of all assets with next `data_version` |
@@ -839,7 +840,12 @@ Implemented as pure functions in `backend/app/market/engine.py` (`ipo`, `quote`,
   - Then it locks the asset row and the trader's user row (the same order as the revenue payout).   - So concurrent orders and payouts on one asset are serialised and can't lose updates. There are regression tests for concurrent buys and for an order racing a reset.
 - **Order rows:** a buy that crosses the end of the primary float is stored as two rows, the primary part (`is_primary`, which paid the community) and the secondary part. The response's `is_primary` is true if any shares came from the float.
 - **What a fill writes, in one transaction:** a new `prices` row with `reason='order'`, and a `price_tick` live event (T29).
-- **Errors:** 404 for an asset outside the world, 409 when the asset isn't listed or has no price, 400 for engine rejections (cash, shares, size).
+- **Errors:** 404 for an asset outside the world, 409 when the asset isn't listed or has no price. Engine rejections are stable codes (T18): 400 `order_too_large` (above the per-order cap), 409 `insufficient_cash`, `insufficient_shares` and `insufficient_supply`.
+- **Response (T18):** `OrderOut` also carries `total` (qty × fill price, in cents), `primary_qty` and `community_amount` (the part paid to the community), so the trade receipt never computes money in the browser.
+
+**As built (T18), `GET /assets/{id}/quote?side=buy|sell&qty=N` and portfolio valuation:**
+- **Quote:** read-only, world-scoped (anonymous reads the live world). Prices the order with `engine.preview`, the same arithmetic `execute` fills with: `price`, `fill_price`, `total`, `slippage_pct`, `primary_qty`, `community_amount` and the size cap `max_order_qty`. With a session it adds `max_qty`, the largest order the user could place on that side now (`engine.max_fillable_qty`: cash at the slipped price, holding, supply and the cap); null without one. Nothing is reserved: the order fills at the price when it's placed. Same 404/409/400 errors as `POST /orders`; 422 for a missing or non-positive `qty` or an unknown `side`.
+- **Portfolio:** `backend/app/market/portfolio.py` (pure, tested in `tests/test_portfolio_valuation.py`) values each holding at its latest price: `market_value` (shares × mark), `cost_basis` (shares × average cost), `unrealized_pnl` and `unrealized_pnl_pct`; `PortfolioOut` adds `holdings_value`, `total_value` (cash + holdings), `cost_basis`, `unrealized_pnl` and `unrealized_pnl_pct` (null with no cost). Money rounds half-up to cents; holdings without a price count toward nothing. `impact` is still zero until the stored reports feed `impact_for_holding` (T41/T44).
 - **Seed IPO prices:** `make seed` gives every listed curated site an `ipo` price equal to its stored report v1's `fair_value_per_share` (T19; `demo_ipo_price` shares the same `rate_site`). Today that's wetland 21.4723, mangrove 285.1519 and forest 19.5456 per share. T59 prices owner-launched IPOs. **On an existing database, run `make seed` once after upgrading** so the template gets its prices; visitor worlds pick them up on their next reset or creation.
 
 A tick is triggered by `POST /admin/simulate/quarter`, by a scheduled job, or by the SSE loop while the demo is running (no always-on process is required).
