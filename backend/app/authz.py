@@ -23,7 +23,16 @@ from sqlmodel import Session, select
 
 from app.auth import Principal
 from app.deps import OptionalPrincipal, SessionDep, SettingsDep, world_for
-from app.models import Asset, Community, CommunityMember, CommunityRole, SessionKind, UserKind
+from app.models import (
+    Asset,
+    AssetStatus,
+    Community,
+    CommunityMember,
+    CommunityRole,
+    SessionKind,
+    UserKind,
+)
+from app.services.lifecycle import is_public
 from app.worlds import LIVE_WORLD_ID, is_sandbox_world
 
 
@@ -160,6 +169,10 @@ class AssetRef:
     world_id: UUID
     asset_id: UUID
     community_id: UUID | None
+    public: bool = True
+    """Listed or suspended (T58). A listing under review is visible only to its community and
+    same-world admins: browsing or trading it is `not_found` for anyone else. Loaders set it
+    from the asset's status (`asset_ref_in`)."""
 
 
 @dataclass(frozen=True)
@@ -209,17 +222,43 @@ def _community_of(resource: Resource) -> UUID | None:
     return None
 
 
+# Actions for which a listing under review doesn't exist unless the actor may see it (T58). The
+# community's own actions (manage, IPO, data) keep their 403s, as T58 specifies.
+HIDDEN_FROM_OUTSIDERS = frozenset({Action.BROWSE, Action.TRADE})
+
+
+def can_see(actor: Actor | None, asset: AssetRef) -> bool:
+    """T58's visibility rule, in one place: a public (listed or suspended) asset is visible; a
+    listing under review only to its community's members and same-world admins. Which world a
+    caller may read is `authorize`'s first check, not this one."""
+    if asset.public:
+        return True
+    if actor is None or asset.world_id != actor.world_id:
+        return False
+    return actor.is_admin or actor.role_in(asset.community_id) is not None
+
+
 def authorize(actor: Actor | None, action: Action, resource: Resource) -> Decision:
     """Allow or deny `action` on `resource` (ADR-0005 §3 matrix). Pure; no I/O."""
+    hidden = (
+        action in HIDDEN_FROM_OUTSIDERS
+        and isinstance(resource, AssetRef)
+        and not resource.public
+        and not can_see(actor, resource)
+    )
     if actor is None:
         if action not in PUBLIC_ACTIONS:
             return Deny(DenyReason.AUTH_REQUIRED)
         # Anonymous visitors read the live world only; anything else doesn't exist for them.
-        return ALLOW if resource.world_id == LIVE_WORLD_ID else Deny(DenyReason.NOT_FOUND)
+        if resource.world_id != LIVE_WORLD_ID or hidden:
+            return Deny(DenyReason.NOT_FOUND)
+        return ALLOW
     if resource.world_id != actor.world_id:
         return Deny(DenyReason.NOT_FOUND)
     if not isinstance(resource, ACCEPTS[action]):
         return Deny(DenyReason.INVALID_RESOURCE)
+    if hidden:
+        return Deny(DenyReason.NOT_FOUND)
     if action in PUBLIC_ACTIONS:
         return ALLOW
     if actor.user_kind == UserKind.TREASURY:
@@ -452,9 +491,19 @@ def asset_ref(
 def asset_ref_in(session: Session, world_id: UUID, asset_id: UUID) -> AssetRef | None:
     """`asset_ref` for an ID that doesn't come from the path (a request body or query)."""
     found = session.exec(
-        select(Asset.id, Asset.community_id).where(Asset.world_id == world_id, Asset.id == asset_id)
+        select(Asset.id, Asset.community_id, Asset.status).where(
+            Asset.world_id == world_id, Asset.id == asset_id
+        )
     ).first()
-    return None if found is None else AssetRef(world_id, found[0], found[1])
+    if found is None:
+        return None
+    asset_id, community_id, asset_status = found
+    return AssetRef(world_id, asset_id, community_id, public=is_public(AssetStatus(asset_status)))
+
+
+def asset_ref_of(asset: Asset) -> AssetRef:
+    """The policy's view of a loaded asset (its visibility from its status)."""
+    return AssetRef(asset.world_id, asset.id, asset.community_id, public=is_public(asset.status))
 
 
 @dataclass(frozen=True)

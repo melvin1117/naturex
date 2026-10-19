@@ -35,6 +35,7 @@ from app.authz import (
     acting_world,
     asset_ref,
     asset_ref_in,
+    asset_ref_of,
     authorize,
     denied,
     deny_error,
@@ -170,14 +171,6 @@ def _locked_asset(session: Session, world_id: UUID, asset_id: UUID) -> Asset:
     return asset
 
 
-def _require_visible(session: Session, principal: Principal | None, asset: Asset) -> None:
-    """404 for a listing under review the caller may not see (T58), as if it didn't exist,
-    instead of revealing it with `not_trading`."""
-    actor = None if principal is None else fresh_actor(session, principal)
-    if not visible_to(actor, asset):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
-
-
 def _latest_price(session: Session, asset: Asset) -> Decimal | None:
     stmt = (
         select(col(Price.price))
@@ -200,7 +193,7 @@ def _market_maker_shares(session: Session, asset: Asset) -> int:
 
 def _tradable_market(session: Session, asset: Asset, *, with_inventory: bool = True) -> MarketState:
     """The asset's market now; 409 `not_trading` unless it is listed and its IPO launched (T59),
-    for quotes and orders alike. Callers check visibility first (`_require_visible`), so a
+    for quotes and orders alike. Callers check visibility first (the TRADE / BROWSE policy), so a
     private listing is a 404, never a `not_trading`.
 
     `with_inventory=False` skips summing the holdings for the market maker's inventory (left at
@@ -269,14 +262,11 @@ def place_order(
     _lock_world(session, world.id)
     # After a concurrent reset the world has fresh asset ids, so a stale id is a 404.
     asset = _locked_asset(session, world.id, body.asset_id)
-    _require_visible(session, principal, asset)
     actor = _actor(session, world.id, principal, lock=True)
-    # Re-check with memberships read under the trader's lock (see the module docstring).
-    enforce(
-        fresh_actor(session, principal),
-        Action.TRADE,
-        AssetRef(world.id, asset.id, asset.community_id),
-    )
+    # Re-check with memberships read under the trader's lock (see the module docstring), and the
+    # locked asset's status: a listing under review the trader can't see is a 404 (T58), never
+    # revealed by `not_listed`.
+    enforce(fresh_actor(session, principal), Action.TRADE, asset_ref_of(asset))
     market = _tradable_market(session, asset)
     holding = _holding(session, world.id, actor.id, asset.id)
     trader = Position(cash=actor.cash_balance, shares=holding.shares, avg_cost=holding.avg_cost)
@@ -359,10 +349,10 @@ def get_quote(
     asset = session.exec(
         select(Asset).where(Asset.world_id == world.id, Asset.id == asset_id)
     ).first()
-    if asset is None:
+    # The BROWSE loader already hid listings under review from outsiders (T58).
+    if asset is None or not visible_to(actor, asset):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
-    _require_visible(session, principal, asset)
-    blocked = _trade_blocked(actor, AssetRef(world.id, asset.id, asset.community_id))
+    blocked = _trade_blocked(actor, asset_ref_of(asset))
     order_side = OrderSide(side)
     # Only a signed-in buyer's max_qty needs the market maker's inventory (the supply).
     buyer = principal is not None and blocked is None and order_side is OrderSide.BUY

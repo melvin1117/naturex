@@ -11,6 +11,7 @@ from app.authz import (
     WorldRef,
     acting_world,
     asset_ref_in,
+    can_see,
     denied,
     require,
 )
@@ -24,11 +25,13 @@ router = APIRouter(tags=["copilot"])
 def copilot_world(
     body: CopilotRequest, actor: OptionalActor, session: SessionDep
 ) -> WorldRef | None:
-    """The caller's world, if the asset asked about (if any) is in it by `(world_id, id)`;
-    None (a 404) otherwise. `body` is the route's own, parsed once."""
+    """The caller's world, if the asset asked about (if any) is in it by `(world_id, id)` and
+    visible to the caller (T58); None (a 404) otherwise. `body` is the route's own, parsed once."""
     world_id = acting_world(actor)
-    if body.asset_id is not None and asset_ref_in(session, world_id, body.asset_id) is None:
-        return None
+    if body.asset_id is not None:
+        asset = asset_ref_in(session, world_id, body.asset_id)
+        if asset is None or not can_see(actor, asset):
+            return None
     return WorldRef(world_id)
 
 

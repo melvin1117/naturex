@@ -16,6 +16,7 @@ from app.authz import (
     acting_world,
     asset_ref,
     asset_ref_in,
+    can_see,
     demo_target,
     denied,
     require,
@@ -67,13 +68,14 @@ def verify_ledger(
 def tamper_target(
     body: TamperDemoIn, actor: OptionalActor, settings: SettingsDep, session: SessionDep
 ) -> DemoTarget | None:
-    """The tamper demo's world, once its asset is found by `(world_id, id)` (None, a 404,
-    otherwise). With `DEMO_MODE` off the asset isn't looked up: the policy hides the route."""
+    """The tamper demo's world, once its asset is found by `(world_id, id)` and visible to the
+    caller (None, a 404, otherwise). With `DEMO_MODE` off the asset isn't looked up: the policy
+    hides the route."""
     target = demo_target(actor, settings)
     if not target.demo_mode:
         return target
     found = asset_ref_in(session, acting_world(actor), body.asset_id)
-    return None if found is None else target
+    return None if found is None or not can_see(actor, found) else target
 
 
 @router.post(
