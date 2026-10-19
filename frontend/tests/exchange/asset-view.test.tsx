@@ -180,6 +180,30 @@ describe("AssetView", () => {
     expect(screen.queryByText("$0.00")).toBeNull();
   });
 
+  it("labels a listed site awaiting its opening offer and shows no price", async () => {
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /assets/${ID}`]: () =>
+          json({
+            ...ASSET,
+            trading: false,
+            ipo_at: null,
+            price: null,
+            price_change_pct: null,
+            total_shares: null,
+            retained_pct: null,
+            primary_shares_remaining: 0,
+          }),
+        [`GET /assets/${ID}/prices`]: () => json([]),
+      }),
+    );
+    const hero = await screen.findByRole("region", {
+      name: "Xochimilco Wetland",
+    });
+    expect(within(hero).getByText("Not trading yet")).toBeInTheDocument();
+  });
+
   it("shows report versions with the summary as text and its source", async () => {
     nav.search = new URLSearchParams("tab=report");
     const v1 = ASSET.latest_report!;

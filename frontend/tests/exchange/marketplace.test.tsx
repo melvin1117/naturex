@@ -115,6 +115,28 @@ describe("Marketplace", () => {
     expect(screen.getByText("Sites listed").nextSibling).toHaveTextContent("3");
   });
 
+  it("marks a listed site awaiting its opening offer as not trading yet", async () => {
+    const launching = {
+      ...WETLAND,
+      id: "77777777-7777-4777-8777-777777777777",
+      name: "New Mangrove",
+      trading: false,
+      price: null,
+      price_change_pct: null,
+      sparkline: [],
+    };
+    renderExchange(<Marketplace />, {
+      "GET /assets": () => json([...CARDS, launching]),
+    });
+    const card = await screen.findByRole("link", { name: /New Mangrove/ });
+
+    expect(within(card).getByText("Not trading yet")).toBeInTheDocument();
+    const traded = screen.getByRole("link", { name: /Xochimilco Wetland/ });
+    expect(
+      within(traded).queryByText("Not trading yet"),
+    ).not.toBeInTheDocument();
+  });
+
   it("marks an unrated site and leaves it out of the rated totals", async () => {
     const pending = {
       ...WETLAND,

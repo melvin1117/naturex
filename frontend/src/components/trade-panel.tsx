@@ -115,8 +115,12 @@ function lockReason(
 ): string | null {
   if (asset.status === "suspended")
     return "Trading is paused on this site while the platform reviews it.";
-  if (asset.status !== "listed" || decimal(asset.price) === null)
-    return "This site opens for stakes after its community launches the opening offer.";
+  if (
+    asset.status !== "listed" ||
+    asset.trading !== true ||
+    decimal(asset.price) === null
+  )
+    return "This site isn't trading yet. It opens for stakes once its community launches the opening offer.";
   if (!me) return "sign-in";
   if (me.is_admin)
     return "Admin accounts can't trade. Use a separate investor account to back sites.";
@@ -124,6 +128,8 @@ function lockReason(
 }
 
 function PriceSummary({ asset }: { asset: AssetDetail }) {
+  // No units exist before the opening offer (T59): `total_shares` is null until then.
+  const issued = asset.total_shares ?? null;
   return (
     <dl className="grid grid-cols-2 gap-4 text-sm">
       <div>
@@ -134,12 +140,21 @@ function PriceSummary({ asset }: { asset: AssetDetail }) {
       </div>
       <div>
         <dt className="text-xs text-muted-foreground">Opening units left</dt>
-        <dd className="tabular text-xl font-light">
-          {int(asset.primary_shares_remaining)}
-        </dd>
-        <dd className="text-xs text-muted-foreground">
-          of {int(asset.total_shares)}
-        </dd>
+        {issued === null ? (
+          <>
+            <dd className="tabular text-xl font-light">—</dd>
+            <dd className="text-xs text-muted-foreground">
+              Set at the opening offer
+            </dd>
+          </>
+        ) : (
+          <>
+            <dd className="tabular text-xl font-light">
+              {int(asset.primary_shares_remaining)}
+            </dd>
+            <dd className="text-xs text-muted-foreground">of {int(issued)}</dd>
+          </>
+        )}
       </div>
     </dl>
   );

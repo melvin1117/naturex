@@ -101,8 +101,17 @@ export function TrendText({
   );
 }
 
-export function SiteCard({ card }: { card: MarketCard }) {
+/** The card's badge: its status, or "Not trading yet" for a listed site awaiting its IPO. */
+export function cardBadge(card: MarketCard): string | undefined {
   const status = STATUS_TEXT[card.status];
+  if (status) return status;
+  return card.status === "listed" && !card.trading
+    ? "Not trading yet"
+    : undefined;
+}
+
+export function SiteCard({ card }: { card: MarketCard }) {
+  const status = cardBadge(card);
   return (
     <Link
       href={`/asset/${card.id}`}

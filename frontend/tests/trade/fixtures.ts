@@ -24,6 +24,8 @@ export function asset(overrides: Partial<AssetDetail> = {}): AssetDetail {
     community_wallet: "0.00",
     site_key: "wetland_mx",
     price: "20.0000",
+    trading: true,
+    ipo_at: "2026-10-01T00:00:00Z",
     recent_events: [],
     ...overrides,
   } as AssetDetail;

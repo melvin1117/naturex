@@ -184,6 +184,11 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
                   Trading paused
                 </span>
               )}
+              {asset.status === "listed" && asset.trading !== true && (
+                <span className="rounded-full bg-clay px-2.5 py-0.5 text-xs font-medium text-white">
+                  Not trading yet
+                </span>
+              )}
             </div>
             <h1
               id="site-title"

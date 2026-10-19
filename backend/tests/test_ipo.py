@@ -573,10 +573,16 @@ def test_the_launch_gate_is_checked_inside_the_transaction(
 def test_orders_need_a_launched_listed_asset(world: World_) -> None:
     asset = listed(world)
     asset_id = UUID(asset["id"])
+    quote_url = f"/assets/{asset['id']}/quote?side=buy&qty=10"
     refused = buy(world, asset["id"], 10)
     assert (refused.status_code, refused.json()["detail"]) == (409, "not_trading")
+    # Anonymous visitors read the live world (T73), where this sandbox asset doesn't exist.
+    assert client_as(world, None).get(quote_url).status_code == 404
+    quoted = client_as(world, world.outsider).get(quote_url)
+    assert (quoted.status_code, quoted.json()["detail"]) == (409, "not_trading")
 
     assert launch_ipo(world, asset["id"]).status_code == 201
+    assert client_as(world, world.outsider).get(quote_url).status_code == 200
     filled = buy(world, asset["id"], 10)
     assert filled.status_code == 200, filled.text
     assert filled.json()["is_primary"] is True
@@ -591,6 +597,8 @@ def test_orders_need_a_launched_listed_asset(world: World_) -> None:
     assert suspend.status_code == 200
     halted = buy(world, asset["id"], 10)
     assert (halted.status_code, halted.json()["detail"]) == (409, "not_trading")
+    paused_quote = client_as(world, world.outsider).get(quote_url)
+    assert (paused_quote.status_code, paused_quote.json()["detail"]) == (409, "not_trading")
     card = next(
         c for c in client_as(world, world.outsider).get("/assets").json() if c["id"] == asset["id"]
     )

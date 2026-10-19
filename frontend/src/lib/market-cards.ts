@@ -15,6 +15,8 @@ export type MarketCard = {
   name: string;
   country: string | null;
   status: AssetCard["status"];
+  /** Orders are open: listed and its opening offer (IPO) launched (T59). */
+  trading: boolean;
   areaHa: number;
   price: number | null;
   /** Latest price vs the IPO price, percent. */
@@ -40,6 +42,7 @@ export function marketCard(card: AssetCard): MarketCard {
     name: card.name,
     country: card.country ?? null,
     status: card.status,
+    trading: card.trading === true,
     areaHa: num(card.area_ha) ?? 0,
     price: num(card.price),
     changePct: num(card.price_change_pct),
