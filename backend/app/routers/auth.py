@@ -120,7 +120,8 @@ def _throttle(
 
 
 def _set_session_cookie(response: Response, token: str, settings: SettingsDep) -> None:
-    # Same first-party proxy reasoning as the nx_world cookie (deps._set_world_cookie).
+    # SameSite=Lax needs the browser to see one site: the frontend proxies /api/* to this
+    # backend (next.config.ts; T20). Don't switch to SameSite=None; browsers block it.
     response.set_cookie(
         SESSION_COOKIE,
         token,

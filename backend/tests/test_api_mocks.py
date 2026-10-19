@@ -4,15 +4,29 @@ coverage is in test_market_api.py."""
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
+import pytest
 from fastapi.testclient import TestClient
 
+from app.deps import current_principal
 from app.main import app
-from app.mocks import REPORT_WETLAND, WETLAND_ID, news_scout_fixture, wetland_report
+from app.mocks import WETLAND_ID, news_scout_fixture, wetland_report
 from app.schemas import AuditorOutput, NewsScoutItem, NewsScoutOutput
+from tests.worlds import stub_principal
 
 client = TestClient(app)
 
 
+@pytest.fixture
+def signed_in() -> Iterator[None]:
+    """Stub routes need a signed-in principal (T73); no database needed for that here."""
+    app.dependency_overrides[current_principal] = stub_principal
+    yield
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.usefixtures("signed_in")
 def test_create_asset_accepted() -> None:
     res = client.post(
         "/assets",
@@ -25,24 +39,18 @@ def test_create_asset_accepted() -> None:
     assert "run_id" in res.json()
 
 
+@pytest.mark.usefixtures("signed_in")
 def test_admin_and_copilot() -> None:
     assert client.post("/admin/simulate/quarter").status_code == 200
-    # World-scoped since T19: real coverage is in test_reports_api.py.
-    assert (
-        client.post(
-            "/admin/simulate/event",
-            json={"asset_id": str(WETLAND_ID), "preset": "encroachment"},
-        ).status_code
-        == 401
-    )
     assert client.get("/admin/trace", params={"asset_id": str(WETLAND_ID)}).status_code == 200
     assert client.post("/copilot", json={"question": "Why did it drop?"}).status_code == 200
 
 
-def test_world_scoped_routes_require_a_world_cookie() -> None:
-    for path in ("/events", "/assets", f"/assets/{WETLAND_ID}", f"/reports/{REPORT_WETLAND}"):
-        res = client.get(path)
-        assert (res.status_code, res.json()["detail"]) == (401, "world_required"), path
+def test_stub_writes_need_a_session() -> None:
+    """Anonymous requests are read-only (T73); every route is covered in test_world_from_session."""
+    for path in ("/assets", "/admin/simulate/quarter", "/copilot"):
+        res = client.post(path, json={})
+        assert (res.status_code, res.json()["detail"]) == (401, "auth_required"), path
 
 
 def test_agent_schemas_validate_fixtures() -> None:

@@ -10,10 +10,10 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, col, select
 
-from app.deps import CurrentWorld, SessionDep, SettingsDep
+from app.deps import CurrentWorld, SessionDep, SettingsDep, current_principal
 from app.models import Asset, AssetStatus, Price, Report
 from app.routers.reports import present_report, recent_events
 from app.schemas import (
@@ -136,7 +136,12 @@ def list_assets(world: CurrentWorld, session: SessionDep) -> list[AssetCard]:
     return cards
 
 
-@router.post("/assets", response_model=AssetCreateResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/assets",
+    response_model=AssetCreateResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(current_principal)],
+)
 def create_asset(body: AssetCreate) -> AssetCreateResponse:
     asset_id = uuid4()
     run_id = uuid4()

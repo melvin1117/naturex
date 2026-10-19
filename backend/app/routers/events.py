@@ -10,7 +10,7 @@ from sqlmodel import Session
 
 from app import events as event_bus
 from app.db import get_session
-from app.deps import CurrentWorld, SessionDep, SettingsDep, current_world
+from app.deps import CurrentWorld, SessionDep, SettingsDep, current_world, optional_principal
 from app.models import World
 from app.schemas import StreamEvent
 
@@ -19,12 +19,11 @@ StreamSessionDep = Annotated[Session, Depends(get_session, scope="function")]
 
 
 def current_world_for_stream(
-    request: Request,
-    response: Response,
-    session: StreamSessionDep,
-    settings: SettingsDep,
+    request: Request, response: Response, session: StreamSessionDep
 ) -> World:
-    return current_world(request, response, session, settings)
+    """`current_world` on a session closed before streaming starts, so an open stream never
+    holds a pooled connection."""
+    return current_world(request, response, session, optional_principal(request, session))
 
 
 CurrentWorldForStream = Annotated[World, Depends(current_world_for_stream)]

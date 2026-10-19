@@ -1,6 +1,8 @@
-"""Per-visitor sandbox worlds (demo-plan §3.5, T31).
+"""Demo sandbox worlds (demo-plan §3.5, T31) and the live world (ADR-0005 §2).
 
-Every visitor gets a private copy of the template world, so judges never affect each other.
+Every demo session gets a private copy of the template world, so judges never affect each
+other. A sandbox is reachable only through its own demo session (T73, `deps.world_for`); no
+client-supplied world ID is ever read.
 Copies get fresh IDs, and every reference between them (community → treasury, members, asset →
 community and treasury, holdings, prices, reports, ledger entries…) is remapped to the copy.
 Ledger chains stay valid because an entry's hash covers its payload, kind, seq and previous
@@ -57,8 +59,6 @@ from app.worlds import PROTECTED_WORLDS
 
 log = logging.getLogger(__name__)
 
-COOKIE_NAME = "nx_world"
-COOKIE_MAX_AGE_S = 30 * 24 * 3600
 STALE_AFTER = timedelta(days=7)
 VISITOR_LABEL = "visitor"
 
@@ -270,10 +270,10 @@ def _delete_world_rows(
 
 
 def create_world(session: Session, max_new_per_hour: int | None = None) -> World:
-    """Create a visitor world as a copy of the template.
+    """Create a demo sandbox world as a copy of the template.
 
     Raises WorldLimitReached when `max_new_per_hour` worlds were already created in the
-    last hour, so a client that never keeps its cookie can't fill the database.
+    last hour, so a client that never keeps its session can't fill the database.
     """
     _ensure_template(session)
     if max_new_per_hour is not None:
@@ -297,7 +297,7 @@ def create_world(session: Session, max_new_per_hour: int | None = None) -> World
 
 
 def reset_world(session: Session, world_id: UUID) -> World:
-    """Restore a visitor world to the template state, keeping its ID (and so its cookie).
+    """Restore a sandbox world to the template state, keeping its ID (and its demo sessions).
 
     Persona users keep their IDs (matched by `persona_key`) and get the template's fields back
     (cash included), so a session on any persona stays valid (ADR-0005 §4). A persona the
@@ -366,21 +366,10 @@ def prune_stale_worlds(
     return len(stale)
 
 
-def world_from_cookie(session: Session, value: str | None) -> World | None:
-    """The visitor's sandbox, or None if the cookie is missing, malformed or unknown, or names
-    the template or the live world (which are never served as sandboxes)."""
-    if not value:
-        return None
-    try:
-        world_id = UUID(value)
-    except ValueError:
-        return None
-    if world_id in PROTECTED_WORLDS:
-        return None
-    world = session.get(World, world_id)
-    if world is None or world.label == LIVE_LABEL:
-        return None
-    return world
+def is_sandbox(world: World) -> bool:
+    """True for a demo sandbox; False for the template and the live world, which are never
+    served as sandboxes."""
+    return world.id not in PROTECTED_WORLDS and world.label != LIVE_LABEL
 
 
 def ensure_live_world(session: Session) -> World:

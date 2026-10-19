@@ -1,7 +1,8 @@
 """Rating runs (T27): `POST /assets/{asset_id}/rate` → 202 + `run_id`; `GET /runs/{run_id}`.
 
-Both are scoped to the caller's world (401 `world_required` without one, 404 for another
-world's asset or run). Progress also streams as `rating_progress` events (`GET /events/stream`).
+Both are scoped to the session's world (404 for another world's asset or run); starting a run
+needs a signed-in session (401 `auth_required`). Progress also streams as `rating_progress`
+events (`GET /events/stream`).
 """
 
 from __future__ import annotations

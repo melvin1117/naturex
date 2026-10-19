@@ -17,7 +17,8 @@ from sqlalchemy import func
 from sqlmodel import Session, col, select
 
 from app import events
-from app.deps import CurrentWorld, SessionDep
+from app.auth import Principal
+from app.deps import AUTH_REQUIRED, CurrentPrincipal, CurrentWorld, SessionDep
 from app.market.engine import MarketError, MarketState, Position, TradeResult, execute
 from app.models import (
     Asset,
@@ -34,18 +35,15 @@ from app.schemas import HoldingOut, ImpactSummary, OrderCreate, OrderOut, Portfo
 
 router = APIRouter(tags=["market"])
 
-# TODO(T57): trade as the signed-in principal (ADR-0005). Until accounts land, every request
-# trades as the demo investor persona of the caller's world.
-_ACTOR_PERSONA_KEY = "arjun"
 
-
-def _actor(session: Session, world_id: UUID, *, lock: bool = False) -> User:
-    stmt = select(User).where(User.world_id == world_id, User.persona_key == _ACTOR_PERSONA_KEY)
+def _actor(session: Session, world_id: UUID, principal: Principal, *, lock: bool = False) -> User:
+    """The signed-in user, who trades as themselves (ADR-0005 §3); never a client-supplied ID."""
+    stmt = select(User).where(User.world_id == world_id, User.id == principal.user_id)
     if lock:
         stmt = stmt.with_for_update()
     user = session.exec(stmt).first()
-    if user is None:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Demo investor not seeded")
+    if user is None:  # deleted between resolving the session and now
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, AUTH_REQUIRED)
     return user
 
 
@@ -110,12 +108,15 @@ def _order_rows(
 
 
 @router.post("/orders", response_model=OrderOut)
-def place_order(body: OrderCreate, world: CurrentWorld, session: SessionDep) -> OrderOut:
-    """Fill a market order instantly. `is_primary` is true if any shares came from the IPO float."""
+def place_order(
+    body: OrderCreate, world: CurrentWorld, principal: CurrentPrincipal, session: SessionDep
+) -> OrderOut:
+    """Fill a market order for the signed-in user. `is_primary` is true if any shares came from
+    the IPO float."""
     _lock_world(session, world.id)
     # After a concurrent reset the world has fresh asset ids, so a stale id is a 404.
     asset = _locked_asset(session, world.id, body.asset_id)
-    actor = _actor(session, world.id, lock=True)
+    actor = _actor(session, world.id, principal, lock=True)
     # TODO(T57): re-check TRADE after locking the user (T68 review):
     # `enforce(fresh_actor(session, principal), Action.TRADE, AssetRef(...))`, so a membership
     # committed while this order waited on the lock blocks the buy.
@@ -182,8 +183,11 @@ def place_order(body: OrderCreate, world: CurrentWorld, session: SessionDep) -> 
 
 
 @router.get("/portfolio", response_model=PortfolioOut)
-def get_portfolio(world: CurrentWorld, session: SessionDep) -> PortfolioOut:
-    actor = _actor(session, world.id)
+def get_portfolio(
+    world: CurrentWorld, principal: CurrentPrincipal, session: SessionDep
+) -> PortfolioOut:
+    """The signed-in user's cash and holdings."""
+    actor = _actor(session, world.id, principal)
     holdings = session.exec(
         select(Holding).where(
             Holding.world_id == world.id,

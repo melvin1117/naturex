@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from app import mocks
-from app.deps import CurrentWorld, SessionDep
+from app.deps import CurrentWorld, SessionDep, current_principal
 from app.routers.assets import world_asset
 from app.schemas import (
     EventOut,
@@ -22,7 +22,11 @@ from app.schemas import (
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-@router.post("/simulate/quarter", response_model=SimulateQuarterResponse)
+@router.post(
+    "/simulate/quarter",
+    response_model=SimulateQuarterResponse,
+    dependencies=[Depends(current_principal)],
+)
 def simulate_quarter() -> SimulateQuarterResponse:
     return SimulateQuarterResponse(
         data_version="sim-1",
