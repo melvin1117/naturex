@@ -233,7 +233,7 @@ PATH=$HOME/.local/bin:$PATH uv run python ../scripts/precompute_sites.py --image
 ## As built (T60, 2026-10-19): live metrics for new listings
 The demo sites stay precomputed and the judging path still never calls Earth Engine. A **new listing**'s polygon has no precomputed file, so with `EARTH_ENGINE_LIVE=true` its rating run computes the same metrics live:
 - **One implementation:** the reductions above moved to `backend/app/tools/earth_engine.py`; `scripts/precompute_sites.py` and the API both call `compute_polygon_metrics`. A live `--check` after the move matched the committed files (only Dynamic World drift of 0.001 on `mangrove_mx`, identical with the old script).
-- **Bounded use of the Community tier:** results are cached by geometry hash and data version; one computation at a time, a 120 s timeout (per request and overall), two live ratings per account per day and 50 a day in total. Details in dev-spec §7.2 "As built (T60)".
+- **Bounded use of the Community tier:** live world only (demo sandboxes never compute); results are cached by geometry hash and data version; one computation at a time per process, a 120 s timeout (per request, no retries, and overall), at most 5,000 ha, two live ratings per account per day and 50 a day in total. Details in dev-spec §7.2 "As built (T60)".
 - **Live run:** a 49 ha polygon next to the mangrove site took 12.2 s (cache hit 81 ms), in line with the T03 timings above.
 - The terms reading below is unchanged: live ratings are still noncommercial play-money use, and the prize-money point is still open (research.md §6).
 
