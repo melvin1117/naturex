@@ -89,9 +89,9 @@ Each calls the auth route, then re-reads `GET /world` (`session.reload()`) and r
 
 ## App shells and roles (T62)
 
-`app/(exchange)`, `app/steward` and `app/admin` each have a layout with `AppHeader` (`components/proto/app-header.tsx`) and a `<main id="main">` that the skip link in `app/layout.tsx` jumps to. The root layout also holds the demo bar slot (T65): the sandbox notice on every page, plus the scripted demo's controls for anonymous visitors.
+`app/(exchange)`, `app/steward` and `app/admin` each have a layout with the shell header (`components/shell/app-header.tsx`; the prototype's Copilot, Agent Trace and alerts go in its `tools` slot from `components/proto/header-tools.tsx`) and a `<main id="main">` that the skip link in `app/layout.tsx` jumps to (standalone pages such as `/login` and `/judge` have one too). The root layout also holds the demo bar slot (T65): the sandbox notice on every page, plus the scripted demo's controls for anonymous visitors.
 
-What the header offers comes from `appAccess()` in `navigation.ts` (pure, unit-tested), through `useAppAccess()` (`components/app-switcher.tsx`):
+What the header offers comes from `appAccess()` in `navigation.ts` (pure, unit-tested), through `useAppAccess()` (`components/shell/app-switcher.tsx`):
 
 | Visitor                    | Apps offered                                | Also                                                                                 |
 | -------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------ |
@@ -100,9 +100,11 @@ What the header offers comes from `appAccess()` in `navigation.ts` (pure, unit-t
 | Community owner or steward | Exchange, Steward app                       | Community switcher in the Steward header if more than one                            |
 | Platform admin             | Exchange, Admin (+ Steward app if a member) | "Create a community" without one                                                     |
 
-Nothing that depends on `/me/communities` shows until it answers. This only decides what the UI shows: the backend authorizes every request (a non-admin on `/admin` gets `RequireAccount`'s 403 message, and every admin route checks `is_admin`).
+Nothing that depends on `/me/communities` shows until it answers; if it fails, signed-in accounts still get the Steward app link, whose error screen explains and retries. This only decides what the UI shows: the backend authorizes every request (a non-admin on `/admin` gets `RequireAccount`'s 403 message, and every admin route checks `is_admin`).
 
-Steward pages read the community they show with `useStewardCommunity()` (`components/steward-community.tsx`): `{ communities, active, select(id) }`. The choice is remembered in `localStorage` (only the ID) and checked against `/me/communities`, falling back to the first. `<StewardGate>` shows a signed-in account without a community the "Start a community" empty state instead of the pages.
+Steward pages read the community they show with `useStewardCommunity()` (`components/shell/steward-community.tsx`): `{ communities, active, select(id), href(path) }`. The `?community=<id>` URL parameter wins, then the one remembered for this account (`localStorage` key `nx-steward-community:<account id>`, only the ID, cleared on sign-out; `lib/active-community.ts`), then the account's first community; each only if `/me/communities` lists it. `select` puts the choice in the URL and remembers it; build Steward links with `href("/steward/...")` so they keep the parameter, which lets pages link to a community and keeps two tabs from disagreeing. `<StewardGate>` shows a signed-in account without a community the "Start a community" empty state instead of the pages.
+
+`useMyCommunities()` is cached per account (`queryKeys.myCommunities(me.id)`) and never fetched while signed out. **Roles change only when this query refetches:** anything that creates, joins or leaves a community (T63's create form, adding or removing a steward) must invalidate it, e.g. `onSuccess: (_d, _v, { cache }) => cache.invalidate(queryKeys.myCommunities(meId))`, or the header keeps the old roles until the next page load.
 
 ## Errors
 
