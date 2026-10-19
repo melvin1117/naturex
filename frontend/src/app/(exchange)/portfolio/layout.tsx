@@ -5,5 +5,5 @@ export default function PortfolioLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <RequireAccount>{children}</RequireAccount>;
+  return <RequireAccount allowPrototypeDemo>{children}</RequireAccount>;
 }

@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { ApiError } from "@/lib/api/errors";
+import { ApiError, apiErrorFromResponse } from "@/lib/api/errors";
 import {
   authFailure,
   initials,
-  isProtectedPath,
   loginHref,
   protectedAccess,
   safeReturnPath,
@@ -92,17 +91,6 @@ describe("loginHref and withNext", () => {
   });
 });
 
-describe("isProtectedPath", () => {
-  it.each(["/steward", "/steward/list", "/portfolio", "/admin"])(
-    "%s needs an account",
-    (path) => expect(isProtectedPath(path)).toBe(true),
-  );
-  it.each(["/", "/asset/x", "/judge", "/login", "/stewards", "/portfolios"])(
-    "%s is public",
-    (path) => expect(isProtectedPath(path)).toBe(false),
-  );
-});
-
 describe("protectedAccess", () => {
   const base = {
     status: "ready" as const,
@@ -146,6 +134,21 @@ describe("validateAuthInput", () => {
   it("accepts valid input", () => {
     expect(validateAuthInput("register", ok)).toEqual({});
     expect(validateAuthInput("login", { ...ok, password: "x" })).toEqual({});
+  });
+
+  it("counts code points, as the backend does, not UTF-16 units", () => {
+    // 5 emoji are 10 UTF-16 units but 5 characters: too short for the backend.
+    expect(
+      validateAuthInput("register", { ...ok, password: "🌿".repeat(5) })
+        .password,
+    ).toBe("Use at least 10 characters for your password.");
+    // 100 emoji are 200 UTF-16 units but 100 characters: within the 128 limit.
+    expect(
+      validateAuthInput("login", { ...ok, password: "🌿".repeat(100) }),
+    ).toEqual({});
+    expect(
+      validateAuthInput("register", { ...ok, name: "🌿".repeat(80) }),
+    ).toEqual({});
   });
 
   it("explains each missing or invalid field", () => {
@@ -249,10 +252,10 @@ describe("authFailure", () => {
     expect(authFailure("login", new ApiError(0, "x")).form).toBe(
       "Can't reach NatureX. Check your connection and try again.",
     );
-    expect(
-      authFailure("login", new ApiError(403, "x", "csrf_origin", "csrf_origin"))
-        .form,
-    ).toMatch(/usual address/);
+    const csrf = apiErrorFromResponse(new Response(null, { status: 403 }), {
+      detail: "csrf_origin",
+    });
+    expect(authFailure("login", csrf).form).toMatch(/usual address/);
     expect(
       authFailure("login", new ApiError(503, "x", "auth_busy", "auth_busy", 1))
         .form,

@@ -8,7 +8,13 @@ import {
 import type { ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { renderToString } from "react-dom/server";
+
+import PortfolioLayout from "@/app/(exchange)/portfolio/layout";
+import AdminLayout from "@/app/admin/layout";
+import StewardLayout from "@/app/steward/layout";
 import { AccountMenu } from "@/components/account-menu";
+import { JudgeLanding } from "@/components/proto/judge-landing";
 import { AuthForm } from "@/components/proto/auth-form";
 import { DemoBar } from "@/components/proto/demo-bar";
 import { TourProvider } from "@/components/proto/tour";
@@ -39,12 +45,12 @@ const router = vi.hoisted(() => ({
   back: vi.fn(),
   prefetch: vi.fn(),
 }));
-const nav = vi.hoisted(() => ({ pathname: "/" }));
+const nav = vi.hoisted(() => ({ pathname: "/", search: "" }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => router,
   usePathname: () => nav.pathname,
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(nav.search),
 }));
 
 beforeAll(() => {
@@ -62,6 +68,7 @@ beforeAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   nav.pathname = "/";
+  nav.search = "";
   window.history.replaceState(null, "", "/");
   window.localStorage.clear();
   window.sessionStorage.clear();
@@ -271,6 +278,69 @@ describe("AuthForm", () => {
     },
   );
 
+  it("keeps submit disabled in the server HTML, so nothing is sent before hydration", () => {
+    const layer = createDataLayer({
+      baseUrl: BASE,
+      fetch: fakeBackend({}).fetch,
+    });
+    const html = renderToString(
+      <WorldProvider dataLayer={layer}>
+        <PrototypeProvider>
+          <TourProvider>
+            <AuthForm mode="login" />
+          </TourProvider>
+        </PrototypeProvider>
+      </WorldProvider>,
+    );
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
+  });
+
+  it("sends one request however often the form is submitted", async () => {
+    const { backend, container } = setup(<AuthForm mode="login" />, {
+      "POST /auth/login": () => new Promise<Response>(() => {}),
+    });
+    fill("Email", "rosa@example.org");
+    fill("Password", "whatever-password");
+    const form = container.querySelector("form")!;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    await waitFor(() => expect(backend.calls("POST /auth/login")).toBe(1));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(backend.calls("POST /auth/login")).toBe(1);
+  });
+
+  it("focuses the password after wrong credentials", async () => {
+    setup(<AuthForm mode="login" />, {
+      "POST /auth/login": () =>
+        json({ detail: "Email or password is incorrect" }, { status: 401 }),
+    });
+    fill("Email", "rosa@example.org");
+    fill("Password", "wrong-password");
+    submit(/^sign in$/i);
+    await screen.findByText("Email or password is incorrect.");
+    await waitFor(() =>
+      expect(screen.getByLabelText("Password")).toHaveFocus(),
+    );
+  });
+
+  it("focuses the alert for other form-level errors", async () => {
+    setup(<AuthForm mode="login" />, {
+      "POST /auth/login": () =>
+        json(
+          { detail: "too_many_attempts" },
+          { status: 429, headers: { "Retry-After": "60" } },
+        ),
+    });
+    fill("Email", "rosa@example.org");
+    fill("Password", "wrong-password");
+    submit(/^sign in$/i);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("wait a minute");
+    await waitFor(() => expect(alert).toHaveFocus());
+    expect(alert).toHaveAttribute("tabindex", "-1");
+  });
+
   it("carries next to the other auth page, but only when it's safe", () => {
     setup(<AuthForm mode="login" next="/steward/list" />);
     expect(
@@ -367,7 +437,7 @@ describe("RequireAccount", () => {
     setup(
       <>
         <EnterDemo />
-        <RequireAccount>
+        <RequireAccount allowPrototypeDemo>
           <Secret />
         </RequireAccount>
       </>,
@@ -375,6 +445,106 @@ describe("RequireAccount", () => {
     fireEvent.click(screen.getByRole("button", { name: "Explore" }));
     expect(await screen.findByText("Your stakes")).toBeVisible();
     expect(window.sessionStorage.getItem("nx-prototype-demo")).toBe("1");
+  });
+
+  it("ignores the scripted demo unless the route opts in", async () => {
+    window.sessionStorage.setItem("nx-prototype-demo", "1");
+    setup(
+      <RequireAccount>
+        <Secret />
+      </RequireAccount>,
+    );
+    await waitFor(() => expect(router.replace).toHaveBeenCalled());
+    expect(screen.queryByText("Your stakes")).not.toBeInTheDocument();
+  });
+
+  it("shows why the session couldn't be checked", async () => {
+    setup(
+      <RequireAccount>
+        <Secret />
+      </RequireAccount>,
+      { "GET /world": () => json({ detail: "x" }, { status: 500 }) },
+    );
+    expect(
+      await screen.findByText("Something went wrong on our side. Try again."),
+    ).toBeVisible();
+  });
+
+  it("never enters the scripted demo from the judge landing while signed in", async () => {
+    const { layer } = setup(<JudgeLanding />, {
+      "GET /world": () => json(SIGNED_IN_WORLD),
+    });
+    await waitFor(() =>
+      expect(layer.session.getSnapshot().world?.me).not.toBeNull(),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /Explore as a community steward/ }),
+    );
+    expect(router.push).toHaveBeenCalledWith("/steward");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(window.sessionStorage.getItem("nx-prototype-demo")).toBeNull();
+  });
+});
+
+describe("protected layouts", () => {
+  const Child = () => <p>Protected content</p>;
+
+  it.each([
+    ["/steward", StewardLayout],
+    ["/admin", AdminLayout],
+    ["/portfolio", PortfolioLayout],
+  ] as const)(
+    "%s sends anonymous visitors to sign in",
+    async (path, Layout) => {
+      window.history.replaceState(null, "", path);
+      nav.pathname = path;
+      setup(
+        <Layout>
+          <Child />
+        </Layout>,
+      );
+      await waitFor(() =>
+        expect(router.replace).toHaveBeenCalledWith(
+          `/login?next=${encodeURIComponent(path)}`,
+        ),
+      );
+      expect(screen.queryByText("Protected content")).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ["/steward", StewardLayout, true],
+    ["/portfolio", PortfolioLayout, true],
+    ["/admin", AdminLayout, false],
+  ] as const)(
+    "%s honours the scripted demo: %s",
+    async (path, Layout, opens) => {
+      window.history.replaceState(null, "", path);
+      nav.pathname = path;
+      window.sessionStorage.setItem("nx-prototype-demo", "1");
+      setup(
+        <Layout>
+          <Child />
+        </Layout>,
+      );
+      if (opens) {
+        expect(await screen.findByText("Protected content")).toBeVisible();
+      } else {
+        await waitFor(() => expect(router.replace).toHaveBeenCalled());
+        expect(screen.queryByText("Protected content")).not.toBeInTheDocument();
+      }
+    },
+  );
+
+  it("/steward shows its children to a signed-in account", async () => {
+    nav.pathname = "/steward";
+    setup(
+      <StewardLayout>
+        <Child />
+      </StewardLayout>,
+      { "GET /world": () => json(SIGNED_IN_WORLD) },
+    );
+    expect(await screen.findByText("Protected content")).toBeVisible();
   });
 });
 
@@ -390,12 +560,33 @@ describe("AccountMenu", () => {
     );
   }
 
-  it("offers sign-in, with a return path, to anonymous visitors", async () => {
+  it("offers sign-in, with a return path and its query, to anonymous visitors", async () => {
     nav.pathname = "/asset/abc";
+    nav.search = "tab=report";
     setup(<AccountMenu />);
     expect(
       await screen.findByRole("link", { name: "Sign in" }),
-    ).toHaveAttribute("href", "/login?next=%2Fasset%2Fabc");
+    ).toHaveAttribute("href", "/login?next=%2Fasset%2Fabc%3Ftab%3Dreport");
+  });
+
+  it("moves focus to Sign in and ends the scripted demo after sign-out", async () => {
+    window.sessionStorage.setItem("nx-prototype-demo", "1");
+    setup(<AccountMenu />, {
+      "GET /world": sequence(
+        () => json(SIGNED_IN_WORLD),
+        () => json(WORLD),
+      ),
+      "POST /auth/logout": () => new Response(null, { status: 204 }),
+    });
+    const trigger = await screen.findByRole("button", {
+      name: "Account: Rosa",
+    });
+    fireEvent.keyDown(trigger, { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: /sign out/i }));
+
+    const signIn = await screen.findByRole("link", { name: "Sign in" });
+    await waitFor(() => expect(signIn).toHaveFocus());
+    expect(window.sessionStorage.getItem("nx-prototype-demo")).toBeNull();
   });
 
   it("shows the account and signs out, resetting the world and cache", async () => {

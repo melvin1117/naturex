@@ -5,7 +5,7 @@
  *
  * The session is the HttpOnly `nx_session` cookie only: nothing here reads or stores a token.
  */
-import type { ApiError } from "./api/errors";
+import { formatWait, type ApiError } from "./api/errors";
 import type { components } from "./api/schema";
 
 export type Me = components["schemas"]["MeOut"];
@@ -18,15 +18,6 @@ export const EMAIL_MAX_LENGTH = 254;
 
 export const LOGIN_PATH = "/login";
 export const REGISTER_PATH = "/register";
-
-/** Routes that need an account. The backend enforces access; this only redirects early. */
-const PROTECTED_PREFIXES = ["/steward", "/portfolio", "/admin"] as const;
-
-export function isProtectedPath(pathname: string): boolean {
-  return PROTECTED_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
-}
 
 const MAX_RETURN_PATH = 2048;
 // Any base works: it only tells a same-origin path apart from one that leaves the site.
@@ -76,15 +67,7 @@ export function safeReturnPath(
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
-/** `/login?next=<path>`, or plain `/login` when there's nowhere useful to come back to. */
-export function loginHref(next?: string | null): string {
-  const path = safeReturnPath(next, "");
-  return path && path !== "/"
-    ? `${LOGIN_PATH}?next=${encodeURIComponent(path)}`
-    : LOGIN_PATH;
-}
-
-/** The same `next` carried between /login and /register. */
+/** `base?next=<path>`, or plain `base` when there's nowhere useful to come back to. */
 export function withNext(base: string, next?: string | null): string {
   const path = safeReturnPath(next, "");
   return path && path !== "/"
@@ -92,14 +75,20 @@ export function withNext(base: string, next?: string | null): string {
     : base;
 }
 
+/** `/login?next=<path>`: where a protected page or "Sign in" sends the visitor. */
+export function loginHref(next?: string | null): string {
+  return withNext(LOGIN_PATH, next);
+}
+
 export type Access =
   "checking" | "allowed" | "sign-in" | "forbidden" | "unavailable";
 
 /**
  * Who may see a protected route. A signed-in account may (an admin route needs `is_admin`,
- * else 403); anonymous visitors go to sign-in. `prototypeDemo` lets the scripted prototype
- * demo (persona switcher, judge landing, tour) keep working for anonymous visitors until T65
- * replaces it with real demo sessions, whose persona will be `me`. Either way the backend
+ * else 403); anonymous visitors go to sign-in. `prototypeDemo` (only on routes that opt in,
+ * never `/admin`) lets the scripted prototype demo (persona switcher, judge landing, tour) keep
+ * working for anonymous visitors until T65 replaces it with real demo sessions, whose persona
+ * will be `me`. Either way the backend
  * checks every request; this decides only what the page shows.
  */
 export function protectedAccess({
@@ -133,6 +122,11 @@ export interface AuthInput {
   password: string;
 }
 
+/** Length as the backend counts it (Python `len`: code points, not UTF-16 units). */
+export function codePoints(value: string): number {
+  return [...value].length;
+}
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const PASSWORD_RULE = `Use ${PASSWORD_MIN_LENGTH} to ${PASSWORD_MAX_LENGTH} characters.`;
@@ -156,16 +150,20 @@ export function validateAuthInput(
   if (mode === "register") {
     const name = (input.name ?? "").trim();
     if (!name) errors.name = MESSAGES.nameMissing;
-    else if (name.length > NAME_MAX_LENGTH) errors.name = MESSAGES.nameTooLong;
+    else if (codePoints(name) > NAME_MAX_LENGTH)
+      errors.name = MESSAGES.nameTooLong;
   }
   const email = input.email.trim();
   if (!email) errors.email = MESSAGES.emailMissing;
-  else if (email.length > EMAIL_MAX_LENGTH || !EMAIL_PATTERN.test(email))
+  else if (codePoints(email) > EMAIL_MAX_LENGTH || !EMAIL_PATTERN.test(email))
     errors.email = MESSAGES.emailInvalid;
   if (!input.password) errors.password = MESSAGES.passwordMissing;
-  else if (input.password.length > PASSWORD_MAX_LENGTH)
+  else if (codePoints(input.password) > PASSWORD_MAX_LENGTH)
     errors.password = MESSAGES.passwordTooLong;
-  else if (mode === "register" && input.password.length < PASSWORD_MIN_LENGTH)
+  else if (
+    mode === "register" &&
+    codePoints(input.password) < PASSWORD_MIN_LENGTH
+  )
     errors.password = MESSAGES.passwordTooShort;
   return errors;
 }
@@ -206,10 +204,7 @@ function validationFailure(detail: unknown): AuthFailure {
 }
 
 function waitText(seconds: number | null): string {
-  if (seconds === null) return "a few minutes";
-  if (seconds < 60) return seconds <= 1 ? "a second" : `${seconds} seconds`;
-  const minutes = Math.ceil(seconds / 60);
-  return minutes === 1 ? "a minute" : `${minutes} minutes`;
+  return seconds === null ? "a few minutes" : formatWait(seconds);
 }
 
 /**
@@ -243,11 +238,7 @@ export function authFailure(mode: AuthMode, error: ApiError): AuthFailure {
         `Too many attempts. For your security, wait ${waitText(error.retryAfterSeconds)} and try again.`,
       );
     case 403:
-      return form(
-        error.code === "csrf_origin"
-          ? "Your browser sent this from an address NatureX doesn't recognise. Open NatureX from its usual address and try again."
-          : error.message,
-      );
+      return form(error.message);
     case 503:
       return form(
         `NatureX is busy right now. Try again in ${waitText(error.retryAfterSeconds)}.`,

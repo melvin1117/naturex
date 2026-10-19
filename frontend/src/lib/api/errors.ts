@@ -54,7 +54,8 @@ export function parseRetryAfter(
   return Math.max(0, Math.ceil((at - now) / 1000));
 }
 
-function formatWait(seconds: number): string {
+/** "a second", "45 seconds", "a minute", "14 minutes". */
+export function formatWait(seconds: number): string {
   if (seconds < 60) return seconds <= 1 ? "a second" : `${seconds} seconds`;
   const minutes = Math.round(seconds / 60);
   return minutes === 1 ? "a minute" : `${minutes} minutes`;

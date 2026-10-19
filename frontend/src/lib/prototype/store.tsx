@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { useOptionalDataLayer } from "../data-layer";
 import { answer } from "./copilot";
 import {
   createInitialWorld,
@@ -40,14 +41,15 @@ type Store = {
   hydrated: boolean;
   /**
    * True once an anonymous visitor enters the scripted demo (judge landing, persona switcher,
-   * tour). `<RequireAccount>` then lets them see the prototype's protected screens. T65
-   * replaces this with real demo sessions.
+   * tour). `<RequireAccount allowPrototypeDemo>` then lets them see the prototype's
+   * protected screens (never `/admin`). Never set while an account is signed in. T65 replaces
+   * this with real demo sessions.
    */
   demo: boolean;
   act: (fn: (w: World) => World) => void;
-  /** Switch the pretend persona; this enters the demo. */
+  /** Switch the pretend persona; when nobody is signed in, this enters the demo. */
   setPersona: (p: PersonaKey) => void;
-  /** Leave the demo (a real account signed in): prototype screens show the investor. */
+  /** Leave the demo (on sign-in and sign-out): prototype screens show the investor. */
   exitDemo: () => void;
   placeOrder: (
     trader: TraderKey,
@@ -136,6 +138,7 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
   const [world, setWorld] = useState<World>(() => createInitialWorld());
   const [hydrated, setHydrated] = useState(false);
   const [demo, setDemo] = useState(false);
+  const layer = useOptionalDataLayer();
   const worldRef = useRef(world);
   worldRef.current = world;
   const [ui, setUi] = useState<Ui>({
@@ -244,7 +247,7 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
       act,
       demo,
       setPersona: (p) => {
-        setDemo(true);
+        if (layer?.session.getSnapshot().world?.me == null) setDemo(true);
         setWorld((w) => ({ ...w, persona: p }));
       },
       exitDemo: () => {
@@ -272,7 +275,7 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
       closeCopilot: () => setUi((u) => ({ ...u, copilotOpen: false })),
       ask,
     }),
-    [world, hydrated, demo, act, placeOrder, reset, ui, ask],
+    [world, hydrated, demo, layer, act, placeOrder, reset, ui, ask],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

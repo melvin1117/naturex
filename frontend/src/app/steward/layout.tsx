@@ -11,7 +11,7 @@ export default function StewardLayout({
     <>
       <AppHeader app="steward" />
       <main className="flex-1">
-        <RequireAccount>{children}</RequireAccount>
+        <RequireAccount allowPrototypeDemo>{children}</RequireAccount>
       </main>
       <SiteFooter />
     </>

@@ -166,6 +166,11 @@ export function DataLayerProvider({
   );
 }
 
+/** The layer if one is provided, else null (for code that also runs without one). */
+export function useOptionalDataLayer(): DataLayer | null {
+  return useContext(DataLayerContext);
+}
+
 export function useDataLayer(): DataLayer {
   const layer = useContext(DataLayerContext);
   if (!layer) {

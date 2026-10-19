@@ -17,9 +17,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { toApiError } from "@/lib/api/errors";
 import {
   authFailure,
-  EMAIL_MAX_LENGTH,
   LOGIN_PATH,
-  NAME_MAX_LENGTH,
   PASSWORD_RULE,
   REGISTER_PATH,
   safeReturnPath,
@@ -33,6 +31,7 @@ import { useRegister, useSignIn, useWorld } from "@/lib/hooks";
 import { usePrototype } from "@/lib/prototype/store";
 
 const FIELD_ORDER: AuthField[] = ["name", "email", "password"];
+const FORM_ERROR_ID = "form-error";
 
 /**
  * `/login` and `/register` (T61), on the real auth API. The session is the HttpOnly
@@ -56,6 +55,11 @@ export function AuthForm({
   const mutation = mode === "register" ? register : signIn;
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
+  // Where focus goes after a failed submit, applied once the errors have rendered.
+  const [focusRequest, setFocusRequest] = useState<{ id: string } | null>(null);
+  // Until React has hydrated, a submit would skip validation and our handler; keep it off.
+  const [hydrated, setHydrated] = useState(false);
+  const submitting = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
   const isRegister = mode === "register";
   const destination = safeReturnPath(next);
@@ -66,10 +70,21 @@ export function AuthForm({
     if (signedIn) router.replace(destination);
   }, [signedIn, destination, router]);
 
-  function focusFirstError(errors: FieldErrors) {
-    const first = FIELD_ORDER.find((field) => errors[field]);
-    if (first)
-      formRef.current?.querySelector<HTMLElement>(`#${first}`)?.focus();
+  useEffect(() => setHydrated(true), []);
+
+  useEffect(() => {
+    if (focusRequest)
+      formRef.current
+        ?.querySelector<HTMLElement>(`#${focusRequest.id}`)
+        ?.focus();
+  }, [focusRequest]);
+
+  /** The first invalid field; else the password after wrong credentials; else the alert. */
+  function focusAfterError(errors: FieldErrors, status?: number) {
+    const id =
+      FIELD_ORDER.find((field) => errors[field]) ??
+      (status === 401 ? "password" : FORM_ERROR_ID);
+    setFocusRequest({ id });
   }
 
   function clearFieldError(field: AuthField) {
@@ -80,7 +95,7 @@ export function AuthForm({
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (mutation.isPending) return;
+    if (submitting.current) return;
     const data = new FormData(e.currentTarget);
     const input = {
       name: String(data.get("name") ?? ""),
@@ -91,9 +106,10 @@ export function AuthForm({
     setFormError(null);
     setFieldErrors(invalid);
     if (Object.keys(invalid).length) {
-      focusFirstError(invalid);
+      focusAfterError(invalid);
       return;
     }
+    submitting.current = true;
     try {
       const me = isRegister
         ? await register.mutateAsync({
@@ -117,10 +133,13 @@ export function AuthForm({
       );
       router.replace(destination);
     } catch (error) {
-      const failure = authFailure(mode, toApiError(error));
+      const apiError = toApiError(error);
+      const failure = authFailure(mode, apiError);
       setFormError(failure.form);
       setFieldErrors(failure.fields);
-      focusFirstError(failure.fields);
+      focusAfterError(failure.fields, apiError.status);
+    } finally {
+      submitting.current = false;
     }
   }
 
@@ -161,7 +180,6 @@ export function AuthForm({
                   id="name"
                   name="name"
                   autoComplete="nickname"
-                  maxLength={NAME_MAX_LENGTH}
                   required
                   {...fieldProps("name")}
                 />
@@ -178,7 +196,6 @@ export function AuthForm({
                 autoComplete="email"
                 autoCapitalize="none"
                 spellCheck={false}
-                maxLength={EMAIL_MAX_LENGTH}
                 required
                 {...fieldProps("email")}
               />
@@ -192,7 +209,12 @@ export function AuthForm({
             />
           </div>
           {formError && (
-            <Alert variant="destructive" className="mt-4 rounded-xl">
+            <Alert
+              id={FORM_ERROR_ID}
+              tabIndex={-1}
+              variant="destructive"
+              className="mt-4 rounded-xl"
+            >
               <TriangleAlertIcon aria-hidden="true" />
               <AlertDescription>{formError}</AlertDescription>
             </Alert>
@@ -201,7 +223,7 @@ export function AuthForm({
             type="submit"
             size="lg"
             className="mt-6 w-full"
-            disabled={mutation.isPending}
+            disabled={!hydrated || mutation.isPending}
           >
             {mutation.isPending && (
               <Spinner aria-hidden="true" role="presentation" />

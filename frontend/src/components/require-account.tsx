@@ -27,20 +27,27 @@ function currentPath(): string {
 export function RequireAccount({
   children,
   admin = false,
+  allowPrototypeDemo = false,
 }: {
   children: ReactNode;
   /** Platform admins only (`me.is_admin`). */
   admin?: boolean;
+  /**
+   * Also open to an anonymous visitor in the scripted prototype demo (until T65). Only for
+   * prototype screens with scripted data; never for `/admin`.
+   */
+  allowPrototypeDemo?: boolean;
 }) {
   const router = useRouter();
-  const { status, world, retry } = useWorld();
+  const { status, world, error, retry } = useWorld();
   const { demo, hydrated } = usePrototype();
   const access = protectedAccess({
     status,
     me: world?.me,
     admin,
-    prototypeDemo: demo,
-    prototypeReady: hydrated,
+    prototypeDemo: allowPrototypeDemo && demo,
+    // Without the exception there's no prototype flag to wait for.
+    prototypeReady: !allowPrototypeDemo || hydrated,
   });
 
   useEffect(() => {
@@ -77,7 +84,8 @@ export function RequireAccount({
           <AlertTitle>We couldn&apos;t check your session</AlertTitle>
           <AlertDescription>
             <p>
-              Can&apos;t reach NatureX. Check your connection and try again.
+              {error?.message ??
+                "Can't reach NatureX. Check your connection and try again."}
             </p>
             <Button
               variant="outline"
