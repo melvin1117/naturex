@@ -272,6 +272,19 @@ describe("AuthForm", () => {
     ).toHaveAttribute("href", "/register?next=%2Fsteward%2Flist");
   });
 
+  it.each(["/.//evil.com", "/a/..//evil.com", "/%2e%2e//evil.com"])(
+    "keeps a signed-in visit to /login?next=%s on the site",
+    async (next) => {
+      setup(<AuthForm mode="login" next={next} />, {
+        "GET /world": () => json(SIGNED_IN_WORLD),
+      });
+      await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/"));
+      expect(router.replace).not.toHaveBeenCalledWith(
+        expect.stringContaining("evil"),
+      );
+    },
+  );
+
   it("sends a visitor who is already signed in straight on", async () => {
     setup(<AuthForm mode="login" next="/admin" />, {
       "GET /world": () => json(SIGNED_IN_WORLD),

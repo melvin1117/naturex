@@ -32,12 +32,17 @@ const MAX_RETURN_PATH = 2048;
 // Any base works: it only tells a same-origin path apart from one that leaves the site.
 const PROBE_ORIGIN = "https://naturex.invalid";
 
+function startsLikeAnotherHost(path: string): boolean {
+  return path.startsWith("//") || path.startsWith("/\\");
+}
+
 /**
  * Where to go after sign-in: `raw` if it's a same-origin relative path, else `fallback`.
  *
  * Rejects absolute URLs (`https://…`, `javascript:`), protocol-relative ones (`//evil.com`,
- * `/\evil.com`, which browsers treat as `//`), backslashes, whitespace and control characters
- * anywhere, and the sign-in pages themselves (no loop).
+ * `/\evil.com`, which browsers treat as `//`), also once dot segments are resolved or the path
+ * is decoded (`/.//evil.com`, `/%2e%2e//evil.com`, `/%2F%2Fevil.com`), backslashes, whitespace
+ * and control characters anywhere, and the sign-in pages themselves (no loop).
  */
 export function safeReturnPath(
   raw: string | null | undefined,
@@ -55,6 +60,17 @@ export function safeReturnPath(
     return fallback;
   }
   if (url.origin !== PROBE_ORIGIN) return fallback;
+  // Dot segments normalise into a protocol-relative path: `/.//evil.com`, `/a/..//evil.com`
+  // and `/%2e%2e//evil.com` all become `//evil.com`. Check what we'd actually return, and its
+  // decoded form too (`/%2F%2Fevil.com`, `/%5Cevil.com`).
+  if (startsLikeAnotherHost(url.pathname)) return fallback;
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(url.pathname);
+  } catch {
+    return fallback;
+  }
+  if (startsLikeAnotherHost(decoded)) return fallback;
   if (url.pathname === LOGIN_PATH || url.pathname === REGISTER_PATH)
     return fallback;
   return `${url.pathname}${url.search}${url.hash}`;

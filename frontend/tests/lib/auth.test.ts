@@ -50,13 +50,24 @@ describe("safeReturnPath", () => {
     [null],
     [undefined],
     ["/" + "a".repeat(3000)],
+    // Dot segments and encodings that normalise or decode into another host.
+    ["/.//evil.com"],
+    ["/a/..//evil.com"],
+    ["/%2e%2e//evil.com"],
+    ["/%2E%2E//evil.com"],
+    ["/././/evil.com"],
+    ["/%2F%2Fevil.com"],
+    ["/%2f/evil.com"],
+    ["/%5Cevil.com"],
+    ["/%E0%A4%A"],
   ])("rejects %j", (raw) => {
     expect(safeReturnPath(raw)).toBe("/");
   });
 
   it("normalises dot segments without leaving the site", () => {
     expect(safeReturnPath("/a/../../evil.com")).toBe("/evil.com");
-    expect(safeReturnPath("/%2F%2Fevil.com")).toBe("/%2F%2Fevil.com");
+    expect(safeReturnPath("/steward/./list")).toBe("/steward/list");
+    expect(safeReturnPath("/asset/caf%C3%A9")).toBe("/asset/caf%C3%A9");
   });
 
   it("uses the fallback given", () => {
