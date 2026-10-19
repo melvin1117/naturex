@@ -12,8 +12,9 @@ import pytest
 from alembic import command
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlmodel import Session
+from sqlmodel import Session, select
 
+from app.authz import optional_actor
 from app.config import Settings, get_settings
 from app.db import get_session
 from app.deps import current_world
@@ -28,10 +29,11 @@ from app.ledger import (
     verify,
 )
 from app.main import app
-from app.models import Asset, AssetStatus, LedgerKind, World
-from app.seed import WORLD_ID, seed
+from app.models import Asset, AssetStatus, LedgerKind, User, UserKind, UserRole
+from app.sandbox import ensure_live_world
+from app.seed import LIVE_WORLD_ID, WORLD_ID, seed
 from tests.conftest import alembic_cfg, requires_db
-from tests.worlds import start_demo
+from tests.worlds import sign_in, start_demo, stub_actor, stub_sandbox
 
 # --- Hashing --------------------------------------------------------------------------------
 
@@ -286,9 +288,8 @@ def test_append_rejects_an_unknown_asset(session: Session) -> None:
 
 @pytest.fixture
 def client(session: Session) -> Iterator[TestClient]:
-    """These tests use the seeded template assets, so the visitor's world is the template."""
+    """A client on the test transaction; its world comes from its session (T73)."""
     app.dependency_overrides[get_session] = lambda: session
-    app.dependency_overrides[current_world] = lambda: session.get(World, WORLD_ID)
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -311,11 +312,46 @@ def _fill(session: Session, world_id: uuid.UUID = WORLD_ID, asset_id: uuid.UUID 
     session.flush()
 
 
-@requires_db
-def test_get_ledger_lists_entries_in_order(session: Session, client: TestClient) -> None:
-    _fill(session)
+def _sandbox_asset(session: Session, client: TestClient, persona_key: str) -> uuid.UUID:
+    """A bare asset in a new demo sandbox, with the client signed in to it as `persona_key`."""
+    world = start_demo(client, session, persona_key=persona_key)
+    asset = Asset(
+        world_id=world.id,
+        name="Sandbox ledger parcel",
+        geojson={"type": "Polygon", "coordinates": []},
+        area_ha=Decimal("500.00"),
+        primary_shares_remaining=490_000,
+        status=AssetStatus.LISTED,  # public, so its ledger is readable (T58)
+    )
+    session.add(asset)
+    session.commit()
+    return asset.id
 
-    response = client.get(f"/ledger/{ASSET_ID}")
+
+@pytest.fixture
+def sandbox_asset(session: Session, client: TestClient) -> uuid.UUID:
+    """The tamper demo is for admins in their own sandbox (T73, T57): the demo admin persona."""
+    return _sandbox_asset(session, client, "admin")
+
+
+@pytest.fixture
+def investor_asset(session: Session, client: TestClient) -> uuid.UUID:
+    """A sandbox asset with the client signed in as the demo investor persona."""
+    return _sandbox_asset(session, client, "arjun")
+
+
+def _filled(session: Session, asset_id: uuid.UUID) -> uuid.UUID:
+    _fill(session, session.get_one(Asset, asset_id).world_id, asset_id)
+    return asset_id
+
+
+@requires_db
+def test_get_ledger_lists_entries_in_order(
+    session: Session, client: TestClient, investor_asset: uuid.UUID
+) -> None:
+    _filled(session, investor_asset)
+
+    response = client.get(f"/ledger/{investor_asset}")
 
     assert response.status_code == 200
     body = response.json()
@@ -325,10 +361,12 @@ def test_get_ledger_lists_entries_in_order(session: Session, client: TestClient)
 
 
 @requires_db
-def test_verify_endpoint_reports_a_valid_chain(session: Session, client: TestClient) -> None:
-    _fill(session)
+def test_verify_endpoint_reports_a_valid_chain(
+    session: Session, client: TestClient, investor_asset: uuid.UUID
+) -> None:
+    _filled(session, investor_asset)
 
-    response = client.get(f"/ledger/{ASSET_ID}/verify")
+    response = client.get(f"/ledger/{investor_asset}/verify")
 
     assert response.status_code == 200
     body = response.json()
@@ -346,30 +384,18 @@ def test_ledger_endpoints_404_for_an_unknown_asset(client: TestClient) -> None:
     assert client.get(f"/ledger/{missing}/verify").status_code == 404
 
 
-@pytest.fixture
-def sandbox_asset(session: Session, client: TestClient) -> uuid.UUID:
-    """A bare asset in a demo sandbox, with the client signed in to it: the tamper demo runs
-    only in sandboxes (T73)."""
-    app.dependency_overrides.pop(current_world, None)
-    world = start_demo(client, session)
-    asset = Asset(
-        world_id=world.id,
-        name="Sandbox ledger parcel",
-        geojson={"type": "Polygon", "coordinates": []},
-        area_ha=Decimal("500.00"),
-        primary_shares_remaining=490_000,
-        status=AssetStatus.LISTED,  # public, so its ledger is readable (T58)
-    )
-    session.add(asset)
-    session.commit()
-    return asset.id
+@requires_db
+def test_the_template_ledger_is_never_served(session: Session, client: TestClient) -> None:
+    _fill(session)
+
+    assert client.get(f"/ledger/{ASSET_ID}").status_code == 404
 
 
 @requires_db
 def test_tamper_demo_breaks_verification_without_writing(
     session: Session, client: TestClient, sandbox_asset: uuid.UUID
 ) -> None:
-    _fill(session, session.get_one(Asset, sandbox_asset).world_id, sandbox_asset)
+    _filled(session, sandbox_asset)
 
     response = client.post("/admin/tamper-demo", json={"asset_id": str(sandbox_asset), "seq": 1})
 
@@ -385,7 +411,7 @@ def test_tamper_demo_breaks_verification_without_writing(
 def test_tamper_demo_defaults_to_the_latest_entry(
     session: Session, client: TestClient, sandbox_asset: uuid.UUID
 ) -> None:
-    _fill(session, session.get_one(Asset, sandbox_asset).world_id, sandbox_asset)
+    _filled(session, sandbox_asset)
 
     response = client.post("/admin/tamper-demo", json={"asset_id": str(sandbox_asset)})
 
@@ -400,20 +426,47 @@ def test_tamper_demo_needs_entries(client: TestClient, sandbox_asset: uuid.UUID)
 
 
 @requires_db
-def test_tamper_demo_never_runs_outside_a_sandbox(session: Session, client: TestClient) -> None:
-    _fill(session)
+def test_tamper_demo_is_for_admins_only(
+    session: Session, client: TestClient, investor_asset: uuid.UUID
+) -> None:
+    _filled(session, investor_asset)
 
-    response = client.post("/admin/tamper-demo", json={"asset_id": str(ASSET_ID)})
+    response = client.post("/admin/tamper-demo", json={"asset_id": str(investor_asset)})
+
+    assert (response.status_code, response.json()["detail"]) == (403, "admin_only")
+
+
+@requires_db
+def test_tamper_demo_never_runs_outside_a_sandbox(session: Session, client: TestClient) -> None:
+    ensure_live_world(session)
+    admin = User(
+        world_id=LIVE_WORLD_ID,
+        name="Live admin",
+        role=UserRole.ADMIN,
+        kind=UserKind.PERSON,
+        is_admin=True,
+    )
+    session.add(admin)
+    session.commit()
+    sign_in(client, session, admin)
+    asset = session.exec(select(Asset).where(Asset.world_id == LIVE_WORLD_ID)).first()
+    assert asset is not None
+
+    response = client.post("/admin/tamper-demo", json={"asset_id": str(asset.id)})
 
     assert (response.status_code, response.json()["detail"]) == (403, "sandbox_only")
 
 
 def test_tamper_demo_is_hidden_outside_demo_mode() -> None:
+    """The policy reads DEMO_MODE (T68): with it off the route doesn't exist, even for an admin
+    in its own sandbox."""
+    sandbox = stub_sandbox()
     app.dependency_overrides[get_settings] = lambda: Settings(demo_mode=False)
-    app.dependency_overrides[current_world] = lambda: World(label="visitor")
+    app.dependency_overrides[current_world] = lambda: sandbox
+    app.dependency_overrides[optional_actor] = lambda: stub_actor(sandbox, is_admin=True)
     try:
         response = TestClient(app).post("/admin/tamper-demo", json={"asset_id": str(uuid.uuid4())})
     finally:
         app.dependency_overrides.clear()
 
-    assert response.status_code == 404
+    assert (response.status_code, response.json()["detail"]) == (404, "demo_mode_off")

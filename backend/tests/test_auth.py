@@ -409,7 +409,9 @@ def test_template_personas_are_backfilled_as_personas(session: Session) -> None:
     users = session.exec(select(User).where(User.world_id == WORLD_ID)).all()
     assert {u.kind for u in users if u.persona_key} == {UserKind.PERSONA}
     assert {u.kind for u in users if not u.persona_key} == {UserKind.TREASURY}  # T56
-    assert not any(u.email or u.password_hash or u.is_admin for u in users)
+    assert not any(u.email or u.password_hash for u in users)
+    # Only the demo admin persona is an admin, and only inside the sandboxes copied from it.
+    assert {u.persona_key for u in users if u.is_admin} == {"admin"}
 
 
 @requires_db
@@ -674,7 +676,7 @@ def test_cli_rejects_weak_or_mismatched_passwords(
     )
 
     assert code == 1
-    assert session.exec(select(User).where(User.is_admin)).all() == []
+    assert session.exec(select(User).where(User.is_admin, User.kind == UserKind.PERSON)).all() == []
 
 
 # --- Review follow-ups -----------------------------------------------------------------------

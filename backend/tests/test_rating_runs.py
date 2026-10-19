@@ -830,7 +830,8 @@ def api(db: Connection) -> Iterator[tuple[TestClient, Deferred]]:
     app.dependency_overrides[get_rating_runner] = lambda: runner
     API_SESSION[:] = [session]
     with TestClient(app) as client:
-        start_demo(client, session)
+        # A re-rate is an operator's action (T57): the demo admin persona, in its own sandbox.
+        start_demo(client, session, persona_key="admin")
         yield client, deferred
     app.dependency_overrides.clear()
     session.close()

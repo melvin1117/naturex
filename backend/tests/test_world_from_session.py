@@ -191,7 +191,7 @@ def test_a_password_session_can_never_reset_the_live_world(
 
     res = client.post("/world/reset")
 
-    assert (res.status_code, res.json()["detail"]) == (403, "demo_only")
+    assert (res.status_code, res.json()["detail"]) == (403, "demo_session_only")
     session.expire_all()
     after = [a.id for a in session.exec(select(Asset).where(Asset.world_id == LIVE_WORLD_ID))]
     assert after == before
@@ -313,9 +313,8 @@ def test_an_account_cannot_rate_simulate_or_tamper_in_the_live_world(
     quarter = client.post("/admin/simulate/quarter")
     tamper = client.post("/admin/tamper-demo", json={"asset_id": asset})
 
-    for res in (rate, event, quarter):
+    for res in (rate, event, quarter, tamper):  # the tamper demo is for admins too (T57)
         assert (res.status_code, res.json()["detail"]) == (403, "admin_only")
-    assert (tamper.status_code, tamper.json()["detail"]) == (403, "sandbox_only")
     assert runner.started == []
 
 
@@ -335,10 +334,10 @@ def test_an_admin_can_rate_in_the_live_world_but_never_tamper(
 
 
 @requires_db
-def test_a_demo_session_can_rate_and_simulate_in_its_own_sandbox(
+def test_the_demo_admin_can_rate_and_simulate_in_its_own_sandbox(
     session: Session, client: TestClient, runner: RecordingRunner
 ) -> None:
-    sandbox = start_demo(client, session)
+    sandbox = start_demo(client, session, persona_key="admin")
     asset = session.exec(select(Asset).where(Asset.world_id == sandbox.id)).first()
     assert asset is not None
 
@@ -346,6 +345,33 @@ def test_a_demo_session_can_rate_and_simulate_in_its_own_sandbox(
     assert client.post(
         "/admin/simulate/event", json={"asset_id": str(asset.id), "preset": "fire"}
     ).is_success
+    assert runner.started == [(sandbox.id, asset.id)]
+
+
+@requires_db
+def test_in_a_sandbox_investors_neither_rate_nor_simulate_and_owners_only_rate(
+    session: Session, client: TestClient, runner: RecordingRunner
+) -> None:
+    """The matrix holds in sandboxes too (T57): a rating run is the operator's or the asset's
+    community's; the Time Machine is the admin's."""
+    sandbox = start_demo(client, session)  # the demo investor
+    asset = session.exec(
+        select(Asset).where(Asset.world_id == sandbox.id).order_by(Asset.site_key)
+    ).first()
+    assert asset is not None
+    event = {"asset_id": str(asset.id), "preset": "fire"}
+
+    investor = [
+        client.post(f"/assets/{asset.id}/rate"),
+        client.post("/admin/simulate/event", json=event),
+    ]
+    start_demo(client, session, sandbox, persona_key="rosa")  # owns every seeded community
+    owner_rate = client.post(f"/assets/{asset.id}/rate")
+    owner_event = client.post("/admin/simulate/event", json=event)
+
+    for res in (*investor, owner_event):
+        assert (res.status_code, res.json()["detail"]) == (403, "admin_only")
+    assert owner_rate.status_code == 202, owner_rate.text
     assert runner.started == [(sandbox.id, asset.id)]
 
 

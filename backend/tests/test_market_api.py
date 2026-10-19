@@ -462,7 +462,7 @@ def test_quote_without_a_session_has_no_max_qty(client: TestClient, session: Ses
     sandbox = session.get(World, UUID(world["id"]))
     assert sandbox is not None
 
-    quote = get_quote(UUID(_asset_id(world)), sandbox, None, session, side="buy", qty=1)
+    quote = get_quote(UUID(_asset_id(world)), sandbox, None, None, session, side="buy", qty=1)
 
     assert quote.max_qty is None and quote.fill_price > quote.price
 

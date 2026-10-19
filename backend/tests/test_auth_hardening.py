@@ -20,6 +20,7 @@ from sqlalchemy import Connection, create_engine, func, text, update
 from sqlmodel import Session, col, select
 
 from app import auth, deps
+from app.authz import optional_actor
 from app.config import Settings, get_settings
 from app.db import get_session
 from app.deps import current_principal, current_world
@@ -33,7 +34,7 @@ from app.middleware import (
 from app.models import AuthAttempt, AuthAttemptKind, AuthBucket, UserSession
 from app.seed import seed
 from tests.conftest import alembic_cfg, requires_db
-from tests.worlds import stub_principal, stub_sandbox
+from tests.worlds import stub_actor, stub_principal, stub_sandbox
 
 ALLOWED = ["https://app.example.com", "http://localhost:3000"]
 
@@ -157,12 +158,16 @@ def client() -> TestClient:
 
 @pytest.fixture
 def signed_in() -> Iterator[None]:
-    """The CSRF tests post to stub routes, which need a session since T73."""
+    """The CSRF tests post to stub routes, which need a session since T73 (a demo admin, so
+    T57's authorization lets it run the Time Machine stub)."""
+    sandbox = stub_sandbox()
     app.dependency_overrides[current_principal] = stub_principal
-    app.dependency_overrides[current_world] = stub_sandbox
+    app.dependency_overrides[current_world] = lambda: sandbox
+    app.dependency_overrides[optional_actor] = lambda: stub_actor(sandbox, is_admin=True)
     yield
     app.dependency_overrides.pop(current_principal, None)
     app.dependency_overrides.pop(current_world, None)
+    app.dependency_overrides.pop(optional_actor, None)
 
 
 def bare_client() -> TestClient:

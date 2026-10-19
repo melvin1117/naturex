@@ -9,20 +9,24 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
+from app.authz import optional_actor
 from app.deps import current_principal, current_world
 from app.main import app
 from app.mocks import WETLAND_ID, news_scout_fixture, wetland_report
 from app.schemas import AuditorOutput, NewsScoutItem, NewsScoutOutput
-from tests.worlds import stub_principal, stub_sandbox
+from tests.worlds import stub_actor, stub_principal, stub_sandbox
 
 client = TestClient(app)
 
 
 @pytest.fixture
 def signed_in() -> Iterator[None]:
-    """Stub routes need a signed-in principal (T73); no database needed for that here."""
+    """Stub routes need a signed-in principal (T73), here a demo admin authorized in its own
+    sandbox (T57); no database needed for that here."""
+    sandbox = stub_sandbox()
     app.dependency_overrides[current_principal] = stub_principal
-    app.dependency_overrides[current_world] = stub_sandbox
+    app.dependency_overrides[current_world] = lambda: sandbox
+    app.dependency_overrides[optional_actor] = lambda: stub_actor(sandbox, is_admin=True)
     yield
     app.dependency_overrides.clear()
 
@@ -44,7 +48,7 @@ def test_create_asset_needs_a_signed_in_member() -> None:
 @pytest.mark.usefixtures("signed_in")
 def test_admin_and_copilot() -> None:
     assert client.post("/admin/simulate/quarter").status_code == 200
-    assert client.get("/admin/trace", params={"asset_id": str(WETLAND_ID)}).status_code == 200
+    assert client.get("/admin/trace").status_code == 200
     assert client.post("/copilot", json={"question": "Why did it drop?"}).status_code == 200
 
 
