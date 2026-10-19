@@ -341,7 +341,8 @@ export interface paths {
         /**
          * Place Order
          * @description Fill a market order for the signed-in user. `is_primary` is true if any shares came from
-         *     the IPO float.
+         *     the IPO float. With `max_total` (buy) or `min_total` (sell), a fill worse than the quote the
+         *     user confirmed is refused with 409 `price_moved` and nothing changes.
          */
         post: operations["place_order_orders_post"];
         delete?: never;
@@ -1237,6 +1238,16 @@ export interface components {
             side: "buy" | "sell";
             /** Qty */
             qty: number;
+            /**
+             * Max Total
+             * @description Buys only: refuse with 409 `price_moved` if the order would cost more (the total of the quote the user saw).
+             */
+            max_total?: number | string | null;
+            /**
+             * Min Total
+             * @description Sells only: refuse with 409 `price_moved` if the order would pay less.
+             */
+            min_total?: number | string | null;
         };
         /** OrderOut */
         OrderOut: {
@@ -1281,6 +1292,16 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Cash Balance
+             * @description The trader's cash right after this fill.
+             */
+            cash_balance: string;
+            /**
+             * Shares Held
+             * @description The trader's shares of this asset after this fill.
+             */
+            shares_held: number;
         };
         /**
          * OverlayImage
@@ -1376,6 +1397,16 @@ export interface components {
              * @description unrealized_pnl as a percentage of cost_basis; null if 0.
              */
             unrealized_pnl_pct?: string | null;
+            /**
+             * Starting Cash
+             * @description The play money every account starts with.
+             */
+            starting_cash: string;
+            /**
+             * Since Start
+             * @description total_value − starting_cash: realised and unrealised gains and dividends.
+             */
+            since_start: string;
             impact: components["schemas"]["ImpactSummary"];
         };
         /** PricePoint */
@@ -2674,7 +2705,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Asset not listed or without a price; `insufficient_cash`, `insufficient_shares` or `insufficient_supply` */
+            /** @description Asset not listed or without a price; `insufficient_cash`, `insufficient_shares`, `insufficient_supply`, or `price_moved` (the total is above `max_total` or below `min_total`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2729,7 +2760,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Asset not listed or without a price; `insufficient_cash`, `insufficient_shares` or `insufficient_supply` */
+            /** @description Asset not listed or without a price */
             409: {
                 headers: {
                     [name: string]: unknown;

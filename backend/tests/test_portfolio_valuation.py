@@ -50,18 +50,27 @@ def test_totals_add_cash_to_the_priced_holdings_only() -> None:
         value_holding(shares=7, avg_cost=D("10.0000"), mark_price=None),
     ]
 
-    totals = portfolio_totals(D("1000.00"), holdings)
+    totals = portfolio_totals(D("1000.00"), holdings, starting_cash=D("10000.00"))
 
     assert totals.holdings_value == D("2600.00")
     assert totals.total_value == D("3600.00")
     assert totals.cost_basis == D("2500.00")
     assert totals.unrealized_pnl == D("100.00")
     assert totals.unrealized_pnl_pct == D("4.00")
+    assert totals.since_start == D("-6400.00")
 
 
 def test_an_empty_portfolio_is_its_cash_with_no_pnl_percentage() -> None:
-    totals = portfolio_totals(D("10000.00"), [])
+    totals = portfolio_totals(D("10000.00"), [], starting_cash=D("10000.00"))
 
     assert totals.total_value == D("10000.00")
     assert totals.holdings_value == totals.unrealized_pnl == D("0.00")
     assert totals.unrealized_pnl_pct is None
+    assert totals.since_start == D("0.00")
+
+
+def test_since_start_counts_realised_gains_and_dividends() -> None:
+    # Sold at a profit and got a dividend: more cash than the start, nothing held.
+    assert portfolio_totals(D("10123.45"), [], starting_cash=D("10000.00")).since_start == D(
+        "123.45"
+    )

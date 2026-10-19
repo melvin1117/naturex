@@ -296,6 +296,7 @@ def test_preview_prices_an_order_exactly_as_execute_fills_it(
     assert quoted.cash_amount == filled.cash_amount
     assert quoted.primary_qty == filled.primary_qty
     assert quoted.community_amount == filled.market.community_wallet - state.community_wallet
+    assert quoted.community_amount == filled.community_amount
 
 
 def test_preview_of_a_sell_matches_execute_and_pays_no_community() -> None:
@@ -333,6 +334,22 @@ def test_max_buy_is_capped_by_supply_and_order_size() -> None:
     assert max_fillable_qty(market(primary=10, market_maker=5), rich, OrderSide.BUY) == 15
     assert max_fillable_qty(market(price="0.0100"), rich, OrderSide.BUY) == max_order_qty(1_000_000)
     assert max_fillable_qty(market(), investor(cash="0.00"), OrderSide.BUY) == 0
+
+
+def test_max_buy_with_no_inventory_is_what_is_left_of_the_float() -> None:
+    state = market(primary=7, market_maker=0)
+    rich = investor(cash="100000000.00")
+
+    assert max_fillable_qty(state, rich, OrderSide.BUY) == 7
+    assert execute(state, rich, OrderSide.BUY, 7).market.primary_shares_remaining == 0
+    with pytest.raises(InsufficientSupply):
+        execute(state, rich, OrderSide.BUY, 8)
+
+
+def test_max_buy_with_no_inventory_is_still_capped_by_cash() -> None:
+    state = market(primary=7, market_maker=0)
+    # About $10 a share plus slippage: $45 buys 4 of the 7 left.
+    assert max_fillable_qty(state, investor(cash="45.00"), OrderSide.BUY) == 4
 
 
 def test_max_sell_is_the_holding_up_to_the_size_cap() -> None:

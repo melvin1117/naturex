@@ -32,6 +32,8 @@ MIN_PRICE = Decimal("0.0001")
 
 _PRICE = Decimal("0.0001")
 _CASH = Decimal("0.01")
+PERCENT_QUANTUM = Decimal("0.01")
+"""Percentages (slippage, P&L) have 2 decimal places."""
 _HUNDRED = Decimal("100")
 
 
@@ -114,6 +116,8 @@ class TradeResult:
     """Cash paid (buy) or received (sell): qty × fill_price, rounded to cents."""
     primary_qty: int
     """Shares bought from the primary float (`orders.is_primary`); the rest are secondary."""
+    community_amount: Decimal
+    """Cash paid to the community wallet: primary_qty × fill_price, rounded to cents."""
     price_change: PriceChange
 
 
@@ -121,8 +125,14 @@ def _price(value: Decimal) -> Decimal:
     return max(value.quantize(_PRICE, rounding=ROUND_HALF_UP), MIN_PRICE)
 
 
-def _cash(value: Decimal) -> Decimal:
+def round_cash(value: Decimal) -> Decimal:
+    """Money: half-up to cents."""
     return value.quantize(_CASH, rounding=ROUND_HALF_UP)
+
+
+def round_pct(value: Decimal) -> Decimal:
+    """Percentages: half-up to 2 decimal places."""
+    return value.quantize(PERCENT_QUANTUM, rounding=ROUND_HALF_UP)
 
 
 def _check_score(name: str, value: Decimal) -> None:
@@ -138,7 +148,7 @@ def fair_value_total(*, value_mid: Decimal, health: Decimal, confidence: Decimal
     _check_score("confidence", confidence)
     health_factor = Decimal("0.5") + Decimal("0.5") * health / _HUNDRED
     confidence_factor = Decimal("0.7") + Decimal("0.3") * confidence / _HUNDRED
-    return _cash(value_mid * 10 * health_factor * confidence_factor)
+    return round_cash(value_mid * 10 * health_factor * confidence_factor)
 
 
 def fair_value_per_share(
@@ -202,28 +212,59 @@ def quote(*, price: Decimal, side: OrderSide, qty: int, total_shares: int) -> De
     return _price(price * (1 + sign * slippage))
 
 
-def execute(market: MarketState, trader: Position, side: OrderSide, qty: int) -> TradeResult:
-    """Fill a market order instantly against the primary float or the platform market maker.
+@dataclass(frozen=True, slots=True)
+class OrderPreview:
+    """What `execute` charges or pays for an order now, before checking cash or holdings."""
 
-    Buys take primary shares first (proceeds go to the community wallet), then the market
-    maker's inventory. Sells always go to the market maker. Raises a MarketError subclass
-    and leaves nothing changed if the order can't be filled.
+    fill_price: Decimal
+    cash_amount: Decimal
+    """qty × fill_price, rounded to cents: the cost of a buy or the proceeds of a sell."""
+    slippage_pct: Decimal
+    """Fill price vs the current price, in percent (2 dp); negative for sells."""
+    primary_qty: int
+    """Shares a buy takes from the primary float; 0 for sells."""
+    community_amount: Decimal
+    """The part of `cash_amount` paid to the community wallet (primary shares × fill price)."""
+
+
+def preview(market: MarketState, side: OrderSide, qty: int) -> OrderPreview:
+    """Price an order: the quote shown before confirming, and the pricing `execute` fills with.
+
+    Raises InvalidOrder for a non-positive quantity or one above the size cap. Cash, holdings
+    and supply are checked by `execute`; `max_fillable_qty` reports them ahead of time.
     """
     if qty <= 0:
         raise InvalidOrder(f"quantity must be positive, got {qty}")
     limit = max_order_qty(market.total_shares)
     if qty > limit:
         raise OrderTooLarge(f"orders are limited to {limit} shares")
-
     fill_price = quote(price=market.price, side=side, qty=qty, total_shares=market.total_shares)
-    cash_amount = _cash(fill_price * qty)
+    primary_qty = min(qty, market.primary_shares_remaining) if side is OrderSide.BUY else 0
+    return OrderPreview(
+        fill_price=fill_price,
+        cash_amount=round_cash(fill_price * qty),
+        slippage_pct=round_pct((fill_price - market.price) / market.price * _HUNDRED),
+        primary_qty=primary_qty,
+        community_amount=round_cash(fill_price * primary_qty),
+    )
+
+
+def execute(market: MarketState, trader: Position, side: OrderSide, qty: int) -> TradeResult:
+    """Fill a market order instantly against the primary float or the platform market maker.
+
+    Buys take primary shares first (proceeds go to the community wallet), then the market
+    maker's inventory. Sells always go to the market maker. Priced by `preview`, so a quote
+    and its fill can't drift apart. Raises a MarketError subclass and leaves nothing changed
+    if the order can't be filled.
+    """
+    priced = preview(market, side, qty)
+    fill_price, cash_amount, primary_qty = priced.fill_price, priced.cash_amount, priced.primary_qty
 
     if side is OrderSide.BUY:
         if qty > market.primary_shares_remaining + market.market_maker_shares:
             raise InsufficientSupply("not enough shares available to buy")
         if cash_amount > trader.cash:
             raise InsufficientCash(f"order costs {cash_amount}, cash is {trader.cash}")
-        primary_qty = min(qty, market.primary_shares_remaining)
         new_shares = trader.shares + qty
         held_cost = (trader.avg_cost or Decimal(0)) * trader.shares
         new_trader = Position(
@@ -235,13 +276,12 @@ def execute(market: MarketState, trader: Position, side: OrderSide, qty: int) ->
             market,
             primary_shares_remaining=market.primary_shares_remaining - primary_qty,
             market_maker_shares=market.market_maker_shares - (qty - primary_qty),
-            community_wallet=market.community_wallet + _cash(fill_price * primary_qty),
+            community_wallet=market.community_wallet + priced.community_amount,
         )
         signed_qty = qty
     else:
         if qty > trader.shares:
             raise InsufficientShares(f"selling {qty} shares, holding {trader.shares}")
-        primary_qty = 0
         remaining = trader.shares - qty
         new_trader = Position(
             cash=trader.cash + cash_amount,
@@ -260,47 +300,8 @@ def execute(market: MarketState, trader: Position, side: OrderSide, qty: int) ->
         fill_price=fill_price,
         cash_amount=cash_amount,
         primary_qty=primary_qty,
+        community_amount=priced.community_amount,
         price_change=PriceChange(new_price, PriceReason.ORDER),
-    )
-
-
-@dataclass(frozen=True, slots=True)
-class OrderPreview:
-    """What `execute` would charge or pay for an order now, without checking cash or holdings."""
-
-    fill_price: Decimal
-    cash_amount: Decimal
-    """qty × fill_price, rounded to cents: the cost of a buy or the proceeds of a sell."""
-    slippage_pct: Decimal
-    """Fill price vs the current price, in percent (2 dp); negative for sells."""
-    primary_qty: int
-    """Shares a buy would take from the primary float; 0 for sells."""
-    community_amount: Decimal
-    """The part of `cash_amount` paid to the community wallet (primary shares × fill price)."""
-
-
-def preview(market: MarketState, side: OrderSide, qty: int) -> OrderPreview:
-    """Price an order the way `execute` fills it (the quote shown before confirming).
-
-    Raises InvalidOrder for a non-positive quantity or one above the size cap. Cash, holdings
-    and supply are the trader's problem at `execute` time; `max_fillable_qty` reports them.
-    """
-    if qty <= 0:
-        raise InvalidOrder(f"quantity must be positive, got {qty}")
-    limit = max_order_qty(market.total_shares)
-    if qty > limit:
-        raise OrderTooLarge(f"orders are limited to {limit} shares")
-    fill_price = quote(price=market.price, side=side, qty=qty, total_shares=market.total_shares)
-    primary_qty = min(qty, market.primary_shares_remaining) if side is OrderSide.BUY else 0
-    slippage = ((fill_price - market.price) / market.price * _HUNDRED).quantize(
-        _CASH, rounding=ROUND_HALF_UP
-    )
-    return OrderPreview(
-        fill_price=fill_price,
-        cash_amount=_cash(fill_price * qty),
-        slippage_pct=slippage,
-        primary_qty=primary_qty,
-        community_amount=_cash(fill_price * primary_qty),
     )
 
 
@@ -319,7 +320,7 @@ def max_fillable_qty(market: MarketState, trader: Position, side: OrderSide) -> 
     while low < high:
         mid = (low + high + 1) // 2
         fill = quote(price=market.price, side=side, qty=mid, total_shares=market.total_shares)
-        if _cash(fill * mid) <= trader.cash:
+        if round_cash(fill * mid) <= trader.cash:
             low = mid
         else:
             high = mid - 1

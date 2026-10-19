@@ -8,7 +8,7 @@ from enum import StrEnum
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from app.auth import (
     EMAIL_MAX_LENGTH,
@@ -254,6 +254,25 @@ class OrderCreate(BaseModel):
     asset_id: UUID
     side: Literal["buy", "sell"]
     qty: int = Field(gt=0)
+    max_total: Decimal | None = Field(
+        default=None,
+        ge=0,
+        description="Buys only: refuse with 409 `price_moved` if the order would cost more "
+        "(the total of the quote the user saw).",
+    )
+    min_total: Decimal | None = Field(
+        default=None,
+        ge=0,
+        description="Sells only: refuse with 409 `price_moved` if the order would pay less.",
+    )
+
+    @model_validator(mode="after")
+    def _limit_matches_side(self) -> OrderCreate:
+        if self.side == "buy" and self.min_total is not None:
+            raise ValueError("min_total applies to sells; use max_total for a buy")
+        if self.side == "sell" and self.max_total is not None:
+            raise ValueError("max_total applies to buys; use min_total for a sell")
+        return self
 
 
 class OrderOut(BaseModel):
@@ -269,6 +288,8 @@ class OrderOut(BaseModel):
     )
     is_primary: bool
     created_at: datetime
+    cash_balance: Decimal = Field(description="The trader's cash right after this fill.")
+    shares_held: int = Field(description="The trader's shares of this asset after this fill.")
 
 
 class QuoteOut(BaseModel):
@@ -323,6 +344,10 @@ class PortfolioOut(BaseModel):
     unrealized_pnl: Decimal = Field(description="holdings_value − cost_basis.")
     unrealized_pnl_pct: Decimal | None = Field(
         default=None, description="unrealized_pnl as a percentage of cost_basis; null if 0."
+    )
+    starting_cash: Decimal = Field(description="The play money every account starts with.")
+    since_start: Decimal = Field(
+        description="total_value − starting_cash: realised and unrealised gains and dividends."
     )
     impact: ImpactSummary
 

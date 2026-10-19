@@ -13,10 +13,7 @@ from app.schemas import (
     AuditorFlag,
     AuditorOutput,
     EventOut,
-    HoldingOut,
-    ImpactSummary,
     NewsScoutItem,
-    PortfolioOut,
     PricePoint,
     ReportOut,
     TraceStep,
@@ -237,32 +234,6 @@ def price_history(asset_id: UUID) -> list[PricePoint]:
         PricePoint(ts=_NOW.replace(day=15), price=base, reason="order"),
         PricePoint(ts=_NOW, price=base * Decimal("0.99"), reason="rerate"),
     ]
-
-
-def portfolio() -> PortfolioOut:
-    return PortfolioOut(
-        cash_balance=Decimal("10000.00"),
-        holdings=[
-            HoldingOut(
-                asset_id=WETLAND_ID,
-                asset_name="Xochimilco Wetland",
-                shares=0,
-                avg_cost=None,
-                mark_price=Decimal("99.7000"),
-                market_value=Decimal("0.00"),
-                unrealized_pnl=Decimal("0.00"),
-            )
-        ],
-        holdings_value=Decimal("0.00"),
-        total_value=Decimal("10000.00"),
-        cost_basis=Decimal("0.00"),
-        unrealized_pnl=Decimal("0.00"),
-        impact=ImpactSummary(
-            ha_protected=Decimal("0.00"),
-            t_co2_stored=Decimal("0.00"),
-            services_usd_yr=Decimal("0.00"),
-        ),
-    )
 
 
 def trace_steps(asset_id: UUID | None) -> list[TraceStep]:

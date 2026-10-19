@@ -18,7 +18,7 @@ from sqlalchemy import func
 from sqlmodel import Session, col, select
 
 from app import events
-from app.auth import Principal
+from app.auth import STARTING_CASH, Principal
 from app.deps import (
     AUTH_REQUIRED,
     CurrentPrincipal,
@@ -37,7 +37,7 @@ from app.market.engine import (
     max_order_qty,
     preview,
 )
-from app.market.portfolio import portfolio_totals, value_holding
+from app.market.portfolio import HoldingValue, portfolio_totals, value_holding
 from app.models import (
     Asset,
     AssetStatus,
@@ -62,13 +62,20 @@ router = APIRouter(tags=["market"])
 
 NOT_LISTED = "Asset is not listed for trading"
 NO_PRICE = "Asset has no price yet"
+PRICE_MOVED = "price_moved"
 ORDER_ERRORS: dict[int | str, dict[str, str]] = {
     400: {"description": "`order_too_large`: above the per-order size cap"},
     404: {"description": "Asset not in the session's world"},
     409: {
         "description": "Asset not listed or without a price; `insufficient_cash`, "
-        "`insufficient_shares` or `insufficient_supply`"
+        "`insufficient_shares`, `insufficient_supply`, or `price_moved` (the total is above "
+        "`max_total` or below `min_total`)"
     },
+}
+QUOTE_ERRORS: dict[int | str, dict[str, str]] = {
+    400: {"description": "`order_too_large`: above the per-order size cap"},
+    404: {"description": "Asset not in the session's world"},
+    409: {"description": "Asset not listed or without a price"},
 }
 
 
@@ -124,8 +131,12 @@ def _market_maker_shares(session: Session, asset: Asset) -> int:
     return asset.total_shares - asset.primary_shares_remaining - int(held)
 
 
-def _tradable_market(session: Session, asset: Asset) -> MarketState:
-    """The asset's market now; 409 if it isn't listed or has no price yet."""
+def _tradable_market(session: Session, asset: Asset, *, with_inventory: bool = True) -> MarketState:
+    """The asset's market now; 409 if it isn't listed or has no price yet.
+
+    `with_inventory=False` skips summing the holdings for the market maker's inventory (left at
+    0): only buys' supply checks need it, and a quote's pricing doesn't.
+    """
     if asset.status != AssetStatus.LISTED:
         raise HTTPException(status.HTTP_409_CONFLICT, NOT_LISTED)
     price = _latest_price(session, asset)
@@ -135,9 +146,16 @@ def _tradable_market(session: Session, asset: Asset) -> MarketState:
         price=price,
         total_shares=asset.total_shares,
         primary_shares_remaining=asset.primary_shares_remaining,
-        market_maker_shares=_market_maker_shares(session, asset),
+        market_maker_shares=_market_maker_shares(session, asset) if with_inventory else 0,
         community_wallet=asset.community_wallet,
     )
+
+
+def _price_moved(body: OrderCreate, total: Decimal) -> bool:
+    """The fill is worse than the total the user confirmed (`max_total` / `min_total`)."""
+    if body.max_total is not None and total > body.max_total:
+        return True
+    return body.min_total is not None and total < body.min_total
 
 
 def _holding(session: Session, world_id: UUID, user_id: UUID, asset_id: UUID) -> Holding:
@@ -172,7 +190,8 @@ def place_order(
     body: OrderCreate, world: CurrentWorld, principal: CurrentPrincipal, session: SessionDep
 ) -> OrderOut:
     """Fill a market order for the signed-in user. `is_primary` is true if any shares came from
-    the IPO float."""
+    the IPO float. With `max_total` (buy) or `min_total` (sell), a fill worse than the quote the
+    user confirmed is refused with 409 `price_moved` and nothing changes."""
     _lock_world(session, world.id)
     # After a concurrent reset the world has fresh asset ids, so a stale id is a 404.
     asset = _locked_asset(session, world.id, body.asset_id)
@@ -189,6 +208,8 @@ def place_order(
         result = execute(market, trader, side, body.qty)
     except MarketError as exc:
         raise _rejected(exc) from exc
+    if _price_moved(body, result.cash_amount):
+        raise HTTPException(status.HTTP_409_CONFLICT, PRICE_MOVED)
 
     asset.primary_shares_remaining = result.market.primary_shares_remaining
     asset.community_wallet = result.market.community_wallet
@@ -226,13 +247,15 @@ def place_order(
         fill_price=result.fill_price,
         total=result.cash_amount,
         primary_qty=result.primary_qty,
-        community_amount=result.market.community_wallet - market.community_wallet,
+        community_amount=result.community_amount,
         is_primary=result.primary_qty > 0,
         created_at=first.created_at,
+        cash_balance=result.trader.cash,
+        shares_held=result.trader.shares,
     )
 
 
-@router.get("/assets/{asset_id}/quote", response_model=QuoteOut, responses=ORDER_ERRORS)
+@router.get("/assets/{asset_id}/quote", response_model=QuoteOut, responses=QUOTE_ERRORS)
 def get_quote(
     asset_id: UUID,
     world: CurrentWorld,
@@ -245,13 +268,17 @@ def get_quote(
     session the largest order the user can place. Read-only: nothing is reserved, and the
     order fills at the price when it's placed. Errors match `POST /orders` for the asset and
     the size; cash and holdings are checked when ordering (see `max_qty`)."""
+    # TODO(T57): once T68's policy lands, apply the same TRADE authorization as orders here
+    # (insider_trading_blocked, admins_cannot_trade), so a quote never invites a refused order.
     asset = session.exec(
         select(Asset).where(Asset.world_id == world.id, Asset.id == asset_id)
     ).first()
     if asset is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found")
-    market = _tradable_market(session, asset)
     order_side = OrderSide(side)
+    # Only a signed-in buyer's max_qty needs the market maker's inventory (the supply).
+    buyer = principal is not None and order_side is OrderSide.BUY
+    market = _tradable_market(session, asset, with_inventory=buyer)
     try:
         priced = preview(market, order_side, qty)
     except MarketError as exc:
@@ -294,7 +321,7 @@ def get_portfolio(
     ).all()
 
     out: list[HoldingOut] = []
-    values = []
+    values: list[HoldingValue] = []
     for holding in holdings:
         asset = session.exec(
             select(Asset).where(Asset.world_id == world.id, Asset.id == holding.asset_id)
@@ -319,7 +346,7 @@ def get_portfolio(
                 unrealized_pnl_pct=value.unrealized_pnl_pct,
             )
         )
-    totals = portfolio_totals(actor.cash_balance, values)
+    totals = portfolio_totals(actor.cash_balance, values, starting_cash=STARTING_CASH)
 
     # Pro-rata impact comes from the stored report (T19 + T41 impact_for_holding); zero for now.
     return PortfolioOut(
@@ -330,6 +357,8 @@ def get_portfolio(
         cost_basis=totals.cost_basis,
         unrealized_pnl=totals.unrealized_pnl,
         unrealized_pnl_pct=totals.unrealized_pnl_pct,
+        starting_cash=STARTING_CASH,
+        since_start=totals.since_start,
         impact=ImpactSummary(
             ha_protected=Decimal("0.00"),
             t_co2_stored=Decimal("0.00"),
