@@ -1,9 +1,10 @@
 """Load precomputed Earth observation metrics for demo sites.
 
-The runtime app deliberately does not import Earth Engine. ``scripts/precompute_sites.py``
-computes the observed (baseline) JSON offline (T11, T13) and derives the Time Machine
-scenario variants from it with the pure functions in ``app.tools.scenarios``; this loader is
-safe to call on the judging path.
+This loader never imports Earth Engine. ``scripts/precompute_sites.py`` computes the observed
+(baseline) JSON offline (T11, T13) and derives the Time Machine scenario variants from it with
+the pure functions in ``app.tools.scenarios``; this loader is safe to call on the judging path.
+New listings' polygons are computed live with the same methods (``app.tools.earth_engine``,
+T60) only when ``EARTH_ENGINE_LIVE=true``.
 """
 
 from __future__ import annotations

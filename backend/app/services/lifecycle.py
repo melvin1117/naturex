@@ -63,7 +63,7 @@ EVIDENCE_REQUIRED = "evidence_required"
 METRICS_UNAVAILABLE = "metrics_unavailable"
 NO_SATELLITE_METRICS = "no_satellite_metrics"
 """`status_reason` of a listing stuck in `rating` because no Earth observation metrics exist
-for its polygon yet (live Earth Engine is T60). It never borrows another site's data."""
+for its polygon yet (live Earth Engine is off: T60). It never borrows another site's data."""
 RATING_FAILED_PREFIX = "rating_failed:"
 
 
