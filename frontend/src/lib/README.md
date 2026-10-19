@@ -79,7 +79,7 @@ await signIn.mutateAsync({ email, password }); // then world.me is the account
 
 Each calls the auth route, then re-reads `GET /world` (`session.reload()`) and resets the cache (`QueryCache.reset()`), so `useWorld().world.me` and every query follow the new account and nothing from the previous one stays on screen. The session is the HttpOnly `nx_session` cookie only; never store a token or `me` in browser storage.
 
-`lib/auth.ts` has the pure helpers: `safeReturnPath(next)` (same-origin relative paths only; use it for every `?next=`), `loginHref(path)`, `validateAuthInput` and `authFailure` (form messages for 401, 409, 422, 429, 403, 503 and network errors). Wrap a page that needs an account in `<RequireAccount>` (`<RequireAccount admin>` for platform admins); the backend still authorizes every request.
+`lib/auth.ts` has the pure helpers: `safeReturnPath(next)` (same-origin relative paths only; use it for every `?next=`), `loginHref(path)`, `validateAuthInput` and `authFailure` (form messages for 401, 409, 422, 429, 403, 503 and network errors). Wrap a page that needs an account in `<RequireAccount>` (`<RequireAccount admin>` for platform admins; `allowPrototypeDemo` only for prototype screens that the scripted demo must keep open until T65, never `/admin`); the backend still authorizes every request.
 
 ## Errors
 
