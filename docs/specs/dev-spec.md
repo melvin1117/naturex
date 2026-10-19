@@ -230,6 +230,8 @@ create table assets (
   community_wallet numeric(14,2) not null default 0,
   status text not null default 'draft'
     check (status in ('draft','rating','needs_evidence','ineligible','listed','suspended')),
+  status_reason varchar(200),                         -- T58: why it's in its status (gate codes, suspension reason, no_satellite_metrics…)
+  attested_at timestamptz,                            -- T58: when the community attested it may list the land; null for curated sites
   created_at timestamptz default now()
 );
 
@@ -386,7 +388,7 @@ create table ledger_entries (         -- Nature Ledger: append-only, hash-chaine
 create table world_events (           -- T29: SSE + polling replay by visitor world
   id bigserial primary key,
   world_id uuid references worlds(id),
-  type text not null check (type in ('rating_progress','price_tick','alert','heartbeat')),
+  type text not null check (type in ('rating_progress','price_tick','alert','heartbeat','listing_status')),  -- listing_status: T58
   payload jsonb not null,
   created_at timestamptz default now()
 );
@@ -408,16 +410,18 @@ create table llm_calls (
 | `POST /demo/start` · `POST /demo/persona` | One-click demo session in a new sandbox world; switch persona (demo sessions only; T55) |
 | `POST /communities` · `GET`/`PATCH /communities/{id}` · `GET`/`POST /communities/{id}/members` · `DELETE /communities/{id}/members/{user_id}` · `GET /me/communities` | Create a community (any signed-in user; becomes owner, treasury created); public profile; edit (owner); list members (members + same-world admins), add/remove stewards (owner; a steward may leave); the caller's communities and roles (T68) |
 | `GET /communities/{id}/summary` | Steward home data (T63) |
-| `POST /assets` | Create a **draft** listing in the caller's community from GeoJSON + details (steward or owner; T58) |
-| `POST /assets/{id}/submit` | Start a rating run; the result sets `listed` / `needs_evidence` / `ineligible` (T58) |
+| `POST /assets` | Create a **draft** listing in a community the caller owns or stewards: `{community_id, name, country?, description?, geojson, attestation: true}` → 201 `AssetDetail`; polygon checked by T36 (422 per problem), no overlap within the world (T58, §6.2) |
+| `PATCH /assets/{id}` | Edit a draft (owner or steward; 409 `cannot_edit_<status>` otherwise) (T58) |
+| `GET /communities/{id}/assets` | The community's listings at every status, drafts included (members + same-world admins) (T58) |
+| `POST /assets/{id}/submit` | Start a rating run → 202 `{asset_id, run_id, status: "rating"}`; the run's sealed report sets `listed` / `needs_evidence` / `ineligible` (T58, §6.2) |
 | `POST /assets/{id}/rate` · `GET /runs/{run_id}` | Re-rate an asset: `202` + `run_id`; the run's status and steps (T27) |
 | `GET /assets/{id}/ipo/preview` · `POST /assets/{id}/ipo` | IPO price with every formula term; launch (owner only, once; T59) |
-| `POST /admin/assets/{id}/suspend` · `…/resume` | Moderation (admin; T58) |
+| `POST /admin/assets/{id}/suspend` `{reason}` · `…/resume` | Moderation: listed ↔ suspended (admins, never on their own community's asset; T58) |
 | `POST /assets/{id}/documents/sample` | Demo mode only (404 in review mode, nothing created): generate watermarked fictional documents from non-personal fields (listing reference, place from reverse geocode, area) + synthetic identities and run the checklist; the `demo_auto` reviewer approves only if every document is a sample, every check passes and no revocation is active (ADR-0006 §6) |
 | `POST /assets/{id}/documents` · `GET /assets/{id}/documents/{doc_id}` | Upload evidence (steward/owner) → checklist; download a document (community members + same-world admins only; 404 otherwise; attachment, `nosniff`, `no-store`) (ADR-0006, T69) |
 | `GET /assets/{id}/verification` · `POST /admin/assets/{id}/verification` · `POST /admin/assets/{id}/verification/revoke` | Public verification summary (check names + results + not-checked list); reviewer approve/reject with a reason; revoke (suspends trading) (T69) |
-| `GET /assets` | Marketplace list (latest price, grade, trend) |
-| `GET /assets/{id}` | Asset detail + latest report + recent events |
+| `GET /assets` | Marketplace list (latest price, grade, trend): `listed` and `suspended` assets only (T58) |
+| `GET /assets/{id}` | Asset detail + latest report + recent events (other statuses: the listing's community and admins only, 404 otherwise; T58) |
 | `POST /assets/{id}/evidence` | Upload photos (audio post-hackathon) → field_evidence agent → event + re-rate |
 | `GET /assets/{id}/reports` · `GET /reports/{id}` · `GET /reports/{id}/diff/{prev}` | Report history & diffs |
 | `GET /assets/{id}/prices?range=` | Price history |
@@ -425,7 +429,7 @@ create table llm_calls (
 | `POST /orders` | `{asset_id, side, qty}` → Market Engine → fill |
 | `GET /portfolio` | Holdings, values, P&L, impact |
 | `POST /copilot` | `{question, asset_id?}` → grounded answer + citations (streamed) |
-| `GET /events/stream` | SSE: price ticks, alerts, rating progress (polling fallback `GET /events?since=` or `?since_id=`) |
+| `GET /events/stream` | SSE: price ticks, alerts, rating progress, listing status changes (polling fallback `GET /events?since=` or `?since_id=`) |
 | `POST /admin/simulate/quarter` | Trigger re-rate of all assets with next `data_version` |
 | `POST /admin/simulate/event` | Inject preset event (fire, encroachment, drought, restoration, protection) |
 | `GET /admin/trace?asset_id=` | LLM call trace for Agent Trace drawer |
@@ -537,6 +541,37 @@ Rating runs asynchronously: the API returns `202` + `run_id`, and progress arriv
 - **Not wired yet:** `POST /admin/simulate/quarter` is still the mock. Its re-rate needs the next scenario per asset, admin authorization (T68) and price re-anchoring and alerts, which are T38's; T38 calls `start_rating_run(..., scenario=..., trigger="time_machine")`.
 
 > Free hosts and serverless endpoints may drop long-lived connections **(verify)**; the frontend (`frontend/src/lib/events.ts`) falls back to polling every 3 s when the stream is refused (`503`), errors repeatedly, or stays silent for 35 s (no event or heartbeat, e.g. a buffering proxy). It retries SSE with backoff and keeps polling until the new stream delivers its first message.
+
+### 6.2 Listing lifecycle (T58)
+
+```mermaid
+stateDiagram-v2
+    [*] --> draft: create (attested; T36 polygon, no overlap)
+    draft --> draft: edit
+    draft --> rating: submit (queues a rating run)
+    rating --> rating: submit again (retry once the run failed)
+    rating --> listed: rated, gate passes
+    rating --> needs_evidence: rated, confidence < 70 only
+    rating --> ineligible: rated, grade < C or recent forest loss ≥ 1 %
+    needs_evidence --> rating: submit with new field evidence
+    listed --> suspended: suspend (admin)
+    suspended --> listed: resume (admin)
+    ineligible --> [*]
+```
+
+**As built (T58).**
+- **State machine** (`app/services/lifecycle.py`, pure): `transition(status, event, …)` returns the transition or raises `TransitionRefused` with a stable code, returned as **409**: `cannot_<event>_<status>` (e.g. `cannot_edit_rating`, `cannot_submit_listed`) or `evidence_required`. Persistence is `app/services/listings.py`.
+- **The listing gate** comes from the sealed report of the run that rated the listing: `auditor_json.rating.score.gate`, the T15 `listing_gate` that `rate_site` + `apply_audit` computed on that report's own numbers (`gate_from_report`; a missing or malformed gate fails the run, so the listing stays in `rating`). Gate passes → `listed`. Fails on confidence alone → `needs_evidence` (validated field photos raise confidence, §7.7). Fails on grade or recent forest loss → `ineligible` (terminal: evidence can't undo degradation). The gate applies **only while the listing is `rating`**: re-rates of listed or suspended assets (`POST /assets/{id}/rate`, the Time Machine) never change their status (T13 note under T38).
+- **Submit** (`POST /assets/{id}/submit`, `MANAGE_LISTING`) calls `RatingRunner.start(…, trigger="listing", on_queue=submit_transition)`. The hook runs inside the run's enqueue transaction after every cap check, so `draft → rating`, its ledger entry, its event and the `queued` run commit together; a 409 `run_in_progress`, 429 or 503 leaves the draft untouched. The run's `_store` applies the `rated` transition in the same transaction as the report (`apply_rating_result`), and its `done` event carries `listing_status`. `POST /assets/{id}/rate` re-rates public assets only: 409 `asset_is_draft` for a draft, `asset_not_listed` for `rating`, `needs_evidence` or `ineligible`.
+- **Missing metrics (the T60 seam).** A new polygon has no `site_key`, so `load_cached_metrics` raises `no_cached_metrics`; the run fails (`earth_obs_failed:no_cached_metrics`) with no report, and the listing stays in `rating` with `status_reason = no_satellite_metrics`. Submitting again retries. A loader that returns a curated site's metrics for a new polygon fails the run as `foreign_metrics`, so a listing never shows another site's data. T60 replaces the loader with live Earth Engine. With **`USE_MOCKS=true` only**, the run falls back to `mock_listing_metrics` (`app/tools/earth_obs.py`): the polygon's area and centroid plus a fixed healthy profile, `data_version` `mock-2026Q3`, a mock attribution and a `mock_metrics` report flag. It is deterministic, and its data is fresh until about 2026-12-30 (then the recency term halves confidence and mock listings land in `needs_evidence`).
+- **Create** (`POST /assets`): the caller must own or steward the community (`MANAGE_LISTING` on the listing about to exist; 404 for a community outside the session's world). `attestation: true` is required (stored as `attested_at`). Name, country and description use the community validators. The polygon passes `validate_polygon` (T36; at most 10 000 vertices, else `too_complex`) against every other listing in the world except `ineligible` ones, drafts included, so two communities can't claim the same land; overlaps never name the other listing. Only the bare geometry is stored: Feature properties are dropped. A community may have at most 10 open listings (draft, rating, needs_evidence): 409 `listing_limit_reached`. Share terms are set at the IPO (T59).
+- **Visibility.** `listed` and `suspended` assets are public in their world (the marketplace shows suspended ones with their status). Any other status is visible only to the listing's community members and same-world admins (`VIEW_COMMUNITY_DATA`) on `GET /assets/{id}`, its reports, prices, `GET /reports/{id}` and the ledger routes; everyone else gets 404. `GET /world` lists public assets only.
+- **Trading.** Orders already need `listed` (409 otherwise). A newly listed asset has no price until its IPO, so it can't be traded either; T59 adds the explicit 409 `not_trading`.
+- **Ledger and events.** Every transition sets `status` and `status_reason`, appends a `listing` ledger entry (`transition`, `from`, `to`, `reason`, plus the details on create and edit: name, country, area, centroid, geometry, `community_id`, `attested_at` and a SHA-256 of the description, never the text; `run_id` on submit; `report_version`, grade, health, confidence and the gate on `rated`, with `ref_id` = the report) and publishes a `listing_status` event (`asset_id`, `community_id`, `transition`, `from`, `to`, `reason`, plus `run_id` / `report_id`). A failed listing run sets `status_reason` without a transition.
+- **Moderation.** `POST /admin/assets/{id}/suspend {reason: moderation | data_dispute | community_request}` and `…/resume` (`OPERATE`: admins, 403 `conflict_of_interest` on their own community's asset). `verification_revoked` is reserved for T69.
+- **Locks.** World row (`FOR NO KEY UPDATE`) → asset row → the world's publisher lock, as orders take them. Submit runs inside the enqueue transaction (global run lock → publisher lock → asset row) and never takes the world lock.
+- **Migration `0012`:** `assets.status_reason`, `assets.attested_at`, and `listing_status` added to `ck_world_events_type`; the downgrade deletes `listing_status` events first.
+- **Deferred:** field evidence that unlocks `needs_evidence` (T40: until it stores `evidence` events, resubmitting is `evidence_required`); live metrics, quotas and the demo-world "cached example" (T60); IPO and 409 `not_trading` (T59); verification, the live-world IPO gate and revocation suspending the asset (T69); filtering `listing_status` events to their community on the shared stream (T57).
 
 ## 7. Rating pipeline
 
