@@ -41,6 +41,10 @@ export const queryKeys = {
   prices: (assetId: string) => ["prices", assetId] as const,
   report: (id: string) => ["report", id] as const,
   portfolio: () => ["portfolio"] as const,
+  /** Every quote of one asset (a prefix, for invalidation). */
+  quotes: (assetId: string) => ["quote", assetId] as const,
+  quote: (assetId: string, side: "buy" | "sell", qty: number) =>
+    ["quote", assetId, side, qty] as const,
 };
 
 export interface CreateDataLayerOptions {
@@ -90,7 +94,7 @@ export function getBrowserDataLayer(): DataLayer {
 /**
  * Keep caches in step with live events. The asset's price is patched at once from the event
  * payload (the backend's number); the asset and everything derived from the price (P&L,
- * % change, history) are then refetched, coalesced so a burst of ticks costs one request
+ * % change, history, quotes) are then refetched, coalesced so a burst of ticks costs one request
  * per query.
  */
 export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
@@ -117,6 +121,7 @@ export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
       queue(queryKeys.assets());
       queue(queryKeys.portfolio());
       queue(queryKeys.prices(payload.asset_id));
+      queue(queryKeys.quotes(payload.asset_id));
     },
     { retain: false },
   );

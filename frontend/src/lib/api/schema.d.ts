@@ -341,9 +341,33 @@ export interface paths {
         /**
          * Place Order
          * @description Fill a market order for the signed-in user. `is_primary` is true if any shares came from
-         *     the IPO float.
+         *     the IPO float. With `max_total` (buy) or `min_total` (sell), a fill worse than the quote the
+         *     user confirmed is refused with 409 `price_moved` and nothing changes.
          */
         post: operations["place_order_orders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{asset_id}/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Quote
+         * @description What an order would cost or pay now, slippage included (`engine.preview`), and with a
+         *     session the largest order the user can place. Read-only: nothing is reserved, and the
+         *     order fills at the price when it's placed. Errors match `POST /orders` for the asset and
+         *     the size; cash and holdings are checked when ordering (see `max_qty`).
+         */
+        get: operations["get_quote_assets__asset_id__quote_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1057,8 +1081,26 @@ export interface components {
             avg_cost?: string | null;
             /** Mark Price */
             mark_price?: string | null;
-            /** Unrealized Pnl */
+            /**
+             * Market Value
+             * @description shares × mark_price.
+             */
+            market_value?: string | null;
+            /**
+             * Cost Basis
+             * @description shares × avg_cost.
+             */
+            cost_basis?: string | null;
+            /**
+             * Unrealized Pnl
+             * @description market_value − cost_basis.
+             */
             unrealized_pnl?: string | null;
+            /**
+             * Unrealized Pnl Pct
+             * @description unrealized_pnl as a percentage of cost_basis (2 dp).
+             */
+            unrealized_pnl_pct?: string | null;
         };
         /** ImpactSummary */
         ImpactSummary: {
@@ -1196,6 +1238,16 @@ export interface components {
             side: "buy" | "sell";
             /** Qty */
             qty: number;
+            /**
+             * Max Total
+             * @description Buys only: refuse with 409 `price_moved` if the order would cost more (the total of the quote the user saw).
+             */
+            max_total?: number | string | null;
+            /**
+             * Min Total
+             * @description Sells only: refuse with 409 `price_moved` if the order would pay less.
+             */
+            min_total?: number | string | null;
         };
         /** OrderOut */
         OrderOut: {
@@ -1218,6 +1270,21 @@ export interface components {
             qty: number;
             /** Fill Price */
             fill_price: string;
+            /**
+             * Total
+             * @description qty × fill_price in cents: what a buy paid or a sell got.
+             */
+            total: string;
+            /**
+             * Primary Qty
+             * @description Shares a buy took from the opening offer.
+             */
+            primary_qty: number;
+            /**
+             * Community Amount
+             * @description The part of `total` paid to the community (primary shares × fill price).
+             */
+            community_amount: string;
             /** Is Primary */
             is_primary: boolean;
             /**
@@ -1225,6 +1292,16 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Cash Balance
+             * @description The trader's cash right after this fill.
+             */
+            cash_balance: string;
+            /**
+             * Shares Held
+             * @description The trader's shares of this asset after this fill.
+             */
+            shares_held: number;
         };
         /**
          * OverlayImage
@@ -1295,6 +1372,41 @@ export interface components {
             cash_balance: string;
             /** Holdings */
             holdings: components["schemas"]["HoldingOut"][];
+            /**
+             * Holdings Value
+             * @description Sum of the priced holdings' market_value.
+             */
+            holdings_value: string;
+            /**
+             * Total Value
+             * @description cash_balance + holdings_value.
+             */
+            total_value: string;
+            /**
+             * Cost Basis
+             * @description Sum of the priced holdings' cost_basis.
+             */
+            cost_basis: string;
+            /**
+             * Unrealized Pnl
+             * @description holdings_value − cost_basis.
+             */
+            unrealized_pnl: string;
+            /**
+             * Unrealized Pnl Pct
+             * @description unrealized_pnl as a percentage of cost_basis; null if 0.
+             */
+            unrealized_pnl_pct?: string | null;
+            /**
+             * Starting Cash
+             * @description The play money every account starts with.
+             */
+            starting_cash: string;
+            /**
+             * Since Start
+             * @description total_value − starting_cash: realised and unrealised gains and dividends.
+             */
+            since_start: string;
             impact: components["schemas"]["ImpactSummary"];
         };
         /** PricePoint */
@@ -1308,6 +1420,65 @@ export interface components {
             price: string;
             /** Reason */
             reason?: string | null;
+        };
+        /**
+         * QuoteOut
+         * @description The price of an order now, before confirming it (play money). Nothing is reserved: the
+         *     order fills at the price when it's placed.
+         */
+        QuoteOut: {
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "buy" | "sell";
+            /** Qty */
+            qty: number;
+            /**
+             * Price
+             * @description Latest price per share, before slippage.
+             */
+            price: string;
+            /**
+             * Fill Price
+             * @description Price per share including slippage.
+             */
+            fill_price: string;
+            /**
+             * Total
+             * @description qty × fill_price in cents: the cost or the proceeds.
+             */
+            total: string;
+            /**
+             * Slippage Pct
+             * @description Fill vs latest price, in percent (2 dp).
+             */
+            slippage_pct: string;
+            /**
+             * Primary Qty
+             * @description Shares a buy takes from the opening offer.
+             */
+            primary_qty: number;
+            /**
+             * Community Amount
+             * @description The part of a buy's total paid to the community (primary shares).
+             */
+            community_amount: string;
+            /**
+             * Max Qty
+             * @description The largest order on this side the signed-in user can place now (cash or holding, supply, size cap); null without a session.
+             */
+            max_qty?: number | null;
+            /**
+             * Max Order Qty
+             * @description The size cap for one order on this asset.
+             */
+            max_order_qty: number;
         };
         /** RatingRunAccepted */
         RatingRunAccepted: {
@@ -2519,6 +2690,82 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["OrderOut"];
                 };
+            };
+            /** @description `order_too_large`: above the per-order size cap */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Asset not in the session's world */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Asset not listed or without a price; `insufficient_cash`, `insufficient_shares`, `insufficient_supply`, or `price_moved` (the total is above `max_total` or below `min_total`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_quote_assets__asset_id__quote_get: {
+        parameters: {
+            query: {
+                side: "buy" | "sell";
+                qty: number;
+            };
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteOut"];
+                };
+            };
+            /** @description `order_too_large`: above the per-order size cap */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Asset not in the session's world */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Asset not listed or without a price */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -23,6 +23,7 @@ import type {
   OrderCreate,
   OrderOut,
   PortfolioOut,
+  QuoteOut,
   RegisterIn,
   ReportOut,
   WorldOut,
@@ -332,7 +333,10 @@ export function usePortfolio(): QueryResult<PortfolioOut> {
   );
 }
 
-/** Buy or sell; on success the portfolio, the asset and the market list refetch. */
+/**
+ * Buy or sell; on success the portfolio, the asset, its quotes and the market list refetch.
+ * Never retried: a failed POST is reported, not replayed (it may have filled).
+ */
 export function usePlaceOrder(): MutationResult<OrderCreate, OrderOut> {
   return useApiMutation(
     (api, order: OrderCreate) => unwrap(api.POST("/orders", { body: order })),
@@ -341,9 +345,36 @@ export function usePlaceOrder(): MutationResult<OrderCreate, OrderOut> {
         cache.invalidate(queryKeys.portfolio());
         cache.invalidate(queryKeys.asset(order.asset_id));
         cache.invalidate(queryKeys.prices(order.asset_id));
+        cache.invalidate(queryKeys.quotes(order.asset_id));
         cache.invalidate(queryKeys.assets());
       },
     },
+  );
+}
+
+/**
+ * What an order would cost or pay now, slippage included, priced by the backend
+ * (`GET /assets/{id}/quote`). Disabled until there's an asset and a positive whole `qty`.
+ * Live: refetches on the asset's `price_tick` and after an order.
+ */
+export function useQuote(
+  assetId: string | undefined,
+  side: "buy" | "sell",
+  qty: number,
+  { enabled = true }: { enabled?: boolean } = {},
+): QueryResult<QuoteOut> {
+  const valid = Boolean(assetId) && Number.isSafeInteger(qty) && qty > 0;
+  useLiveConnection(enabled && valid);
+  return useApiQuery(
+    queryKeys.quote(assetId ?? "", side, qty),
+    (api, signal) =>
+      unwrap(
+        api.GET("/assets/{asset_id}/quote", {
+          params: { path: { asset_id: assetId ?? "" }, query: { side, qty } },
+          signal,
+        }),
+      ),
+    { enabled: enabled && valid },
   );
 }
 

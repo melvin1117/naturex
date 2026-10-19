@@ -22,7 +22,9 @@ from app.market.engine import (
     fair_value_total,
     ipo,
     liquidity,
+    max_fillable_qty,
     max_order_qty,
+    preview,
     primary_float,
     quote,
     reanchor,
@@ -275,6 +277,85 @@ def test_rejected_order_leaves_inputs_unchanged() -> None:
 
     assert state == market()
     assert trader == investor(cash="5.00")
+
+
+# --- Quotes before confirming ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("side", "qty", "primary"), [(OrderSide.BUY, 100, 490_000), (OrderSide.BUY, 300, 120)]
+)
+def test_preview_prices_an_order_exactly_as_execute_fills_it(
+    side: OrderSide, qty: int, primary: int
+) -> None:
+    state = market(primary=primary, market_maker=1_000)
+    quoted = preview(state, side, qty)
+    filled = execute(state, investor(), side, qty)
+
+    assert quoted.fill_price == filled.fill_price
+    assert quoted.cash_amount == filled.cash_amount
+    assert quoted.primary_qty == filled.primary_qty
+    assert quoted.community_amount == filled.market.community_wallet - state.community_wallet
+    assert quoted.community_amount == filled.community_amount
+
+
+def test_preview_of_a_sell_matches_execute_and_pays_no_community() -> None:
+    state = market(market_maker=0)
+    quoted = preview(state, OrderSide.SELL, 50)
+    filled = execute(state, investor(shares=80, avg_cost="9.0000"), OrderSide.SELL, 50)
+
+    assert (quoted.fill_price, quoted.cash_amount) == (filled.fill_price, filled.cash_amount)
+    assert (quoted.primary_qty, quoted.community_amount) == (0, D("0.00"))
+
+
+def test_preview_reports_slippage_in_percent() -> None:
+    # 1,000 shares on 50,000 of liquidity: 0.5 × 1,000 / 50,000 = 1%.
+    assert preview(market(), OrderSide.BUY, 1_000).slippage_pct == D("1.00")
+    assert preview(market(), OrderSide.SELL, 1_000).slippage_pct == D("-1.00")
+
+
+@pytest.mark.parametrize("qty", [0, -1, 10_001])
+def test_preview_rejects_what_execute_rejects_for_size(qty: int) -> None:
+    with pytest.raises(InvalidOrder):
+        preview(market(), OrderSide.BUY, qty)
+
+
+def test_max_buy_is_the_most_the_cash_pays_for_at_the_slipped_price() -> None:
+    state, trader = market(), investor(cash="1000.00")
+    most = max_fillable_qty(state, trader, OrderSide.BUY)
+
+    assert execute(state, trader, OrderSide.BUY, most).cash_amount <= trader.cash
+    with pytest.raises(InsufficientCash):
+        execute(state, trader, OrderSide.BUY, most + 1)
+
+
+def test_max_buy_is_capped_by_supply_and_order_size() -> None:
+    rich = investor(cash="100000000.00")
+    assert max_fillable_qty(market(primary=10, market_maker=5), rich, OrderSide.BUY) == 15
+    assert max_fillable_qty(market(price="0.0100"), rich, OrderSide.BUY) == max_order_qty(1_000_000)
+    assert max_fillable_qty(market(), investor(cash="0.00"), OrderSide.BUY) == 0
+
+
+def test_max_buy_with_no_inventory_is_what_is_left_of_the_float() -> None:
+    state = market(primary=7, market_maker=0)
+    rich = investor(cash="100000000.00")
+
+    assert max_fillable_qty(state, rich, OrderSide.BUY) == 7
+    assert execute(state, rich, OrderSide.BUY, 7).market.primary_shares_remaining == 0
+    with pytest.raises(InsufficientSupply):
+        execute(state, rich, OrderSide.BUY, 8)
+
+
+def test_max_buy_with_no_inventory_is_still_capped_by_cash() -> None:
+    state = market(primary=7, market_maker=0)
+    # About $10 a share plus slippage: $45 buys 4 of the 7 left.
+    assert max_fillable_qty(state, investor(cash="45.00"), OrderSide.BUY) == 4
+
+
+def test_max_sell_is_the_holding_up_to_the_size_cap() -> None:
+    assert max_fillable_qty(market(), investor(shares=42), OrderSide.SELL) == 42
+    assert max_fillable_qty(market(), investor(shares=50_000), OrderSide.SELL) == 10_000
+    assert max_fillable_qty(market(), investor(), OrderSide.SELL) == 0
 
 
 # --- Re-anchoring ----------------------------------------------------------------------------
