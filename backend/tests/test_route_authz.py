@@ -174,6 +174,8 @@ def test_admin_routes_are_operator_only() -> None:
         assert actions[("POST", f"/assets/{{asset_id}}/{action}")] == {Action.MANAGE_LISTING}
     assert actions[("POST", "/admin/assets/{asset_id}/suspend")] == {Action.OPERATE}
     assert actions[("POST", "/admin/assets/{asset_id}/resume")] == {Action.OPERATE}
+    assert actions[("GET", "/assets/{asset_id}/ipo/preview")] == {Action.LAUNCH_IPO}
+    assert actions[("POST", "/assets/{asset_id}/ipo")] == {Action.LAUNCH_IPO}
     assert actions[("GET", "/assets/{asset_id}/quote")] == {Action.BROWSE}
     assert actions[("POST", "/assets/{asset_id}/rate")] == {Action.OPERATE, Action.MANAGE_LISTING}
 
@@ -301,10 +303,18 @@ OBJECT_ROUTES: dict[tuple[str, str], tuple[str, Callable[[Objects], Any] | None]
     ("GET", "/communities/{community_id}/assets"): ("rosa", None),
     ("POST", "/admin/assets/{asset_id}/suspend"): ("admin", lambda o: {"reason": "moderation"}),
     ("POST", "/admin/assets/{asset_id}/resume"): ("admin", None),
+    # T59's IPO: the community owner's (LAUNCH_IPO), on an asset the caller can see.
+    ("GET", "/assets/{asset_id}/ipo/preview"): ("rosa", None),
+    ("POST", "/assets/{asset_id}/ipo"): ("rosa", lambda o: {"expected_price": "1"}),
 }
 # Required query parameters, so the same-world control reaches the handler.
 QUERIES: dict[tuple[str, str], dict[str, str]] = {
     ("GET", "/assets/{asset_id}/quote"): {"side": "buy", "qty": "1"},
+}
+# Reads that pass authorization in the caller's own world but answer a state code there: the
+# seeded sites' IPOs have already launched (T59).
+OWN_WORLD_STATUS: dict[tuple[str, str], tuple[int, str | None]] = {
+    ("GET", "/assets/{asset_id}/ipo/preview"): (409, "ipo_already_launched"),
 }
 # Object IDs that travel in a body or query instead of the path: (persona, body, query), built
 # from the other world's objects. The path, if templated, is filled from the caller's own world.
@@ -484,7 +494,10 @@ def test_the_same_reads_succeed_in_the_callers_own_world(
 
     res = client.request(method, fill(path, mine), params=QUERIES.get((method, path)))
 
-    assert res.status_code == 200, res.text
+    expected = OWN_WORLD_STATUS.get((method, path), (200, None))
+    assert (res.status_code, res.json().get("detail") if expected[1] else None) == expected, (
+        res.text
+    )
 
 
 # --- Orders: TRADE on the asset -----------------------------------------------------------------
