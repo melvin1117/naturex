@@ -377,10 +377,12 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make fe-check`; manual register → sign out → sign in · **Deps:** T54, T73 · **Files:** `frontend/src/app/(auth)/login/page.tsx`, `frontend/src/app/(auth)/register/page.tsx`, `frontend/src/middleware.ts`, `frontend/src/lib/session.ts`
 
 ### T62 · Two app shells and app switcher (#105) — PD · S · Must · K4
-- [ ] Route groups `(exchange)` at `/` and `(steward)` at `/steward`, each with its own shell and navigation, plus an `/admin` shell; the sandbox banner on every page
-- [ ] An app switcher for community members; navigation follows the signed-in user's roles; a slot for the demo bar (T65)
+- [x] Route groups `(exchange)` at `/` and `(steward)` at `/steward`, each with its own shell and navigation, plus an `/admin` shell; the sandbox banner on every page
+  - As built: the Steward app stays in `app/steward/` (same `/steward/...` URLs, no file moves); `(exchange)`, `steward` and `admin` layouts share `AppHeader` with per-app navigation. The sandbox notice and the demo bar slot (T65) sit in the root layout, so every page has them; a skip link jumps to each page's `<main id="main">`. Below `lg`, the pages and switchers move into a menu sheet.
+- [x] An app switcher for community members; navigation follows the signed-in user's roles; a slot for the demo bar (T65)
+  - As built: `appAccess()` (`lib/navigation.ts`) from `world.me` and `useMyCommunities()` (`GET /me/communities`): anonymous → Exchange (plus the Steward app in the scripted demo); no community → Exchange + "Create a community" (the Steward app's empty state until T63's form); owner or steward → Exchange ↔ Steward; admins also Admin. The Steward header lists the account's communities with a switcher when there's more than one; pages read the choice with `useStewardCommunity()`. The UI only hides; the backend authorizes.
 
-**Verify:** `make fe-check`; `web-design-guidelines` review · **Deps:** T61, T68 · **Files:** `frontend/src/app/(exchange)/layout.tsx`, `frontend/src/app/(steward)/steward/layout.tsx`, `frontend/src/app/admin/layout.tsx`, `frontend/src/components/AppSwitcher.tsx`
+**Verify:** `make fe-check`; `web-design-guidelines` review · **Deps:** T61, T68 · **Files:** `frontend/src/app/(exchange)/layout.tsx`, `frontend/src/app/steward/layout.tsx`, `frontend/src/app/admin/layout.tsx`, `frontend/src/components/app-switcher.tsx`, `frontend/src/components/steward-community.tsx`, `frontend/src/lib/navigation.ts`
 
 ### T65 · Judge access (#108) — PD · S · Must · J1 J2
 - [ ] `/judge`: one click on "Explore as a community steward / an investor / the platform admin" starts a demo session and opens the matching app; a "Create a real account" link

@@ -105,7 +105,7 @@ Proposed (2026-10-06). Changes [pm-spec](../specs/pm-spec.md) §2–§5 and Epic
 | App | Routes | For | Main screens |
 |---|---|---|---|
 | **NatureX Exchange** | `/` (route group `(exchange)`) | Investors, everyone | Marketplace, asset page with trade panel, portfolio and impact, alerts, Copilot |
-| **NatureX Steward** | `/steward` (route group `(steward)`) | Community owners and stewards | Community home (wallet, IPO proceeds, holders, payouts, alerts, stewardship actions), communities and members, list land (`/steward/list`), listing status, evidence upload, IPO launch |
+| **NatureX Steward** | `/steward` (`app/steward/`) | Community owners and stewards | Community home (wallet, IPO proceeds, holders, payouts, alerts, stewardship actions), communities and members, list land (`/steward/list`), listing status, evidence upload, IPO launch |
 | Control room | `/admin` | Admins | Time Machine, event presets, suspend or resume |
 | Access | `/login`, `/register`, `/judge` | Everyone | Sign in, sign up, one-click demo |
 
