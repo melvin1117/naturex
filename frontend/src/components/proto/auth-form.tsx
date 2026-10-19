@@ -1,38 +1,134 @@
 "use client";
 
+import { TriangleAlertIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Wordmark } from "@/components/proto/bits";
+import { PasswordField } from "@/components/proto/password-field";
+import { useTour } from "@/components/proto/tour";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
+import { toApiError } from "@/lib/api/errors";
+import {
+  authFailure,
+  EMAIL_MAX_LENGTH,
+  LOGIN_PATH,
+  NAME_MAX_LENGTH,
+  PASSWORD_RULE,
+  REGISTER_PATH,
+  safeReturnPath,
+  validateAuthInput,
+  withNext,
+  type AuthField,
+  type AuthMode,
+  type FieldErrors,
+} from "@/lib/auth";
+import { useRegister, useSignIn, useWorld } from "@/lib/hooks";
 import { usePrototype } from "@/lib/prototype/store";
 
-export function AuthForm({ mode }: { mode: "login" | "register" }) {
-  const router = useRouter();
-  const { setPersona } = usePrototype();
-  const [error, setError] = useState<string | null>(null);
-  const isRegister = mode === "register";
+const FIELD_ORDER: AuthField[] = ["name", "email", "password"];
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+/**
+ * `/login` and `/register` (T61), on the real auth API. The session is the HttpOnly
+ * `nx_session` cookie the backend sets; this form never sees or stores a token. After success
+ * it goes to `next` if that's a safe same-origin path, else the Exchange.
+ */
+export function AuthForm({
+  mode,
+  next,
+}: {
+  mode: AuthMode;
+  /** The page that sent the visitor here (`?next=`); validated before use. */
+  next?: string;
+}) {
+  const router = useRouter();
+  const { exitDemo } = usePrototype();
+  const tour = useTour();
+  const { world } = useWorld();
+  const signIn = useSignIn();
+  const register = useRegister();
+  const mutation = mode === "register" ? register : signIn;
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const isRegister = mode === "register";
+  const destination = safeReturnPath(next);
+  const signedIn = world?.me != null;
+
+  // Already signed in (or just signed in): go where the visitor was heading.
+  useEffect(() => {
+    if (signedIn) router.replace(destination);
+  }, [signedIn, destination, router]);
+
+  function focusFirstError(errors: FieldErrors) {
+    const first = FIELD_ORDER.find((field) => errors[field]);
+    if (first)
+      formRef.current?.querySelector<HTMLElement>(`#${first}`)?.focus();
+  }
+
+  function clearFieldError(field: AuthField) {
+    setFieldErrors((errors) =>
+      errors[field] ? { ...errors, [field]: undefined } : errors,
+    );
+  }
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (mutation.isPending) return;
     const data = new FormData(e.currentTarget);
-    const password = String(data.get("password") ?? "");
-    if (isRegister && password.length < 12) {
-      setError("Use at least 12 characters for your password.");
+    const input = {
+      name: String(data.get("name") ?? ""),
+      email: String(data.get("email") ?? "").trim(),
+      password: String(data.get("password") ?? ""),
+    };
+    const invalid = validateAuthInput(mode, input);
+    setFormError(null);
+    setFieldErrors(invalid);
+    if (Object.keys(invalid).length) {
+      focusFirstError(invalid);
       return;
     }
-    setError(null);
-    toast("Accounts arrive with the backend", {
-      description:
-        "This prototype doesn't create accounts or send anything. Opening the Exchange as a demo investor.",
-    });
-    setPersona("investor");
-    router.push("/");
+    try {
+      const me = isRegister
+        ? await register.mutateAsync({
+            name: input.name.trim(),
+            email: input.email,
+            password: input.password,
+          })
+        : await signIn.mutateAsync({
+            email: input.email,
+            password: input.password,
+          });
+      tour.stop();
+      exitDemo();
+      toast(
+        isRegister
+          ? `Welcome to NatureX, ${me.name}`
+          : `Welcome back, ${me.name}`,
+        {
+          description: "Play money only, not a real security.",
+        },
+      );
+      router.replace(destination);
+    } catch (error) {
+      const failure = authFailure(mode, toApiError(error));
+      setFormError(failure.form);
+      setFieldErrors(failure.fields);
+      focusFirstError(failure.fields);
+    }
   }
+
+  const fieldProps = (field: AuthField) => ({
+    "aria-invalid": fieldErrors[field] ? true : undefined,
+    "aria-describedby": fieldErrors[field] ? `${field}-error` : undefined,
+    onChange: () => clearFieldError(field),
+  });
 
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-16">
@@ -41,10 +137,12 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           <Wordmark />
         </Link>
         <form
+          ref={formRef}
           // A submit before hydration posts instead of putting the password in the URL.
           method="post"
           onSubmit={onSubmit}
           className="mt-8 rounded-[1.75rem] bg-card p-6 shadow-lift sm:p-8"
+          aria-busy={mutation.isPending || undefined}
           noValidate
         >
           <h1 className="font-serif text-4xl">
@@ -59,7 +157,15 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
             {isRegister && (
               <div className="space-y-2">
                 <Label htmlFor="name">Display name</Label>
-                <Input id="name" name="name" autoComplete="nickname" required />
+                <Input
+                  id="name"
+                  name="name"
+                  autoComplete="nickname"
+                  maxLength={NAME_MAX_LENGTH}
+                  required
+                  {...fieldProps("name")}
+                />
+                <FieldError field="name" message={fieldErrors.name} />
               </div>
             )}
             <div className="space-y-2">
@@ -68,58 +174,54 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
                 id="email"
                 name="email"
                 type="email"
+                inputMode="email"
                 autoComplete="email"
+                autoCapitalize="none"
+                spellCheck={false}
+                maxLength={EMAIL_MAX_LENGTH}
                 required
+                {...fieldProps("email")}
               />
+              <FieldError field="email" message={fieldErrors.email} />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete={isRegister ? "new-password" : "current-password"}
-                aria-describedby={isRegister ? "password-hint" : undefined}
-                aria-invalid={error ? true : undefined}
-                required
-              />
-              {isRegister && (
-                <p id="password-hint" className="text-xs text-muted-foreground">
-                  At least 12 characters.
-                </p>
-              )}
-            </div>
+            <PasswordField
+              autoComplete={isRegister ? "new-password" : "current-password"}
+              hint={isRegister ? PASSWORD_RULE : undefined}
+              error={fieldErrors.password}
+              onEdit={() => clearFieldError("password")}
+            />
           </div>
-          {error && (
-            <p role="alert" className="mt-3 text-sm text-destructive">
-              {error}
-            </p>
+          {formError && (
+            <Alert variant="destructive" className="mt-4">
+              <TriangleAlertIcon aria-hidden="true" />
+              <AlertDescription>{formError}</AlertDescription>
+            </Alert>
           )}
-          <Button type="submit" size="lg" className="mt-6 w-full">
-            {isRegister ? "Create account" : "Sign in"}
+          <Button
+            type="submit"
+            size="lg"
+            className="mt-6 w-full"
+            disabled={mutation.isPending}
+          >
+            {mutation.isPending && (
+              <Spinner aria-hidden="true" role="presentation" />
+            )}
+            {mutation.isPending
+              ? isRegister
+                ? "Creating your account…"
+                : "Signing in…"
+              : isRegister
+                ? "Create account"
+                : "Sign in"}
           </Button>
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            {isRegister ? (
-              <>
-                Already have an account?{" "}
-                <Link
-                  href="/login"
-                  className="font-medium text-foreground underline"
-                >
-                  Sign in
-                </Link>
-              </>
-            ) : (
-              <>
-                New to NatureX?{" "}
-                <Link
-                  href="/register"
-                  className="font-medium text-foreground underline"
-                >
-                  Create an account
-                </Link>
-              </>
-            )}
+            {isRegister ? "Already have an account? " : "New to NatureX? "}
+            <Link
+              href={withNext(isRegister ? LOGIN_PATH : REGISTER_PATH, next)}
+              className="font-medium text-foreground underline"
+            >
+              {isRegister ? "Sign in" : "Create an account"}
+            </Link>
           </p>
         </form>
         <p className="mt-4 text-center text-xs text-muted-foreground">
@@ -131,5 +233,20 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         </p>
       </div>
     </div>
+  );
+}
+
+function FieldError({
+  field,
+  message,
+}: {
+  field: AuthField;
+  message?: string;
+}) {
+  if (!message) return null;
+  return (
+    <p id={`${field}-error`} className="text-sm text-destructive">
+      {message}
+    </p>
   );
 }

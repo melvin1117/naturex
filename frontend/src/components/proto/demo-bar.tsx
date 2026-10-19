@@ -16,6 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useTour } from "@/components/proto/tour";
+import { useWorld } from "@/lib/hooks";
 import { usePrototype } from "@/lib/prototype/store";
 import { PERSONAS, type PersonaKey } from "@/lib/prototype/world";
 
@@ -23,7 +24,39 @@ export const SANDBOX_NOTICE = "Sandbox: play money, not a real security.";
 
 const ORDER: PersonaKey[] = ["steward", "investor", "admin"];
 
+/**
+ * The prototype's demo bar (persona switcher, Guided tour, Reset my demo) for anonymous
+ * visitors. A signed-in account sees only the sandbox notice: switching personas would pretend
+ * to change who they are. Until the world says who this is, only the notice shows. T65 makes
+ * the demo bar real (demo sessions).
+ */
 export function DemoBar() {
+  const session = useWorld();
+  const signedIn = session.world?.me != null;
+  const known = session.status === "ready" || session.status === "error";
+  if (signedIn || !known) return <SandboxNotice />;
+  return <DemoControls />;
+}
+
+function SandboxNotice() {
+  return (
+    <div
+      role="region"
+      aria-label="Sandbox notice"
+      className="bg-primary text-primary-foreground"
+    >
+      <p className="mx-auto flex max-w-7xl items-center gap-2 px-4 py-2 text-sm sm:px-6">
+        <FlaskConical
+          className="size-4 shrink-0 text-lime"
+          aria-hidden="true"
+        />
+        <span className="font-medium">{SANDBOX_NOTICE}</span>
+      </p>
+    </div>
+  );
+}
+
+function DemoControls() {
   const { world, setPersona, reset } = usePrototype();
   const router = useRouter();
   const pathname = usePathname();
