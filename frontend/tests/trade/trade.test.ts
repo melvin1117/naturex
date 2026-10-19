@@ -10,6 +10,7 @@ import {
   orderProblem,
   parseUnits,
   signedMoneyText,
+  tradeBlockedMessage,
   unitPrice,
   unitsInput,
 } from "@/lib/trade";
@@ -129,6 +130,19 @@ describe("orderFailure", () => {
     expect(orderFailure(new ApiError(403, "x")).message).toBe(
       "Your account can't trade this site.",
     );
+  });
+
+  it("explains a trade block the same way for a quote and a refused order", () => {
+    for (const reason of [
+      "insider_trading_blocked",
+      "admins_cannot_trade",
+      "treasury_cannot_act",
+    ] as const) {
+      expect(orderFailure(new ApiError(403, "x", reason)).message).toBe(
+        tradeBlockedMessage(reason),
+      );
+    }
+    expect(tradeBlockedMessage("treasury_cannot_act")).toMatch(/can't trade/);
   });
 });
 

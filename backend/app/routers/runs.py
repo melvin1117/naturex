@@ -1,9 +1,11 @@
 """Rating runs (T27): `POST /assets/{asset_id}/rate` → 202 + `run_id`; `GET /runs/{run_id}`.
 
-Both are scoped to the session's world (404 for another world's asset or run); starting a run
-needs a signed-in session (401 `auth_required`) and, in the live world, an admin (403
-`admin_only`; T57 replaces this with the role matrix). Progress also streams as `rating_progress`
-events (`GET /events/stream`).
+Both are scoped to the session's world (404 for another world's asset or run). Starting a run
+spends LLM budget, so it is either an operator's re-rate (`Action.OPERATE`: an admin of this
+world with no stake in the asset's community) or the community's own listing management
+(`Action.MANAGE_LISTING`: its owner or a steward), ADR-0005 §3 rows 5 and 8; anyone else gets 403
+`admin_only`, anonymous callers 401. Progress also streams as `rating_progress` events
+(`GET /events/stream`).
 """
 
 from __future__ import annotations
@@ -11,17 +13,21 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
 from sqlmodel import select
 
-from app.authz import OptionalActor
-from app.deps import (
-    ADMIN_ONLY,
-    CurrentPrincipal,
-    CurrentWorld,
-    SessionDep,
-    require_sandbox_or_admin,
+from app.authz import (
+    Action,
+    AssetRef,
+    DenyReason,
+    OptionalActor,
+    acting_world,
+    asset_ref,
+    asset_ref_in,
+    require,
+    require_any,
 )
+from app.deps import CurrentWorld, SessionDep
 from app.models import Asset
 from app.schemas import RatingRunAccepted, RatingRunOut
 from app.services.listings import visible_to
@@ -45,12 +51,31 @@ def get_rating_runner() -> RatingRunner:
 RunnerDep = Annotated[RatingRunner, Depends(get_rating_runner)]
 
 
+def world_run(
+    run_id: Annotated[UUID, Path()], actor: OptionalActor, session: SessionDep
+) -> RatingRunOut | None:
+    """The run by `(world_id, id)` in the caller's world, or None. Cached per request, so the
+    loader and the route share one lookup."""
+    return get_run(session, acting_world(actor), run_id)
+
+
+WorldRun = Annotated[RatingRunOut | None, Depends(world_run)]
+
+
+def run_ref(run: WorldRun, actor: OptionalActor, session: SessionDep) -> AssetRef | None:
+    """The rated asset of a run in the caller's world (T57), or None (a 404)."""
+    return None if run is None else asset_ref_in(session, acting_world(actor), run.asset_id)
+
+
 @router.post(
     "/assets/{asset_id}/rate",
     response_model=RatingRunAccepted,
     status_code=status.HTTP_202_ACCEPTED,
     responses={
-        403: {"description": f"`{ADMIN_ONLY}`: only an admin can rate in the live world"},
+        403: {
+            "description": f"`{DenyReason.ADMIN_ONLY.value}`: only an admin of this world, or a "
+            "member of the asset's community, can start a rating run"
+        },
         404: {"description": "Asset not found in this world"},
         409: {
             "description": "`run_in_progress` (Location: the active run), `asset_is_draft` or "
@@ -62,17 +87,16 @@ RunnerDep = Annotated[RatingRunner, Depends(get_rating_runner)]
         },
         503: {"description": "`rating_busy`: too many runs, or the run lock is busy"},
     },
+    dependencies=[require_any((Action.OPERATE, Action.MANAGE_LISTING), asset_ref)],
 )
 def start_rating(
     asset_id: UUID,
     world: CurrentWorld,
-    principal: CurrentPrincipal,
     session: SessionDep,
     runner: RunnerDep,
     response: Response,
 ) -> RatingRunAccepted:
     """Start an async rating run for the asset; follow it with `GET /runs/{run_id}`."""
-    require_sandbox_or_admin(world, principal)
     # End the request's read transaction so its pooled connection is free while the runner
     # opens its own session and waits (bounded) on the run locks: one connection at a time.
     world_id = world.id  # read before the commit expires the row
@@ -80,7 +104,7 @@ def start_rating(
     try:
         run_id = runner.start(world_id, asset_id, trigger="api")
     except LookupError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found") from exc
     except AssetNotRateable as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, exc.code) from exc
     except RunInProgress as exc:
@@ -105,13 +129,14 @@ def start_rating(
     return RatingRunAccepted(run_id=run_id, asset_id=asset_id)
 
 
-@router.get("/runs/{run_id}", response_model=RatingRunOut)
+@router.get(
+    "/runs/{run_id}", response_model=RatingRunOut, dependencies=[require(Action.BROWSE, run_ref)]
+)
 def get_rating_run(
-    run_id: UUID, world: CurrentWorld, actor: OptionalActor, session: SessionDep
+    run_id: UUID, world: CurrentWorld, actor: OptionalActor, session: SessionDep, run: WorldRun
 ) -> RatingRunOut:
     """The run's status and steps, rebuilt from its progress events (any worker can answer).
     A run of a listing under review is its community's and same-world admins' only (T58)."""
-    run = get_run(session, world.id, run_id)
     asset = (
         None
         if run is None
@@ -120,5 +145,5 @@ def get_rating_run(
         ).first()
     )
     if run is None or asset is None or not visible_to(actor, asset):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Run not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
     return run

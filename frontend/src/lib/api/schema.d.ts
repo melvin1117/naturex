@@ -551,6 +551,10 @@ export interface paths {
          *     session the largest order the user can place. Read-only: nothing is reserved, and the
          *     order fills at the price when it's placed. Errors match `POST /orders` for the asset and
          *     the size; cash and holdings are checked when ordering (see `max_qty`).
+         *
+         *     Anyone may read a quote (`Action.BROWSE` on the asset). A signed-in user whom `TRADE` would
+         *     refuse (a member of the asset's community, an admin, a treasury) gets `max_qty = 0` and
+         *     the reason in `trade_blocked_reason`, so a quote never invites a refused order.
          */
         get: operations["get_quote_assets__asset_id__quote_get"];
         put?: never;
@@ -731,8 +735,8 @@ export interface paths {
         put?: never;
         /**
          * Tamper Demo
-         * @description DEMO_MODE and demo sandboxes only: edit a copy of one entry and show verification
-         *     failing. Writes nothing.
+         * @description DEMO_MODE, admins and demo sandboxes only: edit a copy of one entry and show
+         *     verification failing. Writes nothing.
          */
         post: operations["tamper_demo_admin_tamper_demo_post"];
         delete?: never;
@@ -775,7 +779,8 @@ export interface paths {
          * Reset
          * @description "Reset my demo": restore the demo session's sandbox to the template, keeping its ID.
          *
-         *     The live world is never reset: any other session gets 403 `demo_only`.
+         *     The live world is never reset: any other session gets 403 `demo_session_only`
+         *     (`Action.CONTROL_DEMO`).
          */
         post: operations["reset_world_reset_post"];
         delete?: never;
@@ -1918,7 +1923,7 @@ export interface components {
             community_amount: string;
             /**
              * Max Qty
-             * @description The largest order on this side the signed-in user can place now (cash or holding, supply, size cap); null without a session.
+             * @description The largest order on this side the signed-in user can place now (cash or holding, supply, size cap); 0 when `trade_blocked_reason` is set; null without a session.
              */
             max_qty?: number | null;
             /**
@@ -1926,6 +1931,11 @@ export interface components {
              * @description The size cap for one order on this asset.
              */
             max_order_qty: number;
+            /**
+             * Trade Blocked Reason
+             * @description Why the signed-in user can't trade this asset at all (an order would get this 403): a member of its community, an admin or a treasury. Null when they can, or without a session.
+             */
+            trade_blocked_reason?: ("insider_trading_blocked" | "admins_cannot_trade" | "treasury_cannot_act") | null;
         };
         /** RatingRunAccepted */
         RatingRunAccepted: {
@@ -3099,6 +3109,13 @@ export interface operations {
                     "application/json": components["schemas"]["EvidenceResponse"];
                 };
             };
+            /** @description Not allowed: `members_only` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -3754,6 +3771,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Not allowed: `insider_trading_blocked`, `admins_cannot_trade`, `treasury_cannot_act` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Asset not in the session's world */
             404: {
                 headers: {
@@ -3852,6 +3876,13 @@ export interface operations {
                     "application/json": components["schemas"]["PortfolioOut"];
                 };
             };
+            /** @description Not allowed: `treasury_cannot_act` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     ask_copilot_copilot_post: {
@@ -3875,6 +3906,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CopilotResponse"];
                 };
+            };
+            /** @description Not allowed: `treasury_cannot_act` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3971,7 +4009,7 @@ export interface operations {
                     "application/json": components["schemas"]["SimulateQuarterResponse"];
                 };
             };
-            /** @description `admin_only`: only an admin can do this in the live world */
+            /** @description Not allowed: `admin_only` */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4002,7 +4040,7 @@ export interface operations {
                     "application/json": components["schemas"]["SimulateEventResponse"];
                 };
             };
-            /** @description `admin_only`: only an admin can do this in the live world */
+            /** @description Not allowed: `admin_only`, `conflict_of_interest` */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4135,7 +4173,7 @@ export interface operations {
                     "application/json": components["schemas"]["TamperDemoOut"];
                 };
             };
-            /** @description `sandbox_only`: never in the live world */
+            /** @description Not allowed: `admin_only`, `sandbox_only` */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4198,7 +4236,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description `demo_only`: only a demo session can reset its sandbox */
+            /** @description Not allowed: `demo_session_only` */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4341,7 +4379,7 @@ export interface operations {
                     "application/json": components["schemas"]["RatingRunAccepted"];
                 };
             };
-            /** @description `admin_only`: only an admin can rate in the live world */
+            /** @description `admin_only`: only an admin of this world, or a member of the asset's community, can start a rating run */
             403: {
                 headers: {
                     [name: string]: unknown;

@@ -32,6 +32,7 @@ from app.auth import (
     register_person,
     start_session,
 )
+from app.authz import Action, require
 from app.config import rate_limit_secret, secure_cookies
 from app.deps import (
     AUTH_REQUIRED,
@@ -219,6 +220,7 @@ def logout(request: Request, session: SessionDep, settings: SettingsDep) -> Resp
     "/me",
     response_model=MeOut,
     responses={401: {"description": AUTH_REQUIRED}},
+    dependencies=[require(Action.USE_OWN_ACCOUNT)],
 )
 def me(principal: CurrentPrincipal, response: Response, session: SessionDep) -> MeOut:
     """The signed-in account."""

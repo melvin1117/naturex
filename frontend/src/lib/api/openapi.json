@@ -714,6 +714,9 @@
               }
             }
           },
+          "403": {
+            "description": "Not allowed: `members_only`"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -1470,6 +1473,9 @@
           "409": {
             "description": "`not_trading` (not listed, e.g. suspended, or its IPO hasn't launched; T59), `insufficient_cash`, `insufficient_shares`, `insufficient_supply`, or `price_moved` (the total is above `max_total` or below `min_total`)"
           },
+          "403": {
+            "description": "Not allowed: `insider_trading_blocked`, `admins_cannot_trade`, `treasury_cannot_act`"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -1489,7 +1495,7 @@
           "market"
         ],
         "summary": "Get Quote",
-        "description": "What an order would cost or pay now, slippage included (`engine.preview`), and with a\nsession the largest order the user can place. Read-only: nothing is reserved, and the\norder fills at the price when it's placed. Errors match `POST /orders` for the asset and\nthe size; cash and holdings are checked when ordering (see `max_qty`).",
+        "description": "What an order would cost or pay now, slippage included (`engine.preview`), and with a\nsession the largest order the user can place. Read-only: nothing is reserved, and the\norder fills at the price when it's placed. Errors match `POST /orders` for the asset and\nthe size; cash and holdings are checked when ordering (see `max_qty`).\n\nAnyone may read a quote (`Action.BROWSE` on the asset). A signed-in user whom `TRADE` would\nrefuse (a member of the asset's community, an admin, a treasury) gets `max_qty = 0` and\nthe reason in `trade_blocked_reason`, so a quote never invites a refused order.",
         "operationId": "get_quote_assets__asset_id__quote_get",
         "parameters": [
           {
@@ -1577,6 +1583,9 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Not allowed: `treasury_cannot_act`"
           }
         }
       }
@@ -1608,6 +1617,9 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Not allowed: `treasury_cannot_act`"
           },
           "422": {
             "description": "Validation Error",
@@ -1788,7 +1800,7 @@
             }
           },
           "403": {
-            "description": "`admin_only`: only an admin can do this in the live world"
+            "description": "Not allowed: `admin_only`"
           }
         }
       }
@@ -1823,7 +1835,7 @@
             }
           },
           "403": {
-            "description": "`admin_only`: only an admin can do this in the live world"
+            "description": "Not allowed: `admin_only`, `conflict_of_interest`"
           },
           "422": {
             "description": "Validation Error",
@@ -1984,7 +1996,7 @@
           "ledger"
         ],
         "summary": "Tamper Demo",
-        "description": "DEMO_MODE and demo sandboxes only: edit a copy of one entry and show verification\nfailing. Writes nothing.",
+        "description": "DEMO_MODE, admins and demo sandboxes only: edit a copy of one entry and show\nverification failing. Writes nothing.",
         "operationId": "tamper_demo_admin_tamper_demo_post",
         "requestBody": {
           "content": {
@@ -2008,7 +2020,7 @@
             }
           },
           "403": {
-            "description": "`sandbox_only`: never in the live world"
+            "description": "Not allowed: `admin_only`, `sandbox_only`"
           },
           "422": {
             "description": "Validation Error",
@@ -2051,7 +2063,7 @@
           "world"
         ],
         "summary": "Reset",
-        "description": "\"Reset my demo\": restore the demo session's sandbox to the template, keeping its ID.\n\nThe live world is never reset: any other session gets 403 `demo_only`.",
+        "description": "\"Reset my demo\": restore the demo session's sandbox to the template, keeping its ID.\n\nThe live world is never reset: any other session gets 403 `demo_session_only`\n(`Action.CONTROL_DEMO`).",
         "operationId": "reset_world_reset_post",
         "responses": {
           "200": {
@@ -2068,7 +2080,7 @@
             "description": "`auth_required`: sign in first"
           },
           "403": {
-            "description": "`demo_only`: only a demo session can reset its sandbox"
+            "description": "Not allowed: `demo_session_only`"
           }
         }
       }
@@ -2245,7 +2257,7 @@
             }
           },
           "403": {
-            "description": "`admin_only`: only an admin can rate in the live world"
+            "description": "`admin_only`: only an admin of this world, or a member of the asset's community, can start a rating run"
           },
           "404": {
             "description": "Asset not found in this world"
@@ -4647,12 +4659,29 @@
               }
             ],
             "title": "Max Qty",
-            "description": "The largest order on this side the signed-in user can place now (cash or holding, supply, size cap); null without a session."
+            "description": "The largest order on this side the signed-in user can place now (cash or holding, supply, size cap); 0 when `trade_blocked_reason` is set; null without a session."
           },
           "max_order_qty": {
             "type": "integer",
             "title": "Max Order Qty",
             "description": "The size cap for one order on this asset."
+          },
+          "trade_blocked_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "insider_trading_blocked",
+                  "admins_cannot_trade",
+                  "treasury_cannot_act"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trade Blocked Reason",
+            "description": "Why the signed-in user can't trade this asset at all (an order would get this 403): a member of its community, an admin or a treasury. Null when they can, or without a session."
           }
         },
         "type": "object",

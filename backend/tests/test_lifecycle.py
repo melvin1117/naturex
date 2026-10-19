@@ -745,7 +745,7 @@ def test_a_draft_can_be_edited_and_each_edit_is_in_the_ledger(world: World_) -> 
     outsider = client_as(world, world.outsider).patch(
         f"/assets/{asset['id']}", json={"name": "Mine"}
     )
-    assert outsider.status_code == 403
+    assert (outsider.status_code, outsider.json()["detail"]) == (404, "not_found")  # hidden (T57)
 
 
 @requires_db
@@ -1000,8 +1000,11 @@ def test_recent_forest_loss_makes_a_listing_ineligible_for_good(world: World_) -
 @requires_db
 def test_only_the_community_submits_and_listed_assets_cant_be_resubmitted(world: World_) -> None:
     asset = draft(world)
-    for user in (world.outsider, world.admin, world.other_steward):
-        assert submit(world, asset["id"], user).status_code == 403
+    # A draft is hidden from outsiders, so their submit is 404 (T57); an admin sees it but isn't
+    # a member.
+    for user in (world.outsider, world.other_steward):
+        assert submit(world, asset["id"], user).status_code == 404
+    assert submit(world, asset["id"], world.admin).json()["detail"] == "members_only"
     assert client_as(world, None).post(f"/assets/{asset['id']}/submit").status_code == 401
     assert submit(world, uuid4()).status_code == 404
     assert status_of(world, asset["id"]) == (AssetStatus.DRAFT, None)
@@ -1101,7 +1104,7 @@ def test_a_rating_listing_is_revised_or_withdrawn_only_without_an_active_run(
     world.runner.settings = _settings(use_mocks=False)
     world.executor.run_all()  # fails: no metrics
     assert client.post(f"/assets/{asset['id']}/revise").json()["status"] == "draft"
-    assert client_as(world, world.outsider).post(f"/assets/{asset['id']}/revise").status_code == 403
+    assert client_as(world, world.outsider).post(f"/assets/{asset['id']}/revise").status_code == 404
 
 
 @requires_db

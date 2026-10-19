@@ -53,6 +53,8 @@
 | 10. Under the hood | 🛰️ | Opens Agent Trace and eval results | Every Nemotron model with tokens and latency; quality scores |
 | Finish | All | Summary card | "What you just saw" in 5 bullets, with links to the repo, video and architecture |
 
+**Who may act (T57, ADR-0005 §3):** the backend enforces the role matrix in sandboxes too. Chapter 3 (**Rate**) must run as Rosa (her community's listing) or the demo admin persona; chapters 6–7 (**Time Machine**, inject) and 9 (**Tamper**) need the demo admin persona (`persona_key = admin`, an admin only inside its own sandbox). The 🛰️ and 🎛️ chapters therefore switch to the demo admin; demo investors (Arjun, Mia) get 403 `admin_only` for all three. The demo admin can't trade (403 `admins_cannot_trade`), and Rosa can't buy her own community's units (`insider_trading_blocked`), so chapter 5 stays Arjun's.
+
 ### 3.4 Interaction mechanics
 - **Spotlight overlay:** dims the page except the element to click, with a short hint.
 - **Two-layer hints** on every step: 💡 *Why this matters* (product) and ⚙️ *Tech behind it* (model, formula, API call).

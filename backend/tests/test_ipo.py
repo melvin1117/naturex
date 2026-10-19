@@ -674,7 +674,7 @@ def test_an_asset_removed_meanwhile_is_not_found(
         preview(world, asset["id"]),
         launch_ipo(world, asset["id"], expected_price="1"),
     ):
-        assert (response.status_code, response.json()["detail"]) == (404, "Asset not found")
+        assert (response.status_code, response.json()["detail"]) == (404, "not_found")
     assert written(world, asset["id"])[:2] == (0, 0)
 
 

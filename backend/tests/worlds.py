@@ -15,6 +15,7 @@ from sqlalchemy import Engine, delete
 from sqlmodel import Session, col, select
 
 from app.auth import SESSION_COOKIE, Principal, start_session
+from app.authz import Actor
 from app.models import SessionKind, User, UserKind, World
 from app.sandbox import _delete_world_rows, create_world
 
@@ -69,4 +70,16 @@ def stub_principal() -> Principal:
         session_kind=SessionKind.PASSWORD,
         user_kind=UserKind.PERSON,
         is_admin=False,
+    )
+
+
+def stub_actor(world: World, *, is_admin: bool = False) -> Actor:
+    """A demo-session actor in `world` for DB-free tests of stub routes (override
+    `authz.optional_actor`)."""
+    return Actor(
+        user_id=uuid4(),
+        world_id=world.id,
+        user_kind=UserKind.PERSONA,
+        is_admin=is_admin,
+        session_kind=SessionKind.DEMO,
     )

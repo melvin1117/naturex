@@ -25,6 +25,7 @@ from app.authz import (
     Resource,
     WorldRef,
     authorize,
+    can_see,
 )
 from app.models import CommunityRole, SessionKind, UserKind
 from app.worlds import LIVE_WORLD_ID, WORLD_ID, is_sandbox_world
@@ -77,7 +78,7 @@ ROLES: dict[str, Actor | None] = {
 }
 ROLE_NAMES = list(ROLES)
 
-ASSET_REF = AssetRef(WORLD, ASSET, COMMUNITY)
+ASSET_REF = AssetRef(WORLD, ASSET, COMMUNITY, public=True)
 COMMUNITY_REF = CommunityRef(WORLD, COMMUNITY)
 WORLD_REF = WorldRef(WORLD)
 
@@ -185,7 +186,7 @@ def test_admins_run_the_time_machine_whatever_their_memberships(role: str) -> No
 
 
 def test_an_admin_member_operates_and_reviews_other_communities_assets() -> None:
-    elsewhere = AssetRef(WORLD, uuid4(), OTHER_COMMUNITY)
+    elsewhere = AssetRef(WORLD, uuid4(), OTHER_COMMUNITY, public=True)
     for role in ("admin_owner_own", "admin_steward_own"):
         assert authorize(ROLES[role], Action.OPERATE, elsewhere) == A
         assert authorize(ROLES[role], Action.REVIEW_LISTING, elsewhere) == A
@@ -224,19 +225,19 @@ def test_a_demo_admin_is_admin_only_inside_its_sandbox() -> None:
 
 def test_anonymous_visitors_browse_the_live_world_only() -> None:
     assert authorize(None, Action.BROWSE, ASSET_REF) == A
-    assert authorize(None, Action.BROWSE, AssetRef(SANDBOX, ASSET, COMMUNITY)) == NF
+    assert authorize(None, Action.BROWSE, AssetRef(SANDBOX, ASSET, COMMUNITY, public=True)) == NF
     assert authorize(None, Action.BROWSE, CommunityRef(WORLD_ID, COMMUNITY)) == NF
 
 
 def test_members_of_one_community_trade_other_communities_assets() -> None:
     steward = actor(roles={COMMUNITY: CommunityRole.STEWARD})
-    elsewhere = AssetRef(WORLD, uuid4(), OTHER_COMMUNITY)
+    elsewhere = AssetRef(WORLD, uuid4(), OTHER_COMMUNITY, public=True)
     assert authorize(steward, Action.TRADE, elsewhere) == A
-    assert authorize(steward, Action.TRADE, AssetRef(WORLD, uuid4(), None)) == A
+    assert authorize(steward, Action.TRADE, AssetRef(WORLD, uuid4(), None, public=True)) == A
 
 
 def test_an_asset_without_a_community_has_no_stewards() -> None:
-    orphan = AssetRef(WORLD, uuid4(), None)
+    orphan = AssetRef(WORLD, uuid4(), None, public=True)
     owner = actor(roles={COMMUNITY: CommunityRole.OWNER})
     assert authorize(owner, Action.MANAGE_LISTING, orphan) == MO
     assert authorize(owner, Action.LAUNCH_IPO, orphan) == OO
@@ -244,7 +245,7 @@ def test_an_asset_without_a_community_has_no_stewards() -> None:
 
 def test_personas_are_signed_in_users() -> None:
     persona = sandbox_actor(kind=UserKind.PERSONA)
-    assert authorize(persona, Action.TRADE, AssetRef(SANDBOX, ASSET, COMMUNITY)) == A
+    assert authorize(persona, Action.TRADE, AssetRef(SANDBOX, ASSET, COMMUNITY, public=True)) == A
 
 
 # --- Adding a member ------------------------------------------------------------------------
@@ -322,3 +323,48 @@ def test_a_candidate_from_another_world_is_not_found() -> None:
 )
 def test_deny_status_codes(reason: DenyReason, code: int) -> None:
     assert Deny(reason).status_code == code
+
+
+# --- Listings under review (T58 visibility, enforced by the policy since T57) -----------------
+
+PRIVATE_ASSET = AssetRef(WORLD, ASSET, COMMUNITY, public=False)
+NF = Deny(DenyReason.NOT_FOUND)
+SEES_PRIVATE = {"steward_own", "owner_own", "admin", "admin_owner_own", "admin_steward_own"}
+SEES_PRIVATE |= {"owner_own_steward_other", "steward_own_owner_other"}
+
+
+@pytest.mark.parametrize("role", ROLE_NAMES)
+def test_a_listing_under_review_is_browsable_by_its_community_and_admins_only(role: str) -> None:
+    decision = authorize(ROLES[role], Action.BROWSE, PRIVATE_ASSET)
+    assert decision == (A if role in SEES_PRIVATE else NF)
+    assert can_see(ROLES[role], PRIVATE_ASSET) is (role in SEES_PRIVATE)
+
+
+@pytest.mark.parametrize("role", ROLE_NAMES)
+def test_trading_a_listing_under_review_is_not_found_for_outsiders(role: str) -> None:
+    """Insiders and admins still get their own reasons; anyone else learns nothing."""
+    decision = authorize(ROLES[role], Action.TRADE, PRIVATE_ASSET)
+    if role == "anonymous":
+        assert decision == Deny(DenyReason.AUTH_REQUIRED)
+    elif role not in SEES_PRIVATE:
+        assert decision == NF
+    else:
+        assert decision == authorize(ROLES[role], Action.TRADE, ASSET_REF)
+
+
+@pytest.mark.parametrize(
+    "action",
+    [Action.MANAGE_LISTING, Action.LAUNCH_IPO, Action.VIEW_COMMUNITY_DATA, Action.OPERATE],
+)
+@pytest.mark.parametrize("role", ROLE_NAMES)
+def test_every_action_on_a_listing_under_review_is_not_found_for_outsiders(
+    action: Action, role: str
+) -> None:
+    """A 403 would reveal the listing; those who can see it get the usual decision."""
+    decision = authorize(ROLES[role], action, PRIVATE_ASSET)
+    if role == "anonymous":
+        assert decision == Deny(DenyReason.AUTH_REQUIRED)
+    elif role not in SEES_PRIVATE:
+        assert decision == NF
+    else:
+        assert decision == authorize(ROLES[role], action, ASSET_REF)

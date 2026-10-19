@@ -2,16 +2,45 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from app.deps import current_principal
+from app.authz import (
+    Action,
+    DenyReason,
+    OptionalActor,
+    WorldRef,
+    acting_world,
+    asset_ref_in,
+    can_see,
+    denied,
+    require,
+)
+from app.deps import SessionDep
 from app.mocks import EVENT_ENCROACH
 from app.schemas import CopilotCitation, CopilotRequest, CopilotResponse
 
 router = APIRouter(tags=["copilot"])
 
 
-@router.post("/copilot", response_model=CopilotResponse, dependencies=[Depends(current_principal)])
+def copilot_world(
+    body: CopilotRequest, actor: OptionalActor, session: SessionDep
+) -> WorldRef | None:
+    """The caller's world, if the asset asked about (if any) is in it by `(world_id, id)` and
+    visible to the caller (T58); None (a 404) otherwise. `body` is the route's own, parsed once."""
+    world_id = acting_world(actor)
+    if body.asset_id is not None:
+        asset = asset_ref_in(session, world_id, body.asset_id)
+        if asset is None or not can_see(actor, asset):
+            return None
+    return WorldRef(world_id)
+
+
+@router.post(
+    "/copilot",
+    response_model=CopilotResponse,
+    dependencies=[require(Action.USE_OWN_ACCOUNT, copilot_world)],
+    responses=denied(DenyReason.TREASURY_CANNOT_ACT),
+)
 def ask_copilot(body: CopilotRequest) -> CopilotResponse:
     return CopilotResponse(
         answer=(

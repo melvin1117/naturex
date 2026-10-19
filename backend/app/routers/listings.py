@@ -18,24 +18,21 @@ from __future__ import annotations
 from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Response, status
 from sqlmodel import Session, col, select
 
 from app.authz import (
     Action,
     AssetRef,
     CommunityRef,
-    Deny,
-    DenyReason,
     Granted,
     OptionalActor,
+    acting_world,
     asset_ref,
     community_ref,
-    deny_error,
-    enforce,
     require,
 )
-from app.deps import SessionDep, SettingsDep, current_principal
+from app.deps import SessionDep, SettingsDep
 from app.models import Asset, Community
 from app.routers.assets import asset_detail, cards
 from app.routers.runs import RunnerDep
@@ -90,6 +87,24 @@ _POLYGON: Responses = {
         "too_small, too_large, overlap) at `loc` [body, geojson]"
     }
 }
+
+
+def new_listing_ref(
+    body: AssetCreate, actor: OptionalActor, session: SessionDep
+) -> AssetRef | None:
+    """The listing about to exist in the body's community, found by `(world_id, id)` in the
+    caller's world (None, a 404, otherwise). `body` is the route's own, parsed once."""
+    world_id = acting_world(actor)
+    community = session.exec(
+        select(Community.id).where(
+            Community.world_id == world_id, Community.id == body.community_id
+        )
+    ).first()
+    # Nothing exists yet to hide, and the community is public: an outsider learns `members_only`.
+    return None if community is None else AssetRef(world_id, uuid4(), community, public=True)
+
+
+NEW_LISTING = require(Action.MANAGE_LISTING, new_listing_ref)
 ListingAccess = Annotated[Granted, require(Action.MANAGE_LISTING, asset_ref)]
 OperateAsset = Annotated[Granted, require(Action.OPERATE, asset_ref)]
 CommunityData = Annotated[Granted, require(Action.VIEW_COMMUNITY_DATA, community_ref)]
@@ -151,8 +166,6 @@ def list_community_assets(
     "/assets",
     response_model=AssetDetail,
     status_code=status.HTTP_201_CREATED,
-    # A session before the body is validated: anonymous callers get 401, not 422 (T73).
-    dependencies=[Depends(current_principal)],
     responses={
         **_AUTH,
         **_DENIED,
@@ -163,7 +176,7 @@ def list_community_assets(
 )
 def create_listing(
     body: AssetCreate,
-    actor: OptionalActor,
+    granted: Annotated[Granted, NEW_LISTING],
     session: SessionDep,
     settings: SettingsDep,
     response: Response,
@@ -172,17 +185,8 @@ def create_listing(
     world. Needs `attestation: true`; the polygon must pass T36's checks and not overlap a
     submitted listing in the world or one of the community's own drafts. Nothing is public
     until it's listed."""
-    if actor is None:
-        raise deny_error(Deny(DenyReason.AUTH_REQUIRED))
-    community = session.exec(
-        select(Community.id).where(
-            Community.world_id == actor.world_id, Community.id == body.community_id
-        )
-    ).first()
-    if community is None:
-        raise deny_error(Deny(DenyReason.NOT_FOUND))
-    # The resource is the listing about to exist in that community.
-    enforce(actor, Action.MANAGE_LISTING, AssetRef(actor.world_id, uuid4(), community))
+    actor = granted.signed_in
+    community = body.community_id
     details = ListingDetails(
         name=body.name, country=body.country, description=body.description, geojson=body.geojson
     )
@@ -285,7 +289,7 @@ def submit_listing(
     except TooSoon as exc:
         raise _too_soon(exc) from None
     except LookupError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found") from exc
     except RunInProgress as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT,

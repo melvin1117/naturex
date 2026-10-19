@@ -35,7 +35,7 @@ from uuid import UUID
 from sqlalchemy import ColumnElement, and_, func, or_, text
 from sqlmodel import Session, col, select
 
-from app.authz import Action, Actor, Allow, AssetRef, authorize
+from app.authz import Actor, asset_ref_of, can_see
 from app.events import ADMINS_ONLY, lock_world_publisher, publish
 from app.ledger import append
 from app.models import (
@@ -141,11 +141,9 @@ class _Area:
 
 def visible_to(actor: Actor | None, asset: Asset) -> bool:
     """Listed and suspended assets are public; any other status only to the listing's community
-    members and same-world admins (`VIEW_COMMUNITY_DATA`). Routes answer 404 otherwise."""
-    if is_public(asset.status):
-        return True
-    ref = AssetRef(asset.world_id, asset.id, asset.community_id)
-    return isinstance(authorize(actor, Action.VIEW_COMMUNITY_DATA, ref), Allow)
+    members and same-world admins. The rule is the policy's (`authz.can_see`), which already
+    answers 404 to anyone else for every action on the asset; handlers re-check with this."""
+    return can_see(actor, asset_ref_of(asset))
 
 
 def audience(asset: Asset, status: AssetStatus | None = None) -> UUID | None:

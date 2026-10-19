@@ -62,7 +62,7 @@ describe("AssetView", () => {
   it("explains an asset that isn't in this world", async () => {
     renderExchange(<AssetView id={ID} />, {
       [`GET /assets/${ID}`]: () =>
-        json({ detail: "Asset not found" }, { status: 404 }),
+        json({ detail: "not_found" }, { status: 404 }),
     });
     expect(
       await screen.findByRole("heading", { level: 1, name: "Site not found" }),

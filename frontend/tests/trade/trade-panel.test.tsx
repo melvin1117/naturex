@@ -161,6 +161,22 @@ describe("TradePanel", () => {
     ).toBeInTheDocument();
   });
 
+  it("explains a quote's trade block and never offers the order", async () => {
+    renderPanel({
+      [QUOTE]: (request) =>
+        quoteFor(request, {
+          max_qty: 0,
+          trade_blocked_reason: "insider_trading_blocked",
+        }),
+    });
+
+    expect(
+      await screen.findByText(/Members of this site's community can't trade/),
+    ).toBeInTheDocument();
+    expect(buyButton()).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Max" })).toBeDisabled();
+  });
+
   it("shows the balance and the backend's quote before confirming", async () => {
     const { backend } = renderPanel();
 

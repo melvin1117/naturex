@@ -12,18 +12,27 @@ The policy covers every row of the ADR-0005 role × action matrix; T57 applies i
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Annotated, Any
+from typing import Annotated, Any, TypeVar
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Path, status
 from sqlmodel import Session, select
 
 from app.auth import Principal
-from app.deps import OptionalPrincipal, SessionDep, SettingsDep
-from app.models import Asset, Community, CommunityMember, CommunityRole, SessionKind, UserKind
+from app.deps import OptionalPrincipal, SessionDep, SettingsDep, world_for
+from app.models import (
+    Asset,
+    AssetStatus,
+    Community,
+    CommunityMember,
+    CommunityRole,
+    SessionKind,
+    UserKind,
+)
+from app.services.lifecycle import is_public
 from app.worlds import LIVE_WORLD_ID, is_sandbox_world
 
 
@@ -160,6 +169,10 @@ class AssetRef:
     world_id: UUID
     asset_id: UUID
     community_id: UUID | None
+    public: bool
+    """Listed or suspended (T58). A listing under review is visible only to its community and
+    same-world admins; every action on it is `not_found` for anyone else. No default: every
+    loader sets it from the asset's status (`asset_ref_in`, `asset_ref_of`)."""
 
 
 @dataclass(frozen=True)
@@ -209,17 +222,35 @@ def _community_of(resource: Resource) -> UUID | None:
     return None
 
 
+def can_see(actor: Actor | None, asset: AssetRef) -> bool:
+    """T58's visibility rule, in one place: a public (listed or suspended) asset is visible; a
+    listing under review only to its community's members and same-world admins. Which world a
+    caller may read is `authorize`'s first check, not this one."""
+    if asset.public:
+        return True
+    if actor is None or asset.world_id != actor.world_id:
+        return False
+    return actor.is_admin or actor.role_in(asset.community_id) is not None
+
+
 def authorize(actor: Actor | None, action: Action, resource: Resource) -> Decision:
     """Allow or deny `action` on `resource` (ADR-0005 §3 matrix). Pure; no I/O."""
+    # A listing under review doesn't exist for anyone who can't see it, whatever the action
+    # (T58, T57): a 403 would reveal it.
+    hidden = isinstance(resource, AssetRef) and not can_see(actor, resource)
     if actor is None:
         if action not in PUBLIC_ACTIONS:
             return Deny(DenyReason.AUTH_REQUIRED)
         # Anonymous visitors read the live world only; anything else doesn't exist for them.
-        return ALLOW if resource.world_id == LIVE_WORLD_ID else Deny(DenyReason.NOT_FOUND)
+        if resource.world_id != LIVE_WORLD_ID or hidden:
+            return Deny(DenyReason.NOT_FOUND)
+        return ALLOW
     if resource.world_id != actor.world_id:
         return Deny(DenyReason.NOT_FOUND)
     if not isinstance(resource, ACCEPTS[action]):
         return Deny(DenyReason.INVALID_RESOURCE)
+    if hidden:
+        return Deny(DenyReason.NOT_FOUND)
     if action in PUBLIC_ACTIONS:
         return ALLOW
     if actor.user_kind == UserKind.TREASURY:
@@ -325,6 +356,12 @@ def deny_error(decision: Deny) -> HTTPException:
     return HTTPException(decision.status_code, decision.reason.value, headers=headers)
 
 
+def denied(*reasons: DenyReason) -> dict[int | str, dict[str, Any]]:
+    """The OpenAPI entry for a route's 403s: the policy reasons it can return."""
+    codes = ", ".join(f"`{reason.value}`" for reason in reasons)
+    return {403: {"description": f"Not allowed: {codes}"}}
+
+
 def enforce(actor: Actor | None, action: Action, resource: Resource) -> None:
     """Raise the HTTP error for a denial; for checks a route makes after loading more data."""
     decision = authorize(actor, action, resource)
@@ -341,6 +378,43 @@ def memberships(session: Session, world_id: UUID, user_id: UUID) -> dict[UUID, C
     return {community_id: CommunityRole(role) for community_id, role in rows}
 
 
+class LazyMemberships(Mapping[UUID, CommunityRole]):
+    """An actor's community roles, read on first use: public actions (BROWSE) never need them,
+    so reads don't query `community_members`."""
+
+    def __init__(self, load: Callable[[], Mapping[UUID, CommunityRole]]) -> None:
+        self._load = load
+        self._roles: Mapping[UUID, CommunityRole] | None = None
+
+    def _get(self) -> Mapping[UUID, CommunityRole]:
+        if self._roles is None:
+            self._roles = dict(self._load())
+        return self._roles
+
+    def __getitem__(self, community_id: UUID) -> CommunityRole:
+        return self._get()[community_id]
+
+    def __iter__(self) -> Iterator[UUID]:
+        return iter(self._get())
+
+    def __len__(self) -> int:
+        return len(self._get())
+
+
+def lazy_actor(session: Session, principal: Principal) -> Actor:
+    """The principal as an actor whose memberships are read only if a check needs them (in
+    `session`, which must still be open then)."""
+    roles = LazyMemberships(lambda: memberships(session, principal.world_id, principal.user_id))
+    return Actor(
+        user_id=principal.user_id,
+        world_id=principal.world_id,
+        user_kind=principal.user_kind,
+        is_admin=principal.is_admin,
+        session_kind=principal.session_kind,
+        memberships=roles,
+    )
+
+
 def fresh_actor(session: Session, principal: Principal) -> Actor:
     """The principal with its memberships as of now.
 
@@ -351,7 +425,13 @@ def fresh_actor(session: Session, principal: Principal) -> Actor:
 
 
 def optional_actor(principal: OptionalPrincipal, session: SessionDep) -> Actor | None:
-    return None if principal is None else fresh_actor(session, principal)
+    """The request's actor, from its session. A session bound to a world it may not use (a demo
+    session outside its sandbox, a password session outside the live world) is 401, exactly as
+    `CurrentWorld` refuses it (T73), so routes that only use `require` get the same check."""
+    if principal is None:
+        return None
+    world_for(session, principal)
+    return lazy_actor(session, principal)
 
 
 OptionalActor = Annotated[Actor | None, Depends(optional_actor)]
@@ -397,11 +477,25 @@ def asset_ref(
     asset_id: Annotated[UUID, Path()], actor: OptionalActor, session: SessionDep
 ) -> AssetRef | None:
     """The asset by `(world_id, id)` in the actor's world, with its community, or None (a 404)."""
-    world_id = acting_world(actor)
+    return asset_ref_in(session, acting_world(actor), asset_id)
+
+
+def asset_ref_in(session: Session, world_id: UUID, asset_id: UUID) -> AssetRef | None:
+    """`asset_ref` for an ID that doesn't come from the path (a request body or query)."""
     found = session.exec(
-        select(Asset.id, Asset.community_id).where(Asset.world_id == world_id, Asset.id == asset_id)
+        select(Asset.id, Asset.community_id, Asset.status).where(
+            Asset.world_id == world_id, Asset.id == asset_id
+        )
     ).first()
-    return None if found is None else AssetRef(world_id, found[0], found[1])
+    if found is None:
+        return None
+    asset_id, community_id, asset_status = found
+    return AssetRef(world_id, asset_id, community_id, public=is_public(AssetStatus(asset_status)))
+
+
+def asset_ref_of(asset: Asset) -> AssetRef:
+    """The policy's view of a loaded asset (its visibility from its status)."""
+    return AssetRef(asset.world_id, asset.id, asset.community_id, public=is_public(asset.status))
 
 
 @dataclass(frozen=True)
@@ -434,20 +528,66 @@ def require(action: Action, loader: ResourceLoader = world_ref) -> Any:
     (T57) locks the trader's user row and re-checks TRADE with fresh memberships, because
     adding a steward locks that same row: otherwise an order authorized before the
     membership commits could still buy the community's asset after it.
+
+    Every route declares one of these (or an `authorizes` dependency); the route-inventory test
+    enforces it (T57).
     """
+
+    return require_any((action,), loader)
+
+
+def require_any(actions: tuple[Action, ...], loader: ResourceLoader = world_ref) -> Any:
+    """Like `require`, allowing the request if *any* of `actions` is allowed on the resource.
+
+    A denial reports the first action's reason, so list the usual one first. Used where one
+    route serves two matrix rows: a rating run is an operator's re-rate (OPERATE) or the
+    community's own listing management (MANAGE_LISTING).
+    """
+    if not actions:
+        raise ValueError("require_any needs at least one action")
+    public = all(action in PUBLIC_ACTIONS for action in actions)
+
+    # Runs before the loader (dependencies resolve in signature order), so an anonymous caller
+    # never reaches a resource lookup or a request-body error before its 401.
+    def signed_in_gate(actor: OptionalActor) -> None:
+        if actor is None and not public:
+            raise deny_error(Deny(DenyReason.AUTH_REQUIRED))
 
     # A default, not `Annotated[..., Depends(loader)]`: with postponed annotations FastAPI
     # resolves annotation strings in module globals, where the local `loader` isn't visible.
     def dependency(
         actor: OptionalActor,
+        _gate: None = Depends(signed_in_gate),  # noqa: B008
         resource: Resource | None = Depends(loader),  # noqa: B008
     ) -> Granted:
-        if actor is None and action not in PUBLIC_ACTIONS:
-            raise deny_error(Deny(DenyReason.AUTH_REQUIRED))
         if resource is None:
             raise deny_error(Deny(DenyReason.NOT_FOUND))
-        enforce(actor, action, resource)
+        decisions = [authorize(actor, action, resource) for action in actions]
+        denials = [decision for decision in decisions if isinstance(decision, Deny)]
+        if len(denials) == len(decisions):
+            raise deny_error(denials[0])
         return Granted(actor, resource)
 
-    dependency.__name__ = f"require_{action.value}"
-    return Depends(dependency)
+    dependency.__name__ = "require_" + "_or_".join(action.value for action in actions)
+    return Depends(authorizes(*actions)(dependency))
+
+
+AUTHORIZERS: dict[Callable[..., Any], frozenset[Action]] = {}
+"""Every dependency that authorizes a request, with its actions. The route-inventory test
+(`tests/test_route_authz.py`) fails for any route that has none of them."""
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def authorizes(*actions: Action) -> Callable[[_F], _F]:
+    """Register a dependency that authorizes `actions` itself (via `authorize`/`enforce`).
+
+    `require` registers its own dependencies; use this only for the rare route that can't use
+    `require`, such as the SSE stream, which must not hold a pooled session while streaming.
+    """
+
+    def register(dependency: _F) -> _F:
+        AUTHORIZERS[dependency] = frozenset(actions)
+        return dependency
+
+    return register

@@ -79,8 +79,8 @@ def test_publish_replay_orders_events_and_honors_since_cursor(session: Session) 
 @requires_db
 def test_replay_is_scoped_to_one_world(session: Session) -> None:
     mine, other = create_world(session), create_world(session)
-    own_event = events.publish(session, mine.id, "alert", {"message": "mine"})
-    events.publish(session, other.id, "alert", {"message": "not mine"})
+    own_event = events.publish(session, mine.id, "price_tick", {"message": "mine"})
+    events.publish(session, other.id, "price_tick", {"message": "not mine"})
     session.flush()
 
     assert [event.id for event in events.replay(session, mine.id)] == [own_event.id]
@@ -90,7 +90,9 @@ def test_replay_is_scoped_to_one_world(session: Session) -> None:
 def test_publish_accepts_a_transaction_connection(session: Session) -> None:
     world = create_world(session)
 
-    event = events.publish(session.connection(), world.id, "alert", {"message": "via connection"})
+    event = events.publish(
+        session.connection(), world.id, "price_tick", {"message": "via connection"}
+    )
 
     assert event.id is not None
     assert [replayed.payload for replayed in events.replay(session, world.id)] == [
@@ -111,11 +113,11 @@ def test_same_world_publish_ids_follow_commit_order() -> None:
     tx_b_done = threading.Event()
     tx_b_ids: list[int | None] = []
     try:
-        event_a = events.publish(tx_a, world_id, "alert", {"message": "a"})
+        event_a = events.publish(tx_a, world_id, "price_tick", {"message": "a"})
 
         def publish_b() -> None:
             with engine.begin() as tx_b:
-                tx_b_ids.append(events.publish(tx_b, world_id, "alert", {"message": "b"}).id)
+                tx_b_ids.append(events.publish(tx_b, world_id, "price_tick", {"message": "b"}).id)
             tx_b_done.set()
 
         thread = threading.Thread(target=publish_b)
@@ -144,9 +146,9 @@ def test_same_world_publish_ids_follow_commit_order() -> None:
 @requires_db
 def test_anonymous_polling_reads_the_live_world_only(session: Session, client: TestClient) -> None:
     live = ensure_live_world(session)
-    live_event = events.publish(session, live.id, "alert", {"message": "live"})
+    live_event = events.publish(session, live.id, "price_tick", {"message": "live"})
     sandbox_event = events.publish(
-        session, create_world(session).id, "alert", {"message": "sandbox"}
+        session, create_world(session).id, "price_tick", {"message": "sandbox"}
     )
     session.flush()
 
@@ -163,7 +165,7 @@ def test_polling_endpoint_returns_world_events_after_since_id(
 ) -> None:
     world = create_world(session)
     first = events.publish(session, world.id, "rating_progress", {"step": "earth_obs"})
-    second = events.publish(session, world.id, "alert", {"message": "Watchlist changed"})
+    second = events.publish(session, world.id, "price_tick", {"message": "Watchlist changed"})
     session.flush()
     start_demo(client, session, world)
 
@@ -172,7 +174,7 @@ def test_polling_endpoint_returns_world_events_after_since_id(
     assert res.status_code == 200
     body = res.json()
     assert [event["id"] for event in body] == [second.id]
-    assert body[0]["type"] == "alert"
+    assert body[0]["type"] == "price_tick"
 
 
 @requires_db
@@ -319,8 +321,10 @@ def test_sse_stream_never_replays_another_worlds_event_after_last_event_id(
         assert UUID(mine.get("/world").json()["id"]) == mine_world
 
         with Session(engine) as session:
-            own_event = events.publish(session, mine_world, "alert", {"message": "mine"})
-            other_event = events.publish(session, other_world, "alert", {"message": "not mine"})
+            own_event = events.publish(session, mine_world, "price_tick", {"message": "mine"})
+            other_event = events.publish(
+                session, other_world, "price_tick", {"message": "not mine"}
+            )
             session.commit()
 
         res = mine.get("/events/stream", headers={"Last-Event-ID": str(other_event.id - 1)})

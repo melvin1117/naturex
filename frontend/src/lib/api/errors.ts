@@ -14,7 +14,7 @@ const CODE_MESSAGES: Record<string, string> = {
   sandbox_only: "That only works in a demo sandbox.",
   csrf_origin:
     "Your browser sent this from an address NatureX doesn't recognise. Open NatureX from its usual address and try again.",
-  demo_only: "Only a demo session can reset its world.",
+  demo_session_only: "Only a demo session can do that.",
   too_many_event_streams:
     "Live updates are busy right now; they will keep refreshing every few seconds.",
 };

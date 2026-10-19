@@ -7,23 +7,27 @@
 Both are the community owner's (`LAUNCH_IPO`, ADR-0005 matrix row 6). Stewards get 403
 `owner_only` on the preview too: it is the first step of the launch, which the matrix keeps
 from them, and every input it shows is already public in the asset's report. Anonymous callers
-get 401. An asset the caller can't see is 404, as on every other asset route (T58's
-`visible_to`): one outside the session's world, or a listing that isn't public and isn't the
-caller's community's, so a draft's existence never leaks. Other users who can see it (any
-public asset) and same-world admins get 403. A refused launch is 409 with a code; nothing is
-written. An asset deleted meanwhile (a "Reset my demo") is 404.
+get 401. An asset the caller can't see is 404, as for every action on every asset route (the
+policy's `authz.can_see`, T58's rule): one outside the session's world, or a listing that isn't
+public and isn't the caller's community's, so a draft's existence never leaks. Other users who
+can see it (any public asset) and same-world admins get 403. A refused launch is 409 with a
+code; nothing is written. An asset deleted meanwhile (a "Reset my demo") is 404.
 """
 
 from __future__ import annotations
 
 from decimal import Decimal
 from typing import Annotated, Any
-from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Path, Query, Response, status
-from sqlmodel import select
+from fastapi import APIRouter, HTTPException, Query, Response, status
 
-from app.authz import Action, AssetRef, Granted, OptionalActor, acting_world, require
+from app.authz import (
+    Action,
+    AssetRef,
+    Granted,
+    asset_ref,
+    require,
+)
 from app.deps import SessionDep
 from app.market.offering import (
     DEFAULT_RETAINED_PCT,
@@ -34,7 +38,6 @@ from app.market.offering import (
     MIN_TOTAL_SHARES,
     Offering,
 )
-from app.models import Asset
 from app.schemas import IpoLaunch, IpoOut, IpoPreviewOut
 from app.services.ipo import (
     ALREADY_LAUNCHED,
@@ -48,7 +51,7 @@ from app.services.ipo import (
     launch,
     preview,
 )
-from app.services.listings import RUN_IN_PROGRESS, visible_to
+from app.services.listings import RUN_IN_PROGRESS
 
 router = APIRouter(tags=["ipo"])
 
@@ -57,21 +60,7 @@ PRIVATE_NO_STORE = "private, no-store"
 Responses = dict[int | str, dict[str, Any]]
 
 
-def visible_asset_ref(
-    asset_id: Annotated[UUID, Path()], actor: OptionalActor, session: SessionDep
-) -> AssetRef | None:
-    """The asset in the actor's world if the actor may see it (T58's `visible_to`), else None
-    (a 404), so a non-member can't tell a draft exists from a 403."""
-    world_id = acting_world(actor)
-    asset = session.exec(
-        select(Asset).where(Asset.world_id == world_id, Asset.id == asset_id)
-    ).first()
-    if asset is None or not visible_to(actor, asset):
-        return None
-    return AssetRef(world_id, asset.id, asset.community_id)
-
-
-LaunchIpo = Annotated[Granted, require(Action.LAUNCH_IPO, visible_asset_ref)]
+LaunchIpo = Annotated[Granted, require(Action.LAUNCH_IPO, asset_ref)]
 
 _COMMON: Responses = {
     401: {"description": "auth_required"},
@@ -102,7 +91,7 @@ def _refused(exc: IpoRefused) -> HTTPException:
 
 def _missing() -> HTTPException:
     return HTTPException(
-        status.HTTP_404_NOT_FOUND, "Asset not found", headers={"Cache-Control": NO_STORE}
+        status.HTTP_404_NOT_FOUND, "not_found", headers={"Cache-Control": NO_STORE}
     )
 
 

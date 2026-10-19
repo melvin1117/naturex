@@ -21,7 +21,7 @@ from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import func
 from sqlmodel import Session, col, select
 
-from app.authz import Actor, OptionalActor
+from app.authz import Action, Actor, DenyReason, OptionalActor, asset_ref, denied, require
 from app.deps import CurrentWorld, SessionDep, SettingsDep
 from app.models import Asset, AssetStatus, Price, Report
 from app.routers.reports import present_report, recent_events
@@ -45,6 +45,11 @@ router = APIRouter(tags=["assets"])
 PRIVATE_NO_STORE = "private, no-store"
 Responses = dict[int | str, dict[str, Any]]
 _MISSING: Responses = {404: {"description": "Not found in the caller's world"}}
+# Every route authorizes through `app.authz.require` (T57); reads load the asset by
+# `(world_id, id)` first, so another world's asset is a 404.
+BROWSE_WORLD = require(Action.BROWSE)
+BROWSE_ASSET = require(Action.BROWSE, asset_ref)
+
 
 _HUNDRED = Decimal(100)
 # Marketplace sparkline length: the latest prices per card, oldest first.
@@ -60,7 +65,7 @@ def world_asset(
         select(Asset).where(Asset.world_id == world_id, Asset.id == asset_id)
     ).first()
     if asset is None or not visible_to(actor, asset):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
     return asset
 
 
@@ -165,7 +170,7 @@ def shown_status_reason(asset: Asset, active: Collection[UUID]) -> str | None:
     return asset.status_reason
 
 
-@router.get("/assets", response_model=list[AssetCard])
+@router.get("/assets", response_model=list[AssetCard], dependencies=[BROWSE_WORLD])
 def list_assets(world: CurrentWorld, session: SessionDep) -> list[AssetCard]:
     """Marketplace cards for the world's public assets: listed and suspended (T58)."""
     assets = session.exec(
@@ -255,7 +260,12 @@ def asset_detail(session: Session, asset: Asset, settings: SettingsDep) -> Asset
     )
 
 
-@router.get("/assets/{asset_id}", response_model=AssetDetail, responses=_MISSING)
+@router.get(
+    "/assets/{asset_id}",
+    response_model=AssetDetail,
+    responses=_MISSING,
+    dependencies=[BROWSE_ASSET],
+)
 def get_asset(
     asset_id: UUID,
     world: CurrentWorld,
@@ -270,7 +280,12 @@ def get_asset(
     return asset_detail(session, asset, settings)
 
 
-@router.post("/assets/{asset_id}/evidence", response_model=EvidenceResponse)
+@router.post(
+    "/assets/{asset_id}/evidence",
+    response_model=EvidenceResponse,
+    dependencies=[require(Action.MANAGE_LISTING, asset_ref)],
+    responses=denied(DenyReason.MEMBERS_ONLY),
+)
 def upload_evidence(
     asset_id: UUID, world: CurrentWorld, actor: OptionalActor, session: SessionDep
 ) -> EvidenceResponse:
@@ -291,7 +306,9 @@ def upload_evidence(
     return EvidenceResponse(event=event, message="Evidence accepted (mock); confidence updated.")
 
 
-@router.get("/assets/{asset_id}/reports", response_model=list[ReportOut])
+@router.get(
+    "/assets/{asset_id}/reports", response_model=list[ReportOut], dependencies=[BROWSE_ASSET]
+)
 def list_reports(
     asset_id: UUID,
     world: CurrentWorld,
@@ -310,7 +327,9 @@ def list_reports(
     return [present_report(session, report, asset, settings, with_ndvi=False) for report in reports]
 
 
-@router.get("/assets/{asset_id}/prices", response_model=list[PricePoint])
+@router.get(
+    "/assets/{asset_id}/prices", response_model=list[PricePoint], dependencies=[BROWSE_ASSET]
+)
 def list_prices(
     asset_id: UUID,
     world: CurrentWorld,
