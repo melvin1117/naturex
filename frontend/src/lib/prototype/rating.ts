@@ -208,12 +208,10 @@ export function buildReport(args: {
     });
 
   const fair = fairValuePerUnit(valueMid, health, confidence);
-  const trend =
-    s.ndviTrend > 0.005
-      ? "improving"
-      : s.ndviTrend < -0.005
-        ? "declining"
-        : "stable";
+  // Same rule as the trend badge (and the API's reports): a direction only when p < 0.05.
+  const trend = (
+    ndviTrendLabel(s.ndviTrend, s.ndviP < 0.05) ?? "Stable"
+  ).toLowerCase();
   const negative = events.filter((e) => e.direction === -1);
 
   const summary = [

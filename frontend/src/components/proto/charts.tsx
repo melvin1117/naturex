@@ -169,7 +169,8 @@ export function PriceChart({
             cursor={{ stroke: "var(--ring)" }}
           />
           <Area
-            type="monotone"
+            // Recorded prices hold until the next one: draw steps, not a curve between them.
+            type={perDay ? "monotone" : "stepAfter"}
             dataKey="price"
             stroke="var(--primary)"
             strokeWidth={1.75}
