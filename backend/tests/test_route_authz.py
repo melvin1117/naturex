@@ -37,6 +37,7 @@ from app.main import app
 from app.middleware import SAFE_METHODS
 from app.models import (
     Asset,
+    AssetStatus,
     CommunityMember,
     CommunityRole,
     Holding,
@@ -55,6 +56,7 @@ from app.sandbox import create_world, ensure_live_world
 from app.seed import LIVE_WORLD_ID, seed
 from app.seed import WORLD_ID as TEMPLATE_WORLD_ID
 from tests.conftest import alembic_cfg, requires_db
+from tests.test_geometry import square as geometry_square
 from tests.worlds import drop_worlds, start_demo
 
 # Routes anyone may call without an authorization dependency, with the reason.
@@ -167,6 +169,11 @@ def test_admin_routes_are_operator_only() -> None:
     assert actions[("POST", "/admin/simulate/event")] == {Action.OPERATE}
     assert actions[("POST", "/admin/tamper-demo")] == {Action.TAMPER_DEMO}
     assert actions[("POST", "/orders")] == {Action.TRADE}
+    assert actions[("POST", "/assets")] == {Action.MANAGE_LISTING}
+    for action in ("submit", "revise", "withdraw"):
+        assert actions[("POST", f"/assets/{{asset_id}}/{action}")] == {Action.MANAGE_LISTING}
+    assert actions[("POST", "/admin/assets/{asset_id}/suspend")] == {Action.OPERATE}
+    assert actions[("POST", "/admin/assets/{asset_id}/resume")] == {Action.OPERATE}
     assert actions[("GET", "/assets/{asset_id}/quote")] == {Action.BROWSE}
     assert actions[("POST", "/assets/{asset_id}/rate")] == {Action.OPERATE, Action.MANAGE_LISTING}
 
@@ -286,6 +293,14 @@ OBJECT_ROUTES: dict[tuple[str, str], tuple[str, Callable[[Objects], Any] | None]
     ("GET", "/ledger/{asset_id}"): ("arjun", None),
     ("GET", "/ledger/{asset_id}/verify"): ("arjun", None),
     ("GET", "/runs/{run_id}"): ("arjun", None),
+    # T58's listing lifecycle: the community's own listing management, and admin moderation.
+    ("PATCH", "/assets/{asset_id}"): ("rosa", lambda o: {"name": "Renamed"}),
+    ("POST", "/assets/{asset_id}/submit"): ("rosa", None),
+    ("POST", "/assets/{asset_id}/revise"): ("rosa", None),
+    ("POST", "/assets/{asset_id}/withdraw"): ("rosa", None),
+    ("GET", "/communities/{community_id}/assets"): ("rosa", None),
+    ("POST", "/admin/assets/{asset_id}/suspend"): ("admin", lambda o: {"reason": "moderation"}),
+    ("POST", "/admin/assets/{asset_id}/resume"): ("admin", None),
 }
 # Required query parameters, so the same-world control reaches the handler.
 QUERIES: dict[tuple[str, str], dict[str, str]] = {
@@ -320,6 +335,8 @@ ID_ROUTES: dict[tuple[str, str], tuple[str, IdIn | None, IdIn | None, str]] = {
         "not_found",
     ),
     ("GET", "/admin/trace"): ("arjun", None, lambda o: {"asset_id": str(o.asset)}, "not_found"),
+    # A draft in another world's community (T58).
+    ("POST", "/assets"): ("rosa", lambda o: new_listing(o.community), None, "not_found"),
     # Adding another world's account to my own community: T68's own 404.
     ("POST", "/communities/{community_id}/members"): (
         "rosa",
@@ -356,6 +373,16 @@ def id_carrying_routes() -> set[tuple[str, str]]:
             if any(name.endswith("_id") and _is_uuid(f) for name, f in fields.items()):
                 found.add((method.upper(), path))
     return found
+
+
+def new_listing(community_id: UUID) -> dict[str, Any]:
+    """A valid `POST /assets` body, so the request reaches authorization."""
+    return {
+        "community_id": str(community_id),
+        "name": "Bosque Vivo",
+        "geojson": geometry_square(1_200, lat=9.9, lon=-84.0),
+        "attestation": True,
+    }
 
 
 def fill(path: str, o: Objects) -> str:
@@ -689,6 +716,126 @@ def test_reads_never_load_memberships(
 
     assert _buy(client, mine.asset).status_code == 200
     assert len(loads) == 2, "TRADE reads them, then again under the trader's lock"
+
+
+# --- Listings under review: one visibility rule for every route (T58 + T57) --------------------
+
+
+def _under_review(session: Session, asset_id: UUID) -> None:
+    session.execute(
+        update(Asset).where(col(Asset.id) == asset_id).values(status=AssetStatus.NEEDS_EVIDENCE)
+    )
+    session.commit()
+
+
+@requires_db
+def test_a_listing_under_review_is_not_found_by_outsiders_on_every_asset_route(
+    session: Session, client: TestClient
+) -> None:
+    """Including the routes T58 didn't touch: Copilot's `asset_id` and the agent trace."""
+    mine = objects(session, create_world(session))
+    _under_review(session, mine.asset)
+    reads = [
+        ("GET", f"/assets/{mine.asset}", None, None),
+        ("GET", f"/assets/{mine.asset}/quote", None, {"side": "buy", "qty": "1"}),
+        ("GET", f"/reports/{mine.report}", None, None),
+        ("GET", f"/runs/{mine.run}", None, None),
+        ("GET", "/admin/trace", None, {"asset_id": str(mine.asset)}),
+        ("POST", "/copilot", {"question": "why?", "asset_id": str(mine.asset)}, None),
+    ]
+
+    for key, expected in (("arjun", 404), ("rosa", 200), ("admin", 200)):
+        start_demo(client, session, mine.world, persona_key=key)
+        for method, url, body, query in reads:
+            res = client.request(method, url, json=body, params=query)
+            if method == "GET" and "quote" in url and expected == 200:
+                expected_here = 409  # visible, but not listed: no price to quote
+            else:
+                expected_here = expected
+            assert res.status_code == expected_here, (key, url, res.text)
+            if expected_here == 404:
+                assert res.json()["detail"] == "not_found"
+    start_demo(client, session, mine.world)
+    order = _buy(client, mine.asset)
+    assert (order.status_code, order.json()["detail"]) == (404, "not_found")
+
+
+@requires_db
+def test_an_outsiders_write_on_a_listing_under_review_stays_403(
+    session: Session, client: TestClient
+) -> None:
+    """T58's rule: the community's own actions answer 403, not 404."""
+    mine = objects(session, create_world(session))
+    _under_review(session, mine.asset)
+    start_demo(client, session, mine.world)
+
+    res = client.post(f"/assets/{mine.asset}/revise")
+
+    assert (res.status_code, res.json()["detail"]) == (403, "members_only")
+
+
+# --- Events: T58's audience and T57's alert targets, together ------------------------------------
+
+
+@requires_db
+def test_audience_and_alert_targets_apply_together(session: Session, client: TestClient) -> None:
+    mine = objects(session, create_world(session))
+    world_id = mine.world.id
+    arjun = persona(session, world_id, "arjun")
+    session.add(Holding(world_id=world_id, user_id=arjun.id, asset_id=mine.asset, shares=5))
+    target = {"asset_id": str(mine.asset)}
+    public_tick = events.publish(session, world_id, "price_tick", target)
+    scoped = events.publish(session, world_id, "listing_status", target, audience=mine.community)
+    admins = events.publish(
+        session, world_id, "listing_status", target, audience=events.ADMINS_ONLY
+    )
+    public_alert = events.publish(session, world_id, "alert", target)
+    scoped_alert = events.publish(session, world_id, "alert", target, audience=mine.community)
+    session.commit()
+
+    seen: dict[str, set[int]] = {}
+    for key in ("arjun", "rosa", "admin", "mia"):
+        start_demo(client, session, mine.world, persona_key=key)
+        polled = client.get("/events", params={"since_id": public_tick.id - 1}).json()
+        seen[key] = {event["id"] for event in polled}
+    client.cookies.clear()
+    seen["anonymous"] = {e["id"] for e in client.get("/events").json()}
+
+    # Arjun holds the asset but isn't in its community: the alert, never the scoped events.
+    assert seen["arjun"] == {public_tick.id, public_alert.id}
+    # Rosa is the community's owner: every scoped event and both alerts.
+    assert seen["rosa"] == {public_tick.id, scoped.id, public_alert.id, scoped_alert.id}
+    # The admin sees every audience, but isn't an alert target.
+    assert seen["admin"] == {public_tick.id, scoped.id, admins.id}
+    assert seen["mia"] == {public_tick.id}
+    assert not seen["anonymous"] & {scoped.id, admins.id, public_alert.id, scoped_alert.id}
+
+
+@requires_db
+def test_the_audience_is_checked_as_of_each_read(session: Session) -> None:
+    """A member removed between two polls stops receiving its community's scoped events."""
+    mine = objects(session, create_world(session))
+    rosa = persona(session, mine.world.id, "rosa")
+    scoped = events.publish(
+        session,
+        mine.world.id,
+        "listing_status",
+        {"asset_id": str(mine.asset)},
+        audience=mine.community,
+    )
+    session.commit()
+    viewer = events.Viewer(rosa.id)
+
+    before = events.replay(session, mine.world.id, since_id=scoped.id - 1, viewer=viewer)
+    session.execute(
+        delete(CommunityMember).where(
+            col(CommunityMember.world_id) == mine.world.id,
+            col(CommunityMember.user_id) == rosa.id,
+        )
+    )
+    after = events.replay(session, mine.world.id, since_id=scoped.id - 1, viewer=viewer)
+
+    assert [e.id for e in before] == [scoped.id] and after == []
 
 
 # --- Events: alerts reach only their targets ----------------------------------------------------
