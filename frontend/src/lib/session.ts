@@ -17,10 +17,9 @@ export const BOOTSTRAP_PATH = "/world";
 export const SESSION_COOKIES = ["nx_session"] as const;
 
 /**
- * 401 `detail` codes that mean "re-read the world, then retry once" (deps.py AUTH_REQUIRED).
- * A signed-in request gets one only if its session ended (signed out elsewhere, expired, or
- * its demo sandbox was pruned); re-reading `GET /world` updates `world` and `me` so the app
- * sees it's signed out, and the retry returns the 401 to the caller if it still is.
+ * 401 `detail` codes that mean "the session ended" (deps.py AUTH_REQUIRED) when the request
+ * was sent signed in (signed out elsewhere, expired, or its demo sandbox was pruned). The API
+ * client then re-reads `GET /world`, so `world.me` updates, and retries only GET and HEAD.
  */
 const SESSION_EXPIRED_CODES: ReadonlySet<string> = new Set(["auth_required"]);
 

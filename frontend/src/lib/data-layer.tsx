@@ -25,7 +25,7 @@ import {
 import type { AssetDetail } from "./api/types";
 import { EventHub, type EventHubOptions } from "./events";
 import { hashKey, QueryCache, type QueryKey } from "./query";
-import type { SessionBootstrap } from "./session";
+import type { SessionBootstrap, World } from "./session";
 
 export interface DataLayer {
   api: ApiClient;
@@ -128,6 +128,11 @@ export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
 
 const DataLayerContext = createContext<DataLayer | null>(null);
 
+/** Who the cache answers for: the world plus the signed-in account (or anonymous). */
+export function viewerKey(world: World | null): string | null {
+  return world ? `${world.id}:${world.me?.id ?? "anonymous"}` : null;
+}
+
 export function DataLayerProvider({
   value,
   children,
@@ -141,14 +146,15 @@ export function DataLayerProvider({
 
   useEffect(() => wireLiveUpdates(layer.cache, layer.events), [layer]);
 
-  // A different world (the old one expired and a re-bootstrap made a new one) makes every
-  // cached answer wrong.
+  // Cached answers belong to one (world, account) pair: the live world is shared by anonymous
+  // visitors and every account, so signing in or out (or a session ending) makes them wrong
+  // too, not only a different world.
   useEffect(() => {
-    let worldId = layer.session.getSnapshot().world?.id;
+    let viewer = viewerKey(layer.session.getSnapshot().world);
     return layer.session.subscribe(() => {
-      const next = layer.session.getSnapshot().world?.id;
-      if (worldId && next && next !== worldId) layer.cache.invalidate();
-      worldId = next ?? worldId;
+      const next = viewerKey(layer.session.getSnapshot().world);
+      if (viewer && next && next !== viewer) layer.cache.invalidate();
+      viewer = next ?? viewer;
     });
   }, [layer]);
 

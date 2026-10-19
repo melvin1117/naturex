@@ -4,8 +4,8 @@
  *
  * - Browser: base URL `/api`, the same-origin proxy in next.config.ts, so the HttpOnly
  *   `nx_session` cookie is first-party and sent automatically. Every request first waits for
- *   the world bootstrap (`GET /world`, single-flight), and a 401 `auth_required` triggers one
- *   re-bootstrap and one retry.
+ *   the world bootstrap (`GET /world`, single-flight). A 401 `auth_required` on a request
+ *   sent signed in re-reads the world; only GET and HEAD are then retried, once.
  * - Server (RSC, route handlers): use `createServerApi()` from `./server`, which calls
  *   `BACKEND_URL` directly and forwards the visitor's session cookies.
  */
@@ -43,34 +43,45 @@ export function defaultBaseUrl(): string {
 // Late-bound so tests can replace globalThis.fetch after this module is imported.
 const globalFetch: FetchFn = (input) => globalThis.fetch(input);
 
+/** Methods safe to replay: they never change anything (RFC 9110 §9.2.1). */
+const RETRYABLE_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD"]);
+
 /**
  * openapi-fetch middleware (https://openapi-ts.dev/openapi-fetch/middleware-auth): wait for
- * the world before every request; on a 401 `auth_required`, bootstrap again and retry
- * exactly once. The retry goes straight to `fetch`, not back through the middleware, so a
- * second 401 is returned to the caller instead of looping.
+ * the world before every request.
+ *
+ * A 401 `auth_required` on a request sent signed in (`world.me` set) means the session ended,
+ * so the world is read again (`world.me` becomes null and screens show it). A GET or HEAD is
+ * then retried once, straight to `fetch` so a second 401 is returned instead of looping. Other
+ * methods are never replayed: the retry could run under a different account (signed in from
+ * another tab), so their 401 goes to the caller. An anonymous 401 is expected (anonymous
+ * visitors are read-only) and costs no extra request.
  */
 export function worldMiddleware(session: SessionBootstrap): Middleware {
-  // Request bodies are single-use streams, so keep a clone for the retry.
-  const pending = new Map<string, { retry: Request; generation: number }>();
+  const pending = new Map<
+    string,
+    { retry: Request | null; generation: number; signedIn: boolean }
+  >();
   return {
     async onRequest({ request, schemaPath, id }) {
       const isBootstrap =
         schemaPath === BOOTSTRAP_PATH && request.method === "GET";
       if (!isBootstrap) await session.ensure();
       pending.set(id, {
-        retry: request.clone(),
+        retry: RETRYABLE_METHODS.has(request.method) ? request.clone() : null,
         generation: session.generation,
+        signedIn: session.getSnapshot().world?.me != null,
       });
       return undefined;
     },
     async onResponse({ response, id, options }) {
       const entry = pending.get(id);
       pending.delete(id);
-      if (!entry || !(await isSessionExpiredResponse(response))) {
+      if (!entry?.signedIn || !(await isSessionExpiredResponse(response))) {
         return undefined;
       }
-      await session.refresh(entry.generation);
-      return options.fetch(entry.retry);
+      await session.refresh(entry.generation).catch(() => undefined);
+      return entry.retry ? options.fetch(entry.retry) : undefined;
     },
     onError({ id }) {
       pending.delete(id);
