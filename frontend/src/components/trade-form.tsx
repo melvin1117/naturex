@@ -2,7 +2,7 @@
 
 import { Info } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { announce, QuoteTable, Receipt } from "@/components/trade-summary";
 import { Button } from "@/components/ui/button";
@@ -25,18 +25,10 @@ import {
   type OrderFailure,
   type Side,
 } from "@/lib/trade";
+import { useDebounced } from "@/lib/use-debounced";
 
 const PRESETS = [10, 50, 100] as const;
 const QUOTE_DELAY_MS = 250;
-
-function useDebounced<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delayMs);
-    return () => clearTimeout(timer);
-  }, [value, delayMs]);
-  return debounced;
-}
 
 /** The signed-in buy/sell form: validation, a backend quote, the order and its receipt. */
 export function TradeForm({
