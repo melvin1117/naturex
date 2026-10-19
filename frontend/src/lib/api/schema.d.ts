@@ -442,8 +442,9 @@ export interface paths {
         /**
          * Preview Ipo
          * @description The price the owner would launch at now: every term of `ipo_price =
-         *     fair_value_per_share`, computed by the market engine from the latest report. Writes
-         *     nothing; a later report can change it (confirm with `expected_price`).
+         *     fair_value_per_share`, computed by the market engine from the latest report, and whether
+         *     the launch would go ahead (`launchable`, else `blocked_reason`). Writes nothing; a later
+         *     report can change it, so the launch confirms it with `expected_price`.
          */
         get: operations["preview_ipo_assets__asset_id__ipo_preview_get"];
         put?: never;
@@ -465,7 +466,8 @@ export interface paths {
         put?: never;
         /**
          * Launch Ipo
-         * @description Launch the IPO of a `listed` asset, once: in one transaction the first `prices` row
+         * @description Launch the IPO of a `listed` asset, once, at the previewed price (`expected_price`):
+         *     in one transaction the first `prices` row
          *     (`reason: ipo`), the community treasury's retained holding, a `price_anchor` ledger entry
          *     with every term and the primary float open for sale; a public `price_tick` follows. Play
          *     money only: shares are sandbox units, not securities.
@@ -1059,10 +1061,16 @@ export interface components {
             geojson: {
                 [key: string]: unknown;
             };
-            /** Total Shares */
-            total_shares: number;
-            /** Retained Pct */
-            retained_pct: string;
+            /**
+             * Total Shares
+             * @description Shares issued at the IPO; null before it (ratings until then quote a fair value per share at 1,000,000 reference shares; T59).
+             */
+            total_shares?: number | null;
+            /**
+             * Retained Pct
+             * @description % the community's treasury kept at the IPO; null before it.
+             */
+            retained_pct?: string | null;
             /** Primary Shares Remaining */
             primary_shares_remaining: number;
             /** Community Wallet */
@@ -1392,9 +1400,9 @@ export interface components {
             retained_pct: number | string;
             /**
              * Expected Price
-             * @description The price per share the owner confirmed in the preview: 409 ipo_price_changed if a newer report moved it.
+             * @description The price per share the owner confirmed in the preview (`ipo_price`; trailing zeros don't matter): 409 ipo_price_changed if a newer report moved it.
              */
-            expected_price?: number | string | null;
+            expected_price: number | string;
         };
         /** IpoOut */
         IpoOut: {
@@ -1463,10 +1471,7 @@ export interface components {
              */
             launched_at: string;
         };
-        /**
-         * IpoPreviewOut
-         * @description The IPO price with every term of dev-spec §8's formula (play money, sandbox only).
-         */
+        /** IpoPreviewOut */
         IpoPreviewOut: {
             /**
              * Asset Id
@@ -1527,6 +1532,16 @@ export interface components {
              * @description Held by the community's treasury.
              */
             retained_shares: number;
+            /**
+             * Launchable
+             * @description Whether POST /assets/{id}/ipo would go ahead now.
+             */
+            launchable: boolean;
+            /**
+             * Blocked Reason
+             * @description Why not, as the code the launch would return: ipo_price_too_high (a share costs more than a new account's starting cash: issue more shares), run_in_progress, or a verification code (T69).
+             */
+            blocked_reason?: string | null;
         };
         /** LedgerEntryOut */
         LedgerEntryOut: {
@@ -3561,7 +3576,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not found in the session's world */
+            /** @description Not found in the session's world, or not visible to the caller */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3624,14 +3639,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not found in the session's world */
+            /** @description Not found in the session's world, or not visible to the caller */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description `ipo_already_launched`, `asset_not_listed` (draft, under review, suspended…), `no_rating` (no usable report) or `ipo_price_too_low` (the price per share rounds to zero: issue fewer shares), or `ipo_price_changed` (`expected_price` is stale) */
+            /** @description `ipo_already_launched`, `asset_not_listed` (draft, under review, suspended…), `no_rating` (no usable report) or `ipo_price_too_low` (the price per share rounds to zero: issue fewer shares), `ipo_price_too_high` (a share would cost more than a new account's starting cash: issue more shares), `run_in_progress` (a rating run is active) or a verification code (T69), or `ipo_price_changed` (`expected_price` is stale) */
             409: {
                 headers: {
                     [name: string]: unknown;

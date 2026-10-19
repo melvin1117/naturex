@@ -1194,7 +1194,7 @@
           "ipo"
         ],
         "summary": "Preview Ipo",
-        "description": "The price the owner would launch at now: every term of `ipo_price =\nfair_value_per_share`, computed by the market engine from the latest report. Writes\nnothing; a later report can change it (confirm with `expected_price`).",
+        "description": "The price the owner would launch at now: every term of `ipo_price =\nfair_value_per_share`, computed by the market engine from the latest report, and whether\nthe launch would go ahead (`launchable`, else `blocked_reason`). Writes nothing; a later\nreport can change it, so the launch confirms it with `expected_price`.",
         "operationId": "preview_ipo_assets__asset_id__ipo_preview_get",
         "parameters": [
           {
@@ -1258,7 +1258,7 @@
             "description": "owner_only (stewards too), treasury_cannot_act"
           },
           "404": {
-            "description": "Not found in the session's world"
+            "description": "Not found in the session's world, or not visible to the caller"
           },
           "409": {
             "description": "`ipo_already_launched`, `asset_not_listed` (draft, under review, suspended\u2026), `no_rating` (no usable report) or `ipo_price_too_low` (the price per share rounds to zero: issue fewer shares)"
@@ -1282,7 +1282,7 @@
           "ipo"
         ],
         "summary": "Launch Ipo",
-        "description": "Launch the IPO of a `listed` asset, once: in one transaction the first `prices` row\n(`reason: ipo`), the community treasury's retained holding, a `price_anchor` ledger entry\nwith every term and the primary float open for sale; a public `price_tick` follows. Play\nmoney only: shares are sandbox units, not securities.",
+        "description": "Launch the IPO of a `listed` asset, once, at the previewed price (`expected_price`):\nin one transaction the first `prices` row\n(`reason: ipo`), the community treasury's retained holding, a `price_anchor` ledger entry\nwith every term and the primary float open for sale; a public `price_tick` follows. Play\nmoney only: shares are sandbox units, not securities.",
         "operationId": "launch_ipo_assets__asset_id__ipo_post",
         "parameters": [
           {
@@ -1324,10 +1324,10 @@
             "description": "owner_only (stewards too), treasury_cannot_act"
           },
           "404": {
-            "description": "Not found in the session's world"
+            "description": "Not found in the session's world, or not visible to the caller"
           },
           "409": {
-            "description": "`ipo_already_launched`, `asset_not_listed` (draft, under review, suspended\u2026), `no_rating` (no usable report) or `ipo_price_too_low` (the price per share rounds to zero: issue fewer shares), or `ipo_price_changed` (`expected_price` is stale)"
+            "description": "`ipo_already_launched`, `asset_not_listed` (draft, under review, suspended\u2026), `no_rating` (no usable report) or `ipo_price_too_low` (the price per share rounds to zero: issue fewer shares), `ipo_price_too_high` (a share would cost more than a new account's starting cash: issue more shares), `run_in_progress` (a rating run is active) or a verification code (T69), or `ipo_price_changed` (`expected_price` is stale)"
           },
           "422": {
             "description": "total_shares outside 10,000\u201310,000,000 or retained_pct outside 10\u201390"
@@ -2721,13 +2721,29 @@
             "title": "Geojson"
           },
           "total_shares": {
-            "type": "integer",
-            "title": "Total Shares"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Shares",
+            "description": "Shares issued at the IPO; null before it (ratings until then quote a fair value per share at 1,000,000 reference shares; T59)."
           },
           "retained_pct": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Retained Pct"
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retained Pct",
+            "description": "% the community's treasury kept at the IPO; null before it."
           },
           "primary_shares_remaining": {
             "type": "integer",
@@ -2823,8 +2839,6 @@
           "status",
           "area_ha",
           "geojson",
-          "total_shares",
-          "retained_pct",
           "primary_shares_remaining",
           "community_wallet"
         ],
@@ -3606,17 +3620,17 @@
               {
                 "type": "string",
                 "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,4}0*$"
-              },
-              {
-                "type": "null"
               }
             ],
             "title": "Expected Price",
-            "description": "The price per share the owner confirmed in the preview: 409 ipo_price_changed if a newer report moved it."
+            "description": "The price per share the owner confirmed in the preview (`ipo_price`; trailing zeros don't matter): 409 ipo_price_changed if a newer report moved it."
           }
         },
         "additionalProperties": false,
         "type": "object",
+        "required": [
+          "expected_price"
+        ],
         "title": "IpoLaunch",
         "description": "The offering an owner launches (T59): shares issued and the % the community keeps."
       },
@@ -3814,6 +3828,23 @@
             "type": "integer",
             "title": "Retained Shares",
             "description": "Held by the community's treasury."
+          },
+          "launchable": {
+            "type": "boolean",
+            "title": "Launchable",
+            "description": "Whether POST /assets/{id}/ipo would go ahead now."
+          },
+          "blocked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocked Reason",
+            "description": "Why not, as the code the launch would return: ipo_price_too_high (a share costs more than a new account's starting cash: issue more shares), run_in_progress, or a verification code (T69)."
           }
         },
         "type": "object",
@@ -3832,10 +3863,10 @@
           "ipo_price",
           "retained_pct",
           "shares_offered",
-          "retained_shares"
+          "retained_shares",
+          "launchable"
         ],
-        "title": "IpoPreviewOut",
-        "description": "The IPO price with every term of dev-spec \u00a78's formula (play money, sandbox only)."
+        "title": "IpoPreviewOut"
       },
       "LedgerEntryOut": {
         "properties": {
