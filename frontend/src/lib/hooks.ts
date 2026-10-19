@@ -22,6 +22,7 @@ import type {
   LedgerVerify,
   LoginIn,
   MeOut,
+  MyCommunity,
   OrderCreate,
   OrderOut,
   PortfolioOut,
@@ -423,6 +424,19 @@ export function usePortfolio(): QueryResult<PortfolioOut> {
   useLiveConnection();
   return useApiQuery(queryKeys.portfolio(), (api, signal) =>
     unwrap(api.GET("/portfolio", { signal })),
+  );
+}
+
+/**
+ * The signed-in account's communities and its role in each (`GET /me/communities`, T68), so
+ * the shells know which apps to offer (T62). Idle for anonymous visitors, who have none.
+ */
+export function useMyCommunities(): QueryResult<MyCommunity[]> {
+  const { world } = useWorld();
+  return useApiQuery(
+    queryKeys.myCommunities(),
+    (api, signal) => unwrap(api.GET("/me/communities", { signal })),
+    { enabled: world?.me != null },
   );
 }
 

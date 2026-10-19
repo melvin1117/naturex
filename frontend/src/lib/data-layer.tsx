@@ -48,6 +48,7 @@ export const queryKeys = {
   quotes: (assetId: string) => ["quote", assetId] as const,
   quote: (assetId: string, side: "buy" | "sell", qty: number) =>
     ["quote", assetId, side, qty] as const,
+  myCommunities: () => ["me", "communities"] as const,
 };
 
 export interface CreateDataLayerOptions {
