@@ -113,13 +113,101 @@ class ReportSummarySource(StrEnum):
     AUDITOR = "auditor"
 
 
+_ATTESTATION_REQUIRED = (
+    "Confirm that your community has the right to list this land and that the details are "
+    "true to the best of your knowledge."
+)
+
+
 class AssetCreate(BaseModel):
-    name: str
-    country: str | None = None
-    description: str | None = None
-    geojson: dict[str, Any]
-    total_shares: int = 1_000_000
-    retained_pct: Decimal = Decimal("51.00")
+    """A draft listing in a community the caller owns or stewards (T58). The share terms are
+    set at the IPO (T59), not here."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    community_id: UUID
+    name: str = Field(max_length=200)
+    country: str | None = Field(default=None, max_length=10)
+    description: str | None = Field(default=None, max_length=2000)
+    geojson: dict[str, Any] = Field(
+        description="GeoJSON Polygon or MultiPolygon (or a Feature wrapping one) in WGS84; "
+        "10–50,000 ha, no self-intersection, no overlap with another listing in the world. "
+        "Feature properties are dropped."
+    )
+    attestation: bool = Field(
+        description="Must be true: the community attests it may list this land (ADR-0005)."
+    )
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str) -> str:
+        return clean_name(value)
+
+    @field_validator("country")
+    @classmethod
+    def _country(cls, value: str | None) -> str | None:
+        return clean_country(value)
+
+    @field_validator("description")
+    @classmethod
+    def _description(cls, value: str | None) -> str | None:
+        return clean_description(value)
+
+    @field_validator("attestation")
+    @classmethod
+    def _attested(cls, value: bool) -> bool:
+        if value is not True:
+            raise ValueError(_ATTESTATION_REQUIRED)
+        return value
+
+
+class AssetUpdate(BaseModel):
+    """Edit a draft (T58). Only the fields sent change; `null` clears country or description."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, max_length=200)
+    country: str | None = Field(default=None, max_length=10)
+    description: str | None = Field(default=None, max_length=2000)
+    geojson: dict[str, Any] | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str | None) -> str:
+        if value is None:
+            raise ValueError("A listing needs a name")
+        return clean_name(value)
+
+    @field_validator("country")
+    @classmethod
+    def _country(cls, value: str | None) -> str | None:
+        return clean_country(value)
+
+    @field_validator("description")
+    @classmethod
+    def _description(cls, value: str | None) -> str | None:
+        return clean_description(value)
+
+    @field_validator("geojson")
+    @classmethod
+    def _geojson(cls, value: dict[str, Any] | None) -> dict[str, Any]:
+        if value is None:
+            raise ValueError("A listing needs an area")
+        return value
+
+
+class AssetSubmitted(BaseModel):
+    """A listing submitted for rating: follow the run with `GET /runs/{run_id}`."""
+
+    asset_id: UUID
+    run_id: UUID
+    status: AssetStatusOut
+
+
+class SuspendRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: Literal["moderation", "data_dispute", "community_request"]
 
 
 class AssetCard(BaseModel):
@@ -127,6 +215,12 @@ class AssetCard(BaseModel):
     name: str
     country: str | None = None
     status: AssetStatusOut
+    status_reason: str | None = Field(
+        default=None,
+        description="Why the listing is in its status, as a code: listing gate failures "
+        "(e.g. confidence_below_70), a suspension reason, no_satellite_metrics or "
+        "rating_failed:<error> while rating (T58).",
+    )
     area_ha: Decimal
     price: Decimal | None = Field(default=None, description="Latest sandbox price (play money).")
     price_change_pct: float | None = Field(
@@ -223,7 +317,11 @@ class AssetDetail(BaseModel):
     name: str
     country: str | None = None
     description: str | None = None
+    community_id: UUID | None = None
     status: AssetStatusOut
+    status_reason: str | None = Field(
+        default=None, description="Why the listing is in its status (see AssetCard)."
+    )
     area_ha: Decimal
     centroid_lat: float | None = None
     centroid_lon: float | None = None
@@ -239,12 +337,6 @@ class AssetDetail(BaseModel):
     price_change_pct: float | None = Field(
         default=None, description="Latest price vs the IPO price, in percent (2 dp); as on cards."
     )
-
-
-class AssetCreateResponse(BaseModel):
-    asset: AssetDetail
-    run_id: UUID
-    status: Literal["accepted"] = "accepted"
 
 
 class EvidenceResponse(BaseModel):

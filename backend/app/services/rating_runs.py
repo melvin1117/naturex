@@ -72,8 +72,17 @@ from app.events import lock_world_publisher, publish
 from app.llm import CallLog, CallRecord, LLMClient, LLMError, LLMResult
 from app.models import Asset, AssetStatus, Report, StreamEventType, World, WorldEvent
 from app.schemas import NewsScoutOutput, RatingRunOut, RatingRunStatus, RatingRunStep
+from app.services.lifecycle import is_public
+from app.services.listings import apply_rating_result, note_rating_failure
 from app.services.rating import SiteRating, asset_is_wetland, latest_report, rate_asset, rate_site
-from app.tools.earth_obs import EarthObsMetrics, ScenarioName, load_site_metrics
+from app.tools.earth_obs import (
+    EarthObsMetrics,
+    ScenarioName,
+    is_curated_site,
+    is_mock_metrics,
+    load_site_metrics,
+    mock_listing_metrics,
+)
 
 log = logging.getLogger(__name__)
 
@@ -87,6 +96,7 @@ LOCK_TIMEOUT_MS = 2000
 GLOBAL_RUNS_LOCK_KEY = 0x4E585252
 """Advisory key ("NXRR") serialising the global run count; always taken before a world lock."""
 REQUIRED_TOOLS = frozenset({Tool.EARTH_OBS, Tool.VALUATION, Tool.AUDITOR})
+NO_CACHED_METRICS = "no_cached_metrics"
 
 Trigger = Literal["api", "time_machine", "listing"]
 
@@ -150,6 +160,7 @@ class AssetInfo:
     centroid_lat: float | None
     centroid_lon: float | None
     total_shares: int
+    area_ha: float | None = None
 
 
 # ----- pluggable steps --------------------------------------------------------------------------
@@ -174,18 +185,27 @@ class NoFieldEvidence:
 
 
 MetricsLoader = Callable[[AssetInfo, ScenarioName], EarthObsMetrics]
+QueueHook = Callable[[Session, Asset, UUID], None]
+"""`(session, asset, run_id)`, run inside the enqueue transaction (see `RatingRunner.start`)."""
 NewsRunner = Callable[[NewsScoutAsset, LLMClient | None], NewsScoutOutput]
 LlmFactory = Callable[[Callable[[CallLog], CallLog]], LLMClient | None]
 
 
 def load_cached_metrics(asset: AssetInfo, scenario: ScenarioName) -> EarthObsMetrics:
-    """Committed demo-site metrics (T11/T13). T60 adds live Earth Engine for new polygons."""
+    """Committed demo-site metrics (T11/T13).
+
+    **The seam for new listings (T58 → T60):** a new polygon has no `site_key`, so this raises
+    `no_cached_metrics` and the run fails before any rating; the listing stays in `rating` with
+    `status_reason = no_satellite_metrics` and never shows another site's data. T60 plugs a
+    live Earth Engine loader in here (`RatingRunner.metrics_loader`). With `USE_MOCKS=true`
+    only, the toolbox falls back to `mock_listing_metrics`, labelled as mock data.
+    """
     if asset.site_key is None:
-        raise ToolFailed("no_cached_metrics", retryable=False)
+        raise ToolFailed(NO_CACHED_METRICS, retryable=False)
     try:
         return load_site_metrics(asset.site_key, scenario)
     except ValueError as exc:
-        raise ToolFailed("no_cached_metrics", retryable=False) from exc
+        raise ToolFailed(NO_CACHED_METRICS, retryable=False) from exc
 
 
 class _NoLLM:
@@ -291,6 +311,10 @@ class RunProgress:
         self._spec = spec
         self._session_factory = session_factory
         self._seq = seq
+
+    @property
+    def spec(self) -> RunSpec:
+        return self._spec
 
     def payload(self, step: str, status: str, **fields: Any) -> dict[str, Any]:
         self._seq += 1
@@ -504,8 +528,34 @@ class RunToolbox:
             case _:  # pragma: no cover - Tool is closed
                 raise AssertionError(tool)
 
+    def _load_metrics(self) -> EarthObsMetrics:
+        asset = self._asset
+        try:
+            metrics = self._deps.metrics_loader(asset, self.scenario)
+        except ToolFailed as exc:
+            mockable = (
+                self._deps.settings.use_mocks
+                and asset.site_key is None
+                and self.scenario == "baseline"
+                and asset.area_ha is not None
+                and asset.centroid_lat is not None
+                and asset.centroid_lon is not None
+            )
+            if exc.code != NO_CACHED_METRICS or not mockable:
+                raise
+            assert asset.area_ha is not None and asset.centroid_lat is not None
+            assert asset.centroid_lon is not None
+            return mock_listing_metrics(
+                area_ha=asset.area_ha,
+                centroid_lat=asset.centroid_lat,
+                centroid_lon=asset.centroid_lon,
+            )
+        if asset.site_key is None and is_curated_site(metrics.site_key):
+            raise ToolFailed("foreign_metrics", retryable=False)  # never another site's data
+        return metrics
+
     def _earth_obs(self) -> dict[str, Any]:
-        metrics = self._deps.metrics_loader(self._asset, self.scenario)
+        metrics = self._load_metrics()
         with self._deps.session_factory() as session:
             row = _world_asset(session, self._spec.world_id, self._spec.asset_id)
             if row is None:
@@ -523,6 +573,7 @@ class RunToolbox:
             "natural_fraction": round(metrics.natural_fraction, 3),
             "cloud_free_obs": metrics.cloud_free_obs,
             "wetland": wetland,
+            "mock": is_mock_metrics(metrics),
         }
 
     def _bound_metrics(self) -> tuple[EarthObsMetrics, bool]:
@@ -689,12 +740,16 @@ class RatingRunner:
         scenario: ScenarioName | None = None,
         trigger: Trigger = "api",
         max_runs_per_hour: int | None = None,
+        on_queue: QueueHook | None = None,
     ) -> UUID:
         """Record a queued run and hand it to a worker; returns its `run_id`.
 
         Raises LookupError (asset not in this world), AssetNotRateable, RunInProgress,
         RunRateLimited or RunnerBusy. ``max_runs_per_hour`` overrides the per-world cap
         (`RATING_RUNS_PER_WORLD_PER_HOUR`), e.g. for a Time Machine quarter (T38).
+        ``on_queue(session, asset, run_id)`` runs in the enqueue transaction once every check
+        passed, just before `queued` is published, so its writes commit with the queued run or
+        not at all; T58's submit moves a draft to `rating` there (drafts are refused otherwise).
         """
         if not self._slots.acquire(blocking=False):
             raise RunnerBusy()
@@ -707,22 +762,24 @@ class RatingRunner:
                 trigger=trigger,
             )
             cap = max_runs_per_hour or self.settings.rating_runs_per_world_per_hour
-            self._enqueue(spec, cap)
+            self._enqueue(spec, cap, on_queue)
             self.executor.submit(self._execute_and_release, spec)
         except BaseException:
             self._slots.release()
             raise
         return spec.run_id
 
-    def _enqueue(self, spec: RunSpec, cap: int) -> None:
+    def _enqueue(self, spec: RunSpec, cap: int, on_queue: QueueHook | None = None) -> None:
         with self.session_factory() as session:
             try:
-                self._enqueue_locked(session, spec, cap)
+                self._enqueue_locked(session, spec, cap, on_queue)
             except OperationalError as exc:  # lock_timeout (or a lost connection)
                 session.rollback()
                 raise RunnerBusy() from exc
 
-    def _enqueue_locked(self, session: Session, spec: RunSpec, cap: int) -> None:
+    def _enqueue_locked(
+        self, session: Session, spec: RunSpec, cap: int, on_queue: QueueHook | None = None
+    ) -> None:
         session.execute(
             text("SELECT set_config('lock_timeout', :value, true)"),
             {"value": f"{LOCK_TIMEOUT_MS}ms"},
@@ -733,8 +790,11 @@ class RatingRunner:
         asset = _world_asset(session, spec.world_id, spec.asset_id)
         if asset is None:
             raise LookupError(f"asset {spec.asset_id} not found in world {spec.world_id}")
-        if asset.status is AssetStatus.DRAFT:
+        if on_queue is None and asset.status is AssetStatus.DRAFT:
             raise AssetNotRateable("asset_is_draft")
+        if on_queue is None and not is_public(asset.status):
+            # Listings under review are rated through T58's submit, never re-rated directly.
+            raise AssetNotRateable("asset_not_listed")
         now, recent = _recent_runs(session, spec.world_id)
         for run in recent.values():
             if run.asset_id == spec.asset_id and run.active(now):
@@ -750,6 +810,8 @@ class RatingRunner:
             raise RunRateLimited(
                 max(1, int(retry_after.total_seconds()) + 1), code="rating_global_limit"
             )
+        if on_queue is not None:
+            on_queue(session, asset, spec.run_id)
         publish(
             session,
             spec.world_id,
@@ -897,6 +959,7 @@ class RatingRunner:
                 centroid_lat=asset.centroid_lat,
                 centroid_lon=asset.centroid_lon,
                 total_shares=asset.total_shares,
+                area_ha=float(asset.area_ha),
             )
 
     def _store(
@@ -968,6 +1031,7 @@ class RatingRunner:
                 run=record,
                 extra_flags=flags,
             )
+            listing = apply_rating_result(session, asset, report)
             publish(
                 session,
                 spec.world_id,
@@ -989,6 +1053,7 @@ class RatingRunner:
                     latency_ms=int((time.perf_counter() - started) * 1000),
                     totals=record["totals"],
                     llm_calls=tail["llm_calls"],
+                    **({"listing_status": listing.to_status.value} if listing else {}),
                 ),
             )
             session.commit()
@@ -1003,6 +1068,13 @@ class RatingRunner:
             )
         except SQLAlchemyError:
             log.exception("could not publish the failure of a rating run")
+        spec = progress.spec
+        try:
+            with self.session_factory() as session:
+                if note_rating_failure(session, spec.world_id, spec.asset_id, code[:120]):
+                    session.commit()
+        except SQLAlchemyError:
+            log.exception("could not record why a listing's rating run failed")
 
 
 # ----- status from events -----------------------------------------------------------------------

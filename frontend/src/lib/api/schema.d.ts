@@ -206,12 +206,38 @@ export interface paths {
         };
         /**
          * List Assets
-         * @description Marketplace cards for every asset in the world except drafts.
+         * @description Marketplace cards for the world's public assets: listed and suspended (T58).
          */
         get: operations["list_assets_assets_get"];
         put?: never;
-        /** Create Asset */
-        post: operations["create_asset_assets_post"];
+        /**
+         * Create Listing
+         * @description Create a **draft** listing in a community the caller owns or stewards, in the session's
+         *     world. Needs `attestation: true`; the polygon must pass T36's checks and not overlap any
+         *     other listing in the world (ineligible ones excepted). Nothing is public until it's listed.
+         */
+        post: operations["create_listing_assets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/communities/{community_id}/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Community Assets
+         * @description The community's listings at every status, drafts included (its members and same-world
+         *     admins only): the Steward app's listing flow.
+         */
+        get: operations["list_community_assets_communities__community_id__assets_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -229,6 +255,73 @@ export interface paths {
         get: operations["get_asset_assets__asset_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit Listing
+         * @description Edit a draft (its community's owner or stewards). Only the fields sent change.
+         */
+        patch: operations["edit_listing_assets__asset_id__patch"];
+        trace?: never;
+    };
+    "/assets/{asset_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Listing
+         * @description Submit a draft for rating (or resubmit: a `needs_evidence` listing with new evidence,
+         *     or a `rating` listing whose run failed). The move to `rating`, its ledger entry and the
+         *     queued run commit together; the run's sealed report then sets `listed`, `needs_evidence`
+         *     or `ineligible`. Follow it with `GET /runs/{run_id}` or `listing_status` events.
+         */
+        post: operations["submit_listing_assets__asset_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/assets/{asset_id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suspend Listing
+         * @description Suspend trading on a listed asset (admins, never on their own community's asset).
+         */
+        post: operations["suspend_listing_admin_assets__asset_id__suspend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/assets/{asset_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Listing
+         * @description Resume trading on a suspended asset (admins, never on their own community's asset).
+         */
+        post: operations["resume_listing_admin_assets__asset_id__resume_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -754,6 +847,11 @@ export interface components {
             /** Country */
             country?: string | null;
             status: components["schemas"]["AssetStatusOut"];
+            /**
+             * Status Reason
+             * @description Why the listing is in its status, as a code: listing gate failures (e.g. confidence_below_70), a suspension reason, no_satellite_metrics or rating_failed:<error> while rating (T58).
+             */
+            status_reason?: string | null;
             /** Area Ha */
             area_ha: string;
             /**
@@ -796,43 +894,35 @@ export interface components {
              */
             sparkline?: string[];
         };
-        /** AssetCreate */
+        /**
+         * AssetCreate
+         * @description A draft listing in a community the caller owns or stewards (T58). The share terms are
+         *     set at the IPO (T59), not here.
+         */
         AssetCreate: {
+            /**
+             * Community Id
+             * Format: uuid
+             */
+            community_id: string;
             /** Name */
             name: string;
             /** Country */
             country?: string | null;
             /** Description */
             description?: string | null;
-            /** Geojson */
+            /**
+             * Geojson
+             * @description GeoJSON Polygon or MultiPolygon (or a Feature wrapping one) in WGS84; 10–50,000 ha, no self-intersection, no overlap with another listing in the world. Feature properties are dropped.
+             */
             geojson: {
                 [key: string]: unknown;
             };
             /**
-             * Total Shares
-             * @default 1000000
+             * Attestation
+             * @description Must be true: the community attests it may list this land (ADR-0005).
              */
-            total_shares: number;
-            /**
-             * Retained Pct
-             * @default 51.00
-             */
-            retained_pct: number | string;
-        };
-        /** AssetCreateResponse */
-        AssetCreateResponse: {
-            asset: components["schemas"]["AssetDetail"];
-            /**
-             * Run Id
-             * Format: uuid
-             */
-            run_id: string;
-            /**
-             * Status
-             * @default accepted
-             * @constant
-             */
-            status: "accepted";
+            attestation: boolean;
         };
         /** AssetDetail */
         AssetDetail: {
@@ -847,7 +937,14 @@ export interface components {
             country?: string | null;
             /** Description */
             description?: string | null;
+            /** Community Id */
+            community_id?: string | null;
             status: components["schemas"]["AssetStatusOut"];
+            /**
+             * Status Reason
+             * @description Why the listing is in its status (see AssetCard).
+             */
+            status_reason?: string | null;
             /** Area Ha */
             area_ha: string;
             /** Centroid Lat */
@@ -889,6 +986,39 @@ export interface components {
          * @enum {string}
          */
         AssetStatusOut: "draft" | "rating" | "needs_evidence" | "ineligible" | "listed" | "suspended";
+        /**
+         * AssetSubmitted
+         * @description A listing submitted for rating: follow the run with `GET /runs/{run_id}`.
+         */
+        AssetSubmitted: {
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            status: components["schemas"]["AssetStatusOut"];
+        };
+        /**
+         * AssetUpdate
+         * @description Edit a draft (T58). Only the fields sent change; `null` clears country or description.
+         */
+        AssetUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Country */
+            country?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Geojson */
+            geojson?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** AuditorFlag */
         AuditorFlag: {
             /** Type */
@@ -1808,7 +1938,15 @@ export interface components {
          * StreamEventType
          * @enum {string}
          */
-        StreamEventType: "rating_progress" | "price_tick" | "alert" | "heartbeat";
+        StreamEventType: "rating_progress" | "price_tick" | "alert" | "heartbeat" | "listing_status";
+        /** SuspendRequest */
+        SuspendRequest: {
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "moderation" | "data_dispute" | "community_request";
+        };
         /** TamperDemoIn */
         TamperDemoIn: {
             /**
@@ -2478,7 +2616,7 @@ export interface operations {
             };
         };
     };
-    create_asset_assets_post: {
+    create_listing_assets_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2492,13 +2630,91 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            202: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AssetCreateResponse"];
+                    "application/json": components["schemas"]["AssetDetail"];
                 };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A reason code, e.g. members_only or admin_only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The community isn't in the caller's world */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description listing_limit_reached */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid body, or the polygon fails T36's checks: each problem is an item with `type` `polygon.<code>` (invalid_geojson, too_complex, self_intersection, too_small, too_large, overlap) at `loc` [body, geojson] */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_community_assets_communities__community_id__assets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                community_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetCard"][];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A reason code, e.g. members_only or admin_only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the caller's world */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2530,6 +2746,269 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AssetDetail"];
                 };
+            };
+            /** @description Not found in the caller's world */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_listing_assets__asset_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A reason code, e.g. members_only or admin_only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the caller's world */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `cannot_edit_<status>`: only drafts can be edited */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid body, or the polygon fails T36's checks: each problem is an item with `type` `polygon.<code>` (invalid_geojson, too_complex, self_intersection, too_small, too_large, overlap) at `loc` [body, geojson] */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    submit_listing_assets__asset_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetSubmitted"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A reason code, e.g. members_only or admin_only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the caller's world */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `cannot_submit_<status>`, `evidence_required` (needs_evidence with no new field evidence) or `run_in_progress` (Location: the active run) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `rating_rate_limited` or `rating_global_limit`; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `rating_busy`; see Retry-After */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    suspend_listing_admin_assets__asset_id__suspend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuspendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A reason code, e.g. members_only or admin_only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the caller's world */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `cannot_suspend_<status>`: only listed assets */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_listing_admin_assets__asset_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A reason code, e.g. members_only or admin_only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the caller's world */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `cannot_resume_<status>`: only suspended assets */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

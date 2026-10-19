@@ -28,7 +28,7 @@ from app.ledger import (
     verify,
 )
 from app.main import app
-from app.models import Asset, LedgerKind, World
+from app.models import Asset, AssetStatus, LedgerKind, World
 from app.seed import WORLD_ID, seed
 from tests.conftest import alembic_cfg, requires_db
 from tests.worlds import start_demo
@@ -201,6 +201,7 @@ def session() -> Iterator[Session]:
                 geojson={"type": "Polygon", "coordinates": []},
                 area_ha=Decimal("500.00"),
                 primary_shares_remaining=490_000,
+                status=AssetStatus.LISTED,  # public, so its ledger is readable (T58)
             )
         )
         db.commit()

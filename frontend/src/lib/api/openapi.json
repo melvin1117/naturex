@@ -510,7 +510,7 @@
           "assets"
         ],
         "summary": "List Assets",
-        "description": "Marketplace cards for every asset in the world except drafts.",
+        "description": "Marketplace cards for the world's public assets: listed and suspended (T58).",
         "operationId": "list_assets_assets_get",
         "responses": {
           "200": {
@@ -533,8 +533,9 @@
         "tags": [
           "assets"
         ],
-        "summary": "Create Asset",
-        "operationId": "create_asset_assets_post",
+        "summary": "Create Listing",
+        "description": "Create a **draft** listing in a community the caller owns or stewards, in the session's\nworld. Needs `attestation: true`; the polygon must pass T36's checks and not overlap any\nother listing in the world (ineligible ones excepted). Nothing is public until it's listed.",
+        "operationId": "create_listing_assets_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -546,15 +547,77 @@
           "required": true
         },
         "responses": {
-          "202": {
+          "201": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AssetCreateResponse"
+                  "$ref": "#/components/schemas/AssetDetail"
                 }
               }
             }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "A reason code, e.g. members_only or admin_only"
+          },
+          "404": {
+            "description": "The community isn't in the caller's world"
+          },
+          "409": {
+            "description": "listing_limit_reached"
+          },
+          "422": {
+            "description": "Invalid body, or the polygon fails T36's checks: each problem is an item with `type` `polygon.<code>` (invalid_geojson, too_complex, self_intersection, too_small, too_large, overlap) at `loc` [body, geojson]"
+          }
+        }
+      }
+    },
+    "/communities/{community_id}/assets": {
+      "get": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "List Community Assets",
+        "description": "The community's listings at every status, drafts included (its members and same-world\nadmins only): the Steward app's listing flow.",
+        "operationId": "list_community_assets_communities__community_id__assets_get",
+        "parameters": [
+          {
+            "name": "community_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Community Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AssetCard"
+                  },
+                  "title": "Response List Community Assets Communities  Community Id  Assets Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "A reason code, e.g. members_only or admin_only"
+          },
+          "404": {
+            "description": "Not found in the caller's world"
           },
           "422": {
             "description": "Validation Error",
@@ -570,6 +633,63 @@
       }
     },
     "/assets/{asset_id}": {
+      "patch": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Edit Listing",
+        "description": "Edit a draft (its community's owner or stewards). Only the fields sent change.",
+        "operationId": "edit_listing_assets__asset_id__patch",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssetUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "A reason code, e.g. members_only or admin_only"
+          },
+          "404": {
+            "description": "Not found in the caller's world"
+          },
+          "409": {
+            "description": "`cannot_edit_<status>`: only drafts can be edited"
+          },
+          "422": {
+            "description": "Invalid body, or the polygon fails T36's checks: each problem is an item with `type` `polygon.<code>` (invalid_geojson, too_complex, self_intersection, too_small, too_large, overlap) at `loc` [body, geojson]"
+          }
+        }
+      },
       "get": {
         "tags": [
           "assets"
@@ -598,6 +718,195 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not found in the caller's world"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assets/{asset_id}/submit": {
+      "post": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Submit Listing",
+        "description": "Submit a draft for rating (or resubmit: a `needs_evidence` listing with new evidence,\nor a `rating` listing whose run failed). The move to `rating`, its ledger entry and the\nqueued run commit together; the run's sealed report then sets `listed`, `needs_evidence`\nor `ineligible`. Follow it with `GET /runs/{run_id}` or `listing_status` events.",
+        "operationId": "submit_listing_assets__asset_id__submit_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetSubmitted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "A reason code, e.g. members_only or admin_only"
+          },
+          "404": {
+            "description": "Not found in the caller's world"
+          },
+          "409": {
+            "description": "`cannot_submit_<status>`, `evidence_required` (needs_evidence with no new field evidence) or `run_in_progress` (Location: the active run)"
+          },
+          "429": {
+            "description": "`rating_rate_limited` or `rating_global_limit`; see Retry-After"
+          },
+          "503": {
+            "description": "`rating_busy`; see Retry-After"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/assets/{asset_id}/suspend": {
+      "post": {
+        "tags": [
+          "assets",
+          "admin"
+        ],
+        "summary": "Suspend Listing",
+        "description": "Suspend trading on a listed asset (admins, never on their own community's asset).",
+        "operationId": "suspend_listing_admin_assets__asset_id__suspend_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuspendRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "A reason code, e.g. members_only or admin_only"
+          },
+          "404": {
+            "description": "Not found in the caller's world"
+          },
+          "409": {
+            "description": "`cannot_suspend_<status>`: only listed assets"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/assets/{asset_id}/resume": {
+      "post": {
+        "tags": [
+          "assets",
+          "admin"
+        ],
+        "summary": "Resume Listing",
+        "description": "Resume trading on a suspended asset (admins, never on their own community's asset).",
+        "operationId": "resume_listing_admin_assets__asset_id__resume_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "A reason code, e.g. members_only or admin_only"
+          },
+          "404": {
+            "description": "Not found in the caller's world"
+          },
+          "409": {
+            "description": "`cannot_resume_<status>`: only suspended assets"
           },
           "422": {
             "description": "Validation Error",
@@ -1816,6 +2125,18 @@
           "status": {
             "$ref": "#/components/schemas/AssetStatusOut"
           },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason",
+            "description": "Why the listing is in its status, as a code: listing gate failures (e.g. confidence_below_70), a suspension reason, no_satellite_metrics or rating_failed:<error> while rating (T58)."
+          },
           "area_ha": {
             "type": "string",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -1973,14 +2294,21 @@
       },
       "AssetCreate": {
         "properties": {
+          "community_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Community Id"
+          },
           "name": {
             "type": "string",
+            "maxLength": 200,
             "title": "Name"
           },
           "country": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 10
               },
               {
                 "type": "null"
@@ -1991,7 +2319,8 @@
           "description": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 2000
               },
               {
                 "type": "null"
@@ -2002,57 +2331,25 @@
           "geojson": {
             "additionalProperties": true,
             "type": "object",
-            "title": "Geojson"
+            "title": "Geojson",
+            "description": "GeoJSON Polygon or MultiPolygon (or a Feature wrapping one) in WGS84; 10\u201350,000 ha, no self-intersection, no overlap with another listing in the world. Feature properties are dropped."
           },
-          "total_shares": {
-            "type": "integer",
-            "title": "Total Shares",
-            "default": 1000000
-          },
-          "retained_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
-              }
-            ],
-            "title": "Retained Pct",
-            "default": "51.00"
+          "attestation": {
+            "type": "boolean",
+            "title": "Attestation",
+            "description": "Must be true: the community attests it may list this land (ADR-0005)."
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
+          "community_id",
           "name",
-          "geojson"
+          "geojson",
+          "attestation"
         ],
-        "title": "AssetCreate"
-      },
-      "AssetCreateResponse": {
-        "properties": {
-          "asset": {
-            "$ref": "#/components/schemas/AssetDetail"
-          },
-          "run_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Run Id"
-          },
-          "status": {
-            "type": "string",
-            "const": "accepted",
-            "title": "Status",
-            "default": "accepted"
-          }
-        },
-        "type": "object",
-        "required": [
-          "asset",
-          "run_id"
-        ],
-        "title": "AssetCreateResponse"
+        "title": "AssetCreate",
+        "description": "A draft listing in a community the caller owns or stewards (T58). The share terms are\nset at the IPO (T59), not here."
       },
       "AssetDetail": {
         "properties": {
@@ -2087,8 +2384,32 @@
             ],
             "title": "Description"
           },
+          "community_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Community Id"
+          },
           "status": {
             "$ref": "#/components/schemas/AssetStatusOut"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason",
+            "description": "Why the listing is in its status (see AssetCard)."
           },
           "area_ha": {
             "type": "string",
@@ -2230,6 +2551,87 @@
           "suspended"
         ],
         "title": "AssetStatusOut"
+      },
+      "AssetSubmitted": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AssetStatusOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "run_id",
+          "status"
+        ],
+        "title": "AssetSubmitted",
+        "description": "A listing submitted for rating: follow the run with `GET /runs/{run_id}`."
+      },
+      "AssetUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "geojson": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geojson"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AssetUpdate",
+        "description": "Edit a draft (T58). Only the fields sent change; `null` clears country or description."
       },
       "AuditorFlag": {
         "properties": {
@@ -4457,9 +4859,29 @@
           "rating_progress",
           "price_tick",
           "alert",
-          "heartbeat"
+          "heartbeat",
+          "listing_status"
         ],
         "title": "StreamEventType"
+      },
+      "SuspendRequest": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "moderation",
+              "data_dispute",
+              "community_request"
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "SuspendRequest"
       },
       "TamperDemoIn": {
         "properties": {

@@ -29,10 +29,24 @@ export interface PriceTickPayload {
   reason: string;
 }
 
+/** `listing_status` payload as published by backend/app/services/listings.py (T58). */
+export interface ListingStatusPayload {
+  asset_id: string;
+  community_id: string | null;
+  transition: "create" | "edit" | "submit" | "rated" | "suspend" | "resume";
+  from: string | null;
+  to: string;
+  /** A code such as `confidence_below_70`; null when the status needs no explanation. */
+  reason: string | null;
+  run_id?: string | null;
+  report_id?: string;
+}
+
 export interface LiveEventPayloads {
   price_tick: PriceTickPayload;
   rating_progress: Record<string, unknown>;
   alert: Record<string, unknown>;
+  listing_status: ListingStatusPayload;
 }
 
 export interface LiveEvent<K extends LiveEventType = LiveEventType> {
@@ -52,6 +66,7 @@ export const LIVE_EVENT_TYPES: readonly LiveEventType[] = [
   "rating_progress",
   "price_tick",
   "alert",
+  "listing_status",
 ];
 
 /** The part of the browser's `EventSource` the hub uses (easy to fake in tests). */

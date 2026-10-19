@@ -55,6 +55,7 @@ from app.models import (
 )
 from app.seed import LIVE_LABEL, LIVE_WORLD_ID, seed
 from app.seed import WORLD_ID as TEMPLATE_WORLD_ID
+from app.services.lifecycle import PUBLIC_STATUSES
 from app.worlds import PROTECTED_WORLDS
 
 log = logging.getLogger(__name__)
@@ -400,13 +401,17 @@ def ensure_live_world(session: Session) -> World:
 
 
 def world_contents(session: Session, world_id: UUID) -> tuple[list[User], list[Asset]]:
-    """The world's personas and assets, in a stable order. Password accounts are never listed."""
+    """The world's personas and public assets, in a stable order. Password accounts are never
+    listed."""
     users = session.exec(
         select(User)
         .where(User.world_id == world_id, User.kind == UserKind.PERSONA)
         .order_by(col(User.persona_key))
     ).all()
+    # Public listings only (T58): drafts and listings under review belong to their community.
     assets = session.exec(
-        select(Asset).where(Asset.world_id == world_id).order_by(col(Asset.site_key))
+        select(Asset)
+        .where(Asset.world_id == world_id, col(Asset.status).in_(PUBLIC_STATUSES))
+        .order_by(col(Asset.site_key))
     ).all()
     return list(users), list(assets)

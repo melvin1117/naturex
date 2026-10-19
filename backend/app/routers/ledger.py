@@ -7,10 +7,12 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 from sqlmodel import Session
 
+from app.authz import Actor, OptionalActor
 from app.deps import SANDBOX_ONLY, CurrentWorld, SessionDep, SettingsDep, require_sandbox
 from app.ledger import VerifyResult, entries_for, tamper, verify
 from app.models import Asset, World
 from app.schemas import LedgerEntryOut, LedgerVerifyOut, TamperDemoIn, TamperDemoOut
+from app.services.listings import visible_to
 
 router = APIRouter(tags=["ledger"])
 
@@ -21,22 +23,29 @@ def _verify_out(result: VerifyResult) -> LedgerVerifyOut:
     )
 
 
-def _require_asset(session: Session, world: World, asset_id: UUID) -> None:
-    """404 unless the asset exists in the visitor's own world."""
+def _require_asset(
+    session: Session, world: World, asset_id: UUID, actor: Actor | None = None
+) -> None:
+    """404 unless the asset exists in the visitor's own world and is public, or the actor's
+    community's listing (T58)."""
     asset = session.get(Asset, asset_id)
-    if asset is None or asset.world_id != world.id:
+    if asset is None or asset.world_id != world.id or not visible_to(actor, asset):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found")
 
 
 @router.get("/ledger/{asset_id}", response_model=list[LedgerEntryOut])
-def list_ledger(asset_id: UUID, world: CurrentWorld, session: SessionDep) -> list[LedgerEntryOut]:
-    _require_asset(session, world, asset_id)
+def list_ledger(
+    asset_id: UUID, world: CurrentWorld, actor: OptionalActor, session: SessionDep
+) -> list[LedgerEntryOut]:
+    _require_asset(session, world, asset_id, actor)
     return [LedgerEntryOut.model_validate(e) for e in entries_for(session, asset_id)]
 
 
 @router.get("/ledger/{asset_id}/verify", response_model=LedgerVerifyOut)
-def verify_ledger(asset_id: UUID, world: CurrentWorld, session: SessionDep) -> LedgerVerifyOut:
-    _require_asset(session, world, asset_id)
+def verify_ledger(
+    asset_id: UUID, world: CurrentWorld, actor: OptionalActor, session: SessionDep
+) -> LedgerVerifyOut:
+    _require_asset(session, world, asset_id, actor)
     return _verify_out(verify(entries_for(session, asset_id)))
 
 
