@@ -53,6 +53,7 @@ from app.models import (
 )
 from app.seed import LIVE_LABEL, LIVE_WORLD_ID, seed
 from app.seed import WORLD_ID as TEMPLATE_WORLD_ID
+from app.worlds import PROTECTED_WORLDS
 
 log = logging.getLogger(__name__)
 
@@ -60,8 +61,6 @@ COOKIE_NAME = "nx_world"
 COOKIE_MAX_AGE_S = 30 * 24 * 3600
 STALE_AFTER = timedelta(days=7)
 VISITOR_LABEL = "visitor"
-# Never served as a sandbox, reset or pruned.
-PROTECTED_WORLDS: frozenset[UUID] = frozenset({TEMPLATE_WORLD_ID, LIVE_WORLD_ID})
 
 # Children before parents, so deletes never violate a foreign key. Sessions go first, so a
 # pruned world's sessions are gone before anything they could reach (ADR-0005 §4).

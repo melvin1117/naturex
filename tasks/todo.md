@@ -330,9 +330,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` · **Deps:** T54 · **Files:** `backend/app/models.py`, `backend/migrations/versions/*_communities.py`, `backend/app/sandbox.py`, `backend/app/seed.py`, `backend/tests/test_tenancy.py`
 
 ### T68 · Authorization policy and community routes (#110) — D1 · M · Must · K3 C6
-- [ ] Pure `authorize(principal, action, resource)` implementing the ADR-0005 matrix: world scoping; members can't trade their community's asset; adding a member who holds its shares returns 409 `member_has_holdings`; admins and treasury accounts can't trade
-- [ ] A `require(action)` dependency; 401 `auth_required` / 403 with a reason / 404 across worlds; a matrix test covers every role × action, allowed and denied
-- [ ] `POST /communities` (creator becomes owner; treasury created), `GET`/`PATCH /communities/{id}` (owner). *Should:* add and remove stewards
+- [x] Pure `authorize(principal, action, resource)` implementing the ADR-0005 matrix: world scoping; members can't trade their community's asset; adding a member who holds its shares returns 409 `member_has_holdings`; admins and treasury accounts can't trade
+- [x] A `require(action)` dependency; 401 `auth_required` / 403 with a reason / 404 across worlds; a matrix test covers every role × action, allowed and denied
+- [x] `POST /communities` (creator becomes owner; treasury created), `GET`/`PATCH /communities/{id}` (owner). *Should:* add and remove stewards
 
 **Verify:** `make test` · **Deps:** T56 · **Files:** `backend/app/authz.py`, `backend/app/routers/communities.py`, `backend/tests/test_authz.py`
 

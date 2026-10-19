@@ -116,6 +116,9 @@ def place_order(body: OrderCreate, world: CurrentWorld, session: SessionDep) -> 
     # After a concurrent reset the world has fresh asset ids, so a stale id is a 404.
     asset = _locked_asset(session, world.id, body.asset_id)
     actor = _actor(session, world.id, lock=True)
+    # TODO(T57): re-check TRADE after locking the user (T68 review):
+    # `enforce(fresh_actor(session, principal), Action.TRADE, AssetRef(...))`, so a membership
+    # committed while this order waited on the lock blocks the buy.
     if asset.status != AssetStatus.LISTED:
         raise HTTPException(status.HTTP_409_CONFLICT, "Asset is not listed for trading")
 

@@ -136,6 +136,374 @@
         }
       }
     },
+    "/communities": {
+      "post": {
+        "tags": [
+          "communities"
+        ],
+        "summary": "Create",
+        "description": "Create a community in the caller's world. The caller becomes its owner, and its treasury\naccount (holds the retained stake, never signs in or trades) is created with it.",
+        "operationId": "create_communities_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommunityCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "409": {
+            "description": "community_limit_reached or community_name_taken"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/communities/{community_id}": {
+      "get": {
+        "tags": [
+          "communities"
+        ],
+        "summary": "Read",
+        "description": "A community's public profile. Anyone may read it, like the marketplace (ADR-0005 \u00a73).",
+        "operationId": "read_communities__community_id__get",
+        "parameters": [
+          {
+            "name": "community_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Community Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in the caller's world"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "communities"
+        ],
+        "summary": "Update",
+        "description": "Edit the community's profile (owner only). Only the fields sent change.",
+        "operationId": "update_communities__community_id__patch",
+        "parameters": [
+          {
+            "name": "community_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Community Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommunityUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "A reason code, e.g. owner_only or members_only"
+          },
+          "404": {
+            "description": "Not found in the caller's world"
+          },
+          "409": {
+            "description": "community_name_taken"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/communities/{community_id}/members": {
+      "get": {
+        "tags": [
+          "communities"
+        ],
+        "summary": "List Members",
+        "description": "The owner and stewards (the community's members and same-world admins only).",
+        "operationId": "list_members_communities__community_id__members_get",
+        "parameters": [
+          {
+            "name": "community_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Community Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CommunityMemberOut"
+                  },
+                  "title": "Response List Members Communities  Community Id  Members Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "A reason code, e.g. owner_only or members_only"
+          },
+          "404": {
+            "description": "Not found in the caller's world"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "communities"
+        ],
+        "summary": "Add Steward",
+        "description": "Add a steward (owner only). Someone holding the community's asset shares can't join:\nmembers can't trade their own asset, so they'd be trapped (409 `member_has_holdings`).",
+        "operationId": "add_steward_communities__community_id__members_post",
+        "parameters": [
+          {
+            "name": "community_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Community Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommunityMemberAdd"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityMemberOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "A reason code, e.g. owner_only or members_only"
+          },
+          "404": {
+            "description": "Not found in the caller's world"
+          },
+          "409": {
+            "description": "member_has_holdings, member_not_eligible or already_member"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/communities/{community_id}/members/{user_id}": {
+      "delete": {
+        "tags": [
+          "communities"
+        ],
+        "summary": "Remove Steward",
+        "description": "Remove a steward (owner), or leave the community (any member). The owner can't be removed.",
+        "operationId": "remove_steward_communities__community_id__members__user_id__delete",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "community_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Community Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "A reason code, e.g. owner_only or members_only"
+          },
+          "404": {
+            "description": "Not found in the caller's world"
+          },
+          "409": {
+            "description": "owner_cannot_be_removed"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/communities": {
+      "get": {
+        "tags": [
+          "communities"
+        ],
+        "summary": "My Communities",
+        "description": "The caller's communities and role in each, so the Steward app knows what to show.",
+        "operationId": "my_communities_me_communities_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MyCommunityOut"
+                  },
+                  "type": "array",
+                  "title": "Response My Communities Me Communities Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          }
+        }
+      }
+    },
     "/assets": {
       "get": {
         "tags": [
@@ -1845,6 +2213,193 @@
         "title": "AuditorOutput",
         "description": "Nemotron Ultra auditor JSON (dev-spec \u00a77.7)."
       },
+      "CommunityCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Name"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "CommunityCreate"
+      },
+      "CommunityMemberAdd": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "title": "CommunityMemberAdd",
+        "description": "Add a steward by account ID (not email: emails are never a claim of identity)."
+      },
+      "CommunityMemberOut": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "$ref": "#/components/schemas/CommunityRole"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "name",
+          "role",
+          "created_at"
+        ],
+        "title": "CommunityMemberOut"
+      },
+      "CommunityOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "country",
+          "description",
+          "created_at"
+        ],
+        "title": "CommunityOut",
+        "description": "A community's public profile: no member or treasury identifiers."
+      },
+      "CommunityRole": {
+        "type": "string",
+        "enum": [
+          "owner",
+          "steward"
+        ],
+        "title": "CommunityRole",
+        "description": "ADR-0005 \u00a73: community roles come from membership, not from `users.role`."
+      },
+      "CommunityUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CommunityUpdate",
+        "description": "Only the fields sent change; `null` clears `country` or `description`."
+      },
       "CopilotCitation": {
         "properties": {
           "ref": {
@@ -2369,6 +2924,60 @@
         ],
         "title": "MeOut",
         "description": "The signed-in account. Never includes the password hash."
+      },
+      "MyCommunityOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "role": {
+            "$ref": "#/components/schemas/CommunityRole"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "country",
+          "description",
+          "created_at",
+          "role"
+        ],
+        "title": "MyCommunityOut",
+        "description": "A community the caller belongs to, with the caller's role in it."
       },
       "OrderCreate": {
         "properties": {

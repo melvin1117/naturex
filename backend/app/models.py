@@ -215,6 +215,10 @@ class AuthAttempt(SQLModel, table=True):
     created_at: datetime = _created_at()
 
 
+# Community names are unique per world, case-insensitively (T68 review; migration 0011).
+COMMUNITY_NAME_INDEX = "uq_communities_world_lower_name"
+
+
 class Community(SQLModel, table=True):
     """A community that manages listings (ADR-0005 §3, T56). Roles come from `community_members`.
 
@@ -231,6 +235,7 @@ class Community(SQLModel, table=True):
             "world_id", "id", "treasury_user_id", name="uq_communities_world_id_id_treasury"
         ),
         UniqueConstraint("treasury_user_id", name="uq_communities_treasury_user_id"),
+        Index(COMMUNITY_NAME_INDEX, "world_id", text("lower(name)"), unique=True),
         ForeignKeyConstraint(
             ["world_id", "treasury_user_id"],
             ["users.world_id", "users.id"],
