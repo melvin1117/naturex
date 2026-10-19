@@ -39,7 +39,12 @@ from app.agents.auditor import AuditEvent, AuditResult, ScoreInputs, apply_audit
 from app.ledger import append
 from app.market.engine import fair_value_per_share, fair_value_total
 from app.models import Asset, LedgerKind, Metrics, Report
-from app.tools.earth_obs import EarthObsMetrics, load_site_metrics
+from app.tools.earth_obs import (
+    MOCK_ATTRIBUTION,
+    EarthObsMetrics,
+    is_mock_metrics,
+    load_site_metrics,
+)
 from app.tools.scoring import (
     GATE_CONFIDENCE_BELOW_70,
     GATE_FOREST_LOSS,
@@ -125,6 +130,8 @@ class SiteRating:
     def flags(self) -> list[dict[str, str]]:
         out: list[dict[str, str]] = []
         metrics = self.metrics
+        if is_mock_metrics(metrics):
+            out.append(_flag("mock_metrics", "data", MOCK_ATTRIBUTION))
         if metrics.simulated:
             out.append(
                 _flag(

@@ -11,9 +11,11 @@ from pyproj import Geod
 
 from app.tools.geometry import (
     MAX_AREA_HA,
+    MAX_VERTICES,
     MIN_AREA_HA,
     OVERLAP_TOLERANCE_HA,
     Problem,
+    bare_geometry,
     validate_polygon,
 )
 
@@ -109,7 +111,27 @@ def test_a_geojson_feature_is_unwrapped() -> None:
     assert check.ok
 
 
+def test_bare_geometry_drops_feature_properties() -> None:
+    feature = {"type": "Feature", "properties": {"owner": "Ada"}, "geometry": square(1_000)}
+
+    assert bare_geometry(feature) == square(1_000)
+    assert bare_geometry(square(1_000)) == square(1_000)
+
+
 # --- Shape ----------------------------------------------------------------------------------
+
+
+def test_a_boundary_with_too_many_points_is_rejected_before_parsing() -> None:
+    ring = square(1_000)["coordinates"][0]
+    many = ring[:1] * (MAX_VERTICES + 5) + ring
+    check = validate_polygon({"type": "Polygon", "coordinates": [many]})
+
+    assert codes(check.problems) == {"too_complex"}
+    assert check.area_ha is None
+    at_limit = ring[:1] * (MAX_VERTICES - len(ring)) + ring
+    assert "too_complex" not in codes(
+        validate_polygon({"type": "Polygon", "coordinates": [at_limit]}).problems
+    )
 
 
 def test_self_intersecting_bow_tie_is_rejected() -> None:

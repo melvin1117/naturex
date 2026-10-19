@@ -25,8 +25,12 @@ MAX_AREA_HA = 50_000
 # Shared borders drawn by hand rarely line up exactly; ignore overlaps smaller than this.
 OVERLAP_TOLERANCE_HA = 1
 M2_PER_HA = 10_000
+# A hand-drawn or imported boundary needs far fewer; this bounds the work one request can cause.
+MAX_VERTICES = 10_000
 
-ProblemCode = Literal["invalid_geojson", "self_intersection", "too_small", "too_large", "overlap"]
+ProblemCode = Literal[
+    "invalid_geojson", "too_complex", "self_intersection", "too_small", "too_large", "overlap"
+]
 Area = Polygon | MultiPolygon
 
 
@@ -75,6 +79,27 @@ def _parse(geojson: Mapping[str, Any]) -> Area:
     return geom
 
 
+def _vertex_count(coordinates: Any, limit: int) -> int:
+    """Positions in a GeoJSON coordinates array, counting no further than just past `limit`."""
+    count, stack = 0, [coordinates]
+    while stack and count <= limit:
+        item = stack.pop()
+        if isinstance(item, list | tuple) and item and isinstance(item[0], list | tuple):
+            stack.extend(item)
+        else:
+            count += 1
+    return count
+
+
+def bare_geometry(geojson: Mapping[str, Any]) -> dict[str, Any]:
+    """The Polygon or MultiPolygon of a validated listing area, without a Feature's properties
+    (free text that would otherwise reach the public ledger)."""
+    geometry = geojson.get("geometry") if geojson.get("type") == "Feature" else geojson
+    if not isinstance(geometry, Mapping):
+        raise ValueError("not a GeoJSON geometry")
+    return {"type": geometry["type"], "coordinates": geometry["coordinates"]}
+
+
 def _area_ha(geom: BaseGeometry, centre: tuple[float, float]) -> float:
     lon, lat = centre
     laea = CRS.from_proj4(f"+proj=laea +lat_0={lat} +lon_0={lon} +datum=WGS84 +units=m")
@@ -91,6 +116,17 @@ def validate_polygon(
     `existing` holds (asset_id, geojson) for listings it must not overlap. Unreadable
     existing geometries are skipped: one bad stored row shouldn't block every new listing.
     """
+    geometry = geojson.get("geometry") if geojson.get("type") == "Feature" else geojson
+    coordinates = geometry.get("coordinates") if isinstance(geometry, Mapping) else None
+    if _vertex_count(coordinates, MAX_VERTICES) > MAX_VERTICES:
+        return PolygonCheck(
+            problems=[
+                Problem(
+                    "too_complex",
+                    f"The boundary has more than {MAX_VERTICES:,} points. Simplify it.",
+                )
+            ]
+        )
     try:
         geom = _parse(geojson)
     except _InvalidGeoJSON as exc:
@@ -132,9 +168,7 @@ def validate_polygon(
         ):
             overlaps.append(asset_id)
     if overlaps:
-        problems.append(
-            Problem("overlap", "This area overlaps land that is already listed. Redraw around it.")
-        )
+        problems.append(Problem("overlap", "This area overlaps another listing. Redraw around it."))
 
     return PolygonCheck(
         problems=problems,

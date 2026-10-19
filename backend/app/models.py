@@ -122,6 +122,7 @@ class StreamEventType(StrEnum):
     PRICE_TICK = "price_tick"
     ALERT = "alert"
     HEARTBEAT = "heartbeat"
+    LISTING_STATUS = "listing_status"
 
 
 class World(SQLModel, table=True):
@@ -321,6 +322,10 @@ class Asset(SQLModel, table=True):
     primary_shares_remaining: int = Field(sa_column=Column(BigInteger, nullable=False))
     community_wallet: Decimal = Field(default=Decimal("0.00"), max_digits=14, decimal_places=2)
     status: AssetStatus = Field(default=AssetStatus.DRAFT, sa_column=_enum_column(AssetStatus))
+    # Why the listing is in its status (gate failure codes, suspension reason…; T58).
+    status_reason: str | None = Field(default=None, max_length=200)
+    # When the community attested it may list this land (T58); NULL for curated sites.
+    attested_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     site_key: str | None = Field(default=None, index=True)
     created_at: datetime = _created_at()
 
