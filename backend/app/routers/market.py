@@ -5,12 +5,18 @@ Concurrency: every order first takes a KEY SHARE lock on its world row, so it wa
 orders don't block each other. It then locks the asset row and the trader's user row (the same
 order as the revenue payout in `market/revenue.py`), so orders and payouts on one asset are
 serialised and balances, holdings and the primary float can't lose updates.
+
+Authorization (T57, ADR-0005 §3): an order is `Action.TRADE` on the asset, loaded by
+`(world_id, id)` from the body: signed-in users only, never admins or treasuries, and never a
+member of the asset's community (insider trading). Memberships are read again once the trader's
+row is locked (`fresh_actor`), because adding a member locks that same row: an order that waited
+behind a new membership can't still buy. The portfolio is the caller's own account.
 """
 
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, cast, get_args
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -19,7 +25,23 @@ from sqlmodel import Session, col, select
 
 from app import events
 from app.auth import STARTING_CASH, Principal
-from app.authz import fresh_actor
+from app.authz import (
+    Action,
+    Actor,
+    Allow,
+    AssetRef,
+    DenyReason,
+    OptionalActor,
+    acting_world,
+    asset_ref,
+    asset_ref_in,
+    authorize,
+    denied,
+    deny_error,
+    enforce,
+    fresh_actor,
+    require,
+)
 from app.deps import (
     AUTH_REQUIRED,
     CurrentPrincipal,
@@ -56,6 +78,7 @@ from app.schemas import (
     OrderOut,
     PortfolioOut,
     QuoteOut,
+    TradeBlockedReason,
 )
 from app.services.ipo import NOT_TRADING, is_trading
 from app.services.listings import visible_to
@@ -91,6 +114,38 @@ def _rejected(exc: MarketError) -> HTTPException:
     return HTTPException(code, exc.code)
 
 
+def order_asset_ref(
+    body: OrderCreate, actor: OptionalActor, session: SessionDep
+) -> AssetRef | None:
+    """The ordered asset by `(world_id, id)`; `body` is the route's own (FastAPI parses it once,
+    so the request schema is unchanged)."""
+    return asset_ref_in(session, acting_world(actor), body.asset_id)
+
+
+QUOTE_ACCESS = require(Action.BROWSE, asset_ref)
+
+
+def _trade_blocked(actor: Actor | None, asset: AssetRef) -> TradeBlockedReason | None:
+    """Why TRADE would refuse this signed-in actor on `asset` (the same policy as orders), or
+    None if it wouldn't, or for anonymous readers (who are asked to sign in instead)."""
+    if actor is None:
+        return None
+    decision = authorize(actor, Action.TRADE, asset)
+    if isinstance(decision, Allow):
+        return None
+    if decision.reason.value not in get_args(TradeBlockedReason):
+        # Anything else (another world, a mis-wired resource) is a bug the route already 404s.
+        raise deny_error(decision)
+    return cast(TradeBlockedReason, decision.reason.value)
+
+
+TRADE_RESPONSES = denied(
+    DenyReason.INSIDER_TRADING_BLOCKED,
+    DenyReason.ADMINS_CANNOT_TRADE,
+    DenyReason.TREASURY_CANNOT_ACT,
+)
+
+
 def _actor(session: Session, world_id: UUID, principal: Principal, *, lock: bool = False) -> User:
     """The signed-in user, who trades as themselves (ADR-0005 §3); never a client-supplied ID."""
     stmt = select(User).where(User.world_id == world_id, User.id == principal.user_id)
@@ -111,7 +166,7 @@ def _locked_asset(session: Session, world_id: UUID, asset_id: UUID) -> Asset:
         select(Asset).where(Asset.world_id == world_id, Asset.id == asset_id).with_for_update()
     ).first()
     if asset is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
     return asset
 
 
@@ -120,7 +175,7 @@ def _require_visible(session: Session, principal: Principal | None, asset: Asset
     instead of revealing it with `not_trading`."""
     actor = None if principal is None else fresh_actor(session, principal)
     if not visible_to(actor, asset):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
 
 
 def _latest_price(session: Session, asset: Asset) -> Decimal | None:
@@ -199,7 +254,12 @@ def _order_rows(
     ]
 
 
-@router.post("/orders", response_model=OrderOut, responses=ORDER_ERRORS)
+@router.post(
+    "/orders",
+    response_model=OrderOut,
+    dependencies=[require(Action.TRADE, order_asset_ref)],
+    responses={**ORDER_ERRORS, **TRADE_RESPONSES},
+)
 def place_order(
     body: OrderCreate, world: CurrentWorld, principal: CurrentPrincipal, session: SessionDep
 ) -> OrderOut:
@@ -211,9 +271,12 @@ def place_order(
     asset = _locked_asset(session, world.id, body.asset_id)
     _require_visible(session, principal, asset)
     actor = _actor(session, world.id, principal, lock=True)
-    # TODO(T57): re-check TRADE after locking the user (T68 review):
-    # `enforce(fresh_actor(session, principal), Action.TRADE, AssetRef(...))`, so a membership
-    # committed while this order waited on the lock blocks the buy.
+    # Re-check with memberships read under the trader's lock (see the module docstring).
+    enforce(
+        fresh_actor(session, principal),
+        Action.TRADE,
+        AssetRef(world.id, asset.id, asset.community_id),
+    )
     market = _tradable_market(session, asset)
     holding = _holding(session, world.id, actor.id, asset.id)
     trader = Position(cash=actor.cash_balance, shares=holding.shares, avg_cost=holding.avg_cost)
@@ -270,11 +333,17 @@ def place_order(
     )
 
 
-@router.get("/assets/{asset_id}/quote", response_model=QuoteOut, responses=QUOTE_ERRORS)
+@router.get(
+    "/assets/{asset_id}/quote",
+    response_model=QuoteOut,
+    responses=QUOTE_ERRORS,
+    dependencies=[QUOTE_ACCESS],
+)
 def get_quote(
     asset_id: UUID,
     world: CurrentWorld,
     principal: OptionalPrincipal,
+    actor: OptionalActor,
     session: SessionDep,
     side: Literal["buy", "sell"],
     qty: int = Query(gt=0),
@@ -282,18 +351,21 @@ def get_quote(
     """What an order would cost or pay now, slippage included (`engine.preview`), and with a
     session the largest order the user can place. Read-only: nothing is reserved, and the
     order fills at the price when it's placed. Errors match `POST /orders` for the asset and
-    the size; cash and holdings are checked when ordering (see `max_qty`)."""
-    # TODO(T57): once T68's policy lands, apply the same TRADE authorization as orders here
-    # (insider_trading_blocked, admins_cannot_trade), so a quote never invites a refused order.
+    the size; cash and holdings are checked when ordering (see `max_qty`).
+
+    Anyone may read a quote (`Action.BROWSE` on the asset). A signed-in user whom `TRADE` would
+    refuse (a member of the asset's community, an admin, a treasury) gets `max_qty = 0` and
+    the reason in `trade_blocked_reason`, so a quote never invites a refused order."""
     asset = session.exec(
         select(Asset).where(Asset.world_id == world.id, Asset.id == asset_id)
     ).first()
     if asset is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
     _require_visible(session, principal, asset)
+    blocked = _trade_blocked(actor, AssetRef(world.id, asset.id, asset.community_id))
     order_side = OrderSide(side)
     # Only a signed-in buyer's max_qty needs the market maker's inventory (the supply).
-    buyer = principal is not None and order_side is OrderSide.BUY
+    buyer = principal is not None and blocked is None and order_side is OrderSide.BUY
     market = _tradable_market(session, asset, with_inventory=buyer)
     try:
         priced = preview(market, order_side, qty)
@@ -301,10 +373,12 @@ def get_quote(
         raise _rejected(exc) from exc
 
     max_qty: int | None = None
-    if principal is not None:
-        actor = _actor(session, world.id, principal)
-        holding = _holding(session, world.id, actor.id, asset.id)
-        trader = Position(cash=actor.cash_balance, shares=holding.shares, avg_cost=holding.avg_cost)
+    if blocked is not None:
+        max_qty = 0
+    elif principal is not None:
+        user = _actor(session, world.id, principal)
+        holding = _holding(session, world.id, user.id, asset.id)
+        trader = Position(cash=user.cash_balance, shares=holding.shares, avg_cost=holding.avg_cost)
         max_qty = max_fillable_qty(market, trader, order_side)
 
     return QuoteOut(
@@ -319,10 +393,16 @@ def get_quote(
         community_amount=priced.community_amount,
         max_qty=max_qty,
         max_order_qty=max_order_qty(market.total_shares),
+        trade_blocked_reason=blocked,
     )
 
 
-@router.get("/portfolio", response_model=PortfolioOut)
+@router.get(
+    "/portfolio",
+    response_model=PortfolioOut,
+    dependencies=[require(Action.USE_OWN_ACCOUNT)],
+    responses=denied(DenyReason.TREASURY_CANNOT_ACT),
+)
 def get_portfolio(
     principal: CurrentPrincipal, world: CurrentWorld, session: SessionDep
 ) -> PortfolioOut:

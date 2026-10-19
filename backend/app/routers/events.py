@@ -1,47 +1,60 @@
 """World-scoped live events over SSE plus polling fallback.
 
-Events about a listing under review carry an audience community (T58): only its members and
-same-world admins receive them; everyone else, anonymous visitors included, gets public events
-only. The viewer is resolved once per request (per stream for SSE).
+Both derive the reader and its world from the session (T57): they browse the world
+(`Action.BROWSE`). Events about a listing under review reach only its community and same-world
+admins (T58), and `alert` events only their targets (T57); see `app.events._visible`. The
+stream re-checks the session on every poll and ends once it's gone.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from sqlmodel import Session
 
 from app import events as event_bus
-from app.auth import SESSION_COOKIE, resolve_session
-from app.authz import memberships
+from app.auth import SESSION_COOKIE
+from app.authz import Action, WorldRef, authorizes, enforce, lazy_actor, require
 from app.db import get_session
-from app.deps import CurrentWorld, SessionDep, SettingsDep, current_world, optional_principal
-from app.models import World
+from app.deps import (
+    CurrentWorld,
+    OptionalPrincipal,
+    SessionDep,
+    SettingsDep,
+    current_world,
+    optional_principal,
+)
 from app.schemas import StreamEvent
 
 router = APIRouter(tags=["events"])
 StreamSessionDep = Annotated[Session, Depends(get_session, scope="function")]
 
 
-def current_world_for_stream(
-    request: Request, response: Response, session: StreamSessionDep
-) -> World:
-    """`current_world` on a session closed before streaming starts, so an open stream never
-    holds a pooled connection."""
-    return current_world(request, response, session, optional_principal(request, session))
+@dataclass(frozen=True)
+class StreamAccess:
+    world_id: UUID
+    auth: event_bus.StreamAuth | None
 
 
-CurrentWorldForStream = Annotated[World, Depends(current_world_for_stream)]
-
-
-def _viewer(request: Request, session: Session, world_id: object) -> event_bus.Viewer:
-    principal = resolve_session(session, request.cookies.get(SESSION_COOKIE))
-    if principal is None or principal.world_id != world_id:
-        return event_bus.PUBLIC_VIEWER
-    communities = memberships(session, principal.world_id, principal.user_id)
-    return event_bus.Viewer(is_admin=principal.is_admin, communities=frozenset(communities))
+@authorizes(Action.BROWSE)
+def stream_access(request: Request, response: Response, session: StreamSessionDep) -> StreamAccess:
+    """The stream's world and session, authorized like `require(Action.BROWSE)` but on a DB
+    session closed before streaming starts, so an open stream never holds a pooled connection."""
+    principal = optional_principal(request, session)
+    world = current_world(request, response, session, principal)
+    actor = None if principal is None else lazy_actor(session, principal)
+    enforce(actor, Action.BROWSE, WorldRef(world.id))
+    token = request.cookies.get(SESSION_COOKIE)
+    auth = (
+        None
+        if principal is None or token is None
+        else event_bus.StreamAuth(token, principal.session_id)
+    )
+    return StreamAccess(world.id, auth)
 
 
 def _parse_last_event_id(value: str | None) -> int | None:
@@ -56,10 +69,10 @@ def _parse_last_event_id(value: str | None) -> int | None:
     return event_id
 
 
-@router.get("/events", response_model=list[StreamEvent])
+@router.get("/events", response_model=list[StreamEvent], dependencies=[require(Action.BROWSE)])
 def poll_events(
-    request: Request,
     world: CurrentWorld,
+    principal: OptionalPrincipal,
     session: SessionDep,
     since: Annotated[datetime | None, Query()] = None,
     since_id: Annotated[int | None, Query(ge=0)] = None,
@@ -67,7 +80,7 @@ def poll_events(
         event_bus.REPLAY_BATCH_LIMIT
     ),
 ) -> list[StreamEvent]:
-    viewer = _viewer(request, session, world.id)
+    viewer = event_bus.viewer_for(world.id, principal)
     return event_bus.replay(
         session, world.id, since_id=since_id, since=since, limit=limit, viewer=viewer
     )
@@ -76,17 +89,16 @@ def poll_events(
 @router.get("/events/stream")
 async def stream_events(
     request: Request,
-    world: CurrentWorldForStream,
-    session: StreamSessionDep,
+    access: Annotated[StreamAccess, Depends(stream_access)],
     settings: SettingsDep,
     last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
     since_id: Annotated[int | None, Query(ge=0)] = None,
 ) -> event_bus.EventStreamResponse:
     cursor = _parse_last_event_id(last_event_id) if last_event_id is not None else since_id
     return event_bus.EventStreamResponse(
-        world.id,
+        access.world_id,
         request,
         cursor,
         settings.event_stream_max_concurrent,
-        _viewer(request, session, world.id),
+        access.auth,
     )

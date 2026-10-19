@@ -285,7 +285,7 @@ def submit_listing(
     except TooSoon as exc:
         raise _too_soon(exc) from None
     except LookupError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found") from exc
     except RunInProgress as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT,

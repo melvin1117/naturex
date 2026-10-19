@@ -1,4 +1,11 @@
-"""Persisted, world-scoped event bus for polling and Server-Sent Events (T29)."""
+"""Persisted, world-scoped event bus for polling and Server-Sent Events (T29).
+
+Who sees what (`_visible`, one query per read): events about a listing under review go only to
+its community's members and same-world admins (T58's audience); an `alert` goes only to its
+targets, the holders of `payload["asset_id"]` and the members of that asset's community (T57).
+Both are worked out from the reader's account on every read. A stream re-resolves its session
+on every poll, so it closes within a poll interval of a logout, expiry or revocation.
+"""
 
 from __future__ import annotations
 
@@ -7,22 +14,26 @@ import json
 import time
 from collections.abc import AsyncIterator, Callable, Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID
 
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, StreamingResponse
-from sqlalchemy import Connection, delete, insert, or_, text
+from sqlalchemy import Connection, String, delete, insert, or_, text
+from sqlalchemy import cast as sa_cast
+from sqlalchemy import select as sa_select
 from sqlalchemy.engine import CursorResult
 from sqlmodel import Session, col, select
+from sqlmodel.sql.expression import SelectOfScalar
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.types import Receive, Scope, Send
 
+from app.auth import Principal, resolve_session
 from app.db import engine
-from app.models import StreamEventType, WorldEvent
+from app.models import Asset, CommunityMember, Holding, StreamEventType, WorldEvent
 from app.schemas import StreamEvent
 
 REPLAY_BATCH_LIMIT = 100
@@ -43,15 +54,56 @@ ADMINS_ONLY = UUID(int=0)
 
 @dataclass(frozen=True)
 class Viewer:
-    """Who reads a world's events (T58): every viewer gets public events (no audience); scoped
-    events go to members of their audience community and to same-world admins. Callers build it
-    only for a principal in the world being read; anyone else is `PUBLIC_VIEWER`."""
+    """Who reads a world's events: a signed-in account of that world (its holdings and
+    memberships are looked up in each read's own query). Built only for a principal in the world
+    being read; anyone else is `PUBLIC_VIEWER`."""
 
+    user_id: UUID | None = None
     is_admin: bool = False
-    communities: frozenset[UUID] = field(default_factory=frozenset)
 
 
 PUBLIC_VIEWER = Viewer()
+
+
+def viewer_for(world_id: UUID, principal: Principal | None) -> Viewer:
+    """The reader of `world_id` behind `principal`; public unless it's signed in to that world."""
+    if principal is None or principal.world_id != world_id:
+        return PUBLIC_VIEWER
+    return Viewer(principal.user_id, principal.is_admin)
+
+
+def _visible(
+    stmt: SelectOfScalar[WorldEvent], world_id: UUID, viewer: Viewer
+) -> SelectOfScalar[WorldEvent]:
+    """Only the events `viewer` may see; both rules hold together, in one query:
+
+    - **Audience (T58):** an event about a listing under review carries its community; only that
+      community's members and same-world admins get it (`ADMINS_ONLY`: admins only).
+    - **Alerts (T57):** an `alert` goes only to its targets, the holders of `payload.asset_id`
+      and the members of that asset's community. An alert without an `asset_id` goes to nobody.
+
+    Memberships and holdings are subqueries, so they are as of this read.
+    """
+    audience = col(WorldEvent.audience_community_id)
+    is_alert = col(WorldEvent.type) == StreamEventType.ALERT
+    if viewer.user_id is None:
+        return stmt.where(audience.is_(None), ~is_alert)
+    my_communities = sa_select(col(CommunityMember.community_id)).where(
+        col(CommunityMember.world_id) == world_id,
+        col(CommunityMember.user_id) == viewer.user_id,
+    )
+    if not viewer.is_admin:
+        stmt = stmt.where(or_(audience.is_(None), audience.in_(my_communities)))
+    held = sa_select(sa_cast(col(Holding.asset_id), String)).where(
+        col(Holding.world_id) == world_id,
+        col(Holding.user_id) == viewer.user_id,
+        col(Holding.shares) > 0,
+    )
+    own = sa_select(sa_cast(col(Asset.id), String)).where(
+        col(Asset.world_id) == world_id, col(Asset.community_id).in_(my_communities)
+    )
+    alert_asset = col(WorldEvent.payload)["asset_id"].astext
+    return stmt.where(or_(~is_alert, alert_asset.in_(held), alert_asset.in_(own)))
 
 
 async def _empty_stream() -> AsyncIterator[str]:
@@ -162,14 +214,7 @@ def replay(
     if capped_limit == 0:
         return []
 
-    stmt = select(WorldEvent).where(WorldEvent.world_id == world_id)
-    if not viewer.is_admin:
-        audience = col(WorldEvent.audience_community_id)
-        stmt = stmt.where(
-            or_(audience.is_(None), audience.in_(viewer.communities))
-            if viewer.communities
-            else audience.is_(None)
-        )
+    stmt = _visible(select(WorldEvent).where(WorldEvent.world_id == world_id), world_id, viewer)
     if since_id is not None:
         stmt = stmt.where(col(WorldEvent.id) > since_id)
     elif since is not None:
@@ -203,8 +248,37 @@ def heartbeat() -> StreamEvent:
     return StreamEvent(id=None, type=StreamEventType.HEARTBEAT, payload={}, ts=datetime.now(UTC))
 
 
-def _poll_once(world_id: UUID, cursor: int | None, viewer: Viewer) -> list[StreamEvent]:
+@dataclass(frozen=True)
+class StreamAuth:
+    """The session a stream was opened with, re-checked on every poll (T57)."""
+
+    token: str
+    session_id: UUID
+
+
+def current_viewer(session: Session, world_id: UUID, auth: StreamAuth | None) -> Viewer | None:
+    """The stream's reader as of now, or None once its session has ended (logged out, expired,
+    revoked, its account deleted) or no longer belongs to this world. Anonymous streams have no
+    session to lose."""
+    if auth is None:
+        return PUBLIC_VIEWER
+    principal = resolve_session(session, auth.token)
+    if principal is None or (principal.session_id, principal.world_id) != (
+        auth.session_id,
+        world_id,
+    ):
+        return None
+    return viewer_for(world_id, principal)
+
+
+def _poll_once(
+    world_id: UUID, cursor: int | None, auth: StreamAuth | None = None
+) -> list[StreamEvent] | None:
+    """The next batch for the stream's reader, or None when its session has ended."""
     with session_scope() as session:
+        viewer = current_viewer(session, world_id, auth)
+        if viewer is None:
+            return None
         return replay(
             session,
             world_id,
@@ -254,10 +328,10 @@ class EventStreamResponse(StreamingResponse):
         request: Request,
         since_id: int | None,
         max_concurrent: int,
-        viewer: Viewer = PUBLIC_VIEWER,
+        auth: StreamAuth | None = None,
     ) -> None:
         self.world_id = world_id
-        self.viewer = viewer
+        self.auth = auth
         self.request = request
         self.since_id = since_id
         self.max_concurrent = max_concurrent
@@ -282,7 +356,7 @@ class EventStreamResponse(StreamingResponse):
             )(scope, receive, send)
             return
         self.body_iterator = stream(
-            self.world_id, self.request, self.since_id, release_slot, self.viewer
+            self.world_id, self.request, self.since_id, release_slot, self.auth
         )
         try:
             await super().__call__(scope, receive, send)
@@ -295,9 +369,13 @@ async def stream(
     request: Request,
     since_id: int | None = None,
     release_slot: Callable[[], None] | None = None,
-    viewer: Viewer = PUBLIC_VIEWER,
+    auth: StreamAuth | None = None,
 ) -> AsyncIterator[str]:
-    """Yield a finite SSE stream with replay, DB polling and heartbeat keep-alives."""
+    """Yield a finite SSE stream with replay, DB polling and heartbeat keep-alives.
+
+    Every poll re-resolves `auth` first, and a heartbeat only follows a poll that did, so the
+    stream ends (the client may reconnect with its current cookie) once the session is gone.
+    """
     cursor = since_id
     deadline = time.monotonic() + STREAM_MAX_SECONDS
     last_heartbeat = time.monotonic()
@@ -308,7 +386,9 @@ async def stream(
             if await request.is_disconnected():
                 break
 
-            batch = await run_in_threadpool(_poll_once, world_id, cursor, viewer)
+            batch = await run_in_threadpool(_poll_once, world_id, cursor, auth)
+            if batch is None:
+                break
 
             if batch:
                 for event in batch:

@@ -6,9 +6,10 @@ sessions, a private sandbox for a demo session.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 
 from app.auth import Principal
+from app.authz import Action, DenyReason, denied, require
 from app.deps import (
     AUTH_REQUIRED,
     CurrentPrincipal,
@@ -16,12 +17,11 @@ from app.deps import (
     OptionalPrincipal,
     SessionDep,
 )
-from app.models import SessionKind, User, World
+from app.models import User, World
 from app.sandbox import reset_world, world_contents
 from app.schemas import MeOut, PersonaOut, WorldAssetOut, WorldOut
 
 router = APIRouter(prefix="/world", tags=["world"])
-DEMO_ONLY = "demo_only"
 
 
 def _world_out(session: SessionDep, world: World, principal: Principal | None) -> WorldOut:
@@ -37,7 +37,7 @@ def _world_out(session: SessionDep, world: World, principal: Principal | None) -
     )
 
 
-@router.get("", response_model=WorldOut)
+@router.get("", response_model=WorldOut, dependencies=[require(Action.BROWSE)])
 def get_world(world: CurrentWorld, principal: OptionalPrincipal, session: SessionDep) -> WorldOut:
     """The session's world: the live world when anonymous or signed in with a password, the
     demo sandbox for a demo session. `me` is the signed-in account, or null."""
@@ -47,16 +47,16 @@ def get_world(world: CurrentWorld, principal: OptionalPrincipal, session: Sessio
 @router.post(
     "/reset",
     response_model=WorldOut,
+    dependencies=[require(Action.CONTROL_DEMO)],
     responses={
         401: {"description": f"`{AUTH_REQUIRED}`: sign in first"},
-        403: {"description": f"`{DEMO_ONLY}`: only a demo session can reset its sandbox"},
+        **denied(DenyReason.DEMO_SESSION_ONLY),
     },
 )
 def reset(world: CurrentWorld, principal: CurrentPrincipal, session: SessionDep) -> WorldOut:
     """ "Reset my demo": restore the demo session's sandbox to the template, keeping its ID.
 
-    The live world is never reset: any other session gets 403 `demo_only`.
+    The live world is never reset: any other session gets 403 `demo_session_only`
+    (`Action.CONTROL_DEMO`).
     """
-    if principal.session_kind != SessionKind.DEMO:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, DEMO_ONLY)
     return _world_out(session, reset_world(session, world.id), principal)

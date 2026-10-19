@@ -496,6 +496,11 @@ class OrderOut(BaseModel):
     shares_held: int = Field(description="The trader's shares of this asset after this fill.")
 
 
+TradeBlockedReason = Literal[
+    "insider_trading_blocked", "admins_cannot_trade", "treasury_cannot_act"
+]
+
+
 class QuoteOut(BaseModel):
     """The price of an order now, before confirming it (play money). Nothing is reserved: the
     order fills at the price when it's placed."""
@@ -514,9 +519,16 @@ class QuoteOut(BaseModel):
     max_qty: int | None = Field(
         default=None,
         description="The largest order on this side the signed-in user can place now (cash "
-        "or holding, supply, size cap); null without a session.",
+        "or holding, supply, size cap); 0 when `trade_blocked_reason` is set; null without a "
+        "session.",
     )
     max_order_qty: int = Field(description="The size cap for one order on this asset.")
+    trade_blocked_reason: TradeBlockedReason | None = Field(
+        default=None,
+        description="Why the signed-in user can't trade this asset at all (an order would get "
+        "this 403): a member of its community, an admin or a treasury. Null when they can, or "
+        "without a session.",
+    )
 
 
 class HoldingOut(BaseModel):

@@ -55,6 +55,8 @@ class Persona:
     key: str
     name: str
     role: UserRole
+    is_admin: bool = False
+    """Admin inside its own sandbox only: sandboxes copy it, the live world never gets it."""
 
 
 @dataclass(frozen=True)
@@ -74,7 +76,13 @@ PERSONAS: tuple[Persona, ...] = (
     Persona(UUID("22222222-2222-2222-2222-222222222201"), "rosa", "Rosa", UserRole.COMMUNITY),
     Persona(UUID("22222222-2222-2222-2222-222222222202"), "arjun", "Arjun", UserRole.INVESTOR),
     Persona(UUID("22222222-2222-2222-2222-222222222203"), "mia", "Mia", UserRole.INVESTOR),
-    Persona(UUID("22222222-2222-2222-2222-222222222204"), "admin", "Demo Admin", UserRole.ADMIN),
+    Persona(
+        UUID("22222222-2222-2222-2222-222222222204"),
+        "admin",
+        "Demo Admin",
+        UserRole.ADMIN,
+        is_admin=True,
+    ),
 )
 # Owner of every seeded community (a member, not a holder: the treasuries hold the stakes).
 COMMUNITY_PERSONA = PERSONAS[0]
@@ -305,8 +313,13 @@ def seed(session: Session) -> None:
                     role=persona.role,
                     cash_balance=STARTING_CASH,
                     persona_key=persona.key,
+                    is_admin=persona.is_admin,
                 )
             )
+        elif existing_user.is_admin != persona.is_admin:
+            # Templates seeded before T57 lack the demo admin's flag; sandboxes copy it.
+            existing_user.is_admin = persona.is_admin
+            session.add(existing_user)
     session.commit()
 
     _seed_communities(session)

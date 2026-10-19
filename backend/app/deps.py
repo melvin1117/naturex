@@ -32,8 +32,6 @@ SettingsDep = Annotated[Settings, Depends(get_settings)]
 TOUCH_EVERY = timedelta(minutes=5)
 PRUNE_EVERY = timedelta(minutes=10)
 AUTH_REQUIRED = "auth_required"
-ADMIN_ONLY = "admin_only"
-SANDBOX_ONLY = "sandbox_only"
 WORLD_UNAVAILABLE = "world_unavailable"
 _last_prune: datetime | None = None
 _last_auth_prune: datetime | None = None
@@ -153,20 +151,3 @@ def current_world(
 
 
 CurrentWorld = Annotated[World, Depends(current_world)]
-
-
-def require_sandbox_or_admin(world: World, principal: Principal) -> None:
-    """Rating and the Time Machine write reports and spend LLM budget: anyone in their own demo
-    sandbox, only an admin in the live world (403 `admin_only`; ADR-0005 §3).
-
-    TODO(T57): replaced by `authz.require()` (T68), with the full role matrix.
-    """
-    if not is_sandbox(world) and not principal.is_admin:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, ADMIN_ONLY)
-
-
-def require_sandbox(world: World) -> None:
-    """Demo-only tools (the ledger tamper demo) never run in the live world (403
-    `sandbox_only`). TODO(T57): replaced by `authz.require()` (T68)."""
-    if not is_sandbox(world):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, SANDBOX_ONLY)

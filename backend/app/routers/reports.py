@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Path, status
 from sqlmodel import Session, col, select
 
 from app.agents.auditor import inline_citations
 from app.agents.summary import SummaryContext, generate_report_summary
-from app.authz import Actor, OptionalActor
+from app.authz import Action, Actor, AssetRef, OptionalActor, acting_world, asset_ref_in, require
 from app.config import Settings
 from app.db import engine
 from app.deps import CurrentWorld, SessionDep, SettingsDep
@@ -214,11 +214,25 @@ def _world_report(
         ).one()
     )
     if report is None or asset is None or not visible_to(actor, asset):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
     return report, asset
 
 
-@router.get("/reports/{report_id}", response_model=ReportOut)
+def report_ref(
+    report_id: Annotated[UUID, Path()], actor: OptionalActor, session: SessionDep
+) -> AssetRef | None:
+    """The report's asset, loading the report by `(world_id, id)` in the actor's world (T57)."""
+    world_id = acting_world(actor)
+    asset_id = session.exec(
+        select(Report.asset_id).where(Report.world_id == world_id, Report.id == report_id)
+    ).first()
+    return None if asset_id is None else asset_ref_in(session, world_id, asset_id)
+
+
+BROWSE_REPORT = require(Action.BROWSE, report_ref)
+
+
+@router.get("/reports/{report_id}", response_model=ReportOut, dependencies=[BROWSE_REPORT])
 def get_report(
     report_id: UUID,
     world: CurrentWorld,
@@ -234,7 +248,9 @@ def _change(label: str, before: object, after: object) -> str:
     return f"{label} unchanged: {after}" if before == after else f"{label}: {before} → {after}"
 
 
-@router.get("/reports/{report_id}/diff/{prev}", response_model=ReportDiff)
+@router.get(
+    "/reports/{report_id}/diff/{prev}", response_model=ReportDiff, dependencies=[BROWSE_REPORT]
+)
 def diff_reports(
     report_id: UUID, prev: UUID, world: CurrentWorld, actor: OptionalActor, session: SessionDep
 ) -> ReportDiff:
