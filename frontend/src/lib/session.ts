@@ -76,6 +76,11 @@ export interface SessionBootstrap {
    * was sent under: if another caller already re-bootstrapped since then, no new request.
    */
   refresh(sentUnderGeneration?: number): Promise<World>;
+  /**
+   * Read the world again after the session cookie changed (sign in, sign up, sign out). Never
+   * reuses a request already in flight: that one was sent with the old cookie.
+   */
+  reload(): Promise<World>;
   /** Bumps on every successful bootstrap. */
   readonly generation: number;
   /** Replace the world (e.g. after `POST /world/reset`). */
@@ -139,6 +144,14 @@ export function createSessionBootstrap(
         return Promise.resolve(state.world);
       }
       return run();
+    },
+    reload() {
+      const stale = inflight;
+      if (!stale) return run();
+      return stale.then(
+        () => run(),
+        () => run(),
+      );
     },
     get generation() {
       return generation;

@@ -10,6 +10,10 @@ const CODE_PATTERN = /^[a-z][a-z0-9_]*$/;
 
 const CODE_MESSAGES: Record<string, string> = {
   auth_required: "Sign in to do that.",
+  admin_only: "Only a platform admin can do that.",
+  sandbox_only: "That only works in a demo sandbox.",
+  csrf_origin:
+    "Your browser sent this from an address NatureX doesn't recognise. Open NatureX from its usual address and try again.",
   demo_only: "Only a demo session can reset its world.",
   too_many_event_streams:
     "Live updates are busy right now; they will keep refreshing every few seconds.",
@@ -50,7 +54,8 @@ export function parseRetryAfter(
   return Math.max(0, Math.ceil((at - now) / 1000));
 }
 
-function formatWait(seconds: number): string {
+/** "a second", "45 seconds", "a minute", "14 minutes". */
+export function formatWait(seconds: number): string {
   if (seconds < 60) return seconds <= 1 ? "a second" : `${seconds} seconds`;
   const minutes = Math.round(seconds / 60);
   return minutes === 1 ? "a minute" : `${minutes} minutes`;
@@ -84,13 +89,19 @@ function friendlyMessage(
   retryAfter: number | null,
 ): string {
   if (code && CODE_MESSAGES[code]) return CODE_MESSAGES[code];
+  const wait = retryAfter === null ? "a moment" : formatWait(retryAfter);
+  if (code === "too_many_attempts")
+    return `Too many attempts. Try again in ${wait}.`;
   switch (status) {
     case 400:
       return isHumanText(detail)
         ? detail
         : "That request couldn't be processed.";
     case 401:
-      return "Your session has expired. Reload the page to continue.";
+      // Login's generic "Email or password is incorrect" is human text; other 401s are codes.
+      return isHumanText(detail)
+        ? detail
+        : "Your session has expired. Reload the page to continue.";
     case 403:
       return "You don't have permission to do that.";
     case 404:
@@ -102,11 +113,9 @@ function friendlyMessage(
     case 422:
       return validationMessage(detail);
     case 429:
-    case 503: {
+    case 503:
       if (isHumanText(detail)) return detail;
-      const wait = retryAfter === null ? "a moment" : formatWait(retryAfter);
       return `NatureX is busy right now. Try again in ${wait}.`;
-    }
     default:
       return status >= 500
         ? "Something went wrong on our side. Try again."

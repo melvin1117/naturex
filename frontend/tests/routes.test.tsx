@@ -14,7 +14,11 @@ import RegisterPage from "@/app/register/page";
 import ListPage from "@/app/steward/list/page";
 import StewardPage from "@/app/steward/page";
 import { TourProvider } from "@/components/proto/tour";
+import { WorldProvider } from "@/components/world-provider";
+import { createDataLayer } from "@/lib/data-layer";
 import { PrototypeProvider } from "@/lib/prototype/store";
+
+import { BASE, fakeBackend, json, WORLD } from "./lib/helpers";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -54,12 +58,20 @@ beforeAll(() => {
 });
 
 function Providers({ children }: { children: ReactNode }) {
+  const layer = createDataLayer({
+    baseUrl: BASE,
+    fetch: fakeBackend({ "GET /world": () => json(WORLD) }).fetch,
+  });
   return (
-    <PrototypeProvider>
-      <TourProvider>{children}</TourProvider>
-    </PrototypeProvider>
+    <WorldProvider dataLayer={layer}>
+      <PrototypeProvider>
+        <TourProvider>{children}</TourProvider>
+      </PrototypeProvider>
+    </WorldProvider>
   );
 }
+
+const noSearch = { searchParams: Promise.resolve({}) };
 
 describe("routes", () => {
   it.each([
@@ -69,12 +81,20 @@ describe("routes", () => {
     ["/steward/list", ListPage, "List your land"],
     ["/admin", AdminPage, "Time Machine"],
     ["/judge", JudgePage, "The bees never sent an invoice."],
-    ["/login", LoginPage, "Sign in"],
-    ["/register", RegisterPage, "Create your account"],
     ["/dev/ui", DevUiPage, "UI kit"],
     ["404", NotFound, "Page not found"],
   ])("%s renders its heading", (_path, Page, heading) => {
     render(<Page />, { wrapper: Providers });
+    expect(
+      screen.getByRole("heading", { level: 1, name: heading }),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ["/login", LoginPage, "Sign in"],
+    ["/register", RegisterPage, "Create your account"],
+  ])("%s renders its heading", async (_path, Page, heading) => {
+    render(await Page(noSearch), { wrapper: Providers });
     expect(
       screen.getByRole("heading", { level: 1, name: heading }),
     ).toBeInTheDocument();

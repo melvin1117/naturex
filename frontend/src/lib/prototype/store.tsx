@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { useOptionalDataLayer } from "../data-layer";
 import { answer } from "./copilot";
 import {
   createInitialWorld,
@@ -24,6 +25,8 @@ import {
 import type { Side } from "./market";
 
 const STORAGE_KEY = "nx-prototype-world";
+/** Per tab: a fresh tab starts outside the demo, so protected routes ask to sign in. */
+const DEMO_KEY = "nx-prototype-demo";
 
 type Ui = {
   traceOpen: boolean;
@@ -36,8 +39,18 @@ type Ui = {
 type Store = {
   world: World;
   hydrated: boolean;
+  /**
+   * True once an anonymous visitor enters the scripted demo (judge landing, persona switcher,
+   * tour). `<RequireAccount allowPrototypeDemo>` then lets them see the prototype's
+   * protected screens (never `/admin`). Never set while an account is signed in. T65 replaces
+   * this with real demo sessions.
+   */
+  demo: boolean;
   act: (fn: (w: World) => World) => void;
+  /** Switch the pretend persona; when nobody is signed in, this enters the demo. */
   setPersona: (p: PersonaKey) => void;
+  /** Leave the demo (on sign-in and sign-out): prototype screens show the investor. */
+  exitDemo: () => void;
   placeOrder: (
     trader: TraderKey,
     siteId: string,
@@ -104,9 +117,28 @@ function save(world: World) {
   }
 }
 
+function loadDemo(): boolean {
+  try {
+    return window.sessionStorage.getItem(DEMO_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveDemo(demo: boolean) {
+  try {
+    if (demo) window.sessionStorage.setItem(DEMO_KEY, "1");
+    else window.sessionStorage.removeItem(DEMO_KEY);
+  } catch {
+    // Storage blocked: the demo lasts until the page reloads.
+  }
+}
+
 export function PrototypeProvider({ children }: { children: ReactNode }) {
   const [world, setWorld] = useState<World>(() => createInitialWorld());
   const [hydrated, setHydrated] = useState(false);
+  const [demo, setDemo] = useState(false);
+  const layer = useOptionalDataLayer();
   const worldRef = useRef(world);
   worldRef.current = world;
   const [ui, setUi] = useState<Ui>({
@@ -120,12 +152,17 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const stored = load();
     if (stored) setWorld(stored);
+    setDemo(loadDemo());
     setHydrated(true);
   }, []);
 
   useEffect(() => {
     if (hydrated) save(world);
   }, [world, hydrated]);
+
+  useEffect(() => {
+    if (hydrated) saveDemo(demo);
+  }, [demo, hydrated]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -208,7 +245,15 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
       world,
       hydrated,
       act,
-      setPersona: (p) => setWorld((w) => ({ ...w, persona: p })),
+      demo,
+      setPersona: (p) => {
+        if (layer?.session.getSnapshot().world?.me == null) setDemo(true);
+        setWorld((w) => ({ ...w, persona: p }));
+      },
+      exitDemo: () => {
+        setDemo(false);
+        setWorld((w) => ({ ...w, persona: "investor" }));
+      },
       placeOrder,
       reset,
       ui,
@@ -230,7 +275,7 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
       closeCopilot: () => setUi((u) => ({ ...u, copilotOpen: false })),
       ask,
     }),
-    [world, hydrated, act, placeOrder, reset, ui, ask],
+    [world, hydrated, demo, layer, act, placeOrder, reset, ui, ask],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

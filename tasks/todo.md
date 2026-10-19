@@ -370,8 +370,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` · **Deps:** T16, T17, T30, T58 · **Files:** `backend/app/routers/ipo.py`, `backend/app/services/ipo.py`, `backend/tests/test_ipo.py`
 
 ### T61 · Sign-in screens and session handling (#104) — PD + D1 · S · Must · K1 K2
-- [ ] `/login`, `/register`, and an account menu with sign out; clear error states; no tokens in JS-readable storage
-- [ ] Protected routes (`/steward/*`, `/portfolio`, `/admin`) redirect to sign-in and back; the client handles 401 and 403 with clear messages
+- [x] `/login`, `/register`, and an account menu with sign out; clear error states; no tokens in JS-readable storage
+- [x] Protected routes (`/steward/*`, `/portfolio`, `/admin`) redirect to sign-in and back; the client handles 401 and 403 with clear messages
+- As built: a client guard on `world.me` (`components/require-account.tsx`) instead of `middleware.ts`, which could only check that a cookie exists; pages stay at `app/login` and `app/register` (dev-spec "As built (T61)")
 
 **Verify:** `make fe-check`; manual register → sign out → sign in · **Deps:** T54, T73 · **Files:** `frontend/src/app/(auth)/login/page.tsx`, `frontend/src/app/(auth)/register/page.tsx`, `frontend/src/middleware.ts`, `frontend/src/lib/session.ts`
 

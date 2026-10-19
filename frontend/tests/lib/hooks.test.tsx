@@ -241,6 +241,8 @@ describe("cache per viewer", () => {
       }),
     );
 
+    // The previous account's cash is never shown while the new one loads.
+    expect(screen.queryByText("Cash 100.00")).toBeNull();
     expect(await screen.findByText("Cash 250.00")).toBeTruthy();
     expect(backend.calls("GET /portfolio")).toBe(2);
 

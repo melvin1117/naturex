@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "cn";
 
+import { AccountMenu } from "@/components/account-menu";
 import { Wordmark } from "@/components/proto/bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -131,6 +132,7 @@ export function AppHeader({ app }: { app: AppKey }) {
               </Link>
             </Button>
           )}
+          <AccountMenu />
         </div>
       </div>
     </header>
