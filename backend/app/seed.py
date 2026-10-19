@@ -38,11 +38,10 @@ from app.services.rating import (
 from app.tools.earth_obs import DATA_DIR, EarthObsMetrics, load_site_metrics
 from app.tools.scoring import is_wetland_from_landcover
 
-# Stable IDs so re-running seed is a no-op.
-WORLD_ID = UUID("11111111-1111-1111-1111-111111111111")
-# The one persistent world for real accounts (ADR-0005 §2); built by app.sandbox.ensure_live_world.
-LIVE_WORLD_ID = UUID("44444444-4444-4444-4444-444444444444")
-LIVE_LABEL = "live"
+# Re-exported: many callers import the fixed worlds from here.
+from app.worlds import LIVE_LABEL as LIVE_LABEL
+from app.worlds import LIVE_WORLD_ID as LIVE_WORLD_ID
+from app.worlds import WORLD_ID as WORLD_ID
 
 TOTAL_SHARES = 1_000_000
 RETAINED_PCT = Decimal("51.00")

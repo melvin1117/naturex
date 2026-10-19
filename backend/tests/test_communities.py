@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
+from fastapi import HTTPException, Response
 from fastapi.testclient import TestClient
-from sqlalchemy import Connection, create_engine
-from sqlmodel import Session, select
+from sqlalchemy import Connection, create_engine, delete
+from sqlmodel import Session, col, select
 
 from app.auth import SESSION_COOKIE, start_session
+from app.authz import Actor, Granted, WorldRef
+from app.communities import create_community
 from app.config import get_settings
 from app.db import get_session
 from app.main import app
@@ -27,9 +33,11 @@ from app.models import (
     User,
     UserKind,
     UserRole,
+    World,
 )
 from app.routers import communities as communities_router
-from app.sandbox import create_world, ensure_live_world
+from app.sandbox import _delete_world_rows, create_world, ensure_live_world
+from app.schemas import CommunityCreate
 from app.seed import LIVE_WORLD_ID, seed
 from tests.conftest import alembic_cfg, requires_db
 
@@ -213,6 +221,7 @@ def test_anyone_reads_a_live_communitys_public_profile(
     community, _ = seeded_live_community(session)
     response = client.get(f"/communities/{community.id}")
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "private, no-store"
     assert response.json()["name"] == community.name
     assert "treasury_user_id" not in response.json()
 
@@ -293,8 +302,10 @@ def test_the_owner_adds_lists_and_removes_a_steward(
         (str(owner.id), "owner"),
         (str(steward.id), "steward"),
     ]
-    assert listed.headers["cache-control"] == "no-store"
-    assert [c["role"] for c in client.get("/me/communities").json()] == ["steward"]
+    assert listed.headers["cache-control"] == "private, no-store"
+    mine = client.get("/me/communities")
+    assert mine.headers["cache-control"] == "private, no-store"
+    assert [c["role"] for c in mine.json()] == ["steward"]
     # A steward can't manage members.
     assert add(client, community_id, person(session, "Other").id).json() == {"detail": "owner_only"}
     assert client.delete(f"/communities/{community_id}/members/{owner.id}").status_code == 403
@@ -361,6 +372,9 @@ def test_member_conflicts_and_unknown_users(
     assert treasury.status_code == 409
     assert treasury.json() == {"detail": "member_not_eligible"}
     assert add(client, community_id, uuid4()).json() == {"detail": "user_not_found"}
+    admin = add(client, community_id, person(session, "Admin", is_admin=True).id)
+    assert admin.status_code == 409
+    assert admin.json() == {"detail": "member_not_eligible"}
     elsewhere = create_world(session)
     persona = session.exec(select(User).where(User.world_id == elsewhere.id)).first()
     assert persona is not None
@@ -381,3 +395,194 @@ def test_a_database_refusal_is_409_not_500(
     response = add(client, community_id, community.treasury_user_id)
     assert response.status_code == 409
     assert response.json() == {"detail": "member_not_eligible"}
+
+
+def test_a_steward_may_leave_but_not_remove_others(
+    session: Session, client: TestClient, owned: tuple[User, UUID]
+) -> None:
+    owner, community_id = owned
+    first, second = person(session, "First"), person(session, "Second")
+    assert add(client, community_id, first.id).status_code == 201
+    assert add(client, community_id, second.id).status_code == 201
+
+    sign_in(client, session, first)
+    others = client.delete(f"/communities/{community_id}/members/{second.id}")
+    assert others.status_code == 403
+    assert others.json() == {"detail": "owner_only"}
+    assert client.delete(f"/communities/{community_id}/members/{first.id}").status_code == 204
+    assert client.get("/me/communities").json() == []
+    # Gone: no longer a member, so "leaving" again is removing someone (owner only).
+    again = client.delete(f"/communities/{community_id}/members/{first.id}")
+    assert again.json() == {"detail": "owner_only"}
+
+    sign_in(client, session, owner)
+    leaving = client.delete(f"/communities/{community_id}/members/{owner.id}")
+    assert leaving.status_code == 409
+    assert leaving.json() == {"detail": "owner_cannot_be_removed"}
+
+
+def test_member_routes_across_worlds_are_not_found(
+    session: Session, client: TestClient, owned: tuple[User, UUID]
+) -> None:
+    owner, community_id = owned
+    world = create_world(session)
+    sandbox_community = session.exec(select(Community).where(Community.world_id == world.id))
+    other = sandbox_community.first()
+    assert other is not None
+    sign_in(client, session, owner)
+    assert client.get(f"/communities/{other.id}/members").status_code == 404
+    assert client.delete(f"/communities/{other.id}/members/{owner.id}").status_code == 404
+
+    # A sandbox admin can't see or touch the live community.
+    sandbox_admin = person(session, "Sandbox admin", world_id=world.id, is_admin=True)
+    sign_in(client, session, sandbox_admin)
+    members = client.get(f"/communities/{community_id}/members")
+    assert members.status_code == 404
+    assert members.json() == {"detail": "not_found"}
+    removed = client.delete(f"/communities/{community_id}/members/{owner.id}")
+    assert removed.status_code == 404
+
+
+def test_anonymous_member_writes_are_401(
+    session: Session, client: TestClient, owned: tuple[User, UUID]
+) -> None:
+    owner, community_id = owned
+    sign_in(client, session, None)
+    for path in (
+        f"/communities/{community_id}/members/{owner.id}",
+        f"/communities/{uuid4()}/members/{uuid4()}",
+    ):
+        response = client.delete(path)
+        assert response.status_code == 401
+        assert response.json() == {"detail": "auth_required"}
+    assert add(client, community_id, owner.id).status_code == 401
+
+
+def test_an_admin_who_owns_a_community_edits_it_like_any_owner(
+    session: Session, client: TestClient
+) -> None:
+    admin = person(session, "Admin", is_admin=True)
+    created = create(sign_in(client, session, admin))
+    assert created.status_code == 201
+    community_id = created.json()["id"]
+    assert client.patch(f"/communities/{community_id}", json={"name": "Renamed"}).is_success
+    assert [c["role"] for c in client.get("/me/communities").json()] == ["owner"]
+
+
+def test_patch_with_no_fields_changes_nothing(client: TestClient, owned: tuple[User, UUID]) -> None:
+    _, community_id = owned
+    before = client.get(f"/communities/{community_id}").json()
+    response = client.patch(f"/communities/{community_id}", json={})
+    assert response.status_code == 200
+    assert response.json() == before
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"name": "A"},
+        {"name": "<b>bold</b>"},
+        {"name": "   "},
+        {"country": "Brazil"},
+        {"country": "B1"},
+        {"description": "nul\x00"},
+        {"description": "x" * 1001},
+        {"treasury_user_id": str(uuid4())},
+    ],
+)
+def test_patch_rejects_invalid_values(
+    client: TestClient, owned: tuple[User, UUID], body: dict[str, Any]
+) -> None:
+    _, community_id = owned
+    assert client.patch(f"/communities/{community_id}", json=body).status_code == 422
+
+
+def test_names_are_nfkc_normalized(session: Session, client: TestClient) -> None:
+    sign_in(client, session, person(session, "Ana"))
+    decomposed = "Ri\u0301o Verde"
+    response = create(client, name=decomposed)
+    assert response.status_code == 201
+    assert response.json()["name"] == "Río Verde"
+    assert create(client, name="\uff32\uff49\uff4f Ｂlanco").json()["name"] == "Rio Blanco"
+
+
+def test_community_names_are_unique_per_world_in_any_case(
+    session: Session, client: TestClient, owned: tuple[User, UUID]
+) -> None:
+    _, community_id = owned  # "Río Verde Stewards"
+    sign_in(client, session, person(session, "Ana"))
+    for name in ("Río Verde Stewards", "RÍO VERDE STEWARDS", "Ri\u0301o verde stewards"):
+        response = create(client, name=name)
+        assert response.status_code == 409
+        assert response.json() == {"detail": "community_name_taken"}
+    other = create(client, name="Another Place")
+    assert other.status_code == 201
+    renamed = client.patch(
+        f"/communities/{other.json()['id']}", json={"name": "río verde stewards"}
+    )
+    assert renamed.status_code == 409
+    assert renamed.json() == {"detail": "community_name_taken"}
+    # The same name is fine in another world.
+    world = create_world(session)
+    mia = session.exec(select(User).where(User.world_id == world.id, User.persona_key == "mia"))
+    assert create(sign_in(client, session, mia.one()), name="Río Verde Stewards").status_code == 201
+
+
+def test_parallel_creates_respect_the_community_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Committed data: N simultaneous creates by one account at cap - 1 leave exactly one."""
+    # Widen the window between the cap check and the insert, so an unlocked race would show.
+    slow_create = communities_router.create_community
+
+    def create_slowly(*args: Any, **kwargs: Any) -> Community:
+        time.sleep(0.2)
+        return slow_create(*args, **kwargs)
+
+    monkeypatch.setattr(communities_router, "create_community", create_slowly)
+    command.upgrade(alembic_cfg(), "head")
+    engine = create_engine(get_settings().database_url)
+    threads = 4
+    with Session(engine) as setup:
+        seed(setup)
+        world_id = create_world(setup).id
+        user = User(world_id=world_id, name="Ana", role=UserRole.INVESTOR, kind=UserKind.PERSON)
+        setup.add(user)
+        setup.flush()
+        for n in range(communities_router.MAX_OWNED_COMMUNITIES - 1):
+            create_community(setup, world_id, f"Already mine {n}", user.id)
+        setup.commit()
+        user_id = user.id
+    actor = Actor(user_id, world_id, UserKind.PERSON, False, SessionKind.DEMO, {})
+    granted = Granted(actor, WorldRef(world_id))
+    barrier = threading.Barrier(threads)
+
+    def create_one(n: int) -> int:
+        with Session(engine) as db:
+            barrier.wait(timeout=10)
+            try:
+                communities_router.create(
+                    CommunityCreate(name=f"Racing {n}"), granted, db, Response()
+                )
+                return 201
+            except HTTPException as exc:
+                db.rollback()
+                return exc.status_code
+
+    try:
+        with ThreadPoolExecutor(max_workers=threads) as pool:
+            codes = sorted(pool.map(create_one, range(threads), timeout=30))
+        assert codes == [201] + [409] * (threads - 1)
+        with Session(engine) as check:
+            owned = check.exec(
+                select(CommunityMember).where(
+                    CommunityMember.world_id == world_id,
+                    CommunityMember.user_id == user_id,
+                    CommunityMember.role == CommunityRole.OWNER,
+                )
+            ).all()
+            assert len(owned) == communities_router.MAX_OWNED_COMMUNITIES
+    finally:
+        with Session(engine) as cleanup:
+            _delete_world_rows(cleanup, world_id, keep_world=False)
+            cleanup.execute(delete(World).where(col(World.id) == world_id))
+            cleanup.commit()
+        engine.dispose()

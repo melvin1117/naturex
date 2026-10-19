@@ -17,16 +17,17 @@ from app.authz import (
     AssetRef,
     CommunityRef,
     Decision,
+    DemoTarget,
     Deny,
     DenyReason,
     MemberCandidate,
+    MemberRef,
     Resource,
     WorldRef,
     authorize,
-    is_sandbox_world,
 )
 from app.models import CommunityRole, SessionKind, UserKind
-from app.seed import LIVE_WORLD_ID, WORLD_ID
+from app.worlds import LIVE_WORLD_ID, WORLD_ID, is_sandbox_world
 
 WORLD = LIVE_WORLD_ID
 OTHER_WORLD = uuid4()
@@ -64,6 +65,15 @@ ROLES: dict[str, Actor | None] = {
     "admin": actor(admin=True),
     "admin_other_world": actor(world=OTHER_WORLD, admin=True),
     "treasury": actor(kind=UserKind.TREASURY),
+    # Combined roles.
+    "admin_owner_own": actor(admin=True, roles={COMMUNITY: CommunityRole.OWNER}),
+    "admin_steward_own": actor(admin=True, roles={COMMUNITY: CommunityRole.STEWARD}),
+    "owner_own_steward_other": actor(
+        roles={COMMUNITY: CommunityRole.OWNER, OTHER_COMMUNITY: CommunityRole.STEWARD}
+    ),
+    "steward_own_owner_other": actor(
+        roles={COMMUNITY: CommunityRole.STEWARD, OTHER_COMMUNITY: CommunityRole.OWNER}
+    ),
 }
 ROLE_NAMES = list(ROLES)
 
@@ -81,9 +91,9 @@ RESOURCES: dict[Action, Resource] = {
     Action.MANAGE_MEMBERS: COMMUNITY_REF,
     Action.EDIT_COMMUNITY: COMMUNITY_REF,
     Action.VIEW_COMMUNITY_DATA: COMMUNITY_REF,
-    Action.OPERATE: WORLD_REF,
+    Action.OPERATE: ASSET_REF,  # suspend or resume; the world-level Time Machine is below
     Action.REVIEW_LISTING: ASSET_REF,
-    Action.TAMPER_DEMO: WORLD_REF,  # the live world: sandbox only
+    Action.TAMPER_DEMO: DemoTarget(WORLD, demo_mode=True),  # the live world: sandbox only
     Action.CONTROL_DEMO: WORLD_REF,  # password sessions: demo sessions only
 }
 
@@ -98,24 +108,26 @@ ADM = Deny(DenyReason.ADMINS_CANNOT_TRADE)
 TRE = Deny(DenyReason.TREASURY_CANNOT_ACT)
 SBX = Deny(DenyReason.SANDBOX_ONLY)
 DSO = Deny(DenyReason.DEMO_SESSION_ONLY)
+COI = Deny(DenyReason.CONFLICT_OF_INTEREST)
 
 # Columns follow ROLE_NAMES:
 #   anonymous, user, steward_own, steward_other, owner_own, owner_other, admin,
-#   admin_other_world, treasury
+#   admin_other_world, treasury | admin_owner_own, admin_steward_own, owner_own_steward_other,
+#   steward_own_owner_other
 MATRIX: dict[Action, tuple[Decision, ...]] = {
-    Action.BROWSE: (A, A, A, A, A, A, A, NF, A),
-    Action.TRADE: (AR, A, INS, A, INS, A, ADM, NF, TRE),
-    Action.USE_OWN_ACCOUNT: (AR, A, A, A, A, A, A, NF, TRE),
-    Action.CREATE_COMMUNITY: (AR, A, A, A, A, A, A, NF, TRE),
-    Action.MANAGE_LISTING: (AR, MO, A, MO, A, MO, MO, NF, TRE),
-    Action.LAUNCH_IPO: (AR, OO, OO, OO, A, OO, OO, NF, TRE),
-    Action.MANAGE_MEMBERS: (AR, OO, OO, OO, A, OO, OO, NF, TRE),
-    Action.EDIT_COMMUNITY: (AR, OO, OO, OO, A, OO, OO, NF, TRE),
-    Action.VIEW_COMMUNITY_DATA: (AR, MO, A, MO, A, MO, A, NF, TRE),
-    Action.OPERATE: (AR, AO, AO, AO, AO, AO, A, NF, TRE),
-    Action.REVIEW_LISTING: (AR, AO, AO, AO, AO, AO, A, NF, TRE),
-    Action.TAMPER_DEMO: (AR, AO, AO, AO, AO, AO, SBX, NF, TRE),
-    Action.CONTROL_DEMO: (AR, DSO, DSO, DSO, DSO, DSO, DSO, NF, TRE),
+    Action.BROWSE: (A, A, A, A, A, A, A, NF, A, A, A, A, A),
+    Action.TRADE: (AR, A, INS, A, INS, A, ADM, NF, TRE, ADM, ADM, INS, INS),
+    Action.USE_OWN_ACCOUNT: (AR, A, A, A, A, A, A, NF, TRE, A, A, A, A),
+    Action.CREATE_COMMUNITY: (AR, A, A, A, A, A, A, NF, TRE, A, A, A, A),
+    Action.MANAGE_LISTING: (AR, MO, A, MO, A, MO, MO, NF, TRE, A, A, A, A),
+    Action.LAUNCH_IPO: (AR, OO, OO, OO, A, OO, OO, NF, TRE, A, OO, A, OO),
+    Action.MANAGE_MEMBERS: (AR, OO, OO, OO, A, OO, OO, NF, TRE, A, OO, A, OO),
+    Action.EDIT_COMMUNITY: (AR, OO, OO, OO, A, OO, OO, NF, TRE, A, OO, A, OO),
+    Action.VIEW_COMMUNITY_DATA: (AR, MO, A, MO, A, MO, A, NF, TRE, A, A, A, A),
+    Action.OPERATE: (AR, AO, AO, AO, AO, AO, A, NF, TRE, COI, COI, AO, AO),
+    Action.REVIEW_LISTING: (AR, AO, AO, AO, AO, AO, A, NF, TRE, COI, COI, AO, AO),
+    Action.TAMPER_DEMO: (AR, AO, AO, AO, AO, AO, SBX, NF, TRE, SBX, SBX, AO, AO),
+    Action.CONTROL_DEMO: (AR, DSO, DSO, DSO, DSO, DSO, DSO, NF, TRE, DSO, DSO, DSO, DSO),
 }
 
 CASES = [
@@ -150,11 +162,51 @@ def test_sandbox_worlds_are_everything_but_live_and_template() -> None:
 
 
 def test_the_tamper_demo_is_for_admins_in_their_own_sandbox_only() -> None:
-    sandbox = WorldRef(SANDBOX)
+    sandbox = DemoTarget(SANDBOX, demo_mode=True)
     assert authorize(sandbox_actor(admin=True), Action.TAMPER_DEMO, sandbox) == A
     assert authorize(sandbox_actor(), Action.TAMPER_DEMO, sandbox) == AO
-    assert authorize(sandbox_actor(admin=True), Action.TAMPER_DEMO, WorldRef(OTHER_WORLD)) == NF
-    assert authorize(actor(admin=True), Action.TAMPER_DEMO, WorldRef(WORLD)) == SBX
+    elsewhere = DemoTarget(OTHER_WORLD, demo_mode=True)
+    assert authorize(sandbox_actor(admin=True), Action.TAMPER_DEMO, elsewhere) == NF
+    assert authorize(actor(admin=True), Action.TAMPER_DEMO, DemoTarget(WORLD, True)) == SBX
+
+
+def test_the_tamper_demo_needs_demo_mode() -> None:
+    off = DemoTarget(SANDBOX, demo_mode=False)
+    for who in (sandbox_actor(admin=True), sandbox_actor()):
+        decision = authorize(who, Action.TAMPER_DEMO, off)
+        assert decision == Deny(DenyReason.DEMO_MODE_OFF)
+        assert isinstance(decision, Deny) and decision.status_code == 404
+    assert authorize(None, Action.TAMPER_DEMO, off) == AR
+
+
+@pytest.mark.parametrize("role", ["admin", "admin_owner_own", "admin_steward_own"])
+def test_admins_run_the_time_machine_whatever_their_memberships(role: str) -> None:
+    assert authorize(ROLES[role], Action.OPERATE, WORLD_REF) == A
+
+
+def test_an_admin_member_operates_and_reviews_other_communities_assets() -> None:
+    elsewhere = AssetRef(WORLD, uuid4(), OTHER_COMMUNITY)
+    for role in ("admin_owner_own", "admin_steward_own"):
+        assert authorize(ROLES[role], Action.OPERATE, elsewhere) == A
+        assert authorize(ROLES[role], Action.REVIEW_LISTING, elsewhere) == A
+
+
+@pytest.mark.parametrize(
+    ("action", "resource"),
+    [
+        (Action.TRADE, COMMUNITY_REF),
+        (Action.TRADE, WORLD_REF),
+        (Action.REVIEW_LISTING, WORLD_REF),
+        (Action.VIEW_COMMUNITY_DATA, WORLD_REF),
+        (Action.MANAGE_LISTING, COMMUNITY_REF),
+        (Action.TAMPER_DEMO, WORLD_REF),
+        (Action.CONTROL_DEMO, ASSET_REF),
+        (Action.BROWSE, DemoTarget(WORLD, demo_mode=True)),
+    ],
+)
+def test_a_resource_the_action_doesnt_take_is_denied(action: Action, resource: Resource) -> None:
+    for role in ("user", "owner_own", "admin"):
+        assert authorize(ROLES[role], action, resource) == Deny(DenyReason.INVALID_RESOURCE)
 
 
 def test_demo_controls_need_a_demo_session_in_the_same_world() -> None:
@@ -199,9 +251,13 @@ def test_personas_are_signed_in_users() -> None:
 
 
 def candidate(
-    *, kind: UserKind = UserKind.PERSON, holds: bool = False, world: UUID = WORLD
+    *,
+    kind: UserKind = UserKind.PERSON,
+    admin: bool = False,
+    holds: bool = False,
+    world: UUID = WORLD,
 ) -> MemberCandidate:
-    return MemberCandidate(world, COMMUNITY, uuid4(), kind, holds)
+    return MemberCandidate(world, COMMUNITY, uuid4(), kind, admin, holds)
 
 
 def test_an_owner_adds_a_member_who_holds_none_of_the_communitys_shares() -> None:
@@ -214,11 +270,28 @@ def test_a_holder_of_the_communitys_shares_cannot_join() -> None:
     assert isinstance(decision, Deny) and decision.status_code == 409
 
 
-def test_a_treasury_cannot_join() -> None:
-    decision = authorize(
-        ROLES["owner_own"], Action.MANAGE_MEMBERS, candidate(kind=UserKind.TREASURY)
-    )
+@pytest.mark.parametrize(
+    "who", [candidate(kind=UserKind.TREASURY), candidate(admin=True)], ids=["treasury", "admin"]
+)
+def test_treasuries_and_admins_cannot_join(who: MemberCandidate) -> None:
+    decision = authorize(ROLES["owner_own"], Action.MANAGE_MEMBERS, who)
     assert decision == Deny(DenyReason.MEMBER_NOT_ELIGIBLE)
+    assert isinstance(decision, Deny) and decision.status_code == 409
+
+
+def test_a_member_may_leave_and_only_the_owner_removes_others() -> None:
+    steward = ROLES["steward_own"]
+    assert isinstance(steward, Actor)
+    leave = MemberRef(WORLD, COMMUNITY, steward.user_id)
+    assert authorize(steward, Action.MANAGE_MEMBERS, leave) == A
+    someone = MemberRef(WORLD, COMMUNITY, uuid4())
+    assert authorize(steward, Action.MANAGE_MEMBERS, someone) == OO
+    assert authorize(ROLES["owner_own"], Action.MANAGE_MEMBERS, someone) == A
+    # "Leaving" a community you don't belong to is just removing someone: owner only.
+    outsider = ROLES["steward_other"]
+    assert isinstance(outsider, Actor)
+    mine = MemberRef(WORLD, COMMUNITY, outsider.user_id)
+    assert authorize(outsider, Action.MANAGE_MEMBERS, mine) == OO
 
 
 @pytest.mark.parametrize("role", ["user", "steward_own", "owner_other", "admin"])
@@ -238,6 +311,9 @@ def test_a_candidate_from_another_world_is_not_found() -> None:
         (DenyReason.NOT_FOUND, 404),
         (DenyReason.MEMBER_HAS_HOLDINGS, 409),
         (DenyReason.MEMBER_NOT_ELIGIBLE, 409),
+        (DenyReason.DEMO_MODE_OFF, 404),
+        (DenyReason.CONFLICT_OF_INTEREST, 403),
+        (DenyReason.INVALID_RESOURCE, 403),
         (DenyReason.OWNER_ONLY, 403),
         (DenyReason.INSIDER_TRADING_BLOCKED, 403),
         (DenyReason.ADMINS_CANNOT_TRADE, 403),

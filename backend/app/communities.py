@@ -7,6 +7,7 @@ owns the transaction. Authorization is `app.authz`'s job; these only enforce sta
 from __future__ import annotations
 
 import re
+import unicodedata
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -46,8 +47,12 @@ _COUNTRY_RE = re.compile(r"^[A-Z]{2}$")
 
 def clean_name(raw: str) -> str:
     """A community name: letters (any script), digits, spaces and ``-'’.,&()``, starting with a
-    letter or digit, 2–80 characters once trimmed; runs of spaces collapse to one."""
-    name = " ".join(raw.split())
+    letter or digit, 2–80 characters once trimmed; runs of spaces collapse to one.
+
+    NFKC-normalized first, so a decomposed "Río" (i + combining accent) is the same name as the
+    composed one, and compatibility forms (full-width letters, ligatures) fold to plain ones.
+    """
+    name = " ".join(unicodedata.normalize("NFKC", raw).split())
     if not NAME_MIN_LENGTH <= len(name) <= NAME_MAX_LENGTH:
         raise ValueError(f"Use {NAME_MIN_LENGTH}–{NAME_MAX_LENGTH} characters")
     if not name[0].isalnum() or any(not (ch.isalnum() or ch in _NAME_PUNCTUATION) for ch in name):

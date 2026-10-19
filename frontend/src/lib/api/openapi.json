@@ -169,7 +169,7 @@
             "description": "auth_required"
           },
           "409": {
-            "description": "community_limit_reached"
+            "description": "community_limit_reached or community_name_taken"
           },
           "422": {
             "description": "Validation Error",
@@ -278,6 +278,9 @@
           },
           "404": {
             "description": "Not found in the caller's world"
+          },
+          "409": {
+            "description": "community_name_taken"
           },
           "422": {
             "description": "Validation Error",
@@ -419,7 +422,7 @@
           "communities"
         ],
         "summary": "Remove Steward",
-        "description": "Remove a steward (owner only). The owner can't be removed.",
+        "description": "Remove a steward (owner), or leave the community (any member). The owner can't be removed.",
         "operationId": "remove_steward_communities__community_id__members__user_id__delete",
         "parameters": [
           {

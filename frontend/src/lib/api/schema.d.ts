@@ -169,7 +169,7 @@ export interface paths {
         post?: never;
         /**
          * Remove Steward
-         * @description Remove a steward (owner only). The owner can't be removed.
+         * @description Remove a steward (owner), or leave the community (any member). The owner can't be removed.
          */
         delete: operations["remove_steward_communities__community_id__members__user_id__delete"];
         options?: never;
@@ -1927,7 +1927,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description community_limit_reached */
+            /** @description community_limit_reached or community_name_taken */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2023,6 +2023,13 @@ export interface operations {
             };
             /** @description Not found in the caller's world */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description community_name_taken */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
