@@ -22,6 +22,8 @@ import { WorldGate } from "@/components/world-provider";
 import { useAssets } from "@/lib/hooks";
 import {
   GRADE_BANDS,
+  isBand,
+  isSort,
   marketCard,
   shownCards,
   SORTS,
@@ -99,14 +101,6 @@ function MarketStats() {
       <Stat label="Nature's value" value={money(value)} sub="a year, mid" />
     </dl>
   );
-}
-
-function isBand(v: string | null): v is GradeBand {
-  return v !== null && v in GRADE_BANDS;
-}
-
-function isSort(v: string | null): v is SortKey {
-  return v !== null && v in SORTS;
 }
 
 export function MarketBoard() {

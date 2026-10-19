@@ -117,6 +117,15 @@ export const GRADE_BANDS: Record<
   low: { label: "B–D", grades: ["B", "C", "D"] },
 };
 
+/** Own keys only: `?grade=toString` or `__proto__` from a URL must not match. */
+export function isBand(v: string | null): v is GradeBand {
+  return v !== null && Object.hasOwn(GRADE_BANDS, v);
+}
+
+export function isSort(v: string | null): v is SortKey {
+  return v !== null && Object.hasOwn(SORTS, v);
+}
+
 export function shownCards(
   cards: MarketCard[],
   band: GradeBand,

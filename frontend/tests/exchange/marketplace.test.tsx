@@ -145,6 +145,24 @@ describe("Marketplace", () => {
     expect(names[1]).toBe("Xochimilco Wetland");
   });
 
+  it.each([
+    "?grade=toString",
+    "?grade=__proto__",
+    "?grade=constructor",
+    "?sort=constructor",
+    "?sort=__proto__&grade=hasOwnProperty",
+  ])("ignores a crafted %s and shows every site", async (query) => {
+    window.history.replaceState(null, "", `/${query}`);
+    renderExchange(<Marketplace />, { "GET /assets": () => json(CARDS) });
+    await screen.findByRole("region", { name: "All sites" });
+
+    expect(screen.getByRole("radio", { name: "All" })).toBeChecked();
+    expect(within(grid()).getAllByRole("link")).toHaveLength(3);
+    expect(
+      screen.getByRole("combobox", { name: "Sort sites" }),
+    ).toHaveTextContent("Sort: Best grade");
+  });
+
   it("updates prices live on price_tick", async () => {
     const moved = CARDS.map((c) =>
       c.id === WETLAND.id
