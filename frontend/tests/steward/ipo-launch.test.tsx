@@ -226,6 +226,23 @@ describe("IPO launch screen", () => {
     await waitFor(() => expect(launchButton()).toBeEnabled());
   });
 
+  it("moves the retained % with the named slider too", async () => {
+    renderLaunch();
+    await steps();
+
+    const slider = screen.getByRole("slider", {
+      name: "Share of the stake the community keeps",
+    });
+    fireEvent.keyDown(slider, { key: "ArrowRight" });
+    expect(screen.getByLabelText("Community keeps")).toHaveValue("52");
+    await waitFor(() =>
+      expect(screen.getByText(/keeps \(52%\)/)).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Opening price $10.5173 per unit, 490,000 units offered.",
+    );
+  });
+
   it("explains invalid inputs and asks for no preview", async () => {
     const { backend } = renderLaunch();
     await steps();
@@ -278,6 +295,28 @@ describe("IPO launch screen", () => {
       expected_price: "10.5173",
     });
     expect(backend.calls(LAUNCH)).toBe(1);
+  });
+
+  it("asks before launching; cancelling launches nothing", async () => {
+    const { backend } = renderLaunch();
+    await steps();
+    await waitFor(() => expect(launchButton()).toBeEnabled());
+    fireEvent.click(launchButton());
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Open Río Claro Forest to supporters?",
+    });
+    expect(dialog).toHaveTextContent("can't be undone");
+    expect(dialog).toHaveTextContent("$10.5173");
+    expect(dialog).toHaveTextContent("490,000");
+    expect(dialog).toHaveTextContent(/play money, not a real security/);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    await waitFor(() => expect(launchButton()).toHaveFocus());
+    expect(backend.calls(LAUNCH)).toBe(0);
   });
 
   it("sends the offering of the preview it shows", async () => {

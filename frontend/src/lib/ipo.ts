@@ -211,7 +211,7 @@ export const PRICE_CHANGED: Explanation = {
 
 export const OWNER_ONLY: Explanation = {
   title: "Only the owner can launch",
-  body: "Only your community's owner can open a site to supporters. Stewards can follow the listing, but the launch is the owner's decision.",
+  body: "Only the owner of the community that lists this site can open it to supporters. If you're one of its stewards, ask the owner to launch it.",
 };
 
 export const NO_RATING: Explanation = {

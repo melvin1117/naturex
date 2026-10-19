@@ -25,6 +25,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -236,7 +237,7 @@ export function IpoLaunch({ assetId }: { assetId: string }) {
           the latest rating; what they pay goes to your community fund.
         </p>
       </header>
-      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <StepCard aria-labelledby="offer-heading">
           <h2 id="offer-heading" className="text-lg font-semibold">
             Your offer
@@ -254,10 +255,14 @@ export function IpoLaunch({ assetId }: { assetId: string }) {
           <h2 id="price-heading" className="text-lg font-semibold">
             Opening price
           </h2>
+          <p role="status" className="sr-only">
+            {current
+              ? `Opening price ${unitPriceText(current.ipo_price)} per unit, ${int(current.shares_offered)} units offered.`
+              : ""}
+          </p>
           <div
             className="mt-4"
             aria-busy={preview.isFetching || !inputsSettled}
-            aria-live="polite"
           >
             {previewRefusal?.kind === "blocked" ? (
               <BlockedAlert explanation={previewRefusal.explanation} />
@@ -274,10 +279,7 @@ export function IpoLaunch({ assetId }: { assetId: string }) {
             ) : shown ? (
               <>
                 {!current && (
-                  <p
-                    role="status"
-                    className="mb-2 flex items-center gap-2 text-xs text-muted-foreground"
-                  >
+                  <p className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
                     <Spinner aria-hidden="true" role="presentation" />
                     Updating the preview…
                   </p>
@@ -375,7 +377,7 @@ function OfferInputs({
         </p>
       </div>
       <div className="space-y-3">
-        <div className="flex items-end justify-between gap-4">
+        <div className="flex items-center justify-between gap-4">
           <Label htmlFor={`${id}-retained`}>Community keeps</Label>
           <div className="flex items-center gap-1">
             <Input
@@ -428,25 +430,27 @@ function ConfirmLaunch({
   pending: boolean;
   onConfirm: (offer: IpoPreview) => Promise<void>;
 }) {
-  const [open, setOpen] = useState(false);
+  // What the dialog shows and sends: the preview as it was when the owner opened it, so a
+  // refetch meanwhile can't change (or close) what they're confirming.
+  const [confirming, setConfirming] = useState<IpoPreview | null>(null);
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Button
-        className="mt-6 w-full"
-        size="lg"
-        disabled={disabled}
-        onClick={() => setOpen(true)}
-      >
-        {pending ? (
-          <>
-            <Spinner aria-hidden="true" role="presentation" />
-            Launching…
-          </>
-        ) : (
-          "Launch opening offer"
-        )}
-      </Button>
-      {offer && (
+    <Dialog
+      open={confirming !== null}
+      onOpenChange={(open) => setConfirming(open ? (offer ?? null) : null)}
+    >
+      <DialogTrigger asChild>
+        <Button className="mt-6 w-full" size="lg" disabled={disabled}>
+          {pending ? (
+            <>
+              <Spinner aria-hidden="true" role="presentation" />
+              Launching…
+            </>
+          ) : (
+            "Launch opening offer"
+          )}
+        </Button>
+      </DialogTrigger>
+      {confirming && (
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Open {name} to supporters?</DialogTitle>
@@ -458,12 +462,14 @@ function ConfirmLaunch({
           <dl className="tabular grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-sm">
             <dt className="text-muted-foreground">Opening price per unit</dt>
             <dd className="text-right font-semibold">
-              {unitPriceText(offer.ipo_price)}
+              {unitPriceText(confirming.ipo_price)}
             </dd>
             <dt className="text-muted-foreground">Units offered</dt>
-            <dd className="text-right">{int(offer.shares_offered)}</dd>
+            <dd className="text-right">{int(confirming.shares_offered)}</dd>
             <dt className="text-muted-foreground">Your community keeps</dt>
-            <dd className="text-right">{int(offer.retained_shares)} units</dd>
+            <dd className="text-right">
+              {int(confirming.retained_shares)} units
+            </dd>
           </dl>
           <p className="text-xs text-muted-foreground">{SANDBOX_NOTE}</p>
           <DialogFooter>
@@ -472,11 +478,11 @@ function ConfirmLaunch({
             </DialogClose>
             <Button
               onClick={() => {
-                setOpen(false);
-                void onConfirm(offer);
+                setConfirming(null);
+                void onConfirm(confirming);
               }}
             >
-              Launch at {unitPriceText(offer.ipo_price)} per unit
+              Launch at {unitPriceText(confirming.ipo_price)} per unit
             </Button>
           </DialogFooter>
         </DialogContent>
