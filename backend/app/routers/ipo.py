@@ -21,9 +21,17 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Path, Query, Response, status
-from sqlmodel import select
 
-from app.authz import Action, AssetRef, Granted, OptionalActor, acting_world, require
+from app.authz import (
+    Action,
+    AssetRef,
+    Granted,
+    OptionalActor,
+    acting_world,
+    asset_ref_in,
+    can_see,
+    require,
+)
 from app.deps import SessionDep
 from app.market.offering import (
     DEFAULT_RETAINED_PCT,
@@ -34,7 +42,6 @@ from app.market.offering import (
     MIN_TOTAL_SHARES,
     Offering,
 )
-from app.models import Asset
 from app.schemas import IpoLaunch, IpoOut, IpoPreviewOut
 from app.services.ipo import (
     ALREADY_LAUNCHED,
@@ -48,7 +55,7 @@ from app.services.ipo import (
     launch,
     preview,
 )
-from app.services.listings import RUN_IN_PROGRESS, visible_to
+from app.services.listings import RUN_IN_PROGRESS
 
 router = APIRouter(tags=["ipo"])
 
@@ -60,15 +67,10 @@ Responses = dict[int | str, dict[str, Any]]
 def visible_asset_ref(
     asset_id: Annotated[UUID, Path()], actor: OptionalActor, session: SessionDep
 ) -> AssetRef | None:
-    """The asset in the actor's world if the actor may see it (T58's `visible_to`), else None
-    (a 404), so a non-member can't tell a draft exists from a 403."""
-    world_id = acting_world(actor)
-    asset = session.exec(
-        select(Asset).where(Asset.world_id == world_id, Asset.id == asset_id)
-    ).first()
-    if asset is None or not visible_to(actor, asset):
-        return None
-    return AssetRef(world_id, asset.id, asset.community_id)
+    """The asset in the actor's world if the actor may see it (T58's rule, `authz.can_see`), else
+    None (a 404), so a non-member can't tell a draft exists from a 403."""
+    asset = asset_ref_in(session, acting_world(actor), asset_id)
+    return asset if asset is not None and can_see(actor, asset) else None
 
 
 LaunchIpo = Annotated[Granted, require(Action.LAUNCH_IPO, visible_asset_ref)]
@@ -102,7 +104,7 @@ def _refused(exc: IpoRefused) -> HTTPException:
 
 def _missing() -> HTTPException:
     return HTTPException(
-        status.HTTP_404_NOT_FOUND, "Asset not found", headers={"Cache-Control": NO_STORE}
+        status.HTTP_404_NOT_FOUND, "not_found", headers={"Cache-Control": NO_STORE}
     )
 
 
