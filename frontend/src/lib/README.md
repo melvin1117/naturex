@@ -103,15 +103,16 @@ It forwards only the session cookie, never calls `GET /world` (the browser owns 
 
 ## Files
 
-| File                                  | Role                                                                                                                                                   |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `api/schema.d.ts`, `api/openapi.json` | **Generated**: `./scripts/generate-client.sh`. Never edit.                                                                                             |
-| `api/client.ts`                       | The typed `openapi-fetch` client and its world middleware (wait for the world; on a signed-in 401 `auth_required` re-read it and retry GET/HEAD once). |
-| `api/server.ts`                       | Server-only client with cookie forwarding.                                                                                                             |
-| `api/errors.ts`, `api/types.ts`       | `ApiError`, `unwrap()`, schema type aliases.                                                                                                           |
-| `session.ts`                          | World bootstrap (single-flight), the forwarded cookie, "expired" codes. Session changes (T55 demo sessions) belong here.                               |
-| `query.ts`                            | The small query cache behind the hooks; `reset()` when the account changes.                                                                            |
-| `events.ts`                           | SSE with polling fallback.                                                                                                                             |
-| `data-layer.tsx`, `hooks.ts`          | React context, cache wiring for live events, and the hooks.                                                                                            |
-| `auth.ts`                             | Sign-in helpers: safe return paths, the protected-route rule, form validation and error messages (T61).                                                |
-| `trade.ts`                            | Trade panel helpers (T18): units input, validation against the quote and portfolio, order error messages. Parses API decimals for display only.        |
+| File                                  | Role                                                                                                                                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api/schema.d.ts`, `api/openapi.json` | **Generated**: `./scripts/generate-client.sh`. Never edit.                                                                                                                                  |
+| `api/client.ts`                       | The typed `openapi-fetch` client and its world middleware (wait for the world; on a signed-in 401 `auth_required` re-read it and retry GET/HEAD once).                                      |
+| `api/server.ts`                       | Server-only client with cookie forwarding.                                                                                                                                                  |
+| `api/errors.ts`, `api/types.ts`       | `ApiError`, `unwrap()`, schema type aliases.                                                                                                                                                |
+| `session.ts`                          | World bootstrap (single-flight), the forwarded cookie, "expired" codes. Session changes (T55 demo sessions) belong here.                                                                    |
+| `query.ts`                            | The small query cache behind the hooks; `reset()` when the account changes.                                                                                                                 |
+| `events.ts`                           | SSE with polling fallback.                                                                                                                                                                  |
+| `data-layer.tsx`, `hooks.ts`          | React context, cache wiring for live events, and the hooks.                                                                                                                                 |
+| `auth.ts`                             | Sign-in helpers: safe return paths, the protected-route rule, form validation and error messages (T61).                                                                                     |
+| `trade.ts`                            | Trade panel helpers (T18): units input, validation against the quote and portfolio, order error messages, money and per-unit formatting, `assetHref`. Parses API decimals for display only. |
+| `dev-routes.ts`                       | `devRoutesEnabled()`: `/dev/*` harness pages are a 404 in production unless `NATUREX_DEV_ROUTES=true`.                                                                                      |

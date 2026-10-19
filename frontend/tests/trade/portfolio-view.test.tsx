@@ -64,6 +64,7 @@ const HELD = portfolio({
   cost_basis: "200.20",
   unrealized_pnl: "-1.50",
   unrealized_pnl_pct: "-0.75",
+  since_start: "-1.50",
 });
 
 beforeEach(() => FakeEventSource.reset());
@@ -84,8 +85,11 @@ describe("PortfolioView", () => {
     expect(screen.getByText("Total").nextSibling).toHaveTextContent(
       "$9,998.50",
     );
+    expect(screen.getByText("Total").parentElement).toHaveTextContent(
+      "−$1.50 since you started with $10,000.00",
+    );
     expect(
-      screen.getByText("Total profit and loss").nextSibling,
+      screen.getByText("Unrealised profit and loss").nextSibling,
     ).toHaveTextContent("−$1.50");
     const cells = within(row)
       .getAllByRole("cell")
@@ -99,11 +103,62 @@ describe("PortfolioView", () => {
     ]);
     expect(within(row).getByRole("link")).toHaveAttribute(
       "href",
-      `/asset/${ASSET_ID}`,
+      `/dev/trade?asset=${ASSET_ID}`,
     );
     await waitFor(() =>
       expect(within(row).getByText("BBB")).toBeInTheDocument(),
     );
+  });
+
+  it("writes losses with a true minus sign", async () => {
+    renderPortfolio({
+      "GET /portfolio": () =>
+        json({
+          ...HELD,
+          holdings: [holding({ unrealized_pnl: "-1234.50" })],
+          unrealized_pnl: "-1234.50",
+        }),
+    });
+
+    const row = (
+      await screen.findByRole("link", { name: "Xochimilco Wetland" })
+    ).closest("tr")!;
+    expect(row).toHaveTextContent("\u2212$1,234.50");
+    expect(
+      screen.getByText("Unrealised profit and loss").nextSibling,
+    ).toHaveTextContent(/^\u2212\$1,234\.50$/);
+  });
+
+  it("shows per-unit prices to 4 decimals", async () => {
+    renderPortfolio({
+      "GET /portfolio": () =>
+        json({
+          ...HELD,
+          holdings: [holding({ avg_cost: "21.4723", mark_price: "21.5001" })],
+        }),
+    });
+
+    const row = (
+      await screen.findByRole("link", { name: "Xochimilco Wetland" })
+    ).closest("tr")!;
+    expect(row).toHaveTextContent("$21.4723");
+    expect(row).toHaveTextContent("$21.5001");
+  });
+
+  it("drops grade and average cost on phones so value and P&L fit", async () => {
+    renderPortfolio({ "GET /portfolio": () => json(HELD) });
+
+    const row = (
+      await screen.findByRole("link", { name: "Xochimilco Wetland" })
+    ).closest("tr")!;
+    const headers = screen.getAllByRole("columnheader");
+    const hidden = headers.filter((h) => h.className.includes("hidden"));
+    expect(hidden.map((h) => h.textContent)).toEqual(["Grade", "Avg cost"]);
+    const cells = within(row).getAllByRole("cell");
+    expect(cells[1]).toHaveClass("hidden", "sm:table-cell");
+    expect(cells[3]).toHaveClass("hidden", "sm:table-cell");
+    expect(cells[5]).not.toHaveClass("hidden");
+    expect(cells[6]).not.toHaveClass("hidden");
   });
 
   it("invites a first stake when nothing is held", async () => {

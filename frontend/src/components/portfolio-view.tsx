@@ -20,8 +20,15 @@ import {
 import type { AssetCard, HoldingOut, PortfolioOut } from "@/lib/api/types";
 import { useAssets, usePortfolio, useWorld } from "@/lib/hooks";
 import type { Grade } from "@/lib/prototype/data";
-import { GRADE_ORDER, int, price } from "@/lib/prototype/format";
-import { decimal } from "@/lib/trade";
+import { GRADE_ORDER, int } from "@/lib/prototype/format";
+import {
+  assetHref,
+  decimal,
+  money,
+  moneyText,
+  signedMoneyText,
+  unitPriceText,
+} from "@/lib/trade";
 
 /**
  * `/portfolio`: the signed-in account's real stakes. `<RequireAccount allowPrototypeDemo>`
@@ -86,21 +93,30 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
   return (
     <>
       <div className="mt-8 grid gap-4 rounded-3xl bg-card p-6 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Play money available" value={money(data.cash_balance)} />
+        <Stat
+          label="Play money available"
+          value={moneyText(data.cash_balance)}
+        />
         <Stat
           label="Value of stakes"
-          value={money(data.holdings_value)}
+          value={moneyText(data.holdings_value)}
           sub={
             pnlPct !== null && (
               <Delta value={pnlPct} suffix="vs cost" className="text-xs" />
             )
           }
         />
-        <Stat label="Total" value={money(data.total_value)} />
         <Stat
-          label="Total profit and loss"
-          value={signedMoney(data.unrealized_pnl)}
-          sub="unrealised, at today's prices"
+          label="Total"
+          value={moneyText(data.total_value)}
+          sub={`${signedMoneyText(data.since_start)} since you started with ${moneyText(
+            data.starting_cash,
+          )}`}
+        />
+        <Stat
+          label="Unrealised profit and loss"
+          value={signedMoneyText(data.unrealized_pnl)}
+          sub="on the stakes you hold, at today's prices"
         />
       </div>
 
@@ -143,12 +159,17 @@ function HoldingsTable({
         <TableHeader>
           <TableRow>
             <TableHead>Site</TableHead>
-            <TableHead>Grade</TableHead>
+            <TableHead className="hidden sm:table-cell">Grade</TableHead>
             <TableHead className="text-right">Units</TableHead>
-            <TableHead className="text-right">Avg cost</TableHead>
+            <TableHead className="hidden text-right sm:table-cell">
+              Avg cost
+            </TableHead>
             <TableHead className="text-right">Price</TableHead>
             <TableHead className="text-right">Value</TableHead>
-            <TableHead className="text-right">Profit and loss</TableHead>
+            <TableHead className="text-right">
+              <span aria-hidden="true">P&amp;L</span>
+              <span className="sr-only">Profit and loss, unrealised</span>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -160,7 +181,7 @@ function HoldingsTable({
               <TableRow key={h.asset_id}>
                 <TableCell>
                   <Link
-                    href={`/asset/${h.asset_id}`}
+                    href={assetHref(h.asset_id)}
                     className="flex items-center gap-3 font-medium hover:underline"
                   >
                     {card?.site_key ? (
@@ -180,7 +201,7 @@ function HoldingsTable({
                     {h.asset_name}
                   </Link>
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden sm:table-cell">
                   {grade ? (
                     <GradeBadge grade={grade} size="sm" />
                   ) : (
@@ -190,17 +211,19 @@ function HoldingsTable({
                 <TableCell className="tabular text-right">
                   {int(h.shares)}
                 </TableCell>
-                <TableCell className="tabular text-right">
-                  {money(h.avg_cost)}
+                <TableCell className="tabular hidden text-right sm:table-cell">
+                  {unitPriceText(h.avg_cost)}
                 </TableCell>
                 <TableCell className="tabular text-right">
-                  {money(h.mark_price)}
+                  {unitPriceText(h.mark_price)}
                 </TableCell>
                 <TableCell className="tabular text-right">
-                  {money(h.market_value)}
+                  {moneyText(h.market_value)}
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="tabular">{signedMoney(h.unrealized_pnl)}</div>
+                  <div className="tabular">
+                    {signedMoneyText(h.unrealized_pnl)}
+                  </div>
                   {pnlPct !== null && (
                     <Delta value={pnlPct} className="text-xs" />
                   )}
@@ -248,7 +271,7 @@ function ImpactCard({ data }: { data: PortfolioOut }) {
           <ImpactLine
             icon={<Sprout className="size-5" aria-hidden="true" />}
             tone="bg-sky"
-            value={`${price(services)}/yr`}
+            value={`${money(services)}/yr`}
             label="of nature's services"
           />
         </ul>
@@ -294,17 +317,4 @@ function ImpactLine({
 
 function asGrade(value: string | null | undefined): Grade | null {
   return GRADE_ORDER.find((grade) => grade === value) ?? null;
-}
-
-function money(value: string | null | undefined): string {
-  const n = decimal(value);
-  return n === null ? "—" : price(n);
-}
-
-/** "+$12.34", "−$5.00" or "$0.00": the API's P&L with its sign spelt out. */
-function signedMoney(value: string | null | undefined): string {
-  const n = decimal(value);
-  if (n === null) return "—";
-  if (n === 0) return price(0);
-  return `${n > 0 ? "+" : "−"}${price(Math.abs(n))}`;
 }
