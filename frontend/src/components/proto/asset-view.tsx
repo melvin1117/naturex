@@ -243,13 +243,25 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
             )}
             {latest && (
               <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:max-w-2xl">
-                <ValueRange
-                  low={latest.valueLow}
-                  mid={latest.valueMid}
-                  high={latest.valueHigh}
-                  confidence={latest.confidence}
-                  tone="image"
-                />
+                {latest.valueLow !== null &&
+                latest.valueMid !== null &&
+                latest.valueHigh !== null ? (
+                  <ValueRange
+                    low={latest.valueLow}
+                    mid={latest.valueMid}
+                    high={latest.valueHigh}
+                    confidence={latest.confidence}
+                    tone="image"
+                  />
+                ) : (
+                  <div>
+                    <div className="text-sm text-white/75">Annual value</div>
+                    <div className="text-2xl font-light">Not available</div>
+                    <p className="text-xs text-white/75">
+                      {latest.confidence.toFixed(0)}% confidence
+                    </p>
+                  </div>
+                )}
                 <div>
                   <div className="text-sm text-white/75">
                     Stake price · play money

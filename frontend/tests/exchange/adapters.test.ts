@@ -92,6 +92,30 @@ describe("reportFacts", () => {
     expect(facts.ndvi).toEqual([]);
   });
 
+  it("leaves missing values, services and score parts null", () => {
+    const rating = REPORT.rating as Record<string, unknown>;
+    const facts = reportFacts({
+      ...REPORT,
+      value_low: null,
+      value_mid: null,
+      value_high: null,
+      value_breakdown: null,
+      rating: { ...rating, score: null },
+    } as ReportOut)!;
+    expect(facts.valueLow).toBeNull();
+    expect(facts.valueMid).toBeNull();
+    expect(facts.valueHigh).toBeNull();
+    expect(facts.services).toEqual({});
+    expect(facts.adjustment).toBeNull();
+    expect(facts.baseHealth).toBeNull();
+    expect(facts.adjustmentReason).toBeNull();
+    expect(facts.components).toEqual([]);
+    expect(facts.confidenceParts).toEqual([]);
+    // Unrelated facts still come through.
+    expect(facts.health).toBe(76.2);
+    expect(facts.carbonStock).toBe(8828);
+  });
+
   it("returns null for a report without a grade or health", () => {
     expect(reportFacts({ ...REPORT, grade: null })).toBeNull();
     expect(reportFacts({ ...REPORT, health_score: null })).toBeNull();

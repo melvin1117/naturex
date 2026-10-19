@@ -69,13 +69,21 @@ export function Panel({
 }
 
 export function ServicesPanel({ facts }: { facts: ReportFacts }) {
-  const groups = SERVICE_GROUPS.map((g) => ({
-    ...g,
-    value: g.parts.reduce((sum, k) => sum + (facts.services[k] ?? 0), 0),
-  })).sort((a, b) => b.value - a.value);
+  // A group is shown only when the report values every one of its parts.
+  const groups = SERVICE_GROUPS.flatMap((g) => {
+    const parts = g.parts.map((k) => facts.services[k]);
+    return parts.every((v) => v !== undefined)
+      ? [{ ...g, value: parts.reduce<number>((sum, v) => sum + v!, 0) }]
+      : [];
+  }).sort((a, b) => b.value - a.value);
   const max = Math.max(1, ...groups.map((g) => g.value));
   return (
     <Panel title="What the land does each year">
+      {groups.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          The service breakdown isn&apos;t available for this report.
+        </p>
+      )}
       <ul className="space-y-3">
         {groups.map((g) => (
           <li key={g.key}>
@@ -109,7 +117,7 @@ export function ServicesPanel({ facts }: { facts: ReportFacts }) {
         <div>
           <div className="text-xs text-muted-foreground">Mid estimate</div>
           <div className="tabular text-xl font-light">
-            {money(facts.valueMid)} /yr
+            {facts.valueMid === null ? "—" : `${money(facts.valueMid)} /yr`}
           </div>
           <div className="text-xs text-muted-foreground">
             Int$ at 2020 prices
@@ -324,9 +332,12 @@ export function ScorePanel({ facts }: { facts: ReportFacts }) {
             )}
           </span>
           <span
-            className={cn("tabular", facts.adjustment < 0 && "text-clay-ink")}
+            className={cn(
+              "tabular",
+              (facts.adjustment ?? 0) < 0 && "text-clay-ink",
+            )}
           >
-            {signed(facts.adjustment)}
+            {facts.adjustment === null ? "—" : signed(facts.adjustment)}
           </span>
         </div>
         <div className="mt-2 flex flex-wrap items-baseline justify-between gap-2 border-t border-border pt-2 font-medium">

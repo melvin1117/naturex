@@ -34,12 +34,13 @@ export type ReportFacts = {
   health: number;
   grade: Grade;
   confidence: number;
-  valueLow: number;
-  valueMid: number;
-  valueHigh: number;
+  valueLow: number | null;
+  valueMid: number | null;
+  valueHigh: number | null;
   fairValuePerUnit: number | null;
   baseHealth: number | null;
-  adjustment: number;
+  /** The Auditor's bounded adjustment; null when the report doesn't record one. */
+  adjustment: number | null;
   adjustmentReason: string | null;
   /** Shown next to the adjustment, e.g. that the prototype's Auditor is scripted. */
   adjustmentNote: string | null;
@@ -180,12 +181,12 @@ export function reportFacts(report: ReportOut): ReportFacts | null {
     health,
     grade,
     confidence,
-    valueLow: num(report.value_low) ?? 0,
-    valueMid: num(report.value_mid) ?? 0,
-    valueHigh: num(report.value_high) ?? 0,
+    valueLow: num(report.value_low),
+    valueMid: num(report.value_mid),
+    valueHigh: num(report.value_high),
     fairValuePerUnit: num(report.fair_value_per_share),
     baseHealth: num(score.base_health),
-    adjustment: num(score.auditor_adjustment) ?? 0,
+    adjustment: num(score.auditor_adjustment),
     adjustmentReason:
       typeof score.adjustment_reason === "string" && score.adjustment_reason
         ? score.adjustment_reason

@@ -132,6 +132,41 @@ describe("AssetView", () => {
     ).toBeInTheDocument();
   });
 
+  it("says a value is not available instead of showing zero", async () => {
+    const report = {
+      ...ASSET.latest_report!,
+      value_low: null,
+      value_mid: null,
+      value_high: null,
+      value_breakdown: null,
+      rating: {
+        ...(ASSET.latest_report!.rating as Record<string, unknown>),
+        score: null,
+      },
+    };
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /assets/${ID}`]: () => json({ ...ASSET, latest_report: report }),
+        [`GET /assets/${ID}/reports`]: () => json([report]),
+      }),
+    );
+    const hero = await screen.findByRole("region", {
+      name: "Xochimilco Wetland",
+    });
+    expect(within(hero).getByText("Not available")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The service breakdown isn't available for this report.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Mid estimate").nextSibling).toHaveTextContent("—");
+    expect(
+      screen.getByText("Auditor adjustment (±10 max)").nextSibling,
+    ).toHaveTextContent("—");
+    expect(screen.queryByText("$0.00")).toBeNull();
+  });
+
   it("shows report versions with the summary as text and its source", async () => {
     nav.search = new URLSearchParams("tab=report");
     const v1 = ASSET.latest_report!;
