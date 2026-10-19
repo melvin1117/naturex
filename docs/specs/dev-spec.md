@@ -547,6 +547,7 @@ Every route is scoped to the caller's world, which comes from the session: anony
   | `PATCH /assets/{id}`, `POST /assets/{id}/submit`, `…/revise`, `…/withdraw` | `manage_listing` (asset), T58 |
   | `GET /communities/{id}/assets` | `view_community_data` (community), T58 |
   | `POST /admin/assets/{id}/suspend`, `…/resume` | `operate` (asset, so `conflict_of_interest` for an admin in its community), T58 |
+  | `GET /assets/{id}/ipo/preview`, `POST /assets/{id}/ipo` | `launch_ipo` (an asset the caller can see: `visible_asset_ref` uses `asset_ref_in` + `can_see`), T59 |
   | `POST /assets/{id}/evidence` | `manage_listing` (asset) |
   | `POST /assets/{id}/rate` | `operate` **or** `manage_listing` (asset) |
   | `POST /admin/simulate/quarter` | `operate` (world) |
