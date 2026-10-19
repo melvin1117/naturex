@@ -95,18 +95,31 @@ Each calls the auth route, then re-reads `GET /world` (`session.reload()`) and r
 
 What the header offers comes from `appAccess()` in `navigation.ts` (pure, unit-tested), through `useAppAccess()` (`components/shell/app-switcher.tsx`):
 
-| Visitor                    | Apps offered                                | Also                                                                                 |
-| -------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Anonymous                  | Exchange                                    | Steward app too in the scripted prototype demo (T61)                                 |
-| Signed in, no community    | Exchange                                    | "Create a community" → `/steward`, whose empty state explains it (T63 adds the form) |
-| Community owner or steward | Exchange, Steward app                       | Community switcher in the Steward header if more than one                            |
-| Platform admin             | Exchange, Admin (+ Steward app if a member) | "Create a community" without one                                                     |
+| Visitor                    | Apps offered                                | Also                                                                           |
+| -------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------ |
+| Anonymous                  | Exchange                                    | Steward app too in the scripted prototype demo (T61)                           |
+| Signed in, no community    | Exchange                                    | "Create a community" → `/steward`, whose empty state has the create form (T63) |
+| Community owner or steward | Exchange, Steward app                       | Community switcher in the Steward header if more than one                      |
+| Platform admin             | Exchange, Admin (+ Steward app if a member) | "Create a community" without one                                               |
 
 Nothing that depends on `/me/communities` shows until it answers; if it fails, signed-in accounts still get the Steward app link, whose error screen explains and retries. This only decides what the UI shows: the backend authorizes every request (a non-admin on `/admin` gets `RequireAccount`'s 403 message, and every admin route checks `is_admin`).
 
-Steward pages read the community they show with `useStewardCommunity()` (`components/shell/steward-community.tsx`): `{ communities, active, select(id), href(path) }`. The `?community=<id>` URL parameter wins, then the one remembered for this account (`localStorage` key `nx-steward-community:<account id>`, only the ID, cleared on sign-out; `lib/active-community.ts`), then the account's first community; each only if `/me/communities` lists it. `select` puts the choice in the URL and remembers it; build Steward links with `href("/steward/...")` so they keep the parameter, which lets pages link to a community and keeps two tabs from disagreeing. `<StewardGate>` shows a signed-in account without a community the "Start a community" empty state instead of the pages.
+Steward pages read the community they show with `useStewardCommunity()` (`components/shell/steward-community.tsx`): `{ communities, active, select(id), href(path) }`. The `?community=<id>` URL parameter wins, then the one remembered for this account (`localStorage` key `nx-steward-community:<account id>`, only the ID, cleared on sign-out; `lib/active-community.ts`), then the account's first community; each only if `/me/communities` lists it. `select` puts the choice in the URL and remembers it; build Steward links with `href("/steward/...")` so they keep the parameter, which lets pages link to a community and keeps two tabs from disagreeing. `<StewardGate>` shows a signed-in account without a community the "Start a community" empty state, with the create form (T63), instead of the pages.
 
 `useMyCommunities()` is cached per account (`queryKeys.myCommunities(me.id)`) and never fetched while signed out. **Roles change only when this query refetches:** anything that creates, joins or leaves a community (T63's create form, adding or removing a steward) must invalidate it, e.g. `onSuccess: (_d, _v, { cache }) => cache.invalidate(queryKeys.myCommunities(meId))`, or the header keeps the old roles until the next page load.
+
+## Steward home and communities (T63)
+
+`lib/community-hooks.ts` (kept out of `hooks.ts` so parallel Steward tasks don't collide):
+
+| Hook                                              | Returns                         | Notes                                                                                                                                             |
+| ------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useCommunitySummary(id)`                         | `CommunitySummary`              | `GET /communities/{id}/summary`: listings and `next_action`, wallet, holders (never named), payouts, recommendations. Live: trades, runs, status. |
+| `useCommunityMembers(id)`                         | `CommunityMember[]`             | Members and same-world admins only.                                                                                                               |
+| `useCreateCommunity()` / `useUpdateCommunity(id)` | `mutate(body)` → `CommunityOut` | Both invalidate `myCommunities(meId)` (and the summary on edit), so the header and switcher follow.                                               |
+| `useAddSteward(id)` / `useRemoveMember(id)`       | `mutate(userId)`                | By account ID; removing yourself (leaving) also refreshes `myCommunities`.                                                                        |
+
+`lib/community.ts` has the pure helpers: `validateCommunity` (the backend's name, country and description rules), `communityFailure` / `memberFailure` (409 `community_name_taken`, `community_limit_reached`, 422 field errors…), and `listingAction(next_action, assetId, communityId)`, the one place that knows the Steward links: the listing flow `/steward/list?community=<id>` (T33), the IPO screen `/steward/assets/<id>/ipo?community=<id>` (T64) and the public page `/asset/<id>`.
 
 ## Errors
 

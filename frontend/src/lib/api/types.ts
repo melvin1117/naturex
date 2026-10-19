@@ -30,3 +30,14 @@ export type StreamEvent = Schemas["StreamEvent"];
 export type StreamEventType = Schemas["StreamEventType"];
 export type WorldAsset = Schemas["WorldAssetOut"];
 export type WorldOut = Schemas["WorldOut"];
+
+// Steward home and community management (T63).
+export type CommunityOut = Schemas["CommunityOut"];
+export type CommunityCreate = Schemas["CommunityCreate"];
+export type CommunityUpdate = Schemas["CommunityUpdate"];
+export type CommunityMember = Schemas["CommunityMemberOut"];
+export type CommunitySummary = Schemas["CommunitySummaryOut"];
+export type ListingSummary = Schemas["ListingSummaryOut"];
+export type NextAction = Schemas["NextAction"];
+export type PayoutSummary = Schemas["PayoutSummaryOut"];
+export type Wallet = Schemas["WalletOut"];
