@@ -7,29 +7,25 @@
 Both are the community owner's (`LAUNCH_IPO`, ADR-0005 matrix row 6). Stewards get 403
 `owner_only` on the preview too: it is the first step of the launch, which the matrix keeps
 from them, and every input it shows is already public in the asset's report. Anonymous callers
-get 401. An asset the caller can't see is 404, as on every other asset route (T58's
-`visible_to`): one outside the session's world, or a listing that isn't public and isn't the
-caller's community's, so a draft's existence never leaks. Other users who can see it (any
-public asset) and same-world admins get 403. A refused launch is 409 with a code; nothing is
-written. An asset deleted meanwhile (a "Reset my demo") is 404.
+get 401. An asset the caller can't see is 404, as for every action on every asset route (the
+policy's `authz.can_see`, T58's rule): one outside the session's world, or a listing that isn't
+public and isn't the caller's community's, so a draft's existence never leaks. Other users who
+can see it (any public asset) and same-world admins get 403. A refused launch is 409 with a
+code; nothing is written. An asset deleted meanwhile (a "Reset my demo") is 404.
 """
 
 from __future__ import annotations
 
 from decimal import Decimal
 from typing import Annotated, Any
-from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Path, Query, Response, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 
 from app.authz import (
     Action,
     AssetRef,
     Granted,
-    OptionalActor,
-    acting_world,
-    asset_ref_in,
-    can_see,
+    asset_ref,
     require,
 )
 from app.deps import SessionDep
@@ -64,16 +60,7 @@ PRIVATE_NO_STORE = "private, no-store"
 Responses = dict[int | str, dict[str, Any]]
 
 
-def visible_asset_ref(
-    asset_id: Annotated[UUID, Path()], actor: OptionalActor, session: SessionDep
-) -> AssetRef | None:
-    """The asset in the actor's world if the actor may see it (T58's rule, `authz.can_see`), else
-    None (a 404), so a non-member can't tell a draft exists from a 403."""
-    asset = asset_ref_in(session, acting_world(actor), asset_id)
-    return asset if asset is not None and can_see(actor, asset) else None
-
-
-LaunchIpo = Annotated[Granted, require(Action.LAUNCH_IPO, visible_asset_ref)]
+LaunchIpo = Annotated[Granted, require(Action.LAUNCH_IPO, asset_ref)]
 
 _COMMON: Responses = {
     401: {"description": "auth_required"},

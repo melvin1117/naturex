@@ -169,10 +169,10 @@ class AssetRef:
     world_id: UUID
     asset_id: UUID
     community_id: UUID | None
-    public: bool = True
+    public: bool
     """Listed or suspended (T58). A listing under review is visible only to its community and
-    same-world admins: browsing or trading it is `not_found` for anyone else. Loaders set it
-    from the asset's status (`asset_ref_in`)."""
+    same-world admins; every action on it is `not_found` for anyone else. No default: every
+    loader sets it from the asset's status (`asset_ref_in`, `asset_ref_of`)."""
 
 
 @dataclass(frozen=True)
@@ -222,11 +222,6 @@ def _community_of(resource: Resource) -> UUID | None:
     return None
 
 
-# Actions for which a listing under review doesn't exist unless the actor may see it (T58). The
-# community's own actions (manage, IPO, data) keep their 403s, as T58 specifies.
-HIDDEN_FROM_OUTSIDERS = frozenset({Action.BROWSE, Action.TRADE})
-
-
 def can_see(actor: Actor | None, asset: AssetRef) -> bool:
     """T58's visibility rule, in one place: a public (listed or suspended) asset is visible; a
     listing under review only to its community's members and same-world admins. Which world a
@@ -240,12 +235,9 @@ def can_see(actor: Actor | None, asset: AssetRef) -> bool:
 
 def authorize(actor: Actor | None, action: Action, resource: Resource) -> Decision:
     """Allow or deny `action` on `resource` (ADR-0005 §3 matrix). Pure; no I/O."""
-    hidden = (
-        action in HIDDEN_FROM_OUTSIDERS
-        and isinstance(resource, AssetRef)
-        and not resource.public
-        and not can_see(actor, resource)
-    )
+    # A listing under review doesn't exist for anyone who can't see it, whatever the action
+    # (T58, T57): a 403 would reveal it.
+    hidden = isinstance(resource, AssetRef) and not can_see(actor, resource)
     if actor is None:
         if action not in PUBLIC_ACTIONS:
             return Deny(DenyReason.AUTH_REQUIRED)
