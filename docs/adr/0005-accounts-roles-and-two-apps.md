@@ -93,6 +93,8 @@ Proposed (2026-10-06). Changes [pm-spec](../specs/pm-spec.md) §2–§5 and Epic
 | Ledger tamper demo | ❌ | ❌ | ❌ | ❌ | ✅ sandbox only |
 | Reset my demo, switch persona | ❌ | demo sessions only | demo sessions only | demo sessions only | demo sessions only |
 
+Each row is an `authz.Action`; the route → action mapping, including the rating-run decision (operate or the community's own listing management), is in dev-spec §6 "As built (T57)".
+
 ### 4. Judges get one-click demo sessions
 - **`/judge` is the landing page**, linked from Devpost, the README and the "Try the demo" button. One click on *Explore as a community steward*, *Explore as an investor* or *Explore as the platform admin* calls `POST /demo/start {persona}`. That creates a sandbox world and a demo session, and opens the matching app.
 - **Reset keeps you signed in:** "Reset my demo" keeps persona user IDs (mapped by `persona_key`) and recreates everything else, so the session stays valid. Pruning a stale world deletes its sessions first.

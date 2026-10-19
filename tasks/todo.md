@@ -343,9 +343,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` (two demo sessions isolated; a demo session can't reach the live world; a password session can't switch persona; reset keeps the active persona) · **Deps:** T54, T56, T73 · **Files:** `backend/app/sandbox.py`, `backend/app/deps.py`, `backend/app/routers/world.py`, `backend/tests/test_sandbox.py`
 
 ### T57 · Enforce authorization on every route (#100) — D1 · M · Must · K3 C6
-- [ ] Every route, GET included, loads resources by `(world_id, id)` before authorizing; state-changing routes use `require(...)`; orders and portfolio use the principal's user; admin routes are admin-only; the tamper demo runs in sandbox worlds only
-- [ ] A route-inventory test fails if any route lacks an authorization dependency, and a cross-world test returns 404 for every object endpoint
-- [ ] SSE and `GET /events` derive the principal and world from the session, revalidate it on every poll and heartbeat, close after logout, expiry or revocation, and deliver `alert` events only to their targets
+- [x] Every route, GET included, loads resources by `(world_id, id)` before authorizing; state-changing routes use `require(...)`; orders and portfolio use the principal's user; admin routes are admin-only; the tamper demo runs in sandbox worlds only
+- [x] A route-inventory test fails if any route lacks an authorization dependency, and a cross-world test returns 404 for every object endpoint
+- [x] SSE and `GET /events` derive the principal and world from the session, revalidate it on every poll and heartbeat, close after logout, expiry or revocation, and deliver `alert` events only to their targets
 
 **Verify:** `make test` · **Deps:** T68, T73, T17, T29 · **Files:** `backend/app/routers/*.py`, `backend/app/events.py`, `backend/tests/test_route_authz.py`
 
