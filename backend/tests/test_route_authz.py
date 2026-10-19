@@ -38,6 +38,7 @@ from app.middleware import SAFE_METHODS
 from app.models import (
     Asset,
     AssetStatus,
+    Community,
     CommunityMember,
     CommunityRole,
     Holding,
@@ -774,17 +775,42 @@ def test_a_listing_under_review_is_not_found_by_outsiders_on_every_asset_route(
 
 
 @requires_db
-def test_an_outsiders_write_on_a_listing_under_review_stays_403(
-    session: Session, client: TestClient
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [
+        ("POST", "/assets/{id}/revise", None),
+        ("PATCH", "/assets/{id}", {"name": "Mine"}),
+        ("POST", "/assets/{id}/evidence", None),
+        ("POST", "/assets/{id}/rate", None),
+        ("GET", "/assets/{id}/ipo/preview", None),
+        ("POST", "/admin/assets/{id}/suspend", {"reason": "moderation"}),
+    ],
+)
+def test_every_action_on_a_listing_under_review_is_not_found_for_outsiders(
+    session: Session, client: TestClient, method: str, path: str, body: dict[str, Any] | None
 ) -> None:
-    """T58's rule: the community's own actions answer 403, not 404."""
+    """Hidden assets are 404 for every action: a 403 would reveal the listing (T57)."""
     mine = objects(session, create_world(session))
     _under_review(session, mine.asset)
     start_demo(client, session, mine.world)
 
-    res = client.post(f"/assets/{mine.asset}/revise")
+    res = client.request(method, path.replace("{id}", str(mine.asset)), json=body)
 
-    assert (res.status_code, res.json()["detail"]) == (403, "members_only")
+    assert (res.status_code, res.json()["detail"]) == (404, "not_found")
+
+
+@requires_db
+def test_an_outsider_on_a_hidden_tamper_target_is_not_found(
+    session: Session, client: TestClient
+) -> None:
+    """A non-admin outsider naming a listing under review gets 404, never `admin_only`."""
+    mine = objects(session, create_world(session))
+    _under_review(session, mine.asset)
+    start_demo(client, session, mine.world)
+
+    hidden = client.post("/admin/tamper-demo", json={"asset_id": str(mine.asset)})
+
+    assert (hidden.status_code, hidden.json()["detail"]) == (404, "not_found")
 
 
 # --- Events: T58's audience and T57's alert targets, together ------------------------------------
@@ -822,6 +848,36 @@ def test_audience_and_alert_targets_apply_together(session: Session, client: Tes
     assert seen["admin"] == {public_tick.id, scoped.id, admins.id}
     assert seen["mia"] == {public_tick.id}
     assert not seen["anonymous"] & {scoped.id, admins.id, public_alert.id, scoped_alert.id}
+
+
+@requires_db
+def test_a_member_of_another_community_gets_neither_scoped_events_nor_alerts(
+    session: Session, client: TestClient
+) -> None:
+    mine = objects(session, create_world(session))
+    world_id = mine.world.id
+    other = session.exec(
+        select(Community.id).where(Community.world_id == world_id, Community.id != mine.community)
+    ).first()
+    assert other is not None
+    mia = persona(session, world_id, "mia")
+    session.add(
+        CommunityMember(
+            world_id=world_id, community_id=other, user_id=mia.id, role=CommunityRole.STEWARD
+        )
+    )
+    target = {"asset_id": str(mine.asset)}
+    scoped = events.publish(session, world_id, "listing_status", target, audience=mine.community)
+    alert = events.publish(session, world_id, "alert", target)
+    scoped_alert = events.publish(session, world_id, "alert", target, audience=mine.community)
+    tick = events.publish(session, world_id, "price_tick", target)
+    session.commit()
+    start_demo(client, session, mine.world, persona_key="mia")
+
+    polled = client.get("/events", params={"since_id": scoped.id - 1}).json()
+
+    assert [event["id"] for event in polled] == [tick.id]
+    assert not {scoped.id, alert.id, scoped_alert.id} & {event["id"] for event in polled}
 
 
 @requires_db
