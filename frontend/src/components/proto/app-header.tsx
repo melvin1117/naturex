@@ -62,6 +62,8 @@ export function AppHeader({ app }: { app: AppKey }) {
   const trader: TraderKey | null =
     app === "admin" ? null : actingTrader(world.persona);
   const offerCreate = access.canCreateCommunity && app !== "steward";
+  // An account without a community gets the Steward app's empty state on every page there.
+  const showPages = !(app === "steward" && access.canCreateCommunity);
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-md">
@@ -79,7 +81,9 @@ export function AppHeader({ app }: { app: AppKey }) {
             </div>
           )}
         </div>
-        <AppNav app={app} pathname={pathname} className="hidden lg:block" />
+        {showPages && (
+          <AppNav app={app} pathname={pathname} className="hidden lg:block" />
+        )}
         <div className="ml-auto flex items-center gap-1.5">
           {app === "exchange" && (
             <Button
@@ -122,6 +126,7 @@ export function AppHeader({ app }: { app: AppKey }) {
             access={access}
             pathname={pathname}
             offerCreate={offerCreate}
+            showPages={showPages}
           />
         </div>
       </div>
@@ -183,11 +188,13 @@ function MobileMenu({
   access,
   pathname,
   offerCreate,
+  showPages,
 }: {
   app: AppKey;
   access: AppAccess;
   pathname: string;
   offerCreate: boolean;
+  showPages: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const steward = useOptionalStewardCommunity();
@@ -209,18 +216,20 @@ function MobileMenu({
             Pages, communities and apps
           </SheetDescription>
         </SheetHeader>
-        <div className="flex flex-col gap-6 overflow-y-auto px-3 pb-6">
+        <div className="flex flex-col gap-6 overflow-y-auto overscroll-contain px-3 pb-6">
           {app === "steward" && steward?.active && (
             <MenuSection title="Community">
               <CommunitySwitcher className="w-full max-w-none" />
             </MenuSection>
           )}
-          <AppNav
-            app={app}
-            pathname={pathname}
-            layout="stack"
-            onNavigate={close}
-          />
+          {showPages && (
+            <AppNav
+              app={app}
+              pathname={pathname}
+              layout="stack"
+              onNavigate={close}
+            />
+          )}
           {(access.apps.some((a) => a !== app) || offerCreate) && (
             <MenuSection title="Apps">
               <AppSwitcher

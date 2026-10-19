@@ -301,6 +301,10 @@ describe("Steward shell", () => {
       }),
     ).toBeVisible();
     expect(screen.queryByText("Page content")).not.toBeInTheDocument();
+    // Its pages would all show this empty state, so they aren't offered.
+    expect(
+      screen.queryByRole("navigation", { name: "Steward navigation" }),
+    ).not.toBeInTheDocument();
     // Already in the Steward app: no second "Create a community" in the header.
     expect(screen.queryByText("Create a community")).not.toBeInTheDocument();
     expect(await switchLinks()).toEqual([["Exchange", "/"]]);

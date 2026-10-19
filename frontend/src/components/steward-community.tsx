@@ -134,7 +134,12 @@ export function CommunitySwitcher({ className }: { className?: string }) {
 
   if (communities.length === 1) {
     return (
-      <p className={cn("flex min-w-0 items-baseline gap-2 text-sm", className)}>
+      <p
+        className={cn(
+          "flex max-w-56 min-w-0 items-baseline gap-2 text-sm",
+          className,
+        )}
+      >
         <span className="sr-only">Community:</span>
         <span className="truncate font-medium">{active.name}</span>
         <span className="shrink-0 text-xs text-muted-foreground">
