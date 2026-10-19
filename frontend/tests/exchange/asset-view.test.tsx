@@ -111,6 +111,11 @@ describe("AssetView", () => {
     );
     expect(screen.getByText("Trees").parentElement).toHaveTextContent("35.7%");
     expect(screen.getByText("Stable")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", {
+        name: /^Monthly NDVI, 60 months from 2021-10/,
+      }),
+    ).toBeInTheDocument();
     expect(screen.getByText(/Mann–Kendall p = 0.10/)).toBeInTheDocument();
     expect(
       await screen.findByText(/Overlay: Dynamic World land-cover mode/),
@@ -207,6 +212,17 @@ describe("AssetView", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("What changed since v1")).toBeInTheDocument();
     expect(screen.getByText("Was A in report v1")).toBeInTheDocument();
+  });
+
+  it("charts the price history with a text summary", async () => {
+    nav.search = new URLSearchParams("tab=price");
+    renderExchange(<AssetView id={ID} />, routes());
+    expect(
+      await screen.findByRole("img", {
+        name: "Stake price, 2 recorded prices: $21.47 on 19 Oct to $21.55 on 19 Oct.",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/35%/)).toBeNull();
   });
 
   it("lists recent events as plain text with a safe source link", async () => {

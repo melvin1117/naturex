@@ -50,11 +50,52 @@ export type ChartPrice = {
 
 export type ChartEvent = { id: string; date: string; direction: number | null };
 
-function timeLabel(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-GB", {
+const DAY_MS = 86_400_000;
+
+function timeLabel(ms: number) {
+  return new Date(ms).toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function dayLabel(ms: number) {
+  return shortDate(new Date(ms).toISOString());
+}
+
+/** A short text version of the price series for screen readers. */
+export function priceSummary(points: { t: number; price: number }[]) {
+  const first = points[0];
+  const last = points.at(-1);
+  if (!first || !last) return "No prices recorded yet.";
+  return `Stake price, ${points.length} recorded prices: ${fmtPrice(first.price)} on ${dayLabel(first.t)} to ${fmtPrice(last.price)} on ${dayLabel(last.t)}.`;
+}
+
+/**
+ * Prices on a time axis (ms), oldest first, and the event markers: each event sits on the
+ * price in force when it happened; events outside the recorded range are left off.
+ */
+export function priceSeries(
+  prices: ChartPrice[],
+  events: ChartEvent[],
+  perDay: boolean,
+) {
+  const points = perDay
+    ? [...new Map(prices.map((p) => [p.t.slice(0, 10), p])).values()]
+    : prices;
+  const data = points
+    .map((p) => ({ t: Date.parse(p.t), price: p.price, reason: p.reason }))
+    .filter((d) => Number.isFinite(d.t))
+    .sort((a, b) => a.t - b.t);
+  const start = data[0]?.t ?? 0;
+  const end = data.at(-1)?.t ?? 0;
+  const marks = events.flatMap((e) => {
+    const at = Date.parse(e.date);
+    if (!Number.isFinite(at) || at < start || at > end) return [];
+    const point = data.filter((d) => d.t <= at).at(-1);
+    return point ? [{ t: at, price: point.price, event: e }] : [];
+  });
+  return { data, marks };
 }
 
 export function PriceChart({
@@ -69,36 +110,24 @@ export function PriceChart({
   /** Keep one point per day (the last); off shows every recorded price. */
   perDay?: boolean;
 }) {
-  const points = perDay
-    ? [...new Map(prices.map((p) => [p.t.slice(0, 10), p])).values()]
-    : prices;
-  const days = new Set(points.map((p) => p.t.slice(0, 10))).size;
-  const data = points.map((p, i) => ({
-    i,
-    t: p.t,
-    label:
-      days > 1 || p.t.length <= 10
-        ? shortDate(p.t)
-        : `${shortDate(p.t)} ${timeLabel(p.t)}`,
-    price: p.price,
-    reason: p.reason,
-  }));
-  const labelOf = (i: string | number | undefined) =>
-    data[Number(i)]?.label ?? "";
+  const { data, marks } = priceSeries(prices, events, perDay);
+  const start = data[0]?.t ?? 0;
+  const end = data.at(-1)?.t ?? 0;
+  const intraday = end - start < 2 * DAY_MS;
+  const tick = (ms: number) => (intraday ? timeLabel(ms) : dayLabel(ms));
+  const label = (ms: number) =>
+    intraday ? `${dayLabel(ms)} ${timeLabel(ms)}` : dayLabel(ms);
   const rerates = data.filter(
     (d) => d.reason === "rerate" || d.reason === "ipo",
   );
-  const marks = events
-    .map((e) => {
-      const point =
-        data.find((d) => d.t.slice(0, 10) >= e.date.slice(0, 10)) ??
-        data[data.length - 1];
-      return point ? { ...point, event: e } : null;
-    })
-    .filter(Boolean) as ((typeof data)[number] & { event: ChartEvent })[];
 
   return (
-    <div style={{ height }} className="w-full">
+    <div
+      style={{ height }}
+      className="w-full"
+      role="img"
+      aria-label={priceSummary(data)}
+    >
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={data}
@@ -112,12 +141,15 @@ export function PriceChart({
           </defs>
           <CartesianGrid vertical={false} stroke="var(--border)" />
           <XAxis
-            dataKey="i"
+            dataKey="t"
+            type="number"
+            scale="time"
+            domain={["dataMin", "dataMax"]}
             tick={AXIS}
             tickLine={false}
             axisLine={false}
             minTickGap={40}
-            tickFormatter={labelOf}
+            tickFormatter={tick}
           />
           <YAxis
             tick={AXIS}
@@ -128,7 +160,12 @@ export function PriceChart({
             tickFormatter={(v: number) => fmtPrice(v)}
           />
           <Tooltip
-            content={<ChartTooltip format={fmtPrice} labelOf={labelOf} />}
+            content={
+              <ChartTooltip
+                format={fmtPrice}
+                labelOf={(l) => (typeof l === "number" ? label(l) : "")}
+              />
+            }
             cursor={{ stroke: "var(--ring)" }}
           />
           <Area
@@ -141,8 +178,8 @@ export function PriceChart({
           />
           {rerates.map((d) => (
             <ReferenceDot
-              key={`r-${d.i}`}
-              x={d.i}
+              key={`r-${d.t}`}
+              x={d.t}
               y={d.price}
               r={4}
               fill="var(--card)"
@@ -153,7 +190,7 @@ export function PriceChart({
           {marks.map((m) => (
             <ReferenceDot
               key={`e-${m.event.id}`}
-              x={m.i}
+              x={m.t}
               y={m.price}
               r={6}
               fill={
@@ -169,6 +206,13 @@ export function PriceChart({
   );
 }
 
+/** A short text version of the NDVI series for screen readers. */
+export function ndviSummary(series: [string, number][]) {
+  if (series.length === 0) return "No NDVI series.";
+  const values = series.map(([, v]) => v);
+  return `Monthly NDVI, ${series.length} months from ${series[0]![0]} to ${series.at(-1)![0]}, between ${Math.min(...values).toFixed(2)} and ${Math.max(...values).toFixed(2)}.`;
+}
+
 export function NdviChart({
   series,
   height = 200,
@@ -177,26 +221,16 @@ export function NdviChart({
   height?: number;
 }) {
   const data = series.map(([m, v]) => ({ m, v }));
-  // Simple least-squares line for the eye; the report's trend uses Sen's slope.
-  const n = data.length;
-  const xs = data.map((_, i) => i);
-  const mx = xs.reduce((a, b) => a + b, 0) / n;
-  const my = data.reduce((a, b) => a + b.v, 0) / n;
-  const slope =
-    xs.reduce((acc, x, i) => acc + (x - mx) * (data[i].v - my), 0) /
-    Math.max(
-      1e-9,
-      xs.reduce((acc, x) => acc + (x - mx) ** 2, 0),
-    );
-  const withTrend = data.map((d, i) => ({
-    ...d,
-    trend: my + slope * (i - mx),
-  }));
   return (
-    <div style={{ height }} className="w-full">
+    <div
+      style={{ height }}
+      className="w-full"
+      role="img"
+      aria-label={ndviSummary(series)}
+    >
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
-          data={withTrend}
+          data={data}
           margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
         >
           <CartesianGrid vertical={false} stroke="var(--border)" />
@@ -227,15 +261,6 @@ export function NdviChart({
             dataKey="v"
             stroke="var(--grade-aa)"
             strokeWidth={1.5}
-            dot={false}
-            isAnimationActive={false}
-          />
-          <Line
-            type="linear"
-            dataKey="trend"
-            stroke="var(--lilac)"
-            strokeWidth={2}
-            strokeDasharray="5 4"
             dot={false}
             isAnimationActive={false}
           />

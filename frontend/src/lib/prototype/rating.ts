@@ -3,7 +3,7 @@
  * bounded overlay (agreement, field evidence, ±10 adjustment) using the dev-spec §7.4 and §8
  * formulas, so every number on screen is traceable to a formula.
  */
-import type { ReportFacts } from "../report-facts";
+import { ndviTrendLabel, type ReportFacts } from "../report-facts";
 import {
   SCORE_COMPONENTS,
   siteDataFor,
@@ -368,12 +368,8 @@ export function prototypeFacts(
     ndvi: report.ndvi,
     ndviTrend: report.ndviTrend,
     ndviP: report.ndviP,
-    trendLabel:
-      report.ndviTrend > 0.005
-        ? "Improving"
-        : report.ndviTrend < -0.005
-          ? "Declining"
-          : "Stable",
+    // Same rule as the API's reports: a direction only when significant at 5%.
+    trendLabel: ndviTrendLabel(report.ndviTrend, report.ndviP < 0.05),
     waterChange: report.waterChange,
     builtShare: report.landcover.built,
     flags: report.flags,

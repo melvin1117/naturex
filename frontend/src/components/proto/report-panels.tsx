@@ -277,8 +277,8 @@ export function TrendPanel({ facts }: { facts: ReportFacts }) {
           {facts.ndviTrend >= 0 ? "+" : ""}
           {facts.ndviTrend.toFixed(4)} a year (Sen&apos;s slope
           {facts.ndviP !== null &&
-            `, Mann–Kendall p = ${facts.ndviP.toFixed(2)}`}
-          ). Dashed line is a visual guide.
+            `, Mann–Kendall p ${facts.ndviP < 0.01 ? "< 0.01" : `= ${facts.ndviP.toFixed(2)}`}`}
+          ).
         </p>
       )}
     </Panel>
