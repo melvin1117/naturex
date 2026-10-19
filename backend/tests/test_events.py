@@ -144,13 +144,16 @@ def test_same_world_publish_ids_follow_commit_order() -> None:
 def test_anonymous_polling_reads_the_live_world_only(session: Session, client: TestClient) -> None:
     live = ensure_live_world(session)
     live_event = events.publish(session, live.id, "alert", {"message": "live"})
-    events.publish(session, create_world(session).id, "alert", {"message": "sandbox"})
+    sandbox_event = events.publish(
+        session, create_world(session).id, "alert", {"message": "sandbox"}
+    )
     session.flush()
 
-    res = client.get("/events")
+    res = client.get("/events", params={"since_id": live_event.id - 1})
 
     assert res.status_code == 200
-    assert [event["id"] for event in res.json()] == [live_event.id]
+    ids = [event["id"] for event in res.json()]
+    assert live_event.id in ids and sandbox_event.id not in ids
 
 
 @requires_db

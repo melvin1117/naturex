@@ -114,11 +114,12 @@ def test_every_unsafe_world_route_is_401_for_anonymous_callers(
 @requires_db
 def test_anonymous_orders_and_portfolio_are_401(session: Session, client: TestClient) -> None:
     asset = live_listed_asset(session)
+    before = len(session.exec(select(Order).where(Order.asset_id == asset.id)).all())
     buy = client.post("/orders", json={"asset_id": str(asset.id), "side": "buy", "qty": 1})
 
     assert (buy.status_code, buy.json()["detail"]) == (401, "auth_required")
     assert client.get("/portfolio").status_code == 401
-    assert session.exec(select(Order).where(Order.asset_id == asset.id)).all() == []
+    assert len(session.exec(select(Order).where(Order.asset_id == asset.id)).all()) == before
 
 
 # --- Password sessions: the live world, trading as themselves ---------------------------------
