@@ -288,8 +288,9 @@ def test_order_rejects_a_zero_quantity(client: TestClient) -> None:
 def test_unlisted_asset_returns_409(client: TestClient, session: Session) -> None:
     world = _world(client)
     asset_id = UUID(_asset_id(world))
+    # Suspended: public but not tradable. A listing under review is a 404 to non-members (T58).
     session.execute(
-        update(Asset).where(col(Asset.id) == asset_id).values(status=AssetStatus.RATING)
+        update(Asset).where(col(Asset.id) == asset_id).values(status=AssetStatus.SUSPENDED)
     )
     session.commit()
 
@@ -493,7 +494,10 @@ def test_quote_refuses_unlisted_unpriced_and_other_worlds_assets(
     template = session.exec(
         select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == HERO)
     ).one()
-    session.execute(update(Asset).where(col(Asset.id) == wetland).values(status=AssetStatus.RATING))
+    # Suspended: public but not tradable. A listing under review is a 404 to non-members (T58).
+    session.execute(
+        update(Asset).where(col(Asset.id) == wetland).values(status=AssetStatus.SUSPENDED)
+    )
     session.execute(delete(Price).where(col(Price.asset_id) == forest))
     session.commit()
 
