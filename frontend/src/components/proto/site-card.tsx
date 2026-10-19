@@ -14,10 +14,8 @@ import {
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
 import { Button } from "@/components/ui/button";
-import { useAssetPrices } from "@/lib/hooks";
 import { countryName, type MarketCard } from "@/lib/market-cards";
 import { ha, money, price } from "@/lib/prototype/format";
-import { num } from "@/lib/report-facts";
 
 const TREND_TEXT = {
   improving: "Health improving",
@@ -32,42 +30,33 @@ const STATUS_TEXT: Partial<Record<MarketCard["status"], string>> = {
   ineligible: "Not eligible",
 };
 
-/** The asset's recorded prices as a sparkline; nothing until there are two points. */
+/** The card's latest prices (from the API's sparkline); nothing until there are two. */
 export function MiniPrice({
-  assetId,
+  id,
+  prices,
   className,
   stroke = "var(--primary)",
 }: {
-  assetId: string;
+  id: string;
+  prices: number[];
   className?: string;
   stroke?: string;
 }) {
-  const { data } = useAssetPrices(assetId);
-  const points = (data ?? [])
-    .slice(-90)
-    .map((p) => ({ p: num(p.price) }))
-    .filter((p): p is { p: number } => p.p !== null);
+  const points = prices.map((p) => ({ p }));
   return (
     <div className={cn("h-12 w-full", className)} aria-hidden="true">
-      {data && points.length < 2 && (
+      {points.length < 2 ? (
         <div className="grid h-full place-items-center rounded-xl border border-dashed text-xs text-muted-foreground">
           The price chart starts with the first trade
         </div>
-      )}
-      {points.length > 1 && (
+      ) : (
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
             data={points}
             margin={{ top: 4, bottom: 0, left: 0, right: 0 }}
           >
             <defs>
-              <linearGradient
-                id={`mini-${assetId}`}
-                x1="0"
-                y1="0"
-                x2="0"
-                y2="1"
-              >
+              <linearGradient id={`mini-${id}`} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={stroke} stopOpacity={0.22} />
                 <stop offset="100%" stopColor={stroke} stopOpacity={0} />
               </linearGradient>
@@ -78,7 +67,7 @@ export function MiniPrice({
               dataKey="p"
               stroke={stroke}
               strokeWidth={1.5}
-              fill={`url(#mini-${assetId})`}
+              fill={`url(#mini-${id})`}
               isAnimationActive={false}
             />
           </AreaChart>
@@ -170,7 +159,7 @@ export function SiteCard({ card }: { card: MarketCard }) {
             </div>
           </div>
         </div>
-        <MiniPrice assetId={card.id} />
+        <MiniPrice id={card.id} prices={card.sparkline} />
         <div className="mt-auto flex items-center justify-between gap-3 border-t pt-3 text-sm">
           <span className="min-w-0 text-muted-foreground">
             {card.valueLow !== null && card.valueHigh !== null && (

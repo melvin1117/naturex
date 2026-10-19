@@ -28,6 +28,8 @@ export type MarketCard = {
   valueMid: number | null;
   valueHigh: number | null;
   imageUrl: string | null;
+  /** The latest prices, oldest first. */
+  sparkline: number[];
 };
 
 const TRENDS: readonly string[] = ["improving", "declining", "stable"];
@@ -52,16 +54,29 @@ export function marketCard(card: AssetCard): MarketCard {
     valueMid: num(card.value_mid),
     valueHigh: num(card.value_high),
     imageUrl: siteImageUrl(card.site_key, card.cover_image_url),
+    sparkline: (card.sparkline ?? []).flatMap((p) => {
+      const n = num(p);
+      return n === null ? [] : [n];
+    }),
   };
 }
 
-/** The site's satellite thumbnail through the backend's media route, else its cover image. */
+/**
+ * The site's satellite thumbnail through the backend's media route, else its cover image if
+ * it's an https URL (it's user-supplied); otherwise null, for the placeholder.
+ */
 export function siteImageUrl(
   siteKey: string | null | undefined,
   coverUrl?: string | null,
 ): string | null {
   if (siteKey) return demoSiteMediaUrl(siteKey, "thumbnail.webp");
-  return coverUrl ?? null;
+  if (!coverUrl) return null;
+  try {
+    const url = new URL(coverUrl);
+    return url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
+  }
 }
 
 export function countryName(code: string | null): string | null {

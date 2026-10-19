@@ -27,7 +27,9 @@ const PRICES = [
 
 function routes(overrides: Parameters<typeof renderExchange>[1] = {}) {
   return {
-    [`GET /assets/${ID}`]: () => json({ ...ASSET, price: "21.5518" }),
+    // The change since opening is the API's (deliberately not what the prices imply).
+    [`GET /assets/${ID}`]: () =>
+      json({ ...ASSET, price: "21.5518", price_change_pct: 2.5 }),
     [`GET /assets/${ID}/reports`]: () => json([ASSET.latest_report]),
     [`GET /assets/${ID}/prices`]: () => json(PRICES),
     "GET /media/demo-sites/wetland_mx/images.json": () => json(images),
@@ -92,7 +94,7 @@ describe("AssetView", () => {
     expect(within(hero).getByText("Mexico · 207 ha")).toBeInTheDocument();
     expect(within(hero).getByText("$21.55")).toBeInTheDocument();
     expect(
-      await within(hero).findByText("+0.4%", { exact: false }),
+      await within(hero).findByText("+2.5%", { exact: false }),
     ).toBeInTheDocument();
     expect(within(hero).getByText("$2.1M–$2.7M")).toBeInTheDocument();
     expect(

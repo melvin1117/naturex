@@ -15,7 +15,8 @@
     "value_mid": "2669511.00",
     "value_high": "2669511.00",
     "cover_image_url": null,
-    "site_key": "wetland_mx"
+    "site_key": "wetland_mx",
+    "sparkline": ["21.4723"]
   },
   {
     "id": "cfaa8564-e675-4e51-a2c2-98d515c1896a",
@@ -33,7 +34,8 @@
     "value_mid": "33801307.00",
     "value_high": "33801307.00",
     "cover_image_url": null,
-    "site_key": "mangrove_mx"
+    "site_key": "mangrove_mx",
+    "sparkline": ["285.1519"]
   },
   {
     "id": "e18cd083-b3ef-40c3-b77d-796e5691d159",
@@ -51,6 +53,7 @@
     "value_mid": "2424480.00",
     "value_high": "2424480.00",
     "cover_image_url": null,
-    "site_key": "restoration_forest"
+    "site_key": "restoration_forest",
+    "sparkline": ["19.5456"]
   }
 ]

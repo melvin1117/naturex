@@ -163,6 +163,30 @@ describe("Marketplace", () => {
     ).toHaveTextContent("Sort: Best grade");
   });
 
+  it("draws each sparkline from the card, with no per-card price request", async () => {
+    const withHistory = CARDS.map((c) =>
+      c.id === WETLAND.id
+        ? { ...c, sparkline: ["21.4723", "21.5045", "21.5518"] }
+        : c,
+    );
+    const { backend } = renderExchange(<Marketplace />, {
+      "GET /assets": () => json(withHistory),
+    });
+    const link = await screen.findByRole("link", {
+      name: /Xochimilco Wetland/,
+    });
+
+    expect(
+      within(link).queryByText("The price chart starts with the first trade"),
+    ).toBeNull();
+    expect(
+      screen.getAllByText("The price chart starts with the first trade"),
+    ).toHaveLength(2);
+    expect(
+      backend.requests.filter((r) => r.url.includes("/prices")),
+    ).toHaveLength(0);
+  });
+
   it("updates prices live on price_tick", async () => {
     const moved = CARDS.map((c) =>
       c.id === WETLAND.id

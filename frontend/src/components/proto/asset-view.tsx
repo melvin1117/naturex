@@ -37,13 +37,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorldGate } from "@/components/world-provider";
 import type { ApiError } from "@/lib/api/errors";
 import type { AssetDetail, SiteImages } from "@/lib/api/types";
-import {
-  boundaryLatLngs,
-  changePct,
-  chartPrices,
-  newsItems,
-  openingPrice,
-} from "@/lib/asset-detail";
+import { boundaryLatLngs, chartPrices, newsItems } from "@/lib/asset-detail";
 import { demoSiteMediaUrl } from "@/lib/demo-site-images";
 import {
   useAsset,
@@ -192,7 +186,7 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
     : undefined;
   const points = useMemo(() => chartPrices(prices.data), [prices.data]);
   const current = num(asset.price);
-  const change = changePct(current, openingPrice(points));
+  const change = num(asset.price_change_pct);
   const polygon = useMemo(
     () => boundaryLatLngs(asset.geojson),
     [asset.geojson],

@@ -50,20 +50,6 @@ export function chartPrices(
   });
 }
 
-/** The opening (IPO) price: the first "ipo" point, else the first recorded price. */
-export function openingPrice(points: ChartPricePoint[]): number | null {
-  return (points.find((p) => p.reason === "ipo") ?? points[0])?.price ?? null;
-}
-
-/** Percent change from `opening` to `current`; null without both. */
-export function changePct(
-  current: number | null,
-  opening: number | null,
-): number | null {
-  if (current === null || opening === null || opening === 0) return null;
-  return ((current - opening) / opening) * 100;
-}
-
 const SOURCE_LABEL: Record<string, string> = {
   tavily: "Found by News Scout",
   admin: "Injected by Time Machine",

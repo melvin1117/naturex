@@ -3,11 +3,9 @@ import { describe, expect, it } from "vitest";
 import type { AssetCard, AssetDetail, ReportOut } from "@/lib/api/types";
 import {
   boundaryLatLngs,
-  changePct,
   chartPrices,
   isApiAssetId,
   newsItems,
-  openingPrice,
 } from "@/lib/asset-detail";
 import {
   countryName,
@@ -153,9 +151,19 @@ describe("market cards", () => {
       areaHa: 206.7,
       imageUrl: "/api/media/demo-sites/wetland_mx/thumbnail.webp",
     });
+    expect(wetland.sparkline).toEqual([21.4723]);
     expect(siteImageUrl(null, "https://example.org/a.webp")).toBe(
       "https://example.org/a.webp",
     );
+    // A user-supplied cover must be https; anything else gets the placeholder.
+    for (const bad of [
+      "http://example.org/a.webp",
+      "javascript:alert(1)",
+      "data:image/png;base64,AAAA",
+      "//example.org/a.webp",
+      "not a url",
+    ])
+      expect(siteImageUrl(null, bad)).toBeNull();
     expect(countryName("MX")).toBe("Mexico");
   });
 
@@ -209,16 +217,16 @@ describe("asset detail helpers", () => {
     expect(boundaryLatLngs({ type: "Point", coordinates: [1, 2] })).toEqual([]);
   });
 
-  it("computes the change since the opening price from recorded prices", () => {
+  it("keeps only parseable recorded prices for the chart", () => {
     const points = chartPrices([
       { ts: "2026-10-19T00:00:00Z", price: "20.00", reason: "ipo" },
       { ts: "2026-10-19T01:00:00Z", price: "21.00", reason: "order" },
       { ts: "2026-10-19T02:00:00Z", price: "bad", reason: "order" },
     ]);
-    expect(points).toHaveLength(2);
-    expect(openingPrice(points)).toBe(20);
-    expect(changePct(22, 20)).toBeCloseTo(10);
-    expect(changePct(22, null)).toBeNull();
+    expect(points).toEqual([
+      { t: "2026-10-19T00:00:00Z", price: 20, reason: "ipo" },
+      { t: "2026-10-19T01:00:00Z", price: 21, reason: "order" },
+    ]);
   });
 
   it("lists events newest first with their source", () => {
