@@ -1,15 +1,6 @@
 "use client";
 
-import {
-  ArrowLeft,
-  Bot,
-  Lock,
-  MapPin,
-  MessageCircle,
-  RefreshCwIcon,
-  ShieldCheck,
-  TriangleAlertIcon,
-} from "lucide-react";
+import { ArrowLeft, Bot, Lock, MapPin, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
@@ -18,10 +9,10 @@ import { Delta, SiteBackdrop, ValueRange } from "@/components/proto/bits";
 import { PriceChart } from "@/components/proto/charts";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
+import { ApiLedgerTab } from "@/components/proto/ledger-panels";
+import { LoadError } from "@/components/proto/load-error";
 import {
   LandPanel,
-  LEDGER_PRIMARY,
-  LedgerPanel,
   NewsList,
   Panel,
   ReportTab,
@@ -30,7 +21,6 @@ import {
   TrendPanel,
 } from "@/components/proto/report-panels";
 import { IMAGERY_ATTRIBUTION } from "@/components/proto/site-map";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -43,9 +33,7 @@ import {
   useAsset,
   useAssetPrices,
   useAssetReports,
-  useLedger,
   useSiteImages,
-  useVerifyLedger,
 } from "@/lib/hooks";
 import { countryName, siteImageUrl } from "@/lib/market-cards";
 import type { LatLng } from "@/lib/prototype/data";
@@ -128,35 +116,6 @@ function NotFound() {
         <Link href="/">Back to the Marketplace</Link>
       </Button>
     </div>
-  );
-}
-
-function LoadError({
-  title,
-  error,
-  retry,
-}: {
-  title: string;
-  error: ApiError;
-  retry: () => Promise<void>;
-}) {
-  return (
-    <Alert variant="destructive">
-      <TriangleAlertIcon aria-hidden="true" />
-      <AlertTitle>{title}</AlertTitle>
-      <AlertDescription>
-        <p>{error.message}</p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-2"
-          onClick={() => void retry()}
-        >
-          <RefreshCwIcon aria-hidden="true" />
-          Try again
-        </Button>
-      </AlertDescription>
-    </Alert>
   );
 }
 
@@ -551,81 +510,6 @@ function TradeComingSoon({
         Buy units
       </Button>
     </section>
-  );
-}
-
-function ApiLedgerTab({ assetId }: { assetId: string }) {
-  const ledger = useLedger(assetId);
-  const verify = useVerifyLedger(assetId);
-  const entries = useMemo(
-    () =>
-      (ledger.data ?? []).map((e) => ({
-        seq: e.seq,
-        kind: e.kind,
-        date: e.created_at,
-        hash: e.hash,
-        payload: e.payload,
-      })),
-    [ledger.data],
-  );
-
-  if (!ledger.data && ledger.error)
-    return (
-      <LoadError
-        title="We couldn't load the ledger"
-        error={ledger.error}
-        retry={ledger.refetch}
-      />
-    );
-  if (!ledger.data)
-    return (
-      <p
-        role="status"
-        className="flex items-center justify-center gap-2 rounded-3xl bg-machine py-16 text-sm text-machine-muted"
-      >
-        <Spinner aria-hidden="true" role="presentation" />
-        Loading the ledger…
-      </p>
-    );
-
-  const result = verify.data;
-  return (
-    <div className="space-y-3">
-      <LedgerPanel
-        entries={entries}
-        check={
-          result
-            ? {
-                valid: result.valid,
-                entries: result.entries,
-                brokenAt: result.broken_at,
-                note: result.valid
-                  ? `The server recomputed every hash from the stored entries; the chain head is ${result.head?.slice(0, 10) ?? "—"}…`
-                  : "The server recomputed the hashes and this entry no longer matches. It and every entry after it can't be trusted.",
-              }
-            : null
-        }
-        actions={
-          <Button
-            className={LEDGER_PRIMARY}
-            onClick={() => void verify.mutate(undefined)}
-            disabled={verify.isPending}
-          >
-            {verify.isPending ? (
-              <Spinner aria-hidden="true" role="presentation" />
-            ) : (
-              <ShieldCheck aria-hidden="true" />
-            )}
-            Verify chain
-          </Button>
-        }
-      />
-      {verify.error && (
-        <p role="alert" className="text-sm text-clay-ink">
-          {verify.error.message}
-        </p>
-      )}
-    </div>
   );
 }
 

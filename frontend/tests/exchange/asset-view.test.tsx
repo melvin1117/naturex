@@ -1,4 +1,10 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AssetView } from "@/components/proto/asset-view";
@@ -283,6 +289,45 @@ describe("AssetView", () => {
     await waitFor(() =>
       expect(backend.calls(`GET /ledger/${ID}/verify`)).toBe(1),
     );
+  });
+
+  it("drops a verify result once the chain changes", async () => {
+    nav.search = new URLSearchParams("tab=ledger");
+    const next = { ...ledger[0]!, seq: 1, hash: "f".repeat(64) };
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        // Initial read and the refetch after verifying: unchanged. Then a new entry.
+        [`GET /ledger/${ID}`]: sequence(
+          () => json(ledger),
+          () => json(ledger),
+          () => json([...ledger, next]),
+        ),
+      }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Verify chain" }),
+    );
+    expect(
+      await screen.findByText("Chain intact: its 1 entry verified."),
+    ).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(
+      screen.getByText("Chain intact: its 1 entry verified."),
+    ).toBeInTheDocument();
+
+    act(() => {
+      const source = FakeEventSource.latest();
+      source.open();
+      source.emit("rating_progress", 1, {
+        asset_id: ID,
+        step: "done",
+        status: "succeeded",
+      });
+    });
+
+    expect(await screen.findByText("#1")).toBeInTheDocument();
+    expect(screen.queryByText(/Chain intact/)).toBeNull();
   });
 
   it("reports a broken chain", async () => {

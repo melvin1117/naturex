@@ -9,8 +9,6 @@ import {
   ExternalLink,
   Flag,
   Layers,
-  ShieldCheck,
-  ShieldX,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "cn";
@@ -21,7 +19,6 @@ import { NdviChart } from "@/components/proto/charts";
 import { GradeBadge } from "@/components/proto/grade";
 import { SiteMap } from "@/components/proto/site-map";
 import { VerificationBadge } from "@/components/proto/verification";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -37,9 +34,7 @@ import {
   type LatLng,
 } from "@/lib/prototype/data";
 import { date, money, quarterLabel, signed } from "@/lib/prototype/format";
-import { verify, type VerifyResult } from "@/lib/prototype/ledger";
-import { usePrototype } from "@/lib/prototype/store";
-import { documentChecks, tamperLedger, type Site } from "@/lib/prototype/world";
+import { documentChecks, type Site } from "@/lib/prototype/world";
 import type { ReportFacts, SummarySource } from "@/lib/report-facts";
 
 export function Panel({
@@ -692,198 +687,6 @@ export function NewsList({
         );
       })}
     </ul>
-  );
-}
-
-export type LedgerRow = {
-  seq: number;
-  kind: string;
-  date: string;
-  hash: string;
-  payload: Record<string, unknown>;
-};
-
-export type LedgerCheck = {
-  valid: boolean;
-  entries: number;
-  brokenAt: number | null;
-  /** Where the hashes were recomputed, or why the chain can't be trusted. */
-  note: string;
-};
-
-function payloadText(payload: Record<string, unknown>) {
-  return Object.entries(payload)
-    .map(
-      ([k, v]) =>
-        `${k}: ${typeof v === "object" && v !== null ? JSON.stringify(v) : String(v)}`,
-    )
-    .join(" · ");
-}
-
-/** The Nature Ledger: entries newest first, the verify result and the caller's actions. */
-export function LedgerPanel({
-  entries,
-  check,
-  actions,
-  tamperedAt,
-  empty = "No ledger entries yet.",
-}: {
-  entries: LedgerRow[];
-  check: LedgerCheck | null;
-  actions: React.ReactNode;
-  tamperedAt?: number;
-  empty?: string;
-}) {
-  return (
-    <section className="rounded-3xl bg-machine p-6 text-machine-ink shadow-soft">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-xl">
-          <h3 className="font-serif text-3xl">Nature Ledger</h3>
-          <p className="mt-1 text-sm text-machine-muted">
-            Append-only and hash-chained. Each entry stores sha256 of its
-            content, kind, sequence number and the previous entry&apos;s hash,
-            so changing any old entry breaks every link after it. No tokens, no
-            trading: it&apos;s a public record.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">{actions}</div>
-      </div>
-      <div aria-live="polite">
-        {check && (
-          <div
-            role="status"
-            className={cn(
-              "nx-rise mt-5 flex items-start gap-3 rounded-2xl p-4",
-              check.valid ? "bg-lime/15" : "bg-clay/25",
-            )}
-          >
-            {check.valid ? (
-              <ShieldCheck
-                className="mt-0.5 size-5 text-lime"
-                aria-hidden="true"
-              />
-            ) : (
-              <ShieldX className="mt-0.5 size-5 text-clay" aria-hidden="true" />
-            )}
-            <div className="text-sm">
-              <div className="font-medium">
-                {check.valid
-                  ? check.entries === 1
-                    ? "Chain intact: its 1 entry verified."
-                    : `Chain intact: all ${check.entries} entries verified.`
-                  : check.brokenAt !== null
-                    ? `Tampering detected at entry #${check.brokenAt}.`
-                    : "The chain doesn't verify."}
-              </div>
-              <div className="text-machine-muted">{check.note}</div>
-            </div>
-          </div>
-        )}
-      </div>
-      {entries.length === 0 ? (
-        <p className="mt-5 text-sm text-machine-muted">{empty}</p>
-      ) : (
-        <ol className="mt-5 space-y-2">
-          {[...entries].reverse().map((e) => (
-            <li
-              key={e.seq}
-              className={cn(
-                "rounded-2xl bg-machine-raised px-4 py-3",
-                tamperedAt === e.seq && "ring-2 ring-clay",
-              )}
-            >
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                <span className="tabular font-mono text-xs text-machine-muted">
-                  #{e.seq}
-                </span>
-                <span className="font-medium capitalize">
-                  {e.kind.replaceAll("_", " ")}
-                </span>
-                <span className="text-xs text-machine-muted">
-                  {date(e.date)}
-                </span>
-                {tamperedAt === e.seq && (
-                  <span className="rounded-full bg-clay px-2 py-0.5 text-[11px] font-semibold text-white">
-                    Edited
-                  </span>
-                )}
-                <span
-                  className="ml-auto font-mono text-[11px] text-machine-muted"
-                  title={e.hash}
-                >
-                  {e.hash.slice(0, 10)}…{e.hash.slice(-6)}
-                </span>
-              </div>
-              <div className="mt-1.5 font-mono text-[11px] break-all text-machine-muted">
-                {payloadText(e.payload)}
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
-    </section>
-  );
-}
-
-export const LEDGER_PRIMARY = "bg-lime text-machine hover:bg-lime/90";
-export const LEDGER_OUTLINE =
-  "border-machine-line bg-transparent text-machine-ink hover:bg-machine-raised hover:text-machine-ink";
-
-function prototypeCheck(result: VerifyResult): LedgerCheck {
-  return result.valid
-    ? {
-        valid: true,
-        entries: result.entries,
-        brokenAt: null,
-        note: "Every hash was recomputed in your browser and matches.",
-      }
-    : {
-        valid: false,
-        entries: result.entries,
-        brokenAt: result.brokenAt,
-        note: `${result.reason} This entry and every entry after it can't be trusted.`,
-      };
-}
-
-/** The prototype's ledger, verified in the browser, with the tamper demo. */
-export function LedgerTab({ site }: { site: Site }) {
-  const { world, act } = usePrototype();
-  const chain = world.ledger[site.id] ?? [];
-  const [result, setResult] = useState<VerifyResult | null>(null);
-  const tamperedAt = world.tampered[site.id];
-  return (
-    <div className="space-y-6">
-      <LedgerPanel
-        entries={chain}
-        check={result && prototypeCheck(result)}
-        tamperedAt={tamperedAt}
-        actions={
-          <>
-            <Button
-              className={LEDGER_PRIMARY}
-              onClick={() => setResult(verify(chain))}
-              data-tour="ledger-verify"
-            >
-              <ShieldCheck aria-hidden="true" />
-              Verify chain
-            </Button>
-            <Button
-              variant="outline"
-              className={LEDGER_OUTLINE}
-              onClick={() => {
-                act((w) => tamperLedger(w, site.id));
-                setResult(null);
-              }}
-              disabled={tamperedAt !== undefined}
-              data-tour="ledger-tamper"
-            >
-              <AlertTriangle aria-hidden="true" />
-              Tamper demo
-            </Button>
-          </>
-        }
-      />
-    </div>
   );
 }
 

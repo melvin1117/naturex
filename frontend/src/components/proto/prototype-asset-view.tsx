@@ -6,11 +6,11 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Delta, SiteBackdrop, ValueRange } from "@/components/proto/bits";
 import { PriceChart } from "@/components/proto/charts";
+import { LedgerTab } from "@/components/proto/ledger-panels";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
 import {
   LandPanel,
-  LedgerTab,
   NewsList,
   Panel,
   ReportTab,
