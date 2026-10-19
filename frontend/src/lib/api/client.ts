@@ -3,8 +3,8 @@
  * run ./scripts/generate-client.sh).
  *
  * - Browser: base URL `/api`, the same-origin proxy in next.config.ts, so the HttpOnly
- *   `nx_world` cookie is first-party and sent automatically. Every request first waits for
- *   the world bootstrap (`GET /world`, single-flight), and a 401 `world_required` triggers one
+ *   `nx_session` cookie is first-party and sent automatically. Every request first waits for
+ *   the world bootstrap (`GET /world`, single-flight), and a 401 `auth_required` triggers one
  *   re-bootstrap and one retry.
  * - Server (RSC, route handlers): use `createServerApi()` from `./server`, which calls
  *   `BACKEND_URL` directly and forwards the visitor's session cookies.
@@ -33,7 +33,7 @@ export function serverBaseUrl(): string {
 
 /**
  * Browser code goes through the same-origin `/api` proxy (next.config.ts) so the
- * `nx_world` sandbox cookie is sent. Server code calls the backend directly and must
+ * `nx_session` cookie is sent. Server code calls the backend directly and must
  * forward the visitor's cookie itself (see ./server.ts).
  */
 export function defaultBaseUrl(): string {
@@ -45,7 +45,7 @@ const globalFetch: FetchFn = (input) => globalThis.fetch(input);
 
 /**
  * openapi-fetch middleware (https://openapi-ts.dev/openapi-fetch/middleware-auth): wait for
- * the world before every request; on a 401 `world_required`, bootstrap again and retry
+ * the world before every request; on a 401 `auth_required`, bootstrap again and retry
  * exactly once. The retry goes straight to `fetch`, not back through the middleware, so a
  * second 401 is returned to the caller instead of looping.
  */

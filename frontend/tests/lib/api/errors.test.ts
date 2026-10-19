@@ -12,12 +12,12 @@ const res = (status: number, headers: Record<string, string> = {}) =>
   new Response(null, { status, headers });
 
 describe("apiErrorFromResponse", () => {
-  it("maps 401 world_required to a code and a friendly message", () => {
-    const error = apiErrorFromResponse(res(401), { detail: "world_required" });
+  it("maps 401 auth_required to a code and a friendly message", () => {
+    const error = apiErrorFromResponse(res(401), { detail: "auth_required" });
     expect(error).toBeInstanceOf(ApiError);
     expect(error.status).toBe(401);
-    expect(error.code).toBe("world_required");
-    expect(error.message).toMatch(/demo world has expired/);
+    expect(error.code).toBe("auth_required");
+    expect(error.message).toBe("Sign in to do that.");
   });
 
   it("keeps a reason code on 403 but shows a friendly message", () => {

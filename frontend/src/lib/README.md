@@ -4,9 +4,9 @@ Screens stay presentational: they call a hook and render `data`, `isLoading` or 
 
 ## Setup you get for free
 
-`app/layout.tsx` wraps every page in `<WorldProvider>` (`components/world-provider.tsx`). It calls `GET /world` **once** when the app loads and always renders the page, so server HTML, static pages and the 404 page don't depend on the backend. Requests never go out before the `nx_world` cookie exists: the API client and live events wait for the world first. Screens never handle "no world yet".
+`app/layout.tsx` wraps every page in `<WorldProvider>` (`components/world-provider.tsx`). It calls `GET /world` **once** when the app loads and always renders the page, so server HTML, static pages and the 404 page don't depend on the backend. The backend derives the world from the `nx_session` cookie (T73): anonymous visitors and password accounts get the live world, a demo session its own sandbox; `world.me` is the signed-in account or `null`. The API client and live events wait for the world first, so screens never handle "no world yet". Anonymous visitors are read-only: unsafe requests get 401 `auth_required`.
 
-For a section that shows world data, wrap it in `<WorldGate>`. It shows an accessible loading state until the world is ready, or an error with "Try again" if it can't be opened (e.g. 503 busy). Keep the gate around the data, not the whole page:
+For a section that shows world data, wrap it in `<WorldGate>`. It shows an accessible loading state until the world is ready, or an error with "Try again" if it can't be opened (e.g. the backend is down). Keep the gate around the data, not the whole page:
 
 ```tsx
 import { WorldGate } from "@/components/world-provider";
@@ -72,7 +72,7 @@ Use the keys in `queryKeys` (`data-layer.tsx`) so mutations and live events refr
 
 ## Errors
 
-Every failure is an `ApiError` (`api/errors.ts`): `status` (0 = offline), `code` (e.g. `world_required`, `owner_only`), `message` (safe to show; friendly text for 401, 403, 404, 409, 422 and 503), `detail` (raw, e.g. 422 field errors) and `retryAfterSeconds`.
+Every failure is an `ApiError` (`api/errors.ts`): `status` (0 = offline), `code` (e.g. `auth_required`, `owner_only`), `message` (safe to show; friendly text for 401, 403, 404, 409, 422 and 503), `detail` (raw, e.g. 422 field errors) and `retryAfterSeconds`.
 
 ## Live events
 
@@ -83,21 +83,21 @@ Every failure is an `ApiError` (`api/errors.ts`): `status` (0 = offline), `code`
 ```ts
 import { createServerApi } from "@/lib/api/server";
 
-const api = await createServerApi(); // BACKEND_URL + the visitor's nx_world cookie
+const api = await createServerApi(); // BACKEND_URL + the visitor's nx_session cookie
 const { data, error } = await api.GET("/portfolio");
 ```
 
-It forwards only the session cookies, never calls `GET /world` (a world made on the server would set a cookie the browser never gets), and doesn't retry. A first-time visitor has no world yet and gets a 401 `world_required`: render that part client-side with the hooks. The browser client is `api` from `@/lib/api`.
+It forwards only the session cookie, never calls `GET /world` (the browser owns the world snapshot) and doesn't retry. Without a session, reads see the live world and signed-in-only calls get a 401 `auth_required`: render those parts client-side with the hooks. The browser client is `api` from `@/lib/api`.
 
 ## Files
 
-| File                                  | Role                                                                                                                                 |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `api/schema.d.ts`, `api/openapi.json` | **Generated**: `./scripts/generate-client.sh`. Never edit.                                                                           |
-| `api/client.ts`                       | The typed `openapi-fetch` client and its world middleware (wait for the world; on 401 `world_required` re-bootstrap and retry once). |
-| `api/server.ts`                       | Server-only client with cookie forwarding.                                                                                           |
-| `api/errors.ts`, `api/types.ts`       | `ApiError`, `unwrap()`, schema type aliases.                                                                                         |
-| `session.ts`                          | World bootstrap (single-flight), cookie names, "expired" codes. **T55 swaps `nx_world` for `nx_session` here only.**                 |
-| `query.ts`                            | The small query cache behind the hooks.                                                                                              |
-| `events.ts`                           | SSE with polling fallback.                                                                                                           |
-| `data-layer.tsx`, `hooks.ts`          | React context, cache wiring for live events, and the hooks.                                                                          |
+| File                                  | Role                                                                                                                                |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `api/schema.d.ts`, `api/openapi.json` | **Generated**: `./scripts/generate-client.sh`. Never edit.                                                                          |
+| `api/client.ts`                       | The typed `openapi-fetch` client and its world middleware (wait for the world; on 401 `auth_required` re-bootstrap and retry once). |
+| `api/server.ts`                       | Server-only client with cookie forwarding.                                                                                          |
+| `api/errors.ts`, `api/types.ts`       | `ApiError`, `unwrap()`, schema type aliases.                                                                                        |
+| `session.ts`                          | World bootstrap (single-flight), the forwarded cookie, "expired" codes. Session changes (T55 demo sessions) belong here.            |
+| `query.ts`                            | The small query cache behind the hooks.                                                                                             |
+| `events.ts`                           | SSE with polling fallback.                                                                                                          |
+| `data-layer.tsx`, `hooks.ts`          | React context, cache wiring for live events, and the hooks.                                                                         |

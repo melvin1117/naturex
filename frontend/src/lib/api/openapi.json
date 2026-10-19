@@ -864,7 +864,7 @@
           "market"
         ],
         "summary": "Place Order",
-        "description": "Fill a market order instantly. `is_primary` is true if any shares came from the IPO float.",
+        "description": "Fill a market order for the signed-in user. `is_primary` is true if any shares came from\nthe IPO float.",
         "operationId": "place_order_orders_post",
         "requestBody": {
           "content": {
@@ -906,6 +906,7 @@
           "market"
         ],
         "summary": "Get Portfolio",
+        "description": "The signed-in user's cash and holdings.",
         "operationId": "get_portfolio_portfolio_get",
         "responses": {
           "200": {
@@ -1360,7 +1361,7 @@
           "world"
         ],
         "summary": "Get World",
-        "description": "The visitor's world. The first call creates it and sets the `nx_world` cookie.\n\nCall this once before any other route; they return 401 `world_required` without it.",
+        "description": "The session's world: the live world when anonymous or signed in with a password, the\ndemo sandbox for a demo session. `me` is the signed-in account, or null.",
         "operationId": "get_world_world_get",
         "responses": {
           "200": {
@@ -1372,9 +1373,6 @@
                 }
               }
             }
-          },
-          "503": {
-            "description": "Too many new demo worlds; retry later"
           }
         }
       }
@@ -1385,7 +1383,7 @@
           "world"
         ],
         "summary": "Reset",
-        "description": "\"Reset my demo\": restore the visitor's world to the template, keeping its ID.",
+        "description": "\"Reset my demo\": restore the demo session's sandbox to the template, keeping its ID.\n\nThe live world is never reset: any other session gets 403 `demo_only`.",
         "operationId": "reset_world_reset_post",
         "responses": {
           "200": {
@@ -1399,7 +1397,10 @@
             }
           },
           "401": {
-            "description": "No world yet: call GET /world first"
+            "description": "`auth_required`: sign in first"
+          },
+          "403": {
+            "description": "`demo_only`: only a demo session can reset its sandbox"
           }
         }
       }
@@ -4454,6 +4455,16 @@
             },
             "type": "array",
             "title": "Assets"
+          },
+          "me": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -4462,9 +4473,11 @@
           "label",
           "created_at",
           "personas",
-          "assets"
+          "assets",
+          "me"
         ],
-        "title": "WorldOut"
+        "title": "WorldOut",
+        "description": "The session's world (ADR-0005 \u00a72): `live`, or a demo sandbox (`visitor`)."
       }
     }
   }

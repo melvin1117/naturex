@@ -18,6 +18,7 @@ export const WORLD: WorldOut = {
     },
   ],
   assets: [],
+  me: null,
 };
 
 export function json(body: unknown, init: ResponseInit = {}): Response {
@@ -28,8 +29,8 @@ export function json(body: unknown, init: ResponseInit = {}): Response {
   });
 }
 
-export const worldRequired = () =>
-  json({ detail: "world_required" }, { status: 401 });
+export const authRequired = () =>
+  json({ detail: "auth_required" }, { status: 401 });
 
 type Handler = (request: Request) => Response | Promise<Response>;
 

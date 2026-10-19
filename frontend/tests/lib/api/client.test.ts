@@ -13,7 +13,7 @@ import {
   json,
   sequence,
   WORLD,
-  worldRequired,
+  authRequired,
 } from "../helpers";
 
 const PORTFOLIO = {
@@ -69,9 +69,9 @@ describe("world bootstrap middleware", () => {
     expect(calls("GET /world")).toBe(1);
   });
 
-  it("re-bootstraps and retries once after a 401 world_required", async () => {
+  it("re-bootstraps and retries once after a 401 auth_required", async () => {
     const { api, calls } = setup({
-      "GET /portfolio": sequence(worldRequired, () => json(PORTFOLIO)),
+      "GET /portfolio": sequence(authRequired, () => json(PORTFOLIO)),
     });
 
     const { data, error } = await api.GET("/portfolio");
@@ -83,20 +83,20 @@ describe("world bootstrap middleware", () => {
   });
 
   it("doesn't loop when the retry is also a 401", async () => {
-    const { api, calls } = setup({ "GET /portfolio": worldRequired });
+    const { api, calls } = setup({ "GET /portfolio": authRequired });
 
     await expect(unwrap(api.GET("/portfolio"))).rejects.toMatchObject({
       status: 401,
-      code: "world_required",
+      code: "auth_required",
     });
     expect(calls("GET /world")).toBe(2);
     expect(calls("GET /portfolio")).toBe(2);
   });
 
-  it("re-bootstraps only once when several requests hit world_required together", async () => {
+  it("re-bootstraps only once when several requests hit auth_required together", async () => {
     const { api, calls } = setup({
-      "GET /portfolio": sequence(worldRequired, () => json(PORTFOLIO)),
-      "GET /assets": sequence(worldRequired, () => json([])),
+      "GET /portfolio": sequence(authRequired, () => json(PORTFOLIO)),
+      "GET /assets": sequence(authRequired, () => json([])),
     });
 
     await Promise.all([api.GET("/portfolio"), api.GET("/assets")]);
@@ -111,7 +111,7 @@ describe("world bootstrap middleware", () => {
       qty: 2,
     };
     const { api, requests } = setup({
-      "POST /orders": sequence(worldRequired, async (request) =>
+      "POST /orders": sequence(authRequired, async (request) =>
         json({ echoed: await request.json() }),
       ),
     });
@@ -127,7 +127,7 @@ describe("world bootstrap middleware", () => {
   it("ignores other 401s", async () => {
     const { api, calls } = setup({
       "GET /portfolio": () =>
-        json({ detail: "auth_required" }, { status: 401 }),
+        json({ detail: "invalid_token" }, { status: 401 }),
     });
     await api.GET("/portfolio");
     expect(calls("GET /world")).toBe(1);

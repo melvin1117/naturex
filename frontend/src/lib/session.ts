@@ -1,23 +1,28 @@
 /**
- * World (and, from T55, session) bootstrap: the one place that knows how the visitor gets a
- * sandbox world. Today that's `GET /world`, which sets the `nx_world` cookie. ADR-0005 / T55
- * replace the cookie with an `nx_session` session; when that lands, only this module (the
- * bootstrap path, the cookie names and the "expired" codes) should need to change: screens,
- * hooks and the API client go through it.
+ * World bootstrap: the one place that knows how the app learns its world. The backend derives
+ * the world from the `nx_session` cookie (ADR-0005 §2, T73): anonymous visitors and password
+ * accounts read the live world, a demo session its own sandbox. `GET /world` returns that
+ * world plus `me` (the signed-in account, or null). Screens, hooks and the API client go
+ * through this module, so session changes (T55 demo sessions) stay here.
  */
 import type { components } from "./api/schema";
 import { toApiError, type ApiError } from "./api/errors";
 
 export type World = components["schemas"]["WorldOut"];
 
-/** The route that creates or returns the visitor's world (and sets its cookie). */
+/** The route that returns the session's world and the signed-in account. Sets no cookie. */
 export const BOOTSTRAP_PATH = "/world";
 
-/** Cookies a server-side fetch forwards to the backend. `nx_session` arrives with T55. */
-export const SESSION_COOKIES = ["nx_world", "nx_session"] as const;
+/** Cookies a server-side fetch forwards to the backend (the world comes from the session). */
+export const SESSION_COOKIES = ["nx_session"] as const;
 
-/** 401 `detail` codes that mean "bootstrap again, then retry" (deps.py WORLD_REQUIRED). */
-const SESSION_EXPIRED_CODES: ReadonlySet<string> = new Set(["world_required"]);
+/**
+ * 401 `detail` codes that mean "re-read the world, then retry once" (deps.py AUTH_REQUIRED).
+ * A signed-in request gets one only if its session ended (signed out elsewhere, expired, or
+ * its demo sandbox was pruned); re-reading `GET /world` updates `world` and `me` so the app
+ * sees it's signed out, and the retry returns the 401 to the caller if it still is.
+ */
+const SESSION_EXPIRED_CODES: ReadonlySet<string> = new Set(["auth_required"]);
 
 export function isSessionExpired(status: number, body: unknown): boolean {
   if (status !== 401 || !body || typeof body !== "object") return false;
@@ -43,7 +48,7 @@ export interface CookieReader {
 }
 
 /**
- * The `Cookie` header a server-side fetch sends so the backend sees the visitor's world.
+ * The `Cookie` header a server-side fetch sends so the backend sees the visitor's session.
  * Only the session cookies are forwarded, never the visitor's other cookies.
  */
 export function forwardedCookieHeader(
@@ -68,7 +73,7 @@ export interface SessionBootstrap {
   /** Resolve once the world exists. Single-flight: concurrent callers share one request. */
   ensure(): Promise<World>;
   /**
-   * Bootstrap again after a 401 `world_required`. Pass the `generation` the failing request
+   * Bootstrap again after a 401 `auth_required`. Pass the `generation` the failing request
    * was sent under: if another caller already re-bootstrapped since then, no new request.
    */
   refresh(sentUnderGeneration?: number): Promise<World>;

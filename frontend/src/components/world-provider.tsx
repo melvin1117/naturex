@@ -46,7 +46,7 @@ function WorldBootstrap() {
 
 /**
  * Renders `children` only once the visitor's world exists; until then an accessible loading
- * state, or an error with a retry if the world can't be opened (e.g. 503 busy).
+ * state, or an error with a retry if the world can't be opened (e.g. the backend is down).
  */
 export function WorldGate({ children }: { children: ReactNode }) {
   const { status, error, retry } = useWorld();

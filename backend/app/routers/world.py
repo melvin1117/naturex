@@ -51,7 +51,7 @@ def get_world(world: CurrentWorld, principal: OptionalPrincipal, session: Sessio
     "/reset",
     response_model=WorldOut,
     responses={
-        401: {"description": AUTH_REQUIRED},
+        401: {"description": f"`{AUTH_REQUIRED}`: sign in first"},
         403: {"description": f"`{DEMO_ONLY}`: only a demo session can reset its sandbox"},
     },
 )

@@ -76,7 +76,7 @@ export interface EventHubOptions {
   fetch?: PollFetch;
   /** Wait for the world before connecting (the bootstrap's `ensure`). */
   ensureSession?: () => Promise<unknown>;
-  /** Called when a poll gets 401 `world_required` (the bootstrap's `refresh`). */
+  /** Called when a poll gets 401 `auth_required` (the bootstrap's `refresh`). */
   refreshSession?: () => Promise<unknown>;
   pollIntervalMs?: number;
   /** Errors in a row, without an `open` in between, before falling back to polling. */

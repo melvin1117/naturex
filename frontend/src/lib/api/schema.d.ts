@@ -340,7 +340,8 @@ export interface paths {
         put?: never;
         /**
          * Place Order
-         * @description Fill a market order instantly. `is_primary` is true if any shares came from the IPO float.
+         * @description Fill a market order for the signed-in user. `is_primary` is true if any shares came from
+         *     the IPO float.
          */
         post: operations["place_order_orders_post"];
         delete?: never;
@@ -356,7 +357,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Portfolio */
+        /**
+         * Get Portfolio
+         * @description The signed-in user's cash and holdings.
+         */
         get: operations["get_portfolio_portfolio_get"];
         put?: never;
         post?: never;
@@ -534,9 +538,8 @@ export interface paths {
         };
         /**
          * Get World
-         * @description The visitor's world. The first call creates it and sets the `nx_world` cookie.
-         *
-         *     Call this once before any other route; they return 401 `world_required` without it.
+         * @description The session's world: the live world when anonymous or signed in with a password, the
+         *     demo sandbox for a demo session. `me` is the signed-in account, or null.
          */
         get: operations["get_world_world_get"];
         put?: never;
@@ -558,7 +561,9 @@ export interface paths {
         put?: never;
         /**
          * Reset
-         * @description "Reset my demo": restore the visitor's world to the template, keeping its ID.
+         * @description "Reset my demo": restore the demo session's sandbox to the template, keeping its ID.
+         *
+         *     The live world is never reset: any other session gets 403 `demo_only`.
          */
         post: operations["reset_world_reset_post"];
         delete?: never;
@@ -1745,7 +1750,10 @@ export interface components {
             name: string;
             status: components["schemas"]["AssetStatus"];
         };
-        /** WorldOut */
+        /**
+         * WorldOut
+         * @description The session's world (ADR-0005 §2): `live`, or a demo sandbox (`visitor`).
+         */
         WorldOut: {
             /**
              * Id
@@ -1763,6 +1771,7 @@ export interface components {
             personas: components["schemas"]["PersonaOut"][];
             /** Assets */
             assets: components["schemas"]["WorldAssetOut"][];
+            me: components["schemas"]["MeOut"] | null;
         };
     };
     responses: never;
@@ -2837,13 +2846,6 @@ export interface operations {
                     "application/json": components["schemas"]["WorldOut"];
                 };
             };
-            /** @description Too many new demo worlds; retry later */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
         };
     };
     reset_world_reset_post: {
@@ -2864,8 +2866,15 @@ export interface operations {
                     "application/json": components["schemas"]["WorldOut"];
                 };
             };
-            /** @description No world yet: call GET /world first */
+            /** @description `auth_required`: sign in first */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `demo_only`: only a demo session can reset its sandbox */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -514,7 +514,7 @@ class WorldOut(BaseModel):
     created_at: datetime
     personas: list[PersonaOut]
     assets: list[WorldAssetOut]
-    me: MeOut | None = None  # the signed-in account (as GET /me), or null when anonymous
+    me: MeOut | None  # the signed-in account (as GET /me), or null when anonymous
 
 
 # ----- Communities (ADR-0005 §3, T68) -----

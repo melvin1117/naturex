@@ -231,7 +231,10 @@ export interface WorldResult {
   resetError: ApiError | null;
 }
 
-/** The visitor's sandbox world. Its personas' cash is a snapshot; use `usePortfolio` for live cash. */
+/**
+ * The session's world (live, or a demo sandbox) and `world.me`, the signed-in account or null.
+ * Its personas' cash is a snapshot; use `usePortfolio` for live cash.
+ */
 export function useWorld(): WorldResult {
   const { session } = useDataLayer();
   const state = useSyncExternalStore(

@@ -9,8 +9,8 @@ type ValidationIssue = { loc?: unknown[]; msg?: string };
 const CODE_PATTERN = /^[a-z][a-z0-9_]*$/;
 
 const CODE_MESSAGES: Record<string, string> = {
-  world_required:
-    "Your demo world has expired. Reload the page to start a new one.",
+  auth_required: "Sign in to do that.",
+  demo_only: "Only a demo session can reset its world.",
   too_many_event_streams:
     "Live updates are busy right now; they will keep refreshing every few seconds.",
 };
@@ -22,7 +22,7 @@ export class ApiError extends Error {
     /** HTTP status, or 0 when the request never got a response (offline, DNS, CORS). */
     readonly status: number,
     message: string,
-    /** Machine-readable code from a snake_case `detail` (e.g. `world_required`), else null. */
+    /** Machine-readable code from a snake_case `detail` (e.g. `auth_required`), else null. */
     readonly code: string | null = null,
     /** The raw `detail` from the response body, for debugging and 422 field errors. */
     readonly detail: unknown = null,

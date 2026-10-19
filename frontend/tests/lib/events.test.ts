@@ -9,7 +9,7 @@ import {
   FakeEventSource,
   json,
   sequence,
-  worldRequired,
+  authRequired,
 } from "./helpers";
 
 type PollRoutes = Parameters<typeof fakeBackend>[0];
@@ -228,9 +228,9 @@ describe("EventHub polling fallback", () => {
     expect(FakeEventSource.instances).toHaveLength(3);
   });
 
-  it("re-bootstraps the world when a poll gets 401 world_required", async () => {
+  it("re-bootstraps the world when a poll gets 401 auth_required", async () => {
     const { hub, refreshSession } = setup({
-      "GET /events": sequence(worldRequired, () => json([tick(1)])),
+      "GET /events": sequence(authRequired, () => json([tick(1)])),
     });
     const handler = vi.fn();
     hub.subscribe("price_tick", handler);
