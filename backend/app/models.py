@@ -591,3 +591,40 @@ class LlmCall(SQLModel, table=True):
     status: str = Field(default="ok", sa_column_kwargs={"server_default": "ok"})
     """ok | invalid_output | error (one row per attempt, including failed ones)."""
     created_at: datetime = _created_at()
+
+
+class EarthObsCache(SQLModel, table=True):
+    """Live Earth Engine metrics of a polygon (T60), keyed by its geometry hash.
+
+    Not world-scoped: the same geometry gives the same observations in every world, so a
+    sandbox reset or prune never makes a listing pay for a second computation. Only metrics
+    are stored (no world, account or listing identifiers)."""
+
+    __tablename__ = "earth_obs_cache"
+
+    geometry_sha256: str = Field(sa_column=Column(String(64), primary_key=True))
+    data_version: str = Field(sa_column=Column(String, primary_key=True))
+    metrics: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
+    latency_ms: int
+    computed_at: datetime = _created_at()
+
+
+class LiveRatingRequest(SQLModel, table=True):
+    """One counted live Earth Engine rating (T60 quotas): per account per day, and globally.
+
+    Kept through sandbox resets and prunes (like `llm_calls`), so neither frees quota; rows
+    older than two days are pruned when a new one is counted."""
+
+    __tablename__ = "live_rating_requests"
+    __table_args__ = (
+        Index("ix_live_rating_requests_user_id_created_at", "user_id", "created_at"),
+        Index("ix_live_rating_requests_created_at", "created_at"),
+    )
+
+    id: int | None = Field(
+        default=None,
+        sa_column=Column(BigInteger, primary_key=True, autoincrement=True),
+    )
+    user_id: UUID
+    geometry_sha256: str = Field(sa_column=Column(String(64), nullable=False))
+    created_at: datetime = _created_at()

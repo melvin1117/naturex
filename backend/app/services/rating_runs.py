@@ -72,6 +72,12 @@ from app.events import lock_world_publisher, publish
 from app.llm import CallLog, CallRecord, LLMClient, LLMError, LLMResult
 from app.models import Asset, AssetStatus, Report, StreamEventType, World, WorldEvent
 from app.schemas import NewsScoutOutput, RatingRunOut, RatingRunStatus, RatingRunStep
+from app.services.earth_obs_live import (
+    LiveEarthObs,
+    LiveMetricsError,
+    LiveQuota,
+    build_live_earth_obs,
+)
 from app.services.lifecycle import is_public
 from app.services.listings import apply_rating_result, lock_asset, note_rating_failure
 from app.services.listings import audience as listing_audience
@@ -84,7 +90,7 @@ from app.tools.earth_obs import (
     load_site_metrics,
     mock_listing_metrics,
 )
-from app.tools.geometry import metrics_match_polygon
+from app.tools.geometry import geometry_sha256, metrics_match_polygon
 
 log = logging.getLogger(__name__)
 
@@ -99,6 +105,9 @@ GLOBAL_RUNS_LOCK_KEY = 0x4E585252
 """Advisory key ("NXRR") serialising the global run count; always taken before a world lock."""
 REQUIRED_TOOLS = frozenset({Tool.EARTH_OBS, Tool.VALUATION, Tool.AUDITOR})
 NO_CACHED_METRICS = "no_cached_metrics"
+LIVE_METRICS_PENDING = "live_metrics_pending"
+"""Live Earth Engine is on but this polygon isn't computed yet, and the run may not compute it
+(only a listing submit, which counts against the live-rating quota, may)."""
 
 Trigger = Literal["api", "time_machine", "listing"]
 
@@ -208,24 +217,53 @@ LlmFactory = Callable[[Callable[[CallLog], CallLog]], LLMClient | None]
 
 
 def resolve_metrics(
-    loader: MetricsLoader, asset: AssetInfo, scenario: ScenarioName, use_mocks: bool
+    loader: MetricsLoader,
+    asset: AssetInfo,
+    scenario: ScenarioName,
+    use_mocks: bool,
+    live: LiveEarthObs | None = None,
+    *,
+    compute_live: bool = False,
 ) -> EarthObsMetrics:
-    """The run's metrics for the asset: the loader's, or (with `USE_MOCKS=true` only, for a new
-    polygon with none) `mock_listing_metrics`. Metrics for a new polygon must describe it: never
-    a curated site's, centroid in its convex hull and area within ±10 % (`foreign_metrics`)."""
+    """The run's metrics for the asset: the loader's, else for a new polygon with none (T60)
+    its live Earth Engine metrics when live is on (cached, or computed if `compute_live`),
+    else (with `USE_MOCKS=true` only) `mock_listing_metrics`. Metrics for a new polygon must
+    describe it: never a curated site's, centroid in its convex hull and area within ±10 %
+    (`foreign_metrics`)."""
     try:
         metrics = loader(asset, scenario)
     except ToolFailed as exc:
-        lat, lon, area = asset.centroid_lat, asset.centroid_lon, asset.area_ha
-        mockable = use_mocks and asset.site_key is None and scenario == "baseline"
-        if exc.code != NO_CACHED_METRICS or not mockable:
+        new_polygon = asset.site_key is None and scenario == "baseline"
+        if exc.code != NO_CACHED_METRICS or not new_polygon:
             raise
-        if lat is None or lon is None or area is None:
-            raise
-        return mock_listing_metrics(area_ha=area, centroid_lat=lat, centroid_lon=lon)
+        metrics = _new_polygon_metrics(asset, exc, use_mocks, live, compute_live)
     if asset.site_key is None and not _describes_polygon(asset, metrics):
         raise ToolFailed("foreign_metrics", retryable=False)  # never another site's data
     return metrics
+
+
+def _new_polygon_metrics(
+    asset: AssetInfo,
+    missing: ToolFailed,
+    use_mocks: bool,
+    live: LiveEarthObs | None,
+    compute_live: bool,
+) -> EarthObsMetrics:
+    lat, lon, area = asset.centroid_lat, asset.centroid_lon, asset.area_ha
+    if live is not None and asset.geojson is not None:
+        # Live Earth Engine is on: a new polygon is rated with its own observations, never mocks.
+        cached = live.cached(asset.geojson)
+        if cached is not None:
+            return cached
+        if not compute_live:
+            raise ToolFailed(LIVE_METRICS_PENDING, retryable=False)
+        try:
+            return live.compute(asset.geojson)
+        except LiveMetricsError as exc:
+            raise ToolFailed(exc.code, retryable=False) from exc
+    if not use_mocks or lat is None or lon is None or area is None:
+        raise missing
+    return mock_listing_metrics(area_ha=area, centroid_lat=lat, centroid_lon=lon)
 
 
 def _describes_polygon(asset: AssetInfo, metrics: EarthObsMetrics) -> bool:
@@ -258,11 +296,11 @@ def asset_info(asset: Asset) -> AssetInfo:
 def load_cached_metrics(asset: AssetInfo, scenario: ScenarioName) -> EarthObsMetrics:
     """Committed demo-site metrics (T11/T13).
 
-    **The seam for new listings (T58 → T60):** a new polygon has no `site_key`, so this raises
-    `no_cached_metrics` and the run fails before any rating; the listing stays in `rating` with
-    `status_reason = no_satellite_metrics` and never shows another site's data. T60 plugs a
-    live Earth Engine loader in here (`RatingRunner.metrics_loader`). With `USE_MOCKS=true`
-    only, the toolbox falls back to `mock_listing_metrics`, labelled as mock data.
+    A new polygon has no `site_key`, so this raises `no_cached_metrics`; `resolve_metrics`
+    then uses live Earth Engine (T60, `RatingRunner.live_metrics`) when it is on, else (with
+    `USE_MOCKS=true` only) `mock_listing_metrics`, labelled as mock data. With neither, the run
+    fails before any rating; the listing stays in `rating` with `status_reason =
+    no_satellite_metrics` and never shows another site's data.
     """
     if asset.site_key is None:
         raise ToolFailed(NO_CACHED_METRICS, retryable=False)
@@ -406,6 +444,14 @@ class RunProgress:
 # ----- the toolbox ------------------------------------------------------------------------------
 
 
+@dataclass(frozen=True, slots=True)
+class MetricsProbe:
+    version: str | None
+    """The data version a run would rate with, or None (no metrics for the polygon)."""
+    live_compute: bool = False
+    """True when that run must compute the metrics live (T60): the submit counts the quota."""
+
+
 @dataclass(slots=True)
 class RunDeps:
     session_factory: Callable[[], Session]
@@ -415,6 +461,7 @@ class RunDeps:
     evidence: EvidenceProvider
     today: Callable[[], date]
     clock: Callable[[], float] = time.perf_counter
+    live: LiveEarthObs | None = None
 
 
 def previous_for_bundle(report: Report | None) -> PreviousReport | None:
@@ -595,7 +642,13 @@ class RunToolbox:
 
     def _load_metrics(self) -> EarthObsMetrics:
         return resolve_metrics(
-            self._deps.metrics_loader, self._asset, self.scenario, self._deps.settings.use_mocks
+            self._deps.metrics_loader,
+            self._asset,
+            self.scenario,
+            self._deps.settings.use_mocks,
+            self._deps.live,
+            # Only a listing submit counted the live-rating quota (T60), so only it computes.
+            compute_live=self._spec.trigger == "listing",
         )
 
     def _earth_obs(self) -> dict[str, Any]:
@@ -766,6 +819,8 @@ class RatingRunner:
     llm_factory: LlmFactory
     news: NewsRunner
     metrics_loader: MetricsLoader = load_cached_metrics
+    live_metrics: LiveEarthObs | None = None
+    """Live Earth Engine for new polygons (T60); None when `EARTH_ENGINE_LIVE` is off."""
     evidence: EvidenceProvider = field(default_factory=NoFieldEvidence)
     today: Callable[[], date] = field(default=lambda: datetime.now(UTC).date())
     max_pending: int = MAX_PENDING_RUNS
@@ -930,6 +985,7 @@ class RatingRunner:
                 news=self.news,
                 evidence=self.evidence,
                 today=self.today,
+                live=self.live_metrics,
             )
             toolbox = RunToolbox(
                 spec,
@@ -1005,16 +1061,36 @@ class RatingRunner:
                 raise RunAborted("asset_not_found")
             return asset_info(asset)
 
-    def metrics_version(self, asset: Asset) -> str | None:
-        """The data version the run's metrics would have for `asset` now, or None if there are
-        none (T58: resubmitting a listing). Never raises for missing metrics."""
+    def metrics_probe(self, asset: Asset) -> MetricsProbe:
+        """What a run's metrics would be for `asset` now, without computing anything (T58's
+        resubmit check, T60's quota). Never raises for missing metrics."""
         try:
             metrics = resolve_metrics(
-                self.metrics_loader, asset_info(asset), "baseline", self.settings.use_mocks
+                self.metrics_loader,
+                asset_info(asset),
+                "baseline",
+                self.settings.use_mocks,
+                self.live_metrics,
             )
-        except ToolFailed:
-            return None
-        return metrics.data_version
+        except ToolFailed as exc:
+            if exc.code == LIVE_METRICS_PENDING and self.live_metrics is not None:
+                return MetricsProbe(self.live_metrics.data_version, live_compute=True)
+            return MetricsProbe(None)
+        return MetricsProbe(metrics.data_version)
+
+    def metrics_version(self, asset: Asset) -> str | None:
+        """The data version the run's metrics would have for `asset` now, or None if there are
+        none (T58: resubmitting a listing)."""
+        return self.metrics_probe(asset).version
+
+    def live_quota(self, asset: Asset, user_id: UUID) -> LiveQuota:
+        """The live rating a submit of `asset` by `user_id` counts (T60)."""
+        return LiveQuota(
+            user_id=user_id,
+            geometry_sha256=geometry_sha256(asset.geojson),
+            per_user_per_day=self.settings.live_ratings_per_user_per_day,
+            global_per_day=self.settings.live_ratings_global_per_day,
+        )
 
     def _store(
         self,
@@ -1397,6 +1473,7 @@ def default_runner() -> RatingRunner:
                 ),
                 llm_factory=_production_llm(settings, session_factory),
                 news=news_runner(settings),
+                live_metrics=build_live_earth_obs(settings, session_factory),
             )
         return _default_runner
 
