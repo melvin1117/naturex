@@ -159,12 +159,21 @@ def audience(asset: Asset, status: AssetStatus | None = None) -> UUID | None:
 # ----- locks ------------------------------------------------------------------------------------
 
 
+def lock_world_key_share(session: Session, world_id: UUID) -> None:
+    """The world row `FOR KEY SHARE`: waits behind a "Reset my demo" (which locks it `FOR
+    UPDATE`) without blocking other writers in the world. First in every lock order. Raises
+    LookupError if the world is gone."""
+    found = session.exec(
+        select(World.id).where(World.id == world_id).with_for_update(read=True, key_share=True)
+    ).one_or_none()
+    if found is None:
+        raise LookupError(f"world {world_id} not found")
+
+
 def lock_listings(session: Session, world_id: UUID) -> None:
     """The world row `FOR KEY SHARE`, then the world's listing advisory lock (see the module
     docstring for the order)."""
-    session.exec(
-        select(World.id).where(World.id == world_id).with_for_update(read=True, key_share=True)
-    ).one()
+    lock_world_key_share(session, world_id)
     session.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
         {"key": f"listings:{world_id}"},
@@ -380,12 +389,9 @@ def create_draft(
         area_ha=area.area_ha,
         status=AssetStatus.DRAFT,
         attested_at=now or datetime.now(UTC),
-        primary_shares_remaining=0,  # set below from the defaults; T59 sets the IPO's terms
+        primary_shares_remaining=0,  # no shares exist before the IPO (T59 sets the terms)
     )
     _set_area(asset, area)
-    asset.primary_shares_remaining = int(
-        Decimal(asset.total_shares) * (Decimal(100) - asset.retained_pct) / Decimal(100)
-    )
     session.add(asset)
     session.flush()
     record(session, asset, created(), payload=_details_payload(asset))

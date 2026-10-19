@@ -363,9 +363,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` · **Deps:** T19, T68, T36, T29, T30 · **Files:** `backend/app/services/lifecycle.py`, `backend/app/routers/assets.py`, `backend/tests/test_lifecycle.py`
 
 ### T59 · IPO launch (#102) — D2 · S · Must · A7 C4
-- [ ] `GET /assets/{id}/ipo/preview` returns the IPO price with every term of the dev-spec §8 formula
-- [ ] `POST /assets/{id}/ipo` (owner only, listed, once): validates shares offered and retained % (10–90); in one transaction writes the first `prices` row (`reason='ipo'`), seeds the treasury's retained holding, appends a ledger entry and opens the primary float
-- [ ] Orders on an asset without an IPO return 409 `not_trading`
+- [x] `GET /assets/{id}/ipo/preview` returns the IPO price with every term of the dev-spec §8 formula
+- [x] `POST /assets/{id}/ipo` (owner only, listed, once): validates shares offered and retained % (10–90); in one transaction writes the first `prices` row (`reason='ipo'`), seeds the treasury's retained holding, appends a ledger entry and opens the primary float
+- [x] Orders on an asset without an IPO return 409 `not_trading`
 
 **Verify:** `make test` · **Deps:** T16, T17, T30, T58 · **Files:** `backend/app/routers/ipo.py`, `backend/app/services/ipo.py`, `backend/tests/test_ipo.py`
 

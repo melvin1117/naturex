@@ -145,7 +145,7 @@ export function orderFailure(
     case "not_trading":
       return {
         message:
-          "Trading on this site hasn't opened yet: its community hasn't launched the opening offer.",
+          "This site isn't trading yet: its community hasn't launched the opening offer, or trading was just paused. Refresh to see its status.",
       };
     case "insufficient_cash":
       return {

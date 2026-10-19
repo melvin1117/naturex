@@ -28,7 +28,7 @@ import hashlib
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID
 
@@ -304,6 +304,65 @@ def asset_is_wetland(session: Session, asset: Asset, metrics: EarthObsMetrics) -
     if metrics.simulated:
         raise ValueError(f"asset {asset.id} has no observed baseline to decide wetland status")
     return is_wetland_from_landcover(metrics.landcover)
+
+
+@dataclass(frozen=True, slots=True)
+class FairValueInputs:
+    """What a report's fair value was computed from (dev-spec §8)."""
+
+    value_mid: Decimal
+    health: Decimal
+    confidence: Decimal
+
+
+def _snapshot_decimal(snapshot: Mapping[str, Any], key: str) -> Decimal | None:
+    value = snapshot.get(key)
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except InvalidOperation:
+        return None
+
+
+def _fair_value_snapshot(report: Report) -> Mapping[str, Any]:
+    rating = (report.auditor_json or {}).get("rating")
+    snapshot = rating.get("fair_value") if isinstance(rating, Mapping) else None
+    return snapshot if isinstance(snapshot, Mapping) else {}
+
+
+def fair_value_inputs(report: Report) -> FairValueInputs | None:
+    """The fair value inputs a sealed report was priced from, all from one source.
+
+    The rating snapshot (`auditor_json.rating.fair_value`) holds the exact, unrounded inputs,
+    so with the report's own share count they reproduce its `fair_value_per_share`; it is used
+    when it has all three. Otherwise the stored columns, when they have all three. None if
+    neither does.
+    """
+    snapshot = _fair_value_snapshot(report)
+    exact = [_snapshot_decimal(snapshot, key) for key in ("value_mid", "health", "confidence")]
+    stored = [report.value_mid, report.health_score, report.confidence]
+    for value_mid, health, confidence in (exact, stored):
+        if value_mid is not None and health is not None and confidence is not None:
+            return FairValueInputs(value_mid=value_mid, health=health, confidence=confidence)
+    return None
+
+
+def report_fair_value_total(report: Report) -> Decimal | None:
+    """The report's total fair value (independent of the share count): the snapshot's, else
+    recomputed from its inputs by the market engine. None without inputs."""
+    stored = _snapshot_decimal(_fair_value_snapshot(report), "fair_value_total")
+    if stored is not None:
+        return stored
+    inputs = fair_value_inputs(report)
+    if inputs is None:
+        return None
+    try:
+        return fair_value_total(
+            value_mid=inputs.value_mid, health=inputs.health, confidence=inputs.confidence
+        )
+    except ValueError:
+        return None
 
 
 def latest_report(session: Session, world_id: UUID, asset_id: UUID) -> Report | None:

@@ -4,6 +4,8 @@
   "country": "MX",
   "description": "Hero inland wetland near Mexico City (demo).",
   "status": "listed",
+  "trading": true,
+  "ipo_at": "2026-10-01T00:00:00Z",
   "area_ha": "206.70",
   "centroid_lat": 19.2873,
   "centroid_lon": -99.0976,

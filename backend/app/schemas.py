@@ -19,6 +19,14 @@ from app.auth import (
     normalize_email,
 )
 from app.communities import clean_country, clean_description, clean_name
+from app.market.offering import (
+    DEFAULT_RETAINED_PCT,
+    DEFAULT_TOTAL_SHARES,
+    MAX_RETAINED_PCT,
+    MAX_TOTAL_SHARES,
+    MIN_RETAINED_PCT,
+    MIN_TOTAL_SHARES,
+)
 from app.models import (
     AssetStatus,
     CommunityRole,
@@ -251,6 +259,11 @@ class AssetCard(BaseModel):
         default_factory=list,
         description="The latest prices (up to 30), oldest first, for the card's sparkline.",
     )
+    trading: bool = Field(
+        default=False,
+        description="Orders are open: listed and its IPO launched (T59). False for a listing "
+        "awaiting its IPO and for a suspended asset; orders on it are 409 not_trading.",
+    )
 
 
 class EventOut(BaseModel):
@@ -334,8 +347,14 @@ class AssetDetail(BaseModel):
     centroid_lat: float | None = None
     centroid_lon: float | None = None
     geojson: dict[str, Any]
-    total_shares: int
-    retained_pct: Decimal
+    total_shares: int | None = Field(
+        default=None,
+        description="Shares issued at the IPO; null before it (ratings until then quote a fair "
+        "value per share at 1,000,000 reference shares; T59).",
+    )
+    retained_pct: Decimal | None = Field(
+        default=None, description="% the community's treasury kept at the IPO; null before it."
+    )
     primary_shares_remaining: int
     community_wallet: Decimal
     site_key: str | None = None
@@ -346,6 +365,76 @@ class AssetDetail(BaseModel):
     price_change_pct: float | None = Field(
         default=None, description="Latest price vs the IPO price, in percent (2 dp); as on cards."
     )
+    trading: bool = Field(default=False, description="See AssetCard.trading (T59).")
+    ipo_at: datetime | None = Field(
+        default=None, description="When the IPO opened trading; null before the IPO (T59)."
+    )
+
+
+class IpoLaunch(BaseModel):
+    """The offering an owner launches (T59): shares issued and the % the community keeps."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_shares: int = Field(
+        default=DEFAULT_TOTAL_SHARES,
+        ge=MIN_TOTAL_SHARES,
+        le=MAX_TOTAL_SHARES,
+        description="Shares issued at the IPO; the shares offered (the primary float) are "
+        "total_shares × (1 − retained_pct/100), rounded down.",
+    )
+    retained_pct: Decimal = Field(
+        default=DEFAULT_RETAINED_PCT,
+        ge=MIN_RETAINED_PCT,
+        le=MAX_RETAINED_PCT,
+        decimal_places=2,
+        description="Percent of the shares the community's treasury keeps (10–90).",
+    )
+    expected_price: Decimal = Field(
+        gt=0,
+        decimal_places=4,
+        description="The price per share the owner confirmed in the preview (`ipo_price`; "
+        "trailing zeros don't matter): 409 ipo_price_changed if a newer report moved it.",
+    )
+
+
+class IpoTermsOut(BaseModel):
+    """The IPO price with every term of dev-spec §8's formula (play money, sandbox only)."""
+
+    asset_id: UUID
+    report_id: UUID
+    report_version: int
+    formula: str = Field(
+        default="fair_value_total = value_mid × 10 × health_factor × confidence_factor; "
+        "ipo_price = fair_value_per_share = fair_value_total / total_shares; "
+        "shares_offered = total_shares × (1 − retained_pct/100)"
+    )
+    value_mid: Decimal = Field(description="Int$2020/yr from the latest report.")
+    health: Decimal
+    confidence: Decimal
+    health_factor: Decimal = Field(description="0.5 + 0.5 × health/100")
+    confidence_factor: Decimal = Field(description="0.7 + 0.3 × confidence/100")
+    fair_value_total: Decimal
+    total_shares: int
+    fair_value_per_share: Decimal
+    ipo_price: Decimal = Field(description="Equals fair_value_per_share.")
+    retained_pct: Decimal
+    shares_offered: int = Field(description="The primary float, sold to investors first.")
+    retained_shares: int = Field(description="Held by the community's treasury.")
+
+
+class IpoPreviewOut(IpoTermsOut):
+    launchable: bool = Field(description="Whether POST /assets/{id}/ipo would go ahead now.")
+    blocked_reason: str | None = Field(
+        default=None,
+        description="Why not, as the code the launch would return: ipo_price_too_high (a "
+        "share costs more than a new account's starting cash: issue more shares), "
+        "run_in_progress, or a verification code (T69).",
+    )
+
+
+class IpoOut(IpoTermsOut):
+    launched_at: datetime
 
 
 class EvidenceResponse(BaseModel):

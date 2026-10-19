@@ -1188,6 +1188,153 @@
         }
       }
     },
+    "/assets/{asset_id}/ipo/preview": {
+      "get": {
+        "tags": [
+          "ipo"
+        ],
+        "summary": "Preview Ipo",
+        "description": "The price the owner would launch at now: every term of `ipo_price =\nfair_value_per_share`, computed by the market engine from the latest report, and whether\nthe launch would go ahead (`launchable`, else `blocked_reason`). Writes nothing; a later\nreport can change it, so the launch confirms it with `expected_price`.",
+        "operationId": "preview_ipo_assets__asset_id__ipo_preview_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          },
+          {
+            "name": "total_shares",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 10000000,
+              "minimum": 10000,
+              "default": 1000000,
+              "title": "Total Shares"
+            }
+          },
+          {
+            "name": "retained_pct",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 90.0,
+                  "minimum": 10.0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$"
+                }
+              ],
+              "default": "51.00",
+              "title": "Retained Pct"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IpoPreviewOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "owner_only (stewards too), treasury_cannot_act"
+          },
+          "404": {
+            "description": "Not found in the session's world, or not visible to the caller"
+          },
+          "409": {
+            "description": "`ipo_already_launched`, `asset_not_listed` (draft, under review, suspended\u2026), `no_rating` (no usable report) or `ipo_price_too_low` (the price per share rounds to zero: issue fewer shares)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assets/{asset_id}/ipo": {
+      "post": {
+        "tags": [
+          "ipo"
+        ],
+        "summary": "Launch Ipo",
+        "description": "Launch the IPO of a `listed` asset, once, at the previewed price (`expected_price`):\nin one transaction the first `prices` row\n(`reason: ipo`), the community treasury's retained holding, a `price_anchor` ledger entry\nwith every term and the primary float open for sale; a public `price_tick` follows. Play\nmoney only: shares are sandbox units, not securities.",
+        "operationId": "launch_ipo_assets__asset_id__ipo_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IpoLaunch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IpoOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "owner_only (stewards too), treasury_cannot_act"
+          },
+          "404": {
+            "description": "Not found in the session's world, or not visible to the caller"
+          },
+          "409": {
+            "description": "`ipo_already_launched`, `asset_not_listed` (draft, under review, suspended\u2026), `no_rating` (no usable report) or `ipo_price_too_low` (the price per share rounds to zero: issue fewer shares), `ipo_price_too_high` (a share would cost more than a new account's starting cash: issue more shares), `run_in_progress` (a rating run is active) or a verification code (T69), or `ipo_price_changed` (`expected_price` is stale)"
+          },
+          "422": {
+            "description": "total_shares outside 10,000\u201310,000,000 or retained_pct outside 10\u201390"
+          }
+        }
+      }
+    },
     "/reports/{report_id}": {
       "get": {
         "tags": [
@@ -1321,7 +1468,7 @@
             "description": "Asset not in the session's world"
           },
           "409": {
-            "description": "Asset not listed or without a price; `insufficient_cash`, `insufficient_shares`, `insufficient_supply`, or `price_moved` (the total is above `max_total` or below `min_total`)"
+            "description": "`not_trading` (not listed, e.g. suspended, or its IPO hasn't launched; T59), `insufficient_cash`, `insufficient_shares`, `insufficient_supply`, or `price_moved` (the total is above `max_total` or below `min_total`)"
           },
           "422": {
             "description": "Validation Error",
@@ -1397,7 +1544,7 @@
             "description": "Asset not in the session's world"
           },
           "409": {
-            "description": "Asset not listed or without a price"
+            "description": "`not_trading`: not listed (e.g. suspended) or its IPO hasn't launched (T59)"
           },
           "422": {
             "description": "Validation Error",
@@ -2405,6 +2552,12 @@
             "type": "array",
             "title": "Sparkline",
             "description": "The latest prices (up to 30), oldest first, for the card's sparkline."
+          },
+          "trading": {
+            "type": "boolean",
+            "title": "Trading",
+            "description": "Orders are open: listed and its IPO launched (T59). False for a listing awaiting its IPO and for a suspended asset; orders on it are 409 not_trading.",
+            "default": false
           }
         },
         "type": "object",
@@ -2568,13 +2721,29 @@
             "title": "Geojson"
           },
           "total_shares": {
-            "type": "integer",
-            "title": "Total Shares"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Shares",
+            "description": "Shares issued at the IPO; null before it (ratings until then quote a fair value per share at 1,000,000 reference shares; T59)."
           },
           "retained_pct": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Retained Pct"
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retained Pct",
+            "description": "% the community's treasury kept at the IPO; null before it."
           },
           "primary_shares_remaining": {
             "type": "integer",
@@ -2642,6 +2811,25 @@
             ],
             "title": "Price Change Pct",
             "description": "Latest price vs the IPO price, in percent (2 dp); as on cards."
+          },
+          "trading": {
+            "type": "boolean",
+            "title": "Trading",
+            "description": "See AssetCard.trading (T59).",
+            "default": false
+          },
+          "ipo_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipo At",
+            "description": "When the IPO opened trading; null before the IPO (T59)."
           }
         },
         "type": "object",
@@ -2651,8 +2839,6 @@
           "status",
           "area_ha",
           "geojson",
-          "total_shares",
-          "retained_pct",
           "primary_shares_remaining",
           "community_wallet"
         ],
@@ -3398,6 +3584,289 @@
           "services_usd_yr"
         ],
         "title": "ImpactSummary"
+      },
+      "IpoLaunch": {
+        "properties": {
+          "total_shares": {
+            "type": "integer",
+            "maximum": 10000000.0,
+            "minimum": 10000.0,
+            "title": "Total Shares",
+            "description": "Shares issued at the IPO; the shares offered (the primary float) are total_shares \u00d7 (1 \u2212 retained_pct/100), rounded down.",
+            "default": 1000000
+          },
+          "retained_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 90.0,
+                "minimum": 10.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$"
+              }
+            ],
+            "title": "Retained Pct",
+            "description": "Percent of the shares the community's treasury keeps (10\u201390).",
+            "default": "51.00"
+          },
+          "expected_price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,4}0*$"
+              }
+            ],
+            "title": "Expected Price",
+            "description": "The price per share the owner confirmed in the preview (`ipo_price`; trailing zeros don't matter): 409 ipo_price_changed if a newer report moved it."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_price"
+        ],
+        "title": "IpoLaunch",
+        "description": "The offering an owner launches (T59): shares issued and the % the community keeps."
+      },
+      "IpoOut": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "report_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Report Id"
+          },
+          "report_version": {
+            "type": "integer",
+            "title": "Report Version"
+          },
+          "formula": {
+            "type": "string",
+            "title": "Formula",
+            "default": "fair_value_total = value_mid \u00d7 10 \u00d7 health_factor \u00d7 confidence_factor; ipo_price = fair_value_per_share = fair_value_total / total_shares; shares_offered = total_shares \u00d7 (1 \u2212 retained_pct/100)"
+          },
+          "value_mid": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value Mid",
+            "description": "Int$2020/yr from the latest report."
+          },
+          "health": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Health"
+          },
+          "confidence": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Confidence"
+          },
+          "health_factor": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Health Factor",
+            "description": "0.5 + 0.5 \u00d7 health/100"
+          },
+          "confidence_factor": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Confidence Factor",
+            "description": "0.7 + 0.3 \u00d7 confidence/100"
+          },
+          "fair_value_total": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fair Value Total"
+          },
+          "total_shares": {
+            "type": "integer",
+            "title": "Total Shares"
+          },
+          "fair_value_per_share": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fair Value Per Share"
+          },
+          "ipo_price": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ipo Price",
+            "description": "Equals fair_value_per_share."
+          },
+          "retained_pct": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Retained Pct"
+          },
+          "shares_offered": {
+            "type": "integer",
+            "title": "Shares Offered",
+            "description": "The primary float, sold to investors first."
+          },
+          "retained_shares": {
+            "type": "integer",
+            "title": "Retained Shares",
+            "description": "Held by the community's treasury."
+          },
+          "launched_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Launched At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "report_id",
+          "report_version",
+          "value_mid",
+          "health",
+          "confidence",
+          "health_factor",
+          "confidence_factor",
+          "fair_value_total",
+          "total_shares",
+          "fair_value_per_share",
+          "ipo_price",
+          "retained_pct",
+          "shares_offered",
+          "retained_shares",
+          "launched_at"
+        ],
+        "title": "IpoOut"
+      },
+      "IpoPreviewOut": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "report_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Report Id"
+          },
+          "report_version": {
+            "type": "integer",
+            "title": "Report Version"
+          },
+          "formula": {
+            "type": "string",
+            "title": "Formula",
+            "default": "fair_value_total = value_mid \u00d7 10 \u00d7 health_factor \u00d7 confidence_factor; ipo_price = fair_value_per_share = fair_value_total / total_shares; shares_offered = total_shares \u00d7 (1 \u2212 retained_pct/100)"
+          },
+          "value_mid": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value Mid",
+            "description": "Int$2020/yr from the latest report."
+          },
+          "health": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Health"
+          },
+          "confidence": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Confidence"
+          },
+          "health_factor": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Health Factor",
+            "description": "0.5 + 0.5 \u00d7 health/100"
+          },
+          "confidence_factor": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Confidence Factor",
+            "description": "0.7 + 0.3 \u00d7 confidence/100"
+          },
+          "fair_value_total": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fair Value Total"
+          },
+          "total_shares": {
+            "type": "integer",
+            "title": "Total Shares"
+          },
+          "fair_value_per_share": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fair Value Per Share"
+          },
+          "ipo_price": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ipo Price",
+            "description": "Equals fair_value_per_share."
+          },
+          "retained_pct": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Retained Pct"
+          },
+          "shares_offered": {
+            "type": "integer",
+            "title": "Shares Offered",
+            "description": "The primary float, sold to investors first."
+          },
+          "retained_shares": {
+            "type": "integer",
+            "title": "Retained Shares",
+            "description": "Held by the community's treasury."
+          },
+          "launchable": {
+            "type": "boolean",
+            "title": "Launchable",
+            "description": "Whether POST /assets/{id}/ipo would go ahead now."
+          },
+          "blocked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocked Reason",
+            "description": "Why not, as the code the launch would return: ipo_price_too_high (a share costs more than a new account's starting cash: issue more shares), run_in_progress, or a verification code (T69)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "report_id",
+          "report_version",
+          "value_mid",
+          "health",
+          "confidence",
+          "health_factor",
+          "confidence_factor",
+          "fair_value_total",
+          "total_shares",
+          "fair_value_per_share",
+          "ipo_price",
+          "retained_pct",
+          "shares_offered",
+          "retained_shares",
+          "launchable"
+        ],
+        "title": "IpoPreviewOut"
       },
       "LedgerEntryOut": {
         "properties": {

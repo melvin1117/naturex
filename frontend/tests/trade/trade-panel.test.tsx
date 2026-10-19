@@ -118,11 +118,33 @@ describe("TradePanel", () => {
     [{ status: "suspended" as const }, /paused/],
     [{ price: null }, /opening offer/],
     [{ status: "rating" as const }, /opening offer/],
+    [{ trading: false, ipo_at: null }, /isn't trading yet/],
   ])("locks trading for %o", async (overrides, message) => {
-    renderPanel({ [ASSET]: () => json(asset(overrides)) });
+    const { backend } = renderPanel({ [ASSET]: () => json(asset(overrides)) });
 
     expect(await screen.findByText(message)).toBeInTheDocument();
     expect(screen.queryByLabelText("Units")).not.toBeInTheDocument();
+    expect(backend.calls(QUOTE)).toBe(0);
+  });
+
+  it("shows no unit counts before the opening offer (T59)", async () => {
+    renderPanel({
+      [ASSET]: () =>
+        json(
+          asset({
+            trading: false,
+            ipo_at: null,
+            price: null,
+            total_shares: null,
+            retained_pct: null,
+            primary_shares_remaining: 0,
+          }),
+        ),
+    });
+
+    expect(await screen.findByText(/isn't trading yet/)).toBeInTheDocument();
+    expect(screen.getByText("Set at the opening offer")).toBeInTheDocument();
+    expect(screen.queryByText(/^of /)).not.toBeInTheDocument();
   });
 
   it("tells admins they can't trade", async () => {
@@ -411,7 +433,7 @@ describe("TradePanel", () => {
     [401, "auth_required", /session has ended/, "Sign in again"],
     [403, "insider_trading_blocked", /community can't trade its units/, null],
     [403, "admins_cannot_trade", /Admin accounts can't trade/, null],
-    [409, "not_trading", /hasn't opened yet/, null],
+    [409, "not_trading", /isn't trading yet/, null],
     [409, "insufficient_cash", /enough play money/, null],
     [409, "insufficient_shares", /more units than you hold/, null],
     [409, "insufficient_supply", /Not enough units are available/, null],

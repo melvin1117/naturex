@@ -45,11 +45,11 @@ from app.models import (
     WorldEvent,
 )
 from app.models import World as WorldRow
-from app.routers.market import NOT_LISTED
 from app.routers.runs import get_rating_runner
 from app.sandbox import _delete_world_rows, create_world, ensure_live_world, reset_world
 from app.seed import seed
 from app.services import listings
+from app.services.ipo import NOT_TRADING
 from app.services.lifecycle import (
     EVIDENCE_REQUIRED,
     METRICS_UNAVAILABLE,
@@ -1480,4 +1480,4 @@ def test_quotes_and_orders_never_reveal_a_private_listing(world: World_) -> None
     assert order.status_code == 404
     # The community sees its own listing isn't tradable (yet).
     mine = client_as(world, world.steward).get(quote)
-    assert (mine.status_code, mine.json()["detail"]) == (409, NOT_LISTED)
+    assert (mine.status_code, mine.json()["detail"]) == (409, NOT_TRADING)

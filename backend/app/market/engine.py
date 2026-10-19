@@ -101,10 +101,38 @@ class PriceChange:
 
 
 @dataclass(frozen=True, slots=True)
+class IpoTerms:
+    """Every term of the IPO price formula (dev-spec §8), for the preview and the ledger."""
+
+    value_mid: Decimal
+    health: Decimal
+    confidence: Decimal
+    health_factor: Decimal
+    """0.5 + 0.5 × health/100"""
+    confidence_factor: Decimal
+    """0.7 + 0.3 × confidence/100"""
+    fair_value_total: Decimal
+    """value_mid × 10 × health_factor × confidence_factor, in cents"""
+    total_shares: int
+    fair_value_per_share: Decimal
+    """fair_value_total / total_shares, 4 dp: the IPO price"""
+    retained_pct: Decimal
+    primary_float: int
+    """total_shares × (1 − retained_pct/100), rounded down: the shares offered"""
+    retained_shares: int
+    """total_shares − primary_float: the community treasury's stake"""
+
+    @property
+    def price(self) -> Decimal:
+        return self.fair_value_per_share
+
+
+@dataclass(frozen=True, slots=True)
 class Listing:
     market: MarketState
     retained_shares: int
     price_change: PriceChange
+    terms: IpoTerms
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,15 +168,23 @@ def _check_score(name: str, value: Decimal) -> None:
         raise ValueError(f"{name} must be between 0 and 100, got {value}")
 
 
+def health_factor(health: Decimal) -> Decimal:
+    """0.5 + 0.5 × health/100: a healthier asset is worth up to twice a degraded one."""
+    _check_score("health", health)
+    return Decimal("0.5") + Decimal("0.5") * health / _HUNDRED
+
+
+def confidence_factor(confidence: Decimal) -> Decimal:
+    """0.7 + 0.3 × confidence/100: uncertainty discounts the value by up to 30%."""
+    _check_score("confidence", confidence)
+    return Decimal("0.7") + Decimal("0.3") * confidence / _HUNDRED
+
+
 def fair_value_total(*, value_mid: Decimal, health: Decimal, confidence: Decimal) -> Decimal:
     """FV_total = value_mid × 10 × (0.5 + 0.5 × health/100) × (0.7 + 0.3 × confidence/100)."""
     if value_mid < 0:
         raise ValueError(f"value_mid must not be negative, got {value_mid}")
-    _check_score("health", health)
-    _check_score("confidence", confidence)
-    health_factor = Decimal("0.5") + Decimal("0.5") * health / _HUNDRED
-    confidence_factor = Decimal("0.7") + Decimal("0.3") * confidence / _HUNDRED
-    return round_cash(value_mid * 10 * health_factor * confidence_factor)
+    return round_cash(value_mid * 10 * health_factor(health) * confidence_factor(confidence))
 
 
 def fair_value_per_share(
@@ -167,6 +203,36 @@ def primary_float(*, total_shares: int, retained_pct: Decimal) -> int:
     return int(total_shares * (_HUNDRED - retained_pct) / _HUNDRED)
 
 
+def ipo_terms(
+    *,
+    value_mid: Decimal,
+    health: Decimal,
+    confidence: Decimal,
+    total_shares: int,
+    retained_pct: Decimal,
+) -> IpoTerms:
+    """Every term of the IPO price formula, from the same functions `ipo` lists with."""
+    price = fair_value_per_share(
+        value_mid=value_mid, health=health, confidence=confidence, total_shares=total_shares
+    )
+    offered = primary_float(total_shares=total_shares, retained_pct=retained_pct)
+    return IpoTerms(
+        value_mid=value_mid,
+        health=health,
+        confidence=confidence,
+        health_factor=health_factor(health),
+        confidence_factor=confidence_factor(confidence),
+        fair_value_total=fair_value_total(
+            value_mid=value_mid, health=health, confidence=confidence
+        ),
+        total_shares=total_shares,
+        fair_value_per_share=price,
+        retained_pct=retained_pct,
+        primary_float=offered,
+        retained_shares=total_shares - offered,
+    )
+
+
 def ipo(
     *,
     value_mid: Decimal,
@@ -175,24 +241,32 @@ def ipo(
     total_shares: int,
     retained_pct: Decimal,
 ) -> Listing:
-    """List an asset at its fair value per share with the whole primary float for sale."""
-    price = fair_value_per_share(
-        value_mid=value_mid, health=health, confidence=confidence, total_shares=total_shares
-    )
-    if price <= 0:
-        raise ValueError("fair value per share rounds to zero; the asset can't be listed")
-    offered = primary_float(total_shares=total_shares, retained_pct=retained_pct)
-    state = MarketState(
-        price=price,
+    """List an asset at its fair value per share with the whole primary float for sale.
+
+    Afterwards `total_shares = primary_float + retained_shares` with no market-maker inventory:
+    the caller records `retained_shares` as the community treasury's holding.
+    """
+    terms = ipo_terms(
+        value_mid=value_mid,
+        health=health,
+        confidence=confidence,
         total_shares=total_shares,
-        primary_shares_remaining=offered,
+        retained_pct=retained_pct,
+    )
+    if terms.price <= 0:
+        raise ValueError("fair value per share rounds to zero; the asset can't be listed")
+    state = MarketState(
+        price=terms.price,
+        total_shares=total_shares,
+        primary_shares_remaining=terms.primary_float,
         market_maker_shares=0,
         community_wallet=Decimal("0.00"),
     )
     return Listing(
         market=state,
-        retained_shares=total_shares - offered,
-        price_change=PriceChange(price, PriceReason.IPO),
+        retained_shares=terms.retained_shares,
+        price_change=PriceChange(terms.price, PriceReason.IPO),
+        terms=terms,
     )
 
 

@@ -175,8 +175,9 @@ def test_copied_assets_point_at_the_copied_communities_and_treasuries(session: S
 
 @requires_db
 def test_template_holdings_prices_and_ledger_are_copied_and_remapped(session: Session) -> None:
+    # The seed already gave the template its `ipo` price; one per asset (T59).
     session.add(
-        Price(world_id=WORLD_ID, asset_id=TEMPLATE_ASSET, price=Decimal("7.9200"), reason="ipo")
+        Price(world_id=WORLD_ID, asset_id=TEMPLATE_ASSET, price=Decimal("7.9200"), reason="rerate")
     )
     append(
         session,
@@ -215,7 +216,8 @@ def test_template_holdings_prices_and_ledger_are_copied_and_remapped(session: Se
 
     copied_prices = by_site(world.id, world_assets)
     assert copied_prices == by_site(WORLD_ID, template_assets)
-    assert (DEMO_SITES[0].key, Decimal("7.9200"), "ipo") in copied_prices
+    assert (DEMO_SITES[0].key, Decimal("7.9200"), "rerate") in copied_prices
+    assert wetland.ipo_at is not None  # copied with the asset: it trades
     copied = entries_for(session, wetland.id)
     assert [e.kind for e in copied] == [
         LedgerKind.REPORT,  # the seed's report v1 (T19)

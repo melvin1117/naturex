@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 from dataclasses import replace
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -17,10 +18,13 @@ from app.market.engine import (
     MarketState,
     Position,
     PriceReason,
+    confidence_factor,
     execute,
     fair_value_per_share,
     fair_value_total,
+    health_factor,
     ipo,
+    ipo_terms,
     liquidity,
     max_fillable_qty,
     max_order_qty,
@@ -116,6 +120,53 @@ def test_ipo_lists_at_fair_value_with_the_whole_primary_float_for_sale() -> None
     assert listing.retained_shares == 510_000
     assert listing.price_change.price == D("7.9200")
     assert listing.price_change.reason is PriceReason.IPO
+
+
+def test_ipo_terms_expose_every_term_of_the_formula() -> None:
+    terms = ipo_terms(
+        value_mid=D("1000000"),
+        health=D("80"),
+        confidence=D("60"),
+        total_shares=1_000_000,
+        retained_pct=D("51"),
+    )
+
+    assert (terms.health_factor, terms.confidence_factor) == (D("0.9"), D("0.88"))
+    assert terms.fair_value_total == D("7920000.00")
+    assert terms.fair_value_per_share == terms.price == D("7.9200")
+    assert (terms.primary_float, terms.retained_shares) == (490_000, 510_000)
+    assert terms.primary_float + terms.retained_shares == terms.total_shares
+
+
+def test_ipo_carries_the_terms_it_listed_with() -> None:
+    args: dict[str, Any] = {
+        "value_mid": D("250000"),
+        "health": D("73.6"),
+        "confidence": D("71"),
+        "total_shares": 2_000_000,
+        "retained_pct": D("33.33"),
+    }
+    listing = ipo(**args)
+
+    assert listing.terms == ipo_terms(**args)
+    assert listing.market.price == listing.terms.price
+    assert listing.market.primary_shares_remaining == listing.terms.primary_float
+    assert listing.retained_shares == listing.terms.retained_shares
+    # Shares are conserved from the first moment: nothing sits with the market maker.
+    assert (
+        listing.market.primary_shares_remaining
+        + listing.market.market_maker_shares
+        + listing.retained_shares
+        == listing.market.total_shares
+    )
+
+
+@pytest.mark.parametrize("score", ["-0.01", "100.01"])
+def test_formula_factors_reject_scores_outside_0_to_100(score: str) -> None:
+    with pytest.raises(ValueError):
+        health_factor(D(score))
+    with pytest.raises(ValueError):
+        confidence_factor(D(score))
 
 
 def test_ipo_refuses_an_asset_whose_share_price_would_round_to_zero() -> None:

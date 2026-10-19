@@ -432,6 +432,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/{asset_id}/ipo/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Ipo
+         * @description The price the owner would launch at now: every term of `ipo_price =
+         *     fair_value_per_share`, computed by the market engine from the latest report, and whether
+         *     the launch would go ahead (`launchable`, else `blocked_reason`). Writes nothing; a later
+         *     report can change it, so the launch confirms it with `expected_price`.
+         */
+        get: operations["preview_ipo_assets__asset_id__ipo_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{asset_id}/ipo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Launch Ipo
+         * @description Launch the IPO of a `listed` asset, once, at the previewed price (`expected_price`):
+         *     in one transaction the first `prices` row
+         *     (`reason: ipo`), the community treasury's retained holding, a `price_anchor` ledger entry
+         *     with every term and the primary float open for sale; a public `price_tick` follows. Play
+         *     money only: shares are sandbox units, not securities.
+         */
+        post: operations["launch_ipo_assets__asset_id__ipo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/reports/{report_id}": {
         parameters: {
             query?: never;
@@ -946,6 +993,12 @@ export interface components {
              * @description The latest prices (up to 30), oldest first, for the card's sparkline.
              */
             sparkline?: string[];
+            /**
+             * Trading
+             * @description Orders are open: listed and its IPO launched (T59). False for a listing awaiting its IPO and for a suspended asset; orders on it are 409 not_trading.
+             * @default false
+             */
+            trading: boolean;
         };
         /**
          * AssetCreate
@@ -1008,10 +1061,16 @@ export interface components {
             geojson: {
                 [key: string]: unknown;
             };
-            /** Total Shares */
-            total_shares: number;
-            /** Retained Pct */
-            retained_pct: string;
+            /**
+             * Total Shares
+             * @description Shares issued at the IPO; null before it (ratings until then quote a fair value per share at 1,000,000 reference shares; T59).
+             */
+            total_shares?: number | null;
+            /**
+             * Retained Pct
+             * @description % the community's treasury kept at the IPO; null before it.
+             */
+            retained_pct?: string | null;
             /** Primary Shares Remaining */
             primary_shares_remaining: number;
             /** Community Wallet */
@@ -1034,6 +1093,17 @@ export interface components {
              * @description Latest price vs the IPO price, in percent (2 dp); as on cards.
              */
             price_change_pct?: number | null;
+            /**
+             * Trading
+             * @description See AssetCard.trading (T59).
+             * @default false
+             */
+            trading: boolean;
+            /**
+             * Ipo At
+             * @description When the IPO opened trading; null before the IPO (T59).
+             */
+            ipo_at?: string | null;
         };
         /**
          * AssetStatus
@@ -1310,6 +1380,168 @@ export interface components {
             t_co2_stored: string;
             /** Services Usd Yr */
             services_usd_yr: string;
+        };
+        /**
+         * IpoLaunch
+         * @description The offering an owner launches (T59): shares issued and the % the community keeps.
+         */
+        IpoLaunch: {
+            /**
+             * Total Shares
+             * @description Shares issued at the IPO; the shares offered (the primary float) are total_shares × (1 − retained_pct/100), rounded down.
+             * @default 1000000
+             */
+            total_shares: number;
+            /**
+             * Retained Pct
+             * @description Percent of the shares the community's treasury keeps (10–90).
+             * @default 51.00
+             */
+            retained_pct: number | string;
+            /**
+             * Expected Price
+             * @description The price per share the owner confirmed in the preview (`ipo_price`; trailing zeros don't matter): 409 ipo_price_changed if a newer report moved it.
+             */
+            expected_price: number | string;
+        };
+        /** IpoOut */
+        IpoOut: {
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /** Report Version */
+            report_version: number;
+            /**
+             * Formula
+             * @default fair_value_total = value_mid × 10 × health_factor × confidence_factor; ipo_price = fair_value_per_share = fair_value_total / total_shares; shares_offered = total_shares × (1 − retained_pct/100)
+             */
+            formula: string;
+            /**
+             * Value Mid
+             * @description Int$2020/yr from the latest report.
+             */
+            value_mid: string;
+            /** Health */
+            health: string;
+            /** Confidence */
+            confidence: string;
+            /**
+             * Health Factor
+             * @description 0.5 + 0.5 × health/100
+             */
+            health_factor: string;
+            /**
+             * Confidence Factor
+             * @description 0.7 + 0.3 × confidence/100
+             */
+            confidence_factor: string;
+            /** Fair Value Total */
+            fair_value_total: string;
+            /** Total Shares */
+            total_shares: number;
+            /** Fair Value Per Share */
+            fair_value_per_share: string;
+            /**
+             * Ipo Price
+             * @description Equals fair_value_per_share.
+             */
+            ipo_price: string;
+            /** Retained Pct */
+            retained_pct: string;
+            /**
+             * Shares Offered
+             * @description The primary float, sold to investors first.
+             */
+            shares_offered: number;
+            /**
+             * Retained Shares
+             * @description Held by the community's treasury.
+             */
+            retained_shares: number;
+            /**
+             * Launched At
+             * Format: date-time
+             */
+            launched_at: string;
+        };
+        /** IpoPreviewOut */
+        IpoPreviewOut: {
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /** Report Version */
+            report_version: number;
+            /**
+             * Formula
+             * @default fair_value_total = value_mid × 10 × health_factor × confidence_factor; ipo_price = fair_value_per_share = fair_value_total / total_shares; shares_offered = total_shares × (1 − retained_pct/100)
+             */
+            formula: string;
+            /**
+             * Value Mid
+             * @description Int$2020/yr from the latest report.
+             */
+            value_mid: string;
+            /** Health */
+            health: string;
+            /** Confidence */
+            confidence: string;
+            /**
+             * Health Factor
+             * @description 0.5 + 0.5 × health/100
+             */
+            health_factor: string;
+            /**
+             * Confidence Factor
+             * @description 0.7 + 0.3 × confidence/100
+             */
+            confidence_factor: string;
+            /** Fair Value Total */
+            fair_value_total: string;
+            /** Total Shares */
+            total_shares: number;
+            /** Fair Value Per Share */
+            fair_value_per_share: string;
+            /**
+             * Ipo Price
+             * @description Equals fair_value_per_share.
+             */
+            ipo_price: string;
+            /** Retained Pct */
+            retained_pct: string;
+            /**
+             * Shares Offered
+             * @description The primary float, sold to investors first.
+             */
+            shares_offered: number;
+            /**
+             * Retained Shares
+             * @description Held by the community's treasury.
+             */
+            retained_shares: number;
+            /**
+             * Launchable
+             * @description Whether POST /assets/{id}/ipo would go ahead now.
+             */
+            launchable: boolean;
+            /**
+             * Blocked Reason
+             * @description Why not, as the code the launch would return: ipo_price_too_high (a share costs more than a new account's starting cash: issue more shares), run_in_progress, or a verification code (T69).
+             */
+            blocked_reason?: string | null;
         };
         /** LedgerEntryOut */
         LedgerEntryOut: {
@@ -3307,6 +3539,129 @@ export interface operations {
             };
         };
     };
+    preview_ipo_assets__asset_id__ipo_preview_get: {
+        parameters: {
+            query?: {
+                total_shares?: number;
+                retained_pct?: number | string;
+            };
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IpoPreviewOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description owner_only (stewards too), treasury_cannot_act */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the session's world, or not visible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `ipo_already_launched`, `asset_not_listed` (draft, under review, suspended…), `no_rating` (no usable report) or `ipo_price_too_low` (the price per share rounds to zero: issue fewer shares) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    launch_ipo_assets__asset_id__ipo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IpoLaunch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IpoOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description owner_only (stewards too), treasury_cannot_act */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the session's world, or not visible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `ipo_already_launched`, `asset_not_listed` (draft, under review, suspended…), `no_rating` (no usable report) or `ipo_price_too_low` (the price per share rounds to zero: issue fewer shares), `ipo_price_too_high` (a share would cost more than a new account's starting cash: issue more shares), `run_in_progress` (a rating run is active) or a verification code (T69), or `ipo_price_changed` (`expected_price` is stale) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description total_shares outside 10,000–10,000,000 or retained_pct outside 10–90 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_report_reports__report_id__get: {
         parameters: {
             query?: never;
@@ -3406,7 +3761,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Asset not listed or without a price; `insufficient_cash`, `insufficient_shares`, `insufficient_supply`, or `price_moved` (the total is above `max_total` or below `min_total`) */
+            /** @description `not_trading` (not listed, e.g. suspended, or its IPO hasn't launched; T59), `insufficient_cash`, `insufficient_shares`, `insufficient_supply`, or `price_moved` (the total is above `max_total` or below `min_total`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3461,7 +3816,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Asset not listed or without a price */
+            /** @description `not_trading`: not listed (e.g. suspended) or its IPO hasn't launched (T59) */
             409: {
                 headers: {
                     [name: string]: unknown;

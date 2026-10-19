@@ -1075,6 +1075,10 @@ class RatingRunner:
             except LookupError as exc:
                 raise RunAborted("asset_not_found") from exc
             previous = latest_report(session, spec.world_id, spec.asset_id)
+            # `rate_asset` prices per share with the locked row's `total_shares`, re-read here,
+            # never the `AssetInfo` captured when the run started: an IPO (T59) may have set
+            # the share count since (launches are refused while a run is active; this is
+            # defence in depth).
             report = rate_asset(
                 session,
                 spec.world_id,

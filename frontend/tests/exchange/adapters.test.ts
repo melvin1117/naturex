@@ -152,6 +152,10 @@ describe("market cards", () => {
       imageUrl: "/api/media/demo-sites/wetland_mx/thumbnail.webp",
     });
     expect(wetland.sparkline).toEqual([21.4723]);
+    expect(wetland.trading).toBe(true);
+    expect(
+      marketCard({ ...(cards[0] as AssetCard), trading: false }).trading,
+    ).toBe(false);
     expect(siteImageUrl(null, "https://example.org/a.webp")).toBe(
       "https://example.org/a.webp",
     );
