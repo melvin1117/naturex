@@ -349,13 +349,22 @@ export function usePlaceOrder(): MutationResult<OrderCreate, OrderOut> {
 
 /**
  * After the session cookie changed: read `GET /world` again (so `world.me` updates) and drop
- * every cached answer, which belonged to the previous account. `DataLayerProvider` resets the
- * cache when the viewer changes; if it didn't (the re-read failed), reset here. A failed
- * re-read leaves the old world in place with its error; the sign-in itself still succeeded.
+ * every cached answer, which belonged to the previous account. If the re-read fails, the auth
+ * route's answer is still known: `me` from login or register, null after logout. Set it on the
+ * current world, so screens and the cache never keep answering as the previous account.
+ * `DataLayerProvider` resets the cache when the viewer changes; if it didn't, reset here.
  */
-async function afterSessionChange({ session, cache }: DataLayer) {
+async function afterSessionChange(
+  { session, cache }: DataLayer,
+  me: MeOut | null,
+) {
   const before = viewerKey(session.getSnapshot().world);
-  await session.reload().catch(() => undefined);
+  try {
+    await session.reload();
+  } catch {
+    const world = session.getSnapshot().world;
+    if (world) session.set({ ...world, me });
+  }
   if (viewerKey(session.getSnapshot().world) === before) cache.reset();
 }
 
@@ -364,7 +373,7 @@ export function useSignIn(): MutationResult<LoginIn, MeOut> {
   const layer = useDataLayer();
   return useApiMutation(async (api, body: LoginIn) => {
     const me = await unwrap(api.POST("/auth/login", { body }));
-    await afterSessionChange(layer);
+    await afterSessionChange(layer, me);
     return me;
   });
 }
@@ -374,7 +383,7 @@ export function useRegister(): MutationResult<RegisterIn, MeOut> {
   const layer = useDataLayer();
   return useApiMutation(async (api, body: RegisterIn) => {
     const me = await unwrap(api.POST("/auth/register", { body }));
-    await afterSessionChange(layer);
+    await afterSessionChange(layer, me);
     return me;
   });
 }
@@ -384,7 +393,7 @@ export function useSignOut(): MutationResult<void, void> {
   const layer = useDataLayer();
   return useApiMutation(async (api) => {
     await unwrap(api.POST("/auth/logout"));
-    await afterSessionChange(layer);
+    await afterSessionChange(layer, null);
   });
 }
 
