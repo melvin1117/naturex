@@ -6,6 +6,7 @@ import {
   communityFailure,
   listingAction,
   memberFailure,
+  sharePct,
   validateCommunity,
 } from "@/lib/community";
 
@@ -105,9 +106,13 @@ describe("listingAction", () => {
     [
       "continue_listing",
       "Continue listing",
-      `/steward/list?community=${COMMUNITY}`,
+      `/steward/list?community=${COMMUNITY}&asset=${ASSET}`,
     ],
-    ["add_evidence", "Add evidence", `/steward/list?community=${COMMUNITY}`],
+    [
+      "add_evidence",
+      "Add evidence",
+      `/steward/list?community=${COMMUNITY}&asset=${ASSET}`,
+    ],
     ["rating_in_progress", "Rating in progress", null],
     [
       "launch_ipo",
@@ -122,5 +127,34 @@ describe("listingAction", () => {
       label,
       href,
     });
+  });
+});
+
+describe("listingAction for suspended listings", () => {
+  it("opens the Exchange once the listing has traded", () => {
+    expect(
+      listingAction("view_on_exchange", ASSET, COMMUNITY, "suspended"),
+    ).toMatchObject({ label: "View on Exchange", href: `/asset/${ASSET}` });
+  });
+
+  it("says it's suspended, with nothing to open, before its IPO", () => {
+    expect(listingAction("none", ASSET, COMMUNITY, "suspended")).toEqual({
+      label: "Suspended",
+      href: null,
+      primary: false,
+    });
+    expect(listingAction("none", ASSET, COMMUNITY, "withdrawn").label).toBe(
+      "Closed",
+    );
+  });
+});
+
+describe("sharePct", () => {
+  it.each([
+    ["12.50", "12.50%"],
+    ["0.01", "0.01%"],
+    ["0.00", "<0.01%"],
+  ])("%s → %s", (pct, text) => {
+    expect(sharePct(pct)).toBe(text);
   });
 });

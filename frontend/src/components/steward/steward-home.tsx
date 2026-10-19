@@ -7,7 +7,7 @@ import { Delta, SiteBackdrop, Stat } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
 import { LoadError } from "@/components/proto/load-error";
-import { Panel } from "@/components/proto/report-panels";
+import { StewardPanel } from "@/components/steward/panel";
 import { StewardHome as PrototypeStewardHome } from "@/components/proto/steward-home";
 import { useStewardCommunity } from "@/components/shell/steward-community";
 import { MembersPanel } from "@/components/steward/members-panel";
@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import type { CommunitySummary, ListingSummary } from "@/lib/api/types";
-import { listingAction, STATUS_LABEL, units } from "@/lib/community";
+import { listingAction, sharePct, STATUS_LABEL, units } from "@/lib/community";
 import { useCommunitySummary } from "@/lib/community-hooks";
 import { useWorld } from "@/lib/hooks";
 import { marketCard, type MarketCard } from "@/lib/market-cards";
@@ -136,7 +136,7 @@ function Home({ summary }: { summary: CommunitySummary }) {
             <EmptyHome listHref={listHref} />
           )}
           {listings.length > 1 && (
-            <Panel title="Your sites" aria-label="Your sites">
+            <StewardPanel title="Your sites">
               <ul className="divide-y divide-border">
                 {listings.map((listing) => (
                   <ListingRow
@@ -146,7 +146,7 @@ function Home({ summary }: { summary: CommunitySummary }) {
                   />
                 ))}
               </ul>
-            </Panel>
+            </StewardPanel>
           )}
           {listings.length > 0 && <Recommendations listings={listings} />}
           {listings.length > 0 && <Payouts summary={summary} />}
@@ -154,12 +154,12 @@ function Home({ summary }: { summary: CommunitySummary }) {
 
         <aside className="min-w-0 space-y-6" aria-label="Community">
           {listings.length > 0 && <WalletCard wallet={summary.wallet} />}
-          <Panel title="Alerts" aria-label="Alerts">
+          <StewardPanel title="Alerts">
             <p className="text-sm text-muted-foreground">
               No alerts yet. You&apos;ll see news and re-ratings about your land
               here.
             </p>
-          </Panel>
+          </StewardPanel>
           {listings.length > 0 && <Supporters listings={listings} />}
           <MembersPanel
             communityId={community.id}
@@ -229,6 +229,7 @@ function ActionButton({
     listing.next_action,
     listing.asset.id,
     communityId,
+    listing.asset.status,
   );
   if (!action.href) {
     return (
@@ -382,7 +383,7 @@ function ListingRow({
 function Recommendations({ listings }: { listings: ListingSummary[] }) {
   const rated = listings.filter((l) => l.recommendations.length > 0);
   return (
-    <Panel title="Stewardship actions" aria-label="Stewardship actions">
+    <StewardPanel title="Stewardship actions">
       {rated.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No recommendations yet. They come from the Auditor once a site has
@@ -397,14 +398,14 @@ function Recommendations({ listings }: { listings: ListingSummary[] }) {
           {rated.map((listing) => (
             <div key={listing.asset.id}>
               {rated.length > 1 && (
-                <h4 className="mb-2 text-sm font-medium">
+                <h3 className="mb-2 text-sm font-medium">
                   {listing.asset.name}
-                </h4>
+                </h3>
               )}
               <ul className="space-y-2">
-                {listing.recommendations.map((text, index) => (
+                {listing.recommendations.map((text) => (
                   <li
-                    key={index}
+                    key={text}
                     className="flex gap-3 rounded-2xl bg-secondary/50 p-3 text-sm"
                   >
                     <Check
@@ -419,13 +420,13 @@ function Recommendations({ listings }: { listings: ListingSummary[] }) {
           ))}
         </div>
       )}
-    </Panel>
+    </StewardPanel>
   );
 }
 
 function Payouts({ summary }: { summary: CommunitySummary }) {
   return (
-    <Panel title="Quarterly payouts" aria-label="Quarterly payouts">
+    <StewardPanel title="Quarterly payouts">
       {summary.payouts.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No payouts yet. Each quarter after the opening offer, half of the
@@ -433,71 +434,81 @@ function Payouts({ summary }: { summary: CommunitySummary }) {
           units&apos; holders, the treasury included.
         </p>
       ) : (
-        <div className="overflow-x-auto" tabIndex={0}>
-          <table className="w-full min-w-[34rem] text-sm">
-            <caption className="sr-only">
-              The latest quarterly payouts, play money
-            </caption>
-            <thead className="text-left text-xs text-muted-foreground">
-              <tr>
-                <th scope="col" className="pb-2 font-normal">
-                  Quarter
-                </th>
-                <th scope="col" className="pb-2 pl-4 font-normal">
-                  Site
-                </th>
-                <th scope="col" className="pb-2 pl-4 text-right font-normal">
-                  Revenue
-                </th>
-                <th scope="col" className="pb-2 pl-4 text-right font-normal">
-                  To the fund
-                </th>
-                <th scope="col" className="pb-2 pl-4 text-right font-normal">
-                  Retained-stake dividend
-                </th>
-              </tr>
-            </thead>
-            <tbody className="tabular divide-y divide-border">
-              {summary.payouts.map((p) => (
-                <tr key={`${p.asset_id}:${p.quarter_label}`}>
-                  <td className="py-2">
-                    {/^\d{4}Q[1-4]$/.test(p.quarter_label)
-                      ? quarterLabel(p.quarter_label)
-                      : p.quarter_label}
-                    <span className="block text-xs text-muted-foreground">
-                      {date(p.paid_at)}
-                    </span>
-                  </td>
-                  <td className="py-2 pl-4">{p.asset_name}</td>
-                  <td className="py-2 pl-4 text-right">
-                    {moneyText(p.revenue)}
-                  </td>
-                  <td className="py-2 pl-4 text-right">
-                    {moneyText(p.community_fund)}
-                  </td>
-                  <td className="py-2 pl-4 text-right">
-                    {moneyText(p.retained_dividend)}
-                  </td>
+        <>
+          <p className="mb-2 text-xs text-muted-foreground sm:hidden">
+            Scroll sideways to see every column.
+          </p>
+          <div
+            className="overflow-x-auto"
+            role="region"
+            aria-label="Quarterly payouts table"
+            tabIndex={0}
+          >
+            <table className="w-full min-w-[34rem] text-sm">
+              <caption className="sr-only">
+                The latest quarterly payouts, play money
+              </caption>
+              <thead className="text-left text-xs text-muted-foreground">
+                <tr>
+                  <th scope="col" className="pb-2 font-normal">
+                    Quarter
+                  </th>
+                  <th scope="col" className="pb-2 pl-4 font-normal">
+                    Site
+                  </th>
+                  <th scope="col" className="pb-2 pl-4 text-right font-normal">
+                    Revenue
+                  </th>
+                  <th scope="col" className="pb-2 pl-4 text-right font-normal">
+                    To the fund
+                  </th>
+                  <th scope="col" className="pb-2 pl-4 text-right font-normal">
+                    Retained-stake dividend
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {summary.payouts_count > summary.payouts.length && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Showing the latest {summary.payouts.length} of{" "}
-              {summary.payouts_count}.
-            </p>
-          )}
-        </div>
+              </thead>
+              <tbody className="tabular divide-y divide-border">
+                {summary.payouts.map((p) => (
+                  <tr key={`${p.asset_id}:${p.quarter_label}`}>
+                    <td className="py-2">
+                      {/^\d{4}Q[1-4]$/.test(p.quarter_label)
+                        ? quarterLabel(p.quarter_label)
+                        : p.quarter_label}
+                      <span className="block text-xs text-muted-foreground">
+                        {date(p.paid_at)}
+                      </span>
+                    </td>
+                    <td className="py-2 pl-4">{p.asset_name}</td>
+                    <td className="py-2 pl-4 text-right">
+                      {moneyText(p.revenue)}
+                    </td>
+                    <td className="py-2 pl-4 text-right">
+                      {moneyText(p.community_fund)}
+                    </td>
+                    <td className="py-2 pl-4 text-right">
+                      {moneyText(p.retained_dividend)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {summary.payouts_count > summary.payouts.length && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Showing the latest {summary.payouts.length} of{" "}
+                {summary.payouts_count}.
+              </p>
+            )}
+          </div>
+        </>
       )}
-    </Panel>
+    </StewardPanel>
   );
 }
 
 function Supporters({ listings }: { listings: ListingSummary[] }) {
   const launched = listings.filter((l) => l.shares !== null);
   return (
-    <Panel title="Supporters" aria-label="Supporters">
+    <StewardPanel title="Supporters">
       {launched.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Supporters appear after the opening offer.
@@ -507,9 +518,9 @@ function Supporters({ listings }: { listings: ListingSummary[] }) {
           {launched.map((listing) => (
             <div key={listing.asset.id}>
               {launched.length > 1 && (
-                <h4 className="mb-1 text-sm font-medium">
+                <h3 className="mb-1 text-sm font-medium">
                   {listing.asset.name}
-                </h4>
+                </h3>
               )}
               {listing.holders.count === 0 ? (
                 <p className="text-sm text-muted-foreground">
@@ -537,10 +548,7 @@ function Supporters({ listings }: { listings: ListingSummary[] }) {
                         </span>
                         <span className="tabular text-muted-foreground">
                           {units(holder.shares)} units ·{" "}
-                          {holder.pct_of_shares === "0.00"
-                            ? "<0.01"
-                            : holder.pct_of_shares}
-                          %
+                          {sharePct(holder.pct_of_shares)}
                         </span>
                       </li>
                     ))}
@@ -554,6 +562,6 @@ function Supporters({ listings }: { listings: ListingSummary[] }) {
           </p>
         </div>
       )}
-    </Panel>
+    </StewardPanel>
   );
 }

@@ -19,6 +19,7 @@ import {
 } from "react";
 import { cn } from "cn";
 
+import { AccountIdCopy } from "@/components/account-id";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -270,10 +271,10 @@ export function StewardGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return <CreateCommunityEmptyState />;
+  return <CreateCommunityEmptyState meId={world.me.id} />;
 }
 
-function CreateCommunityEmptyState() {
+function CreateCommunityEmptyState({ meId }: { meId: string }) {
   const { select } = useStewardCommunity();
   return (
     <section
@@ -314,7 +315,17 @@ function CreateCommunityEmptyState() {
               </li>
             ))}
           </ol>
-          <Button asChild variant="outline" className="mt-8">
+          <div className="mt-8 max-w-md rounded-2xl border border-dashed border-border p-4">
+            <h2 className="text-sm font-medium">
+              Joining someone else&apos;s community?
+            </h2>
+            <p className="mt-1 mb-3 text-sm text-muted-foreground">
+              Give its owner your account ID. Once they&apos;ve added you as a
+              steward, reload this page.
+            </p>
+            <AccountIdCopy id={meId} />
+          </div>
+          <Button asChild variant="outline" className="mt-6">
             <Link href="/">Back to the Exchange</Link>
           </Button>
         </div>

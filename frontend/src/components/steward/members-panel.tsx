@@ -4,7 +4,7 @@ import { TriangleAlertIcon, UserMinus } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
 
 import { LoadError } from "@/components/proto/load-error";
-import { Panel } from "@/components/proto/report-panels";
+import { StewardPanel } from "@/components/steward/panel";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,7 @@ export function MembersPanel({
   const meId = useMeId();
 
   return (
-    <Panel title="Members" aria-label="Members">
+    <StewardPanel title="Members">
       {members.error ? (
         <LoadError
           title="We couldn't load the members"
@@ -102,7 +102,7 @@ export function MembersPanel({
       )}
       {manage && <AddSteward communityId={communityId} />}
       {footer}
-    </Panel>
+    </StewardPanel>
   );
 }
 

@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -21,6 +22,7 @@ import type {
   MyCommunity,
   WorldOut,
 } from "@/lib/api/types";
+import { SUMMARY_TICK_REFRESH_MS } from "@/lib/community-hooks";
 import { createDataLayer } from "@/lib/data-layer";
 import { PrototypeProvider } from "@/lib/prototype/store";
 
@@ -28,6 +30,7 @@ import {
   BASE,
   community,
   createFakeEventSource,
+  FakeEventSource,
   fakeBackend,
   json,
   SIGNED_IN_WORLD,
@@ -60,6 +63,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  FakeEventSource.reset();
   nav.pathname = "/steward";
   nav.search = "";
   window.localStorage.clear();
@@ -239,6 +243,43 @@ describe("creating a community", () => {
     ).toHaveAttribute("href", `/steward/list?community=${created.id}`);
   }, 15_000);
 
+  it("shows the account ID to share with an owner, with Copy", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    setup(<StewardPage />, { communities: [] });
+    await screen.findByRole("heading", { level: 1, name: "Start a community" });
+    expect(screen.getByText(ROSA.id)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Copy account ID" }));
+    expect(await screen.findByText("Account ID copied.")).toBeVisible();
+    expect(writeText).toHaveBeenCalledWith(ROSA.id);
+
+    writeText.mockImplementationOnce(() => Promise.reject(new Error("denied")));
+    fireEvent.click(screen.getByRole("button", { name: "Copy account ID" }));
+    expect(await screen.findByText(/Couldn't copy/)).toBeVisible();
+  });
+
+  it("offers the account ID in the account menu on every page", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    setup(<StewardPage />, { communities: [] });
+    const trigger = await screen.findByRole("button", {
+      name: "Account: Rosa",
+    });
+    fireEvent.keyDown(trigger, { key: "Enter" });
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByText(ROSA.id)).toBeVisible();
+    fireEvent.click(
+      within(menu).getByRole("menuitem", { name: "Copy account ID" }),
+    );
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(ROSA.id));
+  });
+
   it("checks the name before sending", async () => {
     const backend = setup(<StewardPage />, { communities: [] });
     await screen.findByRole("heading", { level: 1, name: "Start a community" });
@@ -408,9 +449,15 @@ describe("the community home", () => {
     );
     expect(
       within(sites).getByRole("link", { name: /Continue listing/ }),
-    ).toHaveAttribute("href", `/steward/list?community=${SELVA.id}`);
+    ).toHaveAttribute(
+      "href",
+      `/steward/list?community=${SELVA.id}&asset=${draft.asset.id}`,
+    );
 
     const wallet = screen.getByRole("region", { name: "Community fund" });
+    expect(
+      within(wallet).getByText(/Community fund balance · play money/),
+    ).toBeVisible();
     expect(
       within(wallet).getByText("IPO proceeds").closest("div"),
     ).toHaveTextContent("$1,500.00");
@@ -418,7 +465,9 @@ describe("the community home", () => {
       within(wallet).getByText("Community-fund payouts").closest("div"),
     ).toHaveTextContent("$50.25");
     expect(
-      within(wallet).getByText("Retained-stake dividends").closest("div"),
+      within(wallet)
+        .getByText("Treasury cash: retained-stake dividends")
+        .closest("div"),
     ).toHaveTextContent("$25.12");
     expect(
       within(wallet).getByText("Total received").closest("div"),
@@ -461,6 +510,53 @@ describe("the community home", () => {
     expect(screen.queryByRole("link", { name: /Launch IPO/ })).toBeNull();
   });
 
+  it("refetches live: once per burst of trades, at once on a status change", async () => {
+    const trading = listing();
+    const backend = setup(<StewardPage />, {
+      routes: {
+        [`GET /communities/${SELVA.id}/summary`]: () =>
+          json(summary({ listings: [trading] })),
+      },
+    });
+    await screen.findByRole("region", { name: "Community fund" });
+    const path = `GET /communities/${SELVA.id}/summary`;
+    const before = backend.calls(path);
+
+    act(() => {
+      const source = FakeEventSource.latest();
+      source.open();
+      for (const id of [1, 2, 3]) {
+        source.emit("price_tick", id, {
+          asset_id: trading.asset.id,
+          price: "21.5000",
+          reason: "order",
+        });
+      }
+      // Another community's trade changes nothing here.
+      source.emit("price_tick", 4, {
+        asset_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        price: "9.0000",
+        reason: "order",
+      });
+    });
+    expect(backend.calls(path)).toBe(before);
+    await waitFor(() => expect(backend.calls(path)).toBe(before + 1), {
+      timeout: SUMMARY_TICK_REFRESH_MS + 2_000,
+    });
+
+    act(() => {
+      FakeEventSource.latest().emit("listing_status", 5, {
+        asset_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        community_id: SELVA.id,
+        transition: "create",
+        from: null,
+        to: "draft",
+        reason: null,
+      });
+    });
+    await waitFor(() => expect(backend.calls(path)).toBe(before + 2));
+  }, 15_000);
+
   it("explains a failed summary and retries", async () => {
     let fail = true;
     setup(<StewardPage />, {
@@ -486,8 +582,8 @@ describe("community settings", () => {
     let name = SELVA.name;
     const backend = setup(<CommunityPage />, {
       routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          json(summary({ community: { ...summary().community, name } })),
+        [`GET /communities/${SELVA.id}`]: () =>
+          json({ ...summary().community, name }),
         [`PATCH /communities/${SELVA.id}`]: async (request) => {
           expect(await request.json()).toEqual({ name: "Selva Viva Norte" });
           name = "Selva Viva Norte";
@@ -497,6 +593,10 @@ describe("community settings", () => {
     });
     const input = await screen.findByLabelText("Community name");
     expect(input).toHaveValue("Selva Viva");
+    await waitFor(() =>
+      expect(backend.calls("GET /me/communities")).toBeGreaterThan(0),
+    );
+    const before = backend.calls("GET /me/communities");
     fireEvent.change(input, { target: { value: "Selva Viva Norte" } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(await screen.findByText("Saved.")).toBeVisible();
@@ -505,8 +605,16 @@ describe("community settings", () => {
         "Selva Viva Norte",
       ),
     );
-    // The header's community list and the home pick up the new name.
-    expect(backend.calls("GET /me/communities")).toBeGreaterThanOrEqual(2);
+    // The edit invalidates the account's communities, so the header shows the new name.
+    await waitFor(() =>
+      expect(backend.calls("GET /me/communities")).toBe(before + 1),
+    );
+    expect(backend.calls(`GET /communities/${SELVA.id}/summary`)).toBe(0);
+    // "Saved." goes once the form changes again.
+    fireEvent.change(screen.getByLabelText("Community name"), {
+      target: { value: "Selva" },
+    });
+    expect(screen.queryByText("Saved.")).toBeNull();
 
     const members = screen.getByRole("region", { name: "Members" });
     expect(await within(members).findByText("Tomás")).toBeVisible();
@@ -523,7 +631,7 @@ describe("community settings", () => {
     let removed = 0;
     setup(<CommunityPage />, {
       routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () => json(summary()),
+        [`GET /communities/${SELVA.id}`]: () => json(summary().community),
         [`DELETE /communities/${SELVA.id}/members/${MEMBERS[1]!.user_id}`]:
           () => {
             removed += 1;
@@ -553,7 +661,7 @@ describe("community settings", () => {
     const newcomer = "77777777-7777-4777-8777-777777777777";
     setup(<CommunityPage />, {
       routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () => json(summary()),
+        [`GET /communities/${SELVA.id}`]: () => json(summary().community),
         [`POST /communities/${SELVA.id}/members`]: async (request) => {
           const body = (await request.json()) as { user_id: string };
           return body.user_id === newcomer
@@ -591,8 +699,7 @@ describe("community settings", () => {
     setup(<CommunityPage />, {
       communities: [community({ role: "steward" })],
       routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          json(summary({ role: "steward" })),
+        [`GET /communities/${SELVA.id}`]: () => json(summary().community),
       },
     });
     expect(

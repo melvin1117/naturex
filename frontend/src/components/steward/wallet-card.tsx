@@ -1,11 +1,11 @@
-import { Panel } from "@/components/proto/report-panels";
+import { StewardPanel } from "@/components/steward/panel";
 import type { Wallet } from "@/lib/api/types";
 import { moneyText } from "@/lib/trade";
 
 /**
  * The community's money (T63), every figure from `GET /communities/{id}/summary`: the
- * community fund (the treasury's `community_wallet`) is IPO proceeds plus community-fund
- * payouts; the retained stake's dividends are paid to the treasury on top. Play money.
+ * community fund (`community_wallet`) is IPO proceeds plus community-fund payouts; the
+ * retained stake's dividends are the treasury's own cash, shown as a separate line. Play money.
  */
 export function WalletCard({
   wallet,
@@ -15,9 +15,9 @@ export function WalletCard({
   title?: string;
 }) {
   return (
-    <Panel title={title} aria-label={title}>
+    <StewardPanel title={title}>
       <p className="text-xs text-muted-foreground">
-        Treasury balance · play money
+        Community fund balance · play money
       </p>
       <p className="tabular mt-1 text-4xl font-light tracking-tight">
         {moneyText(wallet.balance)}
@@ -32,16 +32,16 @@ export function WalletCard({
         >
           The community&apos;s half of each quarter&apos;s simulated revenue
         </Line>
-        <Line label="Community fund" value={wallet.balance} total />
+        <Line label="Community fund balance" value={wallet.balance} total />
         <Line
-          label="Retained-stake dividends"
+          label="Treasury cash: retained-stake dividends"
           value={wallet.retained_dividends}
         >
-          Paid to the treasury for the units it keeps
+          Paid to the treasury for the units it keeps, outside the fund
         </Line>
         <Line label="Total received" value={wallet.total_received} total />
       </dl>
-    </Panel>
+    </StewardPanel>
   );
 }
 

@@ -1,18 +1,19 @@
 "use client";
 
-import { ArrowLeft, Check, Copy } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { AccountIdCopy } from "@/components/account-id";
 import { LoadError } from "@/components/proto/load-error";
-import { Panel } from "@/components/proto/report-panels";
+import { StewardPanel } from "@/components/steward/panel";
 import { useStewardCommunity } from "@/components/shell/steward-community";
 import { EditCommunityForm } from "@/components/steward/community-form";
 import { MembersPanel } from "@/components/steward/members-panel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useCommunitySummary, useMeId } from "@/lib/community-hooks";
+import { useCommunity, useMeId } from "@/lib/community-hooks";
 import { countryName } from "@/lib/market-cards";
 import { COMMUNITY_ROLE_LABEL } from "@/lib/navigation";
 
@@ -23,8 +24,7 @@ import { COMMUNITY_ROLE_LABEL } from "@/lib/navigation";
 export function CommunitySettings() {
   const meId = useMeId();
   const { active, href } = useStewardCommunity();
-  // The profile from the summary, so a saved edit shows everywhere it's used.
-  const summary = useCommunitySummary(active?.id);
+  const profile = useCommunity(active?.id);
   const [saved, setSaved] = useState(false);
 
   if (!meId) {
@@ -44,7 +44,7 @@ export function CommunitySettings() {
   }
   if (!active) return null;
 
-  const community = summary.data?.community;
+  const community = profile.data;
   const isOwner = active.role === "owner";
 
   return (
@@ -63,15 +63,14 @@ export function CommunitySettings() {
       </p>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <Panel
+        <StewardPanel
           title={isOwner ? "Edit community" : "About the community"}
-          aria-label="Community details"
         >
-          {summary.error && !community ? (
+          {profile.error && !community ? (
             <LoadError
               title="We couldn't load the community"
-              error={summary.error}
-              retry={summary.refetch}
+              error={profile.error}
+              retry={profile.refetch}
             />
           ) : !community ? (
             <p
@@ -86,6 +85,7 @@ export function CommunitySettings() {
               <EditCommunityForm
                 community={community}
                 onSaved={() => setSaved(true)}
+                onEdit={() => setSaved(false)}
               />
               <p
                 aria-live="polite"
@@ -100,23 +100,25 @@ export function CommunitySettings() {
               </p>
             </>
           ) : (
-            <dl className="space-y-3 text-sm">
-              <div>
-                <dt className="text-muted-foreground">Country</dt>
-                <dd>{countryName(community.country ?? null) ?? "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">About</dt>
-                <dd className="whitespace-pre-line">
-                  {community.description ?? "—"}
-                </dd>
-              </div>
+            <div className="space-y-3 text-sm">
+              <dl className="space-y-3">
+                <div>
+                  <dt className="text-muted-foreground">Country</dt>
+                  <dd>{countryName(community.country ?? null) ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">About</dt>
+                  <dd className="whitespace-pre-line">
+                    {community.description ?? "—"}
+                  </dd>
+                </div>
+              </dl>
               <p className="text-xs text-muted-foreground">
                 Only the owner can change these details.
               </p>
-            </dl>
+            </div>
           )}
-        </Panel>
+        </StewardPanel>
         <div className="space-y-6">
           <MembersPanel communityId={active.id} manage={isOwner} />
           <YourAccountId id={meId} />
@@ -128,30 +130,12 @@ export function CommunitySettings() {
 
 /** Stewards are added by account ID (never email), so each account can share its own. */
 function YourAccountId({ id }: { id: string }) {
-  const [copied, setCopied] = useState(false);
   return (
-    <Panel title="Your account ID" aria-label="Your account ID">
-      <p className="text-sm text-muted-foreground">
+    <StewardPanel title="Your account ID">
+      <p className="mb-3 text-sm text-muted-foreground">
         To be added to another community, give its owner this ID.
       </p>
-      <div className="mt-3 flex items-center gap-2">
-        <code
-          translate="no"
-          className="min-w-0 flex-1 truncate rounded-lg bg-secondary px-2 py-1.5 font-mono text-xs"
-        >
-          {id}
-        </code>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            void navigator.clipboard?.writeText(id).then(() => setCopied(true));
-          }}
-        >
-          {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      </div>
-    </Panel>
+      <AccountIdCopy id={id} />
+    </StewardPanel>
   );
 }

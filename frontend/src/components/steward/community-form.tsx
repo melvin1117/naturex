@@ -32,10 +32,13 @@ function CommunityFields({
   submitLabel,
   pendingLabel,
   onSubmit,
+  onEdit,
 }: {
   initial: CommunityInput;
   submitLabel: string;
   pendingLabel: string;
+  /** Called on every change to a field. */
+  onEdit?: () => void;
   /** Throws the `ApiError` on failure. */
   onSubmit: (body: Body) => Promise<void>;
 }) {
@@ -47,6 +50,7 @@ function CommunityFields({
 
   const set = (field: keyof CommunityInput) => (value: string) => {
     setValues((v) => ({ ...v, [field]: value }));
+    onEdit?.();
     setErrors((e) => ({ ...e, [field]: undefined }));
   };
 
@@ -180,9 +184,11 @@ export function CreateCommunityForm({
 export function EditCommunityForm({
   community,
   onSaved,
+  onEdit,
 }: {
   community: Pick<CommunityOut, "id" | "name" | "country" | "description">;
   onSaved: (community: CommunityOut) => void;
+  onEdit?: () => void;
 }) {
   const update = useUpdateCommunity(community.id);
   return (
@@ -200,6 +206,7 @@ export function EditCommunityForm({
         description: community.description ?? "",
       }}
       submitLabel="Save changes"
+      onEdit={onEdit}
       pendingLabel="Saving…"
       onSubmit={async (body) => {
         const changed: Partial<Body> = {};

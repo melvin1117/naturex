@@ -5,7 +5,7 @@
  * the Steward home is the API's; nothing here computes one.
  */
 import type { ApiError } from "./api/errors";
-import type { NextAction } from "./api/types";
+import type { AssetCard, NextAction } from "./api/types";
 import { withCommunity } from "./navigation";
 import { assetHref } from "./trade";
 
@@ -138,6 +138,8 @@ export const STATUS_LABEL: Record<string, string> = {
   withdrawn: "Withdrawn",
 };
 
+type AssetStatus = AssetCard["status"];
+
 export interface ListingAction {
   label: string;
   /** Where the action goes; null when there's nothing to open (an explanation instead). */
@@ -147,15 +149,18 @@ export interface ListingAction {
 }
 
 /**
- * The link for a listing's next step. The listing flow (T33) is `/steward/list?community=`,
- * the IPO screen (T64) `/steward/assets/<id>/ipo`, the public page `/asset/<id>`.
+ * The link for a listing's next step. The listing flow (T33) is
+ * `/steward/list?community=<id>&asset=<id>` (it resumes that listing), the IPO screen (T64)
+ * `/steward/assets/<id>/ipo`, the public page `/asset/<id>`. With nothing to open, `status`
+ * says why (a listing suspended before its IPO, or a closed one).
  */
 export function listingAction(
   action: NextAction,
   assetId: string,
   communityId: string,
+  status?: AssetStatus,
 ): ListingAction {
-  const list = withCommunity("/steward/list", communityId);
+  const list = `/steward/list?${new URLSearchParams({ community: communityId, asset: assetId })}`;
   switch (action) {
     case "continue_listing":
       return { label: "Continue listing", href: list, primary: true };
@@ -185,8 +190,17 @@ export function listingAction(
         primary: false,
       };
     default:
-      return { label: "Closed", href: null, primary: false };
+      return {
+        label: status === "suspended" ? "Suspended" : "Closed",
+        href: null,
+        primary: false,
+      };
   }
+}
+
+/** A holding's share of the total, from the API's 2-dp percentage: "0.25%", "<0.01%". */
+export function sharePct(pct: string): string {
+  return Number(pct) === 0 ? "<0.01%" : `${pct}%`;
 }
 
 /** "1,234" for share counts from the API. */

@@ -4,6 +4,8 @@
  * Steward home and community management hooks (T63). Kept apart from `hooks.ts` so the
  * Steward tasks built in parallel don't edit the same file; they follow its conventions.
  */
+import { useEffect, useRef } from "react";
+
 import { unwrap } from "./api/errors";
 import type {
   CommunityCreate,
@@ -21,6 +23,9 @@ import {
   type MutationResult,
   type QueryResult,
 } from "./hooks";
+
+/** At most one summary refetch this often while trades tick in. */
+export const SUMMARY_TICK_REFRESH_MS = 3_000;
 
 function meIdOf({ session }: DataLayer): string | null {
   return session.getSnapshot().world?.me?.id ?? null;
@@ -49,10 +54,24 @@ export function useCommunitySummary(
   const ours = (assetId: unknown) =>
     query.data?.listings.some((l) => l.asset.id === assetId) ?? false;
   const enabled = Boolean(communityId);
+  // A burst of trades costs one refetch per `SUMMARY_TICK_REFRESH_MS`, not one per tick.
+  const tickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refetch = query.refetch;
+  useEffect(
+    () => () => {
+      if (tickTimer.current) clearTimeout(tickTimer.current);
+      tickTimer.current = null;
+    },
+    [refetch],
+  );
   useLiveEvent(
     "price_tick",
     ({ payload }) => {
-      if (ours(payload.asset_id)) void query.refetch();
+      if (!ours(payload.asset_id) || tickTimer.current) return;
+      tickTimer.current = setTimeout(() => {
+        tickTimer.current = null;
+        void refetch();
+      }, SUMMARY_TICK_REFRESH_MS);
     },
     { enabled },
   );
@@ -73,6 +92,24 @@ export function useCommunitySummary(
     { enabled },
   );
   return query;
+}
+
+/** A community's public profile (`GET /communities/{id}`): the settings page's form. */
+export function useCommunity(
+  communityId: string | undefined,
+): QueryResult<CommunityOut> {
+  const id = communityId ?? "";
+  return useApiQuery(
+    queryKeys.communityProfile(id),
+    (api, signal) =>
+      unwrap(
+        api.GET("/communities/{community_id}", {
+          params: { path: { community_id: id } },
+          signal,
+        }),
+      ),
+    { enabled: Boolean(communityId) },
+  );
 }
 
 /** The owner and stewards (`GET /communities/{id}/members`; members and admins only). */
@@ -125,7 +162,8 @@ export function useUpdateCommunity(
     {
       onSuccess: (_community, _body, layer) => {
         layer.cache.invalidate(queryKeys.myCommunities(meIdOf(layer)));
-        layer.cache.invalidate(queryKeys.communitySummary(communityId));
+        // The profile, the home and the members: every query of this community.
+        layer.cache.invalidate(queryKeys.community(communityId));
       },
     },
   );
