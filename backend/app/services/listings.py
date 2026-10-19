@@ -380,12 +380,9 @@ def create_draft(
         area_ha=area.area_ha,
         status=AssetStatus.DRAFT,
         attested_at=now or datetime.now(UTC),
-        primary_shares_remaining=0,  # set below from the defaults; T59 sets the IPO's terms
+        primary_shares_remaining=0,  # no shares exist before the IPO (T59 sets the terms)
     )
     _set_area(asset, area)
-    asset.primary_shares_remaining = int(
-        Decimal(asset.total_shares) * (Decimal(100) - asset.retained_pct) / Decimal(100)
-    )
     session.add(asset)
     session.flush()
     record(session, asset, created(), payload=_details_payload(asset))

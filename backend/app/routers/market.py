@@ -41,7 +41,6 @@ from app.market.engine import (
 from app.market.portfolio import HoldingValue, portfolio_totals, value_holding
 from app.models import (
     Asset,
-    AssetStatus,
     Holding,
     Order,
     OrderSide,
@@ -58,18 +57,18 @@ from app.schemas import (
     PortfolioOut,
     QuoteOut,
 )
+from app.services.ipo import NOT_TRADING, is_trading
 from app.services.listings import visible_to
 
 router = APIRouter(tags=["market"])
 
-NOT_LISTED = "Asset is not listed for trading"
-NO_PRICE = "Asset has no price yet"
 PRICE_MOVED = "price_moved"
 ORDER_ERRORS: dict[int | str, dict[str, str]] = {
     400: {"description": "`order_too_large`: above the per-order size cap"},
     404: {"description": "Asset not in the session's world"},
     409: {
-        "description": "Asset not listed or without a price; `insufficient_cash`, "
+        "description": f"`{NOT_TRADING}` (not listed, e.g. suspended, or its IPO hasn't "
+        "launched; T59), `insufficient_cash`, "
         "`insufficient_shares`, `insufficient_supply`, or `price_moved` (the total is above "
         "`max_total` or below `min_total`)"
     },
@@ -77,7 +76,10 @@ ORDER_ERRORS: dict[int | str, dict[str, str]] = {
 QUOTE_ERRORS: dict[int | str, dict[str, str]] = {
     400: {"description": "`order_too_large`: above the per-order size cap"},
     404: {"description": "Asset not in the session's world"},
-    409: {"description": "Asset not listed or without a price"},
+    409: {
+        "description": f"`{NOT_TRADING}`: not listed (e.g. suspended) or its IPO hasn't "
+        "launched (T59)"
+    },
 }
 
 
@@ -115,7 +117,7 @@ def _locked_asset(session: Session, world_id: UUID, asset_id: UUID) -> Asset:
 
 def _require_visible(session: Session, principal: Principal | None, asset: Asset) -> None:
     """404 for a listing under review the caller may not see (T58), as if it didn't exist,
-    instead of revealing it with `not_listed`."""
+    instead of revealing it with `not_trading`."""
     actor = None if principal is None else fresh_actor(session, principal)
     if not visible_to(actor, asset):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found")
@@ -142,16 +144,18 @@ def _market_maker_shares(session: Session, asset: Asset) -> int:
 
 
 def _tradable_market(session: Session, asset: Asset, *, with_inventory: bool = True) -> MarketState:
-    """The asset's market now; 409 if it isn't listed or has no price yet.
+    """The asset's market now; 409 `not_trading` unless it is listed and its IPO launched (T59),
+    for quotes and orders alike. Callers check visibility first (`_require_visible`), so a
+    private listing is a 404, never a `not_trading`.
 
     `with_inventory=False` skips summing the holdings for the market maker's inventory (left at
     0): only buys' supply checks need it, and a quote's pricing doesn't.
     """
-    if asset.status != AssetStatus.LISTED:
-        raise HTTPException(status.HTTP_409_CONFLICT, NOT_LISTED)
+    if not is_trading(asset):
+        raise HTTPException(status.HTTP_409_CONFLICT, NOT_TRADING)
     price = _latest_price(session, asset)
-    if price is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, NO_PRICE)
+    if price is None:  # an IPO always writes its price; kept so a broken row can't trade
+        raise HTTPException(status.HTTP_409_CONFLICT, NOT_TRADING)
     return MarketState(
         price=price,
         total_shares=asset.total_shares,

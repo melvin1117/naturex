@@ -329,6 +329,8 @@ class Asset(SQLModel, table=True):
     attested_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     # The last submit for rating, for the resubmit cooldown (T58).
     submitted_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    # When the IPO opened trading (T59); NULL: no shares issued yet, orders are `not_trading`.
+    ipo_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     # The polygon's bounding box, so the overlap check only parses nearby listings (T58).
     bbox_west: float | None = None
     bbox_south: float | None = None
@@ -418,6 +420,16 @@ class Report(SQLModel, table=True):
 
 class Price(SQLModel, table=True):
     __tablename__ = "prices"
+    __table_args__ = (
+        # One IPO per asset (T59), behind `launch`'s check under the asset lock.
+        Index(
+            "uq_prices_ipo",
+            "world_id",
+            "asset_id",
+            unique=True,
+            postgresql_where=text("reason = 'ipo'"),
+        ),
+    )
 
     world_id: UUID = Field(foreign_key="worlds.id", primary_key=True)
     asset_id: UUID = Field(foreign_key="assets.id", primary_key=True)

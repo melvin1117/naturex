@@ -232,25 +232,34 @@ def _seed_reports(session: Session) -> None:
 
 def _seed_ipo_prices(session: Session) -> None:
     """One `ipo` price per listed demo asset without a price, at its stored report's fair value
-    per share, so trading works after `make seed`."""
+    per share, and `ipo_at` set, so trading works after `make seed`. Curated sites are launched
+    by the seed, not through `POST /assets/{id}/ipo` (T59)."""
     for site in DEMO_SITES:
         asset = _template_asset(session, site)
-        has_price = session.exec(
-            select(Price.asset_id).where(Price.world_id == WORLD_ID, Price.asset_id == asset.id)
+        first_price = session.exec(
+            select(Price.ts)
+            .where(Price.world_id == WORLD_ID, Price.asset_id == asset.id)
+            .order_by(col(Price.ts))
+            .limit(1)
         ).first()
+        if first_price is not None:
+            if asset.ipo_at is None:
+                asset.ipo_at = first_price
+                session.add(asset)
+            continue
         report = latest_report(session, WORLD_ID, asset.id)
-        if asset.status != AssetStatus.LISTED or has_price is not None or report is None:
+        if asset.status != AssetStatus.LISTED or report is None:
             continue
         if report.fair_value_per_share is None or report.fair_value_per_share <= 0:
             raise RuntimeError(f"report {report.id} has no positive fair value per share")
-        session.add(
-            Price(
-                world_id=WORLD_ID,
-                asset_id=asset.id,
-                price=report.fair_value_per_share,
-                reason="ipo",
-            )
+        price = Price(
+            world_id=WORLD_ID,
+            asset_id=asset.id,
+            price=report.fair_value_per_share,
+            reason="ipo",
         )
+        asset.ipo_at = price.ts
+        session.add_all([price, asset])
     session.commit()
 
 

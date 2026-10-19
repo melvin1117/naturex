@@ -251,6 +251,11 @@ class AssetCard(BaseModel):
         default_factory=list,
         description="The latest prices (up to 30), oldest first, for the card's sparkline.",
     )
+    trading: bool = Field(
+        default=False,
+        description="Orders are open: listed and its IPO launched (T59). False for a listing "
+        "awaiting its IPO and for a suspended asset; orders on it are 409 not_trading.",
+    )
 
 
 class EventOut(BaseModel):
@@ -346,6 +351,67 @@ class AssetDetail(BaseModel):
     price_change_pct: float | None = Field(
         default=None, description="Latest price vs the IPO price, in percent (2 dp); as on cards."
     )
+    trading: bool = Field(default=False, description="See AssetCard.trading (T59).")
+    ipo_at: datetime | None = Field(
+        default=None, description="When the IPO opened trading; null before the IPO (T59)."
+    )
+
+
+class IpoLaunch(BaseModel):
+    """The offering an owner launches (T59): shares issued and the % the community keeps."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_shares: int = Field(
+        default=1_000_000,
+        ge=10_000,
+        le=10_000_000,
+        description="Shares issued at the IPO; the shares offered (the primary float) are "
+        "total_shares × (1 − retained_pct/100), rounded down.",
+    )
+    retained_pct: Decimal = Field(
+        default=Decimal("51.00"),
+        ge=10,
+        le=90,
+        decimal_places=2,
+        description="Percent of the shares the community's treasury keeps (10–90).",
+    )
+    expected_price: Decimal | None = Field(
+        default=None,
+        gt=0,
+        decimal_places=4,
+        description="The price per share the owner confirmed in the preview: 409 "
+        "ipo_price_changed if a newer report moved it.",
+    )
+
+
+class IpoPreviewOut(BaseModel):
+    """The IPO price with every term of dev-spec §8's formula (play money, sandbox only)."""
+
+    asset_id: UUID
+    report_id: UUID
+    report_version: int
+    formula: str = Field(
+        default="fair_value_total = value_mid × 10 × health_factor × confidence_factor; "
+        "ipo_price = fair_value_per_share = fair_value_total / total_shares; "
+        "shares_offered = total_shares × (1 − retained_pct/100)"
+    )
+    value_mid: Decimal = Field(description="Int$2020/yr from the latest report.")
+    health: Decimal
+    confidence: Decimal
+    health_factor: Decimal = Field(description="0.5 + 0.5 × health/100")
+    confidence_factor: Decimal = Field(description="0.7 + 0.3 × confidence/100")
+    fair_value_total: Decimal
+    total_shares: int
+    fair_value_per_share: Decimal
+    ipo_price: Decimal = Field(description="Equals fair_value_per_share.")
+    retained_pct: Decimal
+    shares_offered: int = Field(description="The primary float, sold to investors first.")
+    retained_shares: int = Field(description="Held by the community's treasury.")
+
+
+class IpoOut(IpoPreviewOut):
+    launched_at: datetime
 
 
 class EvidenceResponse(BaseModel):

@@ -23,23 +23,26 @@ from sqlalchemy import create_engine
 from sqlmodel import Session, col, select
 
 import app
+from app.communities import create_community
 from app.config import get_settings
 from app.ledger import LedgerPrivacyError, append, canonical, check_public_payload, entries_for
 from app.market.revenue import pay_quarter
 from app.models import (
     Asset,
+    AssetStatus,
     Community,
     Event,
     EventSource,
     Holding,
     LedgerEntry,
     LedgerKind,
-    Price,
+    Report,
     User,
     UserKind,
     UserRole,
 )
 from app.seed import DEMO_SITES, PERSONAS, WORLD_ID, seed
+from app.services.ipo import Offering, launch
 from app.services.lifecycle import SuspensionReason
 from app.services.listings import (
     ListingDetails,
@@ -246,11 +249,44 @@ def _produce_payout(session: Session) -> None:
     )
 
 
+def _produce_price_anchor(session: Session) -> None:
+    """An owner's IPO (T59) of a listed listing whose community and description name a person."""
+    community = create_community(session, WORLD_ID, "Ada Lovelace's Keepers", PERSONAS[0].id)
+    ring = [[-84.3, 9.7], [-84.29, 9.7], [-84.29, 9.71], [-84.3, 9.71], [-84.3, 9.7]]
+    details = ListingDetails(
+        name="Bosque de Ada",
+        country="CR",
+        description="Kept by Ada Lovelace.",
+        geojson={"type": "Polygon", "coordinates": [ring]},
+    )
+    listing = create_draft(session, world_id=WORLD_ID, community_id=community.id, details=details)
+    curated = session.exec(
+        select(Report).where(Report.world_id == WORLD_ID, Report.asset_id == ASSET_ID)
+    ).first()
+    assert curated is not None
+    session.add(
+        Report(
+            world_id=WORLD_ID,
+            asset_id=listing.id,
+            version=1,
+            health_score=curated.health_score,
+            grade=curated.grade,
+            confidence=curated.confidence,
+            value_mid=curated.value_mid,
+        )
+    )
+    listing.status = AssetStatus.LISTED
+    session.add(listing)
+    session.flush()
+    launch(session, WORLD_ID, listing.id, Offering())
+
+
 # The real producer to run for each kind with one in `app/`. Kinds whose producer already ran
 # during `seed()` (e.g. T19's reports) are covered by the seeded entries instead.
 _REAL_PRODUCERS: dict[LedgerKind, Callable[[Session], None]] = {
     LedgerKind.PAYOUT: _produce_payout,
     LedgerKind.LISTING: _produce_listing,
+    LedgerKind.PRICE_ANCHOR: _produce_price_anchor,
 }
 
 
@@ -299,11 +335,6 @@ def _spec_payload(session: Session, kind: LedgerKind) -> dict[str, Any]:
             "severity": event.severity,
             "source": event.source,
         }
-    if kind is LedgerKind.PRICE_ANCHOR:
-        price = session.exec(
-            select(Price).where(Price.world_id == WORLD_ID, Price.asset_id == ASSET_ID)
-        ).first()
-        return {"price": price.price if price else Decimal("7.9200"), "reason": "ipo"}
     raise AssertionError(f"no spec payload for {kind}")
 
 

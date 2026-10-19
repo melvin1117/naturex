@@ -27,6 +27,7 @@ from app.routers import (
     communities,
     copilot,
     events,
+    ipo,
     ledger,
     listings,
     market,
@@ -113,6 +114,7 @@ app.include_router(auth.router)
 app.include_router(communities.router)
 app.include_router(assets.router)
 app.include_router(listings.router)
+app.include_router(ipo.router)
 app.include_router(reports.router)
 app.include_router(market.router)
 app.include_router(copilot.router)

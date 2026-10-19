@@ -34,6 +34,7 @@ from app.schemas import (
     PricePoint,
     ReportOut,
 )
+from app.services.ipo import is_trading
 from app.services.lifecycle import PUBLIC_STATUSES
 from app.services.listings import RATING_STALE, visible_to
 from app.services.rating_runs import assets_with_active_runs
@@ -210,6 +211,7 @@ def cards(session: Session, world_id: UUID, assets: Sequence[Asset]) -> list[Ass
                 cover_image_url=asset.cover_image_url,
                 site_key=asset.site_key,
                 sparkline=sparklines.get(asset.id, []),
+                trading=is_trading(asset),
             )
         )
     return out
@@ -247,6 +249,8 @@ def asset_detail(session: Session, asset: Asset, settings: SettingsDep) -> Asset
         recent_events=recent_events(session, asset),
         price=price,
         price_change_pct=_change_pct(price, _asset_price(session, asset, latest=False)),
+        trading=is_trading(asset),
+        ipo_at=asset.ipo_at,
     )
 
 
