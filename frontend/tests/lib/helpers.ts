@@ -18,6 +18,7 @@ export const WORLD: WorldOut = {
     },
   ],
   assets: [],
+  me: null,
 };
 
 export function json(body: unknown, init: ResponseInit = {}): Response {
@@ -28,8 +29,21 @@ export function json(body: unknown, init: ResponseInit = {}): Response {
   });
 }
 
-export const worldRequired = () =>
-  json({ detail: "world_required" }, { status: 401 });
+/** WORLD as seen by a signed-in account (`me` set). */
+export const SIGNED_IN_WORLD: WorldOut = {
+  ...WORLD,
+  me: {
+    id: "44444444-4444-4444-8444-444444444444",
+    name: "Rosa",
+    email: "rosa@example.org",
+    kind: "person",
+    is_admin: false,
+    world_id: WORLD.id,
+  },
+};
+
+export const authRequired = () =>
+  json({ detail: "auth_required" }, { status: 401 });
 
 type Handler = (request: Request) => Response | Promise<Response>;
 

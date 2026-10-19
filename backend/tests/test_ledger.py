@@ -31,6 +31,7 @@ from app.main import app
 from app.models import Asset, LedgerKind, World
 from app.seed import WORLD_ID, seed
 from tests.conftest import alembic_cfg, requires_db
+from tests.worlds import start_demo
 
 # --- Hashing --------------------------------------------------------------------------------
 
@@ -291,18 +292,18 @@ def client(session: Session) -> Iterator[TestClient]:
     app.dependency_overrides.clear()
 
 
-def _fill(session: Session) -> None:
+def _fill(session: Session, world_id: uuid.UUID = WORLD_ID, asset_id: uuid.UUID = ASSET_ID) -> None:
     append(
         session,
-        world_id=WORLD_ID,
-        asset_id=ASSET_ID,
+        world_id=world_id,
+        asset_id=asset_id,
         kind=LedgerKind.LISTING,
         payload={"area_ha": "500.00"},
     )
     append(
         session,
-        world_id=WORLD_ID,
-        asset_id=ASSET_ID,
+        world_id=world_id,
+        asset_id=asset_id,
         kind=LedgerKind.REPORT,
         payload={"grade": "AA", "health": 72},
     )
@@ -344,36 +345,65 @@ def test_ledger_endpoints_404_for_an_unknown_asset(client: TestClient) -> None:
     assert client.get(f"/ledger/{missing}/verify").status_code == 404
 
 
+@pytest.fixture
+def sandbox_asset(session: Session, client: TestClient) -> uuid.UUID:
+    """A bare asset in a demo sandbox, with the client signed in to it: the tamper demo runs
+    only in sandboxes (T73)."""
+    app.dependency_overrides.pop(current_world, None)
+    world = start_demo(client, session)
+    asset = Asset(
+        world_id=world.id,
+        name="Sandbox ledger parcel",
+        geojson={"type": "Polygon", "coordinates": []},
+        area_ha=Decimal("500.00"),
+        primary_shares_remaining=490_000,
+    )
+    session.add(asset)
+    session.commit()
+    return asset.id
+
+
 @requires_db
 def test_tamper_demo_breaks_verification_without_writing(
-    session: Session, client: TestClient
+    session: Session, client: TestClient, sandbox_asset: uuid.UUID
 ) -> None:
-    _fill(session)
+    _fill(session, session.get_one(Asset, sandbox_asset).world_id, sandbox_asset)
 
-    response = client.post("/admin/tamper-demo", json={"asset_id": str(ASSET_ID), "seq": 1})
+    response = client.post("/admin/tamper-demo", json={"asset_id": str(sandbox_asset), "seq": 1})
 
     assert response.status_code == 200
     body = response.json()
     assert body["seq"] == 1
     assert (body["field"], body["before"], body["after"]) == ("health", 72, 720)
     assert body["verify"] == {"valid": False, "entries": 2, "head": None, "broken_at": 1}
-    assert client.get(f"/ledger/{ASSET_ID}/verify").json()["valid"] is True
+    assert client.get(f"/ledger/{sandbox_asset}/verify").json()["valid"] is True
 
 
 @requires_db
-def test_tamper_demo_defaults_to_the_latest_entry(session: Session, client: TestClient) -> None:
-    _fill(session)
+def test_tamper_demo_defaults_to_the_latest_entry(
+    session: Session, client: TestClient, sandbox_asset: uuid.UUID
+) -> None:
+    _fill(session, session.get_one(Asset, sandbox_asset).world_id, sandbox_asset)
 
-    response = client.post("/admin/tamper-demo", json={"asset_id": str(ASSET_ID)})
+    response = client.post("/admin/tamper-demo", json={"asset_id": str(sandbox_asset)})
 
     assert response.json()["seq"] == 1
 
 
 @requires_db
-def test_tamper_demo_needs_entries(client: TestClient) -> None:
-    response = client.post("/admin/tamper-demo", json={"asset_id": str(ASSET_ID)})
+def test_tamper_demo_needs_entries(client: TestClient, sandbox_asset: uuid.UUID) -> None:
+    response = client.post("/admin/tamper-demo", json={"asset_id": str(sandbox_asset)})
 
     assert response.status_code == 409
+
+
+@requires_db
+def test_tamper_demo_never_runs_outside_a_sandbox(session: Session, client: TestClient) -> None:
+    _fill(session)
+
+    response = client.post("/admin/tamper-demo", json={"asset_id": str(ASSET_ID)})
+
+    assert (response.status_code, response.json()["detail"]) == (403, "sandbox_only")
 
 
 def test_tamper_demo_is_hidden_outside_demo_mode() -> None:

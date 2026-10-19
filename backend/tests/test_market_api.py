@@ -1,4 +1,8 @@
-"""Orders and portfolio API (T17): the real market engine wired to Postgres, per visitor world."""
+"""Orders and portfolio API (T17): the real market engine wired to Postgres, per world.
+
+The client trades in a private demo sandbox as the `arjun` persona (tests.worlds.start_demo);
+the live world and password accounts are covered in test_world_from_session.py.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,7 @@ from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
@@ -16,6 +20,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, delete, update
 from sqlmodel import Session, col, func, select
 
+from app.auth import Principal
 from app.config import get_settings
 from app.db import get_session
 from app.main import app
@@ -25,6 +30,7 @@ from app.models import (
     Holding,
     Order,
     Price,
+    SessionKind,
     StreamEventType,
     User,
     World,
@@ -37,6 +43,7 @@ from app.schemas import OrderCreate
 from app.seed import WORLD_ID, demo_ipo_price, seed
 from app.tools.earth_obs import load_site_metrics
 from tests.conftest import alembic_cfg, requires_db
+from tests.worlds import start_demo
 
 D = Decimal
 
@@ -67,14 +74,16 @@ def session() -> Iterator[Session]:
 
 @pytest.fixture
 def client(session: Session) -> Iterator[TestClient]:
+    """A client signed in to a fresh demo sandbox as the investor persona."""
     app.dependency_overrides[get_session] = lambda: session
     with TestClient(app) as test_client:
+        start_demo(test_client, session)
         yield test_client
     app.dependency_overrides.clear()
 
 
 def _world(client: TestClient) -> dict[str, Any]:
-    """Create the visitor's world (sets the cookie) and return its contents."""
+    """The client's sandbox world and its contents."""
     res = client.get("/world")
     assert res.status_code == 200
     body: dict[str, Any] = res.json()
@@ -93,6 +102,18 @@ def _investor(session: Session, world_id: UUID) -> User:
     return session.exec(
         select(User).where(User.world_id == world_id, User.persona_key == "arjun")
     ).one()
+
+
+def _as(user: User) -> Principal:
+    """The principal of a demo session for `user`, for calling the route function directly."""
+    return Principal(
+        user_id=user.id,
+        world_id=user.world_id,
+        session_id=uuid4(),
+        session_kind=SessionKind.DEMO,
+        user_kind=user.kind,
+        is_admin=user.is_admin,
+    )
 
 
 @requires_db
@@ -266,7 +287,7 @@ def test_asset_without_a_price_returns_409(client: TestClient, session: Session)
 
 
 @requires_db
-def test_orders_are_scoped_to_the_visitors_world(client: TestClient, session: Session) -> None:
+def test_orders_are_scoped_to_the_sessions_world(client: TestClient, session: Session) -> None:
     _world(client)
     template_asset = session.exec(
         select(Asset).where(Asset.world_id == WORLD_ID, Asset.site_key == HERO)
@@ -277,12 +298,15 @@ def test_orders_are_scoped_to_the_visitors_world(client: TestClient, session: Se
 
 
 @requires_db
-def test_orders_and_portfolio_need_a_world(session: Session) -> None:
+def test_orders_and_portfolio_need_a_session(session: Session) -> None:
     app.dependency_overrides[get_session] = lambda: session
     try:
         with TestClient(app) as anonymous:
-            assert anonymous.get("/portfolio").status_code == 401
-            assert _buy(anonymous, "00000000-0000-0000-0000-000000000000", 1).status_code == 401
+            for res in (
+                anonymous.get("/portfolio"),
+                _buy(anonymous, "00000000-0000-0000-0000-000000000000", 1),
+            ):
+                assert (res.status_code, res.json()["detail"]) == (401, "auth_required")
     finally:
         app.dependency_overrides.clear()
 
@@ -312,9 +336,12 @@ def test_concurrent_buys_conserve_cash_shares_and_the_float() -> None:
         def buy_once() -> int:
             with Session(engine) as db:
                 current = db.get_one(World, world_id)
+                actor = _as(_investor(db, world_id))
                 barrier.wait(timeout=10)
                 try:
-                    place_order(OrderCreate(asset_id=asset_id, side="buy", qty=qty), current, db)
+                    place_order(
+                        OrderCreate(asset_id=asset_id, side="buy", qty=qty), current, actor, db
+                    )
                     return 200
                 except HTTPException as exc:
                     db.rollback()
@@ -379,7 +406,8 @@ def test_order_and_reset_on_the_same_world_serialise_without_deadlock(
         def order() -> str:
             with Session(engine) as db:
                 current = db.get_one(World, world_id)
-                place_order(OrderCreate(asset_id=hero_id, side="buy", qty=10), current, db)
+                actor = _as(_investor(db, world_id))
+                place_order(OrderCreate(asset_id=hero_id, side="buy", qty=10), current, actor, db)
                 return "ok"
 
         def reset() -> str:

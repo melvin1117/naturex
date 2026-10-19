@@ -29,6 +29,7 @@ from app.sandbox import _delete_world_rows
 from app.schemas import EventOut, ReportSummarySource
 from app.seed import seed
 from tests.conftest import alembic_cfg, requires_db
+from tests.worlds import start_demo
 
 NANO = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
 SUPER = "nvidia/nemotron-3-super-120b-a12b"
@@ -321,13 +322,13 @@ def test_call_log_database_errors_trigger_fallback() -> None:
 
 @pytest.fixture
 def world_client() -> Iterator[tuple[TestClient, Any]]:
-    """A client with a committed visitor world, so the call log's own session sees its assets."""
+    """A client with a committed demo sandbox, so the call log's own session sees its assets."""
     command.upgrade(alembic_cfg(), "head")
     engine = create_engine(get_settings().database_url)
+    client = TestClient(app)
     with Session(engine) as session:
         seed(session)
-    client = TestClient(app)
-    world_id = UUID(client.get("/world").json()["id"])
+        world_id = start_demo(client, session).id
     yield client, engine
     with Session(engine) as session:
         _delete_world_rows(session, world_id, keep_world=False)

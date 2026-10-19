@@ -1,4 +1,7 @@
-"""Per-visitor sandbox worlds (T31, demo-plan §3.5): copy, isolate, reset, prune."""
+"""Demo sandbox worlds (T31, demo-plan §3.5): copy, isolate, reset, prune.
+
+Over HTTP a sandbox is reached only through its own demo session (T73, tests.worlds.start_demo).
+"""
 
 from __future__ import annotations
 
@@ -14,7 +17,7 @@ from sqlalchemy import create_engine, func, text
 from sqlalchemy.exc import DBAPIError
 from sqlmodel import Session, col, select
 
-from app.config import Settings, get_settings
+from app.config import get_settings
 from app.db import get_session
 from app.ledger import append, entries_for, verify
 from app.main import app
@@ -43,8 +46,6 @@ from app.models import (
     World,
 )
 from app.sandbox import (
-    COOKIE_MAX_AGE_S,
-    COOKIE_NAME,
     WorldLimitReached,
     create_world,
     ensure_live_world,
@@ -61,6 +62,7 @@ from app.seed import (
     seed,
 )
 from tests.conftest import alembic_cfg, requires_db
+from tests.worlds import start_demo
 
 TEMPLATE_ASSET = DEMO_SITES[0].id
 
@@ -345,47 +347,39 @@ def client(session: Session) -> Iterator[TestClient]:
 
 
 @requires_db
-def test_first_visit_creates_a_world_and_sets_the_cookie(client: TestClient) -> None:
+def test_a_demo_session_reads_its_own_sandbox(session: Session, client: TestClient) -> None:
+    world = start_demo(client, session)
+
     res = client.get("/world")
 
     assert res.status_code == 200
     body = res.json()
-    assert UUID(body["id"]) != WORLD_ID
-    assert client.cookies.get(COOKIE_NAME) == body["id"]
+    assert UUID(body["id"]) == world.id
+    assert UUID(body["id"]) not in {WORLD_ID, LIVE_WORLD_ID}
     assert {p["key"] for p in body["personas"]} == {p.key for p in PERSONAS}
     assert {a["site_key"] for a in body["assets"]} == {s.key for s in DEMO_SITES}
-    cookie = res.headers["set-cookie"].lower()
-    assert "httponly" in cookie
-    assert "samesite=lax" in cookie
-    assert f"max-age={COOKIE_MAX_AGE_S}" in cookie
-    assert "secure" not in cookie, "plain-HTTP local development must still get the cookie"
+    assert body["me"]["id"] == str(persona(session, world.id, "arjun").id)
+    assert "set-cookie" not in res.headers, "no world cookie is issued any more (T73)"
     assert res.headers["cache-control"] == "no-store"
+    assert client.get("/world").json()["id"] == body["id"]
 
 
+@pytest.mark.parametrize("cookie", ["not-a-uuid", str(uuid4()), str(WORLD_ID), "sandbox"])
 @requires_db
-def test_returning_visitor_keeps_the_same_world(client: TestClient) -> None:
-    first = client.get("/world").json()["id"]
-
-    assert client.get("/world").json()["id"] == first
-
-
-@pytest.mark.parametrize("cookie", ["not-a-uuid", str(uuid4()), str(WORLD_ID), str(LIVE_WORLD_ID)])
-@requires_db
-def test_bad_unknown_template_or_live_cookie_gets_a_fresh_world(
-    session: Session, client: TestClient, cookie: str
-) -> None:
+def test_an_nx_world_cookie_is_ignored(session: Session, client: TestClient, cookie: str) -> None:
     ensure_live_world(session)
-    client.cookies.set(COOKIE_NAME, cookie)
+    sandbox = create_world(session)
+    client.cookies.set("nx_world", str(sandbox.id) if cookie == "sandbox" else cookie)
 
     body = client.get("/world").json()
 
-    assert body["id"] != cookie
-    assert UUID(body["id"]) not in {WORLD_ID, LIVE_WORLD_ID}
+    assert UUID(body["id"]) == LIVE_WORLD_ID
+    assert body["me"] is None
 
 
 @requires_db
-def test_reset_endpoint_restores_the_visitors_world(session: Session, client: TestClient) -> None:
-    world_id = UUID(client.get("/world").json()["id"])
+def test_reset_endpoint_restores_the_demo_sandbox(session: Session, client: TestClient) -> None:
+    world_id = start_demo(client, session).id
     persona(session, world_id, "arjun").cash_balance = Decimal("5.00")
     session.commit()
 
@@ -395,15 +389,19 @@ def test_reset_endpoint_restores_the_visitors_world(session: Session, client: Te
     assert UUID(res.json()["id"]) == world_id
     arjun = next(p for p in res.json()["personas"] if p["key"] == "arjun")
     assert Decimal(arjun["cash_balance"]) == Decimal("10000.00")
+    assert client.get("/me").status_code == 200, "the demo session survives the reset"
 
 
 @requires_db
-def test_ledger_of_another_worlds_asset_is_not_visible(client: TestClient) -> None:
-    mine = client.get("/world").json()
-    other = TestClient(app).get("/world").json()
+def test_ledger_of_another_worlds_asset_is_not_visible(
+    session: Session, client: TestClient
+) -> None:
+    other = TestClient(app)
+    mine = start_demo(client, session)
+    theirs = start_demo(other, session)
 
-    assert client.get(f"/ledger/{mine['assets'][0]['id']}").status_code == 200
-    assert client.get(f"/ledger/{other['assets'][0]['id']}").status_code == 404
+    assert client.get(f"/ledger/{assets(session, mine.id)[0].id}").status_code == 200
+    assert client.get(f"/ledger/{assets(session, theirs.id)[0].id}").status_code == 404
 
 
 # --- Review follow-ups -----------------------------------------------------------------------
@@ -425,7 +423,7 @@ def world_count(session: Session) -> int:
 def test_first_visit_gets_the_community_stake_so_shares_are_conserved(
     session: Session, client: TestClient
 ) -> None:
-    world_id = UUID(client.get("/world").json()["id"])
+    world_id = start_demo(client, session).id
 
     for asset in assets(session, world_id):
         held = session.exec(select(Holding).where(Holding.asset_id == asset.id)).all()
@@ -434,39 +432,24 @@ def test_first_visit_gets_the_community_stake_so_shares_are_conserved(
 
 
 @requires_db
-def test_world_scoped_routes_need_a_cookie_and_never_create_worlds(
+def test_anonymous_requests_read_the_live_world_and_never_create_sandboxes(
     session: Session, client: TestClient
 ) -> None:
+    ensure_live_world(session)
     before = world_count(session)
 
     ledger = client.get(f"/ledger/{TEMPLATE_ASSET}")
     reset = client.post("/world/reset")
 
-    assert (ledger.status_code, ledger.json()["detail"]) == (401, "world_required")
-    assert reset.status_code == 401
+    assert ledger.status_code == 404, "the template's asset isn't in the live world"
+    assert (reset.status_code, reset.json()["detail"]) == (401, "auth_required")
     assert world_count(session) == before
-    assert COOKIE_NAME not in client.cookies
 
 
 @requires_db
-def test_new_worlds_are_capped_per_hour(session: Session, client: TestClient) -> None:
-    app.dependency_overrides[get_settings] = lambda: Settings(sandbox_max_new_worlds_per_hour=0)
-
-    res = client.get("/world")
-
-    assert res.status_code == 503
-    assert res.headers["retry-after"] == "300"
+def test_new_worlds_are_capped_per_hour(session: Session) -> None:
     with pytest.raises(WorldLimitReached):
         create_world(session, max_new_per_hour=0)
-
-
-@requires_db
-def test_cookie_is_secure_outside_development(client: TestClient) -> None:
-    app.dependency_overrides[get_settings] = lambda: Settings(environment="production")
-
-    res = client.get("/world")
-
-    assert "secure" in res.headers["set-cookie"].lower()
 
 
 @requires_db
@@ -505,8 +488,8 @@ def test_reset_and_prune_keep_llm_call_history(session: Session) -> None:
 @requires_db
 def test_reset_by_one_visitor_never_touches_another(session: Session, client: TestClient) -> None:
     other = TestClient(app)
-    a_id = UUID(client.get("/world").json()["id"])
-    b_id = UUID(other.get("/world").json()["id"])
+    a_id = start_demo(client, session).id
+    b_id = start_demo(other, session).id
     b_asset = assets(session, b_id)[0]
     append(
         session,

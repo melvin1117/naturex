@@ -26,8 +26,10 @@ class Settings(BaseSettings):
     local_jobs: bool = True
     database_url: str = "postgresql+psycopg://naturex:naturex@localhost:5432/naturex"
     llm_budget_usd: float = 20.0
-    # Cap on new sandbox worlds per hour, so clients that drop the cookie can't fill the DB.
+    # Cap on new demo sandbox worlds per hour (T55's POST /demo/start), so the DB can't be filled.
     sandbox_max_new_worlds_per_hour: int = 300
+    # Create the live world at startup if `make seed` hasn't (ADR-0005 §2); requests never do.
+    live_world_on_startup: bool = True
     event_stream_max_concurrent: int = 40
     # Rating runs (T27): each visitor world may start this many per rolling hour (429 after);
     # LLM_BUDGET_USD stays the global hard cap.

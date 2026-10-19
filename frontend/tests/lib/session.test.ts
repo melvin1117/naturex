@@ -14,18 +14,16 @@ const store = (values: Record<string, string>): CookieReader => ({
 });
 
 describe("forwardedCookieHeader", () => {
-  it("forwards only the session cookies", () => {
+  it("forwards only the session cookie", () => {
     expect(
       forwardedCookieHeader(
-        store({ nx_world: "w-1", theme: "dark", _ga: "tracking" }),
+        store({ nx_session: "s-1", theme: "dark", _ga: "tracking" }),
       ),
-    ).toBe("nx_world=w-1");
+    ).toBe("nx_session=s-1");
   });
 
-  it("forwards nx_session too once T55 sets it", () => {
-    expect(
-      forwardedCookieHeader(store({ nx_world: "w-1", nx_session: "s-1" })),
-    ).toBe("nx_world=w-1; nx_session=s-1");
+  it("never forwards the retired nx_world cookie (T73)", () => {
+    expect(forwardedCookieHeader(store({ nx_world: "w-1" }))).toBeUndefined();
   });
 
   it("returns undefined without session cookies", () => {
@@ -34,10 +32,10 @@ describe("forwardedCookieHeader", () => {
 });
 
 describe("isSessionExpired", () => {
-  it("is true only for 401 world_required", () => {
-    expect(isSessionExpired(401, { detail: "world_required" })).toBe(true);
-    expect(isSessionExpired(401, { detail: "auth_required" })).toBe(false);
-    expect(isSessionExpired(403, { detail: "world_required" })).toBe(false);
+  it("is true only for 401 auth_required", () => {
+    expect(isSessionExpired(401, { detail: "auth_required" })).toBe(true);
+    expect(isSessionExpired(401, { detail: "world_required" })).toBe(false);
+    expect(isSessionExpired(403, { detail: "auth_required" })).toBe(false);
     expect(isSessionExpired(401, null)).toBe(false);
   });
 });

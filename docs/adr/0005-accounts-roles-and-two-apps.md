@@ -124,7 +124,7 @@ Proposed (2026-10-06). Changes [pm-spec](../specs/pm-spec.md) §2–§5 and Epic
   - `DELETE /me` (*Should*) deletes credentials and sessions and pseudonymises the name. Holdings and orders stay, linked to the anonymised user, so the market history stays consistent.
 
 ## Consequences
-- **T31:** the `nx_world` cookie is retired. `CurrentWorld` is derived from the session, and `GET /world` returns the session's world.
+- **T31:** the `nx_world` cookie is retired (done in T73). `CurrentWorld` is derived from the session, and `GET /world` returns the session's world.
 - **Schema:** `users` gains `email`, `password_hash` and `is_admin`. `users.role` stays as a persona label but is no longer used for authorization. New tables: `communities`, `community_members`, `sessions`, `auth_attempts`, plus `assets.community_id`.
 - **T17 (#81)** keeps its persona placeholder until T54/T56 land; T57 then moves every route onto the principal.
 - **New tasks:** T54–T68 (`tasks/todo.md`, issues #97–#111). The listing lifecycle, IPO launch, live rating of new listings and the quarterly revenue split (D4) become *Must*, because real listings and the Steward home can't work without them.

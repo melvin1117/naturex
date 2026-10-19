@@ -17,9 +17,13 @@ afterEach(() => {
 });
 
 describe("createServerApi", () => {
-  it("calls BACKEND_URL directly and forwards only the visitor's world cookie", async () => {
+  it("calls BACKEND_URL directly and forwards only the visitor's session cookie", async () => {
     vi.stubEnv("BACKEND_URL", BASE);
-    Object.assign(cookieValues, { nx_world: "w-123", other: "secret" });
+    Object.assign(cookieValues, {
+      nx_session: "s-123",
+      nx_world: "w-123",
+      other: "secret",
+    });
     const backend = fakeBackend({ "GET /portfolio": () => json({ ok: true }) });
     const { createServerApi } = await import("@/lib/api/server");
 
@@ -29,7 +33,7 @@ describe("createServerApi", () => {
     expect(data).toEqual({ ok: true });
     const [request] = backend.requests;
     expect(request!.url).toBe(`${BASE}/portfolio`);
-    expect(request!.headers.get("cookie")).toBe("nx_world=w-123");
+    expect(request!.headers.get("cookie")).toBe("nx_session=s-123");
     expect(backend.calls("GET /world")).toBe(0);
   });
 
@@ -37,7 +41,7 @@ describe("createServerApi", () => {
     vi.stubEnv("BACKEND_URL", BASE);
     const backend = fakeBackend({
       "GET /portfolio": () =>
-        json({ detail: "world_required" }, { status: 401 }),
+        json({ detail: "auth_required" }, { status: 401 }),
     });
     const { createServerApi } = await import("@/lib/api/server");
 

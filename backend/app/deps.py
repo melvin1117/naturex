@@ -1,5 +1,10 @@
-"""FastAPI dependencies shared by routers: DB session, settings, the visitor's world and the
-signed-in principal."""
+"""FastAPI dependencies shared by routers: DB session, settings, the request's world and the
+signed-in principal.
+
+The world always comes from the session, never from a client value (ADR-0005 §2, T73):
+anonymous requests and password sessions use the live world, and a demo session uses its own
+sandbox world. Anonymous requests are read-only.
+"""
 
 from __future__ import annotations
 
@@ -11,17 +16,12 @@ from fastapi import Depends, HTTPException, Request, Response, status
 from sqlmodel import Session
 
 from app.auth import SESSION_COOKIE, Principal, prune_auth_data, resolve_session
-from app.config import Settings, get_settings, secure_cookies
+from app.config import Settings, get_settings
 from app.db import get_session
-from app.models import World
-from app.sandbox import (
-    COOKIE_MAX_AGE_S,
-    COOKIE_NAME,
-    WorldLimitReached,
-    create_world,
-    prune_stale_worlds,
-    world_from_cookie,
-)
+from app.middleware import SAFE_METHODS
+from app.models import SessionKind, World
+from app.sandbox import is_sandbox, prune_stale_worlds
+from app.seed import LIVE_WORLD_ID
 
 log = logging.getLogger(__name__)
 
@@ -31,28 +31,20 @@ SettingsDep = Annotated[Settings, Depends(get_settings)]
 # Avoid a write on every request; last_seen_at only needs to be roughly right for pruning.
 TOUCH_EVERY = timedelta(minutes=5)
 PRUNE_EVERY = timedelta(minutes=10)
-WORLD_REQUIRED = "world_required"
 AUTH_REQUIRED = "auth_required"
+ADMIN_ONLY = "admin_only"
+SANDBOX_ONLY = "sandbox_only"
+WORLD_UNAVAILABLE = "world_unavailable"
 _last_prune: datetime | None = None
 _last_auth_prune: datetime | None = None
 
 
-def _set_world_cookie(response: Response, world: World, settings: Settings) -> None:
-    # SameSite=Lax needs the browser to see one site: the frontend proxies /api/* to this
-    # backend (next.config.ts; T20). Don't switch to SameSite=None; browsers block it.
-    response.set_cookie(
-        COOKIE_NAME,
-        str(world.id),
-        max_age=COOKIE_MAX_AGE_S,
-        httponly=True,
-        samesite="lax",
-        secure=secure_cookies(settings),
-    )
-    response.headers["Cache-Control"] = "no-store"
+def prune_stale_worlds_now_and_then(session: Session) -> None:
+    """Prune stale sandbox worlds at most every PRUNE_EVERY per process; never fail the request.
 
-
-def _prune_now_and_then(session: Session) -> None:
-    """Prune stale worlds at most every PRUNE_EVERY per process; never fail the request."""
+    Runs on the session-creating paths (register and login today, T55's `POST /demo/start`
+    next), never on anonymous reads. Never touches the template or the live world.
+    """
     global _last_prune
     now = datetime.now(UTC)
     if _last_prune is not None and now - _last_prune < PRUNE_EVERY:
@@ -83,51 +75,11 @@ def prune_auth_data_now_and_then(session: Session) -> None:
 
 
 def _touch(session: Session, world: World) -> None:
+    """Keep a demo sandbox from being pruned while it's in use."""
     if datetime.now(UTC) - world.last_seen_at > TOUCH_EVERY:
         world.last_seen_at = datetime.now(UTC)
         session.add(world)
         session.commit()
-
-
-def visitor_world(
-    request: Request, response: Response, session: SessionDep, settings: SettingsDep
-) -> World:
-    """The visitor's world, created on the first visit. Only `GET /world` uses this."""
-    world = world_from_cookie(session, request.cookies.get(COOKIE_NAME))
-    if world is None:
-        _prune_now_and_then(session)
-        try:
-            world = create_world(session, settings.sandbox_max_new_worlds_per_hour)
-        except WorldLimitReached as exc:
-            raise HTTPException(
-                status.HTTP_503_SERVICE_UNAVAILABLE,
-                "The demo is busy; try again in a few minutes",
-                headers={"Retry-After": "300"},
-            ) from exc
-    else:
-        _touch(session, world)
-    _set_world_cookie(response, world, settings)
-    return world
-
-
-def current_world(
-    request: Request, response: Response, session: SessionDep, settings: SettingsDep
-) -> World:
-    """The visitor's existing world. Never creates one: 401 `world_required` without it.
-
-    The frontend calls `GET /world` once before anything else, so errors on other routes
-    can't silently create worlds whose cookie the browser never receives.
-    """
-    world = world_from_cookie(session, request.cookies.get(COOKIE_NAME))
-    if world is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, WORLD_REQUIRED)
-    _touch(session, world)
-    _set_world_cookie(response, world, settings)
-    return world
-
-
-VisitorWorld = Annotated[World, Depends(visitor_world)]
-CurrentWorld = Annotated[World, Depends(current_world)]
 
 
 def optional_principal(request: Request, session: SessionDep) -> Principal | None:
@@ -149,3 +101,72 @@ def current_principal(
 
 OptionalPrincipal = Annotated[Principal | None, Depends(optional_principal)]
 CurrentPrincipal = Annotated[Principal, Depends(current_principal)]
+
+
+def live_world(session: Session) -> World:
+    """The live world, which `make seed`, the app's startup, `create-admin` and register/login
+    create (`sandbox.ensure_live_world`); requests never build it. 503 `world_unavailable` if
+    it doesn't exist yet."""
+    world = session.get(World, LIVE_WORLD_ID)
+    if world is None:
+        log.error("the live world is missing; run `make seed`")
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, WORLD_UNAVAILABLE)
+    return world
+
+
+def world_for(session: Session, principal: Principal | None) -> World:
+    """The world a principal acts in (ADR-0005 §2): no session or a password session → the
+    live world; a demo session → its own sandbox world.
+
+    Anything else (a demo session on the live world, the template or a deleted world, a password
+    session outside the live world, an unknown session kind) is refused with 401
+    `auth_required` rather than served, so a sandbox is reachable only through its own demo
+    session and the live world only through password sessions or none.
+    """
+    if principal is None:
+        return live_world(session)
+    world = session.get(World, principal.world_id)
+    match principal.session_kind:
+        case SessionKind.PASSWORD if world is not None and world.id == LIVE_WORLD_ID:
+            return world
+        case SessionKind.DEMO if world is not None and is_sandbox(world):
+            _touch(session, world)
+            return world
+    log.warning("session %s is bound to an unexpected world; refused", principal.session_id)
+    raise HTTPException(status.HTTP_401_UNAUTHORIZED, AUTH_REQUIRED)
+
+
+def current_world(
+    request: Request, response: Response, session: SessionDep, principal: OptionalPrincipal
+) -> World:
+    """The request's world, from its session; never from a client value.
+
+    Anonymous requests are read-only: any unsafe method (POST, PUT, PATCH, DELETE) on a route
+    that uses this returns 401 `auth_required` without a session. Responses are `no-store`,
+    since the same URL answers differently per session.
+    """
+    if principal is None and request.method not in SAFE_METHODS:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, AUTH_REQUIRED)
+    world = world_for(session, principal)
+    response.headers["Cache-Control"] = "no-store"
+    return world
+
+
+CurrentWorld = Annotated[World, Depends(current_world)]
+
+
+def require_sandbox_or_admin(world: World, principal: Principal) -> None:
+    """Rating and the Time Machine write reports and spend LLM budget: anyone in their own demo
+    sandbox, only an admin in the live world (403 `admin_only`; ADR-0005 §3).
+
+    TODO(T57): replaced by `authz.require()` (T68), with the full role matrix.
+    """
+    if not is_sandbox(world) and not principal.is_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, ADMIN_ONLY)
+
+
+def require_sandbox(world: World) -> None:
+    """Demo-only tools (the ledger tamper demo) never run in the live world (403
+    `sandbox_only`). TODO(T57): replaced by `authz.require()` (T68)."""
+    if not is_sandbox(world):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, SANDBOX_ONLY)

@@ -5,9 +5,9 @@
  * https://nextjs.org/docs/app/api-reference/functions/cookies), which also opts the route
  * into dynamic rendering, so a visitor's data is never cached for another visitor.
  *
- * It never bootstraps: only the browser may call `GET /world`, because a world created here
- * would set a cookie the browser never receives (deps.py `current_world`). Without a cookie,
- * calls fail with `ApiError` 401 `world_required`; render client-side in that case.
+ * It never bootstraps or retries: the browser owns the world snapshot. Without a session,
+ * reads see the live world and signed-in-only calls fail with `ApiError` 401 `auth_required`
+ * (deps.py `current_world`); render those parts client-side.
  */
 import { cookies } from "next/headers";
 
@@ -19,7 +19,7 @@ import {
   type FetchFn,
 } from "./client";
 
-/** Headers that carry the visitor's world/session cookies to the backend. */
+/** Headers that carry the visitor's session cookie to the backend. */
 export function forwardedHeaders(store: CookieReader): Record<string, string> {
   const cookie = forwardedCookieHeader(store);
   return cookie ? { Cookie: cookie } : {};

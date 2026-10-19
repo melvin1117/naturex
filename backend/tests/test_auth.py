@@ -40,12 +40,13 @@ from app.models import (
 from app.sandbox import (
     create_world,
     ensure_live_world,
+    is_sandbox,
     prune_stale_worlds,
     reset_world,
-    world_from_cookie,
 )
 from app.seed import COMMUNITY_PERSONA, DEMO_SITES, LIVE_WORLD_ID, WORLD_ID, seed
 from tests.conftest import alembic_cfg, requires_db
+from tests.worlds import start_demo
 
 PASSWORD = "correct horse battery"
 EMAIL = "rosa.ok@example.org"
@@ -86,9 +87,14 @@ def login(client: TestClient, email: str = EMAIL, password: str = PASSWORD) -> A
     return client.post("/auth/login", json={"email": email, "password": password})
 
 
-def session_rows(session: Session) -> list[UserSession]:
+def session_rows(session: Session, *user_ids: UUID) -> list[UserSession]:
+    """Session rows, only for `user_ids` when given, so rows other tests committed to the shared
+    test database never matter."""
     session.expire_all()
-    return list(session.exec(select(UserSession)).all())
+    stmt = select(UserSession)
+    if user_ids:
+        stmt = stmt.where(col(UserSession.user_id).in_(user_ids))
+    return list(session.exec(stmt).all())
 
 
 def row_for(session: Session, token: str) -> UserSession:
@@ -270,7 +276,7 @@ def test_each_login_issues_a_new_token_and_revokes_the_one_presented(
 def test_expired_sessions_get_401_and_are_deleted(
     session: Session, client: TestClient, limit: str
 ) -> None:
-    register(client)
+    user_id = UUID(register(client).json()["id"])
     row = row_for(session, client.cookies["nx_session"])
     now = datetime.now(UTC)
     if limit == "idle":
@@ -283,7 +289,7 @@ def test_expired_sessions_get_401_and_are_deleted(
     res = client.get("/me")
 
     assert (res.status_code, res.json()["detail"]) == (401, "auth_required")
-    assert session_rows(session) == []
+    assert session_rows(session, user_id) == []
 
 
 @requires_db
@@ -328,7 +334,7 @@ def test_last_seen_is_bumped_at_most_every_few_minutes(
 
 @requires_db
 def test_logout_deletes_the_row_and_clears_the_cookie(session: Session, client: TestClient) -> None:
-    register(client)
+    user_id = UUID(register(client).json()["id"])
     token = client.cookies["nx_session"]
 
     res = client.post("/auth/logout")
@@ -337,7 +343,7 @@ def test_logout_deletes_the_row_and_clears_the_cookie(session: Session, client: 
     cookie = res.headers["set-cookie"].lower()
     assert cookie.startswith("nx_session=") and "max-age=0" in cookie and "path=/" in cookie
     assert "nx_session" not in client.cookies
-    assert session_rows(session) == []
+    assert session_rows(session, user_id) == []
     assert TestClient(app, cookies={"nx_session": token}).get("/me").status_code == 401
     assert TestClient(app).post("/auth/logout").status_code == 204, "idempotent"
 
@@ -509,10 +515,16 @@ def test_live_world_is_never_pruned_reset_or_served_as_a_sandbox(
 
     with pytest.raises(ValueError):
         reset_world(session, LIVE_WORLD_ID)
-    assert world_from_cookie(session, str(LIVE_WORLD_ID)) is None
-    client.cookies.set("nx_world", str(LIVE_WORLD_ID))
-    served = client.get("/world").json()
-    assert UUID(served["id"]) not in {LIVE_WORLD_ID, WORLD_ID}
+    assert not is_sandbox(live)
+    # A demo session bound to the live world (never issued; T55 binds them to sandboxes) is
+    # refused rather than served or allowed to reset it.
+    owner = session.exec(
+        select(User).where(User.world_id == LIVE_WORLD_ID, User.kind == UserKind.PERSONA)
+    ).first()
+    assert owner is not None
+    client.cookies.set(auth.SESSION_COOKIE, auth.start_session(session, owner, SessionKind.DEMO))
+    assert client.get("/world").status_code == 401
+    assert client.post("/world/reset").status_code == 401
 
 
 @requires_db
@@ -522,12 +534,19 @@ def test_world_listing_never_includes_password_accounts(
     world = create_world(session)
     session.add(_person(world.id, "hidden@example.org"))
     session.commit()
-    client.cookies.set("nx_world", str(world.id))
+    start_demo(client, session, world)
 
     personas = client.get("/world").json()["personas"]
 
     assert "hidden@example.org" not in str(personas)
     assert len(personas) == 4
+
+    client.cookies.clear()
+    assert register(client).status_code == 201
+    live = client.get("/world").json()
+    assert UUID(live["id"]) == LIVE_WORLD_ID
+    assert EMAIL not in str(live["personas"])
+    assert live["me"]["email"] == EMAIL
 
 
 @requires_db
@@ -538,6 +557,7 @@ def test_prune_deletes_expired_sessions_and_stale_worlds_with_sessions(session: 
         select(User).where(User.world_id == world_id, User.kind == UserKind.PERSONA)
     ).first()
     assert persona is not None
+    persona_id = persona.id
     now = datetime.now(UTC)
     session.add(
         UserSession(
@@ -569,7 +589,7 @@ def test_prune_deletes_expired_sessions_and_stale_worlds_with_sessions(session: 
     prune_stale_worlds(session, older_than=timedelta(days=7))
 
     assert session.get(World, world_id) is None
-    assert session_rows(session) == []
+    assert session_rows(session, persona_id, live_person_id) == []
     assert session.get(User, live_person_id) is not None
 
 

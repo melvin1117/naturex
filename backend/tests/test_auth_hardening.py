@@ -22,6 +22,7 @@ from sqlmodel import Session, col, select
 from app import auth, deps
 from app.config import Settings, get_settings
 from app.db import get_session
+from app.deps import current_principal, current_world
 from app.main import app, validate_auth_settings
 from app.middleware import (
     canonical_origin,
@@ -32,6 +33,7 @@ from app.middleware import (
 from app.models import AuthAttempt, AuthAttemptKind, AuthBucket, UserSession
 from app.seed import seed
 from tests.conftest import alembic_cfg, requires_db
+from tests.worlds import stub_principal, stub_sandbox
 
 ALLOWED = ["https://app.example.com", "http://localhost:3000"]
 
@@ -153,6 +155,16 @@ def client() -> TestClient:
     return TestClient(app)
 
 
+@pytest.fixture
+def signed_in() -> Iterator[None]:
+    """The CSRF tests post to stub routes, which need a session since T73."""
+    app.dependency_overrides[current_principal] = stub_principal
+    app.dependency_overrides[current_world] = stub_sandbox
+    yield
+    app.dependency_overrides.pop(current_principal, None)
+    app.dependency_overrides.pop(current_world, None)
+
+
 def bare_client() -> TestClient:
     """A client with no default Origin header, so a test controls both headers itself."""
     client = TestClient(app)
@@ -160,6 +172,7 @@ def bare_client() -> TestClient:
     return client
 
 
+@pytest.mark.usefixtures("signed_in")
 def test_unsafe_request_with_an_allowed_origin_goes_through(client: TestClient) -> None:
     assert client.post("/copilot", json=BODY).status_code == 200
 
@@ -189,6 +202,7 @@ def test_wrong_null_and_empty_origins_are_rejected(origin: str) -> None:
     assert res.status_code == 403
 
 
+@pytest.mark.usefixtures("signed_in")
 def test_referer_is_used_only_when_origin_is_absent() -> None:
     good = bare_client().post("/copilot", json=BODY, headers={"Referer": "http://testserver/x"})
     both = bare_client().post(
@@ -224,6 +238,7 @@ def test_a_body_that_is_not_json_is_rejected(
     assert res.json() == {"detail": "unsupported_media_type"}
 
 
+@pytest.mark.usefixtures("signed_in")
 def test_multipart_bodies_pass_the_media_check_but_are_still_origin_checked(
     client: TestClient,
 ) -> None:
@@ -233,6 +248,7 @@ def test_multipart_bodies_pass_the_media_check_but_are_still_origin_checked(
     assert bare_client().post("/copilot", files=upload).status_code == 403
 
 
+@pytest.mark.usefixtures("signed_in")
 def test_a_post_without_a_body_needs_no_media_type(client: TestClient) -> None:
     assert client.post("/admin/simulate/quarter").status_code == 200
 
@@ -875,6 +891,7 @@ def test_a_chunked_body_with_no_content_length_still_needs_a_json_type(
     assert res.status_code == 415
 
 
+@pytest.mark.usefixtures("signed_in")
 def test_an_empty_body_needs_no_media_type(client: TestClient) -> None:
     res = client.post("/copilot", content=b"", headers={"Content-Type": "text/plain"})
 

@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.deps import current_principal
 from app.mocks import EVENT_ENCROACH
 from app.schemas import CopilotCitation, CopilotRequest, CopilotResponse
 
 router = APIRouter(tags=["copilot"])
 
 
-@router.post("/copilot", response_model=CopilotResponse)
+@router.post("/copilot", response_model=CopilotResponse, dependencies=[Depends(current_principal)])
 def ask_copilot(body: CopilotRequest) -> CopilotResponse:
     return CopilotResponse(
         answer=(

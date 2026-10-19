@@ -9,7 +9,7 @@ import { useState } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { WorldGate, WorldProvider } from "@/components/world-provider";
-import { createDataLayer } from "@/lib/data-layer";
+import { createDataLayer, viewerKey } from "@/lib/data-layer";
 import {
   useAsset,
   useAssets,
@@ -28,6 +28,7 @@ import {
   FakeEventSource,
   json,
   sequence,
+  SIGNED_IN_WORLD,
   WORLD,
 } from "./helpers";
 
@@ -206,6 +207,46 @@ describe("query hooks", () => {
     unmount();
 
     expect(seen!.signal.aborted).toBe(true);
+  });
+});
+
+describe("cache per viewer", () => {
+  it("keys the viewer by world and account", () => {
+    expect(viewerKey(null)).toBeNull();
+    expect(viewerKey(WORLD)).toBe(`${WORLD.id}:anonymous`);
+    expect(viewerKey(SIGNED_IN_WORLD)).toBe(
+      `${WORLD.id}:${SIGNED_IN_WORLD.me!.id}`,
+    );
+  });
+
+  it("refetches when the account changes in the same world, never showing the old one's data", async () => {
+    const { backend, layer } = renderWithWorld(<Portfolio />, {
+      "GET /world": () => json(SIGNED_IN_WORLD),
+      "GET /portfolio": sequence(
+        () => json(portfolio("100.00")),
+        () => json(portfolio("250.00")),
+        () => json(portfolio("999.00")),
+      ),
+    });
+    expect(await screen.findByText("Cash 100.00")).toBeTruthy();
+
+    act(() => layer.session.set({ ...SIGNED_IN_WORLD }));
+    act(() =>
+      layer.session.set({
+        ...SIGNED_IN_WORLD,
+        me: {
+          ...SIGNED_IN_WORLD.me!,
+          id: "55555555-5555-4555-8555-555555555555",
+        },
+      }),
+    );
+
+    expect(await screen.findByText("Cash 250.00")).toBeTruthy();
+    expect(backend.calls("GET /portfolio")).toBe(2);
+
+    act(() => layer.session.set(WORLD));
+    expect(await screen.findByText("Cash 999.00")).toBeTruthy();
+    expect(backend.calls("GET /portfolio")).toBe(3);
   });
 });
 

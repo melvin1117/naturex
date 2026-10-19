@@ -1,7 +1,7 @@
 """FastAPI application entrypoint."""
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -9,8 +9,10 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
+from sqlmodel import Session
 
 from app.config import Settings, get_settings, rate_limit_secret, secure_cookies
+from app.db import engine
 from app.middleware import CsrfMiddleware, parse_allowed_origins
 from app.routers import (
     admin,
@@ -26,6 +28,7 @@ from app.routers import (
     runs,
     world,
 )
+from app.sandbox import ensure_live_world
 
 settings = get_settings()
 
@@ -34,7 +37,7 @@ def warn_if_cookies_insecure(settings: Settings) -> None:
     """Say loudly when session cookies go out without `Secure` (local development and tests)."""
     if not secure_cookies(settings):
         logging.getLogger("app").warning(
-            "ENVIRONMENT=%s: the nx_session and nx_world cookies are not Secure. "
+            "ENVIRONMENT=%s: the nx_session cookie is not Secure. "
             "Every deployment must set ENVIRONMENT=production.",
             settings.environment,
         )
@@ -63,11 +66,27 @@ def validate_auth_settings(settings: Settings) -> frozenset[str]:
     return origins
 
 
+def prepare_live_world(open_session: Callable[[], Session] = lambda: Session(engine)) -> bool:
+    """Create the live world if it's missing, so no request has to (T73). Never fails startup:
+    until it exists (e.g. the template isn't seeded yet), reads get 503 `world_unavailable`."""
+    try:
+        with open_session() as session:
+            ensure_live_world(session)
+        return True
+    except Exception:
+        logging.getLogger("app").exception(
+            "could not create the live world at startup; run `make seed`"
+        )
+        return False
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # At startup rather than import, so tools that only import the app (the OpenAPI export for
     # the API client) don't need production secrets. uvicorn runs this before serving.
     validate_auth_settings(settings)
+    if settings.live_world_on_startup:
+        prepare_live_world()
     yield
 
 

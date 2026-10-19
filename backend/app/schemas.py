@@ -455,14 +455,6 @@ class WorldAssetOut(BaseModel):
     status: AssetStatus
 
 
-class WorldOut(BaseModel):
-    id: UUID
-    label: str
-    created_at: datetime
-    personas: list[PersonaOut]
-    assets: list[WorldAssetOut]
-
-
 # ----- Accounts and sessions (ADR-0005, T54) -----
 
 
@@ -512,6 +504,17 @@ class MeOut(BaseModel):
     kind: UserKind
     is_admin: bool
     world_id: UUID
+
+
+class WorldOut(BaseModel):
+    """The session's world (ADR-0005 §2): `live`, or a demo sandbox (`visitor`)."""
+
+    id: UUID
+    label: str
+    created_at: datetime
+    personas: list[PersonaOut]
+    assets: list[WorldAssetOut]
+    me: MeOut | None  # the signed-in account (as GET /me), or null when anonymous
 
 
 # ----- Communities (ADR-0005 §3, T68) -----

@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 from sqlmodel import Session
 
-from app.deps import CurrentWorld, SessionDep, SettingsDep
+from app.deps import SANDBOX_ONLY, CurrentWorld, SessionDep, SettingsDep, require_sandbox
 from app.ledger import VerifyResult, entries_for, tamper, verify
 from app.models import Asset, World
 from app.schemas import LedgerEntryOut, LedgerVerifyOut, TamperDemoIn, TamperDemoOut
@@ -40,13 +40,19 @@ def verify_ledger(asset_id: UUID, world: CurrentWorld, session: SessionDep) -> L
     return _verify_out(verify(entries_for(session, asset_id)))
 
 
-@router.post("/admin/tamper-demo", response_model=TamperDemoOut)
+@router.post(
+    "/admin/tamper-demo",
+    response_model=TamperDemoOut,
+    responses={403: {"description": f"`{SANDBOX_ONLY}`: never in the live world"}},
+)
 def tamper_demo(
     body: TamperDemoIn, settings: SettingsDep, world: CurrentWorld, session: SessionDep
 ) -> TamperDemoOut:
-    """DEMO_MODE only: edit a copy of one entry and show verification failing. Writes nothing."""
+    """DEMO_MODE and demo sandboxes only: edit a copy of one entry and show verification
+    failing. Writes nothing."""
     if not settings.demo_mode:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
+    require_sandbox(world)
     _require_asset(session, world, body.asset_id)
     entries = entries_for(session, body.asset_id)
     if not entries:
