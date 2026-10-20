@@ -532,6 +532,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 - [x] `rerate_all` and `news_sweep` (`backend/app/jobs/`, logic in `services/monitoring.py`; idempotent via `monitor_runs` claims, budget-capped; the sweep runs daily via GitHub Actions) re-rate live listed assets through the rating service
 - [x] Alerts on health Δ ≥ 5, a grade change or news severity ≥ 4, to the asset's holders and its community's members only; each quarter pays out via T41
 - [x] An alerts list in both apps (read/unread) fed by real `alert` events
+  - Follow-up #199: the header bell shows a signed-in account's real alerts in every app (unread count from `GET /alerts` in the button's label, announced when new alerts arrive; the popover is `AlertsList` with mark read, mark all read and site links); anonymous visitors keep the prototype's scripted bell.
 
 **Verify:** `make test`; manual: a grade-changing re-rate alerts a holder and the owner · **Deps:** T27, T41, T57 · **Files:** `backend/app/jobs/*.py`, `backend/app/services/{alerts,monitoring}.py`, `backend/app/routers/alerts.py`, `backend/migrations/versions/0017_monitoring_alerts.py`, `.github/workflows/news-sweep.yml`, `frontend/src/components/alerts-list.tsx`, `frontend/src/components/proto/alert-toaster.tsx`
 

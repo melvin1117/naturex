@@ -1,0 +1,239 @@
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { PrototypeHeaderTools } from "@/components/proto/header-tools";
+import type { AlertList, AlertOut } from "@/lib/api/types";
+import { usePrototype } from "@/lib/prototype/store";
+
+import { renderExchange, stubBrowserApis } from "../exchange/render";
+import { FakeEventSource, json, SIGNED_IN_WORLD } from "../lib/helpers";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => "/",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+beforeAll(stubBrowserApis);
+beforeEach(() => FakeEventSource.reset());
+
+const WETLAND = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+
+function alert(overrides: Partial<AlertOut> = {}): AlertOut {
+  return {
+    id: "11111111-1111-4111-8111-111111111111",
+    asset_id: WETLAND,
+    asset_name: "Xochimilco Wetland",
+    kind: "grade_change",
+    title: "Xochimilco Wetland downgraded to BBB",
+    message: "Health 72.0 → 64.5 (−7.5 points). Grade A → BBB.",
+    severity: 4,
+    url: null,
+    report_id: null,
+    created_at: "2026-10-19T08:00:00Z",
+    read_at: null,
+    ...overrides,
+  };
+}
+
+const NEWS = alert({
+  id: "33333333-3333-4333-8333-333333333333",
+  kind: "news",
+  title: "Fire reported near the wetland",
+  message: "A fire burned part of the buffer zone.",
+  severity: 5,
+});
+
+function list(alerts: AlertOut[]): AlertList {
+  return {
+    alerts,
+    unread_count: alerts.filter((a) => a.read_at == null).length,
+    next_before: null,
+  };
+}
+
+describe("Header bell, signed in (#199)", () => {
+  it("shows the unread count from GET /alerts and opens the real alerts", async () => {
+    renderExchange(<PrototypeHeaderTools app="exchange" />, {
+      "GET /world": () => json(SIGNED_IN_WORLD),
+      "GET /alerts": () => json(list([alert(), NEWS])),
+    });
+
+    const bell = await screen.findByRole("button", {
+      name: "Alerts, 2 unread",
+    });
+    fireEvent.click(bell);
+
+    const popover = await screen.findByRole("dialog", { name: "Your alerts" });
+    const items = within(
+      within(popover).getByRole("list", { name: "Alerts" }),
+    ).getAllByRole("listitem");
+    expect(items[0]).toHaveTextContent("Xochimilco Wetland downgraded to BBB");
+    expect(
+      within(items[0]!).getByRole("link", { name: "Xochimilco Wetland" }),
+    ).toHaveAttribute("href", `/asset/${WETLAND}`);
+  });
+
+  it("marks one alert read and updates the count", async () => {
+    let read = false;
+    const backend = renderExchange(<PrototypeHeaderTools app="exchange" />, {
+      "GET /world": () => json(SIGNED_IN_WORLD),
+      "GET /alerts": () =>
+        json(
+          list([
+            alert({ read_at: read ? "2026-10-19T09:00:00Z" : null }),
+            NEWS,
+          ]),
+        ),
+      [`POST /alerts/${alert().id}/read`]: () => {
+        read = true;
+        return json(alert({ read_at: "2026-10-19T09:00:00Z" }));
+      },
+    }).backend;
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Alerts, 2 unread" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Mark read: Xochimilco Wetland downgraded to BBB",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Alerts, 1 unread" }),
+    ).toBeInTheDocument();
+    expect(backend.calls(`POST /alerts/${alert().id}/read`)).toBe(1);
+  });
+
+  it("marks everything read", async () => {
+    let read = false;
+    const { backend } = renderExchange(<PrototypeHeaderTools app="steward" />, {
+      "GET /world": () => json(SIGNED_IN_WORLD),
+      "GET /alerts": () =>
+        json(
+          list(
+            [alert(), NEWS].map((a) =>
+              read ? { ...a, read_at: "2026-10-19T09:00:00Z" } : a,
+            ),
+          ),
+        ),
+      "POST /alerts/read-all": () => {
+        read = true;
+        return json({ marked: 2 });
+      },
+    });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Alerts, 2 unread" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Mark all read" }),
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Alerts, all read" }),
+    ).toBeInTheDocument();
+    expect(backend.calls("POST /alerts/read-all")).toBe(1);
+  });
+
+  it("updates and announces the count on a live alert event", async () => {
+    let alerts = [NEWS];
+    renderExchange(<PrototypeHeaderTools app="exchange" />, {
+      "GET /world": () => json(SIGNED_IN_WORLD),
+      "GET /alerts": () => json(list(alerts)),
+    });
+    await screen.findByRole("button", { name: "Alerts, 1 unread" });
+    // Nothing is announced for the count already there on load.
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    await waitFor(() => expect(FakeEventSource.instances).not.toHaveLength(0));
+
+    alerts = [alert(), NEWS];
+    act(() => {
+      const source = FakeEventSource.latest();
+      source.open();
+      source.emit("alert", 9, {
+        alert_id: alert().id,
+        asset_id: WETLAND,
+        asset_name: "Xochimilco Wetland",
+        kind: "grade_change",
+        title: alert().title,
+        message: alert().message,
+        severity: 4,
+        report_id: null,
+        url: null,
+      });
+    });
+
+    expect(
+      await screen.findByRole("button", { name: "Alerts, 2 unread" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("2 unread alerts");
+  });
+
+  it("shows the bell in the admin app too", async () => {
+    renderExchange(<PrototypeHeaderTools app="admin" />, {
+      "GET /world": () => json(SIGNED_IN_WORLD),
+      "GET /alerts": () => json(list([])),
+    });
+    expect(
+      await screen.findByRole("button", { name: "Alerts, all read" }),
+    ).toBeInTheDocument();
+  });
+});
+
+function AddScriptedAlert() {
+  const { act: change } = usePrototype();
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        change((w) => ({
+          ...w,
+          alerts: [
+            {
+              id: "al-1",
+              siteId: "xochimilco-wetland",
+              persona: "investor",
+              severity: "critical",
+              title: "Scripted: Xochimilco downgraded",
+              message: "Encroachment reported.",
+              date: "2026-10-19T08:00:00Z",
+              read: false,
+            },
+            ...w.alerts,
+          ],
+        }))
+      }
+    >
+      Add scripted alert
+    </button>
+  );
+}
+
+describe("Header bell, anonymous prototype", () => {
+  it("keeps the scripted alerts and never asks the API", async () => {
+    const { backend } = renderExchange(
+      <>
+        <AddScriptedAlert />
+        <PrototypeHeaderTools app="exchange" />
+      </>,
+    );
+    await waitFor(() => expect(backend.calls("GET /world")).toBe(1));
+    fireEvent.click(screen.getByRole("button", { name: "Add scripted alert" }));
+
+    // The scripted bell is unchanged (its visible badge adds to its name).
+    const bell = screen.getByRole("button", { name: /^Alerts, 1 unread/ });
+    fireEvent.click(bell);
+    expect(
+      await screen.findByText("Scripted: Xochimilco downgraded"),
+    ).toBeVisible();
+    expect(backend.calls("GET /alerts")).toBe(0);
+  });
+});

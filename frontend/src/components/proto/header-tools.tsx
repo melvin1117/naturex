@@ -3,14 +3,17 @@
 import { Bell, Bot, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
+import { AlertsList } from "@/components/alerts-list";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useAlerts, useWorld } from "@/lib/hooks";
 import type { AppKey } from "@/lib/navigation";
 import { date } from "@/lib/prototype/format";
 import { usePrototype } from "@/lib/prototype/store";
@@ -21,13 +24,15 @@ import {
 } from "@/lib/prototype/world";
 
 /**
- * The prototype's header tools (Copilot, Agent Trace, alerts), on scripted data until their
- * tasks wire them. The shell header (`components/shell/app-header.tsx`) shows them in its
- * `tools` slot.
+ * The header tools (Copilot, Agent Trace, alerts). The shell header
+ * (`components/shell/app-header.tsx`) shows them in its `tools` slot. Signed-in accounts get
+ * their real alerts (T75, #199) and the real Agent Trace (T34); anonymous visitors keep the
+ * prototype's scripted alerts.
  */
 export function PrototypeHeaderTools({ app }: { app: AppKey }) {
   const pathname = usePathname();
   const { world, openCopilot, openTrace } = usePrototype();
+  const signedIn = Boolean(useWorld().world?.me);
   // Alerts follow the persona you're viewing as, the same account that trades.
   const trader: TraderKey | null =
     app === "admin" ? null : actingTrader(world.persona);
@@ -57,7 +62,72 @@ export function PrototypeHeaderTools({ app }: { app: AppKey }) {
         <Bot aria-hidden="true" />
         <span className="sr-only xl:not-sr-only">Agent Trace</span>
       </Button>
-      {trader && <AlertsBell trader={trader} />}
+      {signedIn ? (
+        <AccountAlertsBell />
+      ) : (
+        trader && <AlertsBell trader={trader} />
+      )}
+    </>
+  );
+}
+
+/**
+ * The signed-in account's alerts (`GET /alerts`): the unread count on the bell, announced
+ * when it changes, and the list with mark read, mark all read and links to each site. Live
+ * `alert` events refetch it (`wireLiveUpdates`).
+ */
+function AccountAlertsBell() {
+  const [open, setOpen] = useState(false);
+  const alerts = useAlerts();
+  const loaded = alerts.data !== undefined;
+  const unread = alerts.data?.unread_count ?? 0;
+  const announcement = useCountAnnouncement(loaded ? unread : null);
+  const label = unread
+    ? `Alerts, ${unread} unread`
+    : loaded
+      ? "Alerts, all read"
+      : "Alerts";
+  return (
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="relative"
+            aria-label={label}
+            data-tour="alerts-bell"
+          >
+            <Bell aria-hidden="true" />
+            {unread > 0 && (
+              <span
+                className="tabular absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-clay px-1 text-[10px] font-semibold text-white"
+                aria-hidden="true"
+              >
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          className="w-[min(24rem,calc(100vw-2rem))] rounded-2xl p-0"
+          aria-label="Your alerts"
+          // Following a link to a site closes the list.
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest("a[href^='/']"))
+              setOpen(false);
+          }}
+        >
+          <div className="border-b px-4 py-3 text-sm font-semibold">Alerts</div>
+          <div className="max-h-[min(28rem,70vh)] overflow-y-auto px-4 py-3">
+            <AlertsList empty="No alerts yet. You'll hear here when a site you back is re-rated or in the news." />
+          </div>
+        </PopoverContent>
+      </Popover>
+      <span className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </span>
     </>
   );
 }
@@ -131,4 +201,20 @@ function AlertsBell({ trader }: { trader: TraderKey }) {
       </PopoverContent>
     </Popover>
   );
+}
+
+/**
+ * What a polite live region says about the unread count: nothing on the first load (the
+ * bell's label has it), then the new count whenever more alerts arrive.
+ */
+function useCountAnnouncement(count: number | null): string {
+  const previous = useRef<number | null>(null);
+  const [text, setText] = useState("");
+  useEffect(() => {
+    if (count === null) return;
+    if (previous.current !== null && count > previous.current)
+      setText(`${count} unread ${count === 1 ? "alert" : "alerts"}`);
+    previous.current = count;
+  }, [count]);
+  return text;
 }
