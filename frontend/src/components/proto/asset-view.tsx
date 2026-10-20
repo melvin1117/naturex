@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useMemo } from "react";
 
 import { CopilotChat } from "@/components/copilot-chat";
+import { FieldEvidencePanel } from "@/components/evidence/field-evidence-panel";
 import { Delta, SiteBackdrop, ValueRange } from "@/components/proto/bits";
 import { PriceChart } from "@/components/proto/charts";
 import { GradeBadge } from "@/components/proto/grade";
@@ -382,6 +383,9 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
 
       <div className="mt-8">
         <VerificationPanel assetId={asset.id} />
+      </div>
+      <div className="mt-8">
+        <FieldEvidencePanel assetId={asset.id} />
       </div>
       <DataAttribution facts={latest} images={images.data} />
     </>

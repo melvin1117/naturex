@@ -81,6 +81,15 @@ export const queryKeys = {
   /** Its own prefix: a decision refetches the run, never the (unchanged) preview images. */
   documentPreview: (assetId: string, documentId: string) =>
     ["document-preview", assetId, documentId] as const,
+  /** Every field evidence query of one listing (a prefix, for invalidation; T40). */
+  fieldEvidence: (assetId: string) => ["field-evidence", assetId] as const,
+  fieldEvidencePhotos: (assetId: string) =>
+    ["field-evidence", assetId, "photos"] as const,
+  fieldEvidenceSummary: (assetId: string) =>
+    ["field-evidence", assetId, "summary"] as const,
+  /** Its own prefix: a re-encoded photo never changes, so it's never refetched on a change. */
+  fieldPhotoImage: (assetId: string, photoId: string) =>
+    ["field-photo-image", assetId, photoId] as const,
   /** Every page of the reviewer queue, for every account (a prefix, for invalidation). */
   reviewQueueAll: () => ["review-queue"] as const,
   /** One page of the reviewer queue, per account. */
