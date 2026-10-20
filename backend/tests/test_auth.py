@@ -261,6 +261,32 @@ def test_a_display_name_sharing_words_with_the_password_is_fine(client: TestClie
     assert res.status_code == 201
 
 
+@pytest.mark.parametrize(
+    ("password", "name"),
+    [
+        ("  hunter2hunter2  ", "hunter2hunter2"),  # edge spaces don't hide the password
+        ("straße-is-long", "STRASSE-IS-LONG Ana"),  # casefold
+        ("ｆｕｌｌｗｉｄｔｈ-pass", "fullwidth-pass Ana"),  # NFKC
+    ],
+)
+@requires_db
+def test_the_password_is_found_whatever_its_spacing_case_or_form(
+    client: TestClient, password: str, name: str
+) -> None:
+    res = client.post("/auth/register", json={"email": EMAIL, "password": password, "name": name})
+
+    assert [(e["loc"][-1], e["type"]) for e in res.json()["detail"]] == [
+        ("name", "name_contains_password")
+    ]
+
+
+@requires_db
+def test_a_too_short_password_is_only_a_password_error(client: TestClient) -> None:
+    res = client.post("/auth/register", json={"email": EMAIL, "password": "an", "name": "Ana"})
+
+    assert [e["loc"][-1] for e in res.json()["detail"]] == ["password"]
+
+
 # --- Sessions --------------------------------------------------------------------------------
 
 

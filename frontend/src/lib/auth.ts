@@ -127,6 +127,13 @@ export function codePoints(value: string): number {
   return [...value].length;
 }
 
+/** Whether `text` holds `secret`, ignoring case, Unicode form and the secret's edge spaces. */
+function containsSecret(text: string, secret: string): boolean {
+  const fold = (value: string) => value.normalize("NFKC").toLowerCase();
+  const needle = fold(secret).trim();
+  return needle !== "" && fold(text).includes(needle);
+}
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const PASSWORD_RULE = `Use ${PASSWORD_MIN_LENGTH} to ${PASSWORD_MAX_LENGTH} characters.`;
@@ -155,8 +162,9 @@ export function validateAuthInput(
     else if (codePoints(name) > NAME_MAX_LENGTH)
       errors.name = MESSAGES.nameTooLong;
     else if (
-      input.password &&
-      name.toLowerCase().includes(input.password.toLowerCase())
+      codePoints(input.password) >= PASSWORD_MIN_LENGTH &&
+      codePoints(input.password) <= PASSWORD_MAX_LENGTH &&
+      containsSecret(name, input.password)
     )
       errors.name = MESSAGES.nameContainsPassword;
   }

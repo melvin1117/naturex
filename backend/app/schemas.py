@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
@@ -965,6 +966,12 @@ class WorldAssetOut(BaseModel):
 # ----- Accounts and sessions (ADR-0005, T54) -----
 
 
+def _contains_secret(text: str, secret: str) -> bool:
+    """Whether `text` holds `secret`, ignoring case, Unicode form and the secret's edge spaces."""
+    needle = unicodedata.normalize("NFKC", secret).strip().casefold()
+    return bool(needle) and needle in unicodedata.normalize("NFKC", text).casefold()
+
+
 class RegisterIn(BaseModel):
     email: str = Field(max_length=EMAIL_MAX_LENGTH)
     password: SecretStr = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
@@ -985,10 +992,9 @@ class RegisterIn(BaseModel):
         if not name or not name.isprintable():
             raise ValueError("Enter a display name")
         # The name is public; refuse one holding the password (typed into the wrong field).
+        # `password` is in `info.data` only because it's declared (and validated) before `name`.
         password = info.data.get("password")
-        if isinstance(password, SecretStr) and (
-            password.get_secret_value().casefold() in name.casefold()
-        ):
+        if isinstance(password, SecretStr) and _contains_secret(name, password.get_secret_value()):
             raise PydanticCustomError(
                 "name_contains_password", "The display name can't contain the password"
             )
