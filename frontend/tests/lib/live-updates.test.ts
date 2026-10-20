@@ -152,4 +152,70 @@ describe("wireLiveUpdates", () => {
     unwire();
     release();
   });
+  it("refetches a run on its progress events and a listing on its status (T33)", async () => {
+    const RUN_ID = "88888888-8888-4888-8888-888888888888";
+    const backend = fakeBackend({
+      "GET /world": () => json(WORLD),
+      [`GET /runs/${RUN_ID}`]: () => json({ run_id: RUN_ID }),
+      [`GET /assets/${ASSET_ID}`]: () => json({ id: ASSET_ID }),
+      [`GET /ledger/${ASSET_ID}`]: () => json([]),
+      "GET /assets/outlines": () => json({ outlines: [], truncated: false }),
+    });
+    const layer = createDataLayer({
+      baseUrl: BASE,
+      fetch: backend.fetch,
+      createEventSource: createFakeEventSource,
+    });
+    const unwire = wireLiveUpdates(layer.cache, layer.events);
+    const release = layer.events.retain();
+    const watch = (key: readonly string[], path: string) => {
+      layer.cache.subscribe(key, () => {});
+      void layer.cache.fetch(key, () =>
+        layer.api.GET(path as "/world").then(({ data }) => data),
+      );
+    };
+    watch(queryKeys.run(RUN_ID), `/runs/${RUN_ID}`);
+    watch(queryKeys.asset(ASSET_ID), `/assets/${ASSET_ID}`);
+    watch(queryKeys.ledger(ASSET_ID), `/ledger/${ASSET_ID}`);
+    watch(queryKeys.outlines(), "/assets/outlines");
+    const counts = () => [
+      backend.calls(`GET /runs/${RUN_ID}`),
+      backend.calls(`GET /assets/${ASSET_ID}`),
+      backend.calls(`GET /ledger/${ASSET_ID}`),
+      backend.calls("GET /assets/outlines"),
+    ];
+    await waitFor(() => expect(counts()).toEqual([1, 1, 1, 1]));
+    const source = FakeEventSource.latest();
+    act(() => source.open());
+
+    act(() => {
+      // A burst of steps (a duplicate too) costs one coalesced refetch.
+      source.emit("rating_progress", 1, { run_id: RUN_ID, step: "started" });
+      source.emit("rating_progress", 2, { run_id: RUN_ID, step: "earth_obs" });
+      source.emit("rating_progress", 2, { run_id: RUN_ID, step: "earth_obs" });
+    });
+    await waitFor(() => expect(counts()).toEqual([2, 1, 1, 1]));
+
+    act(() =>
+      source.emit("listing_status", 3, {
+        asset_id: ASSET_ID,
+        transition: "submit",
+        from: "draft",
+        to: "rating",
+      }),
+    );
+    await waitFor(() => expect(counts()).toEqual([2, 2, 2, 1]));
+
+    act(() =>
+      source.emit("listing_status", 4, {
+        asset_id: ASSET_ID,
+        transition: "rated",
+        from: "rating",
+        to: "listed",
+      }),
+    );
+    await waitFor(() => expect(counts()).toEqual([2, 3, 3, 2]));
+    unwire();
+    release();
+  });
 });

@@ -1302,6 +1302,34 @@ def assets_with_active_runs(session: Session, world_id: UUID) -> set[UUID]:
     return {run.asset_id for run in recent.values() if run.active(now)}
 
 
+def latest_run_id(session: Session, world_id: UUID, asset_id: UUID) -> UUID | None:
+    """The asset's newest run: its latest `queued` event while events are kept (T29 prunes
+    them after 24 h), else the run recorded with its latest report; None before any run."""
+    payload_col = cast(Any, WorldEvent.payload)
+    queued = session.exec(
+        select(WorldEvent.payload)
+        .where(
+            WorldEvent.world_id == world_id,
+            WorldEvent.type == StreamEventType.RATING_PROGRESS,
+            payload_col["asset_id"].astext == str(asset_id),
+            payload_col["step"].astext == "queued",
+        )
+        .order_by(col(WorldEvent.id).desc())
+        .limit(1)
+    ).first()
+    if queued is not None and isinstance(queued.get("run_id"), str):
+        return UUID(queued["run_id"])
+    stored = session.exec(
+        select(Report.auditor_json)
+        .where(Report.world_id == world_id, Report.asset_id == asset_id)
+        .order_by(col(Report.version).desc())
+        .limit(1)
+    ).first()
+    run = (stored or {}).get("run") if isinstance(stored, dict) else None
+    run_id = run.get("run_id") if isinstance(run, dict) else None
+    return UUID(run_id) if isinstance(run_id, str) else None
+
+
 def global_runs_queued(session: Session, now: datetime) -> list[datetime]:
     """When each run queued in the last `RUN_WINDOW`, across every world, newest first."""
     payload_col = cast(Any, WorldEvent.payload)

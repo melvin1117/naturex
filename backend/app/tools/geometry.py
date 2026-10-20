@@ -17,7 +17,7 @@ from uuid import UUID
 from pyproj import CRS, Transformer
 from shapely import make_valid
 from shapely.errors import GEOSException
-from shapely.geometry import MultiPolygon, Point, Polygon, shape
+from shapely.geometry import MultiPolygon, Point, Polygon, box, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import transform
 from shapely.validation import explain_validity
@@ -210,6 +210,43 @@ def geometry_bbox(geojson: Mapping[str, Any]) -> BBox | None:
     except _InvalidGeoJSON:
         return None
     return float(west), float(south), float(east), float(north)
+
+
+OUTLINE_MAX_POINTS = 200
+"""Corners per outline (all parts together) in `GET /assets/outlines`: enough for a map hint."""
+_OUTLINE_DIGITS = 5  # ~1 m
+_OUTLINE_TOLERANCES = (0.0, 0.00001, 0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1)
+
+
+def outline_rings(
+    geojson: Mapping[str, Any], max_points: int = OUTLINE_MAX_POINTS
+) -> list[list[list[float]]]:
+    """The exterior ring of each part, [lon, lat] rounded to ~1 m and simplified until every
+    ring together has at most `max_points` corners (holes dropped): an outline to draw and to
+    hint at overlaps with, never a check. A part that won't simplify enough becomes its bounding
+    box; an unreadable area has no outline."""
+    try:
+        area = _parse(geojson)
+    except _InvalidGeoJSON:
+        return []
+    parts: list[Polygon] = list(area.geoms) if isinstance(area, MultiPolygon) else [area]
+
+    def simplified(part: Polygon, tolerance: float) -> Polygon:
+        out = part.simplify(tolerance, preserve_topology=True)
+        return out if isinstance(out, Polygon) and not out.is_empty else part
+
+    rings: list[list[tuple[float, ...]]] = []
+    for tolerance in _OUTLINE_TOLERANCES:
+        rings = [list(simplified(part, tolerance).exterior.coords) for part in parts]
+        if sum(len(ring) for ring in rings) <= max_points:
+            break
+    else:
+        largest = sorted(parts, key=lambda part: part.area, reverse=True)
+        rings = [list(box(*part.bounds).exterior.coords) for part in largest[: max_points // 5]]
+    return [
+        [[round(float(x), _OUTLINE_DIGITS), round(float(y), _OUTLINE_DIGITS)] for x, y, *_ in ring]
+        for ring in rings
+    ]
 
 
 def geometry_sha256(geojson: Mapping[str, Any]) -> str:

@@ -447,7 +447,8 @@ create index on live_rating_requests (run_id);
 | `POST /assets/{id}/documents` · `GET /assets/{id}/documents/{doc_id}` | Upload evidence (steward/owner) → checklist; download a document (community members + same-world admins only; 404 otherwise; attachment, `nosniff`, `no-store`) (ADR-0006, T69) |
 | `GET /assets/{id}/verification` · `POST /admin/assets/{id}/verification` · `POST /admin/assets/{id}/verification/revoke` | Public verification summary (check names + results + not-checked list); reviewer approve/reject with a reason; revoke (suspends trading) (T69) |
 | `GET /assets` | Marketplace list (latest price, grade, trend, `trading`): `listed` and `suspended` assets only (T58); a listed asset awaiting its IPO shows `trading: false` and no price (T59) |
-| `GET /assets/{id}` | Asset detail + latest report + recent events (other statuses: the listing's community and admins only, 404 otherwise; T58) |
+| `GET /assets/{id}` | Asset detail + latest report + recent events (other statuses: the listing's community and admins only, 404 otherwise; T58); a listing under review also carries `latest_run_id` (T33) |
+| `GET /assets/outlines` | `{outlines: [{id, name, rings}], truncated}`: the world's public sites' boundaries simplified on the server (≤ 200 corners each, ≤ 300 sites) for the listing map's outlines and overlap hint; T36 decides on save (T33) |
 | `POST /assets/{id}/evidence` | Upload photos (audio post-hackathon) → field_evidence agent → event + re-rate |
 | `GET /assets/{id}/reports` · `GET /reports/{id}` · `GET /reports/{id}/diff/{prev}` | Report history & diffs |
 | `GET /assets/{id}/prices?range=` | Price history |
@@ -561,7 +562,7 @@ Every route is scoped to the caller's world, which comes from the session: anony
 
   | Route | Action (resource) |
   |---|---|
-  | `GET /world`, `/assets`, `/events`, `/events/stream` | `browse` (world) |
+  | `GET /world`, `/assets`, `/assets/outlines`, `/events`, `/events/stream` | `browse` (world) |
   | `GET /assets/{id}`, `…/reports`, `…/prices`, `…/quote`, `/ledger/{id}`, `…/verify` | `browse` (asset); the quote also evaluates `trade` for a signed-in caller (below) |
   | `GET /reports/{id}`, `…/diff/{prev}` · `GET /runs/{id}` · `GET /admin/trace?asset_id=` | `browse` (the report's / run's / traced asset; the world without `asset_id`) |
   | `GET /communities/{id}` | `browse` (community), T68 |

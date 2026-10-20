@@ -266,6 +266,24 @@ class AssetCard(BaseModel):
     )
 
 
+class AssetOutline(BaseModel):
+    """A public site's boundary, simplified for a map (T33)."""
+
+    id: UUID
+    name: str
+    rings: list[list[list[float]]] = Field(
+        description="The exterior ring of each part, [lon, lat], simplified to at most "
+        "200 corners in all; holes dropped. A hint for drawing and overlap, never a check."
+    )
+
+
+class AssetOutlines(BaseModel):
+    outlines: list[AssetOutline]
+    truncated: bool = Field(
+        description="More public sites exist than were returned (oldest first are kept)."
+    )
+
+
 class EventOut(BaseModel):
     id: UUID
     asset_id: UUID
@@ -385,6 +403,12 @@ class AssetDetail(BaseModel):
         description="Demo worlds only: a listing waiting in `rating` because its satellite "
         "metrics are missing or their live computation failed points to the nearest precomputed "
         "demo site, labelled as a cached example (T60). Always null in the live world.",
+    )
+    latest_run_id: UUID | None = Field(
+        default=None,
+        description="A listing under review's latest rating run (follow it with "
+        "`GET /runs/{id}`), for its community's members and same-world admins, who alone can "
+        "load it (T33). Null for public (listed or suspended) assets and before any run.",
     )
 
 

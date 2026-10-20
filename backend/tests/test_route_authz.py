@@ -178,6 +178,7 @@ def test_admin_routes_are_operator_only() -> None:
     assert actions[("GET", "/assets/{asset_id}/ipo/preview")] == {Action.LAUNCH_IPO}
     assert actions[("POST", "/assets/{asset_id}/ipo")] == {Action.LAUNCH_IPO}
     assert actions[("GET", "/assets/{asset_id}/quote")] == {Action.BROWSE}
+    assert actions[("GET", "/assets/outlines")] == {Action.BROWSE}
     assert actions[("POST", "/assets/{asset_id}/rate")] == {Action.OPERATE, Action.MANAGE_LISTING}
 
 
@@ -725,7 +726,7 @@ def test_reads_never_load_memberships(
         return load(db, world_id, user_id)
 
     monkeypatch.setattr(authz, "memberships", recording)
-    for path in (f"/assets/{mine.asset}", "/assets", "/world", "/events"):
+    for path in (f"/assets/{mine.asset}", "/assets", "/assets/outlines", "/world", "/events"):
         assert client.get(path).status_code == 200, path
     assert loads == [], "BROWSE needs no community roles"
 

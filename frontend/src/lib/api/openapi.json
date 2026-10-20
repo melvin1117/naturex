@@ -628,6 +628,28 @@
         }
       }
     },
+    "/assets/outlines": {
+      "get": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "List Outlines",
+        "description": "The boundaries of the world's public sites (listed and suspended), simplified on the\nserver to at most 200 corners each, for the listing map's outlines and overlap hint (T33).\nOnly a hint: T36's overlap check on create and submit is what decides, and it also counts\nlistings under review, which stay private here.",
+        "operationId": "list_outlines_assets_outlines_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetOutlines"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/assets/{asset_id}": {
       "get": {
         "tags": [
@@ -2906,6 +2928,19 @@
               }
             ],
             "description": "Demo worlds only: a listing waiting in `rating` because its satellite metrics are missing or their live computation failed points to the nearest precomputed demo site, labelled as a cached example (T60). Always null in the live world."
+          },
+          "latest_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Run Id",
+            "description": "A listing under review's latest rating run (follow it with `GET /runs/{id}`), for its community's members and same-world admins, who alone can load it (T33). Null for public (listed or suspended) assets and before any run."
           }
         },
         "type": "object",
@@ -2919,6 +2954,63 @@
           "community_wallet"
         ],
         "title": "AssetDetail"
+      },
+      "AssetOutline": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "rings": {
+            "items": {
+              "items": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Rings",
+            "description": "The exterior ring of each part, [lon, lat], simplified to at most 200 corners in all; holes dropped. A hint for drawing and overlap, never a check."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "rings"
+        ],
+        "title": "AssetOutline",
+        "description": "A public site's boundary, simplified for a map (T33)."
+      },
+      "AssetOutlines": {
+        "properties": {
+          "outlines": {
+            "items": {
+              "$ref": "#/components/schemas/AssetOutline"
+            },
+            "type": "array",
+            "title": "Outlines"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "description": "More public sites exist than were returned (oldest first are kept)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "outlines",
+          "truncated"
+        ],
+        "title": "AssetOutlines"
       },
       "AssetStatus": {
         "type": "string",
