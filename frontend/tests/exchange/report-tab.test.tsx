@@ -118,12 +118,22 @@ describe("ReportTab changes from the diff API (#189)", () => {
     expect(rows.map((r) => r.textContent)).toEqual([
       "Metricv1v2",
       "GradeAAAUpgraded",
-      expect.stringMatching(/^Health score.*76\.287\.1\+10\.9$/),
+      expect.stringMatching(
+        /^Health score.*76\.2 \/ 10087\.1 \/ 100\+10\.9 pts$/,
+      ),
       expect.stringMatching(/^Value \(mid\).*\$2\.4M\$2\.3M−\$150K$/),
     ]);
     // The browser-side comparison is gone on the real path.
     expect(screen.queryByText("Fair price per unit")).toBeNull();
-    expect(screen.queryByText("Threat pressure (1 = none)")).toBeNull();
+    // Each metric's label heads its row.
+    expect(
+      within(table).getByRole("rowheader", { name: /^Health score/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(table).getByRole("rowheader", { name: "Grade" }),
+    ).toBeInTheDocument();
+    // The other groups are in the table but hidden until asked for.
+    expect(screen.getByText("Threat pressure (1 = none)")).not.toBeVisible();
   });
 
   it("shows the other groups on request, each under its own heading", async () => {
@@ -132,14 +142,20 @@ describe("ReportTab changes from the diff API (#189)", () => {
       name: "Show 2 more changed numbers",
     });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const controlled = toggle.getAttribute("aria-controls")!.split(" ");
+    expect(controlled).toHaveLength(2);
+    for (const id of controlled)
+      expect(document.getElementById(id)?.tagName).toBe("TBODY");
+    expect(document.getElementById(controlled[0]!)).not.toBeVisible();
     fireEvent.click(toggle);
+    expect(document.getElementById(controlled[0]!)).toBeVisible();
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(toggle).toHaveTextContent("Show headline changes only");
     expect(
-      screen.getByRole("columnheader", { name: "How the score is built" }),
+      screen.getByRole("rowheader", { name: "How the score is built" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("columnheader", { name: "Satellite data" }),
+      screen.getByRole("rowheader", { name: "Satellite data" }),
     ).toBeInTheDocument();
     expect(rowOf("Threat pressure (1 = none)")).toHaveTextContent(
       /90 \/ 10075 \/ 100−15 pts$/,
@@ -153,7 +169,7 @@ describe("ReportTab changes from the diff API (#189)", () => {
       metrics: BODY.metrics.filter((m) => m.group !== "headline"),
     });
     expect(
-      await screen.findByRole("columnheader", {
+      await screen.findByRole("rowheader", {
         name: "How the score is built",
       }),
     ).toBeInTheDocument();
@@ -222,6 +238,95 @@ describe("ReportTab changes from the diff API (#189)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Why it changed")).toBeInTheDocument();
     expect(backend.calls(DIFF)).toBe(2);
+  });
+
+  it("says a grade changed without an arrow when its direction is unknown", async () => {
+    live({ grade_change: { old: null, new: "AA", direction: null } });
+    const row = (await screen.findByRole("rowheader", { name: "Grade" }))
+      .parentElement!;
+    expect(row).toHaveTextContent(/^Grade—AAChanged$/);
+    expect(row.querySelector("svg")).toBeNull();
+  });
+
+  it("shows a headline number that went away as — and Removed", async () => {
+    live({
+      metrics: [
+        {
+          id: "valuation:value_low",
+          label: "Value (low)",
+          group: "headline",
+          unit: "Int$/yr",
+          change: "removed",
+          old: "1900000",
+          new: null,
+          delta: null,
+          reason_refs: [],
+        },
+      ],
+    });
+    const row = (await screen.findByRole("rowheader", { name: "Value (low)" }))
+      .parentElement!;
+    expect(row).toHaveTextContent(/^Value \(low\)\$1\.9M—Removed$/);
+    expect(row.querySelector("svg")).toBeNull();
+  });
+
+  it("loads the new pair when another version is picked, and resets the toggle and highlight", async () => {
+    const V3: ReportOut = {
+      ...V1,
+      id: "66666666-6666-4666-8666-666666666666",
+      version: 3,
+      health_score: "88.00",
+      grade: "AA",
+    };
+    const DIFF32 = `GET /reports/${V3.id}/diff/${V2.id}`;
+    const v3Body: ReportDiff = {
+      ...BODY,
+      report_id: V3.id,
+      prev_report_id: V2.id,
+      from_version: 2,
+      to_version: 3,
+      grade_change: null,
+    };
+    const { backend } = renderExchange(
+      <ReportTab
+        versions={[V3, V2, V1].map((r) => reportFacts(r)) as ReportFacts[]}
+        live
+      />,
+      { [DIFF32]: () => json(v3Body), [DIFF]: () => json(BODY) },
+    );
+    await screen.findByRole("table", {
+      name: "Numbers that changed from v2 to v3",
+    });
+    const toggle = screen.getByRole("button", { name: /more changed/ });
+    fireEvent.click(toggle);
+    fireEvent.click(
+      screen.getByRole("link", { name: "Reason 1: why Health score changed" }),
+    );
+    expect(
+      screen.getByText("Replanting raised vegetation vigour.").closest("li")!
+        .className,
+    ).toMatch(/ring-lime/);
+
+    fireEvent.pointerDown(
+      screen.getByRole("combobox", { name: "Report version" }),
+      { button: 0, ctrlKey: false, pointerType: "mouse" },
+    );
+    fireEvent.click(await screen.findByRole("option", { name: /^v2/ }));
+
+    expect(
+      await screen.findByRole("table", {
+        name: "Numbers that changed from v1 to v2",
+      }),
+    ).toBeInTheDocument();
+    expect(backend.calls(DIFF)).toBe(1);
+    expect(backend.calls(DIFF32)).toBe(1);
+    expect(
+      screen.getByRole("button", { name: /more changed/ }),
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.getByText("Replanting raised vegetation vigour.").closest("li")!
+        .className,
+    ).not.toMatch(/ring-lime/);
   });
 
   it("keeps the prototype's own comparison and never calls the diff API", async () => {

@@ -34,10 +34,10 @@ function row(over: Partial<MetricChange>) {
 
 describe("report diff formatting (#189)", () => {
   it("formats each API unit like the rest of the report", () => {
-    expect(row({})).toEqual(["76.2", "87.1", "+10.9"]);
+    expect(row({})).toEqual(["76.2 / 100", "87.1 / 100", "+10.9 pts"]);
     expect(row({ unit: "%", old: "70.0", new: "74.5", delta: "4.5" })).toEqual([
-      "70%",
-      "75%",
+      "70.0%",
+      "74.5%",
       "+4.5 pts",
     ]);
     expect(
@@ -50,16 +50,20 @@ describe("report diff formatting (#189)", () => {
     ).toEqual(["$2.4M", "$2.3M", "−$150K"]);
     expect(
       row({ unit: "Int$", old: "51234.5", new: "52234.5", delta: "1000" }),
-    ).toEqual(["$51,234.50", "$52,234.50", "+$1K"]);
+    ).toEqual(["$51,234.50", "$52,234.50", "+$1,000.00"]);
     expect(
       row({ unit: "Int$/yr", old: "78398", new: "79198", delta: "800" }),
-    ).toEqual(["$78,398.00", "$79,198.00", "+$800"]);
+    ).toEqual(["$78,398.00", "$79,198.00", "+$800.00"]);
+    // Compact values get a compact delta, even below $100K.
+    expect(
+      row({ unit: "Int$/yr", old: "461645", new: "363417", delta: "-98228" }),
+    ).toEqual(["$462K", "$363K", "−$98K"]);
     expect(row({ unit: "Int$", old: "10", new: "10.5", delta: "0.5" })).toEqual(
       ["$10.00", "$10.50", "+$0.50"],
     );
     expect(row({ unit: "points", old: "-2", new: "0", delta: "2" })).toEqual([
       "−2.0",
-      "±0.0",
+      "0.0",
       "+2.0 pts",
     ]);
     expect(
@@ -103,6 +107,54 @@ describe("report diff formatting (#189)", () => {
       "2 widgets",
       "+1 widgets",
     ]);
+  });
+
+  it("shows whole percentages when the change is whole", () => {
+    expect(row({ unit: "%", old: "70", new: "75", delta: "5" })).toEqual([
+      "70%",
+      "75%",
+      "+5 pts",
+    ]);
+  });
+
+  it("shows a zero value without a sign, but a zero change as ±", () => {
+    expect(
+      row({ unit: "NDVI/yr", old: "0", new: "0.0012", delta: "0.0012" }),
+    ).toEqual(["0.0000", "+0.0012", "+0.0012"]);
+    expect(row({ unit: "ha", old: "0", new: "0", delta: "0" })).toEqual([
+      "0 ha",
+      "0 ha",
+      "±0 ha",
+    ]);
+  });
+
+  it("never shows a non-zero change as zero: the smallest step, signed", () => {
+    const tiny = (over: Partial<MetricChange>) =>
+      formatMetricDelta(metric(over));
+    expect(tiny({ unit: "/100", delta: "0.04" })).toBe("+<0.1 pts");
+    expect(tiny({ unit: "%", delta: "-0.04" })).toBe("−<0.1 pts");
+    expect(tiny({ unit: "Int$", delta: "0.004" })).toBe("+<$0.01");
+    expect(tiny({ unit: "Int$/yr", delta: "-0.001" })).toBe("−<$0.01");
+    expect(tiny({ unit: "points", delta: "0.01" })).toBe("+<0.1 pts");
+    expect(tiny({ unit: "0-1", group: "health", delta: "0.0004" })).toBe(
+      "+<0.1 pts",
+    );
+    expect(tiny({ unit: "0-1", group: "confidence", delta: "-0.0004" })).toBe(
+      "−<0.1 pts",
+    );
+    expect(tiny({ unit: "share", delta: "0.0001" })).toBe("+<0.1 pts");
+    expect(tiny({ unit: "ha", delta: "-0.02" })).toBe("−<0.1 ha");
+    expect(tiny({ unit: "NDVI/yr", delta: "0.00004" })).toBe("+<0.0001");
+    expect(tiny({ unit: "-100 to 100", delta: "-0.04" })).toBe("−<0.1");
+    expect(tiny({ unit: "t/ha", delta: "0.01" })).toBe("+<0.1 t/ha");
+    expect(tiny({ unit: "t C/ha", delta: "-0.01" })).toBe("−<0.1 t C/ha");
+    expect(tiny({ unit: "tCO2", delta: "0.4" })).toBe("+<1 tCO₂");
+    expect(tiny({ unit: "tCO2/yr", delta: "-0.2" })).toBe("−<1 tCO₂/yr");
+    expect(tiny({ unit: null, delta: "0.0002" })).toBe("+<0.001");
+    expect(tiny({ unit: "widgets", delta: "-0.0001" })).toBe("−<0.001 widgets");
+    // At the rounding edge the step itself shows, not "<".
+    expect(tiny({ unit: "/100", delta: "0.05" })).toBe("+0.1 pts");
+    expect(tiny({ unit: "Int$", delta: "0.005" })).toBe("+$0.01");
   });
 
   it("says when a number appeared or went away, with no direction", () => {

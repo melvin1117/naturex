@@ -72,6 +72,8 @@ function ValueCells({
   );
 }
 
+const ROW_HEADER = "h-auto py-2 pl-0 align-top font-normal whitespace-normal";
+
 function MetricRow({
   metric,
   reasonCount,
@@ -86,7 +88,7 @@ function MetricRow({
   const refs = metric.reason_refs.filter((r) => r >= 0 && r < reasonCount);
   return (
     <TableRow className="hover:bg-transparent">
-      <TableCell className="py-2 pl-0 align-top whitespace-normal">
+      <TableHead scope="row" className={ROW_HEADER}>
         {metric.label}
         {refs.length > 0 && (
           <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
@@ -107,7 +109,7 @@ function MetricRow({
             ))}
           </div>
         )}
-      </TableCell>
+      </TableHead>
       <ValueCells
         old={formatMetricValue(metric, metric.old)}
         now={formatMetricValue(metric, metric.new)}
@@ -122,7 +124,7 @@ function GroupHeading({ label }: { label: string }) {
   return (
     <TableRow className="border-b-0 hover:bg-transparent">
       <TableHead
-        scope="colgroup"
+        scope="rowgroup"
         colSpan={3}
         className="h-auto px-0 pt-4 pb-1 text-xs font-medium text-muted-foreground"
       >
@@ -186,6 +188,7 @@ export function ReportChanges({
   const hasHeadline = Boolean(grade) || headline.length > 0;
   const expanded = showAll || !hasHeadline;
   const reasonId = (i: number) => `${base}-reason-${i}`;
+  const groupId = (group: string) => `${base}-group-${group}`;
 
   const jumpToReason = (i: number) => {
     setFocused(i);
@@ -243,7 +246,9 @@ export function ReportChanges({
             <TableBody>
               {grade && (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell className="py-2 pl-0 align-top">Grade</TableCell>
+                  <TableHead scope="row" className={ROW_HEADER}>
+                    Grade
+                  </TableHead>
                   <ValueCells
                     old={grade.old ?? "—"}
                     now={grade.new ?? "—"}
@@ -261,13 +266,12 @@ export function ReportChanges({
               {headline.map(row)}
             </TableBody>
           )}
-          {expanded &&
-            rest.map((g) => (
-              <TableBody key={g.group}>
-                <GroupHeading label={g.label} />
-                {g.rows.map(row)}
-              </TableBody>
-            ))}
+          {rest.map((g) => (
+            <TableBody key={g.group} id={groupId(g.group)} hidden={!expanded}>
+              <GroupHeading label={g.label} />
+              {g.rows.map(row)}
+            </TableBody>
+          ))}
         </Table>
       )}
       {hasHeadline && restCount > 0 && (
@@ -276,6 +280,7 @@ export function ReportChanges({
           size="sm"
           className="mt-2 -ml-2"
           aria-expanded={showAll}
+          aria-controls={rest.map((g) => groupId(g.group)).join(" ")}
           onClick={() => setShowAll((v) => !v)}
         >
           {showAll

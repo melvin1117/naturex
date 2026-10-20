@@ -53,8 +53,25 @@ function sign(value: number): string {
   return value > 0 ? "+" : value < 0 ? MINUS : "±";
 }
 
-function unsigned(value: number, max: number, min = 0): string {
-  return `${value < 0 ? MINUS : ""}${nf(value, max, min)}`;
+/** A value's own sign: "−" when negative, "+" too when `showPlus`, never "±". */
+function valueSign(value: number, showPlus = false): string {
+  return value < 0 ? MINUS : showPlus && value > 0 ? "+" : "";
+}
+
+/**
+ * A signed change with `max` decimals. A non-zero change too small to show reads as the
+ * smallest step ("+<0.1 pts"), never as "+0".
+ */
+function signedDelta(
+  d: number,
+  max: number,
+  min: number,
+  render: (abs: string) => string,
+): string {
+  const step = 10 ** -max;
+  if (d !== 0 && Math.abs(d) < step / 2)
+    return `${sign(d)}<${render(nf(step, max, max))}`;
+  return `${sign(d)}${render(nf(d, max, min))}`;
 }
 
 interface UnitFormat {
@@ -62,62 +79,80 @@ interface UnitFormat {
   delta: (d: number) => string;
 }
 
-function plain(max: number, min = 0, suffix = ""): UnitFormat {
+function plain(
+  max: number,
+  min = 0,
+  suffix = "",
+  deltaSuffix = suffix,
+): UnitFormat {
   return {
-    value: (v) => `${unsigned(v, max, min)}${suffix}`,
-    delta: (d) => `${sign(d)}${nf(d, max, min)}${suffix}`,
+    value: (v) => `${valueSign(v)}${nf(v, max, min)}${suffix}`,
+    delta: (d) => signedDelta(d, max, min, (abs) => `${abs}${deltaSuffix}`),
   };
 }
 
-/** A 0-1 share shown as a percentage; its change in percentage points. */
-function share(suffix: string): UnitFormat {
+/** A 0-1 share shown on a 0-100 scale; its change in points. */
+function scaled(suffix: string): UnitFormat {
+  const f = plain(1, 0, suffix, " pts");
+  return { value: (v) => f.value(v * 100), delta: (d) => f.delta(d * 100) };
+}
+
+/**
+ * The delta has the values' precision: to the cent while both values are below $100K (where
+ * `money` stops compacting), compact ("−$98K") once either value is.
+ */
+function moneyFormat(metric: MetricChange): UnitFormat {
+  const compact = [metric.old, metric.new].some(
+    (v) => Math.abs(toNumber(v) ?? 0) >= 100_000,
+  );
   return {
-    value: (v) => `${unsigned(v * 100, 1)}${suffix}`,
-    delta: (d) => `${sign(d)}${nf(d * 100, 1)} pts`,
+    value: (v) => money(v),
+    delta: (d) => {
+      const abs = Math.abs(d);
+      if (abs > 0 && abs < 0.005) return `${sign(d)}<$0.01`;
+      return `${sign(d)}${money(abs, compact ? { compact } : {})}`;
+    },
   };
 }
 
-const MONEY: UnitFormat = {
-  value: (v) => money(v),
-  // Compact like the value; whole dollars below $1K drop the ".00".
-  delta: (d) => {
-    const abs = Math.abs(d);
-    const text =
-      abs < 1000 && Number.isInteger(abs)
-        ? `$${nf(abs, 0)}`
-        : money(abs, { compact: true });
-    return `${sign(d)}${text}`;
-  },
-};
+const SCORE = " / 100";
+
+function isWhole(value: string | null): boolean {
+  const n = toNumber(value);
+  return n === null || Number.isInteger(n);
+}
 
 function unitFormat(metric: MetricChange): UnitFormat {
   switch (metric.unit) {
     case "/100":
-      return plain(1, 1);
-    case "%":
+      return plain(1, 1, SCORE, " pts");
+    case "%": {
+      // Whole percentages, unless the change itself has a decimal (70.0% → 74.5%).
+      const digits = isWhole(metric.delta) ? 0 : 1;
       return {
-        value: (v) => `${unsigned(v, 0)}%`,
-        delta: (d) => `${sign(d)}${nf(d, 1)} pts`,
+        value: plain(digits, digits, "%").value,
+        delta: plain(1, 0, "", " pts").delta,
       };
+    }
     case "Int$":
     case "Int$/yr":
-      return MONEY;
+      return moneyFormat(metric);
     case "points":
       return {
-        value: (v) => `${sign(v)}${nf(v, 1, 1)}`,
-        delta: (d) => `${sign(d)}${nf(d, 1, 1)} pts`,
+        value: (v) => `${valueSign(v, true)}${nf(v, 1, 1)}`,
+        delta: plain(1, 1, "", " pts").delta,
       };
     case "0-1":
-      // Same scale as the score and confidence panels: "82 / 100" and "82%".
-      return metric.group === "confidence" ? share("%") : share(" / 100");
+      // The score and confidence panels' scales: "82 / 100" and "82%".
+      return scaled(metric.group === "confidence" ? "%" : SCORE);
     case "share":
-      return share("%");
+      return scaled("%");
     case "ha":
       return plain(1, 0, " ha");
     case "NDVI/yr":
       return {
-        value: (v) => `${sign(v)}${nf(v, 4, 4)}`,
-        delta: (d) => `${sign(d)}${nf(d, 4, 4)}`,
+        value: (v) => `${valueSign(v, true)}${nf(v, 4, 4)}`,
+        delta: plain(4, 4).delta,
       };
     case "-100 to 100":
       return plain(1);
