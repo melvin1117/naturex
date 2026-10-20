@@ -21,7 +21,8 @@ from typing import Any
 MAX_CHUNK_CHARS = 1800
 # The Auditor's inline bundle citations (`[event:…]`, `[metric:ndvi_trend]`): IDs the Copilot
 # can't cite, so they are dropped from summaries before indexing.
-_BUNDLE_CITATION = re.compile(r"\[\s*[a-z_]+:[^\[\]\s]+(?:\s*[,;]\s*[a-z_]+:[^\[\]\s]+)*\s*\]")
+# IDs exclude the `,`/`;` separators so the repetition can't backtrack exponentially (ReDoS).
+_BUNDLE_CITATION = re.compile(r"\[\s*[a-z_]+:[^\[\]\s,;]+(?:\s*[,;]\s*[a-z_]+:[^\[\]\s,;]+)*\s*\]")
 _SPACES = re.compile(r"[ \t]+")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 

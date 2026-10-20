@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import date
 from decimal import Decimal
 
@@ -135,3 +136,11 @@ def test_split_text_respects_the_limit_even_without_spaces() -> None:
 
 def test_strip_bundle_citations_leaves_other_brackets() -> None:
     assert strip_bundle_citations("A [sic] note [metric:x] here.") == "A [sic] note here."
+
+
+def test_strip_bundle_citations_handles_lists_and_hostile_input_in_linear_time() -> None:
+    assert strip_bundle_citations("Up [metric:a, event:b; score:c] now.") == "Up now."
+    hostile = "[_:!" + ",_:!" * 5000
+    start = time.perf_counter()
+    assert strip_bundle_citations(hostile) == hostile
+    assert time.perf_counter() - start < 1.0
