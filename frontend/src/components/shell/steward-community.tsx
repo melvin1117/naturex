@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { CreateCommunityForm } from "@/components/steward/community-form";
+import { NotACommunityMember } from "@/components/steward/not-a-member";
 import {
   COMMUNITY_PARAM,
   readRememberedCommunity,
@@ -40,7 +41,13 @@ import {
   subscribeRememberedCommunity,
 } from "@/lib/active-community";
 import type { MyCommunity } from "@/lib/api/types";
-import { useMyCommunities, useWorld, type QueryResult } from "@/lib/hooks";
+import { isApiAssetId } from "@/lib/asset-detail";
+import {
+  useAsset,
+  useMyCommunities,
+  useWorld,
+  type QueryResult,
+} from "@/lib/hooks";
 import {
   COMMUNITY_ROLE_LABEL,
   pickCommunity,
@@ -223,55 +230,112 @@ export function CommunitySwitcher({ className }: { className?: string }) {
   );
 }
 
+/** The asset a Steward asset page (`/steward/assets/<id>/...`) is about; null elsewhere. */
+export function stewardAssetId(pathname: string | null): string | null {
+  const match = /^\/steward\/assets\/([^/]+)(?:\/|$)/.exec(pathname ?? "");
+  return match ? match[1] : null;
+}
+
 /**
  * What a signed-in account sees in the Steward app: its pages once it belongs to a community,
- * else "Start a community" with the create form (T63). Anonymous visitors only get here in the
- * scripted demo (`RequireAccount`).
+ * else "Start a community" with the create form (T63). On a site's pages
+ * (`/steward/assets/<id>/...`), an account outside the community that lists the site is told
+ * so instead (T74); the API refuses its actions either way. Anonymous visitors only get here
+ * in the scripted demo (`RequireAccount`).
  */
 export function StewardGate({ children }: { children: ReactNode }) {
   const { world } = useWorld();
   const { query, communities } = useStewardCommunity();
+  const assetId = stewardAssetId(usePathname());
 
   if (world?.me == null) return children;
-  if (communities.length > 0) return children;
 
-  if (query.status === "error") {
-    return (
-      <div className="mx-auto max-w-xl px-4 py-16 sm:px-6">
-        <Alert variant="destructive">
-          <TriangleAlertIcon aria-hidden="true" />
-          <AlertTitle>We couldn&apos;t load your communities</AlertTitle>
-          <AlertDescription>
-            <p>{query.error?.message}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-2"
-              onClick={() => void query.refetch()}
-            >
-              <RefreshCwIcon aria-hidden="true" />
-              Try again
-            </Button>
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
+  if (communities.length === 0) {
+    if (query.status === "error") {
+      return (
+        <div className="mx-auto max-w-xl px-4 py-16 sm:px-6">
+          <Alert variant="destructive">
+            <TriangleAlertIcon aria-hidden="true" />
+            <AlertTitle>We couldn&apos;t load your communities</AlertTitle>
+            <AlertDescription>
+              <p>{query.error?.message}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={() => void query.refetch()}
+              >
+                <RefreshCwIcon aria-hidden="true" />
+                Try again
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </div>
+      );
+    }
+
+    if (query.status !== "success") {
+      return <GateLoading>Loading your communities…</GateLoading>;
+    }
+
+    if (assetId === null) {
+      return <CreateCommunityEmptyState meId={world.me.id} />;
+    }
   }
 
-  if (query.status !== "success") {
+  if (assetId !== null) {
     return (
-      <div
-        role="status"
-        aria-live="polite"
-        className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"
-      >
-        <Spinner aria-hidden="true" role="presentation" />
-        Loading your communities…
-      </div>
+      <AssetMembershipGate assetId={assetId} meId={world.me.id}>
+        {children}
+      </AssetMembershipGate>
     );
   }
+  return children;
+}
 
-  return <CreateCommunityEmptyState meId={world.me.id} />;
+function GateLoading({ children }: { children: ReactNode }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"
+    >
+      <Spinner aria-hidden="true" role="presentation" />
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A site's Steward pages, for members of the community that lists it. A missing site or a
+ * failed load is left to the page, which explains it.
+ */
+function AssetMembershipGate({
+  assetId,
+  meId,
+  children,
+}: {
+  assetId: string;
+  meId: string;
+  children: ReactNode;
+}) {
+  const { communities, href } = useStewardCommunity();
+  const validId = isApiAssetId(assetId);
+  const asset = useAsset(validId ? assetId : undefined);
+
+  if (!validId || asset.error) return children;
+  if (!asset.data) return <GateLoading>Checking this site…</GateLoading>;
+
+  const listedBy = asset.data.community_id;
+  if (listedBy && communities.some((c) => c.id === listedBy)) return children;
+  return (
+    <NotACommunityMember
+      assetId={assetId}
+      name={asset.data.name}
+      meId={meId}
+      homeHref={communities.length > 0 ? href("/steward") : null}
+    />
+  );
 }
 
 function CreateCommunityEmptyState({ meId }: { meId: string }) {

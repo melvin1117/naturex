@@ -25,6 +25,7 @@ import type {
 import { SUMMARY_TICK_REFRESH_MS } from "@/lib/community-hooks";
 import { createDataLayer } from "@/lib/data-layer";
 import { PrototypeProvider } from "@/lib/prototype/store";
+import { stewardAssetId } from "@/components/shell/steward-community";
 
 import {
   BASE,
@@ -35,6 +36,7 @@ import {
   json,
   SIGNED_IN_WORLD,
 } from "../lib/helpers";
+import { asset as assetFixture, ASSET_ID } from "../trade/fixtures";
 
 const nav = vi.hoisted(() => ({ pathname: "/steward", search: "" }));
 const router = vi.hoisted(() => ({
@@ -486,12 +488,45 @@ describe("the community home", () => {
     expect(within(payouts).getByText("$100.50")).toBeVisible();
 
     const supporters = screen.getByRole("region", { name: "Supporters" });
+    expect(supporters).toHaveTextContent("2 supporters hold 75 units");
     expect(within(supporters).getByText("Supporter 1")).toBeVisible();
     expect(within(supporters).getByText(/50 units · 0.01%/)).toBeVisible();
     expect(within(supporters).getByText(/25 units · <0.01%/)).toBeVisible();
     expect(screen.getByText("Fence the riverbank")).toBeVisible();
     expect(screen.getByText(/No alerts yet/)).toBeVisible();
   });
+
+  it.each([
+    [1, 60, "1 supporter holds 60 units"],
+    [1, 1, "1 supporter holds 1 unit"],
+  ])(
+    "says how many supporters hold how many units (%i, %i)",
+    async (count, held, text) => {
+      const one = listing({
+        holders: {
+          count,
+          shares_held: held,
+          top: [{ rank: 1, shares: held, pct_of_shares: "0.01" }],
+        },
+        shares: {
+          shares_offered: 490_000,
+          shares_sold: held,
+          retained_shares: 510_000,
+        },
+      });
+      setup(<StewardPage />, {
+        routes: {
+          [`GET /communities/${SELVA.id}/summary`]: () =>
+            json(summary({ listings: [one], holder_count: count })),
+        },
+      });
+
+      const supporters = await screen.findByRole("region", {
+        name: "Supporters",
+      });
+      await waitFor(() => expect(supporters).toHaveTextContent(text));
+    },
+  );
 
   it("lists the alerts about the community's own sites (T75)", async () => {
     const mine = {
@@ -767,5 +802,124 @@ describe("community settings", () => {
     ).toBeVisible();
     expect(screen.queryByLabelText("Community name")).toBeNull();
     expect(screen.queryByLabelText("Add a steward by account ID")).toBeNull();
+  });
+});
+
+describe("a site's Steward pages (T74)", () => {
+  const OTHER = community({
+    id: "77777777-7777-4777-8777-777777777777",
+    name: "Río Verde",
+  });
+  const CONTROLS = "The site's Steward controls";
+  const site = assetFixture({ name: "Cloud Forest", community_id: OTHER.id });
+
+  function openSitePage(
+    communities: MyCommunity[],
+    detail = site,
+    path = `/steward/assets/${ASSET_ID}/ipo`,
+  ) {
+    nav.pathname = path;
+    nav.search = `community=${OTHER.id}`;
+    return setup(<p>{CONTROLS}</p>, {
+      communities,
+      routes: { [`GET /assets/${ASSET_ID}`]: () => json(detail) },
+    });
+  }
+
+  it.each([
+    [`/steward/assets/${ASSET_ID}/ipo`, ASSET_ID],
+    [`/steward/assets/${ASSET_ID}/verify`, ASSET_ID],
+    [`/steward/assets/${ASSET_ID}`, ASSET_ID],
+    ["/steward", null],
+    ["/steward/list", null],
+    ["/steward/assetsx/1", null],
+    [null, null],
+  ])("finds the site of %s", (pathname, id) => {
+    expect(stewardAssetId(pathname)).toBe(id);
+  });
+
+  it.each([
+    `/steward/assets/${ASSET_ID}/ipo`,
+    `/steward/assets/${ASSET_ID}/verify`,
+  ])(
+    "tells an account without a community it isn't a member (%s)",
+    async (path) => {
+      openSitePage([], site, path);
+
+      expect(
+        await screen.findByRole("heading", {
+          level: 1,
+          name: "You're not a member of the community that lists this site",
+        }),
+      ).toBeVisible();
+      expect(
+        screen.queryByRole("heading", { name: "Start a community" }),
+      ).toBeNull();
+      expect(screen.queryByText(CONTROLS)).toBeNull();
+      expect(
+        screen.getByRole("link", { name: /See Cloud Forest on the Exchange/ }),
+      ).toHaveAttribute("href", `/asset/${ASSET_ID}`);
+      expect(
+        screen.getByRole("link", { name: "Start a community" }),
+      ).toHaveAttribute("href", "/steward");
+      expect(screen.getByText(ROSA.id)).toBeVisible();
+    },
+  );
+
+  it("tells a member of another community, and links to its own home", async () => {
+    openSitePage([SELVA]);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "You're not a member of the community that lists this site",
+    });
+    expect(screen.queryByText(CONTROLS)).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Your community home" }),
+    ).toHaveAttribute("href", `/steward?community=${SELVA.id}`);
+    expect(
+      screen.queryByRole("link", { name: "Start a community" }),
+    ).toBeNull();
+  });
+
+  it("refuses a site no community lists", async () => {
+    openSitePage([SELVA], assetFixture({ community_id: null }));
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "You're not a member of the community that lists this site",
+    });
+    expect(screen.queryByText(CONTROLS)).toBeNull();
+  });
+
+  it("shows the page to a member of the community that lists the site", async () => {
+    openSitePage([SELVA, { ...OTHER, role: "steward" }]);
+
+    expect(await screen.findByText(CONTROLS)).toBeVisible();
+    expect(screen.queryByRole("heading", { name: /not a member/ })).toBeNull();
+  });
+
+  it("leaves a missing site to the page, which explains it", async () => {
+    nav.pathname = `/steward/assets/${ASSET_ID}/ipo`;
+    setup(<p>{CONTROLS}</p>, {
+      communities: [],
+      routes: {
+        [`GET /assets/${ASSET_ID}`]: () =>
+          json({ detail: "asset_not_found" }, { status: 404 }),
+      },
+    });
+
+    expect(await screen.findByText(CONTROLS)).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "Start a community" }),
+    ).toBeNull();
+  });
+
+  it("still offers to start a community everywhere else", async () => {
+    nav.pathname = "/steward/list";
+    const backend = setup(<p>{CONTROLS}</p>, { communities: [] });
+
+    await screen.findByRole("heading", { level: 1, name: "Start a community" });
+    expect(backend.calls(`GET /assets/${ASSET_ID}`)).toBe(0);
   });
 });

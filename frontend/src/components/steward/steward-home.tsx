@@ -586,8 +586,11 @@ function Supporters({ listings }: { listings: ListingSummary[] }) {
                 <>
                   <p className="text-sm text-muted-foreground">
                     {units(listing.holders.count)}{" "}
-                    {listing.holders.count === 1 ? "supporter" : "supporters"}{" "}
-                    hold {units(listing.holders.shares_held)} units
+                    {listing.holders.count === 1
+                      ? "supporter holds"
+                      : "supporters hold"}{" "}
+                    {units(listing.holders.shares_held)}{" "}
+                    {listing.holders.shares_held === 1 ? "unit" : "units"}
                   </p>
                   <ol className="mt-2 space-y-1.5 text-sm">
                     {listing.holders.top.map((holder) => (
