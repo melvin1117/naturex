@@ -1,12 +1,21 @@
 # Real-account E2E (T74): Playwright drives both apps on the real stack (Postgres + pgvector,
-# FastAPI, a production Next.js build) with USE_MOCKS=true, so it needs no secrets. Only PRs that
-# touch the apps (or this harness) run it, and a newer push cancels the older run, to save
-# Actions minutes. Path-filtered, so don't make it a required check (docs/ci.md).
+# FastAPI, a production Next.js build) with USE_MOCKS=true, so it needs no secrets. Only PRs
+# (ready for review, not drafts) and pushes to main that touch the apps (or this harness) run
+# it, and a newer push cancels the older run, to save Actions minutes. The push to main catches
+# a break that two separately green PRs make together. Path-filtered, so don't make it a
+# required check (docs/ci.md).
 name: e2e
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "frontend/**"
+      - "backend/**"
+      - "scripts/e2e-backend.sh"
+      - ".github/workflows/e2e.yml"
+  push:
+    branches: [main]
     paths:
       - "frontend/**"
       - "backend/**"
@@ -24,6 +33,7 @@ permissions:
 jobs:
   real-accounts:
     name: e2e / real accounts
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:
@@ -72,9 +82,22 @@ jobs:
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
+      - name: Read the Playwright version
+        id: playwright
+        working-directory: frontend
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the Playwright browser
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      # Headless shell only (the suite never runs headed); --with-deps installs the system
+      # libraries every run, since the cache holds only the browser.
       - name: Install Chromium for Playwright
         working-directory: frontend
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps --only-shell chromium
 
       - name: Run the real-account E2E
         working-directory: frontend

@@ -54,7 +54,7 @@ export default defineConfig({
     {
       name: "web",
       // `next start` directly: through pnpm, the stop at the end logs a misleading failure.
-      command: `${process.env.E2E_SKIP_BUILD ? "" : "pnpm build && "}exec ./node_modules/.bin/next start --port ${WEB_PORT}`,
+      command: `${process.env.E2E_SKIP_BUILD === "1" ? "" : "pnpm build && "}exec ./node_modules/.bin/next start --port ${WEB_PORT}`,
       url: `${WEB_ORIGIN}/login`,
       env: {
         // The /api proxy target is baked in at build time (next.config.ts).

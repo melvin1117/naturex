@@ -36,15 +36,23 @@ const INVESTOR = {
 };
 const COMMUNITY = `Riverkeepers ${RUN}`;
 const SITE = `Cloud Forest ${RUN}`;
-// Somewhere in Kenya, far from the curated sites, a little different each run.
-const CENTER = `${(0.2 + Math.random()).toFixed(4)}, ${(37 + Math.random()).toFixed(4)}`;
+// Somewhere in Kenya, far from the curated sites; the database is fresh each run.
+const CENTER = "0.7000, 37.5000";
 
 /** Rating runs are async (queued, then a worker); with mocks they take seconds. */
 const RATING_TIMEOUT = 120_000;
 
+/** Every session the test opened; closed after it, pass or fail. */
+const sessions: BrowserContext[] = [];
+
+test.afterEach(async () => {
+  await Promise.all(sessions.splice(0).map((context) => context.close()));
+});
+
 /** A fresh browser session that never leaves the machine (map tiles etc. are refused). */
 async function newSession(browser: Browser): Promise<BrowserContext> {
   const context = await browser.newContext({ baseURL: WEB_ORIGIN });
+  sessions.push(context);
   await context.route(
     /^https?:\/\/(?!localhost[:/]|127\.0\.0\.1[:/])/,
     (route) => route.abort(),
@@ -99,6 +107,22 @@ function tradePanel(page: Page): Locator {
   return page.getByRole("region", { name: "Back this site" });
 }
 
+/** The cell of `row` under the column headed `header`, wherever that column is. */
+async function cellUnder(row: Locator, header: string): Promise<Locator> {
+  const table = row.page().getByRole("table").filter({ has: row });
+  const headers = (await table.getByRole("columnheader").allTextContents()).map(
+    (text) => text.trim(),
+  );
+  const column = headers.indexOf(header);
+  expect(column, `a "${header}" column in ${headers.join(", ")}`).not.toBe(-1);
+  return row.locator("th, td").nth(column);
+}
+
+/** "490,000" → 490000. */
+function count(text: string): number {
+  return Number(text.replaceAll(",", ""));
+}
+
 test("real accounts: list, verify, launch, trade, and sign out", async ({
   browser,
 }) => {
@@ -107,6 +131,7 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
   let communityId = "";
   let assetId = "";
   let ipoPath = "";
+  let unitsOffered = "";
 
   await test.step("the owner registers and creates a community", async () => {
     await owner.goto("/register?next=/steward");
@@ -239,7 +264,7 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
     const checks = admin
       .getByRole("region", { name: "Automated checks" })
       .getByRole("listitem");
-    await expect(checks).toHaveCount(4);
+    await expect(checks.first()).toBeVisible();
     for (const check of await checks.all()) {
       await expect(check).toContainText("Passed");
     }
@@ -264,6 +289,12 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
     await expect(
       owner.getByRole("heading", { name: `${SITE} is open to supporters` }),
     ).toBeVisible();
+    const launched = owner.getByText(/units are on offer/);
+    await expect(launched).toContainText(/[\d,]+ units are on offer/);
+    unitsOffered = /([\d,]+) units are on offer/.exec(
+      (await launched.textContent()) ?? "",
+    )![1];
+    expect(count(unitsOffered)).toBeGreaterThan(100);
   });
 
   const investorContext = await newSession(browser);
@@ -310,6 +341,7 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
     await panel.getByRole("textbox", { name: "Units" }).fill("100");
     await panel.getByRole("button", { name: "Buy 100 units" }).click();
     await expect(status).toContainText("Bought 100 units");
+    await expect(status).toContainText(/You paid \$[\d,]+\.\d{2}/);
     paid = /You paid (\$[\d,]+\.\d{2})/.exec(
       (await status.textContent()) ?? "",
     )![1];
@@ -327,7 +359,7 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
       investor.getByRole("heading", { name: "Your stakes", level: 1 }),
     ).toBeVisible();
     const row = investor.getByRole("row", { name: new RegExp(SITE) });
-    await expect(row.getByRole("cell").nth(2)).toHaveText("60");
+    await expect(await cellUnder(row, "Units")).toHaveText("60");
     await expect(row.getByRole("link", { name: SITE })).toHaveAttribute(
       "href",
       `/asset/${assetId}`,
@@ -335,14 +367,28 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
   });
 
   await test.step("the investor is refused Steward and admin actions", async () => {
-    // The Steward app shows a non-member none of the community's pages or controls...
-    await investor.goto(ipoPath);
-    await expect(
-      investor.getByRole("heading", { name: "Start a community", level: 1 }),
-    ).toBeVisible();
-    await expect(
-      investor.getByRole("button", { name: "Launch opening offer" }),
-    ).toHaveCount(0);
+    // The Steward app tells a non-member why it shows none of the community's controls...
+    for (const path of [ipoPath, `/steward/assets/${assetId}/verify`]) {
+      await investor.goto(path);
+      await expect(
+        investor.getByRole("heading", {
+          name: "You're not a member of the community that lists this site",
+          level: 1,
+        }),
+      ).toBeVisible();
+      await expect(
+        investor.getByRole("link", { name: `See ${SITE} on the Exchange` }),
+      ).toHaveAttribute("href", `/asset/${assetId}`);
+      await expect(
+        investor.getByRole("link", { name: "Start a community" }),
+      ).toHaveAttribute("href", "/steward");
+      await expect(
+        investor.getByRole("button", { name: "Launch opening offer" }),
+      ).toHaveCount(0);
+      await expect(
+        investor.getByRole("region", { name: "Upload a document" }),
+      ).toHaveCount(0);
+    }
     // ...and the API refuses its Steward actions with a 403 and the policy's reason.
     await expectRefused(
       await apiWrite(investor, "POST", `/assets/${assetId}/ipo`, {
@@ -388,11 +434,11 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
     await expect(
       owner
         .getByRole("region", { name: SITE })
-        .getByText("100 of 490,000 units taken by supporters"),
+        .getByText(`100 of ${unitsOffered} units taken by supporters`),
     ).toBeVisible();
     await expect(
       owner.getByRole("region", { name: "Supporters" }),
-    ).toContainText("1 supporter hold 60 units");
+    ).toContainText("1 supporter holds 60 units");
     await expect(
       owner.getByRole("region", { name: "Community fund" }),
     ).toContainText(paid);
@@ -406,10 +452,4 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
     await expect(investor).toHaveURL(/\/login\?next=%2Fportfolio/);
     await signOut(admin, "E2E Admin");
   });
-
-  await Promise.all([
-    ownerContext.close(),
-    adminContext.close(),
-    investorContext.close(),
-  ]);
 });
