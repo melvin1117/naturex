@@ -20,6 +20,7 @@ from sqlalchemy import Connection, Engine, create_engine, delete
 from sqlmodel import Session, col, select
 
 from app import events as event_bus
+from app.agents.document_check import MockDocumentLLM
 from app.auth import SESSION_COOKIE, start_session
 from app.communities import create_community
 from app.config import Settings, get_settings, validate_mock_settings
@@ -49,6 +50,7 @@ from app.routers.runs import get_rating_runner
 from app.sandbox import _delete_world_rows, create_world, ensure_live_world, reset_world
 from app.seed import seed
 from app.services import listings
+from app.services.document_check import DocumentChecker, get_document_checker
 from app.services.ipo import NOT_TRADING
 from app.services.lifecycle import (
     EVIDENCE_REQUIRED,
@@ -342,6 +344,16 @@ def _runner(session_factory: Callable[[], Session], **overrides: Any) -> RatingR
     )
 
 
+def _checker(session_factory: Callable[[], Session], **overrides: Any) -> DocumentChecker:
+    """The AI document check (T71) with the mock model; its jobs wait for `executor.run_all`."""
+    return DocumentChecker(
+        session_factory=session_factory,
+        settings=_settings(**overrides),
+        executor=Deferred(),
+        llm_factory=MockDocumentLLM,
+    )
+
+
 def _person(
     session: Session, world_id: UUID, name: str, role: UserRole = UserRole.INVESTOR
 ) -> User:
@@ -382,6 +394,7 @@ class World_:
     session: Session
     runner: RatingRunner
     executor: Deferred
+    checker: DocumentChecker
 
 
 @pytest.fixture
@@ -406,6 +419,8 @@ def world(conn: Connection) -> Iterator[World_]:
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_settings] = lambda: _settings()
     app.dependency_overrides[get_rating_runner] = lambda: runner
+    checker = _checker(_sessions(conn))
+    app.dependency_overrides[get_document_checker] = lambda: checker
     yield World_(
         sandbox.id,
         community.id,
@@ -418,6 +433,7 @@ def world(conn: Connection) -> Iterator[World_]:
         session,
         runner,
         runner.executor,
+        checker,
     )
     app.dependency_overrides.clear()
     session.close()

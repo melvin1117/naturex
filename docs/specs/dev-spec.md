@@ -257,7 +257,7 @@ create table verification_runs (       -- one row per run; one current run per a
   reviewer_role text check (reviewer_role in ('platform_admin','partner_reviewer')),  -- T76 adds 'demo_auto' + check (demo_auto → mode = demo and evidence_kind = sample)
   reviewer_user_id uuid, reason text, decided_at timestamptz,  -- the decision: written once; reason required to reject
   revoked_by uuid, revoke_reason text, revoked_at timestamptz,  -- the revocation (verified → revoked): written once, reason required
-  -- T71 adds ai_suggestion text check (ai_suggestion in ('consistent','inconsistent','unreadable')), ai_reasons jsonb (untrusted heuristic)
+  -- T71's AI suggestion is NOT stored here (runs are write-once): see verification_ai_suggestions below
   unique (world_id, asset_id, id),
   foreign key (world_id, asset_id) references assets (world_id, id),
   foreign key (world_id, submitted_by) / (world_id, reviewer_user_id) / (world_id, revoked_by) references users (world_id, id),
@@ -292,7 +292,7 @@ create table listing_documents (       -- sensitive personal data; members of th
   is_sample boolean not null default false,  -- T76: generated fictional sample (demo mode), watermarked
   uploaded_by uuid,                    -- null after account deletion (anonymised)
   created_at timestamptz not null default now(),
-  -- T71 adds extracted jsonb (may hold names): members and reviewers only
+  -- T71's extracted fields live in verification_ai_suggestions.result (reviewers only), not here
   unique (world_id, asset_id, id),
   foreign key (world_id, asset_id) references assets (world_id, id),
   foreign key (world_id, asset_id, run_id) references verification_runs (world_id, asset_id, id),  -- same asset's run only
@@ -307,6 +307,16 @@ create table listing_document_blobs (  -- private storage: bytea in Postgres, ne
   foreign key (world_id, asset_id, document_id) references listing_documents (world_id, asset_id, id)
 );                                     -- immutable (trigger)
 create index ix_listing_document_blobs_world_id on listing_document_blobs (world_id);  -- sandbox reset and prune
+create table verification_ai_suggestions (  -- T71, migration 0019: the untrusted AI heuristic of one run, for reviewers only
+  run_id uuid primary key, world_id uuid not null references worlds, asset_id uuid not null,
+  status text not null check (status in ('completed','failed')),
+  suggestion text check (suggestion is null or suggestion in ('consistent','inconsistent','unreadable')),
+  result jsonb not null,               -- reasons, comparisons, documents (extracted fields: sensitive), flags, models
+  method_version text not null, created_at timestamptz not null default now(),
+  check ((status = 'completed') = (suggestion is not null)),
+  foreign key (world_id, asset_id, run_id) references verification_runs (world_id, asset_id, id)
+);                                     -- immutable (trigger verification_immutable); deletes need the whole-world opt-in
+create index ix_verification_ai_suggestions_world_id on verification_ai_suggestions (world_id);
 create table payout_lines (            -- private and erasable; the public ledger holds only a hash commitment (T67)
   id bigserial primary key, world_id uuid not null, asset_id uuid not null, quarter_label text not null,
   user_id uuid, shares bigint, amount numeric(14,2),   -- all null once erased (tombstone)
@@ -733,7 +743,19 @@ stateDiagram-v2
 - **Events:** a submission publishes `listing_status` (`transition: verification`, `run_id`, `level`) to the community and admins; decisions follow the asset's visibility.
 - **Sandboxes:** reset and prune delete blobs → documents → fingerprint bindings → runs (with the whole-world delete opt-in the triggers honour). A world holding verification records is never copied (fingerprints are keyed per world and a run's fingerprint covers the community ID a copy remaps); templates hold none.
 - **Libraries:** Pillow (MIT-CMU / HPND) and pypdf (BSD-3-Clause).
-- **Deferred:** the UI (T70); AI extraction (T71); demo mode, sample documents, `demo_auto` (which must also respect `verification_revoked_at`) and the demo → review switch (T76); deleting documents, nonces and reason salts 30 days after a listing is deleted, and anonymising `uploaded_by` / `submitted_by` / reviewers on account deletion (K5; the triggers already allow clearing them); partner reviewers.
+- **Deferred:** the UI (T70); demo mode, sample documents, `demo_auto` (which must also respect `verification_revoked_at`) and the demo → review switch (T76); deleting documents, nonces and reason salts 30 days after a listing is deleted, and anonymising `uploaded_by` / `submitted_by` / reviewers on account deletion (K5; the triggers already allow clearing them); partner reviewers.
+
+### 6.4 AI document check (T71)
+
+**As built (T71), ADR-0006 §2 and §5.** Files: `app/agents/document_check.py` (prompts, model I/O, the check), `app/tools/document_fields.py` (pure: untrusted text, area, verdict), `app/services/document_check.py` (scheduling, what is sent, storage), migration `0019`.
+- **When:** after `POST /assets/{id}/verification/runs` commits, the route queues the check on a one-thread background worker (`DocumentChecker`); nothing runs inside the request or a DB transaction. A run that is superseded or decided before the worker reaches it isn't checked. One result per run (insert once).
+- **Where:** every sandbox; the live world only with `VERIFICATION_AI_LIVE=true` (default `false`, until Token Factory's data retention and training terms are confirmed): with it off the live world queues nothing and the queue shows `ai_suggestion: null`.
+- **What is sent:** only a document's **sanitised preview** (PNG, ≤ 1600 px), never its bytes or a PDF's text layer; a document without a preview is `not_sent_reason: no_preview`. A sandbox sends only **sample documents** (`is_sample`, T76); visitor uploads are `not_sample`. With `USE_MOCKS=true` a fake model (`MockDocumentLLM`) runs in-process (nothing leaves, nothing is spent): it reads a fixed fictional holder and compares nothing.
+- **Steps:** (1) MiniCPM-V (`Tier.PERCEPTION` = `MODEL_MULTIMODAL`, one retry, no fallback model) reads each preview: holder name, parcel ID, place, area (number + unit), issue date, each with a verbatim excerpt, plus `instruction_like_text`. Its prompt holds the image and fixed instructions only. (2) Code cleans every string (NFKC, no control or invisible characters, one line, capped) and flags instruction-like text (EN/ES patterns). (3) The **area** is converted to hectares and compared in code: within ±20% of the listing's area is `match`; the number must appear in the quoted excerpt, else `unclear`. (4) Nemotron Nano (`Tier.FAST`) compares holder name ↔ the listing's community name and place ↔ the listing's place names (Nominatim reverse geocode of the centroid, as News Scout; the stored country if that fails, flagged `place_not_geocoded`), escaped inside `<untrusted_document_text>`. Fields of a document with instruction-like text are never sent. Answers are bound by `(document_index, field)` to the pairs asked; a reason that cites a number not in its inputs, or looks like an instruction, is withheld (`reason_withheld`, verdict `unclear`). Sample documents' names are `not_applicable` ("n/a (sample)"). (5) Code makes the suggestion: `inconsistent` if any document holds instruction-like text or any field mismatches; else `consistent` if any field matches; else `unreadable`.
+- **Hardening:** no tools, no secrets, no IDs in prompts (`world_id`/`asset_id` go to `llm_calls` only), only this run's documents (loaded by `(world_id, asset_id, run_id)`). Both answers are Pydantic-validated with retry (`LLMClient.structured`); every attempt is in `llm_calls` and counts against `LLM_BUDGET_USD` (an image reserves 2,048 prompt tokens, not its base64 length). Prompts, answers and LLM error messages are never logged; a spent budget or no answer stores `status: failed`.
+- **Never changes the run:** the result is its own write-once row (`verification_ai_suggestions`); the checklist, fingerprint and level are untouched, and approval rules ignore it.
+- **API:** only the admin queue (`GET /admin/verifications`, `review_listing`) returns it, as `ai_suggestion` on each item (`AiSuggestionOut`): `trust: "untrusted_heuristic"`, a fixed `notice`, `status`, `suggestion`, `reasons`, `comparisons[]` (`field`, `listing_value`, `document_value`, `excerpt`, `verdict`: match | mismatch | unclear | not_applicable, `reason`, `compared_by`: model | code), `documents[]` (what was read, `sent_to_model`, `not_sent_reason`, `instruction_like_text`), `flags`, `models`, `method_version`. Steward routes and the public panel never include it. Excerpts and values are attacker-written: render as plain text.
+- **Deferred:** a reviewer-triggered re-run; checking sample documents end to end needs T76's generator; deleting results with the listing's documents (30 days, ADR-0006 §5) follows that retention job.
 
 ## 7. Rating pipeline
 

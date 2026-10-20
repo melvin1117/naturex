@@ -64,6 +64,7 @@ from app.sandbox import (
 )
 from app.seed import seed
 from app.services import verification
+from app.services.document_check import get_document_checker
 from app.tools import documents as docs
 from app.tools.verification import (
     NOT_CHECKED,
@@ -82,6 +83,7 @@ from tests.test_lifecycle import (
     Committed,
     Deferred,
     World_,
+    _checker,
     _committed_draft,
     _member,
     _person,
@@ -964,6 +966,8 @@ def live(conn: Connection) -> Iterator[World_]:
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_settings] = lambda: _settings()
     app.dependency_overrides[get_rating_runner] = lambda: runner
+    checker = _checker(_sessions(conn))
+    app.dependency_overrides[get_document_checker] = lambda: checker
     yield World_(
         LIVE_WORLD_ID,
         community.id,
@@ -976,6 +980,7 @@ def live(conn: Connection) -> Iterator[World_]:
         session,
         runner,
         runner.executor,
+        checker,
     )
     app.dependency_overrides.clear()
     session.close()

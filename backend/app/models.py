@@ -1023,3 +1023,43 @@ class ListingDocumentBlob(SQLModel, table=True):
     asset_id: UUID
     content: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
     preview_png: bytes | None = Field(default=None, sa_column=Column(LargeBinary, nullable=True))
+
+
+class VerificationAiSuggestion(SQLModel, table=True):
+    """The AI document check of one run (T71, ADR-0006 §2): an untrusted heuristic for the
+    reviewer, kept apart from the run so it can't touch the checklist or the level. Written once
+    (trigger `verification_ai_suggestions_immutable`); deleted only with the whole world.
+
+    `result` holds what the models read off the documents (holder names, parcel IDs): sensitive
+    personal data, readable only through the admin review queue. Prompts and answers are never
+    stored; `llm_calls` has the calls' metadata."""
+
+    __tablename__ = "verification_ai_suggestions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["world_id", "asset_id", "run_id"],
+            ["verification_runs.world_id", "verification_runs.asset_id", "verification_runs.id"],
+            name="fk_verification_ai_suggestions_run",
+        ),
+        Index("ix_verification_ai_suggestions_world_id", "world_id"),
+        CheckConstraint(
+            "status IN ('completed','failed')", name="ck_verification_ai_suggestions_status"
+        ),
+        CheckConstraint(
+            "suggestion IS NULL OR suggestion IN ('consistent','inconsistent','unreadable')",
+            name="ck_verification_ai_suggestions_suggestion",
+        ),
+        CheckConstraint(
+            "(status = 'completed') = (suggestion IS NOT NULL)",
+            name="ck_verification_ai_suggestions_completed",
+        ),
+    )
+
+    run_id: UUID = Field(primary_key=True)
+    world_id: UUID = Field(foreign_key="worlds.id")
+    asset_id: UUID
+    status: str
+    suggestion: str | None = None
+    result: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
+    method_version: str
+    created_at: datetime = _created_at()

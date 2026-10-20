@@ -1357,6 +1357,96 @@ class VerificationReason(BaseModel):
         return cleaned
 
 
+class AiExtractedField(BaseModel):
+    """A value a model read off a document, and the verbatim excerpt around it. Attacker-written
+    text: render it as plain text, never as HTML or Markdown."""
+
+    value: str | None
+    excerpt: str | None
+
+
+class AiDocumentReadingOut(BaseModel):
+    """What the model read from one document's sanitised preview (T71)."""
+
+    document_id: UUID
+    doc_type: DocumentType
+    sent_to_model: bool
+    not_sent_reason: Literal["no_preview", "not_sample"] | None = Field(
+        description="`no_preview`: the document has no sanitised preview (a PDF without a "
+        "scanned image on page 1). `not_sample`: a sandbox sends only sample documents."
+    )
+    readable: bool
+    holder_name: AiExtractedField
+    parcel_id: AiExtractedField
+    place: AiExtractedField
+    area: AiExtractedField = Field(description="The number and unit as read, e.g. `144 ha`.")
+    area_ha: Decimal | None = Field(
+        description="The area in hectares, converted in code, when the area comparison used it."
+    )
+    issue_date: AiExtractedField
+    instruction_like_text: bool = Field(
+        description="Text aimed at an AI model was found: a sign of manipulation."
+    )
+
+
+class AiComparisonOut(BaseModel):
+    """One field of one document compared with the listing: both values, the excerpt, the verdict
+    and why. `compared_by`: `model` (Nemotron, holder name and place) or `code` (always the area,
+    and fields that couldn't or mustn't go to a model)."""
+
+    document_id: UUID
+    field: Literal["holder_name", "place", "area"]
+    listing_value: str | None
+    document_value: str | None
+    excerpt: str | None
+    verdict: Literal["match", "mismatch", "unclear", "not_applicable"]
+    reason: str
+    compared_by: Literal["model", "code"]
+
+
+class AiSuggestionResult(BaseModel):
+    """The AI document check's result, as stored (T71)."""
+
+    suggestion: Literal["consistent", "inconsistent", "unreadable"]
+    reasons: list[str]
+    comparisons: list[AiComparisonOut]
+    documents: list[AiDocumentReadingOut]
+    flags: list[str] = Field(
+        description="instruction_like_text, documents_not_sent, place_not_geocoded, "
+        "reason_withheld, model_fallback, mock_model"
+    )
+    models: list[str]
+    method_version: str
+
+
+AI_SUGGESTION_NOTICE = (
+    "Untrusted AI heuristic: read from the uploaded documents by AI models, which can be wrong "
+    "or manipulated by the documents themselves. It never changes the checks or the "
+    "verification level; a person decides."
+)
+
+
+class AiSuggestionOut(BaseModel):
+    """The AI document check of a run (T71, ADR-0006 §2), for the reviewer only. **Untrusted
+    heuristic**: show it labelled as such, next to its excerpts; it never changed a check or the
+    level. `status: failed` means no model answered (or the budget was spent): `suggestion` is
+    null. A run has no AI suggestion while the check is pending or when it doesn't run (the live
+    world while `VERIFICATION_AI_LIVE=false`)."""
+
+    trust: Literal["untrusted_heuristic"] = "untrusted_heuristic"
+    notice: str = AI_SUGGESTION_NOTICE
+    run_id: UUID
+    status: Literal["completed", "failed"]
+    suggestion: Literal["consistent", "inconsistent", "unreadable"] | None
+    reasons: list[str]
+    comparisons: list[AiComparisonOut]
+    documents: list[AiDocumentReadingOut]
+    flags: list[str]
+    models: list[str]
+    method_version: str
+    created_at: datetime
+
+
 class ReviewQueueItem(BaseModel):
     """A listing waiting for a reviewer: its current, undecided run."""
 
@@ -1365,3 +1455,8 @@ class ReviewQueueItem(BaseModel):
     asset_status: AssetStatusOut
     community_id: UUID | None
     run: VerificationRunOut
+    ai_suggestion: AiSuggestionOut | None = Field(
+        default=None,
+        description="The AI document check of the run: an untrusted heuristic (see its `trust` "
+        "and `notice`), null while pending or when it doesn't run.",
+    )

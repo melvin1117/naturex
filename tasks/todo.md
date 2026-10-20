@@ -499,6 +499,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 **Verify:** `make test` with a fake LLM and adversarial fixtures · **Deps:** T69, T09 · **Files:** `backend/app/agents/document_check.py`, `backend/tests/test_document_check.py`, `backend/tests/fixtures/verification/*`
 
+**As built:** see dev-spec §6.4. The suggestion is stored in its own write-once table (`verification_ai_suggestions`, migration 0019) rather than on the run, and only the admin queue returns it (`ai_suggestion`, `trust: untrusted_heuristic`); sandboxes send only sample documents, so with real models nothing is sent until T76 generates them.
+
 ### T70 · Verification screens and transparency panel (#114) — PD + D1 · S · Must · A9
 - [ ] Steward: upload documents ("Use sample documents (demo)" is T76); see the checklist and the decision; the IPO screen explains why launch is blocked until verified
 - [ ] Exchange: a badge with precise wording by evidence, not deployment mode (sample runs: "Demo verification: sample documents, no real ownership checked"; human-reviewed real documents: "Documents reviewed by NatureX (hackathon process)"; "Self-attested by the community"; "Verification revoked"); a site footer note when demo mode is on and a public "How this listing was verified" panel: level, date, reviewer role, each check's result, everything not checked, link to the ledger entry
