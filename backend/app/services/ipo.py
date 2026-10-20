@@ -46,6 +46,8 @@ from app.models import Asset, AssetStatus, Holding, LedgerKind, Price, Report, S
 from app.services.listings import RUN_IN_PROGRESS, lock_asset, lock_world_key_share
 from app.services.rating import fair_value_inputs, latest_report
 from app.services.rating_runs import run_active
+from app.services.verification import gate_refusal
+from app.tools.verification import NOT_VERIFIED as NOT_VERIFIED
 
 ALREADY_LAUNCHED = "ipo_already_launched"
 NOT_LISTED = "asset_not_listed"
@@ -132,12 +134,14 @@ def check_gate(session: Session, asset: Asset) -> None:
     """The launch gate beyond `listed`, in the preview and inside the launch transaction (with
     the asset locked).
 
-    **T69 seam (ADR-0006 §"The IPO is gated"):** in the live world the current verification run
-    must be `verified` with an input fingerprint matching the listing (and, in review mode, a
-    `review` run with `real` evidence); T69 raises `IpoRefused("verification_required")` here
-    otherwise. Until then every listed asset passes.
+    ADR-0006 "The IPO is gated" (T69): in the live world the current verification run must be
+    `verified`, a `review` run with `real` evidence, with an input fingerprint matching the
+    listing; a revoked current run blocks the launch in every world. Otherwise
+    `IpoRefused("not_verified")`. Sandboxes need no verification until T76's demo mode.
     """
-    _ = (session, asset)
+    refusal = gate_refusal(session, asset)
+    if refusal is not None:
+        raise IpoRefused(refusal)
 
 
 def _blocker(session: Session, asset: Asset) -> str | None:

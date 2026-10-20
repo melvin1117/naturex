@@ -43,6 +43,7 @@ from app.services.ipo import (
     ALREADY_LAUNCHED,
     NO_RATING,
     NOT_LISTED,
+    NOT_VERIFIED,
     PRICE_CHANGED,
     PRICE_TOO_HIGH,
     PRICE_TOO_LOW,
@@ -74,7 +75,8 @@ _REFUSED = (
 )
 _BLOCKED = (
     f"`{PRICE_TOO_HIGH}` (a share would cost more than a new account's starting cash: issue "
-    f"more shares), `{RUN_IN_PROGRESS}` (a rating run is active) or a verification code (T69)"
+    f"more shares), `{RUN_IN_PROGRESS}` (a rating run is active) or `{NOT_VERIFIED}` (the "
+    "live world needs a verified listing; a revoked verification blocks everywhere; T69)"
 )
 
 

@@ -88,6 +88,7 @@ class AuthBucket(StrEnum):
 class AuthAttemptKind(StrEnum):
     LOGIN = "login"
     REGISTER = "register"
+    DOCUMENT_UPLOAD = "document_upload"  # T69: verification uploads per account
 
 
 class AssetStatus(StrEnum):
@@ -117,6 +118,51 @@ class LedgerKind(StrEnum):
     EVENT = "event"
     PRICE_ANCHOR = "price_anchor"
     PAYOUT = "payout"
+    VERIFICATION = "verification"
+
+
+class VerificationLevel(StrEnum):
+    """ADR-0006 §1. A run is created `documents_submitted`; `unverified` means no current run
+    (or one whose input fingerprint no longer matches the listing) and is never stored."""
+
+    UNVERIFIED = "unverified"
+    DOCUMENTS_SUBMITTED = "documents_submitted"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+    REVOKED = "revoked"
+
+
+class ReviewerRole(StrEnum):
+    """Who decided, as a role: the public ledger and panel never name a person (ADR-0006 §3)."""
+
+    PLATFORM_ADMIN = "platform_admin"
+    PARTNER_REVIEWER = "partner_reviewer"
+
+
+class VerificationMode(StrEnum):
+    """The deployment's verification mode when a run was created (ADR-0006 §6). T69 ships
+    `review` only; `demo` is T76."""
+
+    REVIEW = "review"
+    DEMO = "demo"
+
+
+class EvidenceKind(StrEnum):
+    """Real uploads, or T76's generated fictional samples."""
+
+    REAL = "real"
+    SAMPLE = "sample"
+
+
+class DocumentType(StrEnum):
+    """What the steward says a document is (ADR-0006 §2). `assembly_minutes` is the
+    consent-labelled document the checklist looks for."""
+
+    TITLE = "title"
+    AGRARIAN_CERTIFICATE = "agrarian_certificate"
+    ASSEMBLY_MINUTES = "assembly_minutes"
+    ENTITY_REGISTRATION = "entity_registration"
+    OTHER = "other"
 
 
 class StreamEventType(StrEnum):
@@ -332,6 +378,9 @@ class Asset(SQLModel, table=True):
     submitted_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     # When the IPO opened trading (T59); NULL: no shares issued yet, orders are `not_trading`.
     ipo_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    # When a verification was revoked (ADR-0006, T69); cleared only by an admin's approval of a
+    # new run. While set, the asset can't resume trading or launch its IPO in any world.
+    verification_revoked_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     # The polygon's bounding box, so the overlap check only parses nearby listings (T58).
     bbox_west: float | None = None
     bbox_south: float | None = None
@@ -640,3 +689,204 @@ class LiveRatingRequest(SQLModel, table=True):
     run_id: UUID | None = None
     """The rating run it was counted for; refunded if that run never reached Earth Engine."""
     created_at: datetime = _created_at()
+
+
+class VerificationRun(SQLModel, table=True):
+    """One verification of a listing (ADR-0006 §1, T69): write-once (DB trigger
+    `verification_runs_write_once`), one current run per asset (`uq_verification_runs_current`).
+
+    The checklist, input fingerprint, method version, mode, evidence kind and document count
+    never change. The decision (`level` → verified | rejected, with `reviewer_role`, `reason`
+    and `decided_at`) is written once, and so is a revocation (verified → revoked).
+    `is_current` only goes true → false, when a newer run supersedes it.
+    """
+
+    __tablename__ = "verification_runs"
+    __table_args__ = (
+        UniqueConstraint("world_id", "asset_id", "id", name="uq_verification_runs_world_asset_id"),
+        ForeignKeyConstraint(
+            ["world_id", "asset_id"],
+            ["assets.world_id", "assets.id"],
+            name="fk_verification_runs_asset",
+        ),
+        ForeignKeyConstraint(
+            ["world_id", "submitted_by"],
+            ["users.world_id", "users.id"],
+            name="fk_verification_runs_submitted_by",
+        ),
+        ForeignKeyConstraint(
+            ["world_id", "reviewer_user_id"],
+            ["users.world_id", "users.id"],
+            name="fk_verification_runs_reviewer",
+        ),
+        ForeignKeyConstraint(
+            ["world_id", "revoked_by"],
+            ["users.world_id", "users.id"],
+            name="fk_verification_runs_revoked_by",
+        ),
+        Index(
+            "uq_verification_runs_current",
+            "world_id",
+            "asset_id",
+            unique=True,
+            postgresql_where=text("is_current"),
+        ),
+        # The admin review queue: current runs waiting for a decision.
+        Index(
+            "ix_verification_runs_queue",
+            "world_id",
+            "created_at",
+            postgresql_where=text("is_current AND level = 'documents_submitted'"),
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    world_id: UUID = Field(foreign_key="worlds.id")
+    asset_id: UUID
+    level: VerificationLevel = Field(sa_column=_enum_column(VerificationLevel))
+    is_current: bool = Field(default=True, sa_column_kwargs={"server_default": text("true")})
+    input_fingerprint: str = Field(sa_column=Column(String(64), nullable=False))
+    checklist: list[dict[str, Any]] = Field(sa_column=Column(JSONB, nullable=False))
+    method_version: str
+    mode: VerificationMode = Field(
+        default=VerificationMode.REVIEW, sa_column=_enum_column(VerificationMode)
+    )
+    evidence_kind: EvidenceKind = Field(
+        default=EvidenceKind.REAL, sa_column=_enum_column(EvidenceKind)
+    )
+    document_count: int = Field(sa_type=SmallInteger)
+    # Private, random: the ledger commits to the reviewer's reasons as sha256(salt ‖ reason), so
+    # nobody can confirm a guessed reason against the public ledger. Clearing it unlinks them.
+    reason_salt: bytes | None = Field(default=None, sa_column=Column(LargeBinary, nullable=True))
+    submitted_by: UUID | None = None  # null once the account is deleted (anonymised, K5)
+    created_at: datetime = _created_at()
+    reviewer_role: ReviewerRole | None = Field(
+        default=None,
+        sa_column=Column(
+            SAEnum(ReviewerRole, values_callable=_enum_values, native_enum=False), nullable=True
+        ),
+    )
+    reviewer_user_id: UUID | None = None  # private: never in the ledger or a public response
+    reason: str | None = None  # the reviewer's reason (required to reject); members and admins
+    decided_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    revoked_by: UUID | None = None
+    revoke_reason: str | None = None
+    revoked_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+
+
+class DocumentFingerprint(SQLModel, table=True):
+    """Binds a document's private, per-world keyed fingerprint to ONE asset at a time (ADR-0006
+    §2): the same file can't back two listings; the same listing may upload it again. One
+    binding per fingerprint is `active` (`uq_document_fingerprints_active`); a binding to a
+    withdrawn or ineligible listing may be retired (active → false) so another listing of the
+    same community can bind it. Retired rows stay: the old listing's documents point at them."""
+
+    __tablename__ = "document_fingerprints"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["world_id", "asset_id"],
+            ["assets.world_id", "assets.id"],
+            name="fk_document_fingerprints_asset",
+        ),
+        Index(
+            "uq_document_fingerprints_active",
+            "world_id",
+            "private_fingerprint",
+            unique=True,
+            postgresql_where=text("active"),
+        ),
+        Index("ix_document_fingerprints_world_id_asset_id", "world_id", "asset_id"),
+    )
+
+    world_id: UUID = Field(foreign_key="worlds.id", primary_key=True)
+    private_fingerprint: str = Field(sa_column=Column(String(64), primary_key=True))
+    asset_id: UUID = Field(primary_key=True)
+    active: bool = Field(default=True, sa_column_kwargs={"server_default": text("true")})
+
+
+class ListingDocument(SQLModel, table=True):
+    """An uploaded verification document's metadata (ADR-0006 §5): sensitive personal data,
+    readable only by the listing's community members and same-world admins. The bytes live in
+    `listing_document_blobs`. Linked to at most one run of its own asset, once, at submission.
+    """
+
+    __tablename__ = "listing_documents"
+    __table_args__ = (
+        UniqueConstraint("world_id", "asset_id", "id", name="uq_listing_documents_world_asset_id"),
+        ForeignKeyConstraint(
+            ["world_id", "asset_id"],
+            ["assets.world_id", "assets.id"],
+            name="fk_listing_documents_asset",
+        ),
+        # A document links only to a run of its own asset.
+        ForeignKeyConstraint(
+            ["world_id", "asset_id", "run_id"],
+            ["verification_runs.world_id", "verification_runs.asset_id", "verification_runs.id"],
+            name="fk_listing_documents_run",
+        ),
+        ForeignKeyConstraint(
+            ["world_id", "private_fingerprint", "asset_id"],
+            [
+                "document_fingerprints.world_id",
+                "document_fingerprints.private_fingerprint",
+                "document_fingerprints.asset_id",
+            ],
+            name="fk_listing_documents_fingerprint",
+        ),
+        ForeignKeyConstraint(
+            ["world_id", "uploaded_by"],
+            ["users.world_id", "users.id"],
+            name="fk_listing_documents_uploaded_by",
+        ),
+        Index("ix_listing_documents_world_id_asset_id_run_id", "world_id", "asset_id", "run_id"),
+        # The deferred completeness check looks documents up by run alone.
+        Index("ix_listing_documents_run_id", "run_id", postgresql_where=text("run_id IS NOT NULL")),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    world_id: UUID = Field(foreign_key="worlds.id")
+    asset_id: UUID
+    run_id: UUID | None = None
+    doc_type: DocumentType = Field(sa_column=_enum_column(DocumentType))
+    media_type: str
+    size_bytes: int
+    page_count: int | None = None
+    width: int | None = None
+    height: int | None = None
+    has_preview: bool = False
+    # HMAC(per-world key, file): reuse detection only, never published.
+    private_fingerprint: str = Field(sa_column=Column(String(64), nullable=False))
+    # sha256(nonce ‖ file): the randomized commitment the public ledger holds.
+    commitment: str = Field(sa_column=Column(String(64), nullable=False))
+    # Private; erasing it makes the public commitment unlinkable to the file.
+    commitment_nonce: bytes | None = Field(
+        default=None, sa_column=Column(LargeBinary, nullable=True)
+    )
+    is_sample: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
+    uploaded_by: UUID | None = None  # null once the account is deleted (anonymised, K5)
+    created_at: datetime = _created_at()
+
+
+class ListingDocumentBlob(SQLModel, table=True):
+    """A document's original bytes and its sanitised PNG preview (private storage, T69).
+
+    Postgres `bytea`, not files on disk: deletes are transactional with the metadata (sandbox
+    reset and prune need nothing else), there's no path to traverse, and nothing sits under a
+    web root. A separate table so listing queries never read the bytes by accident.
+    """
+
+    __tablename__ = "listing_document_blobs"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["world_id", "asset_id", "document_id"],
+            ["listing_documents.world_id", "listing_documents.asset_id", "listing_documents.id"],
+            name="fk_listing_document_blobs_document",
+        ),
+        Index("ix_listing_document_blobs_world_id", "world_id"),  # sandbox reset and prune
+    )
+
+    document_id: UUID = Field(primary_key=True)
+    world_id: UUID
+    asset_id: UUID
+    content: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+    preview_png: bytes | None = Field(default=None, sa_column=Column(LargeBinary, nullable=True))

@@ -1405,10 +1405,767 @@
             "description": "Not found in the session's world, or not visible to the caller"
           },
           "409": {
-            "description": "`ipo_already_launched`, `asset_not_listed` (draft, under review, suspended\u2026), `no_rating` (no usable report) or `ipo_price_too_low` (the price per share rounds to zero: issue fewer shares), `ipo_price_too_high` (a share would cost more than a new account's starting cash: issue more shares), `run_in_progress` (a rating run is active) or a verification code (T69), or `ipo_price_changed` (`expected_price` is stale)"
+            "description": "`ipo_already_launched`, `asset_not_listed` (draft, under review, suspended\u2026), `no_rating` (no usable report) or `ipo_price_too_low` (the price per share rounds to zero: issue fewer shares), `ipo_price_too_high` (a share would cost more than a new account's starting cash: issue more shares), `run_in_progress` (a rating run is active) or `not_verified` (the live world needs a verified listing; a revoked verification blocks everywhere; T69), or `ipo_price_changed` (`expected_price` is stale)"
           },
           "422": {
             "description": "total_shares outside 10,000\u201310,000,000 or retained_pct outside 10\u201390"
+          }
+        }
+      }
+    },
+    "/assets/{asset_id}/documents": {
+      "post": {
+        "tags": [
+          "verification"
+        ],
+        "summary": "Upload Document",
+        "description": "Upload one verification document for the listing (its community's owner or stewards).\nThe body is the file. It's checked by magic bytes, size, pixel and PDF limits in a worker\nwith a timeout; only then is it stored, privately. By uploading, the steward confirms they\nmay share it. Submit documents for review with `POST /assets/{id}/verification/runs`.",
+        "operationId": "upload_document_assets__asset_id__documents_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          },
+          {
+            "name": "doc_type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/DocumentType",
+              "description": "What the document is."
+            },
+            "description": "What the document is."
+          },
+          {
+            "name": "content-type",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Content-Type"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListingDocumentOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "members_only, treasury_cannot_act"
+          },
+          "404": {
+            "description": "Not found in the caller's world, or not visible to the caller"
+          },
+          "409": {
+            "description": "`listing_closed` (ineligible or withdrawn), `document_limit_reached` (20 per listing), `storage_quota_exceeded` (the community's or world's document bytes) or `document_reused` (the same file backs another listing, unless that's a withdrawn or ineligible listing of the same community)"
+          },
+          "411": {
+            "description": "length_required"
+          },
+          "413": {
+            "description": "`file_too_large`: over 5 MB"
+          },
+          "415": {
+            "description": "`unsupported_media_type`: not PDF, JPEG or PNG"
+          },
+          "422": {
+            "description": "The file is refused: empty_file, unsupported_format, media_type_mismatch, image_too_large, image_malformed, trailing_data, embedded_signature, pdf_encrypted, pdf_malformed, pdf_too_many_pages, pdf_too_many_objects, pdf_active_content, inspection_timeout or inspection_failed"
+          },
+          "429": {
+            "description": "`upload_rate_limited`: see Retry-After"
+          },
+          "503": {
+            "description": "`inspection_busy`: see Retry-After"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "The file itself (PDF, JPEG or PNG, at most 5 MB).",
+          "content": {
+            "application/pdf": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "verification"
+        ],
+        "summary": "List Documents",
+        "description": "The listing's documents, submitted or not, oldest first.",
+        "operationId": "list_documents_assets__asset_id__documents_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ListingDocumentOut"
+                  },
+                  "title": "Response List Documents Assets  Asset Id  Documents Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "404": {
+            "description": "`not_found`: outside the caller's world, or the caller isn't a member of the listing's community or a same-world admin"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assets/{asset_id}/documents/{document_id}": {
+      "get": {
+        "tags": [
+          "verification"
+        ],
+        "summary": "Download Document",
+        "description": "The original file, always as an attachment (`Content-Disposition: attachment`,\n`X-Content-Type-Options: nosniff`, `Cache-Control: no-store`). Loaded by\n`(world_id, asset_id, id)`.",
+        "operationId": "download_document_assets__asset_id__documents__document_id__get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The original file, as a download",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "404": {
+            "description": "`not_found` (see the list route) or `document_not_found`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assets/{asset_id}/documents/{document_id}/preview": {
+      "get": {
+        "tags": [
+          "verification"
+        ],
+        "summary": "Preview Document",
+        "description": "The document's sanitised preview: a PNG re-encoded from the decoded pixels, at most\n1600 px, with no metadata. Never the original bytes.",
+        "operationId": "preview_document_assets__asset_id__documents__document_id__preview_get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A sanitised, re-encoded PNG",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "404": {
+            "description": "`not_found`, `document_not_found` or `no_preview`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assets/{asset_id}/verification/runs": {
+      "post": {
+        "tags": [
+          "verification"
+        ],
+        "summary": "Submit Verification",
+        "description": "Submit 1\u20133 uploaded documents for review: a new current run with its deterministic\nchecklist (accepted format, not reused, boundary free, consent document attached) and the\nfingerprint of what it vouches for. Any earlier run stops being current.",
+        "operationId": "submit_verification_assets__asset_id__verification_runs_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationSubmit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationRunOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "members_only, treasury_cannot_act"
+          },
+          "404": {
+            "description": "`not_found`, or `document_not_found` (a document that isn't one of this listing's)"
+          },
+          "409": {
+            "description": "`listing_closed` or `document_already_submitted`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "verification"
+        ],
+        "summary": "List Verification Runs",
+        "description": "Every run of the listing, newest first, with its checklist values, documents and the\nreviewer's reasons (never the reviewer's identity).",
+        "operationId": "list_verification_runs_assets__asset_id__verification_runs_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VerificationRunOut"
+                  },
+                  "title": "Response List Verification Runs Assets  Asset Id  Verification Runs Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "404": {
+            "description": "`not_found`: outside the caller's world, or the caller isn't a member of the listing's community or a same-world admin"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assets/{asset_id}/verification": {
+      "get": {
+        "tags": [
+          "verification"
+        ],
+        "summary": "Verification Panel",
+        "description": "How this listing was verified (ADR-0006 \u00a74): the level and its badge, the date, the\nreviewer's role, each check's result, the ledger entry, and what was **not** checked.\nNever documents, values or reasons.",
+        "operationId": "verification_panel_assets__asset_id__verification_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationPublicOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in the caller's world, or not visible"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/verifications": {
+      "get": {
+        "tags": [
+          "verification",
+          "admin"
+        ],
+        "summary": "Review Queue",
+        "description": "Listings waiting for a reviewer in the caller's world, oldest first, with their current\nrun, one page at a time (`limit`, `offset`). Listings of the admin's own communities are\nleft out (conflict of interest).",
+        "operationId": "review_queue_admin_verifications_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReviewQueueItem"
+                  },
+                  "title": "Response Review Queue Admin Verifications Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "admin_only"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/assets/{asset_id}/verification/{run_id}/approve": {
+      "post": {
+        "tags": [
+          "verification",
+          "admin"
+        ],
+        "summary": "Approve Verification",
+        "description": "Approve the listing's current run: it becomes `verified`, a `verification` ledger entry\nrecords the decision, and an asset suspended by a revocation trades again.",
+        "operationId": "approve_verification_admin_assets__asset_id__verification__run_id__approve_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationApprove"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationRunOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "admin_only, conflict_of_interest (the admin's own community)"
+          },
+          "404": {
+            "description": "`not_found`, or `run_not_found` (not one of this listing's runs)"
+          },
+          "409": {
+            "description": "`run_superseded`, `run_already_decided`, `listing_closed`, `stale_run` (the listing changed since the run: it needs a new one), `checks_failed` or `overlap`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/assets/{asset_id}/verification/{run_id}/reject": {
+      "post": {
+        "tags": [
+          "verification",
+          "admin"
+        ],
+        "summary": "Reject Verification",
+        "description": "Reject the listing's current run with a reason the steward sees.",
+        "operationId": "reject_verification_admin_assets__asset_id__verification__run_id__reject_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationReason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationRunOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "admin_only, conflict_of_interest (the admin's own community)"
+          },
+          "404": {
+            "description": "`not_found`, or `run_not_found` (not one of this listing's runs)"
+          },
+          "409": {
+            "description": "`run_superseded` or `run_already_decided`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/assets/{asset_id}/verification/{run_id}/revoke": {
+      "post": {
+        "tags": [
+          "verification",
+          "admin"
+        ],
+        "summary": "Revoke Verification",
+        "description": "Revoke the listing's verified run, with a reason: in one transaction it becomes\n`revoked` and a listed asset is suspended (`verification_revoked`), so orders are refused\nuntil a new run is approved. Both changes are in the ledger.",
+        "operationId": "revoke_verification_admin_assets__asset_id__verification__run_id__revoke_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationReason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationRunOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "admin_only, conflict_of_interest (the admin's own community)"
+          },
+          "404": {
+            "description": "`not_found`, or `run_not_found` (not one of this listing's runs)"
+          },
+          "409": {
+            "description": "`run_superseded` or `not_verified` (the run isn't verified)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
@@ -3580,6 +4337,18 @@
         ],
         "title": "DateWindow"
       },
+      "DocumentType": {
+        "type": "string",
+        "enum": [
+          "title",
+          "agrarian_certificate",
+          "assembly_minutes",
+          "entity_registration",
+          "other"
+        ],
+        "title": "DocumentType",
+        "description": "What the steward says a document is (ADR-0006 \u00a72). `assembly_minutes` is the\nconsent-labelled document the checklist looks for."
+      },
       "EventOut": {
         "properties": {
           "id": {
@@ -3688,6 +4457,15 @@
           "created_at"
         ],
         "title": "EventOut"
+      },
+      "EvidenceKind": {
+        "type": "string",
+        "enum": [
+          "real",
+          "sample"
+        ],
+        "title": "EvidenceKind",
+        "description": "Real uploads, or T76's generated fictional samples."
       },
       "EvidenceResponse": {
         "properties": {
@@ -4131,7 +4909,7 @@
               }
             ],
             "title": "Blocked Reason",
-            "description": "Why not, as the code the launch would return: ipo_price_too_high (a share costs more than a new account's starting cash: issue more shares), run_in_progress, or a verification code (T69)."
+            "description": "Why not, as the code the launch would return: ipo_price_too_high (a share costs more than a new account's starting cash: issue more shares), run_in_progress, or not_verified (the live world needs the listing's current verification run verified and still matching; a revoked one blocks everywhere; T69)."
           }
         },
         "type": "object",
@@ -4214,7 +4992,8 @@
           "report",
           "event",
           "price_anchor",
-          "payout"
+          "payout",
+          "verification"
         ],
         "title": "LedgerKind"
       },
@@ -4303,6 +5082,108 @@
           "color"
         ],
         "title": "LegendEntry"
+      },
+      "ListingDocumentOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id",
+            "description": "The run it was submitted with; null until then."
+          },
+          "doc_type": {
+            "$ref": "#/components/schemas/DocumentType"
+          },
+          "media_type": {
+            "type": "string",
+            "title": "Media Type"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "page_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Count",
+            "description": "PDFs only."
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width",
+            "description": "Images only, in pixels."
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "has_preview": {
+            "type": "boolean",
+            "title": "Has Preview",
+            "description": "A sanitised PNG preview exists: every image, and a PDF whose first page holds an image (a scan)."
+          },
+          "commitment": {
+            "type": "string",
+            "title": "Commitment",
+            "description": "sha256(private nonce \u2016 file): what the public ledger holds for this document. It can't be matched against a copy of the file without the nonce."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "asset_id",
+          "run_id",
+          "doc_type",
+          "media_type",
+          "size_bytes",
+          "has_preview",
+          "commitment",
+          "created_at"
+        ],
+        "title": "ListingDocumentOut",
+        "description": "A verification document's metadata (the listing's community and same-world admins\nonly). The file is at `GET /assets/{asset_id}/documents/{id}` (a download), its sanitised\npreview at `\u2026/preview`."
       },
       "ListingSummaryOut": {
         "properties": {
@@ -5015,6 +5896,30 @@
           "price"
         ],
         "title": "PricePoint"
+      },
+      "PublicCheckOut": {
+        "properties": {
+          "check": {
+            "type": "string",
+            "title": "Check"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warn",
+              "fail"
+            ],
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "check",
+          "result"
+        ],
+        "title": "PublicCheckOut",
+        "description": "A check's name and result only: the public panel never shows the values."
       },
       "QuoteOut": {
         "properties": {
@@ -5764,6 +6669,56 @@
         ],
         "title": "ReportSummarySource"
       },
+      "ReviewQueueItem": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "asset_name": {
+            "type": "string",
+            "title": "Asset Name"
+          },
+          "asset_status": {
+            "$ref": "#/components/schemas/AssetStatusOut"
+          },
+          "community_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Community Id"
+          },
+          "run": {
+            "$ref": "#/components/schemas/VerificationRunOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "asset_name",
+          "asset_status",
+          "community_id",
+          "run"
+        ],
+        "title": "ReviewQueueItem",
+        "description": "A listing waiting for a reviewer: its current, undecided run."
+      },
+      "ReviewerRole": {
+        "type": "string",
+        "enum": [
+          "platform_admin",
+          "partner_reviewer"
+        ],
+        "title": "ReviewerRole",
+        "description": "Who decided, as a role: the public ledger and panel never name a person (ADR-0006 \u00a73)."
+      },
       "SharesOut": {
         "properties": {
           "shares_offered": {
@@ -6273,6 +7228,379 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VerificationApprove": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Optional note for the steward (at most 500 characters)."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "VerificationApprove"
+      },
+      "VerificationCheckOut": {
+        "properties": {
+          "check": {
+            "type": "string",
+            "title": "Check",
+            "description": "accepted_format, not_reused, boundary_free or consent_document"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warn",
+              "fail"
+            ],
+            "title": "Result"
+          },
+          "found": {
+            "type": "string",
+            "title": "Found"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "check",
+          "result",
+          "found",
+          "source"
+        ],
+        "title": "VerificationCheckOut",
+        "description": "One deterministic check of a run, with the value found and where it came from."
+      },
+      "VerificationLevel": {
+        "type": "string",
+        "enum": [
+          "unverified",
+          "documents_submitted",
+          "verified",
+          "rejected",
+          "revoked"
+        ],
+        "title": "VerificationLevel",
+        "description": "ADR-0006 \u00a71. A run is created `documents_submitted`; `unverified` means no current run\n(or one whose input fingerprint no longer matches the listing) and is never stored."
+      },
+      "VerificationMode": {
+        "type": "string",
+        "enum": [
+          "review",
+          "demo"
+        ],
+        "title": "VerificationMode",
+        "description": "The deployment's verification mode when a run was created (ADR-0006 \u00a76). T69 ships\n`review` only; `demo` is T76."
+      },
+      "VerificationPublicOut": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "level": {
+            "$ref": "#/components/schemas/VerificationLevel",
+            "description": "The current run's level, or `unverified` when there is none or the listing changed since it."
+          },
+          "badge": {
+            "type": "string",
+            "title": "Badge",
+            "description": "`Documents reviewed by NatureX (hackathon process)` when verified, `Verification revoked`, else `Self-attested by the community`."
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "reviewer_role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewerRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "method_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method Version"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/PublicCheckOut"
+            },
+            "type": "array",
+            "title": "Checks"
+          },
+          "not_checked": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Not Checked"
+          },
+          "ledger_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ledger Seq",
+            "description": "The `verification` ledger entry of the latest decision."
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "level",
+          "badge",
+          "not_checked"
+        ],
+        "title": "VerificationPublicOut",
+        "description": "\"How this listing was verified\" (ADR-0006 \u00a74): public, for anyone who can see the asset.\nCheck names and results only; what was *not* checked is always listed."
+      },
+      "VerificationReason": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 700,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "VerificationReason",
+        "description": "A rejection or revocation: the reason is required and shown to the steward."
+      },
+      "VerificationRunOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "level": {
+            "$ref": "#/components/schemas/VerificationLevel",
+            "description": "The run's stored level."
+          },
+          "effective_level": {
+            "$ref": "#/components/schemas/VerificationLevel",
+            "description": "`unverified` once the listing's name, area, polygon or community changed since the run (its fingerprint no longer matches); else `level`."
+          },
+          "is_current": {
+            "type": "boolean",
+            "title": "Is Current"
+          },
+          "fingerprint_matches": {
+            "type": "boolean",
+            "title": "Fingerprint Matches"
+          },
+          "input_fingerprint": {
+            "type": "string",
+            "title": "Input Fingerprint"
+          },
+          "method_version": {
+            "type": "string",
+            "title": "Method Version"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/VerificationMode"
+          },
+          "evidence_kind": {
+            "$ref": "#/components/schemas/EvidenceKind"
+          },
+          "checklist": {
+            "items": {
+              "$ref": "#/components/schemas/VerificationCheckOut"
+            },
+            "type": "array",
+            "title": "Checklist"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/ListingDocumentOut"
+            },
+            "type": "array",
+            "title": "Documents"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "reviewer_role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewerRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "The reviewer's reason, if any."
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "revoke_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoke Reason"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "asset_id",
+          "level",
+          "effective_level",
+          "is_current",
+          "fingerprint_matches",
+          "input_fingerprint",
+          "method_version",
+          "mode",
+          "evidence_kind",
+          "checklist",
+          "documents",
+          "created_at"
+        ],
+        "title": "VerificationRunOut",
+        "description": "A verification run, for the listing's community and same-world admins: the checklist\nwith values, the documents, and the reviewer's reasons (never the reviewer's identity)."
+      },
+      "VerificationSubmit": {
+        "properties": {
+          "document_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Document Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_ids"
+        ],
+        "title": "VerificationSubmit",
+        "description": "Submit 1\u20133 of the listing's uploaded, not yet submitted documents for review."
       },
       "VisParams": {
         "properties": {

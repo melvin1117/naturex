@@ -268,6 +268,8 @@ class RateLimit:
 RATE_LIMITS = {
     AuthAttemptKind.LOGIN: RateLimit(10, timedelta(minutes=15)),
     AuthAttemptKind.REGISTER: RateLimit(5, timedelta(hours=1)),
+    # The default; the upload route passes DOCUMENT_UPLOADS_PER_HOUR (T69).
+    AuthAttemptKind.DOCUMENT_UPLOAD: RateLimit(20, timedelta(hours=1)),
 }
 # Longest a request waits for a bucket's lock; each waiter holds a pooled connection.
 LOCK_TIMEOUT_MS = 2000
@@ -357,8 +359,11 @@ def consume_attempt(
     keys: Sequence[tuple[AuthBucket, str]],
     now: datetime | None = None,
     lock_timeout_ms: int = LOCK_TIMEOUT_MS,
+    limit: RateLimit | None = None,
 ) -> int | None:
     """Count one attempt in every bucket, or refuse it. Commits.
+
+    `limit` overrides `RATE_LIMITS[kind]` for kinds whose limit is a setting (document uploads).
 
     Call it first in a request: a refusal rolls the session back, which would discard any
     pending writes. Returns None when the attempt is allowed, else the seconds until it would be.
@@ -367,7 +372,7 @@ def consume_attempt(
     a bucket can't deadlock. A refused attempt is not stored, so a blocked client can't extend
     its own lockout. Raises AttemptsBusy if a lock isn't free within `lock_timeout_ms`.
     """
-    limit = RATE_LIMITS[kind]
+    limit = limit or RATE_LIMITS[kind]
     ordered = sorted(set(keys), key=lambda item: (item[0].value, item[1]))
     try:
         session.execute(

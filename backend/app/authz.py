@@ -56,7 +56,8 @@ class Action(StrEnum):
     OPERATE = "operate"
     """Time Machine, inject events (on the world), suspend or resume an asset (on the asset)."""
     REVIEW_LISTING = "review_listing"
-    """Approve, reject or revoke a listing's verification (ADR-0006 §3: admin in the hackathon)."""
+    """Approve, reject or revoke a listing's verification, or read the world's review queue
+    (ADR-0006 §3: admin in the hackathon)."""
     TAMPER_DEMO = "tamper_demo"
     """The ledger tamper demo: admins, sandbox worlds and `DEMO_MODE` only."""
     CONTROL_DEMO = "control_demo"
@@ -210,7 +211,8 @@ ACCEPTS: Mapping[Action, tuple[type[Resource], ...]] = {
     Action.EDIT_COMMUNITY: (CommunityRef,),
     Action.VIEW_COMMUNITY_DATA: (CommunityRef, AssetRef),
     Action.OPERATE: (WorldRef, AssetRef),
-    Action.REVIEW_LISTING: (AssetRef,),
+    # The world for the review queue; the asset for a decision on its verification.
+    Action.REVIEW_LISTING: (WorldRef, AssetRef),
     Action.TAMPER_DEMO: (DemoTarget,),
     Action.CONTROL_DEMO: (WorldRef,),
 }

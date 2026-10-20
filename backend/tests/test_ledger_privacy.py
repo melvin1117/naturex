@@ -32,6 +32,7 @@ from app.models import (
     Asset,
     AssetStatus,
     Community,
+    DocumentType,
     Event,
     EventSource,
     Holding,
@@ -43,6 +44,7 @@ from app.models import (
     UserRole,
 )
 from app.seed import DEMO_SITES, PERSONAS, WORLD_ID, seed
+from app.services import verification
 from app.services.ipo import launch, preview
 from app.services.lifecycle import SuspensionReason
 from app.services.listings import (
@@ -55,6 +57,7 @@ from app.services.listings import (
     update_draft,
     withdraw,
 )
+from app.tools.documents import Inspection
 from tests.conftest import alembic_cfg, requires_db
 
 ASSET_ID = DEMO_SITES[0].id
@@ -283,12 +286,66 @@ def _produce_price_anchor(session: Session) -> None:
     launch(session, WORLD_ID, listing.id, Offering(), expected_price=price)
 
 
+def _produce_verification(session: Session) -> None:
+    """T69's decisions on a listing whose community, documents and reasons name people: a
+    rejection, then an approval and a revocation (`verification` entries)."""
+    community = create_community(session, WORLD_ID, "Ada Lovelace's Verifiers", PERSONAS[0].id)
+    reviewer = User(
+        world_id=WORLD_ID,
+        name="Grace Hopper",
+        role=UserRole.ADMIN,
+        kind=UserKind.PERSON,
+        email="grace.hopper@example.org",
+        is_admin=True,
+    )
+    session.add(reviewer)
+    session.flush()
+    ring = [[-84.5, 9.5], [-84.49, 9.5], [-84.49, 9.51], [-84.5, 9.51], [-84.5, 9.5]]
+    details = ListingDetails(
+        name="Bosque de Grace",
+        country="CR",
+        description="Title held by Ada Lovelace.",
+        geojson={"type": "Polygon", "coordinates": [ring]},
+    )
+    listing = create_draft(session, world_id=WORLD_ID, community_id=community.id, details=details)
+    for step in ("reject", "approve"):
+        document = verification.store_document(
+            session,
+            world_id=WORLD_ID,
+            asset_id=listing.id,
+            uploaded_by=PERSONAS[0].id,
+            doc_type=DocumentType.ASSEMBLY_MINUTES,
+            data=f"Assembly minutes signed by Ada Lovelace ({step})".encode(),
+            inspection=Inspection("application/pdf", page_count=1),
+            secret="ledger-privacy-test",
+            quota=verification.StorageQuota(10**9, 10**9),
+        )
+        run = verification.submit_run(
+            session,
+            world_id=WORLD_ID,
+            asset_id=listing.id,
+            submitted_by=PERSONAS[0].id,
+            document_ids=[document.id],
+        ).run
+        ids = {"world_id": WORLD_ID, "asset_id": listing.id, "run_id": run.id}
+        if step == "reject":
+            verification.reject(
+                session, **ids, reviewer=reviewer.id, reason="Ada Lovelace's scan is unreadable"
+            )
+        else:
+            verification.approve(session, **ids, reviewer=reviewer.id, reason="Grace checked it")
+            verification.revoke(
+                session, **ids, revoked_by=reviewer.id, reason="Grace Hopper found a dispute"
+            )
+
+
 # The real producer to run for each kind with one in `app/`. Kinds whose producer already ran
 # during `seed()` (e.g. T19's reports) are covered by the seeded entries instead.
 _REAL_PRODUCERS: dict[LedgerKind, Callable[[Session], None]] = {
     LedgerKind.PAYOUT: _produce_payout,
     LedgerKind.LISTING: _produce_listing,
     LedgerKind.PRICE_ANCHOR: _produce_price_anchor,
+    LedgerKind.VERIFICATION: _produce_verification,
 }
 
 
