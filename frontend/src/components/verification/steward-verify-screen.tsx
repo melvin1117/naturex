@@ -128,8 +128,12 @@ function Loaded({
   const current = currentRun(runs);
   const earlier = runs.filter((run) => run !== current);
   const closed = CLOSED.has(asset.status);
+  // A newer submission doesn't lift an earlier revocation; only an approval does.
   const revocationStands =
-    current?.level !== "verified" && runs.some((r) => r.level === "revoked");
+    current !== null &&
+    current.level !== "verified" &&
+    current.level !== "revoked" &&
+    runs.some((r) => r.level === "revoked");
 
   const toggle = (id: string, on: boolean) =>
     setSelected((prev) =>

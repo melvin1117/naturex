@@ -77,6 +77,8 @@ export function DecisionForm({
         </Label>
         <Textarea
           id={`${id}-reason`}
+          name="reason"
+          autoComplete="off"
           value={reason}
           maxLength={REASON_MAX}
           rows={4}

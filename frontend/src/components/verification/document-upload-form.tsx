@@ -59,7 +59,12 @@ export function DocumentUploadForm({
       next.consent = "Confirm you're authorised to share this document.";
     setErrors(next);
     setDone(null);
-    if (Object.keys(next).length > 0 || !file || !docType) return;
+    const first = (["type", "file", "consent"] as const).find((f) => next[f]);
+    if (first) {
+      globalThis.document.getElementById(`${id}-${first}`)?.focus();
+      return;
+    }
+    if (!file || !docType) return;
     const document = await upload.mutate({ file, docType });
     if (!document) return;
     setDone(`Uploaded: ${DOC_TYPE_LABEL[document.doc_type]}.`);
@@ -88,7 +93,7 @@ export function DocumentUploadForm({
             aria-invalid={Boolean(errors.type)}
             aria-describedby={errors.type ? errorId("type") : undefined}
           >
-            <SelectValue placeholder="Choose a document type" />
+            <SelectValue placeholder="Choose a document type…" />
           </SelectTrigger>
           <SelectContent>
             {DOC_TYPES.map((type) => (
@@ -110,6 +115,7 @@ export function DocumentUploadForm({
         <Input
           ref={fileRef}
           id={`${id}-file`}
+          name="document"
           type="file"
           accept={ACCEPT_ATTRIBUTE}
           disabled={disabled || pending}

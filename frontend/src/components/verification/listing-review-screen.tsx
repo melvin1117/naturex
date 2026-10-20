@@ -217,7 +217,10 @@ function Review({
             </Panel>
             <Panel title="Automated checks">
               <Checklist items={current.checklist} detailed />
-              <p className="mt-4 font-mono text-[11px] break-all text-muted-foreground">
+              <p
+                translate="no"
+                className="mt-4 font-mono text-[11px] break-all text-muted-foreground"
+              >
                 {current.method_version} · fingerprint{" "}
                 {current.input_fingerprint.slice(0, 16)}…
                 {current.fingerprint_matches

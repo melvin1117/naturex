@@ -133,7 +133,10 @@ function PanelBody({ data }: { data: VerificationPublic }) {
             )}
           </div>
           {data.method_version && (
-            <p className="mt-3 font-mono text-[11px] text-muted-foreground">
+            <p
+              translate="no"
+              className="mt-3 font-mono text-[11px] text-muted-foreground"
+            >
               Method {data.method_version}
             </p>
           )}

@@ -502,6 +502,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 - [ ] Exchange: a badge with precise wording by evidence, not deployment mode (sample runs: "Demo verification: sample documents, no real ownership checked"; human-reviewed real documents: "Documents reviewed by NatureX (hackathon process)"; "Self-attested by the community"; "Verification revoked"); a site footer note when demo mode is on and a public "How this listing was verified" panel: level, date, reviewer role, each check's result, everything not checked, link to the ledger entry
 - [ ] Admin: a review queue with document previews, the checklist, any AI suggestion labelled as an untrusted heuristic with source excerpts, and the map; approve, reject or revoke with a reason
 
+- As built: steward `/steward/assets/[id]/verify` (upload, submit, checklist, decision; linked from Steward home and the IPO screen's `not_verified` alert); Exchange hero badge and "How this listing was verified" panel (`components/verification/verification-panel.tsx`, the API's `badge` verbatim; the ledger link scrolls to the entry); admin `/admin/verifications` queue and `/admin/verifications/[id]` review (previews, checklist, map, approve/reject/revoke). The AI suggestion area says it's off until T71 returns one; the sample button, sample badge source and footer switch stay with T76.
+
 **Verify:** `make fe-check`; `web-design-guidelines` review; manual upload → approve → badge → revoke · **Deps:** T69, T62 · **Files:** `frontend/src/app/(steward)/steward/assets/[id]/verify/page.tsx`, `frontend/src/components/VerificationPanel.tsx`, `frontend/src/app/admin/verifications/page.tsx`
 
 

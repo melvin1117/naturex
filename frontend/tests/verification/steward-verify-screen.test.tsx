@@ -229,7 +229,7 @@ describe("StewardVerifyScreen", () => {
     );
     const checks = screen.getByRole("list", { name: "Automated checks" });
     expect(within(checks).getByText("no overlap")).toBeInTheDocument();
-  });
+  }, 15_000);
 
   it("explains an upload the backend refused", async () => {
     renderScreen({

@@ -22,7 +22,7 @@ export function RunDecision({ run }: { run: VerificationRun }) {
     rows.push({ label: "Revoked", value: date(run.revoked_at) });
   return (
     <div className="space-y-3">
-      <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+      <dl className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-3 text-sm">
         {rows.map((row) => (
           <div key={row.label}>
             <dt className="text-muted-foreground">{row.label}</dt>

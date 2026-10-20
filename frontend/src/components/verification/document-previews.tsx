@@ -61,6 +61,9 @@ function DocumentPreview({
           <img
             src={preview.url}
             alt={`Preview of the ${label.toLowerCase()}`}
+            width={document.width ?? 1200}
+            height={document.height ?? 1600}
+            loading="lazy"
             className="size-full object-contain"
           />
         ) : preview.error ? (
