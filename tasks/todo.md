@@ -305,8 +305,9 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` · **Deps:** T27 · **Files:** `backend/app/routers/reports.py`, `backend/app/services/diff.py`
 
 ### T40 · Field evidence (photos) (#50) — D2 · S · Could (only if ahead; re-plan Oct 4) · A4
-- [ ] Up to 5 geotagged photos → EXIF GPS/date check → MiniCPM-V description → evidence event → Auditor weighs it → confidence updated (ADR-0003)
-- [ ] Exposed as the `field_evidence` tool so the Orchestrator (T27) calls it when evidence exists
+- [x] Up to 5 geotagged photos → EXIF GPS/date check → MiniCPM-V description → evidence event → Auditor weighs it → confidence updated (ADR-0003)
+- [x] Exposed as the `field_evidence` tool so the Orchestrator (T27) calls it when evidence exists
+  - As built: the worker reads EXIF GPS and date, stores only a re-encoded JPEG without metadata; code checks the position (inside, or ≤ 100 m of the edge) and the date (≤ 1 year); MiniCPM-V answers labels only (no numbers, no free text) and can only fail a photo; a validated photo writes an `events` row (`source='evidence'`) whose fields come from fixed label tables. It sets the confidence evidence term (+14.0 points, never threat pressure). Steward screen `/steward/assets/{id}/evidence`, public aggregate on the asset page. Live world AI behind `FIELD_EVIDENCE_AI_LIVE` (off). See dev-spec §7.6 "As built (T40)".
 
 **Verify:** `make test`; manual upload raises confidence · **Deps:** T09, T15 · **Files:** `backend/app/agents/field_evidence.py`, `backend/app/routers/assets.py`
 
