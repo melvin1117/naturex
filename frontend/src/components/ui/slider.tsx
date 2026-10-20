@@ -10,6 +10,8 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  "aria-label": ariaLabel,
+  "aria-labelledby": ariaLabelledBy,
   ...props
 }: React.ComponentProps<typeof SliderPrimitive.Root>) {
   const _values = React.useMemo(
@@ -21,6 +23,10 @@ function Slider({
           : [min, max],
     [value, defaultValue, min, max],
   );
+  // Local change to the shadcn/ui file (T64): the focusable role="slider" is the thumb, so a
+  // single-thumb slider's name goes there; Radix names multiple thumbs itself, and then the
+  // label stays on the root.
+  const single = _values.length === 1;
 
   return (
     <SliderPrimitive.Root
@@ -34,6 +40,8 @@ function Slider({
         className,
       )}
       {...props}
+      aria-label={single ? undefined : ariaLabel}
+      aria-labelledby={single ? undefined : ariaLabelledBy}
     >
       <SliderPrimitive.Track
         data-slot="slider-track"
@@ -52,6 +60,8 @@ function Slider({
         <SliderPrimitive.Thumb
           data-slot="slider-thumb"
           key={index}
+          aria-label={single ? ariaLabel : undefined}
+          aria-labelledby={single ? ariaLabelledBy : undefined}
           className="block size-4 shrink-0 rounded-full border border-primary bg-white shadow-sm ring-ring/50 transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
         />
       ))}

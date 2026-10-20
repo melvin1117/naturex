@@ -117,4 +117,39 @@ describe("wireLiveUpdates", () => {
     await waitFor(() => expect(counts()).toEqual([3, 2, 2, 3]));
     cleanup();
   });
+
+  it("refetches the asset's IPO previews when its rating run ends (T64)", async () => {
+    let fetched = 0;
+    const layer = createDataLayer({
+      baseUrl: BASE,
+      fetch: fakeBackend({ "GET /world": () => json(WORLD) }).fetch,
+      createEventSource: createFakeEventSource,
+    });
+    const unwire = wireLiveUpdates(layer.cache, layer.events);
+    const release = layer.events.retain();
+    const watch = (assetId: string) => {
+      const key = queryKeys.ipoPreview(assetId, 1_000_000, "51");
+      layer.cache.subscribe(key, () => {});
+      void layer.cache.fetch(
+        key,
+        async () => (fetched += assetId === ASSET_ID ? 1 : 0),
+      );
+    };
+    watch(ASSET_ID);
+    watch(OTHER_ID);
+    await waitFor(() => expect(fetched).toBe(1));
+    const source = FakeEventSource.latest();
+    act(() => source.open());
+
+    act(() =>
+      source.emit("rating_progress", 1, {
+        asset_id: ASSET_ID,
+        step: "done",
+        status: "succeeded",
+      }),
+    );
+    await waitFor(() => expect(fetched).toBe(2));
+    unwire();
+    release();
+  });
 });

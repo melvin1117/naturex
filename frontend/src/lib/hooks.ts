@@ -19,6 +19,9 @@ import { toApiError, unwrap, type ApiError } from "./api/errors";
 import type {
   AssetCard,
   AssetDetail,
+  IpoLaunch,
+  IpoOut,
+  IpoPreview,
   LedgerEntry,
   LedgerVerify,
   LoginIn,
@@ -546,6 +549,66 @@ export function useSignOut(): MutationResult<void, void> {
     if (meId) forgetCommunity(meId);
     await afterSessionChange(layer, null);
   });
+}
+
+/**
+ * The opening offer (IPO) an owner would launch now (T64): every term of the price formula,
+ * `launchable` and `blocked_reason`, priced by the backend (`GET /assets/{id}/ipo/preview`).
+ * Idle until both inputs are valid. Live: refetches when the asset's rating run ends.
+ */
+export function useIpoPreview(
+  assetId: string | undefined,
+  totalShares: number | null,
+  retainedPct: string | null,
+  { enabled = true }: { enabled?: boolean } = {},
+): QueryResult<IpoPreview> {
+  const on =
+    enabled && Boolean(assetId) && totalShares !== null && retainedPct !== null;
+  useLiveConnection(on);
+  return useApiQuery(
+    queryKeys.ipoPreview(assetId ?? "", totalShares ?? 0, retainedPct ?? ""),
+    (api, signal) =>
+      unwrap(
+        api.GET("/assets/{asset_id}/ipo/preview", {
+          params: {
+            path: { asset_id: assetId ?? "" },
+            query: {
+              total_shares: totalShares ?? undefined,
+              retained_pct: retainedPct ?? undefined,
+            },
+          },
+          signal,
+        }),
+      ),
+    { enabled: on },
+  );
+}
+
+/**
+ * Launch the opening offer at the previewed price (`POST /assets/{id}/ipo`; `expected_price`
+ * is required, so a newer report gets 409 `ipo_price_changed` instead of a surprise price).
+ * Then the asset, its prices and ledger and the market list refetch. Never retried.
+ */
+export function useLaunchIpo(
+  assetId: string,
+): MutationResult<IpoLaunch, IpoOut> {
+  return useApiMutation(
+    (api, body: IpoLaunch) =>
+      unwrap(
+        api.POST("/assets/{asset_id}/ipo", {
+          params: { path: { asset_id: assetId } },
+          body,
+        }),
+      ),
+    {
+      onSuccess: (_ipo, _vars, { cache }) => {
+        cache.invalidate(queryKeys.asset(assetId));
+        cache.invalidate(queryKeys.prices(assetId));
+        cache.invalidate(queryKeys.ledger(assetId));
+        cache.invalidate(queryKeys.assets());
+      },
+    },
+  );
 }
 
 export type { QueryStatus };
