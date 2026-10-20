@@ -8,7 +8,16 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
+from pydantic_core import PydanticCustomError
 
 from app.auth import (
     EMAIL_MAX_LENGTH,
@@ -971,10 +980,18 @@ class RegisterIn(BaseModel):
 
     @field_validator("name")
     @classmethod
-    def _name(cls, value: str) -> str:
+    def _name(cls, value: str, info: ValidationInfo) -> str:
         name = value.strip()
         if not name or not name.isprintable():
             raise ValueError("Enter a display name")
+        # The name is public; refuse one holding the password (typed into the wrong field).
+        password = info.data.get("password")
+        if isinstance(password, SecretStr) and (
+            password.get_secret_value().casefold() in name.casefold()
+        ):
+            raise PydanticCustomError(
+                "name_contains_password", "The display name can't contain the password"
+            )
         return name
 
 

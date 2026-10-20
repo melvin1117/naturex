@@ -176,6 +176,27 @@ describe("validateAuthInput", () => {
       validateAuthInput("register", { ...ok, name: "n".repeat(81) }).name,
     ).toBe("Use 80 characters or fewer for your display name.");
   });
+
+  it("refuses a display name that contains the password", () => {
+    const password = "correct-horse-battery-22";
+    const message =
+      "Your display name is public, so it can't contain your password.";
+    for (const name of [
+      password,
+      `${password}Ana Investor`,
+      `Ana ${password.toUpperCase()}`,
+    ]) {
+      expect(validateAuthInput("register", { ...ok, name, password })).toEqual({
+        name: message,
+      });
+    }
+    expect(
+      validateAuthInput("register", { ...ok, name: "Correct Horse", password }),
+    ).toEqual({});
+    expect(
+      validateAuthInput("login", { ...ok, name: password, password }),
+    ).toEqual({});
+  });
 });
 
 describe("authFailure", () => {
@@ -246,6 +267,19 @@ describe("authFailure", () => {
     expect(authFailure("register", new ApiError(422, "x", null, [])).form).toBe(
       "Some of the details you entered aren't valid.",
     );
+    expect(
+      authFailure(
+        "register",
+        new ApiError(422, "x", null, [
+          { loc: ["body", "name"], type: "name_contains_password", msg: "." },
+        ]),
+      ),
+    ).toEqual({
+      form: null,
+      fields: {
+        name: "Your display name is public, so it can't contain your password.",
+      },
+    });
   });
 
   it("explains network, CSRF, busy and server errors", () => {

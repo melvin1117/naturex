@@ -134,6 +134,8 @@ export const PASSWORD_RULE = `Use ${PASSWORD_MIN_LENGTH} to ${PASSWORD_MAX_LENGT
 const MESSAGES = {
   nameMissing: "Enter a display name.",
   nameTooLong: `Use ${NAME_MAX_LENGTH} characters or fewer for your display name.`,
+  nameContainsPassword:
+    "Your display name is public, so it can't contain your password.",
   emailMissing: "Enter your email address.",
   emailInvalid: "Enter a valid email address, like name@example.org.",
   passwordMissing: "Enter your password.",
@@ -152,6 +154,11 @@ export function validateAuthInput(
     if (!name) errors.name = MESSAGES.nameMissing;
     else if (codePoints(name) > NAME_MAX_LENGTH)
       errors.name = MESSAGES.nameTooLong;
+    else if (
+      input.password &&
+      name.toLowerCase().includes(input.password.toLowerCase())
+    )
+      errors.name = MESSAGES.nameContainsPassword;
   }
   const email = input.email.trim();
   if (!email) errors.email = MESSAGES.emailMissing;
@@ -181,6 +188,7 @@ function fieldMessage(field: AuthField, type: string | undefined): string {
     return MESSAGES.passwordTooShort;
   }
   if (field === "name") {
+    if (type === "name_contains_password") return MESSAGES.nameContainsPassword;
     return type === "string_too_long"
       ? MESSAGES.nameTooLong
       : MESSAGES.nameMissing;
