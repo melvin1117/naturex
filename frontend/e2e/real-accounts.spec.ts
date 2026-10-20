@@ -18,11 +18,13 @@ import {
   type Page,
 } from "@playwright/test";
 
+import { randomUUID } from "node:crypto";
+
 import { ADMIN_EMAIL, ADMIN_PASSWORD, WEB_ORIGIN } from "./env";
 import { uniquePng } from "./png";
 
 // Unique per run, so the suite never collides with an earlier run's accounts or names.
-const RUN = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+const RUN = `${Date.now().toString(36)}${randomUUID().slice(0, 4)}`;
 
 const OWNER = {
   name: `Owner ${RUN}`,
