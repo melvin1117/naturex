@@ -3,12 +3,7 @@
  * outcome and the live progress of a quarter. Pure, so the panel stays presentational.
  */
 import { formatWait, type ApiError } from "./api/errors";
-import type {
-  AssetRating,
-  MeOut,
-  SimulatedAsset,
-  TimeMachine,
-} from "./api/types";
+import type { AssetRating, SimulatedAsset, TimeMachine } from "./api/types";
 import { num } from "./report-facts";
 
 export type TimeMachineFailure = {
@@ -24,19 +19,13 @@ export const SANDBOX_ONLY: Omit<TimeMachineFailure, "refresh"> = {
     "Real listings in the live world are never moved by simulated quarters or events. Open a demo session as the demo admin to try it.",
 };
 
-/**
- * Why the Time Machine can't be used here, or null when it can. It runs in demo sandboxes
- * only (T38): the API's `available` flag when it sends one, else the account kind (only a demo
- * session's persona is in a sandbox; a password account is in the live world).
- */
-export function unavailableReason(
-  state: TimeMachine | undefined,
-  me: Pick<MeOut, "kind"> | null | undefined,
-): string | null {
-  const flags = state as
-    (TimeMachine & { available?: boolean; reason?: string | null }) | undefined;
-  const available = flags?.available ?? me?.kind === "persona";
-  return available ? null : SANDBOX_ONLY.message;
+/** Why the Time Machine can't be used in this world, or null when it can (T38 `available`). */
+export function unavailableReason(state: TimeMachine): string | null {
+  if (state.available) return null;
+  return state.unavailable_reason === "time_machine_sandbox_only" ||
+    !state.unavailable_reason
+    ? SANDBOX_ONLY.message
+    : `The Time Machine isn't available here (${state.unavailable_reason}).`;
 }
 
 function common(error: ApiError): TimeMachineFailure | null {
@@ -142,6 +131,13 @@ export function eventFailure(error: ApiError): TimeMachineFailure {
           "A newer rating sealed while this event was being applied, so nothing was stored. Try again: it will start from the new rating.",
         refresh: true,
       };
+    case "event_not_recorded":
+      return {
+        title: "The site was re-rated, but the event wasn't recorded",
+        message:
+          "The new rating and price stand, but the event itself couldn't be stored, so it won't appear in the news, on the chart or as a news alert. The server logged the run; check the site before injecting again.",
+        refresh: true,
+      };
     case "rerate_failed":
       return {
         title: "The re-rate failed",
@@ -186,6 +182,7 @@ const DETAIL_LABEL: Record<string, string> = {
   job_budget_exhausted: "this run's budget is spent",
   rating_rate_limited: "the hourly rating limit",
   rating_global_limit: "the hourly rating limit",
+  rating_busy: "every rating worker was busy",
 };
 
 export function detailText(detail: string | null | undefined): string | null {

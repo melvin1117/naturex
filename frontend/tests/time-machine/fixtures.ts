@@ -33,6 +33,8 @@ export const LIVE_ADMIN_WORLD: WorldOut = {
 };
 
 export const STATE: TimeMachine = {
+  available: true,
+  unavailable_reason: null,
   step: 0,
   current: {
     step: 0,

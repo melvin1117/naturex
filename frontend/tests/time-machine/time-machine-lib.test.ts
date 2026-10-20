@@ -20,17 +20,22 @@ const error = (
 ) => new ApiError(status, "Server said no.", code, code, retry);
 
 describe("unavailableReason", () => {
-  it("uses the API's flag when it sends one", () => {
-    const off = { ...STATE, available: false } as typeof STATE;
-    const on = { ...STATE, available: true } as typeof STATE;
-    expect(unavailableReason(off, { kind: "persona" })).toMatch(/live world/);
-    expect(unavailableReason(on, { kind: "person" })).toBeNull();
-  });
-
-  it("otherwise allows only a demo session's persona", () => {
-    expect(unavailableReason(STATE, { kind: "persona" })).toBeNull();
-    expect(unavailableReason(STATE, { kind: "person" })).toMatch(/live world/);
-    expect(unavailableReason(STATE, null)).toMatch(/live world/);
+  it("follows the API's availability", () => {
+    expect(unavailableReason(STATE)).toBeNull();
+    expect(
+      unavailableReason({
+        ...STATE,
+        available: false,
+        unavailable_reason: "time_machine_sandbox_only",
+      }),
+    ).toMatch(/live world/);
+    expect(
+      unavailableReason({
+        ...STATE,
+        available: false,
+        unavailable_reason: null,
+      }),
+    ).toMatch(/live world/);
   });
 });
 
@@ -40,6 +45,8 @@ describe("failures", () => {
     expect(quarterFailure(error("timeline_end")).refresh).toBe(true);
     expect(eventFailure(error("stale_metrics")).refresh).toBe(true);
     expect(eventFailure(error("run_in_progress")).refresh).toBe(false);
+    expect(eventFailure(error("event_not_recorded", 503)).refresh).toBe(true);
+    expect(eventFailure(error("time_machine_sandbox_only")).refresh).toBe(true);
   });
 
   it("states the wait for limits and busy raters", () => {
@@ -66,6 +73,9 @@ describe("stoppedText and ratingChange", () => {
   it("explains an early stop", () => {
     expect(stoppedText("llm_budget_exhausted")).toBe(
       "Stopped early: the AI budget is spent. Run the quarter again to finish the remaining sites.",
+    );
+    expect(stoppedText("rating_busy")).toBe(
+      "Stopped early: every rating worker was busy. Run the quarter again to finish the remaining sites.",
     );
     expect(stoppedText(null)).toBeNull();
   });

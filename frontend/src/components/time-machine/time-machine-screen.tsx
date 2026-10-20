@@ -37,8 +37,6 @@ function Loading({ label }: { label: string }) {
 }
 
 export function TimeMachinePanel() {
-  const { world } = useWorld();
-  const me = world?.me;
   const state = useTimeMachine();
   const assets = useAssets();
   // A reset remounts the sections, so no result from before it stays on screen.
@@ -52,7 +50,7 @@ export function TimeMachinePanel() {
     [assets.data],
   );
   const unavailable = state.data
-    ? unavailableReason(state.data, me)
+    ? unavailableReason(state.data)
     : state.error?.code === "time_machine_sandbox_only"
       ? SANDBOX_ONLY.message
       : null;

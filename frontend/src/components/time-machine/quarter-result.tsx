@@ -111,7 +111,11 @@ export function QuarterResult({ result }: { result: SimulateQuarter }) {
                       {a.alert_ids?.length ?? 0}
                     </TableCell>
                     <TableCell>
-                      {a.payout ? PAYOUT_LABEL[a.payout] : "—"}
+                      {a.payout ? (
+                        PAYOUT_LABEL[a.payout]
+                      ) : (
+                        <span className="text-muted-foreground">No payout</span>
+                      )}
                       {a.payout_detail && (
                         <span className="block text-xs text-muted-foreground">
                           {detailText(a.payout_detail)}

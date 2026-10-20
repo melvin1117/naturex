@@ -124,24 +124,49 @@ describe("TimeMachinePanel", () => {
   });
 
   it("explains the live world instead of showing controls", async () => {
-    renderPanel({}, LIVE_ADMIN_WORLD);
+    renderPanel(
+      {
+        "GET /admin/time-machine": () =>
+          json({
+            ...STATE,
+            available: false,
+            unavailable_reason: "time_machine_sandbox_only",
+          }),
+      },
+      LIVE_ADMIN_WORLD,
+    );
     expect(
       await screen.findByText("The Time Machine runs in demo sandboxes only"),
     ).toBeInTheDocument();
+    expect(screen.getByText(/Real listings in the live world/)).toBeVisible();
     expect(screen.queryByRole("button", { name: /Next quarter/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Reset/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Inject/ })).toBeNull();
   });
 
-  it("follows the API's availability flag", async () => {
+  it("switches to the explanation when an action is refused as sandbox-only", async () => {
+    let available = true;
     renderPanel({
       "GET /admin/time-machine": () =>
-        json({ ...STATE, available: false, reason: "sandbox_only" }),
+        json({
+          ...STATE,
+          available,
+          unavailable_reason: available ? null : "time_machine_sandbox_only",
+        }),
+      "POST /admin/simulate/quarter": () => {
+        available = false;
+        return json({ detail: "time_machine_sandbox_only" }, { status: 409 });
+      },
     });
+    await confirmQuarter();
     expect(
-      await screen.findByText("The Time Machine runs in demo sandboxes only"),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Next quarter/ })).toBeNull();
+      await screen.findAllByText(
+        "The Time Machine runs in demo sandboxes only",
+      ),
+    ).not.toHaveLength(0);
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Next quarter/ })).toBeNull(),
+    );
   });
 
   it("asks before running a quarter, and Cancel sends nothing", async () => {
@@ -334,6 +359,11 @@ describe("TimeMachinePanel", () => {
 
   it.each([
     ["stale_metrics", 409, "The site was re-rated meanwhile"],
+    [
+      "event_not_recorded",
+      503,
+      "The site was re-rated, but the event wasn't recorded",
+    ],
     ["run_in_progress", 409, "A rating is already running for this site"],
     ["asset_not_listed", 409, "This site isn't listed"],
     ["llm_budget_exhausted", 503, "The AI budget is spent"],
@@ -349,6 +379,33 @@ describe("TimeMachinePanel", () => {
       }),
     );
     expect(await screen.findByText(title)).toBeInTheDocument();
+  });
+
+  it("shows an early stop and an unpaid skipped site", async () => {
+    renderPanel({
+      "POST /admin/simulate/quarter": () =>
+        json({
+          ...QUARTER,
+          stopped: "rating_busy",
+          assets: [
+            QUARTER.assets[0],
+            {
+              ...QUARTER.assets[1],
+              status: "stopped",
+              detail: "rating_busy",
+              payout: null,
+            },
+          ],
+        }),
+    });
+    await confirmQuarter();
+    expect(
+      await screen.findByText(/Stopped early: every rating worker was busy/),
+    ).toBeInTheDocument();
+    const forest = screen.getAllByRole("row")[2]!;
+    expect(forest).toHaveTextContent("Stopped");
+    expect(forest).toHaveTextContent("every rating worker was busy");
+    expect(forest).toHaveTextContent("No payout");
   });
 
   it("says when a quarter sent no alerts", async () => {
