@@ -34,6 +34,12 @@ describe("CopilotChat", () => {
   });
 
   it("renders the streamed answer with each citation linking to its source", async () => {
+    // jsdom has no layout: give the answer list a height so following it is observable.
+    const height = vi
+      .spyOn(HTMLElement.prototype, "scrollHeight", "get")
+      .mockImplementation(function (this: HTMLElement) {
+        return this.dataset.testid === "copilot-turns" ? 900 : 0;
+      });
     const { backend } = renderExchange(chat(), {
       ...signedIn,
       "POST /copilot": () => sseResponse(answerEvents()),
@@ -53,6 +59,9 @@ describe("CopilotChat", () => {
     const sources = screen.getByRole("list");
     expect(within(sources).getAllByRole("link")).toHaveLength(2);
     expect(screen.getByText(/health fell from 77.60 to 72.30/)).toBeVisible();
+    // The list follows the answer down to its source links.
+    expect(screen.getByTestId("copilot-turns").scrollTop).toBe(900);
+    height.mockRestore();
     const [request] = backend.requests.filter((r) => r.method === "POST");
     expect(await request!.json()).toEqual({
       question: "Why did the price change?",

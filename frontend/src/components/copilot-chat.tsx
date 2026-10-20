@@ -64,7 +64,15 @@ export function CopilotChat({
     (t) => t.status === "searching" || t.status === "writing",
   );
 
+  const listRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => () => abort.current?.abort(), []);
+
+  // Follow the conversation: a streamed answer and its source links end at the bottom.
+  useEffect(() => {
+    const list = listRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
+  }, [turns]);
 
   if (!world?.me) {
     return (
@@ -153,6 +161,8 @@ export function CopilotChat({
   return (
     <Shell>
       <div
+        ref={listRef}
+        data-testid="copilot-turns"
         className="mt-4 max-h-[28rem] space-y-4 overflow-y-auto"
         aria-live="polite"
         aria-busy={pending}
