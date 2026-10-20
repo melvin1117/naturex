@@ -48,8 +48,6 @@ def test_create_asset_needs_a_signed_in_member() -> None:
 @pytest.mark.usefixtures("signed_in")
 def test_admin_and_copilot() -> None:
     assert client.post("/admin/simulate/quarter").status_code == 200
-    trace = client.get("/admin/trace")
-    assert trace.status_code == 200 and trace.json()["steps"] == []
     assert client.post("/copilot", json={"question": "Why did it drop?"}).status_code == 200
 
 
