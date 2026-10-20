@@ -12,6 +12,7 @@ from uuid import UUID
 
 import pytest
 from alembic import command
+from alembic.script import ScriptDirectory
 from fastapi import HTTPException
 from sqlalchemy import func, text
 from sqlmodel import Session, col, select
@@ -1051,4 +1052,5 @@ def test_the_migration_refuses_an_asset_with_two_ipo_prices(committed: Committed
         )
     finally:
         command.upgrade(cfg, "head")
-    assert _sql(committed, "SELECT version_num FROM alembic_version") == [("0013",)]
+    head = ScriptDirectory.from_config(cfg).get_current_head()
+    assert _sql(committed, "SELECT version_num FROM alembic_version") == [(head,)]

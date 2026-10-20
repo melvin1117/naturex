@@ -462,9 +462,10 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 
 ### T60 · Live rating for new listings (#103) — D2 · M · Must · A3
-- [ ] `earth_obs` computes metrics for any validated polygon live on Earth Engine, using the T11/T13 methods, with a timeout and a cache keyed by geometry hash; the orchestrator (T27) uses it for new listings
-- [ ] Quotas: 2 live ratings per user per day plus the global `LLM_BUDGET_USD`. On failure the listing stays in `rating` with a retry; it never shows another site's data
-- [ ] In demo worlds only, a failed live run may show the nearest cached site with an explicit "cached example" notice
+- [x] `earth_obs` computes metrics for any validated polygon live on Earth Engine, using the T11/T13 methods, with a timeout and a cache keyed by geometry hash; the orchestrator (T27) uses it for new listings
+- [x] Quotas: 2 live ratings per user per day plus the global `LLM_BUDGET_USD`. On failure the listing stays in `rating` with a retry; it never shows another site's data
+- [x] In demo worlds only, a failed live run may show the nearest cached site with an explicit "cached example" notice
+- As built: methods shared in `app/tools/earth_engine.py`; `services/earth_obs_live.py` (cache `earth_obs_cache`, quotas `live_rating_requests`, migration `0015`); off unless `EARTH_ENGINE_LIVE=true`; live world only (demo sandboxes never compute and get the cached example); plus a global daily cap and a 5,000 ha live cap; `AssetDetail.cached_example` (`services/cached_example.py`) is API-only, its UI is T76/T55 (dev-spec §7.2 "As built (T60)")
 
 **Verify:** `make test` (Earth Engine mocked); manual live rating of a new polygon · **Deps:** T13, T19, T27, T58 · **Files:** `backend/app/tools/earth_obs.py`, `backend/app/services/rating.py`, `backend/tests/test_earth_obs_live.py`
 

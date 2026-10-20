@@ -174,5 +174,5 @@
 - Nemotron model IDs, JSON-mode support, and `chat_template_kwargs` passthrough on Token Factory (needs an API key).
 - ~~The four unverified Costanza rows~~ (T14: superseded by Brander 2024 Table 1 values, verified against the paper; the Costanza Table 3 rows stay unverified and unused).
 - GEDI L4B v2.1 coverage: v2 has no 1 km cell over the Sumidero forest site, so its `biomass_gedi_t_ha` cross-check is null. The SoilGrids licence was verified as CC BY 4.0 in T13.
-- Earth Engine terms for a prize-bearing hackathon.
+- Earth Engine terms for a prize-bearing hackathon. Since T60, new listings are also computed live (cached per polygon, 2 a day per account, 50 a day in total, off unless `EARTH_ENGINE_LIVE=true`), so the answer now covers live use as well as the precompute.
 - ESVD written consent if we want ESVD-derived coefficients.

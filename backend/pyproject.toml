@@ -17,6 +17,7 @@ dependencies = [
     "openai>=2",
     "httpx>=0.28.1",
     "pwdlib[argon2]>=0.3.1",
+    "earthengine-api>=1.5",
 ]
 
 [dependency-groups]

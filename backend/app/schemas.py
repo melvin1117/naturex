@@ -333,6 +333,17 @@ class ReportOut(BaseModel):
     created_at: datetime
 
 
+class CachedExample(BaseModel):
+    """Demo worlds only (T60): the nearest precomputed demo site, shown with its notice next to
+    a listing whose live satellite rating failed. Never the listing's own data."""
+
+    asset_id: UUID
+    name: str
+    site_key: str
+    distance_km: float
+    notice: str
+
+
 class AssetDetail(BaseModel):
     id: UUID
     name: str
@@ -368,6 +379,12 @@ class AssetDetail(BaseModel):
     trading: bool = Field(default=False, description="See AssetCard.trading (T59).")
     ipo_at: datetime | None = Field(
         default=None, description="When the IPO opened trading; null before the IPO (T59)."
+    )
+    cached_example: CachedExample | None = Field(
+        default=None,
+        description="Demo worlds only: a listing waiting in `rating` because its satellite "
+        "metrics are missing or their live computation failed points to the nearest precomputed "
+        "demo site, labelled as a cached example (T60). Always null in the live world.",
     )
 
 

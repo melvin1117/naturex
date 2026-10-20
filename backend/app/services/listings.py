@@ -51,6 +51,7 @@ from app.models import (
     StreamEventType,
     World,
 )
+from app.services.earth_obs_live import LiveQuota, LiveQuotaExceeded, reserve_live_rating
 from app.services.lifecycle import (
     NO_SATELLITE_METRICS,
     OPEN_STATUSES,
@@ -488,12 +489,21 @@ class ListingSubmit:
     run commit together or not at all.
 
     `metrics_version` is the data version the run's metrics loader has for the listing right
-    now (None: nothing), probed by the caller before any lock.
+    now (None: nothing), probed by the caller before any lock. `live_quota` is set when the run
+    will compute the metrics live on Earth Engine (T60): the submit then counts one live rating
+    for the account and globally, under the runner's global run lock (429 when spent).
     """
 
-    def __init__(self, metrics_version: str | None, now: datetime | None = None) -> None:
+    def __init__(
+        self,
+        metrics_version: str | None,
+        now: datetime | None = None,
+        *,
+        live_quota: LiveQuota | None = None,
+    ) -> None:
         self.metrics_version = metrics_version
         self.now = now
+        self.live_quota = live_quota
 
     def lock(self, session: Session, world_id: UUID, asset_id: UUID) -> None:
         """Called before the runner's publisher lock, keeping the module's lock order."""
@@ -501,7 +511,8 @@ class ListingSubmit:
         lock_asset(session, world_id, asset_id)
 
     def __call__(self, session: Session, asset: Asset, run_id: UUID) -> None:
-        """Raises TransitionRefused (incl. `overlap`) or TooSoon (`resubmit_cooldown`)."""
+        """Raises TransitionRefused (incl. `overlap`) or TooSoon (`resubmit_cooldown`,
+        `live_rating_quota`, `live_rating_global_limit`)."""
         now = self.now or datetime.now(UTC)
         locked = lock_asset(session, asset.world_id, asset.id)  # already held: no wait
         needs_evidence = locked.status is AssetStatus.NEEDS_EVIDENCE
@@ -527,6 +538,11 @@ class ListingSubmit:
             exclude=locked.id,
         ):
             raise TransitionRefused(OVERLAP)
+        if self.live_quota is not None:
+            try:
+                reserve_live_rating(session, self.live_quota, now, run_id)
+            except LiveQuotaExceeded as exc:
+                raise TooSoon(exc.code, exc.retry_after_s) from exc
         locked.submitted_at = now
         payload = _details_payload(locked, full_geometry=True) if from_draft else {}
         record(

@@ -59,6 +59,20 @@ class Settings(BaseSettings):
     tavily_api_key: str = ""
     nominatim_user_agent: str = "NatureX/0.1 (https://github.com/melvin1117/naturex)"
     ee_service_account_json: str = ""
+    # Live Earth Engine metrics for new listings (T60). Off by default (tests and CI); on, a new
+    # polygon's rating run computes its metrics live with the T11/T13 methods and caches them.
+    earth_engine_live: bool = False
+    # Wait at most this long for a free slot, then at most this long for the computation; twice
+    # the cap stays under the 15 minutes after which a silent rating run counts as stale.
+    earth_engine_timeout_s: float = Field(default=120.0, gt=0, le=400)
+    # Per API process; the daily live-rating quotas below are global (in the database).
+    earth_engine_max_concurrent: int = Field(default=1, ge=1, le=4)
+    # Larger polygons are never computed live (409 `live_area_too_large` at submit).
+    earth_engine_live_max_ha: float = Field(default=5_000.0, gt=0)
+    # Live-world live ratings (submits that need a computation; cache hits are free; demo
+    # sandboxes never compute), rolling 24 hours.
+    live_ratings_per_user_per_day: int = Field(default=2, ge=0)
+    live_ratings_global_per_day: int = Field(default=50, ge=0)
 
 
 INSECURE_COOKIE_ENVIRONMENTS = frozenset({"development", "test"})

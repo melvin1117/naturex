@@ -338,6 +338,9 @@ export interface paths {
          * Submit Listing
          * @description Submit a draft for rating, or resubmit: a `needs_evidence` listing with new evidence or
          *     newer satellite data, or a `rating` listing whose run failed (at most every 10 minutes).
+         *     In the live world, a new polygon's metrics are computed live on Earth Engine when that is on
+         *     (T60); such a submit counts against the live-rating quotas, while a polygon already computed
+         *     is free. Demo sandboxes never compute live.
          *     The move to `rating`, its ledger entry and the queued run commit together; the run's
          *     sealed report then sets `listed`, `needs_evidence` or `ineligible`. Follow it with
          *     `GET /runs/{run_id}` or `listing_status` events.
@@ -1109,6 +1112,8 @@ export interface components {
              * @description When the IPO opened trading; null before the IPO (T59).
              */
             ipo_at?: string | null;
+            /** @description Demo worlds only: a listing waiting in `rating` because its satellite metrics are missing or their live computation failed points to the nearest precomputed demo site, labelled as a cached example (T60). Always null in the live world. */
+            cached_example?: components["schemas"]["CachedExample"] | null;
         };
         /**
          * AssetStatus
@@ -1191,6 +1196,26 @@ export interface components {
              * @description Metric or event IDs cited in the report
              */
             citations?: string[];
+        };
+        /**
+         * CachedExample
+         * @description Demo worlds only (T60): the nearest precomputed demo site, shown with its notice next to
+         *     a listing whose live satellite rating failed. Never the listing's own data.
+         */
+        CachedExample: {
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /** Name */
+            name: string;
+            /** Site Key */
+            site_key: string;
+            /** Distance Km */
+            distance_km: number;
+            /** Notice */
+            notice: string;
         };
         /** CommunityCreate */
         CommunityCreate: {
@@ -3284,7 +3309,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description `cannot_submit_<status>`, `overlap` (a listing submitted first claims the land), `evidence_required` (needs_evidence with no new evidence or newer data), `metrics_unavailable` (still no metrics for the polygon) or `run_in_progress` (Location: the active run) */
+            /** @description `cannot_submit_<status>`, `overlap` (a listing submitted first claims the land), `evidence_required` (needs_evidence with no new evidence or newer data), `metrics_unavailable` (still no metrics for the polygon), `live_area_too_large` (too large to compute its satellite metrics live) or `run_in_progress` (Location: the active run) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3300,7 +3325,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description `resubmit_cooldown`, `rating_rate_limited` or `rating_global_limit`; see Retry-After */
+            /** @description `resubmit_cooldown`, `rating_rate_limited`, `rating_global_limit`, or, when the run must compute the polygon's satellite metrics live, `live_rating_quota` (per account per day) or `live_rating_global_limit`; see Retry-After */
             429: {
                 headers: {
                     [name: string]: unknown;
