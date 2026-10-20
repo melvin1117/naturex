@@ -1,4 +1,4 @@
-"""Time Machine, event injection, and agent trace (mock). Tamper demo lives on the ledger router.
+"""Time Machine, event injection, and call log. Tamper demo lives on the ledger router.
 
 The Time Machine and event injection are operator actions: admins only, in their own world
 (`Action.OPERATE`; a demo admin persona operates only its sandbox). The agent trace is a read
@@ -12,8 +12,8 @@ from typing import Annotated, Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Query
+from sqlmodel import col, select
 
-from app import mocks
 from app.authz import (
     Action,
     AssetRef,
@@ -26,12 +26,14 @@ from app.authz import (
     require,
 )
 from app.deps import CurrentWorld, SessionDep
+from app.models import LlmCall
 from app.schemas import (
     EventOut,
     SimulateEventRequest,
     SimulateEventResponse,
     SimulateQuarterResponse,
     TraceOut,
+    TraceStep,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -100,5 +102,26 @@ def simulate_event(body: SimulateEventRequest, world: CurrentWorld) -> SimulateE
 
 
 @router.get("/trace", response_model=TraceOut, dependencies=[require(Action.BROWSE, trace_target)])
-def get_trace(asset_id: Annotated[UUID | None, Query()] = None) -> TraceOut:
-    return TraceOut(asset_id=asset_id, steps=mocks.trace_steps(asset_id))
+def get_trace(
+    world: CurrentWorld, session: SessionDep, asset_id: Annotated[UUID | None, Query()] = None
+) -> TraceOut:
+    """Recent call metadata for this world or asset; for per-run tool spans use /runs/{id}/trace."""
+    query = select(LlmCall).where(LlmCall.world_id == world.id)
+    if asset_id is not None:
+        query = query.where(LlmCall.asset_id == asset_id)
+    calls = session.exec(query.order_by(col(LlmCall.id).desc()).limit(50)).all()
+    return TraceOut(
+        asset_id=asset_id,
+        steps=[
+            TraceStep(
+                agent=call.agent,
+                model=call.model,
+                prompt_tokens=call.prompt_tokens,
+                completion_tokens=call.completion_tokens,
+                latency_ms=call.latency_ms,
+                created_at=call.created_at,
+                status=call.status,
+            )
+            for call in calls
+        ],
+    )

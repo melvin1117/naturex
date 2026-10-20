@@ -696,6 +696,33 @@ class RatingRunOut(BaseModel):
     updated_at: datetime | None = None
 
 
+class TraceCall(BaseModel):
+    id: int | None = None
+    agent: str | None = None
+    model: str | None = None
+    tier: str | None = None
+    status: str
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    latency_ms: int | None = None
+    cost_usd: Decimal
+
+
+class RunTraceStep(RatingRunStep):
+    """A progress span with safe tool-result facts and metadata for every model attempt."""
+
+    attempts: int | None = None
+    output: dict[str, Any] | None = None
+    llm_calls: list[TraceCall] = Field(default_factory=list)
+
+
+class RunTraceOut(BaseModel):
+    run_id: UUID
+    asset_id: UUID
+    status: RatingRunStatus
+    steps: list[RunTraceStep]
+
+
 class SimulateQuarterResponse(BaseModel):
     data_version: str
     assets_rerated: int
@@ -713,12 +740,13 @@ class SimulateEventResponse(BaseModel):
 
 
 class TraceStep(BaseModel):
-    agent: str
-    model: str
-    prompt_tokens: int
-    completion_tokens: int
-    latency_ms: int
+    agent: str | None
+    model: str | None
+    prompt_tokens: int | None
+    completion_tokens: int | None
+    latency_ms: int | None
     created_at: datetime
+    status: str = "ok"
 
 
 class TraceOut(BaseModel):

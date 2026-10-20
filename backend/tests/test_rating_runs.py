@@ -43,7 +43,16 @@ from app.events import publish
 from app.ledger import verify
 from app.llm import THINKING_OFF, LLMClient
 from app.main import app
-from app.models import Asset, AssetStatus, LedgerEntry, Report, StreamEventType, User, World
+from app.models import (
+    Asset,
+    AssetStatus,
+    LedgerEntry,
+    LlmCall,
+    Report,
+    StreamEventType,
+    User,
+    World,
+)
 from app.models import WorldEvent as WorldEventRow
 from app.routers.runs import get_rating_runner
 from app.sandbox import _delete_world_rows, create_world, ensure_live_world
@@ -405,6 +414,38 @@ def test_trace_ready_every_call_has_agent_asset_and_a_step(db: Connection, site:
     assert Decimal(audit["cost_usd"]) > 0 and audit["latency_ms"] >= 0
     logged = sum(len(e.get("llm_calls", [])) for e in events.values())
     assert logged == len(h.log.records) == 5
+
+
+@requires_db
+def test_run_trace_exposes_real_steps_calls_and_safe_outputs(db: Connection, site: Site) -> None:
+    h = harness(db, *happy_script())
+    run_id = h.runner.start(site.world_id, site.asset_id)
+
+    with sessions(db)() as session:
+        trace = rating_runs.get_run_trace(session, site.world_id, run_id)
+    assert trace is not None
+    assert trace.run_id == run_id and trace.asset_id == site.asset_id
+    assert [step.step for step in trace.steps] == STEPS
+    assert trace.steps[2].tool == "earth_obs"
+    assert trace.steps[2].output is not None
+    assert trace.steps[2].output["data_version"] == "2026Q3"
+    assert trace.steps[2].latency_ms is not None
+    assert [call.agent for step in trace.steps for call in step.llm_calls] == [
+        record.agent for record in h.log.records
+    ]
+    assert trace.steps[-2].model == ULTRA
+    assert trace.steps[-2].llm_calls[-1].status == "ok"
+    with sessions(db)() as session:
+        assert rating_runs.get_run_trace(session, uuid4(), run_id) is None
+        session.execute(delete(WorldEventRow).where(col(WorldEventRow.world_id) == site.world_id))
+        session.commit()
+    with sessions(db)() as session:
+        archived = rating_runs.get_run_trace(session, site.world_id, run_id)
+    assert archived is not None
+    assert archived.status is RatingRunStatus.SUCCEEDED
+    assert [step.step for step in archived.steps] == STEPS[2:-1]
+    assert archived.steps[0].output == trace.steps[2].output
+    assert sum(len(step.llm_calls) for step in archived.steps) == len(h.log.records)
 
 
 @requires_db
@@ -877,6 +918,40 @@ def test_rate_returns_202_and_the_run_completes(api: tuple[TestClient, Deferred]
     report = client.get(f"/reports/{body['report_id']}").json()
     assert report["run_id"] == run_id and report["version"] == 2
     assert report["greenwashing_risk"] is None  # the no-op audit didn't assess it
+    trace = client.get(f"/runs/{run_id}/trace")
+    assert trace.status_code == 200
+    assert trace.json()["run_id"] == run_id
+    earth = next(step for step in trace.json()["steps"] if step["step"] == "earth_obs")
+    assert earth["output"]["data_version"] == "2026Q3"
+
+
+@requires_db
+def test_admin_trace_reads_world_scoped_call_log_not_mock_steps(
+    api: tuple[TestClient, Deferred],
+) -> None:
+    client, _ = api
+    hero = UUID(_hero(client))
+    world_id = UUID(client.get("/world").json()["id"])
+    with sessions(API_SESSION[0].connection())() as session:
+        session.add(
+            LlmCall(
+                world_id=world_id,
+                asset_id=hero,
+                agent="auditor",
+                model="nvidia/nemotron-3-ultra",
+                prompt_tokens=24,
+                completion_tokens=7,
+                latency_ms=42,
+                status="ok",
+            )
+        )
+        session.commit()
+    trace = client.get("/admin/trace", params={"asset_id": str(hero)})
+    assert trace.status_code == 200
+    calls = [
+        (step["agent"], step["model"], step["prompt_tokens"]) for step in trace.json()["steps"]
+    ]
+    assert calls == [("auditor", "nvidia/nemotron-3-ultra", 24)]
 
 
 @requires_db
@@ -889,10 +964,12 @@ def test_rate_and_runs_are_world_scoped(api: tuple[TestClient, Deferred]) -> Non
         start_demo(other, API_SESSION[0])
         _hero(other)
         assert other.get(f"/runs/{run_id}").status_code == 404
+        assert other.get(f"/runs/{run_id}/trace").status_code == 404
         assert other.post(f"/assets/{hero}/rate").status_code == 404
     ensure_live_world(API_SESSION[0])
     with TestClient(app) as anonymous:
         assert anonymous.get(f"/runs/{run_id}").status_code == 404, "reads the live world"
+        assert anonymous.get(f"/runs/{run_id}/trace").status_code == 404
         rate = anonymous.post(f"/assets/{hero}/rate")
         assert (rate.status_code, rate.json()["detail"]) == (401, "auth_required")
     assert client.get(f"/runs/{uuid4()}").status_code == 404

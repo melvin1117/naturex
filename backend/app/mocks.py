@@ -16,7 +16,6 @@ from app.schemas import (
     NewsScoutItem,
     PricePoint,
     ReportOut,
-    TraceStep,
 )
 from app.seed import DEMO_SITES, DemoSite
 
@@ -233,34 +232,4 @@ def price_history(asset_id: UUID) -> list[PricePoint]:
         PricePoint(ts=_NOW.replace(day=1), price=base * Decimal("0.98"), reason="ipo"),
         PricePoint(ts=_NOW.replace(day=15), price=base, reason="order"),
         PricePoint(ts=_NOW, price=base * Decimal("0.99"), reason="rerate"),
-    ]
-
-
-def trace_steps(asset_id: UUID | None) -> list[TraceStep]:
-    _ = asset_id
-    return [
-        TraceStep(
-            agent="orchestrator",
-            model="nemotron-3-super-mock",
-            prompt_tokens=1200,
-            completion_tokens=340,
-            latency_ms=1800,
-            created_at=_NOW,
-        ),
-        TraceStep(
-            agent="news_scout",
-            model="nemotron-nano-mock",
-            prompt_tokens=800,
-            completion_tokens=120,
-            latency_ms=600,
-            created_at=_NOW,
-        ),
-        TraceStep(
-            agent="auditor",
-            model="nemotron-3-ultra-mock",
-            prompt_tokens=4000,
-            completion_tokens=900,
-            latency_ms=4200,
-            created_at=_NOW,
-        ),
     ]

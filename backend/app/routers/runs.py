@@ -29,7 +29,7 @@ from app.authz import (
 )
 from app.deps import CurrentWorld, SessionDep
 from app.models import Asset
-from app.schemas import RatingRunAccepted, RatingRunOut
+from app.schemas import RatingRunAccepted, RatingRunOut, RunTraceOut
 from app.services.listings import visible_to
 from app.services.rating_runs import (
     AssetNotRateable,
@@ -39,6 +39,7 @@ from app.services.rating_runs import (
     RunRateLimited,
     default_runner,
     get_run,
+    get_run_trace,
 )
 
 router = APIRouter(tags=["runs"])
@@ -147,3 +148,27 @@ def get_rating_run(
     if run is None or asset is None or not visible_to(actor, asset):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
     return run
+
+
+@router.get(
+    "/runs/{run_id}/trace",
+    response_model=RunTraceOut,
+    dependencies=[require(Action.BROWSE, run_ref)],
+)
+def get_rating_run_trace(
+    run_id: UUID, world: CurrentWorld, actor: OptionalActor, session: SessionDep, run: WorldRun
+) -> RunTraceOut:
+    """A run's progress spans and model-attempt metadata; no prompts or raw model output."""
+    asset = (
+        None
+        if run is None
+        else session.exec(
+            select(Asset).where(Asset.world_id == world.id, Asset.id == run.asset_id)
+        ).first()
+    )
+    if run is None or asset is None or not visible_to(actor, asset):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
+    trace = get_run_trace(session, world.id, run_id)
+    if trace is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
+    return trace

@@ -313,6 +313,7 @@ OBJECT_ROUTES: dict[tuple[str, str], tuple[str, Callable[[Objects], Any] | None]
     ("GET", "/ledger/{asset_id}"): ("arjun", None),
     ("GET", "/ledger/{asset_id}/verify"): ("arjun", None),
     ("GET", "/runs/{run_id}"): ("arjun", None),
+    ("GET", "/runs/{run_id}/trace"): ("arjun", None),
     # T58's listing lifecycle: the community's own listing management, and admin moderation.
     ("PATCH", "/assets/{asset_id}"): ("rosa", lambda o: {"name": "Renamed"}),
     ("POST", "/assets/{asset_id}/submit"): ("rosa", None),
@@ -796,6 +797,7 @@ def test_a_listing_under_review_is_not_found_by_outsiders_on_every_asset_route(
         ("GET", f"/assets/{mine.asset}/quote", None, {"side": "buy", "qty": "1"}),
         ("GET", f"/reports/{mine.report}", None, None),
         ("GET", f"/runs/{mine.run}", None, None),
+        ("GET", f"/runs/{mine.run}/trace", None, None),
         ("GET", "/admin/trace", None, {"asset_id": str(mine.asset)}),
         ("POST", "/copilot", {"question": "why?", "asset_id": str(mine.asset)}, None),
     ]
