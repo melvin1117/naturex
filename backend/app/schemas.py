@@ -1036,6 +1036,13 @@ class WorldOut(BaseModel):
     personas: list[PersonaOut]
     assets: list[WorldAssetOut]
     me: MeOut | None  # the signed-in account (as GET /me), or null when anonymous
+    document_ai_check: Literal["off", "samples_only", "uploads"] = Field(
+        description="What the AI document check (T71) does with a steward's own verification "
+        "upload in this world, for the uploader notice (ADR-0006 §5): `uploads` (its sanitised "
+        "preview may be sent to an AI model on Nebius Token Factory when submitted), "
+        "`samples_only` (a sandbox: only NatureX sample documents are sent, never an upload) "
+        "or `off` (the live world while `VERIFICATION_AI_LIVE=false`)."
+    )
 
 
 # ----- Communities (ADR-0005 §3, T68) -----

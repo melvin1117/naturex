@@ -229,9 +229,11 @@ def review_queue(
     *,
     limit: int = 50,
     offset: int = 0,
+    asset_id: UUID | None = None,
 ) -> list[tuple[Asset, RunView]]:
     """Current runs waiting for a decision, oldest first, without the excluded communities'
-    listings (an admin never reviews its own community's): one page, in two queries."""
+    listings (an admin never reviews its own community's): one page, in two queries. With
+    `asset_id`, only that listing's (at most one: one run is current per asset)."""
     query = (
         select(VerificationRun, Asset)
         .join(
@@ -246,6 +248,8 @@ def review_queue(
         )
         .order_by(col(VerificationRun.created_at), col(VerificationRun.id))
     )
+    if asset_id is not None:
+        query = query.where(VerificationRun.asset_id == asset_id)
     excluded = list(exclude_communities)
     if excluded:
         query = query.where(

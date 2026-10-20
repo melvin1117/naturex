@@ -660,10 +660,10 @@ export interface paths {
         /**
          * Review Queue
          * @description Listings waiting for a reviewer in the caller's world, oldest first, with their current
-         *     run, one page at a time (`limit`, `offset`). Listings of the admin's own communities are
-         *     left out (conflict of interest). Each item carries the run's AI document check
-         *     (`ai_suggestion_status`, `ai_suggestion`): an **untrusted heuristic** read from the
-         *     documents by AI models, to be shown labelled as such next to its excerpts.
+         *     run, one page at a time (`limit`, `offset`), or one listing's (`asset_id`). Listings of the
+         *     admin's own communities are left out (conflict of interest). Each item carries the run's
+         *     AI document check (`ai_suggestion_status`, `ai_suggestion`): an **untrusted heuristic** read
+         *     from the documents by AI models, to be shown labelled as such next to its excerpts.
          */
         get: operations["review_queue_admin_verifications_get"];
         put?: never;
@@ -1083,6 +1083,7 @@ export interface paths {
          * Get World
          * @description The session's world: the live world when anonymous or signed in with a password, the
          *     demo sandbox for a demo session. `me` is the signed-in account, or null.
+         *     `document_ai_check` says whether a verification upload may be read by an AI model here.
          */
         get: operations["get_world_world_get"];
         put?: never;
@@ -3704,6 +3705,12 @@ export interface components {
             /** Assets */
             assets: components["schemas"]["WorldAssetOut"][];
             me: components["schemas"]["MeOut"] | null;
+            /**
+             * Document Ai Check
+             * @description What the AI document check (T71) does with a steward's own verification upload in this world, for the uploader notice (ADR-0006 §5): `uploads` (its sanitised preview may be sent to an AI model on Nebius Token Factory when submitted), `samples_only` (a sandbox: only NatureX sample documents are sent, never an upload) or `off` (the live world while `VERIFICATION_AI_LIVE=false`).
+             * @enum {string}
+             */
+            document_ai_check: "off" | "samples_only" | "uploads";
         };
     };
     responses: never;
@@ -5435,6 +5442,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                /** @description Only this listing's item: an empty list when it isn't waiting (or is the admin's own community's); 404 when it isn't a listing in the caller's world. */
+                asset_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -5460,6 +5469,13 @@ export interface operations {
             };
             /** @description admin_only */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_found`: `asset_id` isn't a listing in the caller's world */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

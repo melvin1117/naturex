@@ -425,6 +425,13 @@ ID_ROUTES[("POST", "/alerts/read-all")] = (
     lambda o: {"community_id": str(o.community)},
     "not_found",
 )
+# #196: the review queue narrowed to another world's listing.
+ID_ROUTES[("GET", "/admin/verifications")] = (
+    "admin",
+    None,
+    lambda o: {"asset_id": str(o.asset)},
+    "not_found",
+)
 # Routes whose `*_id` body or query fields aren't world objects (none yet); each needs a reason.
 ID_EXCEPTIONS: dict[tuple[str, str], str] = {}
 

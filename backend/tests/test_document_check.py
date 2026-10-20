@@ -45,7 +45,7 @@ from app.agents.document_check import (
     check_documents,
 )
 from app.agents.news_scout import GeocodedPlace
-from app.config import Settings
+from app.config import Settings, get_settings
 from app.llm import IMAGE_PROMPT_TOKENS, CallRecord, DbCallLog, LLMClient, LLMResult, Tier, cost_usd
 from app.main import app
 from app.models import DocumentType, ListingDocument, LlmCall, VerificationAiSuggestion
@@ -646,6 +646,70 @@ def test_the_live_world_skips_the_check_while_the_flag_is_off(live: World_) -> N
     assert not service.enabled(settings(), LIVE_WORLD_ID)
     assert service.enabled(settings(verification_ai_live=True), LIVE_WORLD_ID)
     assert service.enabled(settings(), uuid4()), "every sandbox"
+
+
+def test_the_uploader_notice_says_where_an_upload_may_go() -> None:
+    sandbox = uuid4()
+
+    assert service.upload_ai_check(settings(), LIVE_WORLD_ID) == "off"
+    assert service.upload_ai_check(settings(verification_ai_live=True), LIVE_WORLD_ID) == "uploads"
+    assert service.upload_ai_check(settings(), sandbox) == "samples_only", "never a visitor's file"
+    assert service.upload_ai_check(settings(use_mocks=True), sandbox) == "uploads"
+    assert service.upload_ai_check(settings(use_mocks=True), LIVE_WORLD_ID) == "off"
+
+
+@requires_db
+def test_the_live_world_tells_uploaders_whether_a_model_may_read_their_documents(
+    live: World_,
+) -> None:
+    off = tv.client_for(live, live.steward).get("/world")
+    app.dependency_overrides[get_settings] = lambda: settings(verification_ai_live=True)
+    on = tv.client_for(live, live.steward).get("/world")
+    anonymous = tv.client_for(live, None).get("/world")
+
+    assert off.status_code == 200, off.text
+    assert off.json()["document_ai_check"] == "off"
+    assert on.json()["document_ai_check"] == "uploads"
+    assert anonymous.json()["document_ai_check"] == "uploads", "a world setting, nothing private"
+
+
+@requires_db
+def test_a_sandbox_tells_uploaders_their_files_stay_out_of_the_model(world: World_) -> None:
+    app.dependency_overrides[get_settings] = lambda: settings()
+    sandbox = tv.client_for(world, world.steward).get("/world")
+    app.dependency_overrides[get_settings] = lambda: settings(use_mocks=True)
+    mocked = tv.client_for(world, world.steward).get("/world")
+
+    assert sandbox.status_code == 200, sandbox.text
+    assert sandbox.json()["id"] == str(world.id)
+    assert sandbox.json()["document_ai_check"] == "samples_only"
+    assert mocked.json()["document_ai_check"] == "uploads"
+
+
+@requires_db
+def test_the_queue_answers_for_one_listing(world: World_) -> None:
+    asset_id, run = submit_fixtures(world)
+    other = tv.draft(world, geojson=square(700, lat=9.5))["id"]
+    tv.evidence(world, other)
+    admin = tv.client_for(world, world.admin)
+
+    one = admin.get("/admin/verifications", params={"asset_id": asset_id})
+    unknown = admin.get("/admin/verifications", params={"asset_id": str(uuid4())})
+    invalid = admin.get("/admin/verifications", params={"asset_id": "nope"})
+    steward = tv.client_for(world, world.steward).get(
+        "/admin/verifications", params={"asset_id": asset_id}
+    )
+
+    assert one.status_code == 200, one.text
+    assert [(item["asset_id"], item["run"]["id"]) for item in one.json()] == [(asset_id, run["id"])]
+    assert one.json()[0]["ai_suggestion_status"] == "pending"
+    assert len(admin.get("/admin/verifications").json()) == 2
+    assert (unknown.status_code, unknown.json()["detail"]) == (404, "not_found")
+    assert admin.get("/admin/verifications", params={"asset_id": other}).json()[0]["asset_id"] == (
+        other
+    )
+    assert invalid.status_code == 422
+    assert (steward.status_code, steward.json()["detail"]) == (403, "admin_only")
 
 
 @requires_db

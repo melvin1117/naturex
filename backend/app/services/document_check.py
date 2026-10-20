@@ -94,6 +94,21 @@ def not_sent_reason(
     return None
 
 
+UploadAiCheck = Literal["off", "samples_only", "uploads"]
+
+
+def upload_ai_check(settings: Settings, world_id: UUID) -> UploadAiCheck:
+    """What the check does with a steward's own upload in this world, for ADR-0006 §5's
+    uploader notice: `uploads` (its preview may be sent to a model), `samples_only` (a sandbox:
+    only sample documents are sent) or `off`. With `USE_MOCKS=true` the fake model stands in for
+    the real one, as everywhere else."""
+    if not enabled(settings, world_id):
+        return "off"
+    if not_sent_reason(settings, world_id, has_preview=True, is_sample=False) is None:
+        return "uploads"
+    return "samples_only"
+
+
 @dataclass(frozen=True, slots=True)
 class _Prepared:
     community_name: str | None
