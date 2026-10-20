@@ -13,6 +13,7 @@ from sqlmodel import Session
 
 from app.config import (
     Settings,
+    document_fingerprint_secret,
     get_settings,
     rate_limit_secret,
     secure_cookies,
@@ -34,6 +35,7 @@ from app.routers import (
     media,
     reports,
     runs,
+    verification,
     world,
 )
 from app.sandbox import ensure_live_world
@@ -93,6 +95,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # At startup rather than import, so tools that only import the app (the OpenAPI export for
     # the API client) don't need production secrets. uvicorn runs this before serving.
     validate_auth_settings(settings)
+    document_fingerprint_secret(settings)  # T69: fails closed outside development and test
     if settings.live_world_on_startup:
         prepare_live_world()
     validate_mock_settings(settings)
@@ -115,6 +118,7 @@ app.include_router(communities.router)
 app.include_router(assets.router)
 app.include_router(listings.router)
 app.include_router(ipo.router)
+app.include_router(verification.router)
 app.include_router(reports.router)
 app.include_router(market.router)
 app.include_router(copilot.router)

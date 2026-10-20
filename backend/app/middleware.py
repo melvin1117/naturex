@@ -5,13 +5,17 @@ Cookies are `SameSite=Lax`; on top of that every method except GET, HEAD, OPTION
 checked first; only when it is absent does `Referer` count. A value
 that is `null`, malformed, duplicated or not exactly in `ALLOWED_ORIGINS` (scheme, host and port)
 is rejected, and so is a request with neither header. A request body must be JSON, or multipart
-for uploads, so a cross-site HTML form can't be used even where a header check is bypassed.
+for uploads, so a cross-site HTML form can't be used even where a header check is bypassed. The
+one exception is a verification document upload (`POST /assets/{id}/documents`, T69), whose body
+is the file itself: PDF, JPEG or PNG. None of those is a type an HTML form can send, so a
+cross-site page still can't send one without a CORS preflight.
 
 Pure ASGI, not `BaseHTTPMiddleware`, so streaming responses (SSE) are never buffered.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Sequence
 from urllib.parse import urlsplit
 
@@ -21,6 +25,8 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
 DEFAULT_PORTS = {"http": 80, "https": 443}
+DOCUMENT_UPLOAD_PATH = re.compile(r"/assets/[^/]+/documents")
+DOCUMENT_MEDIA_TYPES = frozenset({"application/pdf", "image/jpeg", "image/png"})
 CSRF_FAILED = "csrf_origin"
 UNSUPPORTED_MEDIA_TYPE = "unsupported_media_type"
 
@@ -77,8 +83,10 @@ def origin_allowed(origins: Sequence[str], referers: Sequence[str], allowed: Ite
     return False
 
 
-def media_type_ok(content_type: str | None) -> bool:
+def media_type_ok(content_type: str | None, *, document_upload: bool = False) -> bool:
     media = (content_type or "").split(";", 1)[0].strip().lower()
+    if document_upload and media in DOCUMENT_MEDIA_TYPES:
+        return True
     return (
         media == "application/json"
         or (media.startswith("application/") and media.endswith("+json"))
@@ -91,6 +99,10 @@ def has_body(headers: Headers) -> bool:
     return "transfer-encoding" in headers or (
         length is not None and length.strip() not in ("", "0")
     )
+
+
+def _is_document_upload(scope: Scope) -> bool:
+    return scope["method"] == "POST" and DOCUMENT_UPLOAD_PATH.fullmatch(scope["path"]) is not None
 
 
 class CsrfMiddleware:
@@ -106,7 +118,9 @@ class CsrfMiddleware:
         headers = Headers(scope=scope)
         if not origin_allowed(headers.getlist("origin"), headers.getlist("referer"), self.allowed):
             await self._reject(403, CSRF_FAILED, scope, receive, send)
-        elif has_body(headers) and not media_type_ok(headers.get("content-type")):
+        elif has_body(headers) and not media_type_ok(
+            headers.get("content-type"), document_upload=_is_document_upload(scope)
+        ):
             await self._reject(415, UNSUPPORTED_MEDIA_TYPE, scope, receive, send)
         else:
             await self.app(scope, receive, send)

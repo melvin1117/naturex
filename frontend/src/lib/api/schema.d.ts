@@ -529,6 +529,210 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/{asset_id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Documents
+         * @description The listing's documents, submitted or not, oldest first.
+         */
+        get: operations["list_documents_assets__asset_id__documents_get"];
+        put?: never;
+        /**
+         * Upload Document
+         * @description Upload one verification document for the listing (its community's owner or stewards).
+         *     The body is the file. It's checked by magic bytes, size, pixel and PDF limits in a worker
+         *     with a timeout; only then is it stored, privately. By uploading, the steward confirms they
+         *     may share it. Submit documents for review with `POST /assets/{id}/verification/runs`.
+         */
+        post: operations["upload_document_assets__asset_id__documents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{asset_id}/documents/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Document
+         * @description The original file, always as an attachment (`Content-Disposition: attachment`,
+         *     `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`). Loaded by
+         *     `(world_id, asset_id, id)`.
+         */
+        get: operations["download_document_assets__asset_id__documents__document_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{asset_id}/documents/{document_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Document
+         * @description The document's sanitised preview: a PNG re-encoded from the decoded pixels, at most
+         *     1600 px, with no metadata. Never the original bytes.
+         */
+        get: operations["preview_document_assets__asset_id__documents__document_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{asset_id}/verification/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Verification Runs
+         * @description Every run of the listing, newest first, with its checklist values, documents and the
+         *     reviewer's reasons (never the reviewer's identity).
+         */
+        get: operations["list_verification_runs_assets__asset_id__verification_runs_get"];
+        put?: never;
+        /**
+         * Submit Verification
+         * @description Submit 1–3 uploaded documents for review: a new current run with its deterministic
+         *     checklist (accepted format, not reused, boundary free, consent document attached) and the
+         *     fingerprint of what it vouches for. Any earlier run stops being current.
+         */
+        post: operations["submit_verification_assets__asset_id__verification_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{asset_id}/verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Verification Panel
+         * @description How this listing was verified (ADR-0006 §4): the level and its badge, the date, the
+         *     reviewer's role, each check's result, the ledger entry, and what was **not** checked.
+         *     Never documents, values or reasons.
+         */
+        get: operations["verification_panel_assets__asset_id__verification_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/verifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Review Queue
+         * @description Listings waiting for a reviewer in the caller's world, oldest first, with their current
+         *     run, one page at a time (`limit`, `offset`). Listings of the admin's own communities are
+         *     left out (conflict of interest).
+         */
+        get: operations["review_queue_admin_verifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/assets/{asset_id}/verification/{run_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Verification
+         * @description Approve the listing's current run: it becomes `verified`, a `verification` ledger entry
+         *     records the decision, and an asset suspended by a revocation trades again.
+         */
+        post: operations["approve_verification_admin_assets__asset_id__verification__run_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/assets/{asset_id}/verification/{run_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Verification
+         * @description Reject the listing's current run with a reason the steward sees.
+         */
+        post: operations["reject_verification_admin_assets__asset_id__verification__run_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/assets/{asset_id}/verification/{run_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Verification
+         * @description Revoke the listing's verified run, with a reason: in one transaction it becomes
+         *     `revoked` and a listed asset is suspended (`verification_revoked`), so orders are refused
+         *     until a new run is approved. Both changes are in the ledger.
+         */
+        post: operations["revoke_verification_admin_assets__asset_id__verification__run_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/reports/{report_id}": {
         parameters: {
             query?: never;
@@ -1426,6 +1630,13 @@ export interface components {
             /** End */
             end: string;
         };
+        /**
+         * DocumentType
+         * @description What the steward says a document is (ADR-0006 §2). `assembly_minutes` is the
+         *     consent-labelled document the checklist looks for.
+         * @enum {string}
+         */
+        DocumentType: "title" | "agrarian_certificate" | "assembly_minutes" | "entity_registration" | "other";
         /** EventOut */
         EventOut: {
             /**
@@ -1460,6 +1671,12 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * EvidenceKind
+         * @description Real uploads, or T76's generated fictional samples.
+         * @enum {string}
+         */
+        EvidenceKind: "real" | "sample";
         /** EvidenceResponse */
         EvidenceResponse: {
             event: components["schemas"]["EventOut"];
@@ -1686,7 +1903,7 @@ export interface components {
             launchable: boolean;
             /**
              * Blocked Reason
-             * @description Why not, as the code the launch would return: ipo_price_too_high (a share costs more than a new account's starting cash: issue more shares), run_in_progress, or a verification code (T69).
+             * @description Why not, as the code the launch would return: ipo_price_too_high (a share costs more than a new account's starting cash: issue more shares), run_in_progress, or not_verified (the live world needs the listing's current verification run verified and still matching; a revoked one blocks everywhere; T69).
              */
             blocked_reason?: string | null;
         };
@@ -1715,7 +1932,7 @@ export interface components {
          * LedgerKind
          * @enum {string}
          */
-        LedgerKind: "listing" | "report" | "event" | "price_anchor" | "payout";
+        LedgerKind: "listing" | "report" | "event" | "price_anchor" | "payout" | "verification";
         /** LedgerVerifyOut */
         LedgerVerifyOut: {
             /** Valid */
@@ -1746,6 +1963,61 @@ export interface components {
             label: string;
             /** Color */
             color: string;
+        };
+        /**
+         * ListingDocumentOut
+         * @description A verification document's metadata (the listing's community and same-world admins
+         *     only). The file is at `GET /assets/{asset_id}/documents/{id}` (a download), its sanitised
+         *     preview at `…/preview`.
+         */
+        ListingDocumentOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /**
+             * Run Id
+             * @description The run it was submitted with; null until then.
+             */
+            run_id: string | null;
+            doc_type: components["schemas"]["DocumentType"];
+            /** Media Type */
+            media_type: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Page Count
+             * @description PDFs only.
+             */
+            page_count?: number | null;
+            /**
+             * Width
+             * @description Images only, in pixels.
+             */
+            width?: number | null;
+            /** Height */
+            height?: number | null;
+            /**
+             * Has Preview
+             * @description A sanitised PNG preview exists: every image, and a PDF whose first page holds an image (a scan).
+             */
+            has_preview: boolean;
+            /**
+             * Commitment
+             * @description sha256(private nonce ‖ file): what the public ledger holds for this document. It can't be matched against a copy of the file without the nonce.
+             */
+            commitment: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** ListingSummaryOut */
         ListingSummaryOut: {
@@ -2074,6 +2346,19 @@ export interface components {
             reason?: string | null;
         };
         /**
+         * PublicCheckOut
+         * @description A check's name and result only: the public panel never shows the values.
+         */
+        PublicCheckOut: {
+            /** Check */
+            check: string;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "pass" | "warn" | "fail";
+        };
+        /**
          * QuoteOut
          * @description The price of an order now, before confirming it (play money). Nothing is reserved: the
          *     order fills at the price when it's placed.
@@ -2369,6 +2654,29 @@ export interface components {
          * @enum {string}
          */
         ReportSummarySource: "live" | "fallback" | "auditor";
+        /**
+         * ReviewQueueItem
+         * @description A listing waiting for a reviewer: its current, undecided run.
+         */
+        ReviewQueueItem: {
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /** Asset Name */
+            asset_name: string;
+            asset_status: components["schemas"]["AssetStatusOut"];
+            /** Community Id */
+            community_id: string | null;
+            run: components["schemas"]["VerificationRunOut"];
+        };
+        /**
+         * ReviewerRole
+         * @description Who decided, as a role: the public ledger and panel never name a person (ADR-0006 §3).
+         * @enum {string}
+         */
+        ReviewerRole: "platform_admin" | "partner_reviewer";
         /** SharesOut */
         SharesOut: {
             /** Shares Offered */
@@ -2590,6 +2898,155 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VerificationApprove */
+        VerificationApprove: {
+            /**
+             * Reason
+             * @description Optional note for the steward (at most 500 characters).
+             */
+            reason?: string | null;
+        };
+        /**
+         * VerificationCheckOut
+         * @description One deterministic check of a run, with the value found and where it came from.
+         */
+        VerificationCheckOut: {
+            /**
+             * Check
+             * @description accepted_format, not_reused, boundary_free or consent_document
+             */
+            check: string;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "pass" | "warn" | "fail";
+            /** Found */
+            found: string;
+            /** Source */
+            source: string;
+        };
+        /**
+         * VerificationLevel
+         * @description ADR-0006 §1. A run is created `documents_submitted`; `unverified` means no current run
+         *     (or one whose input fingerprint no longer matches the listing) and is never stored.
+         * @enum {string}
+         */
+        VerificationLevel: "unverified" | "documents_submitted" | "verified" | "rejected" | "revoked";
+        /**
+         * VerificationMode
+         * @description The deployment's verification mode when a run was created (ADR-0006 §6). T69 ships
+         *     `review` only; `demo` is T76.
+         * @enum {string}
+         */
+        VerificationMode: "review" | "demo";
+        /**
+         * VerificationPublicOut
+         * @description "How this listing was verified" (ADR-0006 §4): public, for anyone who can see the asset.
+         *     Check names and results only; what was *not* checked is always listed.
+         */
+        VerificationPublicOut: {
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /** @description The current run's level, or `unverified` when there is none or the listing changed since it. */
+            level: components["schemas"]["VerificationLevel"];
+            /**
+             * Badge
+             * @description `Documents reviewed by NatureX (hackathon process)` when verified, `Verification revoked`, else `Self-attested by the community`.
+             */
+            badge: string;
+            /** Run Id */
+            run_id?: string | null;
+            /** Submitted At */
+            submitted_at?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Revoked At */
+            revoked_at?: string | null;
+            reviewer_role?: components["schemas"]["ReviewerRole"] | null;
+            /** Method Version */
+            method_version?: string | null;
+            /** Checks */
+            checks?: components["schemas"]["PublicCheckOut"][];
+            /** Not Checked */
+            not_checked: string[];
+            /**
+             * Ledger Seq
+             * @description The `verification` ledger entry of the latest decision.
+             */
+            ledger_seq?: number | null;
+        };
+        /**
+         * VerificationReason
+         * @description A rejection or revocation: the reason is required and shown to the steward.
+         */
+        VerificationReason: {
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * VerificationRunOut
+         * @description A verification run, for the listing's community and same-world admins: the checklist
+         *     with values, the documents, and the reviewer's reasons (never the reviewer's identity).
+         */
+        VerificationRunOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /** @description The run's stored level. */
+            level: components["schemas"]["VerificationLevel"];
+            /** @description `unverified` once the listing's name, area, polygon or community changed since the run (its fingerprint no longer matches); else `level`. */
+            effective_level: components["schemas"]["VerificationLevel"];
+            /** Is Current */
+            is_current: boolean;
+            /** Fingerprint Matches */
+            fingerprint_matches: boolean;
+            /** Input Fingerprint */
+            input_fingerprint: string;
+            /** Method Version */
+            method_version: string;
+            mode: components["schemas"]["VerificationMode"];
+            evidence_kind: components["schemas"]["EvidenceKind"];
+            /** Checklist */
+            checklist: components["schemas"]["VerificationCheckOut"][];
+            /** Documents */
+            documents: components["schemas"]["ListingDocumentOut"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            reviewer_role?: components["schemas"]["ReviewerRole"] | null;
+            /**
+             * Reason
+             * @description The reviewer's reason, if any.
+             */
+            reason?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Revoke Reason */
+            revoke_reason?: string | null;
+            /** Revoked At */
+            revoked_at?: string | null;
+        };
+        /**
+         * VerificationSubmit
+         * @description Submit 1–3 of the listing's uploaded, not yet submitted documents for review.
+         */
+        VerificationSubmit: {
+            /** Document Ids */
+            document_ids: string[];
         };
         /** VisParams */
         VisParams: {
@@ -3989,7 +4446,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description `ipo_already_launched`, `asset_not_listed` (draft, under review, suspended…), `no_rating` (no usable report) or `ipo_price_too_low` (the price per share rounds to zero: issue fewer shares), `ipo_price_too_high` (a share would cost more than a new account's starting cash: issue more shares), `run_in_progress` (a rating run is active) or a verification code (T69), or `ipo_price_changed` (`expected_price` is stale) */
+            /** @description `ipo_already_launched`, `asset_not_listed` (draft, under review, suspended…), `no_rating` (no usable report) or `ipo_price_too_low` (the price per share rounds to zero: issue fewer shares), `ipo_price_too_high` (a share would cost more than a new account's starting cash: issue more shares), `run_in_progress` (a rating run is active) or `not_verified` (the live world needs a verified listing; a revoked verification blocks everywhere; T69), or `ipo_price_changed` (`expected_price` is stale) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4002,6 +4459,633 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    list_documents_assets__asset_id__documents_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingDocumentOut"][];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_found`: outside the caller's world, or the caller isn't a member of the listing's community or a same-world admin */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_document_assets__asset_id__documents_post: {
+        parameters: {
+            query: {
+                /** @description What the document is. */
+                doc_type: components["schemas"]["DocumentType"];
+            };
+            header: {
+                "content-type": string;
+            };
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description The file itself (PDF, JPEG or PNG, at most 5 MB). */
+        requestBody: {
+            content: {
+                "application/pdf": string;
+                "image/jpeg": string;
+                "image/png": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingDocumentOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description members_only, treasury_cannot_act */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the caller's world, or not visible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `listing_closed` (ineligible or withdrawn), `document_limit_reached` (20 per listing), `storage_quota_exceeded` (the community's or world's document bytes) or `document_reused` (the same file backs another listing, unless that's a withdrawn or ineligible listing of the same community) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description length_required */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `file_too_large`: over 5 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `unsupported_media_type`: not PDF, JPEG or PNG */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The file is refused: empty_file, unsupported_format, media_type_mismatch, image_too_large, image_malformed, trailing_data, embedded_signature, pdf_encrypted, pdf_malformed, pdf_too_many_pages, pdf_too_many_objects, pdf_active_content, inspection_timeout or inspection_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `upload_rate_limited`: see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `inspection_busy`: see Retry-After */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    download_document_assets__asset_id__documents__document_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The original file, as a download */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                    "image/jpeg": string;
+                    "image/png": string;
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_found` (see the list route) or `document_not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_document_assets__asset_id__documents__document_id__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A sanitised, re-encoded PNG */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_found`, `document_not_found` or `no_preview` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_verification_runs_assets__asset_id__verification_runs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationRunOut"][];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_found`: outside the caller's world, or the caller isn't a member of the listing's community or a same-world admin */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_verification_assets__asset_id__verification_runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerificationSubmit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationRunOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description members_only, treasury_cannot_act */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_found`, or `document_not_found` (a document that isn't one of this listing's) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `listing_closed` or `document_already_submitted` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verification_panel_assets__asset_id__verification_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationPublicOut"];
+                };
+            };
+            /** @description Not found in the caller's world, or not visible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_queue_admin_verifications_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewQueueItem"][];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description admin_only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_verification_admin_assets__asset_id__verification__run_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerificationApprove"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationRunOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description admin_only, conflict_of_interest (the admin's own community) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_found`, or `run_not_found` (not one of this listing's runs) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `run_superseded`, `run_already_decided`, `listing_closed`, `stale_run` (the listing changed since the run: it needs a new one), `checks_failed` or `overlap` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_verification_admin_assets__asset_id__verification__run_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerificationReason"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationRunOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description admin_only, conflict_of_interest (the admin's own community) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_found`, or `run_not_found` (not one of this listing's runs) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `run_superseded` or `run_already_decided` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_verification_admin_assets__asset_id__verification__run_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerificationReason"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationRunOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description admin_only, conflict_of_interest (the admin's own community) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_found`, or `run_not_found` (not one of this listing's runs) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `run_superseded` or `not_verified` (the run isn't verified) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

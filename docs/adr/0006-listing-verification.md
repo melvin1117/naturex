@@ -37,7 +37,7 @@ Proposed (2026-10-07). Builds on [ADR-0005](./0005-accounts-roles-and-two-apps.m
 - **One run is current per asset**, enforced with a partial unique index.
 - **Changes reset verification:** if the polygon, area, name, community or documents change afterwards, the fingerprint no longer matches and the listing counts as `unverified` until a new run is approved.
 - **The IPO is gated:** in the live world, the IPO transaction locks the asset and needs the current run to be `verified` with a matching fingerprint.
-- **Revoking** atomically marks the run `revoked` and suspends the asset. Orders are rejected, the public panel says "Verification revoked", and both changes go into the ledger. Trading resumes only after a new run is approved.
+- **Revoking** atomically marks the run `revoked` and suspends the asset. Orders are rejected, the public panel says "Verification revoked", and both changes go into the ledger. Trading resumes only after a new run is approved. *Clarification (T69):* the revocation is recorded on the asset (`assets.verification_revoked_at`, as in §6) in every mode, and only an admin's approval of a new run clears it; submitting a new run doesn't.
 - Rating and browsing work at any level.
 - **Sandbox worlds** start the curated sites as `verified` by a seeded demo reviewer, and also include one unverified listing, so judges can see both.
 
@@ -52,7 +52,7 @@ Each run produces a **checklist**, stored with the result and shown to the revie
 | Check | How | Type |
 |---|---|---|
 | Accepted file format | MIME allowlist (PDF, JPEG, PNG), magic bytes, ≤ 5 MB, decoded-pixel and PDF page/object limits; encrypted or malformed PDFs rejected | Deterministic |
-| Not reused | A per-world keyed fingerprint of the file is bound to one asset (database constraint): the same document can't back two listings, but the same listing can reuse it in a later run | Deterministic |
+| Not reused | A per-world keyed fingerprint of the file is bound to one asset (database constraint): the same document can't back two listings, but the same listing can reuse it in a later run. *Clarification (T69):* once the listing holding it is withdrawn or ineligible, the binding may move to another listing **of the same community** (the closed listing keeps its documents); it never moves across communities | Deterministic |
 | Boundary is free | No overlap with another listing in this world (T36/T58) | Deterministic |
 | Consent-labelled document attached | The steward attached a document labelled "assembly minutes / consent". This shows a document was attached, **not** that consent exists | Deterministic |
 | Extracted fields consistent with listing *(Should, T71)* | MiniCPM-V extracts holder name, parcel ID, place, area and issue date. Nemotron compares them with the listing: community name, municipality or state (Nominatim reverse geocode of the centroid), and area within ±20%. Each comparison shows both values and the source excerpt | AI heuristic |

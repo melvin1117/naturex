@@ -38,9 +38,12 @@ from app.models import (
     Community,
     CommunityMember,
     DocChunk,
+    DocumentFingerprint,
     Event,
     Holding,
     LedgerEntry,
+    ListingDocument,
+    ListingDocumentBlob,
     LlmCall,
     Metrics,
     Order,
@@ -50,6 +53,7 @@ from app.models import (
     User,
     UserKind,
     UserSession,
+    VerificationRun,
     World,
     WorldEvent,
 )
@@ -69,6 +73,11 @@ _DELETE_ORDER: tuple[type[SQLModel], ...] = (
     UserSession,
     LedgerEntry,
     PayoutLine,
+    # Verification (T69): blobs → documents → fingerprint bindings and runs.
+    ListingDocumentBlob,
+    ListingDocument,
+    DocumentFingerprint,
+    VerificationRun,
     DocChunk,
     Alert,
     WorldEvent,
@@ -130,8 +139,9 @@ def _copy_world_rows(
     """Copy every world-scoped row from `source` into `target`, remapping IDs.
 
     Inserts are flushed table by table in foreign-key order. Orders, sessions and LLM call logs
-    are visitor activity, not template content, so they are not copied. Payouts are activity
-    too, and the source must hold none (T67). With `communities_only`, only the communities'
+    are visitor activity, not template content, so they are not copied. Payouts and listing
+    verification (documents and runs) are activity too, and the source must hold none (T67,
+    T69). With `communities_only`, only the communities'
     treasuries and members (and their holdings) are copied, so demo investors and the demo
     admin persona never reach the live world. `keep_personas` maps `persona_key` to a persona
     already in `target`: that user keeps its ID and gets the source persona's fields, so its
@@ -143,6 +153,12 @@ def _copy_world_rows(
     payout_line = select(PayoutLine.id).where(PayoutLine.world_id == source).limit(1)
     if session.exec(payout_line).first() is not None:
         raise RuntimeError(f"world {source} holds payouts, which can't be copied")
+    # Verification (T69) is per world too: document fingerprints are keyed by world and a run's
+    # input fingerprint covers the community's ID, which a copy remaps, so a copied run could
+    # never match. Templates hold none; T76 creates sandboxes' demo runs in each world instead.
+    for model in (VerificationRun, ListingDocument):
+        if session.exec(select(model).where(_world_col(model) == source).limit(1)).first():
+            raise RuntimeError(f"world {source} holds verification records, which can't be copied")
     ids: dict[UUID, UUID] = {}
     copied_users: set[UUID] | None = None
     if communities_only:

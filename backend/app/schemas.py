@@ -30,10 +30,15 @@ from app.market.offering import (
 from app.models import (
     AssetStatus,
     CommunityRole,
+    DocumentType,
+    EvidenceKind,
     LedgerKind,
+    ReviewerRole,
     StreamEventType,
     UserKind,
     UserRole,
+    VerificationLevel,
+    VerificationMode,
 )
 from app.tools.earth_obs import NdviPoint
 
@@ -470,7 +475,8 @@ class IpoPreviewOut(IpoTermsOut):
         default=None,
         description="Why not, as the code the launch would return: ipo_price_too_high (a "
         "share costs more than a new account's starting cash: issue more shares), "
-        "run_in_progress, or a verification code (T69).",
+        "run_in_progress, or not_verified (the live world needs the listing's current "
+        "verification run verified and still matching; a revoked one blocks everywhere; T69).",
     )
 
 
@@ -1021,3 +1027,171 @@ class CommunitySummaryOut(BaseModel):
         description="The latest quarterly payouts, newest first."
     )
     payouts_count: int
+
+
+# ----- Listing verification (T69, ADR-0006) -----
+
+VERIFICATION_REASON_MAX_LENGTH = 500
+CheckResultOut = Literal["pass", "warn", "fail"]
+
+
+def _clean_reason(raw: str | None) -> str | None:
+    """Printable text and line breaks, at most 500 characters once trimmed; empty means none."""
+    if raw is None or not raw.strip():
+        return None
+    reason = raw.strip()
+    if len(reason) > VERIFICATION_REASON_MAX_LENGTH:
+        raise ValueError(f"Use at most {VERIFICATION_REASON_MAX_LENGTH} characters")
+    if any(not (ch.isprintable() or ch in "\n\t") for ch in reason):
+        raise ValueError("Remove control characters")
+    return reason
+
+
+class VerificationCheckOut(BaseModel):
+    """One deterministic check of a run, with the value found and where it came from."""
+
+    check: str = Field(description="accepted_format, not_reused, boundary_free or consent_document")
+    result: CheckResultOut
+    found: str
+    source: str
+
+
+class PublicCheckOut(BaseModel):
+    """A check's name and result only: the public panel never shows the values."""
+
+    check: str
+    result: CheckResultOut
+
+
+class ListingDocumentOut(BaseModel):
+    """A verification document's metadata (the listing's community and same-world admins
+    only). The file is at `GET /assets/{asset_id}/documents/{id}` (a download), its sanitised
+    preview at `…/preview`."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    asset_id: UUID
+    run_id: UUID | None = Field(description="The run it was submitted with; null until then.")
+    doc_type: DocumentType
+    media_type: str
+    size_bytes: int
+    page_count: int | None = Field(default=None, description="PDFs only.")
+    width: int | None = Field(default=None, description="Images only, in pixels.")
+    height: int | None = None
+    has_preview: bool = Field(
+        description="A sanitised PNG preview exists: every image, and a PDF whose first page "
+        "holds an image (a scan)."
+    )
+    commitment: str = Field(
+        description="sha256(private nonce ‖ file): what the public ledger holds for this "
+        "document. It can't be matched against a copy of the file without the nonce."
+    )
+    created_at: datetime
+
+
+class VerificationRunOut(BaseModel):
+    """A verification run, for the listing's community and same-world admins: the checklist
+    with values, the documents, and the reviewer's reasons (never the reviewer's identity)."""
+
+    id: UUID
+    asset_id: UUID
+    level: VerificationLevel = Field(description="The run's stored level.")
+    effective_level: VerificationLevel = Field(
+        description="`unverified` once the listing's name, area, polygon or community changed "
+        "since the run (its fingerprint no longer matches); else `level`."
+    )
+    is_current: bool
+    fingerprint_matches: bool
+    input_fingerprint: str
+    method_version: str
+    mode: VerificationMode
+    evidence_kind: EvidenceKind
+    checklist: list[VerificationCheckOut]
+    documents: list[ListingDocumentOut]
+    created_at: datetime
+    reviewer_role: ReviewerRole | None = None
+    reason: str | None = Field(default=None, description="The reviewer's reason, if any.")
+    decided_at: datetime | None = None
+    revoke_reason: str | None = None
+    revoked_at: datetime | None = None
+
+
+class VerificationPublicOut(BaseModel):
+    """ "How this listing was verified" (ADR-0006 §4): public, for anyone who can see the asset.
+    Check names and results only; what was *not* checked is always listed."""
+
+    asset_id: UUID
+    level: VerificationLevel = Field(
+        description="The current run's level, or `unverified` when there is none or the "
+        "listing changed since it."
+    )
+    badge: str = Field(
+        description="`Documents reviewed by NatureX (hackathon process)` when verified, "
+        "`Verification revoked`, else `Self-attested by the community`."
+    )
+    run_id: UUID | None = None
+    submitted_at: datetime | None = None
+    decided_at: datetime | None = None
+    revoked_at: datetime | None = None
+    reviewer_role: ReviewerRole | None = None
+    method_version: str | None = None
+    checks: list[PublicCheckOut] = Field(default_factory=list)
+    not_checked: list[str]
+    ledger_seq: int | None = Field(
+        default=None, description="The `verification` ledger entry of the latest decision."
+    )
+
+
+class VerificationSubmit(BaseModel):
+    """Submit 1–3 of the listing's uploaded, not yet submitted documents for review."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    document_ids: list[UUID] = Field(min_length=1, max_length=3)
+
+    @field_validator("document_ids")
+    @classmethod
+    def _distinct(cls, value: list[UUID]) -> list[UUID]:
+        if len(set(value)) != len(value):
+            raise ValueError("List each document once")
+        return value
+
+
+class VerificationApprove(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = Field(
+        default=None, description="Optional note for the steward (at most 500 characters)."
+    )
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, value: str | None) -> str | None:
+        return _clean_reason(value)
+
+
+class VerificationReason(BaseModel):
+    """A rejection or revocation: the reason is required and shown to the steward."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=VERIFICATION_REASON_MAX_LENGTH + 200)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, value: str) -> str:
+        cleaned = _clean_reason(value)
+        if cleaned is None:
+            raise ValueError("A reason is required")
+        return cleaned
+
+
+class ReviewQueueItem(BaseModel):
+    """A listing waiting for a reviewer: its current, undecided run."""
+
+    asset_id: UUID
+    asset_name: str
+    asset_status: AssetStatusOut
+    community_id: UUID | None
+    run: VerificationRunOut

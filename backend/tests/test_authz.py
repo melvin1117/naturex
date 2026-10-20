@@ -192,12 +192,22 @@ def test_an_admin_member_operates_and_reviews_other_communities_assets() -> None
         assert authorize(ROLES[role], Action.REVIEW_LISTING, elsewhere) == A
 
 
+def test_only_admins_read_the_review_queue() -> None:
+    """REVIEW_LISTING on the world (T69's queue); the queue itself leaves out the admin's own
+    communities' listings."""
+    for role in ("admin", "admin_owner_own", "admin_steward_own"):
+        assert authorize(ROLES[role], Action.REVIEW_LISTING, WORLD_REF) == A
+    for role in ("user", "owner_own"):
+        assert authorize(ROLES[role], Action.REVIEW_LISTING, WORLD_REF) == AO
+    assert authorize(None, Action.REVIEW_LISTING, WORLD_REF) == AR
+
+
 @pytest.mark.parametrize(
     ("action", "resource"),
     [
         (Action.TRADE, COMMUNITY_REF),
         (Action.TRADE, WORLD_REF),
-        (Action.REVIEW_LISTING, WORLD_REF),
+        (Action.REVIEW_LISTING, COMMUNITY_REF),
         (Action.VIEW_COMMUNITY_DATA, WORLD_REF),
         (Action.MANAGE_LISTING, COMMUNITY_REF),
         (Action.TAMPER_DEMO, WORLD_REF),

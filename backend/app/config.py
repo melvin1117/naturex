@@ -47,6 +47,16 @@ class Settings(BaseSettings):
     trusted_proxy_hops: int = Field(default=0, ge=0, le=10)
     # HMAC key for the rate-limit buckets, so a guessed email can't be matched to a row.
     auth_rate_limit_secret: str = ""
+    # HMAC key for verification documents' private fingerprints (T69, ADR-0006 §2): detects a
+    # file reused across listings without storing a hash anyone could match a copy against.
+    # Changing it makes earlier uploads undetectable as reused.
+    document_fingerprint_secret: str = ""
+    # Verification uploads (T69): each account may try this many per rolling hour (429 after),
+    # and listings' documents may hold at most these many bytes per community and per world
+    # (409 storage_quota_exceeded). Documents live in Postgres, so the world quota bounds the DB.
+    document_uploads_per_hour: int = Field(default=20, ge=1)
+    document_quota_community_bytes: int = Field(default=100 * 1024 * 1024, ge=1)
+    document_quota_world_bytes: int = Field(default=1024 * 1024 * 1024, ge=1)
 
     nebius_api_key: str = ""
     token_factory_base_url: str = "https://api.tokenfactory.nebius.com/v1/"
@@ -116,4 +126,20 @@ def rate_limit_secret(settings: Settings) -> str:
         return DEV_RATE_LIMIT_SECRET
     raise RuntimeError(
         "AUTH_RATE_LIMIT_SECRET must be set (ENVIRONMENT is not development or test)"
+    )
+
+
+# Only ever used when ENVIRONMENT is explicitly development or test.
+DEV_DOCUMENT_FINGERPRINT_SECRET = "naturex-dev-only-document-fingerprint-secret"
+
+
+def document_fingerprint_secret(settings: Settings) -> str:
+    """The HMAC key for document fingerprints (T69). Fails closed outside explicit development
+    or test, like `rate_limit_secret`."""
+    if settings.document_fingerprint_secret:
+        return settings.document_fingerprint_secret
+    if not secure_cookies(settings):
+        return DEV_DOCUMENT_FINGERPRINT_SECRET
+    raise RuntimeError(
+        "DOCUMENT_FINGERPRINT_SECRET must be set (ENVIRONMENT is not development or test)"
     )

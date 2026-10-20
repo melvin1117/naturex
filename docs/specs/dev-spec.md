@@ -214,7 +214,7 @@ create table assets (
   name text not null,
   community_id uuid,                                  -- ADR-0005: the community that manages the listing
   community_user_id uuid,                             -- the community's treasury (kind = 'treasury'): retained stake, seeded at IPO, + its dividends (T41)
-  verification_revoked_at timestamptz,                -- ADR-0006: set on revoke; while set, demo_auto can't approve; cleared only by a human admin approval
+  verification_revoked_at timestamptz,                -- ADR-0006 (T69, migration 0016): set on revoke; cleared only by an admin's approval of a new run; while set: no resume, no IPO in any world (and T76's demo_auto can't approve)
   -- unique (world_id, id) (added by T67 for payout_lines). As built (T56):
   --   foreign key (world_id, community_id) → communities (world_id, id);
   --   foreign key (world_id, community_user_id) → users (world_id, id);
@@ -240,50 +240,73 @@ create table assets (
   created_at timestamptz default now()
 );
 
--- ADR-0006: listing verification (T69). Documents are private; the ledger keeps only randomized commitments.
+-- ADR-0006: listing verification (T69, migration 0016). Documents are private; the ledger keeps only randomized commitments.
 create table verification_runs (       -- one row per run; one current run per asset
-  id uuid primary key default gen_random_uuid(), world_id uuid not null, asset_id uuid not null,
-  level text not null check (level in ('unverified','documents_submitted','verified','rejected','revoked')),
+  id uuid primary key, world_id uuid not null references worlds, asset_id uuid not null,
+  level text not null check (level in ('unverified','documents_submitted','verified','rejected','revoked')),  -- stored from documents_submitted on; 'unverified' = no current or a stale run
   is_current boolean not null default true,
-  input_fingerprint char(64) not null, -- sha256(community, name, geometry, area, document commitments, method_version, mode, evidence_kind); any change → unverified
+  input_fingerprint char(64) not null, -- sha256(community, name, geometry, area, document types + commitments, method_version, mode, evidence_kind); any change → unverified
   checklist jsonb not null,            -- [{check, result: pass|warn|fail, found, source}]; public panel shows names + results only
-  ai_suggestion text check (ai_suggestion in ('consistent','inconsistent','unreadable')), ai_reasons jsonb,  -- T71; untrusted heuristic
-  reviewer_role text check (reviewer_role in ('platform_admin','partner_reviewer','demo_auto')), reviewer_user_id uuid, reason text,
-  mode text not null check (mode in ('review','demo')),  -- deployment mode at creation (ADR-0006 §6)
-  evidence_kind text not null check (evidence_kind in ('sample','real')),  -- set by trigger at submission from ALL linked documents' is_sample
-  check (reviewer_role is distinct from 'demo_auto' or (mode = 'demo' and evidence_kind = 'sample')),
-  method_version text not null, created_at timestamptz default now(),
-  unique (world_id, id), unique (world_id, asset_id, id),
+  method_version text not null,
+  mode text not null check (mode in ('review','demo')),  -- deployment mode at creation (ADR-0006 §6); T69 writes 'review' only
+  evidence_kind text not null check (evidence_kind in ('sample','real')),  -- T69 writes 'real' only; T76 derives it by trigger from the documents' is_sample
+  document_count smallint not null check (document_count between 1 and 3),
+  reason_salt bytea check (octet_length(reason_salt) = 32),  -- private; the ledger commits to reasons as sha256(salt || purpose || reason); may only be cleared
+  submitted_by uuid,                   -- null after account deletion (anonymised)
+  created_at timestamptz not null default now(),
+  reviewer_role text check (reviewer_role in ('platform_admin','partner_reviewer')),  -- T76 adds 'demo_auto' + check (demo_auto → mode = demo and evidence_kind = sample)
+  reviewer_user_id uuid, reason text, decided_at timestamptz,  -- the decision: written once; reason required to reject
+  revoked_by uuid, revoke_reason text, revoked_at timestamptz,  -- the revocation (verified → revoked): written once, reason required
+  -- T71 adds ai_suggestion text check (ai_suggestion in ('consistent','inconsistent','unreadable')), ai_reasons jsonb (untrusted heuristic)
+  unique (world_id, asset_id, id),
   foreign key (world_id, asset_id) references assets (world_id, id),
-  foreign key (world_id, reviewer_user_id) references users (world_id, id)
+  foreign key (world_id, submitted_by) / (world_id, reviewer_user_id) / (world_id, revoked_by) references users (world_id, id),
+  check ((level in ('documents_submitted','unverified')) = (decided_at is null) and (decided_at is null) = (reviewer_role is null)
+         and (level <> 'rejected' or reason is not null)),
+  check ((level = 'revoked') = (revoked_at is not null) and (revoked_at is null) = (revoke_reason is null))
 );
--- Write-once: a trigger rejects changes to input_fingerprint, checklist, ai_*, method_version, mode and evidence_kind, and
--- rewrites of reviewer_role/reviewer_user_id/reason once set; a second trigger derives evidence_kind at submission and rejects
--- listing_documents.run_id changes once the run is submitted; level may move only
--- documents_submitted → verified | rejected, or verified → revoked; is_current only true → false (superseded). Every
--- decision is also appended to the ledger, which is append-only (migration 0003).
-create unique index verification_runs_current on verification_runs (world_id, asset_id) where is_current;
-create table document_fingerprints (   -- binds a document's private fingerprint to ONE asset: no reuse across assets,
-  world_id uuid not null, private_fingerprint char(64) not null, asset_id uuid not null,  -- reuse for the same asset's re-runs is fine
-  primary key (world_id, private_fingerprint), unique (world_id, private_fingerprint, asset_id),
+-- Write-once (trigger verification_runs_write_once): a run is inserted current and documents_submitted; its inputs (fingerprint,
+-- checklist, method_version, mode, evidence_kind, document_count, created_at) never change; level moves only documents_submitted →
+-- verified | rejected or verified → revoked, and only on the current run; the decision and the revocation are written once; account
+-- references may only be cleared; is_current only true → false (superseded). A deferred constraint trigger checks at commit that each
+-- run has exactly document_count linked documents, so nothing can be linked after the submitting transaction. Every decision is also
+-- appended to the ledger (`verification`), which is append-only (migration 0003). Deletes need the whole-world opt-in (sandbox reset/prune).
+create unique index uq_verification_runs_current on verification_runs (world_id, asset_id) where is_current;
+create index ix_verification_runs_queue on verification_runs (world_id, created_at) where is_current and level = 'documents_submitted';
+create table document_fingerprints (   -- binds a document's private fingerprint to ONE asset at a time: no reuse across assets,
+  world_id uuid not null, private_fingerprint char(64) not null, asset_id uuid not null,  -- reuse by the same asset is fine
+  active boolean not null default true,  -- retired (false) when a withdrawn/ineligible listing's file moves to another listing of its community
+  primary key (world_id, private_fingerprint, asset_id),
   foreign key (world_id, asset_id) references assets (world_id, id)
-);
-create table listing_documents (       -- sensitive personal data; private storage; deleted 30 days after the listing
-  id uuid primary key default gen_random_uuid(), world_id uuid not null, asset_id uuid not null, run_id uuid,
+);                                     -- trigger: only active true -> false; deletes need the whole-world opt-in
+create unique index uq_document_fingerprints_active on document_fingerprints (world_id, private_fingerprint) where active;
+create table listing_documents (       -- sensitive personal data; members of the community + same-world admins only
+  id uuid primary key, world_id uuid not null, asset_id uuid not null, run_id uuid,  -- run_id set once, at submission
   doc_type text not null check (doc_type in ('title','agrarian_certificate','assembly_minutes','entity_registration','other')),
-  storage_key text not null,           -- generated; never exposed
-  mime text not null, size_bytes int not null,
-  private_fingerprint char(64) not null,  -- HMAC(per-world key, file); dedup only, never published
-  commitment_nonce bytea not null,     -- private; the ledger stores sha256(nonce || file); deleted with the listing
-  extracted jsonb,                     -- T71 fields (may hold names): members and reviewers only
-  is_sample boolean not null default false,  -- generated fictional sample (demo mode), watermarked
+  media_type text not null check (media_type in ('application/pdf','image/jpeg','image/png')),
+  size_bytes int not null check (size_bytes between 1 and 5242880),
+  page_count int, width int, height int, has_preview boolean not null,  -- from the worker's inspection
+  private_fingerprint char(64) not null,  -- HMAC(HMAC(DOCUMENT_FINGERPRINT_SECRET, world_id), file); dedup only, never published
+  commitment char(64) not null,        -- sha256(nonce || file): what the ledger holds
+  commitment_nonce bytea check (octet_length(commitment_nonce) = 32),  -- private; erasing it makes the commitment unlinkable
+  is_sample boolean not null default false,  -- T76: generated fictional sample (demo mode), watermarked
   uploaded_by uuid,                    -- null after account deletion (anonymised)
-  created_at timestamptz default now(),
+  created_at timestamptz not null default now(),
+  -- T71 adds extracted jsonb (may hold names): members and reviewers only
+  unique (world_id, asset_id, id),
   foreign key (world_id, asset_id) references assets (world_id, id),
   foreign key (world_id, asset_id, run_id) references verification_runs (world_id, asset_id, id),  -- same asset's run only
   foreign key (world_id, private_fingerprint, asset_id) references document_fingerprints (world_id, private_fingerprint, asset_id),
   foreign key (world_id, uploaded_by) references users (world_id, id)
-);
+);                                     -- write-once (trigger): only run_id (once), the nonce and uploaded_by (cleared) change
+create index ix_listing_documents_run_id on listing_documents (run_id) where run_id is not null;  -- the deferred completeness check
+create table listing_document_blobs (  -- private storage: bytea in Postgres, never files on disk or cloud storage (T69)
+  document_id uuid primary key, world_id uuid not null, asset_id uuid not null,
+  content bytea not null check (octet_length(content) between 1 and 5242880),
+  preview_png bytea,                   -- sanitised, re-encoded preview (images; a PDF's first-page scan)
+  foreign key (world_id, asset_id, document_id) references listing_documents (world_id, asset_id, id)
+);                                     -- immutable (trigger)
+create index ix_listing_document_blobs_world_id on listing_document_blobs (world_id);  -- sandbox reset and prune
 create table payout_lines (            -- private and erasable; the public ledger holds only a hash commitment (T67)
   id bigserial primary key, world_id uuid not null, asset_id uuid not null, quarter_label text not null,
   user_id uuid, shares bigint, amount numeric(14,2),   -- all null once erased (tombstone)
@@ -444,8 +467,12 @@ create index on live_rating_requests (run_id);
 | `POST /assets/{id}/ipo` | Launch, once: `{total_shares?: 10,000–10,000,000 (1,000,000), retained_pct?: 10–90 (51), expected_price}` → 201 the preview's terms + `launched_at`; owner only, `listed` only; 409 as the preview plus `ipo_price_changed`, `ipo_price_too_high`, `run_in_progress` (T59, §8) |
 | `POST /admin/assets/{id}/suspend` `{reason}` · `…/resume` | Moderation: listed ↔ suspended (admins, never on their own community's asset; T58) |
 | `POST /assets/{id}/documents/sample` | Demo mode only (404 in review mode, nothing created): generate watermarked fictional documents from non-personal fields (listing reference, place from reverse geocode, area) + synthetic identities and run the checklist; the `demo_auto` reviewer approves only if every document is a sample, every check passes and no revocation is active (ADR-0006 §6) |
-| `POST /assets/{id}/documents` · `GET /assets/{id}/documents/{doc_id}` | Upload evidence (steward/owner) → checklist; download a document (community members + same-world admins only; 404 otherwise; attachment, `nosniff`, `no-store`) (ADR-0006, T69) |
-| `GET /assets/{id}/verification` · `POST /admin/assets/{id}/verification` · `POST /admin/assets/{id}/verification/revoke` | Public verification summary (check names + results + not-checked list); reviewer approve/reject with a reason; revoke (suspends trading) (T69) |
+| `POST /assets/{id}/documents?doc_type=` | Upload one document; the body is the file (`Content-Type` PDF, JPEG or PNG, ≤ 5 MB), inspected in a worker before it's stored → 201 metadata; steward/owner (`manage_listing`); 409 `document_reused` / `document_limit_reached` / `storage_quota_exceeded` / `listing_closed`, 413, 415, 422 with the rejection code, 429 `upload_rate_limited`, 503 `inspection_busy` (T69) |
+| `GET /assets/{id}/documents` · `GET /assets/{id}/documents/{doc_id}` · `…/{doc_id}/preview` | The listing's documents; the original file (attachment, `nosniff`, `no-store`, CSP sandbox); its sanitised PNG preview. Community members + same-world admins only, 404 for everyone else (T69) |
+| `POST /assets/{id}/verification/runs` `{document_ids}` · `GET /assets/{id}/verification/runs` | Submit 1–3 uploaded documents for review (a new current run with its checklist; steward/owner); every run with checklist values, documents and reasons (members + same-world admins, 404 otherwise) (T69) |
+| `GET /assets/{id}/verification` | Public "How this listing was verified": level, badge, dates, reviewer role, check names + results, not-checked list, ledger seq (T69) |
+| `GET /admin/verifications?limit=&offset=` | The review queue: current undecided runs in the world, oldest first, paged (`limit` 1-100, 50), without the admin's own communities' listings (T69) |
+| `POST /admin/assets/{id}/verification/{run_id}/approve` `{reason?}` · `…/reject` `{reason}` · `…/revoke` `{reason}` | Reviewer decisions (`review_listing`: admins, never on their own community's listing); revoke suspends trading at once (T69) |
 | `GET /assets` | Marketplace list (latest price, grade, trend, `trading`): `listed` and `suspended` assets only (T58); a listed asset awaiting its IPO shows `trading: false` and no price (T59) |
 | `GET /assets/{id}` | Asset detail + latest report + recent events (other statuses: the listing's community and admins only, 404 otherwise; T58); a listing under review also carries `latest_run_id` (T33) |
 | `GET /assets/outlines` | `{outlines: [{id, name, rings}], truncated}`: the world's public sites' boundaries simplified on the server (≤ 200 corners each, ≤ 300 sites) for the listing map's outlines and overlap hint; T36 decides on save (T33) |
@@ -574,6 +601,10 @@ Every route is scoped to the caller's world, which comes from the session: anony
   | `GET /communities/{id}/summary` | `view_community_data` (community), T63 |
   | `POST /admin/assets/{id}/suspend`, `…/resume` | `operate` (asset, so `conflict_of_interest` for an admin in its community), T58 |
   | `GET /assets/{id}/ipo/preview`, `POST /assets/{id}/ipo` | `launch_ipo` (asset; hidden listings are 404 like every action), T59 |
+  | `POST /assets/{id}/documents`, `POST /assets/{id}/verification/runs` | `manage_listing` (asset), T69 |
+  | `GET /assets/{id}/documents`, `…/documents/{doc_id}`, `…/preview`, `GET /assets/{id}/verification/runs` | `view_community_data` (asset) through `community_evidence`: any denial is 404, T69 |
+  | `GET /assets/{id}/verification` | `browse` (asset), T69 |
+  | `GET /admin/verifications` · `POST /admin/assets/{id}/verification/{run_id}/approve`, `…/reject`, `…/revoke` | `review_listing` (world · asset: `conflict_of_interest` on the admin's own community's listing), T69 |
   | `POST /assets/{id}/evidence` | `manage_listing` (asset) |
   | `POST /assets/{id}/rate` | `operate` **or** `manage_listing` (asset) |
   | `POST /admin/simulate/quarter` | `operate` (world) |
@@ -653,6 +684,28 @@ stateDiagram-v2
 - **Locks**, one order on every path: world row (`FOR KEY SHARE` for listing writes: waits behind a reset's `FOR UPDATE` without serializing orders) → the world's listing advisory lock (overlap and cap) → asset row → the world's publisher lock. Submit runs inside the enqueue transaction: global run lock → `ListingSubmit.lock` (world, listings, asset) → publisher lock. A run storing its report: world row → asset → publisher. Two-thread tests cover edit + submit and suspend + submit.
 - **Migration `0012`:** `assets.status_reason`, `attested_at`, `submitted_at` and `bbox_*` (backfilled), `withdrawn` in `ck_assets_status`, `world_events.audience_community_id`, `listing_status` in `ck_world_events_type`; both checks are re-created `NOT VALID` and then validated. The downgrade refuses while any listing is `withdrawn`, and deletes `listing_status` events first.
 - **Deferred:** storing field evidence (T40; until then, newer satellite data or `revise` reopens `needs_evidence`); live metrics, quotas and the demo-world "cached example" landed with T60 (§7.2); verification, the live-world IPO gate and revocation suspending the asset (T69); re-checking memberships on every SSE poll (T57).
+
+### 6.3 Listing verification (T69)
+
+**As built (T69), review mode (ADR-0006; demo mode is T76, AI extraction T71, the UI T70).** Files: `app/tools/documents.py` (file safety), `app/tools/verification.py` (fingerprints, commitments, checklist; pure), `app/services/verification.py`, `app/routers/verification.py`, migration `0016`.
+- **Upload** (`POST /assets/{id}/documents?doc_type=`, `manage_listing`): the request body is the file, not multipart, so a cross-site form can't send it (the T66 CSRF middleware accepts these three binary types on `POST` to this path only; the origin rule still applies; a binary body with any other method or path is 415). In order: authorization; the **per-account rate limit** (`DOCUMENT_UPLOADS_PER_HOUR`, default 20 attempts per rolling hour, accepted or not, in T66's `auth_attempts` buckets, kind `document_upload`, keyed by an HMAC of world and user; 429 `upload_rate_limited` with `Retry-After`); a **worker slot**, taken without waiting (503 `inspection_busy`, `Retry-After: 5`), *before* the body is read; then the body: `Content-Length` required (411, so no chunked uploads), over 5 MB is 413 before and while reading, chunks joined once. Cheap pre-checks (document count, quotas) run before the worker, and again under the locks. 415 for any other type.
+- **Quotas:** the documents of a community's listings may hold `DOCUMENT_QUOTA_COMMUNITY_BYTES` (100 MB) and a whole world `DOCUMENT_QUOTA_WORLD_BYTES` (1 GB); 409 `storage_quota_exceeded`. Checked under the world's listing lock, so concurrent uploads can't both slip under. At most 20 documents per listing (409 `document_limit_reached`); `listing_closed` for ineligible or withdrawn listings.
+- **The worker** (`run_worker`): a fresh `python -I -B -c …` (isolated: no environment variables, user site or current directory on the path, no bytecode writes) with an **empty environment** (no secrets), run from **`/`**, not `backend/` (where `.env` lives), with `RLIMIT_CPU` (timeout + 1 s), `RLIMIT_AS` 1 GiB (Linux), `RLIMIT_NOFILE` 64, `RLIMIT_FSIZE` 0 and `RLIMIT_CORE` 0. The file goes in on stdin and the verdict comes back as JSON (never pickle), at most 16 MB of it (more is `inspection_failed`); it's killed after 15 s (`inspection_timeout`). It **contains denial of service, not code execution**: a memory-corruption bug in Pillow's or zlib's C code exploited by a crafted file would run as the API's OS user (without its environment, but with its file access). A real sandbox (seccomp, a container without network or filesystem) is the deployment's job (T20). **Slots are per API process** (2 each): with several workers or replicas the total is 2 × processes.
+- **Checks** (each a 422 code): magic bytes (`unsupported_format`), declared type equals the sniffed one (`media_type_mismatch`), PNG chunk walk with CRCs, image dimensions ≤ 12,000 px a side and 40 M pixels **read from the header before decoding** (`image_too_large`: decompression bombs), a full decode (`image_malformed`). **What is checked of polyglots:** nothing may follow a PNG's `IEND`, a JPEG's EOI or a PDF's final `%%EOF` (`trailing_data`), and an image may not contain a ZIP (`PK\x03\x04`, `PK\x05\x06`) or PDF (`%PDF`) signature anywhere (`embedded_signature`; compressed pixels contain one by chance about once per 300 MB of images, so a rare genuine scan must be re-saved). A PDF that is also valid as another format isn't detected; downloads are attachments and never rendered by the API's origin. PDFs are parsed strictly by pypdf with its `Configuration` limits lowered (32 MB per decoded stream, 20,000 elements per array or dictionary, a shallow page tree, no external `jbig2dec`): ≤ 50 pages, ≤ 10,000 objects, no `/Encrypt`, and no JavaScript, launch, remote or embedded go-to (`/GoToR`, `/GoToE`), import, submit or rich-media actions, embedded files or XFA in any object, compressed object streams included (`pdf_encrypted`, `pdf_malformed` (a Flate bomb past the limit too), `pdf_too_many_pages`, `pdf_too_many_objects`, `pdf_active_content`). Plain links (`/URI`) are allowed: following one is the reader's choice. **Previews** are re-encoded PNGs (≤ 1600 px, RGB/RGBA, no metadata): every image, and the largest image drawn directly on a PDF's first page (scans), its declared `/Width` × `/Height` checked against the limits before it's decoded. PDFs aren't rasterised, as no permissively licensed pure-Python rasteriser exists (PyMuPDF is AGPL).
+- **Storage:** Postgres `bytea` in `listing_document_blobs`, not files on disk: deletes are transactional with the metadata (sandbox reset and prune need nothing else), there's no path to traverse and nothing under a web root. The preview route reads only `preview_png`, the download only `content`.
+- **Reuse:** the private fingerprint `HMAC(HMAC(DOCUMENT_FINGERPRINT_SECRET, world_id), file)` (hashed incrementally, like the commitment, without copying the file) is bound to one asset in `document_fingerprints`: one **active** binding per fingerprint (partial unique index), taken under a per-fingerprint advisory lock. 409 `document_reused` if another listing holds it; the same listing may upload it again (a new row and nonce). **ADR-0006 clarification:** a binding held by a **withdrawn or ineligible** listing is retired (`active` → false; the trigger allows nothing else) when another listing **of the same community** uploads the file; the closed listing keeps its documents. Across communities it stays refused. Keyed per world, so a sandbox and the live world never link. The secret is required outside development and test (startup fails).
+- **Serving:** `GET /assets/{id}/documents/{doc_id}` loads by `(world_id, asset_id, id)`; the community's members and same-world admins only, through `community_evidence` (`view_community_data`, every denial becomes 404 `not_found`, so investors, other communities and other worlds learn nothing; anonymous callers get 401 before any lookup). Headers: `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`, `Content-Security-Policy: default-src 'none'; sandbox`, `Cross-Origin-Resource-Policy: same-origin`. The preview is `inline` with the same headers. **For T70:** `Cross-Origin-Resource-Policy: same-origin` assumes the browser reaches the API through the frontend's same-origin `/api` proxy (`next.config.ts`, as today); an `<img>` pointing at the API on another origin would be blocked.
+- **Runs** (`POST /assets/{id}/verification/runs {document_ids}`): 1–3 of the listing's not-yet-submitted documents (404 `document_not_found` for any other, 409 `document_already_submitted`). Under world → listing lock → asset, the current run is superseded and a new one inserted, `documents_submitted`, with `mode = review`, `evidence_kind = real`, `method_version = naturex-verification-v1`, a private random `reason_salt`, its checklist and input fingerprint; the documents' `run_id` is set. The checklist: `accepted_format` (pass: what the worker accepted), `not_reused` (fail if the active binding is elsewhere, warn for the same file twice in the run), `boundary_free` (fail if the polygon overlaps a listing that claims land now, T58's rule; values never name the other listing), `consent_document` (fail without an `assembly_minutes` document; "shows a document was attached, not that consent exists").
+- **Unverified on change:** the gate and every read recompute the fingerprint from the asset now (community, name, geometry hash, area) and the run's documents. `PATCH /assets/{id}` of the name, area or polygon (after `revise`, or on a draft) therefore makes a verified listing `unverified` (`effective_level`, the public panel); country and description aren't covered. Approving a stale run is 409 `stale_run`.
+- **Decisions** (`review_listing`: an admin, 403 `conflict_of_interest` on its own community's listing; the queue leaves those out): approve (optional note) needs the current undecided run (`run_superseded`, `run_already_decided`), a matching fingerprint, no failed check (`checks_failed`) and no overlap now (`overlap`); reject needs a reason. Approving clears `assets.verification_revoked_at` and resumes an asset suspended by a revocation (a `listing` `resume` entry); a moderation suspension stays.
+- **Revoke** (reason required; the run must be verified, else 409 `not_verified`): in one transaction the run becomes `revoked`, `assets.verification_revoked_at` is set, and a `listed` asset is suspended (`verification_revoked`), so orders are 409 `not_trading`. While `verification_revoked_at` is set (**cleared only by `approve`**), `POST /admin/assets/{id}/resume` is 409 `not_verified` and the IPO is refused in every world, whatever new runs are submitted meanwhile, and the public panel says "Verification revoked", even after an edit.
+- **Ledger** (`verification`, `ref_id` = the run): `level`, `run_id`, `community_id`, `reviewer_role`, `method_version`, `mode`, `evidence_kind`, `checks` (names and results), `input_fingerprint`, `document_commitments` (`doc_type` + `sha256(nonce ‖ file)`), `reason_commitment` (`sha256(reason_salt ‖ "decision" ‖ 0x00 ‖ reason)`), `decided_at`; a revocation adds `revoke_reason_commitment` (purpose `revocation`) and `revoked_at`. The salt is private, like the document nonces, so a guessed reason can't be confirmed against the ledger; revealing it proves the reason, erasing it unlinks it. Never the file, its raw hash, the private fingerprint, a name, an account ID or the reason's text (scanned by `test_ledger_privacy.py`). Submitting writes no entry.
+- **The IPO gate:** `check_gate` → `gate_refusal`: in **every world** a standing revocation (`verification_revoked_at`) blocks; in the **live world only**, the listing also needs a verified review-mode run on real evidence whose fingerprint matches. Sandboxes are otherwise ungated until T76's demo mode verifies their listings. 409 `not_verified`, also the preview's `blocked_reason`.
+- **Review queue** (`GET /admin/verifications?limit=&offset=`): oldest first, `limit` 1–100 (50), two queries per page (the runs with their assets, then all their documents).
+- **Events:** a submission publishes `listing_status` (`transition: verification`, `run_id`, `level`) to the community and admins; decisions follow the asset's visibility.
+- **Sandboxes:** reset and prune delete blobs → documents → fingerprint bindings → runs (with the whole-world delete opt-in the triggers honour). A world holding verification records is never copied (fingerprints are keyed per world and a run's fingerprint covers the community ID a copy remaps); templates hold none.
+- **Libraries:** Pillow (MIT-CMU / HPND) and pypdf (BSD-3-Clause).
+- **Deferred:** the UI (T70); AI extraction (T71); demo mode, sample documents, `demo_auto` (which must also respect `verification_revoked_at`) and the demo → review switch (T76); deleting documents, nonces and reason salts 30 days after a listing is deleted, and anonymising `uploaded_by` / `submitted_by` / reviewers on account deletion (K5; the triggers already allow clearing them); partner reviewers.
 
 ## 7. Rating pipeline
 
@@ -998,7 +1051,7 @@ Implemented as pure functions in `backend/app/market/engine.py` (`ipo`, `quote`,
 - **Shares are conserved from the IPO on:** `total_shares = primary_shares_remaining + market-maker inventory + Σ holdings`, with the treasury's stake as a holding and no inventory at launch (tests: the launch, primary and secondary trades, two concurrent launches). Before the IPO no shares exist: drafts start with `primary_shares_remaining = 0` and no holdings.
 - **Trading:** `trading = listed and ipo_at is not null` (`is_trading`), checked in `_tradable_market`, so `GET /assets/{id}/quote` and `POST /orders` both answer 409 `not_trading` for anything else, suspended assets included; visibility comes first, so a listing under review is still a 404 to outsiders (T58). In the UI, the marketplace card and the asset page show a "Not trading yet" label for a listed site awaiting its IPO, and the trade panel locks with "This site isn't trading yet…" and shows no unit counts while `total_shares` is null. `AssetCard.trading` and `AssetDetail.trading` / `ipo_at` tell the UI; a listed asset awaiting its IPO stays on the marketplace with `trading: false` and no price. Curated sites are launched by the seed (migration 0013 backfills `ipo_at` from each asset's first price), so they keep trading.
 - **Migration 0013:** backfills `ipo_at` with each asset's first price `ts` (no price: stays null); sets `primary_shares_remaining = 0` on unlaunched assets with no holdings (T58 drafts had a default float); leaves an unlaunched asset that has holdings alone and logs a warning naming it; refuses to upgrade, naming the count, if an asset has two `ipo` prices. The downgrade drops the column and the index.
-- **T69 seam:** `check_gate(session, asset)` runs inside the launch transaction with the asset locked, and in the preview to fill `blocked_reason`. Today every listed asset passes; T69 adds ADR-0006's rule there (live world: the current verification run is `verified` with a matching fingerprint, else 409 `verification_required`).
+- **The gate (T69):** `check_gate(session, asset)` runs inside the launch transaction with the asset locked, and in the preview to fill `blocked_reason`. In the live world the current verification run must be `verified`, `review` mode with `real` evidence, and its input fingerprint must match the listing now; in every world a revoked current run blocks. Otherwise 409 `not_verified` (see "As built (T69)").
 - **Deferred:** re-checking `LAUNCH_IPO` with fresh memberships after the lock (owners can't leave or be removed today, so it can't change).
 - **The screen (T64):** `/steward/assets/{id}/ipo` (Steward app, signed-in accounts only). The owner types the units to issue and the % kept; the preview is asked for 400 ms after the last change and shows every term it returns, labelled, without computing any number in the browser. The launch button needs a launchable preview that echoes the current inputs, and the confirm dialog sends that preview's `total_shares`, `retained_pct` and `ipo_price` (as `expected_price`). The backend's answer decides the page: 403 → "only the owner can launch" (before any 409, so a steward never sees a status message as if they could launch), `ipo_already_launched` → a link to `/asset/{id}`, `asset_not_listed` → why, by the asset's status; `blocked_reason` and the launch's 409s are explained in words (`ipo_price_changed` re-previews; `verification_required`/`not_verified` say verification comes first, T69/T70). Helpers in `frontend/src/lib/ipo.ts` and `use-ipo-offer.ts`. It works opened directly; Steward home (T63) and the listing flow (T33) will link here.
 
@@ -1098,6 +1151,10 @@ ENVIRONMENT=production     # every deployment; cookies drop Secure only if expli
 ALLOWED_ORIGINS=https://app.example.com   # exact origins allowed to POST/PUT/PATCH/DELETE (T66); default http://localhost:3000
 TRUSTED_PROXY_HOPS=0                      # trusted proxies that append to X-Forwarded-For; the Next.js /api rewrite is not one (T66); set from the real deployment, T20
 AUTH_RATE_LIMIT_SECRET=<32+ random bytes>  # HMAC key for rate-limit buckets; required unless ENVIRONMENT is development or test (T66)
+DOCUMENT_FINGERPRINT_SECRET=<32+ random bytes>  # HMAC key for verification documents' private fingerprints; required unless ENVIRONMENT is development or test (T69)
+DOCUMENT_UPLOADS_PER_HOUR=20                     # verification upload attempts per account per rolling hour; 429 upload_rate_limited (T69)
+DOCUMENT_QUOTA_COMMUNITY_BYTES=104857600         # document bytes a community's listings may hold; 409 storage_quota_exceeded (T69)
+DOCUMENT_QUOTA_WORLD_BYTES=1073741824            # document bytes a whole world may hold (T69)
 LLM_BUDGET_USD=20          # hard cap per deployment key (§21)
 RATING_RUNS_PER_WORLD_PER_HOUR=6  # rating runs each world may start per rolling hour; 429 after (T27)
 RATING_RUNS_GLOBAL_PER_HOUR=60    # rating runs across all worlds per rolling hour; 429 rating_global_limit (T27)

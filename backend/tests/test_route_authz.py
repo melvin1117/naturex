@@ -180,6 +180,21 @@ def test_admin_routes_are_operator_only() -> None:
     assert actions[("GET", "/assets/{asset_id}/quote")] == {Action.BROWSE}
     assert actions[("GET", "/assets/outlines")] == {Action.BROWSE}
     assert actions[("POST", "/assets/{asset_id}/rate")] == {Action.OPERATE, Action.MANAGE_LISTING}
+    # T69: steward uploads and submits; the community and admins read; admins decide.
+    assert actions[("POST", "/assets/{asset_id}/documents")] == {Action.MANAGE_LISTING}
+    assert actions[("POST", "/assets/{asset_id}/verification/runs")] == {Action.MANAGE_LISTING}
+    for path in (
+        "/assets/{asset_id}/documents",
+        "/assets/{asset_id}/documents/{document_id}",
+        "/assets/{asset_id}/documents/{document_id}/preview",
+        "/assets/{asset_id}/verification/runs",
+    ):
+        assert actions[("GET", path)] == {Action.VIEW_COMMUNITY_DATA}, path
+    assert actions[("GET", "/assets/{asset_id}/verification")] == {Action.BROWSE}
+    assert actions[("GET", "/admin/verifications")] == {Action.REVIEW_LISTING}
+    for step in ("approve", "reject", "revoke"):
+        path = f"/admin/assets/{{asset_id}}/verification/{{run_id}}/{step}"
+        assert actions[("POST", path)] == {Action.REVIEW_LISTING}
 
 
 def test_the_order_request_body_is_unchanged_by_its_loader() -> None:
@@ -309,6 +324,27 @@ OBJECT_ROUTES: dict[tuple[str, str], tuple[str, Callable[[Objects], Any] | None]
     # T59's IPO: the community owner's (LAUNCH_IPO), on an asset the caller can see.
     ("GET", "/assets/{asset_id}/ipo/preview"): ("rosa", None),
     ("POST", "/assets/{asset_id}/ipo"): ("rosa", lambda o: {"expected_price": "1"}),
+    # T69's verification: the steward's uploads and runs, the community's and admins' reads,
+    # the public panel and the reviewer's decisions.
+    ("POST", "/assets/{asset_id}/documents"): ("rosa", None),
+    ("GET", "/assets/{asset_id}/documents"): ("rosa", None),
+    ("GET", "/assets/{asset_id}/documents/{document_id}"): ("rosa", None),
+    ("GET", "/assets/{asset_id}/documents/{document_id}/preview"): ("rosa", None),
+    ("POST", "/assets/{asset_id}/verification/runs"): (
+        "rosa",
+        lambda o: {"document_ids": [str(uuid4())]},
+    ),
+    ("GET", "/assets/{asset_id}/verification/runs"): ("rosa", None),
+    ("GET", "/assets/{asset_id}/verification"): ("arjun", None),
+    ("POST", "/admin/assets/{asset_id}/verification/{run_id}/approve"): ("admin", lambda o: {}),
+    ("POST", "/admin/assets/{asset_id}/verification/{run_id}/reject"): (
+        "admin",
+        lambda o: {"reason": "Unreadable scan"},
+    ),
+    ("POST", "/admin/assets/{asset_id}/verification/{run_id}/revoke"): (
+        "admin",
+        lambda o: {"reason": "Disputed title"},
+    ),
 }
 # Required query parameters, so the same-world control reaches the handler.
 QUERIES: dict[tuple[str, str], dict[str, str]] = {
@@ -318,6 +354,9 @@ QUERIES: dict[tuple[str, str], dict[str, str]] = {
 # seeded sites' IPOs have already launched (T59).
 OWN_WORLD_STATUS: dict[tuple[str, str], tuple[int, str | None]] = {
     ("GET", "/assets/{asset_id}/ipo/preview"): (409, "ipo_already_launched"),
+    # No document has that ID in the caller's world either (T69).
+    ("GET", "/assets/{asset_id}/documents/{document_id}"): (404, "document_not_found"),
+    ("GET", "/assets/{asset_id}/documents/{document_id}/preview"): (404, "document_not_found"),
 }
 # Object IDs that travel in a body or query instead of the path: (persona, body, query), built
 # from the other world's objects. The path, if templated, is filled from the caller's own world.
@@ -406,6 +445,7 @@ def fill(path: str, o: Objects) -> str:
         "report_id": o.report,
         "prev": o.report,
         "run_id": o.run,
+        "document_id": o.report,  # any ID: the asset in the path decides the world
     }
     return re.sub(r"\{([^}]+)\}", lambda m: str(values[m.group(1)]), path)
 

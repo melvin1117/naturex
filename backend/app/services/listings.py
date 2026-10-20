@@ -78,6 +78,7 @@ from app.tools.geometry import (
     geometry_sha256,
     overlapping,
 )
+from app.tools.verification import NOT_VERIFIED
 
 STATUS_REASON_MAX = 200
 MAX_OPEN_LISTINGS = 10
@@ -650,7 +651,9 @@ def withdraw(session: Session, world_id: UUID, asset_id: UUID, *, run_active: Ru
 
 
 def suspend(session: Session, world_id: UUID, asset_id: UUID, reason: SuspensionReason) -> Asset:
-    """listed → suspended (admin moderation; T69's revocation). Raises TransitionRefused."""
+    """listed → suspended (admin moderation). T69's revocation suspends through
+    `app.services.verification.revoke`, in the same transaction as the revoked run. Raises
+    TransitionRefused."""
     lock_listings(session, world_id)
     asset = lock_asset(session, world_id, asset_id)
     record(session, asset, transition(asset.status, ListingEvent.SUSPEND, suspension=reason))
@@ -658,8 +661,13 @@ def suspend(session: Session, world_id: UUID, asset_id: UUID, reason: Suspension
 
 
 def resume(session: Session, world_id: UUID, asset_id: UUID) -> Asset:
-    """suspended → listed (admin). Raises TransitionRefused."""
+    """suspended → listed (admin). Raises TransitionRefused, `not_verified` while a verification
+    revocation stands (`assets.verification_revoked_at`, T69): only an admin's approval of a new
+    run clears it, and resumes the asset itself."""
     lock_listings(session, world_id)
     asset = lock_asset(session, world_id, asset_id)
-    record(session, asset, transition(asset.status, ListingEvent.RESUME))
+    step = transition(asset.status, ListingEvent.RESUME)
+    if asset.verification_revoked_at is not None:
+        raise TransitionRefused(NOT_VERIFIED)
+    record(session, asset, step)
     return asset
