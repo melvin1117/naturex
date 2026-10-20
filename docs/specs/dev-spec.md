@@ -554,6 +554,7 @@ create index on live_rating_requests (run_id);
 | `GET /admin/time-machine` | The world's Time Machine quarter, the next one, the timeline and the event presets; `available: false` (+ `unavailable_reason`) outside a sandbox (T38) |
 | `POST /admin/simulate/quarter` `{period}` | Sandbox only. Advance to the next quarter (or replay the current one): re-rate every listed asset with its next scenario version, re-anchor prices, alert, pay the quarter (T38) |
 | `POST /admin/simulate/event` `{asset_id, preset}` | Sandbox only. Inject a preset event (fire, encroachment, drought, restoration, protection) into one asset and re-rate it (T38) |
+| `GET /admin/alerts?ids=` | The alerts a quarter or event sent (its `alert_ids`, 1–50), as recipients got them, with how many accounts each reached; `operate`, the caller's world only (T43: the Time Machine's phone preview) |
 | `GET /admin/trace?asset_id=` | Latest 50 logged LLM attempts in the caller's world, optionally filtered to a visible asset; metadata only |
 | `GET /runs/{run_id}/trace` | World-scoped per-run progress spans, model attempts, tokens, latency and safe tool-result summaries (full trace snapshotted with the sealed report for event pruning; older reports have only tool spans), and `totals` (model calls, tokens, cost of every call; null until the run seals a report) |
 | `GET /ledger/{asset_id}` | Ledger entries (hashes, kinds, timestamps) |

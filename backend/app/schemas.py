@@ -1125,6 +1125,24 @@ class SimulateEventResponse(BaseModel):
     alert_created: bool
 
 
+class SentAlertOut(BaseModel):
+    """An alert as its recipients got it, for the admin who raised it (T43)."""
+
+    id: UUID
+    asset_id: UUID
+    asset_name: str
+    kind: Literal["grade_change", "health_change", "news"]
+    title: str
+    message: str
+    severity: int = Field(ge=1, le=5)
+    url: str | None = None
+    report_id: UUID | None = None
+    created_at: datetime
+    recipients: int = Field(
+        ge=0, description="Accounts it was delivered to (holders and community members)"
+    )
+
+
 class TraceStep(BaseModel):
     agent: str | None
     model: str | None

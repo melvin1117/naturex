@@ -3,7 +3,8 @@
 The Time Machine (`GET /admin/time-machine`, `POST /admin/simulate/quarter`) and event injection
 (`POST /admin/simulate/event`) are operator actions: admins only, in their own world
 (`Action.OPERATE`; a demo admin persona operates only its sandbox). Their logic is
-`app/services/time_machine.py` (T38). The agent trace is a read (`Action.BROWSE`, ADR-0005 §3
+`app/services/time_machine.py` (T38). `GET /admin/alerts` shows the operator the alerts a
+simulation sent (T43). The agent trace is a read (`Action.BROWSE`, ADR-0005 §3
 matrix row 1).
 """
 
@@ -13,11 +14,11 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, func, select
 
 from app.authz import (
     Action,
@@ -32,11 +33,12 @@ from app.authz import (
 )
 from app.deps import CurrentWorld, SessionDep, SettingsDep
 from app.llm import DbCallLog
-from app.models import LlmCall
+from app.models import Alert, AlertRecipient, Asset, LlmCall
 from app.schemas import (
     AssetRatingOut,
     EventOut,
     EventPresetOut,
+    SentAlertOut,
     SimulatedAssetOut,
     SimulateEventRequest,
     SimulateEventResponse,
@@ -48,7 +50,7 @@ from app.schemas import (
     TraceStep,
 )
 from app.services import time_machine
-from app.services.alerts import NEWS_ALERT_SEVERITY
+from app.services.alerts import NEWS_ALERT_SEVERITY, AlertKindOut
 from app.services.rating_runs import (
     AssetNotRateable,
     RunError,
@@ -368,6 +370,59 @@ def simulate_event(
         alert_ids=outcome.alert_ids,
         alert_created=bool(outcome.alert_ids),
     )
+
+
+MAX_SENT_ALERTS = 50
+
+
+@router.get(
+    "/alerts",
+    response_model=list[SentAlertOut],
+    dependencies=[OPERATE],
+    responses=ADMIN_ONLY_RESPONSE,
+)
+def get_sent_alerts(
+    world: CurrentWorld,
+    session: SessionDep,
+    ids: Annotated[list[UUID], Query(min_length=1, max_length=MAX_SENT_ALERTS)],
+) -> list[SentAlertOut]:
+    """The given alerts of the caller's world as their recipients got them, with how many
+    accounts each reached, newest first (T43: what a Time Machine quarter or event sent; its
+    response lists the `alert_ids`). IDs from another world, or unknown, are left out."""
+    recipients = (
+        select(func.count())
+        .where(
+            AlertRecipient.world_id == Alert.world_id,
+            AlertRecipient.alert_id == Alert.id,
+        )
+        .scalar_subquery()
+    )
+    rows = session.exec(
+        select(Alert, Asset.name, recipients)
+        .join(Asset, col(Asset.id) == col(Alert.asset_id))
+        .where(
+            Alert.world_id == world.id,
+            Asset.world_id == world.id,
+            col(Alert.id).in_(ids),
+        )
+        .order_by(col(Alert.created_at).desc(), col(Alert.id))
+    ).all()
+    return [
+        SentAlertOut(
+            id=alert.id,
+            asset_id=alert.asset_id,
+            asset_name=name,
+            kind=cast(AlertKindOut, alert.kind),
+            title=alert.title or "",
+            message=alert.message or "",
+            severity=alert.severity or 1,
+            url=alert.url,
+            report_id=alert.report_id,
+            created_at=alert.created_at,
+            recipients=count,
+        )
+        for alert, name, count in rows
+    ]
 
 
 @router.get("/trace", response_model=TraceOut, dependencies=[require(Action.BROWSE, trace_target)])
