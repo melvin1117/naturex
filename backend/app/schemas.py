@@ -495,10 +495,61 @@ class PricePoint(BaseModel):
     reason: str | None = None
 
 
+MetricGroup = Literal["headline", "health", "confidence", "satellite", "valuation"]
+
+
+class MetricChange(BaseModel):
+    """One stored number that differs between two report versions (T37)."""
+
+    id: str = Field(
+        description="Stable key; it matches the Auditor's citation ID where one exists "
+        "(e.g. `metric:landcover.built`, `score:threat_pressure`)."
+    )
+    label: str
+    group: MetricGroup
+    unit: str | None
+    change: Literal["changed", "added", "removed"]
+    old: Decimal | None = Field(description="Value in the older report; null if absent there.")
+    new: Decimal | None = Field(description="Value in the newer report; null if absent there.")
+    delta: Decimal | None = Field(description="`new - old`; null unless both are present.")
+    reason_refs: list[int] = Field(
+        description="Indexes into `ReportDiff.reasons` that cite this metric."
+    )
+
+
+class GradeChange(BaseModel):
+    old: str | None
+    new: str | None
+    direction: Literal["up", "down"] | None = Field(
+        description="`up` = a better grade; null if either grade is unknown."
+    )
+
+
+class DiffReason(BaseModel):
+    """Why something changed, from stored data only: the Auditor's cited text, a stored event
+    title, a flag's stored detail or a fixed template filled with stored codes (never new
+    model text)."""
+
+    source: Literal["auditor", "event", "flag", "data", "scenario"]
+    version: int = Field(description="The report version this reason was recorded with.")
+    code: str | None
+    text: str
+    citations: list[str]
+
+
 class ReportDiff(BaseModel):
     report_id: UUID
     prev_report_id: UUID
-    changes: list[str]
+    changes: list[str] = Field(
+        description="Headline lines (health, grade, confidence, value_mid, fair_value_total)."
+    )
+    from_version: int
+    to_version: int
+    grade_change: GradeChange | None = Field(description="Null when the grade is unchanged.")
+    metrics: list[MetricChange] = Field(
+        description="Changed numbers only; unchanged ones are omitted."
+    )
+    reasons: list[DiffReason]
 
 
 class OrderCreate(BaseModel):

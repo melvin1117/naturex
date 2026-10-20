@@ -2219,7 +2219,7 @@
           "reports"
         ],
         "summary": "Diff Reports",
-        "description": "Headline changes between two reports of one asset (deterministic; T37 extends it).",
+        "description": "What changed from report `prev` to report `report_id` (two versions of one asset):\neach changed number with its old and new value and delta, the grade change and the reasons\n(stored Auditor citations, events, flags and data versions; no model is called).\n400 `prev_not_older` when `prev` is a later version than `report_id`.",
         "operationId": "diff_reports_reports__report_id__diff__prev__get",
         "parameters": [
           {
@@ -2253,6 +2253,12 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "The reports belong to different assets, or `prev` is the later version (`prev_not_older`)."
+          },
+          "404": {
+            "description": "Either report is missing, in another world or not visible."
           },
           "422": {
             "description": "Validation Error",
@@ -4382,6 +4388,58 @@
         ],
         "title": "DateWindow"
       },
+      "DiffReason": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "auditor",
+              "event",
+              "flag",
+              "data",
+              "scenario"
+            ],
+            "title": "Source"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "description": "The report version this reason was recorded with."
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "citations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Citations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "version",
+          "code",
+          "text",
+          "citations"
+        ],
+        "title": "DiffReason",
+        "description": "Why something changed, from stored data only: the Auditor's cited text, a stored event\ntitle, a flag's stored detail or a fixed template filled with stored codes (never new\nmodel text)."
+      },
       "DocumentType": {
         "type": "string",
         "enum": [
@@ -4528,6 +4586,55 @@
           "message"
         ],
         "title": "EvidenceResponse"
+      },
+      "GradeChange": {
+        "properties": {
+          "old": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old"
+          },
+          "new": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "up",
+                  "down"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction",
+            "description": "`up` = a better grade; null if either grade is unknown."
+          }
+        },
+        "type": "object",
+        "required": [
+          "old",
+          "new",
+          "direction"
+        ],
+        "title": "GradeChange"
       },
       "HTTPValidationError": {
         "properties": {
@@ -5370,6 +5477,111 @@
         ],
         "title": "MeOut",
         "description": "The signed-in account. Never includes the password hash."
+      },
+      "MetricChange": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Stable key; it matches the Auditor's citation ID where one exists (e.g. `metric:landcover.built`, `score:threat_pressure`)."
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "group": {
+            "type": "string",
+            "enum": [
+              "headline",
+              "health",
+              "confidence",
+              "satellite",
+              "valuation"
+            ],
+            "title": "Group"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "changed",
+              "added",
+              "removed"
+            ],
+            "title": "Change"
+          },
+          "old": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old",
+            "description": "Value in the older report; null if absent there."
+          },
+          "new": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New",
+            "description": "Value in the newer report; null if absent there."
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta",
+            "description": "`new - old`; null unless both are present."
+          },
+          "reason_refs": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Reason Refs",
+            "description": "Indexes into `ReportDiff.reasons` that cite this metric."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "group",
+          "unit",
+          "change",
+          "old",
+          "new",
+          "delta",
+          "reason_refs"
+        ],
+        "title": "MetricChange",
+        "description": "One stored number that differs between two report versions (T37)."
       },
       "MyCommunityOut": {
         "properties": {
@@ -6435,14 +6647,54 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Changes"
+            "title": "Changes",
+            "description": "Headline lines (health, grade, confidence, value_mid, fair_value_total)."
+          },
+          "from_version": {
+            "type": "integer",
+            "title": "From Version"
+          },
+          "to_version": {
+            "type": "integer",
+            "title": "To Version"
+          },
+          "grade_change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GradeChange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the grade is unchanged."
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/MetricChange"
+            },
+            "type": "array",
+            "title": "Metrics",
+            "description": "Changed numbers only; unchanged ones are omitted."
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/DiffReason"
+            },
+            "type": "array",
+            "title": "Reasons"
           }
         },
         "type": "object",
         "required": [
           "report_id",
           "prev_report_id",
-          "changes"
+          "changes",
+          "from_version",
+          "to_version",
+          "grade_change",
+          "metrics",
+          "reasons"
         ],
         "title": "ReportDiff"
       },

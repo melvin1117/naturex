@@ -759,7 +759,10 @@ export interface paths {
         };
         /**
          * Diff Reports
-         * @description Headline changes between two reports of one asset (deterministic; T37 extends it).
+         * @description What changed from report `prev` to report `report_id` (two versions of one asset):
+         *     each changed number with its old and new value and delta, the grade change and the reasons
+         *     (stored Auditor citations, events, flags and data versions; no model is called).
+         *     400 `prev_not_older` when `prev` is a later version than `report_id`.
          */
         get: operations["diff_reports_reports__report_id__diff__prev__get"];
         put?: never;
@@ -1654,6 +1657,30 @@ export interface components {
             end: string;
         };
         /**
+         * DiffReason
+         * @description Why something changed, from stored data only: the Auditor's cited text, a stored event
+         *     title, a flag's stored detail or a fixed template filled with stored codes (never new
+         *     model text).
+         */
+        DiffReason: {
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "auditor" | "event" | "flag" | "data" | "scenario";
+            /**
+             * Version
+             * @description The report version this reason was recorded with.
+             */
+            version: number;
+            /** Code */
+            code: string | null;
+            /** Text */
+            text: string;
+            /** Citations */
+            citations: string[];
+        };
+        /**
          * DocumentType
          * @description What the steward says a document is (ADR-0006 §2). `assembly_minutes` is the
          *     consent-labelled document the checklist looks for.
@@ -1705,6 +1732,18 @@ export interface components {
             event: components["schemas"]["EventOut"];
             /** Message */
             message: string;
+        };
+        /** GradeChange */
+        GradeChange: {
+            /** Old */
+            old: string | null;
+            /** New */
+            new: string | null;
+            /**
+             * Direction
+             * @description `up` = a better grade; null if either grade is unknown.
+             */
+            direction: ("up" | "down") | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2093,6 +2132,51 @@ export interface components {
              * Format: uuid
              */
             world_id: string;
+        };
+        /**
+         * MetricChange
+         * @description One stored number that differs between two report versions (T37).
+         */
+        MetricChange: {
+            /**
+             * Id
+             * @description Stable key; it matches the Auditor's citation ID where one exists (e.g. `metric:landcover.built`, `score:threat_pressure`).
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Group
+             * @enum {string}
+             */
+            group: "headline" | "health" | "confidence" | "satellite" | "valuation";
+            /** Unit */
+            unit: string | null;
+            /**
+             * Change
+             * @enum {string}
+             */
+            change: "changed" | "added" | "removed";
+            /**
+             * Old
+             * @description Value in the older report; null if absent there.
+             */
+            old: string | null;
+            /**
+             * New
+             * @description Value in the newer report; null if absent there.
+             */
+            new: string | null;
+            /**
+             * Delta
+             * @description `new - old`; null unless both are present.
+             */
+            delta: string | null;
+            /**
+             * Reason Refs
+             * @description Indexes into `ReportDiff.reasons` that cite this metric.
+             */
+            reason_refs: number[];
         };
         /**
          * MyCommunityOut
@@ -2581,8 +2665,24 @@ export interface components {
              * Format: uuid
              */
             prev_report_id: string;
-            /** Changes */
+            /**
+             * Changes
+             * @description Headline lines (health, grade, confidence, value_mid, fair_value_total).
+             */
             changes: string[];
+            /** From Version */
+            from_version: number;
+            /** To Version */
+            to_version: number;
+            /** @description Null when the grade is unchanged. */
+            grade_change: components["schemas"]["GradeChange"] | null;
+            /**
+             * Metrics
+             * @description Changed numbers only; unchanged ones are omitted.
+             */
+            metrics: components["schemas"]["MetricChange"][];
+            /** Reasons */
+            reasons: components["schemas"]["DiffReason"][];
         };
         /** ReportOut */
         ReportOut: {
@@ -5253,6 +5353,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ReportDiff"];
                 };
+            };
+            /** @description The reports belong to different assets, or `prev` is the later version (`prev_not_older`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Either report is missing, in another world or not visible. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

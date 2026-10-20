@@ -30,6 +30,7 @@ export type QuoteOut = Schemas["QuoteOut"];
 export type RatingRun = Schemas["RatingRunOut"];
 export type RatingRunStep = Schemas["RatingRunStep"];
 export type RegisterIn = Schemas["RegisterIn"];
+export type ReportDiff = Schemas["ReportDiff"];
 export type ReportOut = Schemas["ReportOut"];
 export type SiteImages = Schemas["SiteImages"];
 export type StreamEvent = Schemas["StreamEvent"];

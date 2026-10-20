@@ -19,6 +19,7 @@ import { NdviChart } from "@/components/proto/charts";
 import { GradeBadge } from "@/components/proto/grade";
 import { SiteMap } from "@/components/proto/site-map";
 import { VerificationBadge } from "@/components/proto/verification";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -27,6 +28,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import type { ReportDiff } from "@/lib/api/types";
+import { useReportDiff } from "@/lib/hooks";
 import {
   LANDCOVER,
   LANDCOVER_ORDER,
@@ -418,8 +421,67 @@ function diffRows(report: ReportFacts, prev?: ReportFacts): DiffRow[] {
   ];
 }
 
+const REASON_SOURCE: Record<ReportDiff["reasons"][number]["source"], string> = {
+  auditor: "Auditor",
+  event: "News",
+  flag: "Flag",
+  data: "Data",
+  scenario: "Scenario",
+};
+
+/** Why a report changed since `prevId`: stored reasons from the diff API (T37). */
+function ChangeReasons({
+  reportId,
+  prevId,
+}: {
+  reportId: string;
+  prevId: string;
+}) {
+  const diff = useReportDiff(reportId, prevId);
+  if (!diff.data)
+    return (
+      <p className="mt-4 text-xs text-muted-foreground" aria-live="polite">
+        {diff.error
+          ? "We couldn't load why it changed."
+          : "Loading why it changed…"}
+      </p>
+    );
+  const { reasons } = diff.data;
+  return (
+    <div className="mt-5">
+      <h4 className="text-sm font-medium">Why it changed</h4>
+      {reasons.length === 0 ? (
+        <p className="mt-2 text-sm text-muted-foreground">
+          No reasons were recorded between these versions.
+        </p>
+      ) : (
+        <ul className="mt-2 space-y-2">
+          {reasons.map((r, i) => (
+            <li
+              key={`${i}-${r.text}`}
+              className="flex items-start gap-2 text-sm"
+            >
+              <Badge variant="secondary" className="mt-0.5 shrink-0">
+                {REASON_SOURCE[r.source]}
+              </Badge>
+              <MarkdownText text={r.text} className="min-w-0 break-words" />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** Report versions, newest first; the picker shows any version and what changed from the one before. */
-export function ReportTab({ versions }: { versions: ReportFacts[] }) {
+export function ReportTab({
+  versions,
+  showReasons = false,
+}: {
+  versions: ReportFacts[];
+  /** Load the reasons from the diff API (real assets only, not the prototype). */
+  showReasons?: boolean;
+}) {
   const [picked, setPicked] = useState<string | null>(null);
   const index = Math.max(
     0,
@@ -567,6 +629,9 @@ export function ReportTab({ versions }: { versions: ReportFacts[] }) {
                 })}
               </tbody>
             </table>
+          )}
+          {prev && showReasons && (
+            <ChangeReasons reportId={report.id} prevId={prev.id} />
           )}
         </Panel>
         <Panel title="Stewardship actions">

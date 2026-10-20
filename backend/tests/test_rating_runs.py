@@ -25,6 +25,7 @@ import pytest
 from alembic import command
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection, create_engine, delete, text, update
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, func, select
 
 from app import mocks
@@ -59,6 +60,7 @@ from app.sandbox import _delete_world_rows, create_world, ensure_live_world
 from app.schemas import NewsScoutOutput, RatingRunStatus
 from app.seed import seed
 from app.services import rating_runs
+from app.services.diff import audited_step, diff_reports
 from app.services.rating import rate_site
 from app.services.rating_runs import (
     GLOBAL_RUNS_LOCK_KEY,
@@ -332,6 +334,43 @@ def test_auditor_needs_offered_evidence_first() -> None:
 
 
 # ----- happy path -------------------------------------------------------------------------------
+
+
+@requires_db
+def test_a_rerate_adds_a_version_and_leaves_the_earlier_one_untouched(
+    db: Connection, site: Site
+) -> None:
+    def stored(session: Session) -> list[dict[str, Any]]:
+        rows = session.exec(
+            select(Report)
+            .where(Report.world_id == site.world_id, Report.asset_id == site.asset_id)
+            .order_by(col(Report.version))
+        ).all()
+        return [row.model_dump() for row in rows]
+
+    with sessions(db)() as session:
+        before = stored(session)
+    assert [row["version"] for row in before] == [1]
+
+    h = harness(db, *happy_script())
+    run_id = h.runner.start(site.world_id, site.asset_id)
+
+    with sessions(db)() as session:
+        after = stored(session)
+        first, second = (session.get_one(Report, row["id"]) for row in after)
+        diff = diff_reports(first, second, [audited_step(second)])
+    assert [row["version"] for row in after] == [1, 2]
+    assert after[0] == before[0]  # the sealed v1 row is byte-for-byte unchanged
+    assert after[1]["id"] != before[0]["id"]
+    assert after[1]["auditor_json"]["run"]["run_id"] == str(run_id)
+    # The diff explains v2 with the Auditor's stored, cited key changes (no new model call).
+    key_changes = [r.text for r in diff.reasons if r.code == "key_change"]
+    assert key_changes == answer()["key_changes"]
+    assert len(h.transport.requests) == 5
+    with sessions(db)() as session, pytest.raises(IntegrityError):
+        duplicate = Report(world_id=site.world_id, asset_id=site.asset_id, version=2)
+        session.add(duplicate)
+        session.flush()
 
 
 @requires_db
