@@ -453,6 +453,12 @@ describe("the community home", () => {
       "href",
       `/steward/list?community=${SELVA.id}&asset=${draft.asset.id}`,
     );
+    expect(
+      within(sites).getByRole("link", { name: "Verification of Bosque Alto" }),
+    ).toHaveAttribute(
+      "href",
+      `/steward/assets/${awaiting.asset.id}/verify?community=${SELVA.id}`,
+    );
 
     const wallet = screen.getByRole("region", { name: "Community fund" });
     expect(

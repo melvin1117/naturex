@@ -66,6 +66,22 @@ export const queryKeys = {
   run: (runId: string) => ["run", runId] as const,
   /** Public sites' simplified boundaries for the listing map (T33). */
   outlines: () => ["outlines"] as const,
+  /** Every verification query of one listing (a prefix, for invalidation; T70). */
+  verification: (assetId: string) => ["verification", assetId] as const,
+  verificationPanel: (assetId: string) =>
+    ["verification", assetId, "panel"] as const,
+  verificationRuns: (assetId: string) =>
+    ["verification", assetId, "runs"] as const,
+  verificationDocuments: (assetId: string) =>
+    ["verification", assetId, "documents"] as const,
+  /** Its own prefix: a decision refetches the run, never the (unchanged) preview images. */
+  documentPreview: (assetId: string, documentId: string) =>
+    ["document-preview", assetId, documentId] as const,
+  /** Every page of the reviewer queue, for every account (a prefix, for invalidation). */
+  reviewQueueAll: () => ["review-queue"] as const,
+  /** One page of the reviewer queue, per account. */
+  reviewQueue: (meId: string | null, offset: number) =>
+    ["review-queue", meId, offset] as const,
 };
 
 export interface CreateDataLayerOptions {

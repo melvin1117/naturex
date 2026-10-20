@@ -41,6 +41,17 @@ function routes(overrides: Parameters<typeof renderExchange>[1] = {}) {
     "GET /media/demo-sites/wetland_mx/images.json": () => json(images),
     [`GET /ledger/${ID}`]: () => json(ledger),
     [`GET /ledger/${ID}/verify`]: () => json(verify),
+    [`GET /assets/${ID}/verification`]: () =>
+      json({
+        asset_id: ID,
+        level: "verified",
+        badge: "Documents reviewed by NatureX (hackathon process)",
+        decided_at: "2026-10-19T09:00:00Z",
+        reviewer_role: "platform_admin",
+        checks: [{ check: "boundary_free", result: "pass" }],
+        not_checked: ["Registry records"],
+        ledger_seq: 3,
+      }),
     ...overrides,
   };
 }
@@ -346,6 +357,66 @@ describe("AssetView", () => {
     expect(links[0]).toHaveAttribute("href", "https://example.org/fill");
     expect(links[0]).toHaveAttribute("rel", "noopener noreferrer nofollow");
     expect(screen.queryByText("Sample")).toBeNull();
+  });
+
+  it("shows the verification badge in the hero and the public panel", async () => {
+    renderExchange(<AssetView id={ID} />, routes());
+
+    const hero = await screen.findByRole("link", {
+      name: /^Documents reviewed by NatureX \(hackathon process\)/,
+    });
+    expect(hero).toHaveAttribute("href", "#verification");
+    const panel = screen.getByRole("region", {
+      name: "How this listing was verified",
+    });
+    expect(
+      within(panel).getByText("NatureX platform admin"),
+    ).toBeInTheDocument();
+    expect(within(panel).getByText("Registry records")).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("link", { name: /entry #3/ }),
+    ).toHaveAttribute("href", `/asset/${ID}?tab=ledger#ledger-entry-3`);
+  });
+
+  it("scrolls to and outlines the ledger entry a link names", async () => {
+    nav.search = new URLSearchParams("tab=ledger");
+    window.history.replaceState(
+      null,
+      "",
+      `/asset/${ID}?tab=ledger#ledger-entry-0`,
+    );
+    renderExchange(<AssetView id={ID} />, routes());
+
+    const entry = (await screen.findByText("#0")).closest("li")!;
+    await waitFor(() => expect(entry).toHaveFocus());
+    expect(entry).toHaveAttribute("id", "ledger-entry-0");
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("follows the panel's ledger link while the ledger is already open", async () => {
+    nav.search = new URLSearchParams("tab=ledger");
+    window.history.replaceState(null, "", `/asset/${ID}?tab=ledger`);
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /assets/${ID}/verification`]: () =>
+          json({
+            asset_id: ID,
+            level: "verified",
+            badge: "Documents reviewed by NatureX (hackathon process)",
+            checks: [],
+            not_checked: [],
+            ledger_seq: 0,
+          }),
+      }),
+    );
+    const entry = (await screen.findByText("#0")).closest("li")!;
+    expect(entry).not.toHaveFocus();
+
+    fireEvent.click(await screen.findByRole("link", { name: /entry #0/ }));
+    await waitFor(() => expect(entry).toHaveFocus());
+    expect(window.location.hash).toBe("#ledger-entry-0");
+    window.history.replaceState(null, "", "/");
   });
 
   it("loads the ledger and verifies it on the server", async () => {

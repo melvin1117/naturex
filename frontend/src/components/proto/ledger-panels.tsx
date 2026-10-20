@@ -12,6 +12,7 @@ import { date } from "@/lib/prototype/format";
 import { verify, type VerifyResult } from "@/lib/prototype/ledger";
 import { usePrototype } from "@/lib/prototype/store";
 import { tamperLedger, type Site } from "@/lib/prototype/world";
+import { ledgerEntryId } from "@/lib/verification";
 
 export type LedgerRow = {
   seq: number;
@@ -44,12 +45,15 @@ export function LedgerPanel({
   check,
   actions,
   tamperedAt,
+  highlightedAt,
   empty = "No ledger entries yet.",
 }: {
   entries: LedgerRow[];
   check: LedgerCheck | null;
   actions: React.ReactNode;
   tamperedAt?: number;
+  /** The entry a link pointed at (`#ledger-entry-<seq>`), outlined. */
+  highlightedAt?: number | null;
   empty?: string;
 }) {
   return (
@@ -105,9 +109,12 @@ export function LedgerPanel({
           {[...entries].reverse().map((e) => (
             <li
               key={e.seq}
+              id={ledgerEntryId(e.seq)}
+              tabIndex={-1}
               className={cn(
-                "rounded-2xl bg-machine-raised px-4 py-3",
+                "scroll-mt-24 rounded-2xl bg-machine-raised px-4 py-3 outline-none",
                 tamperedAt === e.seq && "ring-2 ring-clay",
+                highlightedAt === e.seq && "ring-2 ring-lime",
               )}
             >
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
@@ -229,6 +236,7 @@ export function ApiLedgerTab({ assetId }: { assetId: string }) {
   useEffect(() => {
     resetVerify();
   }, [chainKey, resetVerify]);
+  const highlighted = useLinkedEntry(ledger.data !== undefined);
 
   if (!ledger.data && ledger.error)
     return (
@@ -254,6 +262,7 @@ export function ApiLedgerTab({ assetId }: { assetId: string }) {
     <div className="space-y-3">
       <LedgerPanel
         entries={entries}
+        highlightedAt={highlighted}
         check={
           result
             ? {
@@ -288,4 +297,30 @@ export function ApiLedgerTab({ assetId }: { assetId: string }) {
       )}
     </div>
   );
+}
+
+/**
+ * The entry the page's hash names (`#ledger-entry-<seq>`, e.g. from "How this listing was
+ * verified"), scrolled to and focused once the entries are on screen, and again whenever the
+ * hash changes while the ledger is open.
+ */
+function useLinkedEntry(loaded: boolean): number | null {
+  const [seq, setSeq] = useState<number | null>(null);
+  useEffect(() => {
+    if (!loaded) return;
+    const follow = () => {
+      const match = /^#ledger-entry-(\d+)$/.exec(window.location.hash);
+      const target = match
+        ? document.getElementById(window.location.hash.slice(1))
+        : null;
+      if (!match || !target) return;
+      setSeq(Number(match[1]));
+      target.scrollIntoView({ block: "center" });
+      target.focus({ preventScroll: true });
+    };
+    follow();
+    window.addEventListener("hashchange", follow);
+    return () => window.removeEventListener("hashchange", follow);
+  }, [loaded]);
+  return seq;
 }

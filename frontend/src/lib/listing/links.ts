@@ -19,3 +19,11 @@ export function stewardHomeHref(communityId: string | null): string {
 export function ipoHref(assetId: string, communityId: string | null): string {
   return withCommunity(`/steward/assets/${assetId}/ipo`, communityId);
 }
+
+/** The listing's verification screen (T70): documents, checklist and decision. */
+export function verifyHref(
+  assetId: string,
+  communityId: string | null,
+): string {
+  return withCommunity(`/steward/assets/${assetId}/verify`, communityId);
+}
