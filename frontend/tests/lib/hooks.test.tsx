@@ -354,7 +354,11 @@ describe("live updates", () => {
 
     act(() => {
       FakeEventSource.latest().open();
-      FakeEventSource.latest().emit("alert", 1, { title: "Fire" });
+      FakeEventSource.latest().emit("alert", 1, {
+        alert_id: "a1",
+        asset_id: "s1",
+        title: "Fire",
+      });
     });
 
     expect(await screen.findByText("sse: Fire")).toBeInTheDocument();

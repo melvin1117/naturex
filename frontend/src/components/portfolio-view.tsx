@@ -3,6 +3,7 @@
 import { Leaf, RefreshCwIcon, Sprout, Trees } from "lucide-react";
 import Link from "next/link";
 
+import { AlertsList } from "@/components/alerts-list";
 import { Delta, SiteThumb, Stat } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
 import { Portfolio as PrototypePortfolio } from "@/components/proto/portfolio";
@@ -140,7 +141,12 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
             <Holdings holdings={data.holdings} cards={cards} />
           )}
         </Panel>
-        <ImpactCard data={data} />
+        <div className="min-w-0 space-y-8">
+          <Panel title="Alerts">
+            <AlertsList empty="No alerts yet. When a site you back is re-rated or in the news, you'll hear about it here." />
+          </Panel>
+          <ImpactCard data={data} />
+        </div>
       </div>
     </>
   );

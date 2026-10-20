@@ -80,7 +80,13 @@ describe("EventHub over SSE", () => {
       price: "10.50",
       reason: "trade",
     });
-    source.emit("alert", 2, { title: "Fire nearby" });
+    source.emit("alert", 2, {
+      alert_id: "a1",
+      asset_id: "s1",
+      title: "Fire nearby",
+    });
+    // An alert without its IDs (T75's payload) is dropped like a malformed tick.
+    source.emit("alert", 3, { title: "No asset" });
 
     expect(ticks).toHaveLength(1);
     expect(ticks[0]).toMatchObject({ id: 1, payload: { price: "10.50" } });

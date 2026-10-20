@@ -166,6 +166,7 @@ function setup(
     "GET /world": () => json(world),
     "GET /me/communities": () => json(communities),
     [`GET /communities/${SELVA.id}/members`]: () => json(MEMBERS),
+    "GET /alerts": () => json({ alerts: [], unread_count: 0 }),
     ...routes,
   });
   const layer = createDataLayer({
@@ -489,6 +490,46 @@ describe("the community home", () => {
     expect(within(supporters).getByText(/25 units · <0.01%/)).toBeVisible();
     expect(screen.getByText("Fence the riverbank")).toBeVisible();
     expect(screen.getByText(/No alerts yet/)).toBeVisible();
+  });
+
+  it("lists the alerts about the community's own sites (T75)", async () => {
+    const mine = {
+      id: "11111111-1111-4111-8111-111111111111",
+      asset_id: card().id,
+      asset_name: "Xochimilco Wetland",
+      kind: "grade_change" as const,
+      title: "Xochimilco Wetland downgraded to BBB",
+      message: "Health 72.0 → 64.5 (−7.5 points). Grade A → BBB.",
+      severity: 4,
+      url: null,
+      report_id: null,
+      created_at: "2026-10-19T08:00:00Z",
+      read_at: null,
+    };
+    const elsewhere = {
+      ...mine,
+      id: "22222222-2222-4222-8222-222222222222",
+      asset_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      asset_name: "A site I back",
+      title: "A site I back: health fell 6.0 points",
+    };
+    setup(<StewardPage />, {
+      routes: {
+        [`GET /communities/${SELVA.id}/summary`]: () =>
+          json(summary({ listings: [listing()] })),
+        "GET /alerts": () =>
+          json({ alerts: [mine, elsewhere], unread_count: 2 }),
+      },
+    });
+
+    const panel = await screen.findByRole("region", { name: "Alerts" });
+    expect(
+      await within(panel).findByText("Xochimilco Wetland downgraded to BBB"),
+    ).toBeVisible();
+    expect(within(panel).getByText("1 unread")).toBeVisible();
+    expect(
+      within(panel).queryByText("A site I back: health fell 6.0 points"),
+    ).not.toBeInTheDocument();
   });
 
   it("tells a steward the owner launches the IPO", async () => {
