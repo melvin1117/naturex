@@ -1,5 +1,7 @@
 /** API answers for the verification screens (shapes from the OpenAPI schema, T69). */
 import type {
+  AiDocumentReading,
+  AiSuggestion,
   ListingDocument,
   ReviewQueueItem,
   VerificationPublic,
@@ -158,6 +160,92 @@ export function queueItem(
     community_id: "66666666-6666-4666-8666-666666666666",
     run: run(),
     ai_suggestion_status: "not_run",
+    ...overrides,
+  };
+}
+
+export const AI_NOTICE =
+  "Untrusted AI heuristic: read from the uploaded documents by AI models, which can be wrong or manipulated by the documents themselves. It never changes the checks or the verification level; a person decides.";
+
+const field = (value: string | null = null, excerpt: string | null = null) => ({
+  value,
+  excerpt,
+});
+
+export function aiReading(
+  overrides: Partial<AiDocumentReading> = {},
+): AiDocumentReading {
+  return {
+    document_id: DOC_TITLE,
+    doc_type: "title",
+    sent_to_model: true,
+    not_sent_reason: null,
+    readable: true,
+    holder_name: field(
+      "Ejido Río Claro",
+      "Titular: Ejido Río Claro, municipio de Ejemplo",
+    ),
+    parcel_id: field("RAN-0042", "Parcela RAN-0042"),
+    place: field("Ejemplo", "municipio de Ejemplo"),
+    area: field("144 ha", "Superficie: 144 ha"),
+    area_ha: "144.00",
+    issue_date: field(null, null),
+    instruction_like_text: false,
+    ...overrides,
+  };
+}
+
+export function aiSuggestion(
+  overrides: Partial<AiSuggestion> = {},
+): AiSuggestion {
+  return {
+    trust: "untrusted_heuristic",
+    notice: AI_NOTICE,
+    run_id: RUN_ID,
+    status: "completed",
+    suggestion: "consistent",
+    reasons: ["Document 1, holder name: the names refer to the same ejido."],
+    comparisons: [
+      {
+        document_id: DOC_TITLE,
+        field: "holder_name",
+        listing_value: "Río Claro Keepers",
+        document_value: "Ejido Río Claro",
+        excerpt: "Titular: Ejido Río Claro, municipio de Ejemplo",
+        verdict: "match",
+        reason: "The names refer to the same ejido.",
+        compared_by: "model",
+      },
+      {
+        document_id: DOC_TITLE,
+        field: "area",
+        listing_value: "144.00 ha",
+        document_value: "144 ha",
+        excerpt: "Superficie: 144 ha",
+        verdict: "match",
+        reason: "Within 20% of the listing's area.",
+        compared_by: "code",
+      },
+    ],
+    documents: [
+      aiReading(),
+      aiReading({
+        document_id: DOC_MINUTES,
+        doc_type: "assembly_minutes",
+        sent_to_model: false,
+        not_sent_reason: "no_preview",
+        readable: false,
+        holder_name: field(),
+        parcel_id: field(),
+        place: field(),
+        area: field(),
+        area_ha: null,
+      }),
+    ],
+    flags: ["documents_not_sent"],
+    models: ["openbmb/MiniCPM-V-4_5", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"],
+    method_version: "naturex-doc-check-v1",
+    created_at: "2026-10-18T11:04:00Z",
     ...overrides,
   };
 }

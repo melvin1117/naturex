@@ -50,7 +50,14 @@ export type WorldAsset = Schemas["WorldAssetOut"];
 export type WorldOut = Schemas["WorldOut"];
 
 // Listing verification (T69 API, T70 screens; ADR-0006).
+export type AiComparison = Schemas["AiComparisonOut"];
+export type AiDocumentReading = Schemas["AiDocumentReadingOut"];
+export type AiExtractedField = Schemas["AiExtractedField"];
+export type AiSuggestion = Schemas["AiSuggestionOut"];
+export type AiSuggestionStatus =
+  Schemas["ReviewQueueItem"]["ai_suggestion_status"];
 export type CheckResult = Schemas["VerificationCheckOut"]["result"];
+export type DocumentAiCheck = Schemas["WorldOut"]["document_ai_check"];
 export type DocumentType = Schemas["DocumentType"];
 export type ListingDocument = Schemas["ListingDocumentOut"];
 export type PublicCheck = Schemas["PublicCheckOut"];

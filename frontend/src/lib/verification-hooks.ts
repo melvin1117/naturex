@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 
+import { AI_POLL_MS } from "./ai-suggestion";
 import { unwrap } from "./api/errors";
 import type {
   DocumentType,
@@ -188,6 +189,40 @@ export function useReviewQueue(
       ),
     { enabled: meId !== null },
   );
+}
+
+/**
+ * One listing's review-queue item (admins): its current undecided run with the AI document
+ * check's status and untrusted suggestion (T71). `null` when the listing isn't waiting in this
+ * admin's queue. Asks again every `AI_POLL_MS` while the check is pending.
+ */
+export function useReviewQueueItem(
+  assetId: string | undefined,
+  { enabled = true }: { enabled?: boolean } = {},
+): QueryResult<ReviewQueueItem | null> {
+  const { world } = useWorld();
+  const meId = world?.me?.id ?? null;
+  const query = useApiQuery(
+    queryKeys.reviewQueueItem(meId, assetId ?? ""),
+    async (api, signal) => {
+      const items = await unwrap(
+        api.GET("/admin/verifications", {
+          params: { query: { asset_id: assetId ?? "", limit: 1 } },
+          signal,
+        }),
+      );
+      return items[0] ?? null;
+    },
+    { enabled: enabled && meId !== null && Boolean(assetId) },
+  );
+  const pending = query.data?.ai_suggestion_status === "pending";
+  const { refetch } = query;
+  useEffect(() => {
+    if (!pending) return;
+    const timer = setInterval(() => void refetch(), AI_POLL_MS);
+    return () => clearInterval(timer);
+  }, [pending, refetch]);
+  return query;
 }
 
 /**
