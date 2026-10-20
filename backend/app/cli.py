@@ -2,8 +2,8 @@
 
 `create-admin` is the only way to create a live-world admin: never through the API, and never
 by promoting an existing account whose email matches. The password is read with `getpass`, or
-from the first line of stdin with `--password-stdin` for scripts (T74's E2E setup), never from
-argv or the environment, and is never printed or logged.
+from the first line of piped stdin with `--password-stdin` for scripts (T74's E2E setup), never
+from argv or the environment, and is never printed or logged.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
@@ -50,11 +50,19 @@ def _read_password() -> str:
 
 def _read_password_stdin() -> str:
     """The first line of stdin, without its line ending: no prompt and no confirmation."""
+    if sys.stdin.isatty():
+        raise CliError("--password-stdin needs piped input")
     line = sys.stdin.readline(PASSWORD_MAX_LENGTH + 3)
     return _check_length(line.removesuffix("\n").removesuffix("\r"))
 
 
-def create_admin(session: Session, email: str, name: str, *, password_stdin: bool = False) -> User:
+def create_admin(
+    session: Session,
+    email: str,
+    name: str,
+    *,
+    read_password: Callable[[], str] = _read_password,
+) -> User:
     """Create a new admin person in the live world. Refuses an email that is already taken."""
     email = normalize_email(email)
     name = name.strip()
@@ -62,7 +70,7 @@ def create_admin(session: Session, email: str, name: str, *, password_stdin: boo
         raise CliError("Enter a valid email address.")
     if not 1 <= len(name) <= NAME_MAX_LENGTH or not name.isprintable():
         raise CliError(f"The name must be 1–{NAME_MAX_LENGTH} printable characters.")
-    password = _read_password_stdin() if password_stdin else _read_password()
+    password = read_password()
     live = ensure_live_world(session)
     user = User(
         world_id=live.id,
@@ -108,15 +116,12 @@ def main(argv: Sequence[str] | None = None, session: Session | None = None) -> i
     args = _parser().parse_args(argv)
     try:
         if args.command == "create-admin":
+            reader = _read_password_stdin if args.password_stdin else _read_password
             if session is not None:
-                user = create_admin(
-                    session, args.email, args.name, password_stdin=args.password_stdin
-                )
+                user = create_admin(session, args.email, args.name, read_password=reader)
             else:
                 with Session(engine) as own:
-                    user = create_admin(
-                        own, args.email, args.name, password_stdin=args.password_stdin
-                    )
+                    user = create_admin(own, args.email, args.name, read_password=reader)
             print(f"Created live-world admin {user.id}.")
     except CliError as exc:
         print(f"error: {exc}", file=sys.stderr)

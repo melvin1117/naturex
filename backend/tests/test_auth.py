@@ -760,7 +760,7 @@ def test_cli_password_stdin_reads_the_first_line_without_prompting(
 
 
 @requires_db
-@pytest.mark.parametrize("stdin", ["", "\n", "short\n", "x" * 200])
+@pytest.mark.parametrize("stdin", ["", "\n", "short\n", "x" * 129 + "\n", "x" * 129, "x" * 200])
 def test_cli_password_stdin_rejects_a_missing_or_bad_length_password(
     session: Session, monkeypatch: pytest.MonkeyPatch, stdin: str
 ) -> None:
@@ -772,6 +772,43 @@ def test_cli_password_stdin_rejects_a_missing_or_bad_length_password(
     )
 
     assert code == 1
+    assert session.exec(select(User).where(User.is_admin, User.kind == UserKind.PERSON)).all() == []
+
+
+@requires_db
+def test_cli_password_stdin_accepts_the_longest_password_with_a_crlf_ending(
+    session: Session, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    secret = "p" * cli.PASSWORD_MAX_LENGTH
+    monkeypatch.setattr(sys, "stdin", io.StringIO(f"{secret}\r\n"))
+
+    code = cli.main(
+        ["create-admin", "--email", "ops@example.org", "--name", "Ops", "--password-stdin"],
+        session=session,
+    )
+
+    assert code == 0
+    assert login(client, email="ops@example.org", password=secret).status_code == 200
+
+
+class _Terminal(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
+@requires_db
+def test_cli_password_stdin_refuses_a_terminal(
+    session: Session, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(sys, "stdin", _Terminal("typed secret 1234\n"))
+
+    code = cli.main(
+        ["create-admin", "--email", "ops@example.org", "--name", "Ops", "--password-stdin"],
+        session=session,
+    )
+
+    assert code == 1
+    assert "--password-stdin needs piped input" in capsys.readouterr().err
     assert session.exec(select(User).where(User.is_admin, User.kind == UserKind.PERSON)).all() == []
 
 
