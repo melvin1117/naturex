@@ -2506,10 +2506,10 @@
             "description": "Not allowed: `treasury_cannot_act`"
           },
           "429": {
-            "description": "`copilot_rate_limited`: the world's hourly Copilot calls are used up"
+            "description": "`copilot_rate_limited`: the account's or the world's hourly Copilot questions, or the world's Copilot model calls, are used up"
           },
           "503": {
-            "description": "`copilot_unavailable`: the question can't be embedded (no key, provider down, or LLM_BUDGET_USD reached)"
+            "description": "`copilot_unavailable`: the question can't be embedded (no key, provider down, LLM_BUDGET_USD reached) or only LLM_RESERVE_USD is left"
           },
           "422": {
             "description": "Validation Error",

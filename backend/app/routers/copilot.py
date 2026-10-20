@@ -33,6 +33,7 @@ from app.rag.answer import Source, answer_question, stream_pieces
 from app.rag.service import (
     CopilotModels,
     CopilotRateLimited,
+    CopilotUnavailable,
     PreparedQuestion,
     copilot_models,
     prepare,
@@ -87,7 +88,7 @@ def prepared_question(
         )
     except CopilotRateLimited as exc:
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, RATE_LIMITED) from exc
-    except LLMError as exc:
+    except (LLMError, CopilotUnavailable) as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, UNAVAILABLE) from exc
 
 
@@ -111,10 +112,13 @@ def source_out(source: Source) -> CopilotSource:
     dependencies=[require(Action.USE_OWN_ACCOUNT, copilot_world)],
     responses={
         **denied(DenyReason.TREASURY_CANNOT_ACT),
-        429: {"description": f"`{RATE_LIMITED}`: the world's hourly Copilot calls are used up"},
+        429: {
+            "description": f"`{RATE_LIMITED}`: the account's or the world's hourly Copilot "
+            "questions, or the world's Copilot model calls, are used up"
+        },
         503: {
             "description": f"`{UNAVAILABLE}`: the question can't be embedded (no key, provider "
-            "down, or LLM_BUDGET_USD reached)"
+            "down, LLM_BUDGET_USD reached) or only LLM_RESERVE_USD is left"
         },
     },
 )

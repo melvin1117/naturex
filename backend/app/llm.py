@@ -283,6 +283,10 @@ class LLMClient:
         self._clock = clock
         self._embeddings = embeddings
 
+    def spent_usd(self) -> Decimal:
+        """Total spend so far in the call log (all agents), for reserve checks."""
+        return self._log.spent_usd()
+
     def model_for(self, tier: Tier) -> str:
         model = {
             Tier.FAST: self._settings.model_fast,

@@ -348,7 +348,11 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
               <TradePanel assetId={asset.id} />
             </Suspense>
             <Suspense fallback={null}>
-              <CopilotChat assetId={asset.id} assetName={asset.name} />
+              <CopilotChat
+                key={asset.id}
+                assetId={asset.id}
+                assetName={asset.name}
+              />
             </Suspense>
             <section className="rounded-3xl bg-card p-6 shadow-soft">
               <h2 className="text-base font-semibold">How it was rated</h2>

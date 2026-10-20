@@ -7,35 +7,44 @@ swaps in a fake Token Factory, so CI needs no keys.
 from __future__ import annotations
 
 import json
+import threading
+import time
 from collections.abc import Iterator, Sequence
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 import pytest
 from alembic import command
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, update
+from sqlalchemy import create_engine, text, update
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, func, select
 
 from app.config import Settings, get_settings
+from app.db import engine as db_engine
 from app.db import get_session
+from app.llm import BudgetExceeded
 from app.main import app
 from app.models import (
     Asset,
     AssetStatus,
+    ChunkSource,
+    CopilotQuestion,
     DocChunk,
     Event,
     EventSource,
     LlmCall,
     Report,
+    User,
     World,
 )
+from app.rag import index as rag_index
 from app.rag.answer import COPILOT_AGENT, NOT_IN_RECORD
-from app.rag.embed import HashEmbedder, LlmEmbedder, Purpose
-from app.rag.index import index_assets
+from app.rag.embed import EMBED_AGENT, HashEmbedder, LlmEmbedder, Purpose
+from app.rag.index import EVENTS_PER_ASSET, IndexStats, index_assets
 from app.rag.retrieve import retrieve, visible_assets
-from app.rag.service import CopilotModels
+from app.rag.service import CopilotModels, CopilotRateLimited, reserve_question
 from app.routers.copilot import copilot_models_dep
 from app.sandbox import create_world
 from app.seed import seed
@@ -43,7 +52,7 @@ from app.services.rating import rate_asset
 from app.tools.earth_obs import load_site_metrics
 from tests.conftest import alembic_cfg, requires_db
 from tests.rag_fakes import FakeTokenFactory, MemoryLog, draft, fake_client
-from tests.worlds import start_demo
+from tests.worlds import drop_worlds, start_demo
 
 HERO = "wetland_mx"
 PRICE_DROP = "Why did the price drop?"
@@ -296,7 +305,7 @@ def test_indexing_is_idempotent_and_world_copies_reuse_vectors(session: Session)
     assert (again.added, again.removed, again.embedded) == (0, 0, 0)
     assert copied.added == built.added and copied.embedded == 0
     assert copied.reused == copied.added
-    assert embedder.calls == [built.embedded]
+    assert sum(embedder.calls) == built.embedded
     rows = session.exec(
         select(func.count()).select_from(DocChunk).where(DocChunk.world_id == first.id)
     ).one()
@@ -339,22 +348,22 @@ def test_the_model_answer_is_streamed_with_only_retrieved_citations(
     event = encroach(session, world.id)
     ref = ref_of(event)
     transport = FakeTokenFactory(
-        draft(f"Encroachment was reported [{ref}] [E00000000]."),
-        draft(f"An encroachment event of severity 4 was reported [{ref}]."),
+        draft(f"An encroachment event of severity 4 was reported [{ref}] [E00000000]."),
     )
     llm, log = fake_client(transport)
 
     _use_models(CopilotModels(LlmEmbedder(llm), llm))
 
-    final = done(ask(client, PRICE_DROP, wetland(session, world.id).id))
+    events = ask(client, PRICE_DROP, wetland(session, world.id).id)
+    final = done(events)
 
+    assert events[0]["type"] == "sources"
     assert final["mode"] == "model"
     assert final["model"] == "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
     assert final["answer"] == f"An encroachment event of severity 4 was reported [{ref}]."
     assert [c["ref"] for c in final["citations"]] == [ref]
     assert [(r.agent, r.status) for r in log.rows if r.agent == COPILOT_AGENT] == [
-        (COPILOT_AGENT, "rejected"),
-        (COPILOT_AGENT, "ok"),
+        (COPILOT_AGENT, "ok")
     ]
     embeds = [r for r in log.rows if r.agent == "copilot_embed"]
     assert embeds and all(r.world_id == world.id and r.status == "ok" for r in embeds)
@@ -380,10 +389,13 @@ def test_an_exhausted_budget_is_a_503_before_streaming(
 
 
 @requires_db
-def test_each_world_has_an_hourly_copilot_call_limit(client: TestClient, session: Session) -> None:
+def test_each_world_has_an_hourly_copilot_call_limit_embeddings_included(
+    client: TestClient, session: Session
+) -> None:
     world = start_demo(client, session)
-    for _ in range(2):
-        session.add(LlmCall(world_id=world.id, agent=COPILOT_AGENT, created_at=datetime.now(UTC)))
+    for agent in (COPILOT_AGENT, EMBED_AGENT):
+        session.add(LlmCall(world_id=world.id, agent=agent, created_at=datetime.now(UTC)))
+    session.add(LlmCall(world_id=world.id, agent="report_summary", created_at=datetime.now(UTC)))
     session.commit()
     llm, _ = fake_client(FakeTokenFactory())
 
@@ -392,3 +404,305 @@ def test_each_world_has_an_hourly_copilot_call_limit(client: TestClient, session
     res = client.post("/copilot", json={"question": PRICE_DROP})
 
     assert (res.status_code, res.json()["detail"]) == (429, "copilot_rate_limited")
+
+
+@requires_db
+def test_each_account_has_an_hourly_question_limit(client: TestClient, session: Session) -> None:
+    world = start_demo(client, session)
+    ref = ref_of(encroach(session, world.id))
+    llm, _ = fake_client(FakeTokenFactory(draft(f"Encroachment was reported [{ref}].")))
+    _use_models(CopilotModels(LlmEmbedder(llm), llm), copilot_questions_per_user_per_hour=1)
+
+    first = client.post("/copilot", json={"question": PRICE_DROP})
+    second = client.post("/copilot", json={"question": PRICE_DROP})
+    start_demo(client, session, world, persona_key="rosa")
+    other_user = client.post("/copilot", json={"question": "What is the capital of France?"})
+
+    assert done(events_of(first))["mode"] == "model"
+    assert (second.status_code, second.json()["detail"]) == (429, "copilot_rate_limited")
+    assert done(events_of(other_user))["mode"] == "refusal"
+    asked = session.exec(
+        select(func.count())
+        .select_from(CopilotQuestion)
+        .where(CopilotQuestion.world_id == world.id)
+    ).one()
+    assert asked == 2
+
+
+@requires_db
+def test_each_world_has_an_hourly_question_limit(client: TestClient, session: Session) -> None:
+    world = start_demo(client, session)
+    rosa = session.exec(
+        select(User).where(User.world_id == world.id, User.persona_key == "rosa")
+    ).one()
+    session.add(CopilotQuestion(world_id=world.id, user_id=rosa.id))
+    session.commit()
+    llm, _ = fake_client(FakeTokenFactory())
+    _use_models(CopilotModels(LlmEmbedder(llm), llm), copilot_questions_per_world_per_hour=1)
+
+    res = client.post("/copilot", json={"question": PRICE_DROP})
+
+    assert (res.status_code, res.json()["detail"]) == (429, "copilot_rate_limited")
+
+
+@requires_db
+def test_the_copilot_never_spends_the_llm_reserve(client: TestClient, session: Session) -> None:
+    start_demo(client, session)
+    llm, log = fake_client(FakeTokenFactory(), llm_budget_usd=5.0, llm_reserve_usd=6.0)
+    _use_models(CopilotModels(LlmEmbedder(llm), llm), llm_budget_usd=5.0, llm_reserve_usd=6.0)
+
+    res = client.post("/copilot", json={"question": PRICE_DROP})
+
+    assert (res.status_code, res.json()["detail"]) == (503, "copilot_unavailable")
+    assert log.rows == []
+
+
+# --- index: windows, caps, partial failures, concurrency ------------------------------------
+
+
+@requires_db
+def test_events_falling_out_of_the_window_are_removed(session: Session) -> None:
+    world = create_world(session)
+    asset = wetland(session, world.id)
+    base = datetime(2026, 9, 1, tzinfo=UTC)
+
+    def add_event(day: int) -> Event:
+        event = Event(
+            world_id=world.id,
+            asset_id=asset.id,
+            source=EventSource.TAVILY,
+            title=f"Local news item number {day}",
+            created_at=base + timedelta(days=day),
+        )
+        session.add(event)
+        return event
+
+    events = [add_event(day) for day in range(EVENTS_PER_ASSET)]
+    session.commit()
+    index_assets(session, world.id, [asset], HashEmbedder())
+    oldest = events[0]
+    assert session.exec(select(DocChunk).where(DocChunk.event_id == oldest.id)).first()
+
+    newest = add_event(EVENTS_PER_ASSET)
+    session.commit()
+    stats = index_assets(session, world.id, [asset], HashEmbedder())
+
+    assert (stats.removed, stats.added) == (1, 1)
+    assert session.exec(select(DocChunk).where(DocChunk.event_id == oldest.id)).first() is None
+    assert session.exec(select(DocChunk).where(DocChunk.event_id == newest.id)).first()
+
+
+class FailingAfter(CountingEmbedder):
+    """Embeds `ok` requests, then fails like an exhausted budget."""
+
+    def __init__(self, ok: int) -> None:
+        super().__init__()
+        self.ok = ok
+
+    def embed(
+        self, texts: Sequence[str], *, purpose: Purpose, world_id: UUID | None
+    ) -> list[list[float]]:
+        if len(self.calls) >= self.ok:
+            self.calls.append(-len(texts))
+            raise BudgetExceeded("over budget")
+        return super().embed(texts, purpose=purpose, world_id=world_id)
+
+
+def _vectors(session: Session, world_id: UUID) -> tuple[int, int]:
+    """(rows with an embedding, claims without one) in the world."""
+    rows = session.exec(select(DocChunk.embedding).where(DocChunk.world_id == world_id)).all()
+    return sum(1 for r in rows if r is not None), sum(1 for r in rows if r is None)
+
+
+@requires_db
+def test_a_failed_batch_keeps_the_batches_already_paid_for(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(rag_index, "EMBED_BATCH", 2)
+    world = create_world(session)
+    assets = visible_assets(session, None, world.id)
+    failing = FailingAfter(ok=1)
+
+    first = index_assets(session, world.id, assets, failing)
+
+    assert (first.embedded, first.added) == (2, 2)
+    assert first.skipped > 0
+    assert _vectors(session, world.id) == (2, 0)  # failed claims are released
+    retry = CountingEmbedder()
+    second = index_assets(session, world.id, assets, retry)
+    assert sum(retry.calls) == second.embedded == first.skipped  # nothing paid twice
+    assert _vectors(session, world.id) == (2 + second.added, 0)
+
+
+@requires_db
+def test_each_question_embeds_at_most_the_cap(session: Session) -> None:
+    world = create_world(session)
+    assets = visible_assets(session, None, world.id)
+    embedder = CountingEmbedder()
+
+    first = index_assets(session, world.id, assets, embedder, max_embed=2)
+    rest = index_assets(session, world.id, assets, embedder)
+
+    assert first.embedded == 2 and first.skipped > 0
+    assert rest.embedded == first.skipped
+    assert sum(embedder.calls) == first.embedded + rest.embedded
+
+
+@requires_db
+def test_a_busy_index_lock_is_skipped_not_waited_on(session: Session) -> None:
+    world = create_world(session)
+    assets = visible_assets(session, None, world.id)
+    embedder = CountingEmbedder()
+    engine = create_engine(get_settings().database_url)
+    with engine.connect() as holder:
+        holder.execute(
+            text("SELECT pg_advisory_xact_lock(:ns, hashtext(:world))"),
+            {"ns": rag_index.INDEX_LOCK_NAMESPACE, "world": str(world.id)},
+        )
+        started = time.monotonic()
+        stats = index_assets(session, world.id, assets, embedder, lock_wait_s=0.2)
+        waited = time.monotonic() - started
+        holder.rollback()
+    engine.dispose()
+
+    assert stats.busy and waited < 1.5
+    assert embedder.calls == []
+
+
+class GatedEmbedder(CountingEmbedder):
+    """Blocks inside `embed` until released, to hold a request mid-embedding."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.entered = threading.Event()
+        self.release = threading.Event()
+
+    def embed(
+        self, texts: Sequence[str], *, purpose: Purpose, world_id: UUID | None
+    ) -> list[list[float]]:
+        self.entered.set()
+        assert self.release.wait(10)
+        return super().embed(texts, purpose=purpose, world_id=world_id)
+
+
+@requires_db
+def test_two_questions_at_once_neither_wait_nor_embed_twice() -> None:
+    command.upgrade(alembic_cfg(), "head")
+    with Session(db_engine) as setup:
+        seed(setup)
+        world_id = create_world(setup).id
+    slow, fast = GatedEmbedder(), CountingEmbedder()
+    results: dict[str, IndexStats] = {}
+
+    def first() -> None:
+        with Session(db_engine) as s:
+            results["first"] = index_assets(s, world_id, visible_assets(s, None, world_id), slow)
+
+    thread = threading.Thread(target=first)
+    try:
+        thread.start()
+        assert slow.entered.wait(10), "the first request is embedding"
+        started = time.monotonic()
+        with Session(db_engine) as s:
+            second = index_assets(s, world_id, visible_assets(s, None, world_id), fast)
+        waited = time.monotonic() - started
+        slow.release.set()
+        thread.join(10)
+        assert not thread.is_alive()
+
+        assert waited < 1.5 and not second.busy
+        assert second.embedded == 0 and fast.calls == []  # the first request's claims stand
+        assert results["first"].embedded == sum(slow.calls) > 0
+        with Session(db_engine) as s:
+            assert _vectors(s, world_id) == (results["first"].added, 0)
+    finally:
+        slow.release.set()
+        thread.join(10)
+        drop_worlds(db_engine, [world_id])
+
+
+@requires_db
+def test_concurrent_questions_cannot_both_take_the_last_slot() -> None:
+    command.upgrade(alembic_cfg(), "head")
+    with Session(db_engine) as setup:
+        seed(setup)
+        world = create_world(setup)
+        world_id = world.id
+        users = [u.id for u in setup.exec(select(User).where(User.world_id == world_id)).all()][:4]
+    settings = Settings(_env_file=None, copilot_questions_per_world_per_hour=1)
+    barrier = threading.Barrier(len(users))
+    outcomes: list[str] = []
+
+    def ask_once(user_id: UUID) -> None:
+        with Session(db_engine) as s:
+            barrier.wait(5)
+            try:
+                reserve_question(s, world_id, user_id, settings, datetime.now(UTC))
+                outcomes.append("ok")
+            except CopilotRateLimited:
+                outcomes.append("limited")
+
+    threads = [threading.Thread(target=ask_once, args=(u,)) for u in users]
+    try:
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(10)
+        assert sorted(outcomes) == ["limited"] * (len(users) - 1) + ["ok"]
+    finally:
+        drop_worlds(db_engine, [world_id])
+
+
+# --- schema ---------------------------------------------------------------------------------
+
+
+@requires_db
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"source_kind": "report"},  # neither report nor event
+        {"source_kind": "event", "report": True},
+        {"source_kind": "report", "report": True, "event": True},
+        {"source_kind": "note", "report": True},
+    ],
+)
+def test_a_chunk_must_name_exactly_its_one_source(session: Session, fields: dict[str, Any]) -> None:
+    world = create_world(session)
+    event = encroach(session, world.id)
+    report = session.exec(select(Report).where(Report.world_id == world.id)).first()
+    assert report is not None
+    with pytest.raises(IntegrityError, match="ck_doc_chunks"), session.begin_nested():
+        session.execute(
+            text(
+                "INSERT INTO doc_chunks (id, world_id, asset_id, source_kind, report_id, "
+                "event_id, seq, content, content_sha256, embed_model) VALUES (gen_random_uuid(), "
+                ":world, :asset, :kind, :report, :event, 0, 'x', :sha, 'm')"
+            ),
+            {
+                "world": world.id,
+                "asset": event.asset_id,
+                "kind": fields["source_kind"],
+                "report": report.id if fields.get("report") else None,
+                "event": event.id if fields.get("event") else None,
+                "sha": "0" * 64,
+            },
+        )
+
+
+@requires_db
+def test_a_chunk_cannot_name_another_worlds_asset(session: Session) -> None:
+    mine, other = create_world(session), create_world(session)
+    event = encroach(session, mine.id)
+    with pytest.raises(IntegrityError, match="fk_doc_chunks_asset"), session.begin_nested():
+        session.add(
+            DocChunk(
+                world_id=mine.id,
+                asset_id=wetland(session, other.id).id,
+                source_kind=ChunkSource.EVENT,
+                event_id=event.id,
+                content="x",
+                content_sha256="0" * 64,
+                embed_model="m",
+            )
+        )
+        session.flush()

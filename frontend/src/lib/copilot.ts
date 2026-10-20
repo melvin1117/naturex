@@ -116,8 +116,10 @@ export type AnswerPart =
   | { kind: "citation"; ref: string; source: CopilotSource | null };
 
 /**
- * Split an answer into text and `[ref]` citations. A citation links only when `sources` has
- * its ref (the backend already removed every other one; this keeps the UI honest anyway).
+ * Split an answer into text and `[ref]` citations. Like the backend's citation check, a
+ * bracket is a citation only when its ref has a digit (`[R2]`, `[E1a2b3c4d]`) or names a
+ * source, so `[Erosion]` stays text. A citation links only when `sources` has its ref (the
+ * backend already removed every other one; this keeps the UI honest anyway).
  */
 export function answerParts(
   answer: string,
@@ -127,19 +129,18 @@ export function answerParts(
   const parts: AnswerPart[] = [];
   const pattern = /\[([RE][0-9A-Za-z-]{1,40})\]/g;
   let last = 0;
+  const text = (end: number) => {
+    if (end > last) parts.push({ kind: "text", text: answer.slice(last, end) });
+  };
   for (const match of answer.matchAll(pattern)) {
+    const ref = match[1];
+    if (!/\d/.test(ref) && !byRef.has(ref)) continue;
     const index = match.index ?? 0;
-    if (index > last)
-      parts.push({ kind: "text", text: answer.slice(last, index) });
-    parts.push({
-      kind: "citation",
-      ref: match[1],
-      source: byRef.get(match[1]) ?? null,
-    });
+    text(index);
+    parts.push({ kind: "citation", ref, source: byRef.get(ref) ?? null });
     last = index + match[0].length;
   }
-  if (last < answer.length)
-    parts.push({ kind: "text", text: answer.slice(last) });
+  text(answer.length);
   return parts;
 }
 

@@ -109,6 +109,16 @@ describe("answerParts", () => {
     ]);
   });
 
+  it("leaves bracketed words without a digit as text", () => {
+    expect(
+      answerParts("[Erosion] and [Rain] after [R2].", [REPORT_SOURCE]),
+    ).toEqual([
+      { kind: "text", text: "[Erosion] and [Rain] after " },
+      { kind: "citation", ref: "R2", source: REPORT_SOURCE },
+      { kind: "text", text: "." },
+    ]);
+  });
+
   it("builds links to the report and news tabs", () => {
     expect(sourceHref(REPORT_SOURCE)).toBe(`/asset/${ASSET_ID}?tab=report`);
     expect(sourceHref(EVENT_SOURCE)).toBe(`/asset/${ASSET_ID}?tab=news`);

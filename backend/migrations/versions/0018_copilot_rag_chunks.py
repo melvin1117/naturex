@@ -5,6 +5,12 @@
 - `content_sha256` + `embed_model`: the indexer is idempotent (a source whose pieces' hashes
   and model are unchanged is skipped) and reuses a vector already computed for the same text
   and model in any world, so sandbox copies cost no embedding calls.
+- `fk_doc_chunks_asset`: a composite `(world_id, asset_id)` foreign key, so a chunk can't name
+  another world's asset (the 0010 style). Reports and events have no `(world_id, id)` key yet,
+  so their foreign keys stay single-column; the indexer writes a source's world.
+- A row with a NULL `embedding` is an indexer's claim (being embedded outside a transaction).
+- `copilot_questions`: one row per Copilot question that passed the per-account and per-world
+  hourly limits, inserted under a per-world lock so check-and-reserve is atomic.
 - No ANN (HNSW/IVFFlat) index on purpose: every query is filtered to one world and the caller's
   visible assets first (`ix_doc_chunks_world_id`), leaving tens to hundreds of rows to rank
   exactly. A post-filtered ANN scan could return fewer rows than asked for.
@@ -46,6 +52,10 @@ def upgrade() -> None:
         ),
     )
     op.create_foreign_key("doc_chunks_event_id_fkey", "doc_chunks", "events", ["event_id"], ["id"])
+    op.drop_constraint("doc_chunks_asset_id_fkey", "doc_chunks", type_="foreignkey")
+    op.create_foreign_key(
+        "fk_doc_chunks_asset", "doc_chunks", "assets", ["world_id", "asset_id"], ["world_id", "id"]
+    )
     op.create_check_constraint(
         "ck_doc_chunks_source_kind", "doc_chunks", "source_kind IN ('report', 'event')"
     )
@@ -71,9 +81,40 @@ def upgrade() -> None:
     )
     op.create_index("ix_doc_chunks_content_sha256", "doc_chunks", ["content_sha256", "embed_model"])
 
+    op.create_table(
+        "copilot_questions",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("world_id", sa.Uuid(), nullable=False),
+        sa.Column("user_id", sa.Uuid(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["world_id"], ["worlds.id"]),
+        sa.ForeignKeyConstraint(
+            ["world_id", "user_id"],
+            ["users.world_id", "users.id"],
+            name="fk_copilot_questions_user",
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        "ix_copilot_questions_world_id_created_at", "copilot_questions", ["world_id", "created_at"]
+    )
+    op.create_index(
+        "ix_copilot_questions_user_id_created_at", "copilot_questions", ["user_id", "created_at"]
+    )
+
 
 def downgrade() -> None:
+    op.drop_index("ix_copilot_questions_user_id_created_at", table_name="copilot_questions")
+    op.drop_index("ix_copilot_questions_world_id_created_at", table_name="copilot_questions")
+    op.drop_table("copilot_questions")
     op.execute("DELETE FROM doc_chunks")
+    op.drop_constraint("fk_doc_chunks_asset", "doc_chunks", type_="foreignkey")
+    op.create_foreign_key("doc_chunks_asset_id_fkey", "doc_chunks", "assets", ["asset_id"], ["id"])
     op.drop_index("ix_doc_chunks_content_sha256", table_name="doc_chunks")
     op.drop_index("uq_doc_chunks_event_seq", table_name="doc_chunks")
     op.drop_index("uq_doc_chunks_report_seq", table_name="doc_chunks")

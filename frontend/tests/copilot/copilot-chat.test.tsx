@@ -98,4 +98,46 @@ describe("CopilotChat", () => {
       "The Copilot can't search the record right now.",
     );
   });
+
+  it("keeps the partial answer and explains an error event mid-stream", async () => {
+    renderExchange(chat(), {
+      ...signedIn,
+      "POST /copilot": () =>
+        sseResponse([
+          { type: "sources", sources: [EVENT_SOURCE] },
+          { type: "delta", text: "An encroachment event " },
+          { type: "error", detail: "copilot_failed" },
+        ]),
+    });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Why did the price change?" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The Copilot couldn't finish this answer.",
+    );
+    expect(screen.getByText("An encroachment event")).toBeInTheDocument();
+    expect(screen.queryByText("Sources:")).not.toBeInTheDocument();
+  });
+
+  it("aborts the request in flight when it unmounts", async () => {
+    let request: Request | undefined;
+    const { unmount } = renderExchange(chat(), {
+      ...signedIn,
+      "POST /copilot": (r) => {
+        request = r;
+        return new Promise<Response>(() => {});
+      },
+    });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Why did the price change?" }),
+    );
+    await waitFor(() => expect(request).toBeDefined());
+    expect(request!.signal.aborted).toBe(false);
+    unmount();
+
+    expect(request!.signal.aborted).toBe(true);
+  });
 });

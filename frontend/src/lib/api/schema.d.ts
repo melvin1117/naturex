@@ -5780,14 +5780,14 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description `copilot_rate_limited`: the world's hourly Copilot calls are used up */
+            /** @description `copilot_rate_limited`: the account's or the world's hourly Copilot questions, or the world's Copilot model calls, are used up */
             429: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description `copilot_unavailable`: the question can't be embedded (no key, provider down, or LLM_BUDGET_USD reached) */
+            /** @description `copilot_unavailable`: the question can't be embedded (no key, provider down, LLM_BUDGET_USD reached) or only LLM_RESERVE_USD is left */
             503: {
                 headers: {
                     [name: string]: unknown;

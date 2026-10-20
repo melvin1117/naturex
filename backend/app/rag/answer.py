@@ -4,12 +4,13 @@ Nemotron Nano (`MODEL_FAST`) writes the answer from the retrieved sources only. 
 Pydantic-validated JSON draft, then checked in code before anyone sees it:
 
 - every `[R…]`/`[E…]` citation must be a source that was retrieved for this question; any other
-  bracketed reference is removed from the text (an invented ID never reaches the reader);
-- an answer must cite at least one source, and may only repeat numbers found in the sources
-  or the question (`agents.guards`), so a model (or an instruction planted in a news article)
-  can't invent a metric, value or price.
+  bracketed reference is removed from the text (an invented ID never reaches the reader), and
+  a draft that is otherwise fine is used as cleaned, without a second call;
+- an answer must cite at least one source, and may only use numbers found in the sources
+  (`agents.guards`; not the question's), so a model (or an instruction planted in a news
+  article) can't invent a metric, value or price.
 
-A draft that fails is marked `rejected` in `llm_calls` and asked again once with the reasons;
+A draft that still fails is marked `rejected` in `llm_calls` and asked again once with the reasons;
 after that, or when the model is unavailable or over budget, the answer is extractive: quoted
 sentences from the top sources with their citations, written by code. When the sources don't
 answer the question the Copilot says so instead of guessing (`NOT_IN_RECORD`).
@@ -138,25 +139,31 @@ def check_citations(text: str, allowed: Sequence[str]) -> CitationCheck:
     return CitationCheck(cleaned, tuple(cited), tuple(dropped))
 
 
-def without_citations(text: str) -> str:
-    """The text minus `[ref]` markers, so `R2` isn't read as the number 2."""
-    return _BRACKET.sub(" ", text)
+def without_citations(text: str, refs: Sequence[str]) -> str:
+    """The text minus exactly the `[ref]` markers of `refs` (the ones `check_citations` kept),
+    so `R2` isn't read as the number 2. Every other bracket stays, so `[$9,999]` or `[by 40%]`
+    is still checked as a number."""
+    if not refs:
+        return text
+    pattern = re.compile(r"\[(?:" + "|".join(re.escape(r) for r in refs) + r")\]")
+    return pattern.sub(" ", text)
 
 
-def check_draft(
-    draft: CopilotDraft, question: str, sources: Sequence[Source]
-) -> tuple[CitationCheck, list[str]]:
-    """The draft with only known citations, and the rules it breaks (empty = usable)."""
+def check_draft(draft: CopilotDraft, sources: Sequence[Source]) -> tuple[CitationCheck, list[str]]:
+    """The draft with only known citations, and the rules it still breaks (empty = usable).
+
+    Removed unknown citations alone don't make a draft unusable: the cleaned text cites only
+    retrieved sources (see `CitationCheck.dropped`). Numbers must come from the sources; the
+    question is not a source, so a number the investor suggests can't be confirmed by echoing
+    it."""
     check = check_citations(draft.answer, [s.ref for s in sources])
     violations: list[str] = []
-    if check.dropped:
-        violations.append("unknown citations removed: " + ", ".join(sorted(set(check.dropped))[:5]))
     if not check.text:
         violations.append("the answer is empty")
     elif not check.cited:
         violations.append("cite at least one source inline as [ref]")
-    facts = [chunk for source in sources for chunk in source.chunks] + [question]
-    invented = invented_numbers(without_citations(check.text), facts)
+    facts = [chunk for source in sources for chunk in source.chunks]
+    invented = invented_numbers(without_citations(check.text, check.cited), facts)
     if invented:
         violations.append("numbers not in the sources: " + ", ".join(dict.fromkeys(invented[:5])))
     return check, violations
@@ -264,11 +271,19 @@ def answer_question(
         draft = result.value
         if draft.insufficient:
             return refusal(["the model found the sources insufficient"])
-        check, violations = check_draft(draft, question, sources)
+        check, violations = check_draft(draft, sources)
+        dropped = sorted(set(check.dropped))[:5]
+        if dropped:
+            notes.append("unknown citations removed: " + ", ".join(dropped))
         if not violations:
+            # Usable as cleaned: no second (slower) draft just for removed citations.
             by_ref = {s.ref: s for s in sources}
             cited = tuple(by_ref[ref] for ref in check.cited)
-            return CopilotAnswer(check.text, cited, AnswerMode.MODEL, model=result.model)
+            return CopilotAnswer(
+                check.text, cited, AnswerMode.MODEL, model=result.model, notes=tuple(notes)
+            )
+        if dropped:
+            violations.append("unknown citations removed: " + ", ".join(dropped))
         notes += violations
         _mark_rejected(llm, result)
         messages = [
