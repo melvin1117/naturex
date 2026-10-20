@@ -46,8 +46,14 @@ check-client:
 eval:
 	@echo "eval: harness lands in T47; to run the News Scout eval now, see evals/README.md" >&2; exit 1
 
+# T74 real-account E2E: Playwright starts the API and a production frontend build on their own
+# ports (8100, 3100) with a freshly recreated naturex_e2e database, then stops them. Start
+# Postgres first: docker compose up -d. Override with E2E_API_PORT, E2E_WEB_PORT,
+# E2E_DATABASE_URL; E2E_SKIP_BUILD=1 reuses the last build. Report: frontend/playwright-report.
 e2e:
-	@echo "e2e: Playwright suite lands in T46" >&2; exit 1
+	cd frontend && pnpm install --frozen-lockfile
+	cd frontend && pnpm exec playwright install chromium
+	cd frontend && pnpm exec playwright test
 
 # Refresh tasks/task-map.html and .json from GitHub issues (needs `gh auth login`)
 task-map:
