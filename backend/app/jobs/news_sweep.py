@@ -20,11 +20,11 @@ from app.jobs.runtime import (
     session_factory,
     spend,
 )
-from app.services.monitoring import day_label, news_sweep
+from app.services.monitoring import day_label, news_sweep, parse_day_period
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = parse_args(__doc__ or "", lambda now: day_label(now.date()), argv)
+    args = parse_args(__doc__ or "", day_label, parse_day_period, argv)
     settings = job_settings()
     report = news_sweep(
         session_factory,

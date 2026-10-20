@@ -7,7 +7,7 @@ import argparse
 import logging
 from collections.abc import Callable, Sequence
 from concurrent.futures import Executor, Future
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -17,7 +17,7 @@ from sqlmodel import Session
 from app.config import Settings, get_settings, validate_mock_settings
 from app.db import engine
 from app.llm import DbCallLog, get_llm_client
-from app.services.monitoring import JobReport, NewsFn, SessionFactory
+from app.services.monitoring import JobReport, NewsFn, SessionFactory, parse_job_cap
 from app.services.rating_runs import RatingRunner, build_runner, news_runner
 from app.worlds import LIVE_WORLD_ID
 
@@ -60,21 +60,42 @@ def spend(sessions: SessionFactory = session_factory) -> Callable[[], Decimal]:
     return log.spent_usd
 
 
+def _arg(parse: Callable[[str], Any]) -> Callable[[str], Any]:
+    """An argparse `type` that reports a ValueError's message as a usage error."""
+
+    def convert(value: str) -> Any:
+        try:
+            return parse(value)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(str(exc)) from exc
+
+    return convert
+
+
 def parse_args(
-    description: str, default_period: Callable[[datetime], str], argv: Sequence[str] | None
+    description: str,
+    default_period: Callable[[date], str],
+    check_period: Callable[[str, date], str],
+    argv: Sequence[str] | None,
+    *,
+    today: date | None = None,
 ) -> argparse.Namespace:
+    """`--world`, `--period` (validated by `check_period`: never malformed or in the future)
+    and `--max-usd` (finite, ≥ 0). Invalid values exit with a usage error (status 2)."""
+    day = today or datetime.now(UTC).date()
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
         "--world", type=UUID, default=LIVE_WORLD_ID, help="world ID (default: the live world)"
     )
     parser.add_argument(
         "--period",
-        default=default_period(datetime.now(UTC)),
+        type=_arg(lambda value: check_period(value, day)),
+        default=default_period(day),
         help="idempotency period (default: the current one)",
     )
     parser.add_argument(
         "--max-usd",
-        type=Decimal,
+        type=_arg(parse_job_cap),
         default=None,
         help="this run's LLM cap (default: MONITOR_JOB_BUDGET_USD)",
     )

@@ -166,7 +166,8 @@ function setup(
     "GET /world": () => json(world),
     "GET /me/communities": () => json(communities),
     [`GET /communities/${SELVA.id}/members`]: () => json(MEMBERS),
-    "GET /alerts": () => json({ alerts: [], unread_count: 0 }),
+    "GET /alerts": () =>
+      json({ alerts: [], unread_count: 0, next_before: null }),
     ...routes,
   });
   const layer = createDataLayer({
@@ -517,8 +518,17 @@ describe("the community home", () => {
       routes: {
         [`GET /communities/${SELVA.id}/summary`]: () =>
           json(summary({ listings: [listing()] })),
-        "GET /alerts": () =>
-          json({ alerts: [mine, elsewhere], unread_count: 2 }),
+        // The API filters by community (members only); the home never sees other sites'.
+        "GET /alerts": (request) =>
+          json(
+            new URL(request.url).searchParams.get("community_id") === SELVA.id
+              ? { alerts: [mine], unread_count: 1, next_before: null }
+              : {
+                  alerts: [mine, elsewhere],
+                  unread_count: 2,
+                  next_before: null,
+                },
+          ),
       },
     });
 
@@ -530,6 +540,9 @@ describe("the community home", () => {
     expect(
       within(panel).queryByText("A site I back: health fell 6.0 points"),
     ).not.toBeInTheDocument();
+    expect(
+      within(panel).getByRole("button", { name: "Mark all read" }),
+    ).toBeVisible();
   });
 
   it("tells a steward the owner launches the IPO", async () => {

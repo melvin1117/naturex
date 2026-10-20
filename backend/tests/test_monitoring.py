@@ -21,6 +21,7 @@ from app.agents.news_scout import NewsScoutAsset
 from app.config import get_settings
 from app.jobs import news_sweep as news_sweep_cli
 from app.jobs.runtime import InlineExecutor
+from app.market.revenue import PayoutAlreadyApplied, pay_quarter
 from app.models import (
     Alert,
     AlertRecipient,
@@ -39,12 +40,16 @@ from app.seed import seed
 from app.services import monitoring
 from app.services.monitoring import (
     NEWS_SWEEP,
+    PAYOUT,
     RERATE,
     Budget,
     budget_stop,
     claim,
     day_label,
     finish,
+    parse_day_period,
+    parse_job_cap,
+    parse_quarter_period,
     quarter_label,
 )
 from app.services.rating_runs import RatingRunner, news_runner
@@ -86,6 +91,65 @@ def test_the_budget_stops_before_an_asset_could_pass_a_cap(
         budget_stop(budget, spent_total=Decimal(spent), spent_at_start=Decimal(at_start))
         == expected
     )
+
+
+@pytest.mark.parametrize("value", ["2026Q4", "2026Q1", "2025Q3"])
+def test_valid_quarter_periods(value: str) -> None:
+    assert parse_quarter_period(value, date(2026, 10, 19)) == value
+
+
+@pytest.mark.parametrize(
+    "value", ["2026-Q4", "2026q4", "2026Q5", "2026Q0", " 2026Q4", "2026Q4 ", "2027Q1", "x"]
+)
+def test_malformed_or_future_quarter_periods_are_refused(value: str) -> None:
+    with pytest.raises(ValueError):
+        parse_quarter_period(value, date(2026, 10, 19))
+
+
+@pytest.mark.parametrize("value", ["2026-10-19", "2026-01-01"])
+def test_valid_day_periods(value: str) -> None:
+    assert parse_day_period(value, date(2026, 10, 19)) == value
+
+
+@pytest.mark.parametrize(
+    "value", ["2026-10-20", "2026-02-30", "20261019", "2026-10-19T00:00", "2026-1-9", ""]
+)
+def test_malformed_or_future_day_periods_are_refused(value: str) -> None:
+    with pytest.raises(ValueError):
+        parse_day_period(value, date(2026, 10, 19))
+
+
+@pytest.mark.parametrize("value", ["-1", "-0.01", "NaN", "sNaN", "Infinity", "-inf", "abc", ""])
+def test_job_caps_must_be_finite_and_not_negative(value: str) -> None:
+    with pytest.raises(ValueError):
+        parse_job_cap(value)
+
+
+def test_job_caps() -> None:
+    assert parse_job_cap("0") == Decimal(0)
+    assert parse_job_cap("1.5") == Decimal("1.5")
+
+
+@pytest.mark.parametrize(
+    ("module", "args"),
+    [
+        ("rerate_all", ["--period", "2026-Q4"]),
+        ("rerate_all", ["--period", "2999Q1"]),
+        ("rerate_all", ["--max-usd", "NaN"]),
+        ("news_sweep", ["--period", "2999-01-01"]),
+        ("news_sweep", ["--max-usd", "-1"]),
+    ],
+)
+def test_the_clis_refuse_bad_periods_and_caps_before_any_work(
+    module: str, args: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import importlib
+
+    cli = importlib.import_module(f"app.jobs.{module}")
+    monkeypatch.setattr(cli, "job_settings", lambda: pytest.fail("parsed past bad arguments"))
+    with pytest.raises(SystemExit) as exit_:
+        cli.main(args)
+    assert exit_.value.code == 2
 
 
 # --- DB fixtures --------------------------------------------------------------------------------
@@ -130,8 +194,8 @@ class ScenarioRunner:
     """T27's runner in mock mode, inline; every run uses `scenario` (a Time Machine quarter
     that moves the grade), so a re-rate has something to alert on."""
 
-    def __init__(self, conn: Connection, scenario: str = "encroachment") -> None:
-        cfg = settings(use_mocks=True)
+    def __init__(self, conn: Connection, scenario: str = "encroachment", **cfg_: Any) -> None:
+        cfg = settings(use_mocks=True, **cfg_)
         self.inner = RatingRunner(
             session_factory=sessions(conn),
             settings=cfg,
@@ -268,7 +332,8 @@ def test_rerate_all_stops_at_the_budget(db: Connection, world_id: UUID) -> None:
     assert len(runner.started) == 1
     with sessions(db)() as session:
         claims = session.exec(select(MonitorRun).where(MonitorRun.world_id == world_id)).all()
-    assert [c.status for c in claims] == ["done"]  # the rest is left for the next run
+    # The rest is left for the next run; the one re-rated asset is also paid.
+    assert sorted((c.job, c.status) for c in claims) == [(PAYOUT, "done"), (RERATE, "done")]
 
     exhausted = rerate(db, world_id, runner, period="2027Q1", spend=lambda: Decimal("19.9"))
     assert exhausted.stopped == "llm_budget_exhausted" and exhausted.done == []
@@ -285,9 +350,12 @@ def test_a_failed_rerate_is_retried_by_the_next_run(db: Connection, world_id: UU
     first = rerate(db, world_id, Busy())
     assert first.done == [] and {reason for _, reason in first.failed} == {"rating_busy"}
 
+    assert first.payouts == 0  # a failed re-rate isn't paid
+    assert count(db, LedgerEntry, world_id, LedgerEntry.kind == LedgerKind.PAYOUT) == 0
+
     retry = rerate(db, world_id, ScenarioRunner(db))
     assert len(retry.done) == len(listed(db, world_id))
-    assert retry.payouts == 0  # paid once already, by the failed run (from the latest report)
+    assert retry.payouts == len(listed(db, world_id))
 
 
 @requires_db
@@ -305,6 +373,72 @@ def test_a_rate_limit_stops_the_job_and_leaves_the_rest(db: Connection, world_id
 
     assert report.stopped == "rating_global_limit" and Limited.calls == 1
     assert count(db, MonitorRun, world_id) == 1  # the rest is claimed by the next run
+
+
+@requires_db
+def test_a_second_label_for_the_same_quarter_cant_pay_twice(db: Connection, world_id: UUID) -> None:
+    report = rerate(db, world_id, ScenarioRunner(db))
+    asset = report.done[0]
+    with sessions(db)() as session:
+        value = session.exec(
+            select(Report.value_mid)
+            .where(Report.world_id == world_id, Report.asset_id == asset)
+            .order_by(col(Report.version).desc())
+        ).first()
+        assert value is not None
+        for label in ("2026-Q4", "2026-q4", " 2026Q4"):
+            with pytest.raises(PayoutAlreadyApplied):
+                pay_quarter(
+                    session, world_id=world_id, asset_id=asset, value_mid=value, quarter_label=label
+                )
+            session.rollback()
+    assert count(db, LedgerEntry, world_id, LedgerEntry.kind == LedgerKind.PAYOUT) == len(
+        report.done
+    )
+
+
+@requires_db
+def test_a_payout_error_is_retried_and_the_quarter_is_paid_once(
+    db: Connection, world_id: UUID, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assets = listed(db, world_id)
+    real = monitoring.pay_quarter
+    calls = {"n": 0}
+
+    def flaky(*args: Any, **kwargs: Any) -> Any:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("ledger hiccup")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(monitoring, "pay_quarter", flaky)
+    runner = ScenarioRunner(db)
+
+    first = rerate(db, world_id, runner)
+
+    assert len(first.done) == len(assets)  # every re-rate stands
+    assert [reason for _, reason in first.failed] == ["payout_failed:RuntimeError"]
+    assert first.payouts == len(assets) - 1
+
+    retry = rerate(db, world_id, runner)
+
+    assert retry.done == [] and len(runner.started) == len(assets)  # nothing re-rated
+    assert retry.payouts == 1 and retry.failed == []
+    assert count(db, LedgerEntry, world_id, LedgerEntry.kind == LedgerKind.PAYOUT) == len(assets)
+    assert rerate(db, world_id, runner).payouts == 0
+
+
+@requires_db
+def test_scheduled_runs_leave_the_worlds_hourly_window_to_people(
+    db: Connection, world_id: UUID
+) -> None:
+    runner = ScenarioRunner(db, rating_runs_per_world_per_hour=1)
+
+    report = rerate(db, world_id, runner)
+    assert len(report.done) == len(listed(db, world_id)) > 1
+
+    # An admin's re-rate still fits the world's window of 1 run per hour.
+    runner.inner.start(world_id, report.done[0], trigger="api")
 
 
 # --- news_sweep ---------------------------------------------------------------------------------
@@ -405,3 +539,56 @@ def test_the_mock_news_sweep_cli_runs_without_keys(
 
     assert news_sweep_cli.main(["--world", str(world_id), "--period", TODAY]) == 0
     assert count(db, MonitorRun, world_id, MonitorRun.status == "done") == len(listed(db, world_id))
+
+
+@requires_db
+def test_unverified_locality_stores_events_but_alerts_nobody(
+    db: Connection, world_id: UUID
+) -> None:
+    def unverified(asset: NewsScoutAsset) -> NewsScoutOutput:
+        return scout(news(5, "big"))(asset).model_copy(update={"locality_unverified": True})
+
+    report = sweep(db, world_id, unverified)
+
+    assert len(report.done) == len(listed(db, world_id))
+    assert report.events == len(report.done) == count(db, Event, world_id)
+    assert report.alerts == 0 == count(db, Alert, world_id)
+
+
+@requires_db
+def test_a_failure_to_store_the_news_is_retried(
+    db: Connection, world_id: UUID, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(*_: Any, **__: Any) -> Any:
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(monitoring, "record_news", broken)
+    failed = sweep(db, world_id, scout(news(5, "big")))
+    assert {reason for _, reason in failed.failed} == {"store_failed:RuntimeError"}
+    assert failed.done == [] and count(db, Event, world_id) == 0
+
+    monkeypatch.undo()
+    retried = sweep(db, world_id, scout(news(5, "big")))
+    assert len(retried.done) == len(listed(db, world_id))
+    assert retried.alerts == len(retried.done)
+
+
+@requires_db
+def test_an_asset_without_a_centroid_is_skipped(db: Connection, world_id: UUID) -> None:
+    first = listed(db, world_id)[0].id
+    with sessions(db)() as session:
+        session.execute(
+            update(Asset).where(col(Asset.id) == first).values(centroid_lat=None, centroid_lon=None)
+        )
+        session.commit()
+    asked: list[UUID] = []
+
+    def fn(asset: NewsScoutAsset) -> NewsScoutOutput:
+        asked.append(asset.id)
+        return NewsScoutOutput(events=[])
+
+    report = sweep(db, world_id, fn)
+
+    assert (first, "no_centroid") in report.skipped and first not in asked
+    with sessions(db)() as session:
+        assert monitoring.claim_status(session, NEWS_SWEEP, TODAY, first) == "skipped"

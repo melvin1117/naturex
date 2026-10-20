@@ -2625,9 +2625,28 @@
           "alerts"
         ],
         "summary": "List Alerts",
-        "description": "My alerts in this world, newest first, with the total unread count.",
+        "description": "My alerts in this world, newest first, a page at a time, with the unread count.",
         "operationId": "list_alerts_alerts_get",
         "parameters": [
+          {
+            "name": "community_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only alerts about this community's assets (members only)",
+              "title": "Community Id"
+            },
+            "description": "Only alerts about this community's assets (members only)"
+          },
           {
             "name": "unread_only",
             "in": "query",
@@ -2639,6 +2658,25 @@
             }
           },
           {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's `next_before` cursor",
+              "title": "Before"
+            },
+            "description": "The previous page's `next_before` cursor"
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -2646,7 +2684,7 @@
               "type": "integer",
               "maximum": 50,
               "minimum": 1,
-              "default": 50,
+              "default": 20,
               "title": "Limit"
             }
           }
@@ -2684,8 +2722,29 @@
           "alerts"
         ],
         "summary": "Read All Alerts",
-        "description": "Mark every unread alert of mine read.",
+        "description": "Mark every unread alert of mine read (only those about `community_id`'s assets, if set).",
         "operationId": "read_all_alerts_alerts_read_all_post",
+        "parameters": [
+          {
+            "name": "community_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only alerts about this community's assets (members only)",
+              "title": "Community Id"
+            },
+            "description": "Only alerts about this community's assets (members only)"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2699,6 +2758,16 @@
           },
           "403": {
             "description": "Not allowed: `treasury_cannot_act`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
@@ -3399,13 +3468,26 @@
             },
             "type": "array",
             "title": "Alerts",
-            "description": "Newest first"
+            "description": "One page, newest first"
           },
           "unread_count": {
             "type": "integer",
             "minimum": 0.0,
             "title": "Unread Count",
-            "description": "All unread alerts, not only those listed"
+            "description": "Unread alerts matching the filter, on every page, not only this one"
+          },
+          "next_before": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Before",
+            "description": "Pass as `before` for the next (older) page; null on the last"
           }
         },
         "type": "object",

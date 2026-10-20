@@ -321,7 +321,7 @@ def test_someone_elses_alert_is_not_found_and_not_listed(
     alert = grade_drop(session, world, asset)  # rosa (owner) only: nobody holds it
     start_demo(client, session, world, persona_key="mia")
 
-    assert client.get("/alerts").json() == {"alerts": [], "unread_count": 0}
+    assert client.get("/alerts").json() == {"alerts": [], "unread_count": 0, "next_before": None}
     res = client.post(f"/alerts/{alert.id}/read")
     assert (res.status_code, res.json()["detail"]) == (404, "not_found")
     assert client.post(f"/alerts/{uuid4()}/read").status_code == 404
@@ -344,3 +344,89 @@ def test_another_worlds_alert_is_not_found(session: Session, client: TestClient)
 def test_alerts_need_a_session(client: TestClient) -> None:
     assert client.get("/alerts").status_code == 401
     assert client.post("/alerts/read-all").status_code == 401
+
+
+# --- stream and list agree (recipients fixed at delivery) ---------------------------------------
+
+
+@requires_db
+def test_the_stream_and_the_list_show_the_same_alerts(session: Session, client: TestClient) -> None:
+    world = create_world(session)
+    asset = first_asset(session, world.id)
+    arjun, mia = persona(session, world.id, "arjun"), persona(session, world.id, "mia")
+    hold(session, world.id, arjun, asset)
+    alert = grade_drop(session, world, asset)
+    hold(session, world.id, mia, asset)  # bought after the alert: not a recipient
+    session.commit()
+
+    for user, expected in ((arjun, [str(alert.id)]), (mia, [])):
+        stream = events.replay(session, world.id, viewer=events.Viewer(user.id))
+        streamed = [e.payload["alert_id"] for e in stream if e.type is StreamEventType.ALERT]
+        start_demo(client, session, world, persona_key=user.persona_key or "")
+        listed = [a["id"] for a in client.get("/alerts").json()["alerts"]]
+        assert streamed == listed == expected
+
+
+# --- community filter and pagination ------------------------------------------------------------
+
+
+def news_alerts(session: Session, world: World, asset: Asset, n: int) -> list[Alert]:
+    raised = []
+    for i in range(n):
+        draft = news_alert(asset.id, asset.name, item(4, id=f"evt-{i}"))
+        assert draft is not None
+        alert = alerts.raise_alert(session, world.id, asset, draft)
+        assert alert is not None
+        raised.append(alert)
+    session.commit()
+    return raised
+
+
+@requires_db
+def test_alerts_come_a_page_at_a_time(session: Session, client: TestClient) -> None:
+    world = create_world(session)
+    asset = first_asset(session, world.id)
+    raised = news_alerts(session, world, asset, 3)
+    start_demo(client, session, world, persona_key="rosa")
+
+    first = client.get("/alerts", params={"limit": 2}).json()
+    second = client.get("/alerts", params={"limit": 2, "before": first["next_before"]}).json()
+
+    ids = [a["id"] for a in first["alerts"] + second["alerts"]]
+    assert sorted(ids) == sorted(str(a.id) for a in raised) and len(set(ids)) == 3
+    assert first["next_before"] == first["alerts"][-1]["id"] and second["next_before"] is None
+    assert first["unread_count"] == second["unread_count"] == 3
+    unknown = client.get("/alerts", params={"before": str(uuid4())})
+    assert (unknown.status_code, unknown.json()["detail"]) == (404, "not_found")
+
+
+@requires_db
+def test_a_member_filters_alerts_by_community(session: Session, client: TestClient) -> None:
+    world = create_world(session)
+    assets = session.exec(
+        select(Asset).where(Asset.world_id == world.id).order_by(Asset.site_key)
+    ).all()
+    mine, other = assets[0], assets[1]
+    assert mine.community_id != other.community_id
+    arjun = persona(session, world.id, "arjun")
+    hold(session, world.id, arjun, mine)
+    hold(session, world.id, arjun, other)
+    about_mine = news_alerts(session, world, mine, 1)[0]
+    news_alerts(session, world, other, 1)
+    start_demo(client, session, world, persona_key="rosa")  # owner of every seeded community
+    params = {"community_id": str(mine.community_id)}
+
+    body = client.get("/alerts", params=params).json()
+    assert [a["id"] for a in body["alerts"]] == [str(about_mine.id)]
+    assert body["unread_count"] == 1
+    assert client.get("/alerts").json()["unread_count"] == 2
+    assert client.post("/alerts/read-all", params=params).json() == {"marked": 1}
+    assert client.get("/alerts").json()["unread_count"] == 1
+
+    start_demo(client, session, world, persona_key="arjun")  # a holder, not a member
+    for res in (
+        client.get("/alerts", params=params),
+        client.post("/alerts/read-all", params=params),
+    ):
+        assert (res.status_code, res.json()["detail"]) == (404, "not_found")
+    assert client.get("/alerts").json()["unread_count"] == 2

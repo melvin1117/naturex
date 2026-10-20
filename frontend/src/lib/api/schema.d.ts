@@ -902,7 +902,7 @@ export interface paths {
         };
         /**
          * List Alerts
-         * @description My alerts in this world, newest first, with the total unread count.
+         * @description My alerts in this world, newest first, a page at a time, with the unread count.
          */
         get: operations["list_alerts_alerts_get"];
         put?: never;
@@ -924,7 +924,7 @@ export interface paths {
         put?: never;
         /**
          * Read All Alerts
-         * @description Mark every unread alert of mine read.
+         * @description Mark every unread alert of mine read (only those about `community_id`'s assets, if set).
          */
         post: operations["read_all_alerts_alerts_read_all_post"];
         delete?: never;
@@ -1278,14 +1278,19 @@ export interface components {
         AlertListOut: {
             /**
              * Alerts
-             * @description Newest first
+             * @description One page, newest first
              */
             alerts: components["schemas"]["AlertOut"][];
             /**
              * Unread Count
-             * @description All unread alerts, not only those listed
+             * @description Unread alerts matching the filter, on every page, not only this one
              */
             unread_count: number;
+            /**
+             * Next Before
+             * @description Pass as `before` for the next (older) page; null on the last
+             */
+            next_before?: string | null;
         };
         /**
          * AlertOut
@@ -5762,7 +5767,11 @@ export interface operations {
     list_alerts_alerts_get: {
         parameters: {
             query?: {
+                /** @description Only alerts about this community's assets (members only) */
+                community_id?: string | null;
                 unread_only?: boolean;
+                /** @description The previous page's `next_before` cursor */
+                before?: string | null;
                 limit?: number;
             };
             header?: never;
@@ -5800,7 +5809,10 @@ export interface operations {
     };
     read_all_alerts_alerts_read_all_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only alerts about this community's assets (members only) */
+                community_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5822,6 +5834,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

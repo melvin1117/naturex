@@ -35,7 +35,8 @@ function renderPortfolio(routes: Routes = {}) {
     "GET /world": () => json(SIGNED_IN_WORLD),
     "GET /assets": () => json(cards),
     "GET /portfolio": () => json(portfolio()),
-    "GET /alerts": () => json({ alerts: [], unread_count: 0 }),
+    "GET /alerts": () =>
+      json({ alerts: [], unread_count: 0, next_before: null }),
     ...routes,
   });
   const layer = createDataLayer({
@@ -98,6 +99,7 @@ describe("PortfolioView", () => {
             },
           ],
           unread_count: 1,
+          next_before: null,
         }),
     });
 

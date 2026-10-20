@@ -23,10 +23,11 @@ stops the job.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Literal, Protocol
 from uuid import UUID
 
@@ -50,9 +51,10 @@ from app.services.rating_runs import (
 
 log = logging.getLogger(__name__)
 
-Job = Literal["rerate_all", "news_sweep"]
+Job = Literal["rerate_all", "news_sweep", "payout"]
 RERATE: Job = "rerate_all"
 NEWS_SWEEP: Job = "news_sweep"
+PAYOUT: Job = "payout"
 CLAIM_STALE_AFTER = timedelta(hours=1)
 # Worst-case LLM spend of one asset, checked before starting it (generous on purpose).
 RERATE_ESTIMATE_USD = Decimal("0.50")
@@ -74,6 +76,42 @@ def quarter_label(day: date) -> str:
 def day_label(day: date) -> str:
     """`2026-10-19`: the period of `news_sweep`."""
     return day.isoformat()
+
+
+_QUARTER_PERIOD = re.compile(r"\d{4}Q[1-4]")
+_DAY_PERIOD = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def parse_quarter_period(value: str, today: date) -> str:
+    """A `rerate_all` period: exactly `YYYYQn`, not after `today`'s quarter. Raises ValueError.
+
+    One spelling per quarter keeps claims and payouts keyed on the same label."""
+    if not _QUARTER_PERIOD.fullmatch(value):
+        raise ValueError(f"period must look like 2026Q4, got {value!r}")
+    if value > quarter_label(today):
+        raise ValueError(f"period {value} is in the future")
+    return value
+
+
+def parse_day_period(value: str, today: date) -> str:
+    """A `news_sweep` period: an ISO date (`YYYY-MM-DD`), not after `today`. Raises ValueError."""
+    if not _DAY_PERIOD.fullmatch(value):
+        raise ValueError(f"period must be an ISO date like 2026-10-19, got {value!r}")
+    day = date.fromisoformat(value)  # ValueError for 2026-02-30
+    if day > today:
+        raise ValueError(f"period {value} is in the future")
+    return value
+
+
+def parse_job_cap(value: str) -> Decimal:
+    """A `--max-usd` cap: a finite, non-negative amount. Raises ValueError."""
+    try:
+        cap = Decimal(value)
+    except InvalidOperation as exc:
+        raise ValueError(f"not an amount: {value!r}") from exc
+    if not cap.is_finite() or cap < 0:
+        raise ValueError(f"the cap must be a finite amount ≥ 0, got {value!r}")
+    return cap
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,38 +252,80 @@ def rerate_all(
     llm_budget_usd: Decimal,
     job_cap_usd: Decimal,
 ) -> JobReport:
-    """Re-rate every listed asset once per period, then pay its quarterly revenue."""
+    """Re-rate every listed asset once per period; pay each re-rated asset's quarterly revenue.
+
+    The payout is its own claim (`payout`, same period), taken only once the asset's re-rate
+    claim is `done`, so a payout that failed is retried by the next run without re-rating, and
+    an asset whose re-rate failed is paid only after its retried re-rate succeeds. A budget or
+    rate-limit stop ends the re-rates but still settles the payouts of assets already re-rated.
+    """
     report = JobReport(RERATE, period, world_id)
     with session_factory() as session:
         assets = [asset.id for asset in listed_assets(session, world_id)]
     budget = Budget(llm_budget_usd, job_cap_usd, RERATE_ESTIMATE_USD)
     at_start = spend()
     for asset_id in assets:
-        stop = budget_stop(budget, spent_total=spend(), spent_at_start=at_start)
-        if stop is not None:
-            report.stopped = stop
-            break
-        with session_factory() as session:
-            if not claim(session, RERATE, period, world_id, asset_id):
-                report.skipped.append((asset_id, "claimed"))
-                continue
-        status, detail = _rerate_one(session_factory, runner, world_id, asset_id, len(assets))
-        with session_factory() as session:
-            finish(session, RERATE, period, asset_id, status, detail)
-        if status == "done":
-            report.done.append(asset_id)
-        elif status == "skipped":
-            report.skipped.append((asset_id, detail or ""))
-        else:
-            report.failed.append((asset_id, detail or ""))
-        if _pay(session_factory, world_id, asset_id, period):
-            report.payouts += 1
-        if detail in RATE_LIMITED:  # every later asset would be refused too
-            report.stopped = detail
-            break
+        if report.stopped is None:
+            report.stopped = budget_stop(budget, spent_total=spend(), spent_at_start=at_start)
+        if report.stopped is None:
+            _rerate_claimed(session_factory, runner, report, asset_id, len(assets))
+        _settle_payout(session_factory, report, asset_id)
     with session_factory() as session:
         report.alerts = _alerts_for_reports(session, world_id, report.done)
     return report
+
+
+def _rerate_claimed(
+    session_factory: SessionFactory,
+    runner: Runner,
+    report: JobReport,
+    asset_id: UUID,
+    asset_count: int,
+) -> None:
+    with session_factory() as session:
+        if not claim(session, RERATE, report.period, report.world_id, asset_id):
+            report.skipped.append((asset_id, "claimed"))
+            return
+    status, detail = _rerate_one(session_factory, runner, report.world_id, asset_id, asset_count)
+    with session_factory() as session:
+        finish(session, RERATE, report.period, asset_id, status, detail)
+    if status == "done":
+        report.done.append(asset_id)
+    elif status == "skipped":
+        report.skipped.append((asset_id, detail or ""))
+    else:
+        report.failed.append((asset_id, detail or ""))
+        if detail in RATE_LIMITED:  # every later asset would be refused too
+            report.stopped = detail
+
+
+def claim_status(session: Session, job: Job, period: str, asset_id: UUID) -> str | None:
+    return session.exec(
+        select(MonitorRun.status).where(
+            MonitorRun.job == job, MonitorRun.period == period, MonitorRun.asset_id == asset_id
+        )
+    ).first()
+
+
+def _settle_payout(session_factory: SessionFactory, report: JobReport, asset_id: UUID) -> None:
+    """Pay the asset's quarter once its re-rate is `done` (own claim; see `rerate_all`)."""
+    with session_factory() as session:
+        if claim_status(session, RERATE, report.period, asset_id) != "done":
+            return
+        if not claim(session, PAYOUT, report.period, report.world_id, asset_id):
+            return
+    status: Literal["done", "failed", "skipped"]
+    try:
+        status, detail = _pay(session_factory, report.world_id, asset_id, report.period)
+    except Exception as exc:  # anything unexpected: retried by the next run
+        log.exception("payout failed for %s %s", asset_id, report.period)
+        status, detail = "failed", f"payout_failed:{type(exc).__name__}"
+    with session_factory() as session:
+        finish(session, PAYOUT, report.period, asset_id, status, detail)
+    if status == "failed":
+        report.failed.append((asset_id, detail or ""))
+    elif detail == "paid":
+        report.payouts += 1
 
 
 def _rerate_one(
@@ -278,13 +358,16 @@ def _rerate_one(
     return "failed", run.error or run.status.value
 
 
-def _pay(session_factory: SessionFactory, world_id: UUID, asset_id: UUID, period: str) -> bool:
-    """Pay the quarter's revenue from the latest report's value (T41). Once per asset and
-    quarter; an asset without a report value or a recorded community stake isn't paid."""
+def _pay(
+    session_factory: SessionFactory, world_id: UUID, asset_id: UUID, period: str
+) -> tuple[Literal["done", "skipped"], str]:
+    """Pay the quarter's revenue from the latest report's value (T41), once per asset and
+    quarter. An asset without a report value or a recorded community stake isn't paid
+    (`skipped`); other errors propagate."""
     with session_factory() as session:
         latest = latest_report(session, world_id, asset_id)
         if latest is None or latest.value_mid is None:
-            return False
+            return "skipped", "no_report_value"
         try:
             pay_quarter(
                 session,
@@ -295,13 +378,12 @@ def _pay(session_factory: SessionFactory, world_id: UUID, asset_id: UUID, period
             )
         except PayoutAlreadyApplied:
             session.rollback()
-            return False
+            return "done", "already_paid"
         except CommunityStakeMissing:
             session.rollback()
-            log.info("no community stake recorded for %s; no payout", asset_id)
-            return False
+            return "skipped", "no_community_stake"
         session.commit()
-        return True
+        return "done", "paid"
 
 
 def _alerts_for_reports(session: Session, world_id: UUID, asset_ids: Sequence[UUID]) -> int:
@@ -322,12 +404,15 @@ def _alerts_for_reports(session: Session, world_id: UUID, asset_ids: Sequence[UU
 NewsFn = Callable[[NewsScoutAsset], NewsScoutOutput]
 
 
-def news_asset(asset: Asset) -> NewsScoutAsset:
+def news_asset(asset: Asset) -> NewsScoutAsset | None:
+    """What News Scout needs; None without a centroid (it geocodes the centroid)."""
+    if asset.centroid_lat is None or asset.centroid_lon is None:
+        return None
     return NewsScoutAsset(
         id=asset.id,
         name=asset.name,
-        centroid_lat=asset.centroid_lat or 0.0,
-        centroid_lon=asset.centroid_lon or 0.0,
+        centroid_lat=asset.centroid_lat,
+        centroid_lon=asset.centroid_lon,
         country=asset.country,
     )
 
@@ -343,7 +428,10 @@ def news_sweep(
     job_cap_usd: Decimal,
 ) -> JobReport:
     """Run News Scout once per listed asset and period; store new events and alert on
-    severity ≥ 4."""
+    severity ≥ 4. An asset without a centroid is `skipped` (`no_centroid`); when News Scout
+    couldn't verify the locality (`locality_unverified`), events are stored but nobody is
+    alerted. A failure of News Scout or of storing its output marks the asset `failed`, so the
+    next run retries it."""
     report = JobReport(NEWS_SWEEP, period, world_id)
     with session_factory() as session:
         targets = [(asset.id, news_asset(asset)) for asset in listed_assets(session, world_id)]
@@ -358,29 +446,56 @@ def news_sweep(
             if not claim(session, NEWS_SWEEP, period, world_id, asset_id):
                 report.skipped.append((asset_id, "claimed"))
                 continue
+            if target is None:
+                finish(session, NEWS_SWEEP, period, asset_id, "skipped", "no_centroid")
+                report.skipped.append((asset_id, "no_centroid"))
+                continue
         try:
             output = news(target)
         except Exception as exc:  # News Scout or its LLM failed: retry on the next run
-            log.warning("news sweep failed for %s: %s", asset_id, type(exc).__name__)
-            with session_factory() as session:
-                finish(session, NEWS_SWEEP, period, asset_id, "failed", type(exc).__name__)
-            report.failed.append((asset_id, type(exc).__name__))
+            _news_failed(session_factory, report, asset_id, type(exc).__name__)
             continue
+        try:
+            with session_factory() as session:
+                stored, alerted = record_news(
+                    session,
+                    world_id,
+                    asset_id,
+                    output.events,
+                    alert=not output.locality_unverified,
+                )
+                session.commit()
+        except Exception as exc:  # storing failed (rolled back): retry on the next run
+            _news_failed(session_factory, report, asset_id, f"store_failed:{type(exc).__name__}")
+            continue
+        detail = f"events={stored}" + (" locality_unverified" if output.locality_unverified else "")
         with session_factory() as session:
-            stored, alerted = record_news(session, world_id, asset_id, output.events)
-            session.commit()
-            finish(session, NEWS_SWEEP, period, asset_id, "done", f"events={stored}")
+            finish(session, NEWS_SWEEP, period, asset_id, "done", detail)
         report.done.append(asset_id)
         report.events += stored
         report.alerts += alerted
     return report
 
 
+def _news_failed(
+    session_factory: SessionFactory, report: JobReport, asset_id: UUID, detail: str
+) -> None:
+    log.warning("news sweep failed for %s: %s", asset_id, detail)
+    with session_factory() as session:
+        finish(session, NEWS_SWEEP, report.period, asset_id, "failed", detail)
+    report.failed.append((asset_id, detail))
+
+
 def record_news(
-    session: Session, world_id: UUID, asset_id: UUID, items: Sequence[NewsScoutItem]
+    session: Session,
+    world_id: UUID,
+    asset_id: UUID,
+    items: Sequence[NewsScoutItem],
+    *,
+    alert: bool = True,
 ) -> tuple[int, int]:
-    """Store the relevant events not stored yet and raise their alerts, in the caller's
-    transaction. Returns (events stored, alerts raised)."""
+    """Store the relevant events not stored yet and, with `alert`, raise their alerts, in the
+    caller's transaction. Returns (events stored, alerts raised)."""
     asset = session.exec(
         select(Asset).where(Asset.world_id == world_id, Asset.id == asset_id)
     ).one()
@@ -407,7 +522,7 @@ def record_news(
                 )
             )
             stored += 1
-        draft = news_alert(asset_id, asset.name, item)
+        draft = news_alert(asset_id, asset.name, item) if alert else None
         if draft is not None and raise_alert(session, world_id, asset, draft) is not None:
             alerted += 1
     session.flush()

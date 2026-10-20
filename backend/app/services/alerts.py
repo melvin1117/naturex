@@ -21,11 +21,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Literal, cast
+from typing import Any, Literal, cast
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from sqlalchemy import func, update
+from sqlalchemy import func, literal, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, select
 from sqlmodel.sql.expression import Select
@@ -51,7 +51,8 @@ NEWS_ALERT_SEVERITY = 4
 BIG_HEALTH_DROP = Decimal(10)
 TITLE_MAX = 120
 MESSAGE_MAX = 400
-ALERT_LIST_LIMIT = 50
+ALERT_PAGE = 20
+ALERT_PAGE_MAX = 50
 
 
 class AlertKind(StrEnum):
@@ -232,11 +233,9 @@ def alert_audience(session: Session, world_id: UUID, asset: Asset) -> list[UUID]
     return sorted({*holders, *members})
 
 
-def raise_alert(session: Session, world_id: UUID, asset: Asset, draft: AlertDraft) -> Alert | None:
-    """Store the alert, deliver it and publish its `alert` event, in the caller's transaction.
-
-    Returns None when an alert with the same `dedupe_key` already exists in the world.
-    """
+def deliver_alert(session: Session, world_id: UUID, asset: Asset, draft: AlertDraft) -> UUID | None:
+    """Store the alert and its recipients (no event), in the caller's transaction. Returns its
+    ID, or None when an alert with the same `dedupe_key` already exists in the world."""
     table = Alert.__table__  # type: ignore[attr-defined]
     alert_id = session.execute(
         pg_insert(table)
@@ -259,6 +258,15 @@ def raise_alert(session: Session, world_id: UUID, asset: Asset, draft: AlertDraf
     for user_id in alert_audience(session, world_id, asset):
         session.add(AlertRecipient(alert_id=alert_id, user_id=user_id, world_id=world_id))
     session.flush()
+    return cast(UUID, alert_id)
+
+
+def raise_alert(session: Session, world_id: UUID, asset: Asset, draft: AlertDraft) -> Alert | None:
+    """Deliver the alert and publish its `alert` event (seen by its recipients only), in the
+    caller's transaction. None when an alert with the same `dedupe_key` already exists."""
+    alert_id = deliver_alert(session, world_id, asset, draft)
+    if alert_id is None:
+        return None
     publish(
         session,
         world_id,
@@ -334,14 +342,43 @@ def _mine(world_id: UUID, user_id: UUID) -> Select[Alert, AlertRecipient, str]:
     )
 
 
-def unread_count(session: Session, world_id: UUID, user_id: UUID) -> int:
-    return session.exec(
-        select(func.count()).where(
-            AlertRecipient.world_id == world_id,
-            AlertRecipient.user_id == user_id,
-            col(AlertRecipient.read_at).is_(None),
+def _community_assets(world_id: UUID, community_id: UUID) -> Any:
+    return select(Asset.id).where(Asset.world_id == world_id, Asset.community_id == community_id)
+
+
+def is_member(session: Session, world_id: UUID, user_id: UUID, community_id: UUID) -> bool:
+    """Whether the account belongs to the community (the only way to filter alerts by it)."""
+    return (
+        session.exec(
+            select(CommunityMember.user_id).where(
+                CommunityMember.world_id == world_id,
+                CommunityMember.community_id == community_id,
+                CommunityMember.user_id == user_id,
+            )
+        ).first()
+        is not None
+    )
+
+
+def unread_count(
+    session: Session, world_id: UUID, user_id: UUID, *, community_id: UUID | None = None
+) -> int:
+    stmt = select(func.count()).where(
+        AlertRecipient.world_id == world_id,
+        AlertRecipient.user_id == user_id,
+        col(AlertRecipient.read_at).is_(None),
+    )
+    if community_id is not None:
+        about = select(Alert.id).where(
+            Alert.world_id == world_id,
+            col(Alert.asset_id).in_(_community_assets(world_id, community_id)),
         )
-    ).one()
+        stmt = stmt.where(col(AlertRecipient.alert_id).in_(about))
+    return session.exec(stmt).one()
+
+
+class CursorNotFound(LookupError):
+    """`before` isn't one of the account's alerts in this world."""
 
 
 def list_alerts(
@@ -349,17 +386,32 @@ def list_alerts(
     world_id: UUID,
     user_id: UUID,
     *,
-    limit: int = ALERT_LIST_LIMIT,
+    limit: int = ALERT_PAGE,
     unread_only: bool = False,
-) -> list[AlertOut]:
-    """The account's own alerts in this world, newest first."""
+    community_id: UUID | None = None,
+    before: UUID | None = None,
+) -> tuple[list[AlertOut], UUID | None]:
+    """One page of the account's own alerts in this world, newest first, and the `before`
+    cursor of the next page (None on the last). `community_id` keeps the alerts about that
+    community's assets (the caller checks membership). Raises CursorNotFound."""
     stmt = _mine(world_id, user_id)
     if unread_only:
         stmt = stmt.where(col(AlertRecipient.read_at).is_(None))
+    if community_id is not None:
+        stmt = stmt.where(col(Alert.asset_id).in_(_community_assets(world_id, community_id)))
+    if before is not None:
+        cursor = session.exec(_mine(world_id, user_id).where(Alert.id == before)).first()
+        if cursor is None:
+            raise CursorNotFound(str(before))
+        stmt = stmt.where(
+            tuple_(col(Alert.created_at), col(Alert.id))
+            < tuple_(literal(cursor[0].created_at), literal(cursor[0].id))
+        )
     rows = session.exec(
-        stmt.order_by(col(Alert.created_at).desc(), col(Alert.id).desc()).limit(limit)
+        stmt.order_by(col(Alert.created_at).desc(), col(Alert.id).desc()).limit(limit + 1)
     ).all()
-    return [_out(alert, recipient, name) for alert, recipient, name in rows]
+    page = [_out(alert, recipient, name) for alert, recipient, name in rows[:limit]]
+    return page, (page[-1].id if len(rows) > limit else None)
 
 
 def mark_read(
@@ -379,16 +431,25 @@ def mark_read(
 
 
 def mark_all_read(
-    session: Session, world_id: UUID, user_id: UUID, *, now: datetime | None = None
+    session: Session,
+    world_id: UUID,
+    user_id: UUID,
+    *,
+    community_id: UUID | None = None,
+    now: datetime | None = None,
 ) -> int:
-    """Mark every unread alert of the account read; returns how many changed."""
-    result = session.execute(
-        update(AlertRecipient)
-        .where(
-            col(AlertRecipient.world_id) == world_id,
-            col(AlertRecipient.user_id) == user_id,
-            col(AlertRecipient.read_at).is_(None),
-        )
-        .values(read_at=now or datetime.now(UTC))
+    """Mark the account's unread alerts read (only those about `community_id`'s assets, if
+    given); returns how many changed."""
+    stmt = update(AlertRecipient).where(
+        col(AlertRecipient.world_id) == world_id,
+        col(AlertRecipient.user_id) == user_id,
+        col(AlertRecipient.read_at).is_(None),
     )
+    if community_id is not None:
+        about = select(Alert.id).where(
+            Alert.world_id == world_id,
+            col(Alert.asset_id).in_(_community_assets(world_id, community_id)),
+        )
+        stmt = stmt.where(col(AlertRecipient.alert_id).in_(about))
+    result = session.execute(stmt.values(read_at=now or datetime.now(UTC)))
     return int(result.rowcount)  # type: ignore[attr-defined]

@@ -3,9 +3,16 @@
 # The job is idempotent (one claim per asset and day) and budget-capped (MONITOR_JOB_BUDGET_USD
 # per run, LLM_BUDGET_USD overall), so a manual re-run or a retry never alerts or spends twice.
 #
-# Fail safe: without the secrets (forks, or before T20 deploys a database) it only logs a notice
-# and succeeds. Secrets: NEWS_SWEEP_DATABASE_URL, NEBIUS_API_KEY, TAVILY_API_KEY. Variables:
-# MODEL_FAST (the Nemotron Nano model ID), optional LLM_BUDGET_USD and MONITOR_JOB_BUDGET_USD.
+# Fail safe: without its configuration (forks, or before T20 deploys a database) it only logs a
+# notice and succeeds. Secrets: NEWS_SWEEP_DATABASE_URL, NEBIUS_API_KEY, TAVILY_API_KEY.
+# Variables: MODEL_FAST (the Nemotron Nano model ID) and LLM_BUDGET_USD (the global cap, required
+# so the job never assumes one); optional MONITOR_JOB_BUDGET_USD (default 2).
+#
+# NEWS_SWEEP_DATABASE_URL must be a least-privilege role used only by this job: CONNECT, SELECT on
+# what it reads (assets, llm_calls, events, alerts, monitor_runs, holdings, users,
+# community_members, world_events) and INSERT/UPDATE only on monitor_runs, events, alerts,
+# alert_recipients, world_events and llm_calls (plus USAGE on their sequences). Never the owner or
+# a superuser role.
 name: news-sweep
 
 on:
@@ -37,17 +44,20 @@ jobs:
           NEBIUS_API_KEY: ${{ secrets.NEBIUS_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           MODEL_FAST: ${{ vars.MODEL_FAST }}
+          LLM_BUDGET_USD: ${{ vars.LLM_BUDGET_USD }}
         run: |
-          if [ -n "$DATABASE_URL" ] && [ -n "$NEBIUS_API_KEY" ] && [ -n "$TAVILY_API_KEY" ] && [ -n "$MODEL_FAST" ]; then
+          if [ -n "$DATABASE_URL" ] && [ -n "$NEBIUS_API_KEY" ] && [ -n "$TAVILY_API_KEY" ] && [ -n "$MODEL_FAST" ] && [ -n "$LLM_BUDGET_USD" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::news sweep skipped: NEWS_SWEEP_DATABASE_URL, NEBIUS_API_KEY, TAVILY_API_KEY or MODEL_FAST is not set."
+            echo "::notice::news sweep skipped: NEWS_SWEEP_DATABASE_URL, NEBIUS_API_KEY, TAVILY_API_KEY, MODEL_FAST or LLM_BUDGET_USD is not set."
           fi
 
       - name: Check out repository
         if: steps.secrets.outputs.configured == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install uv
         if: steps.secrets.outputs.configured == 'true'
@@ -69,6 +79,6 @@ jobs:
           NEBIUS_API_KEY: ${{ secrets.NEBIUS_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           MODEL_FAST: ${{ vars.MODEL_FAST }}
-          LLM_BUDGET_USD: ${{ vars.LLM_BUDGET_USD || '20' }}
+          LLM_BUDGET_USD: ${{ vars.LLM_BUDGET_USD }}
           MONITOR_JOB_BUDGET_USD: ${{ vars.MONITOR_JOB_BUDGET_USD || '2' }}
         run: uv run python -m app.jobs.news_sweep

@@ -88,7 +88,9 @@ def upgrade() -> None:
             ["assets.world_id", "assets.id"],
             name="fk_monitor_runs_asset",
         ),
-        sa.CheckConstraint("job IN ('rerate_all','news_sweep')", name="ck_monitor_runs_job"),
+        sa.CheckConstraint(
+            "job IN ('rerate_all','news_sweep','payout')", name="ck_monitor_runs_job"
+        ),
         sa.CheckConstraint(
             "status IN ('running','done','failed','skipped')", name="ck_monitor_runs_status"
         ),

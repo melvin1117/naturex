@@ -2,6 +2,7 @@
 
 import { BellRing, ExternalLink, TriangleAlert } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { cn } from "cn";
 
 import { LoadError } from "@/components/proto/load-error";
@@ -15,31 +16,35 @@ import { assetHref } from "@/lib/trade";
 const URGENT = 4;
 
 /**
- * The signed-in account's alerts (T75), newest first, with read/unread state. Fed by the real
- * `alert` events: a new one refetches the list. `assetIds` narrows it to some sites (the
- * Steward home shows only its community's); then "Mark all read" is hidden, because it would
- * also read alerts that aren't shown.
+ * The signed-in account's alerts (T75), newest first, a page at a time, with read/unread
+ * state. Fed by the real `alert` events: a new one refetches the list. `communityId` (the
+ * Steward home) asks the API for that community's sites only, so the unread count and "Mark
+ * all read" cover exactly what is listed.
  */
 export function AlertsList({
-  assetIds,
+  communityId,
   empty,
 }: {
-  assetIds?: ReadonlySet<string>;
+  communityId?: string;
   empty: string;
 }) {
-  const alerts = useAlerts();
+  const first = useAlerts({ communityId });
   const markAll = useMarkAllAlertsRead();
+  const [older, setOlder] = useState<string[]>([]);
+  const newest = first.data?.alerts[0]?.id;
+  // A new alert shifts every page: start again from the newest page rather than leave a gap.
+  useEffect(() => setOlder([]), [newest]);
 
-  if (alerts.error && !alerts.data) {
+  if (first.error && !first.data) {
     return (
       <LoadError
         title="We couldn't load your alerts"
-        error={alerts.error}
-        retry={alerts.refetch}
+        error={first.error}
+        retry={first.refetch}
       />
     );
   }
-  if (!alerts.data) {
+  if (!first.data) {
     return (
       <div
         role="status"
@@ -48,26 +53,23 @@ export function AlertsList({
       />
     );
   }
-  const shown = assetIds
-    ? alerts.data.alerts.filter((a) => assetIds.has(a.asset_id))
-    : alerts.data.alerts;
-  const unread = shown.filter((a) => a.read_at == null).length;
-
-  if (shown.length === 0) {
+  const { alerts, unread_count: unread, next_before: next } = first.data;
+  if (alerts.length === 0) {
     return <p className="text-sm text-muted-foreground">{empty}</p>;
   }
+  const more = (cursor: string) => setOlder((pages) => [...pages, cursor]);
   return (
     <div>
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground" aria-live="polite">
           {unread === 0 ? "All read" : `${unread} unread`}
         </p>
-        {!assetIds && alerts.data.unread_count > 0 && (
+        {unread > 0 && (
           <Button
             variant="outline"
             size="sm"
             disabled={markAll.isPending}
-            onClick={() => void markAll.mutate()}
+            onClick={() => void markAll.mutate({ communityId })}
           >
             Mark all read
           </Button>
@@ -79,11 +81,74 @@ export function AlertsList({
         </p>
       )}
       <ul className="divide-y divide-border" aria-label="Alerts">
-        {shown.map((alert) => (
+        {alerts.map((alert) => (
           <AlertItem key={alert.id} alert={alert} />
         ))}
       </ul>
+      {older.map((cursor, i) => (
+        <OlderAlerts
+          key={cursor}
+          communityId={communityId}
+          before={cursor}
+          onMore={i === older.length - 1 ? more : undefined}
+        />
+      ))}
+      {older.length === 0 && next && <LoadMore onClick={() => more(next)} />}
     </div>
+  );
+}
+
+function OlderAlerts({
+  communityId,
+  before,
+  onMore,
+}: {
+  communityId?: string;
+  before: string;
+  onMore?: (cursor: string) => void;
+}) {
+  const page = useAlerts({ communityId, before });
+  if (page.error && !page.data) {
+    return (
+      <div className="mt-3">
+        <LoadError
+          title="We couldn't load older alerts"
+          error={page.error}
+          retry={page.refetch}
+        />
+      </div>
+    );
+  }
+  if (!page.data) {
+    return (
+      <div
+        role="status"
+        aria-label="Loading older alerts"
+        className="mt-3 h-12 animate-pulse rounded-2xl bg-muted"
+      />
+    );
+  }
+  const next = page.data.next_before;
+  return (
+    <>
+      <ul
+        className="mt-3 divide-y divide-border border-t border-border pt-3"
+        aria-label="Older alerts"
+      >
+        {page.data.alerts.map((alert) => (
+          <AlertItem key={alert.id} alert={alert} />
+        ))}
+      </ul>
+      {onMore && next && <LoadMore onClick={() => onMore(next)} />}
+    </>
+  );
+}
+
+function LoadMore({ onClick }: { onClick: () => void }) {
+  return (
+    <Button variant="ghost" size="sm" className="mt-3 w-full" onClick={onClick}>
+      Show older alerts
+    </Button>
   );
 }
 

@@ -711,8 +711,13 @@ class AlertOut(BaseModel):
 
 
 class AlertListOut(BaseModel):
-    alerts: list[AlertOut] = Field(description="Newest first")
-    unread_count: int = Field(ge=0, description="All unread alerts, not only those listed")
+    alerts: list[AlertOut] = Field(description="One page, newest first")
+    unread_count: int = Field(
+        ge=0, description="Unread alerts matching the filter, on every page, not only this one"
+    )
+    next_before: UUID | None = Field(
+        default=None, description="Pass as `before` for the next (older) page; null on the last"
+    )
 
 
 class AlertsMarkedOut(BaseModel):

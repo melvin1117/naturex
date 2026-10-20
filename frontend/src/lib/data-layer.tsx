@@ -84,7 +84,11 @@ export const queryKeys = {
     ["review-queue", meId, offset] as const,
   /** The signed-in account's alerts (T75); `alertsAll` is the prefix for invalidation. */
   alertsAll: () => ["alerts"] as const,
-  alerts: (meId: string | null) => ["alerts", meId] as const,
+  alerts: (
+    meId: string | null,
+    communityId: string | null,
+    before: string | null,
+  ) => ["alerts", meId, communityId, before] as const,
 };
 
 export interface CreateDataLayerOptions {

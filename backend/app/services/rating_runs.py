@@ -931,7 +931,14 @@ class RatingRunner:
         for run in recent.values():
             if run.asset_id == spec.asset_id and run.active(now):
                 raise RunInProgress(run.run_id)
-        queued = sorted(run.queued_at for run in recent.values() if run.queued_at is not None)
+        # Scheduled re-rates (T75) don't use up the world's hourly window, so a monitoring run
+        # never locks people out of rating; the global cap below still counts them.
+        counted = [
+            run
+            for run in recent.values()
+            if spec.trigger == "scheduled" or run.trigger != "scheduled"
+        ]
+        queued = sorted(run.queued_at for run in counted if run.queued_at is not None)
         if len(queued) >= cap:
             raise RunRateLimited(_cap_retry_after(queued[len(queued) - cap], now))
         global_cap = self.settings.rating_runs_global_per_hour
@@ -1268,6 +1275,10 @@ class _RunEvents:
     @property
     def queued_at(self) -> datetime | None:
         return next((ts for p, ts in self.events if p.get("step") == "queued"), None)
+
+    @property
+    def trigger(self) -> str | None:
+        return next((p.get("trigger") for p, _ in self.events if p.get("step") == "queued"), None)
 
     @property
     def done(self) -> dict[str, Any] | None:

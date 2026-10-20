@@ -82,7 +82,6 @@ function Home({ summary }: { summary: CommunitySummary }) {
   const featured =
     listings.find((l) => l.asset.status === "listed") ?? listings[0];
   const trading = listings.filter((l) => l.asset.trading).length;
-  const siteIds = new Set(listings.map((l) => l.asset.id));
 
   return (
     <div className="mx-auto max-w-7xl px-4 pt-10 pb-16 sm:px-6">
@@ -166,7 +165,8 @@ function Home({ summary }: { summary: CommunitySummary }) {
           {listings.length > 0 && <WalletCard wallet={summary.wallet} />}
           <StewardPanel title="Alerts">
             <AlertsList
-              assetIds={siteIds}
+              key={community.id}
+              communityId={community.id}
               empty="No alerts yet. You'll see news and re-ratings about your land here."
             />
           </StewardPanel>

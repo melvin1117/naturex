@@ -62,10 +62,14 @@ const NEWS = alert({
   created_at: "2026-10-18T08:00:00Z",
 });
 
-function list(alerts: AlertOut[]): AlertList {
+function list(
+  alerts: AlertOut[],
+  next_before: string | null = null,
+): AlertList {
   return {
     alerts,
     unread_count: alerts.filter((a) => a.read_at == null).length,
+    next_before,
   };
 }
 
@@ -73,7 +77,7 @@ type Routes = Parameters<typeof fakeBackend>[0];
 
 function renderAlerts(
   routes: Routes = {},
-  props: { assetIds?: ReadonlySet<string> } = {},
+  props: { communityId?: string } = {},
 ) {
   const backend = fakeBackend({
     "GET /world": () => json(SIGNED_IN_WORLD),
@@ -206,17 +210,63 @@ describe("AlertsList", () => {
     expect(backend.calls("GET /alerts")).toBeGreaterThanOrEqual(2);
   });
 
-  it("shows only the given sites' alerts and no mark-all for a filtered list", async () => {
-    renderAlerts({}, { assetIds: new Set([FOREST]) });
+  it("asks the API for one community's alerts and marks only those read", async () => {
+    const COMMUNITY = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+    let read = false;
+    const backend = renderAlerts(
+      {
+        "GET /alerts": (request) => {
+          const query = new URL(request.url).searchParams;
+          expect(query.get("community_id")).toBe(COMMUNITY);
+          // The server's count covers every unread alert of the community, not just this page.
+          return json({
+            ...list([read ? { ...NEWS, read_at: "x" } : NEWS]),
+            unread_count: read ? 0 : 3,
+          });
+        },
+        "POST /alerts/read-all": (request) => {
+          expect(new URL(request.url).searchParams.get("community_id")).toBe(
+            COMMUNITY,
+          );
+          read = true;
+          return json({ marked: 3 });
+        },
+      },
+      { communityId: COMMUNITY },
+    );
 
-    await screen.findByText("Fire reported near Osa Forest");
+    expect(await screen.findByText("3 unread")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Mark all read" }));
+
+    await screen.findByText("All read");
+    expect(backend.calls("POST /alerts/read-all")).toBe(1);
+  });
+
+  it("shows older alerts a page at a time", async () => {
+    const OLDEST = alert({
+      id: "44444444-4444-4444-8444-444444444444",
+      title: "Oldest alert",
+      created_at: "2026-10-01T08:00:00Z",
+    });
+    const backend = renderAlerts({
+      "GET /alerts": (request) => {
+        const before = new URL(request.url).searchParams.get("before");
+        if (before === null) return json(list([alert(), NEWS], NEWS.id));
+        expect(before).toBe(NEWS.id);
+        return json({ ...list([OLDEST]), unread_count: 3 });
+      },
+    });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Show older alerts" }),
+    );
+
+    const older = await screen.findByRole("list", { name: "Older alerts" });
+    expect(within(older).getByText("Oldest alert")).toBeInTheDocument();
     expect(
-      screen.queryByText("Xochimilco Wetland downgraded to BBB"),
+      screen.queryByRole("button", { name: "Show older alerts" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("1 unread")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Mark all read" }),
-    ).not.toBeInTheDocument();
+    expect(backend.calls("GET /alerts")).toBeGreaterThanOrEqual(2);
   });
 
   it("says so when there are none", async () => {

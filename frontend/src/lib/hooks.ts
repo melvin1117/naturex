@@ -482,21 +482,31 @@ export function useMyCommunities(): QueryResult<MyCommunity[]> {
 }
 
 /**
- * The signed-in account's alerts with their read state (T75), newest first. Live: an `alert`
- * event refetches it (`wireLiveUpdates`). Idle for anonymous visitors, who get no alerts.
+ * One page of the signed-in account's alerts with their read state (T75), newest first:
+ * `communityId` narrows to that community's sites (members only), `before` is the previous
+ * page's `next_before`. Live: an `alert` event refetches every page (`wireLiveUpdates`). Idle
+ * for anonymous visitors, who get no alerts.
  */
-export function useAlerts(): QueryResult<AlertList> {
+export function useAlerts({
+  communityId,
+  before,
+}: { communityId?: string; before?: string } = {}): QueryResult<AlertList> {
   const { session } = useDataLayer();
   const { world } = useWorld();
   const meId = world?.me?.id ?? null;
   useLiveConnection(meId != null);
   return useApiQuery(
-    queryKeys.alerts(meId),
+    queryKeys.alerts(meId, communityId ?? null, before ?? null),
     (api, signal) => {
       if (session.getSnapshot().world?.me?.id !== meId) {
         return Promise.reject(new Error("The account changed."));
       }
-      return unwrap(api.GET("/alerts", { signal }));
+      return unwrap(
+        api.GET("/alerts", {
+          params: { query: { community_id: communityId, before } },
+          signal,
+        }),
+      );
     },
     { enabled: meId != null },
   );
@@ -517,11 +527,22 @@ export function useMarkAlertRead(): MutationResult<string, AlertOut> {
   );
 }
 
-/** Mark every alert read; the alerts list refetches. */
-export function useMarkAllAlertsRead(): MutationResult<void, AlertsMarked> {
-  return useApiMutation((api) => unwrap(api.POST("/alerts/read-all")), {
-    onSuccess: (_d, _v, { cache }) => cache.invalidate(queryKeys.alertsAll()),
-  });
+/** Mark every alert read (only `communityId`'s sites', if set); the alerts list refetches. */
+export function useMarkAllAlertsRead(): MutationResult<
+  { communityId?: string },
+  AlertsMarked
+> {
+  return useApiMutation(
+    (api, { communityId }: { communityId?: string }) =>
+      unwrap(
+        api.POST("/alerts/read-all", {
+          params: { query: { community_id: communityId } },
+        }),
+      ),
+    {
+      onSuccess: (_d, _v, { cache }) => cache.invalidate(queryKeys.alertsAll()),
+    },
+  );
 }
 
 /**

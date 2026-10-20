@@ -20,11 +20,11 @@ from app.jobs.runtime import (
     session_factory,
     spend,
 )
-from app.services.monitoring import quarter_label, rerate_all
+from app.services.monitoring import parse_quarter_period, quarter_label, rerate_all
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = parse_args(__doc__ or "", lambda now: quarter_label(now.date()), argv)
+    args = parse_args(__doc__ or "", quarter_label, parse_quarter_period, argv)
     settings = job_settings()
     report = rerate_all(
         session_factory,
