@@ -54,6 +54,12 @@ export const queryKeys = {
   ipoPreviews: (assetId: string) => ["ipo-preview", assetId] as const,
   ipoPreview: (assetId: string, totalShares: number, retainedPct: string) =>
     ["ipo-preview", assetId, totalShares, retainedPct] as const,
+  /** Every query of one community (a prefix, for invalidation), T63. */
+  community: (id: string) => ["community", id] as const,
+  communityProfile: (id: string) => ["community", id, "profile"] as const,
+  /** The Steward home (T63) and a community's members (T68). */
+  communitySummary: (id: string) => ["community", id, "summary"] as const,
+  communityMembers: (id: string) => ["community", id, "members"] as const,
 };
 
 export interface CreateDataLayerOptions {

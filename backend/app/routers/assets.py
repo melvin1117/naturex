@@ -11,7 +11,7 @@ The lifecycle's writes are in `app.routers.listings`.
 
 from __future__ import annotations
 
-from collections.abc import Collection, Sequence
+from collections.abc import Collection
 from dataclasses import asdict
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -19,7 +19,6 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Response, status
-from sqlalchemy import func
 from sqlmodel import Session, col, select
 
 from app.authz import Action, Actor, DenyReason, OptionalActor, asset_ref, denied, require
@@ -36,12 +35,17 @@ from app.schemas import (
     PricePoint,
     ReportOut,
 )
+from app.services.asset_cards import (
+    cards,
+    change_pct,
+    is_mock_report,
+    shown_status_reason,
+)
 from app.services.cached_example import cached_example
 from app.services.ipo import is_trading
 from app.services.lifecycle import PUBLIC_STATUSES
-from app.services.listings import RATING_STALE, visible_to
+from app.services.listings import visible_to
 from app.services.rating_runs import assets_with_active_runs
-from app.tools.earth_obs import MOCK_FLAG
 
 router = APIRouter(tags=["assets"])
 
@@ -52,11 +56,6 @@ _MISSING: Responses = {404: {"description": "Not found in the caller's world"}}
 # `(world_id, id)` first, so another world's asset is a 404.
 BROWSE_WORLD = require(Action.BROWSE)
 BROWSE_ASSET = require(Action.BROWSE, asset_ref)
-
-
-_HUNDRED = Decimal(100)
-# Marketplace sparkline length: the latest prices per card, oldest first.
-SPARKLINE_POINTS = 30
 
 
 def world_asset(
@@ -72,81 +71,6 @@ def world_asset(
     return asset
 
 
-def _price_per_asset(
-    session: Session, world_id: UUID, asset_ids: Collection[UUID], *, latest: bool
-) -> dict[UUID, Decimal]:
-    """The latest (or first, i.e. IPO) price of each of these assets."""
-    ts = col(Price.ts).desc() if latest else col(Price.ts).asc()
-    rows = session.exec(
-        select(col(Price.asset_id), col(Price.price))
-        .where(Price.world_id == world_id, col(Price.asset_id).in_(asset_ids))
-        .order_by(col(Price.asset_id), ts)
-        .distinct(col(Price.asset_id))
-    ).all()
-    return {asset_id: price for asset_id, price in rows}
-
-
-def _sparklines(
-    session: Session, world_id: UUID, asset_ids: Collection[UUID]
-) -> dict[UUID, list[Decimal]]:
-    """The last `SPARKLINE_POINTS` prices of each of these assets, oldest first (one query)."""
-    ranked = (
-        select(
-            col(Price.asset_id).label("asset_id"),
-            col(Price.price).label("price"),
-            col(Price.ts).label("ts"),
-            func.row_number()
-            .over(partition_by=col(Price.asset_id), order_by=col(Price.ts).desc())
-            .label("rank"),
-        )
-        .where(Price.world_id == world_id, col(Price.asset_id).in_(asset_ids))
-        .subquery()
-    )
-    rows = session.exec(
-        select(ranked.c.asset_id, ranked.c.price)
-        .where(ranked.c.rank <= SPARKLINE_POINTS)
-        .order_by(ranked.c.asset_id, ranked.c.ts)
-    ).all()
-    out: dict[UUID, list[Decimal]] = {}
-    for asset_id, price in rows:
-        out.setdefault(asset_id, []).append(price)
-    return out
-
-
-def _latest_two_reports(
-    session: Session, world_id: UUID, asset_ids: Collection[UUID]
-) -> dict[UUID, list[Report]]:
-    """Each asset's latest report and the one before it (for the trend)."""
-    rows = session.exec(
-        select(Report)
-        .where(Report.world_id == world_id, col(Report.asset_id).in_(asset_ids))
-        .order_by(col(Report.asset_id), col(Report.version).desc())
-    ).all()
-    out: dict[UUID, list[Report]] = {}
-    for report in rows:
-        latest = out.setdefault(report.asset_id, [])
-        if len(latest) < 2:
-            latest.append(report)
-    return out
-
-
-def _trend(headlines: list[Report]) -> str | None:
-    if len(headlines) < 2:
-        return None
-    current, previous = headlines[0].health_score, headlines[1].health_score
-    if current is None or previous is None:
-        return None
-    if current > previous:
-        return "improving"
-    return "declining" if current < previous else "stable"
-
-
-def _change_pct(latest: Decimal | None, ipo: Decimal | None) -> float | None:
-    if latest is None or ipo is None or ipo <= 0:
-        return None
-    return float(((latest - ipo) / ipo * _HUNDRED).quantize(Decimal("0.01")))
-
-
 def _asset_price(session: Session, asset: Asset, *, latest: bool) -> Decimal | None:
     """The asset's latest (or first, i.e. IPO) price."""
     ts = col(Price.ts).desc() if latest else col(Price.ts).asc()
@@ -158,21 +82,6 @@ def _asset_price(session: Session, asset: Asset, *, latest: bool) -> Decimal | N
     ).first()
 
 
-def is_mock_report(report: Report | None) -> bool:
-    """A report rated from `USE_MOCKS` placeholder metrics (T58), never observed data."""
-    return report is not None and any(
-        isinstance(flag, dict) and flag.get("type") == MOCK_FLAG for flag in report.flags or []
-    )
-
-
-def shown_status_reason(asset: Asset, active: Collection[UUID]) -> str | None:
-    """The stored reason, or `rating_stale` for a listing in `rating` whose run died (a
-    worker crash leaves no failure to record)."""
-    if asset.status is AssetStatus.RATING and asset.status_reason is None:
-        return None if asset.id in active else RATING_STALE
-    return asset.status_reason
-
-
 @router.get("/assets", response_model=list[AssetCard], dependencies=[BROWSE_WORLD])
 def list_assets(world: CurrentWorld, session: SessionDep) -> list[AssetCard]:
     """Marketplace cards for the world's public assets: listed and suspended (T58)."""
@@ -182,47 +91,6 @@ def list_assets(world: CurrentWorld, session: SessionDep) -> list[AssetCard]:
         .order_by(col(Asset.created_at), col(Asset.name))
     ).all()
     return cards(session, world.id, assets)
-
-
-def cards(session: Session, world_id: UUID, assets: Sequence[Asset]) -> list[AssetCard]:
-    """Marketplace cards for these assets (reports and prices loaded for them only)."""
-    ids = [asset.id for asset in assets]
-    reports = _latest_two_reports(session, world_id, ids)
-    latest_prices = _price_per_asset(session, world_id, ids, latest=True)
-    ipo_prices = _price_per_asset(session, world_id, ids, latest=False)
-    reviewing = any(asset.status is AssetStatus.RATING for asset in assets)
-    active = assets_with_active_runs(session, world_id) if reviewing else set()
-    sparklines = _sparklines(session, world_id, ids)
-    out: list[AssetCard] = []
-    for asset in assets:
-        headlines = reports.get(asset.id, [])
-        latest = headlines[0] if headlines else None
-        price = latest_prices.get(asset.id)
-        out.append(
-            AssetCard(
-                id=asset.id,
-                name=asset.name,
-                country=asset.country,
-                status=AssetStatusOut(asset.status.value),
-                status_reason=shown_status_reason(asset, active),
-                area_ha=asset.area_ha,
-                price=price,
-                price_change_pct=_change_pct(price, ipo_prices.get(asset.id)),
-                mock=is_mock_report(latest),
-                grade=latest.grade if latest else None,
-                trend=_trend(headlines),
-                confidence=latest.confidence if latest else None,
-                health_score=latest.health_score if latest else None,
-                value_low=latest.value_low if latest else None,
-                value_mid=latest.value_mid if latest else None,
-                value_high=latest.value_high if latest else None,
-                cover_image_url=asset.cover_image_url,
-                site_key=asset.site_key,
-                sparkline=sparklines.get(asset.id, []),
-                trading=is_trading(asset),
-            )
-        )
-    return out
 
 
 def asset_detail(session: Session, asset: Asset, settings: SettingsDep) -> AssetDetail:
@@ -257,7 +125,7 @@ def asset_detail(session: Session, asset: Asset, settings: SettingsDep) -> Asset
         latest_report=present_report(session, report, asset, settings) if report else None,
         recent_events=recent_events(session, asset),
         price=price,
-        price_change_pct=_change_pct(price, _asset_price(session, asset, latest=False)),
+        price_change_pct=change_pct(price, _asset_price(session, asset, latest=False)),
         trading=is_trading(asset),
         ipo_at=asset.ipo_at,
         cached_example=_cached_example(session, asset, active),

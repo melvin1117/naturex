@@ -283,6 +283,7 @@ OBJECT_ROUTES: dict[tuple[str, str], tuple[str, Callable[[Objects], Any] | None]
     ("GET", "/communities/{community_id}"): ("arjun", None),
     ("PATCH", "/communities/{community_id}"): ("rosa", lambda o: {"description": "x"}),
     ("GET", "/communities/{community_id}/members"): ("rosa", None),
+    ("GET", "/communities/{community_id}/summary"): ("rosa", None),
     ("POST", "/communities/{community_id}/members"): ("rosa", lambda o: {"user_id": str(o.owner)}),
     ("DELETE", "/communities/{community_id}/members/{user_id}"): ("rosa", None),
     ("GET", "/assets/{asset_id}"): ("arjun", None),

@@ -1,11 +1,12 @@
 "use client";
 
-import { LogOut } from "lucide-react";
+import { Copy, LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
 import { toast } from "sonner";
 
+import { copyText } from "@/components/account-id";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -111,6 +112,32 @@ function AccountMenuContent() {
             </span>
           )}
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="font-normal">
+          <span className="block text-xs text-muted-foreground">
+            Account ID, to join a community as a steward
+          </span>
+          <code
+            translate="no"
+            className="mt-0.5 block truncate font-mono text-xs select-all"
+          >
+            {me.id}
+          </code>
+        </DropdownMenuLabel>
+        <DropdownMenuItem
+          onSelect={() =>
+            void copyText(me.id).then((ok) =>
+              ok
+                ? toast("Account ID copied")
+                : toast.error("We couldn't copy your account ID", {
+                    description: "Select it in the menu and copy it yourself.",
+                  }),
+            )
+          }
+        >
+          <Copy aria-hidden="true" />
+          Copy account ID
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={signOut.isPending}

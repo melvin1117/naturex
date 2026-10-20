@@ -19,6 +19,7 @@ import {
 } from "react";
 import { cn } from "cn";
 
+import { AccountIdCopy } from "@/components/account-id";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
+import { CreateCommunityForm } from "@/components/steward/community-form";
 import {
   COMMUNITY_PARAM,
   readRememberedCommunity,
@@ -222,9 +224,9 @@ export function CommunitySwitcher({ className }: { className?: string }) {
 }
 
 /**
- * What a signed-in account sees in the Steward app before its pages are wired (T63): the
- * prototype pages once it belongs to a community, else an empty state that leads to creating
- * one. Anonymous visitors only get here in the scripted demo (`RequireAccount`).
+ * What a signed-in account sees in the Steward app: its pages once it belongs to a community,
+ * else "Start a community" with the create form (T63). Anonymous visitors only get here in the
+ * scripted demo (`RequireAccount`).
  */
 export function StewardGate({ children }: { children: ReactNode }) {
   const { world } = useWorld();
@@ -269,39 +271,74 @@ export function StewardGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return <CreateCommunityEmptyState />;
+  return <CreateCommunityEmptyState meId={world.me.id} />;
 }
 
-function CreateCommunityEmptyState() {
+function CreateCommunityEmptyState({ meId }: { meId: string }) {
+  const { select } = useStewardCommunity();
   return (
     <section
       aria-labelledby="steward-empty-title"
-      className="mx-auto max-w-2xl px-4 py-16 sm:px-6 sm:py-24"
+      className="mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-20"
     >
-      <span
-        aria-hidden="true"
-        className="grid size-12 place-items-center rounded-2xl bg-lime/40 text-lime-ink"
-      >
-        <Sprout className="size-6" />
-      </span>
-      <h1
-        id="steward-empty-title"
-        className="mt-6 font-serif text-4xl tracking-tight text-balance sm:text-5xl"
-      >
-        Start a community
-      </h1>
-      <p className="mt-4 max-w-prose text-pretty text-muted-foreground">
-        The Steward app is for the people who look after the land. Create a
-        community to list your land, get it rated and receive what investors pay
-        into its treasury. You&apos;ll be its owner and can invite stewards.
-      </p>
-      <p className="mt-6 max-w-prose rounded-2xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-        Creating a community from here is coming next. Until then, the Steward
-        app stays empty for your account.
-      </p>
-      <Button asChild variant="outline" className="mt-8">
-        <Link href="/">Back to the Exchange</Link>
-      </Button>
+      <div className="grid gap-10 lg:grid-cols-[1fr_440px] lg:items-start">
+        <div>
+          <span
+            aria-hidden="true"
+            className="grid size-12 place-items-center rounded-2xl bg-lime/40 text-lime-ink"
+          >
+            <Sprout className="size-6" />
+          </span>
+          <h1
+            id="steward-empty-title"
+            className="mt-6 font-serif text-4xl tracking-tight text-balance sm:text-5xl"
+          >
+            Start a community
+          </h1>
+          <p className="mt-4 max-w-prose text-pretty text-muted-foreground">
+            The Steward app is for the people who look after the land. Create a
+            community to list your land, get it rated and receive what
+            supporters pay into its fund. You&apos;ll be its owner and can add
+            stewards.
+          </p>
+          <ol className="mt-6 space-y-3 text-sm">
+            {[
+              "Create your community",
+              "Draw your land and get an AI rating in minutes",
+              "Open it to supporters and grow your community fund",
+            ].map((step, i) => (
+              <li key={step} className="flex items-center gap-3">
+                <span className="tabular grid size-6 place-items-center rounded-full bg-lime text-xs font-semibold">
+                  {i + 1}
+                </span>
+                {step}
+              </li>
+            ))}
+          </ol>
+          <div className="mt-8 max-w-md rounded-2xl border border-dashed border-border p-4">
+            <h2 className="text-sm font-medium">
+              Joining someone else&apos;s community?
+            </h2>
+            <p className="mt-1 mb-3 text-sm text-muted-foreground">
+              Give its owner your account ID. Once they&apos;ve added you as a
+              steward, reload this page.
+            </p>
+            <AccountIdCopy id={meId} />
+          </div>
+          <Button asChild variant="outline" className="mt-6">
+            <Link href="/">Back to the Exchange</Link>
+          </Button>
+        </div>
+        <div className="rounded-[1.75rem] bg-card p-6 shadow-lift sm:p-8">
+          <h2 className="text-lg font-semibold">Create your community</h2>
+          <p className="mt-1 mb-5 text-sm text-muted-foreground">
+            Play money only: nothing here is a real security or investment.
+          </p>
+          <CreateCommunityForm
+            onCreated={(community) => select(community.id)}
+          />
+        </div>
+      </div>
     </section>
   );
 }

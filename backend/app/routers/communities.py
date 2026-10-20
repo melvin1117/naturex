@@ -48,6 +48,7 @@ from app.communities import (
 from app.deps import SessionDep
 from app.models import (
     COMMUNITY_NAME_INDEX,
+    Asset,
     Community,
     CommunityMember,
     CommunityRole,
@@ -59,9 +60,18 @@ from app.schemas import (
     CommunityMemberAdd,
     CommunityMemberOut,
     CommunityOut,
+    CommunitySummaryOut,
     CommunityUpdate,
+    HoldersOut,
+    ListingSummaryOut,
     MyCommunityOut,
+    PayoutSummaryOut,
+    SharesOut,
+    TopHolderOut,
+    WalletOut,
 )
+from app.services.asset_cards import cards, latest_reports
+from app.services.community_summary import Wallet, summarize
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["communities"])
@@ -327,6 +337,101 @@ def remove_steward(user_id: UUID, granted: Membership, session: SessionDep) -> R
         code = status.HTTP_404_NOT_FOUND if exc.reason == NOT_A_MEMBER else status.HTTP_409_CONFLICT
         raise HTTPException(code, exc.reason) from None
     return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"Cache-Control": NO_STORE})
+
+
+def _wallet_out(wallet: Wallet) -> WalletOut:
+    return WalletOut(
+        balance=wallet.balance,
+        ipo_proceeds=wallet.ipo_proceeds,
+        community_fund_payouts=wallet.community_fund_payouts,
+        retained_dividends=wallet.retained_dividends,
+        total_received=wallet.total_received,
+    )
+
+
+@router.get(
+    "/communities/{community_id}/summary",
+    response_model=CommunitySummaryOut,
+    responses={**_AUTH, **_DENIED, **_MISSING},
+)
+def summary(granted: CommunityData, session: SessionDep, response: Response) -> CommunitySummaryOut:
+    """The Steward home (T63; the community's members and same-world admins): its listings with
+    their status and next action, the community wallet (IPO proceeds and community-fund
+    payouts), the treasury's retained-stake dividends, holders (counted and ranked, never
+    named), recent quarterly payouts and the latest reports' stewardship recommendations.
+    Every number comes from stored rows (`app.services.community_summary`). Play money."""
+    actor = granted.signed_in
+    community = _community(session, granted)
+    assets = session.exec(
+        select(Asset)
+        .where(Asset.world_id == community.world_id, Asset.community_id == community.id)
+        .order_by(col(Asset.created_at), col(Asset.name))
+    ).all()
+    role = actor.role_in(community.id)
+    ids = [asset.id for asset in assets]
+    # The latest two reports (the cards' trend), loaded once for the cards and the summary.
+    reports = latest_reports(session, community.world_id, ids, per_asset=2)
+    facts = summarize(
+        session,
+        community.world_id,
+        assets,
+        latest={asset_id: versions[0] for asset_id, versions in reports.items()},
+        can_launch=role == CommunityRole.OWNER,
+    )
+    card_of = {
+        card.id: card for card in cards(session, community.world_id, assets, reports=reports)
+    }
+    names = {asset.id: asset.name for asset in assets}
+    _no_store(response, PRIVATE_NO_STORE)
+    return CommunitySummaryOut(
+        community=CommunityOut.model_validate(community),
+        role=role,
+        listings=[
+            ListingSummaryOut(
+                asset=card_of[listing.asset.id],
+                next_action=listing.next_action,
+                ipo_at=listing.asset.ipo_at,
+                wallet=_wallet_out(listing.wallet),
+                holders=HoldersOut(
+                    count=listing.holders.count,
+                    shares_held=listing.holders.shares_held,
+                    top=[
+                        TopHolderOut(rank=t.rank, shares=t.shares, pct_of_shares=t.pct_of_shares)
+                        for t in listing.holders.top
+                    ],
+                ),
+                shares=(
+                    None
+                    if listing.shares is None
+                    else SharesOut(
+                        shares_offered=listing.shares.shares_offered,
+                        shares_sold=listing.shares.shares_sold,
+                        retained_shares=listing.shares.retained_shares,
+                    )
+                ),
+                recommendations=list(listing.recommendations),
+                report_version=listing.report_version,
+            )
+            for listing in facts.listings
+        ],
+        wallet=_wallet_out(facts.wallet),
+        holder_count=facts.holder_count,
+        payouts=[
+            PayoutSummaryOut(
+                asset_id=p.asset_id,
+                asset_name=names[p.asset_id],
+                quarter_label=p.quarter_label,
+                revenue=p.revenue,
+                community_fund=p.community_fund,
+                dividends_total=p.dividends_total,
+                retained_dividend=p.retained_dividend,
+                holder_count=p.holder_count,
+                paid_at=p.paid_at,
+            )
+            for p in facts.payouts
+        ],
+        payouts_count=facts.payouts_count,
+    )
 
 
 @router.get("/me/communities", response_model=list[MyCommunityOut], responses=_AUTH)

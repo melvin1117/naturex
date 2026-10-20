@@ -34,7 +34,7 @@ from app.authz import (
 )
 from app.deps import SessionDep, SettingsDep
 from app.models import Asset, Community
-from app.routers.assets import asset_detail, cards
+from app.routers.assets import asset_detail
 from app.routers.runs import RunnerDep
 from app.schemas import (
     AssetCard,
@@ -45,6 +45,7 @@ from app.schemas import (
     AssetUpdate,
     SuspendRequest,
 )
+from app.services.asset_cards import cards
 from app.services.earth_obs_live import LIVE_AREA_TOO_LARGE
 from app.services.lifecycle import (
     EVIDENCE_REQUIRED,

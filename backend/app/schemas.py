@@ -901,3 +901,99 @@ class CommunityMemberAdd(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     user_id: UUID
+
+
+# ----- Steward home (T63) -----
+
+
+class NextAction(StrEnum):
+    """What the Steward home offers to do next with a listing."""
+
+    CONTINUE_LISTING = "continue_listing"
+    RATING_IN_PROGRESS = "rating_in_progress"
+    ADD_EVIDENCE = "add_evidence"
+    LAUNCH_IPO = "launch_ipo"
+    AWAITING_IPO = "awaiting_ipo"
+    VIEW_ON_EXCHANGE = "view_on_exchange"
+    NONE = "none"
+
+
+class WalletOut(BaseModel):
+    """Play money. `balance` is the community wallet (`community_wallet`) and equals
+    `ipo_proceeds + community_fund_payouts`; `retained_dividends` went to the treasury for its
+    retained stake. `total_received` is all three: the wallet plus those dividends."""
+
+    balance: Decimal
+    ipo_proceeds: Decimal = Field(description="Σ primary-float purchases (qty × IPO-float price).")
+    community_fund_payouts: Decimal = Field(
+        description="Σ `community_wallet_credit` of the quarterly payouts."
+    )
+    retained_dividends: Decimal = Field(
+        description="Dividends paid to the treasury for its retained stake."
+    )
+    total_received: Decimal
+
+
+class TopHolderOut(BaseModel):
+    """An investor ranked by shares, without a name or account ID."""
+
+    rank: int
+    shares: int
+    pct_of_shares: Decimal = Field(description="Of the listing's total shares, 2 dp.")
+
+
+class HoldersOut(BaseModel):
+    count: int
+    shares_held: int = Field(description="Shares investors hold; the retained stake excluded.")
+    top: list[TopHolderOut]
+
+
+class SharesOut(BaseModel):
+    shares_offered: int
+    shares_sold: int = Field(description="Bought from the IPO float so far.")
+    retained_shares: int
+
+
+class ListingSummaryOut(BaseModel):
+    asset: AssetCard
+    next_action: NextAction = Field(
+        description="continue_listing (draft), rating_in_progress, add_evidence "
+        "(needs_evidence), launch_ipo (listed, not launched; owner), awaiting_ipo (the same "
+        "for stewards and admins), view_on_exchange (trading or suspended), none (ineligible, "
+        "withdrawn)."
+    )
+    ipo_at: datetime | None
+    wallet: WalletOut
+    holders: HoldersOut
+    shares: SharesOut | None = Field(description="None before the IPO: no shares exist yet.")
+    recommendations: list[str] = Field(
+        description="The Auditor's stewardship recommendations from the latest report."
+    )
+    report_version: int | None
+
+
+class PayoutSummaryOut(BaseModel):
+    asset_id: UUID
+    asset_name: str
+    quarter_label: str
+    revenue: Decimal
+    community_fund: Decimal = Field(description="Credited to the community wallet.")
+    dividends_total: Decimal
+    retained_dividend: Decimal = Field(description="The treasury's share of the dividends.")
+    holder_count: int
+    paid_at: datetime
+
+
+class CommunitySummaryOut(BaseModel):
+    """The Steward home (T63): members and same-world admins only. Play money; holders are
+    counted and ranked without names or account IDs."""
+
+    community: CommunityOut
+    role: CommunityRole | None = Field(description="The caller's role; null for an admin.")
+    listings: list[ListingSummaryOut]
+    wallet: WalletOut
+    holder_count: int = Field(description="Distinct investors holding any of its listings.")
+    payouts: list[PayoutSummaryOut] = Field(
+        description="The latest quarterly payouts, newest first."
+    )
+    payouts_count: int
