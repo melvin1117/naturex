@@ -1412,8 +1412,9 @@ class AiSuggestionResult(BaseModel):
     comparisons: list[AiComparisonOut]
     documents: list[AiDocumentReadingOut]
     flags: list[str] = Field(
-        description="instruction_like_text, documents_not_sent, place_not_geocoded, "
-        "reason_withheld, model_fallback, mock_model"
+        description="instruction_like_text (a document), listing_instruction_like_text (the "
+        "listing's community or place names), documents_not_sent, place_not_geocoded, "
+        "reason_withheld, mock_model"
     )
     models: list[str]
     method_version: str
@@ -1431,7 +1432,7 @@ class AiSuggestionOut(BaseModel):
     heuristic**: show it labelled as such, next to its excerpts; it never changed a check or the
     level. `status: failed` means no model answered (or the budget was spent): `suggestion` is
     null. A run has no AI suggestion while the check is pending or when it doesn't run (the live
-    world while `VERIFICATION_AI_LIVE=false`)."""
+    world while `VERIFICATION_AI_LIVE=false`): see the queue item's `ai_suggestion_status`."""
 
     trust: Literal["untrusted_heuristic"] = "untrusted_heuristic"
     notice: str = AI_SUGGESTION_NOTICE
@@ -1455,8 +1456,15 @@ class ReviewQueueItem(BaseModel):
     asset_status: AssetStatusOut
     community_id: UUID | None
     run: VerificationRunOut
+    ai_suggestion_status: Literal["pending", "not_run", "completed", "failed"] = Field(
+        description="The run's AI document check: `pending` (queued or running, for up to 15 "
+        "minutes after submission), `not_run` (off in this world, or no document may be sent "
+        "to a model), `completed`, or `failed` (no model answer, a spent budget, an error, a "
+        "lost job or a stored result that no longer reads)."
+    )
     ai_suggestion: AiSuggestionOut | None = Field(
         default=None,
-        description="The AI document check of the run: an untrusted heuristic (see its `trust` "
-        "and `notice`), null while pending or when it doesn't run.",
+        description="The AI document check's result: an untrusted heuristic (see its `trust` "
+        "and `notice`). Present when `ai_suggestion_status` is `completed`, and when `failed` "
+        "with a stored result; null otherwise.",
     )

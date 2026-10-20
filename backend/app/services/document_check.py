@@ -9,26 +9,36 @@
 - **What is sent** (`not_sent_reason`): only a document's sanitised preview, never its bytes. A
   sandbox sends only sample documents (`is_sample`, T76), so no real person's data leaves; with
   `USE_MOCKS=true` the fake model runs in-process and every previewed document is "read".
+  When no document may be sent, nothing runs and nothing is stored (status `not_run`). The
+  listing's place is reverse-geocoded only when a document shows a place to compare.
 - **What it can change:** nothing but its own row in `verification_ai_suggestions`. The run's
   checklist, fingerprint and level are never read for writing.
-- **Errors:** no model answer, a spent budget or a missing key store a `failed` row; neither
-  prompts, answers nor error messages (which can quote an answer) are logged.
+- **Errors:** no model answer, a spent budget, a missing key or any other error store a
+  `failed` row; a run deleted meanwhile (sandbox reset) stores nothing. Neither prompts,
+  answers nor error messages (which can quote an answer) are logged: only the error's type and
+  frames.
+- **Status** (`suggestion_status`, on the admin queue): `pending` | `not_run` | `completed` |
+  `failed`; a check still missing `PENDING_TIMEOUT` after submission was lost and reads
+  `failed`. At API shutdown queued checks are dropped (`shutdown_default_checker`).
 """
 
 from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Callable, Iterable
+import traceback
+from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import Executor, ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, Final, Literal
 from uuid import UUID
 
 import httpx
 from pydantic import ValidationError
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
 from app.agents.document_check import (
@@ -58,8 +68,13 @@ from app.worlds import LIVE_WORLD_ID
 
 log = logging.getLogger(__name__)
 
-COMPLETED = "completed"
-FAILED = "failed"
+COMPLETED: Final = "completed"
+FAILED: Final = "failed"
+PENDING: Final = "pending"
+NOT_RUN: Final = "not_run"
+SuggestionStatus = Literal["pending", "not_run", "completed", "failed"]
+PENDING_TIMEOUT = timedelta(minutes=15)
+"""A check not stored by then was lost (an API restart drops the queue): it reads `failed`."""
 FAILED_REASON = "No model answered (or the AI budget is spent); review the documents yourself."
 
 
@@ -208,8 +223,10 @@ def store(
 
 def suggestions_for(
     session: Session, world_id: UUID, run_ids: Iterable[UUID]
-) -> dict[UUID, AiSuggestionOut]:
-    """The stored suggestions of these runs in this world, by run."""
+) -> dict[UUID, AiSuggestionOut | None]:
+    """The stored suggestions of these runs in this world, by run. A row that no longer
+    validates (e.g. written by an older version) maps to None, so one bad row can't break the
+    review queue; its status reads `failed`."""
     wanted = list(run_ids)
     if not wanted:
         return {}
@@ -219,19 +236,63 @@ def suggestions_for(
             col(VerificationAiSuggestion.run_id).in_(wanted),
         )
     ).all()
-    return {
-        row.run_id: AiSuggestionOut.model_validate(
-            {
-                **row.result,
-                "run_id": row.run_id,
-                "status": row.status,
-                "suggestion": row.suggestion,
-                "method_version": row.method_version,
-                "created_at": row.created_at,
-            }
+    found: dict[UUID, AiSuggestionOut | None] = {}
+    for row in rows:
+        try:
+            found[row.run_id] = AiSuggestionOut.model_validate(
+                {
+                    **(row.result if isinstance(row.result, dict) else {}),
+                    "run_id": row.run_id,
+                    "status": row.status,
+                    "suggestion": row.suggestion,
+                    "method_version": row.method_version,
+                    "created_at": row.created_at,
+                }
+            )
+        except ValidationError:
+            log.warning("AI suggestion of run %s no longer validates; shown as failed", row.run_id)
+            found[row.run_id] = None
+    return found
+
+
+def sendable(settings: Settings, world_id: UUID, documents: Iterable[ListingDocument]) -> bool:
+    """Whether any of these documents may go to the model (see `not_sent_reason`)."""
+    return any(
+        not_sent_reason(
+            settings, world_id, has_preview=document.has_preview, is_sample=document.is_sample
         )
-        for row in rows
-    }
+        is None
+        for document in documents
+    )
+
+
+def suggestion_status(
+    settings: Settings,
+    world_id: UUID,
+    *,
+    stored: bool,
+    stored_out: AiSuggestionOut | None,
+    documents: Sequence[ListingDocument],
+    submitted_at: datetime,
+    now: datetime,
+) -> SuggestionStatus:
+    """`completed` | `failed` once a result is stored (an unreadable row reads `failed`);
+    `not_run` where the check is off or no document may be sent; `pending` for up to
+    `PENDING_TIMEOUT` after submission; then `failed` (the job was lost, e.g. a restart)."""
+    if stored:
+        return stored_out.status if stored_out is not None else FAILED
+    if not enabled(settings, world_id) or not sendable(settings, world_id, documents):
+        return NOT_RUN
+    return PENDING if now - submitted_at < PENDING_TIMEOUT else FAILED
+
+
+def _frames(exc: BaseException) -> str:
+    """Where an exception happened (file, line and function per frame), never its message or
+    source lines, which can quote a model's answer or a document."""
+    return "\n".join(
+        f"  {frame.filename}:{frame.lineno} in {frame.name}"
+        for frame in traceback.extract_tb(exc.__traceback__)
+    )
 
 
 LlmFactory = Callable[[], StructuredLLM]
@@ -253,32 +314,36 @@ class DocumentChecker:
             return False
         try:
             self.executor.submit(self.run, world_id, asset_id, run_id)
-        except RuntimeError:  # the worker is shutting down: the run stands without a suggestion
+        except RuntimeError:  # the worker is shut down: the run stands without a suggestion
             log.warning("document check of run %s not queued: worker unavailable", run_id)
             return False
         return True
 
+    def shutdown(self) -> None:
+        """Stop taking checks and drop queued ones (API shutdown); a running one finishes."""
+        self.executor.shutdown(wait=False, cancel_futures=True)
+
     def run(self, world_id: UUID, asset_id: UUID, run_id: UUID) -> None:
         try:
             self._run(world_id, asset_id, run_id)
-        except Exception as exc:  # a worker thread: report the kind only, never the message
-            log.error("document check of run %s failed: %s", run_id, type(exc).__name__)
+        except Exception as exc:  # a worker thread: report the kind and frames, never the message
+            log.error(
+                "document check of run %s failed: %s\n%s", run_id, type(exc).__name__, _frames(exc)
+            )
 
     def _run(self, world_id: UUID, asset_id: UUID, run_id: UUID) -> None:
         if not enabled(self.settings, world_id):
             return
         with self.session_factory() as session:
             prepared = _prepare(session, self.settings, world_id, asset_id, run_id)
-        if prepared is None:
-            return
-        place_names, source = _place(prepared, self.geocoder)
+        if prepared is None or all(d.not_sent is not None for d in prepared.documents):
+            return  # nothing may be sent: no row, so the status reads `not_run`
         listing = ListingInput(
             world_id=world_id,
             asset_id=asset_id,
             community_name=prepared.community_name,
             area_ha=prepared.area,
-            place_names=place_names,
-            place_source=source,
+            resolve_place=lambda: _place(prepared, self.geocoder),
         )
         result: AiSuggestionResult | None
         try:
@@ -288,9 +353,18 @@ class DocumentChecker:
                 "document check of run %s: no model answer (%s)", run_id, type(exc).__name__
             )
             result = None
+        except Exception as exc:
+            log.error(
+                "document check of run %s failed: %s\n%s", run_id, type(exc).__name__, _frames(exc)
+            )
+            result = None
         with self.session_factory() as session:
-            store(session, world_id=world_id, asset_id=asset_id, run_id=run_id, result=result)
-            session.commit()
+            try:
+                store(session, world_id=world_id, asset_id=asset_id, run_id=run_id, result=result)
+                session.commit()
+            except IntegrityError:  # the run went away meanwhile (a sandbox reset or prune)
+                session.rollback()
+                log.info("document check of run %s not stored: the run is gone", run_id)
 
 
 # ----- the process-wide checker -----------------------------------------------------------------
@@ -338,3 +412,10 @@ def default_checker() -> DocumentChecker:
 def get_document_checker() -> DocumentChecker:
     """FastAPI dependency (tests override it)."""
     return default_checker()
+
+
+def shutdown_default_checker() -> None:
+    """At API shutdown: drop queued checks (if the checker was ever created)."""
+    with _default_lock:
+        if _default_checker is not None:
+            _default_checker.shutdown()
