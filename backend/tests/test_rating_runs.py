@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable, Iterator
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from functools import partial
 from types import SimpleNamespace
@@ -724,6 +724,15 @@ def test_per_world_cap_returns_retry_after(db: Connection, site: Site) -> None:
     assert 1 <= exc.value.retry_after_s <= 3601
     # The cap is per world, and a Time Machine quarter may raise it explicitly.
     h.runner.start(site.world_id, site.assets[keys[2]], max_runs_per_hour=10)
+
+
+def test_cap_retry_after_clamps_future_event_and_rounds_up(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    now = datetime(2026, 10, 20, tzinfo=UTC)
+    assert rating_runs._cap_retry_after(now + timedelta(seconds=2), now) == 3600
+    assert "retry_after_clamped" in caplog.text
+    assert rating_runs._cap_retry_after(now - timedelta(seconds=3599, milliseconds=500), now) == 1
 
 
 @requires_db
