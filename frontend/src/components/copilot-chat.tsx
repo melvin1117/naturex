@@ -285,9 +285,10 @@ function TurnView({ turn }: { turn: Turn }) {
             </p>
             <ul className="mt-1 flex flex-wrap gap-1.5">
               {turn.citations.map((s) => (
-                <li key={s.ref}>
+                <li key={s.ref} className="max-w-full min-w-0">
                   <Link
                     href={sourceHref(s)}
+                    title={sourceLabel(s)}
                     className="inline-flex max-w-full items-center gap-1 rounded-full bg-card px-2.5 py-1 text-xs font-medium hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   >
                     <span className="font-mono text-muted-foreground">
