@@ -343,7 +343,7 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
             </TabsContent>
           </Tabs>
 
-          <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
+          <aside className="min-w-0 space-y-6 lg:sticky lg:top-24 lg:self-start">
             <Suspense fallback={null}>
               <TradePanel assetId={asset.id} />
             </Suspense>
