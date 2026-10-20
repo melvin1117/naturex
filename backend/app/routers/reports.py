@@ -1,4 +1,4 @@
-"""Report history and diffs, read from the caller's world (T19)."""
+"""Report history and diffs (T37), read from the caller's world (T19)."""
 
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ from app.schemas import (
     ReportOut,
     ReportSummarySource,
 )
+from app.services.diff import diff_reports as build_report_diff
 from app.services.listings import visible_to
-from app.services.rating import report_fair_value_total
 from app.tools.earth_obs import NdviPoint
 
 router = APIRouter(tags=["reports"])
@@ -244,34 +244,36 @@ def get_report(
     return present_report(session, report, asset, settings)
 
 
-def _change(label: str, before: object, after: object) -> str:
-    return f"{label} unchanged: {after}" if before == after else f"{label}: {before} → {after}"
-
-
 @router.get(
-    "/reports/{report_id}/diff/{prev}", response_model=ReportDiff, dependencies=[BROWSE_REPORT]
+    "/reports/{report_id}/diff/{prev}",
+    response_model=ReportDiff,
+    dependencies=[BROWSE_REPORT],
+    responses={
+        400: {"description": "The reports belong to different assets."},
+        404: {"description": "Either report is missing, in another world or not visible."},
+    },
 )
 def diff_reports(
     report_id: UUID, prev: UUID, world: CurrentWorld, actor: OptionalActor, session: SessionDep
 ) -> ReportDiff:
-    """Headline changes between two reports of one asset (deterministic; T37 extends it)."""
+    """What changed from report `prev` to report `report_id` (two versions of one asset):
+    each changed number with its old and new value and delta, the grade change and the reasons
+    (stored Auditor citations, events, flags and data versions; no model is called).
+    422 for an invalid ID or when `prev` is a later version than `report_id` (`prev_not_older`)."""
     current, _ = _world_report(session, world.id, report_id, actor)
     previous, _ = _world_report(session, world.id, prev, actor)
     if current.asset_id != previous.asset_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Reports belong to different assets")
-    return ReportDiff(
-        report_id=report_id,
-        prev_report_id=prev,
-        changes=[
-            _change("health_score", previous.health_score, current.health_score),
-            _change("grade", previous.grade, current.grade),
-            _change("confidence", previous.confidence, current.confidence),
-            _change("value_mid", previous.value_mid, current.value_mid),
-            # The total, not per share: the share count changes at the IPO (T59).
-            _change(
-                "fair_value_total",
-                report_fair_value_total(previous),
-                report_fair_value_total(current),
-            ),
-        ],
-    )
+    if previous.version > current.version:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "prev_not_older")
+    between = session.exec(
+        select(Report)
+        .where(
+            Report.world_id == world.id,
+            Report.asset_id == current.asset_id,
+            Report.version > previous.version,
+            Report.version <= current.version,
+        )
+        .order_by(col(Report.version))
+    ).all()
+    return build_report_diff(previous, current, between)

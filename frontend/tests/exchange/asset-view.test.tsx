@@ -230,12 +230,37 @@ describe("AssetView", () => {
       routes({
         [`GET /assets/${ID}`]: () => json({ ...ASSET, latest_report: v2 }),
         [`GET /assets/${ID}/reports`]: () => json([v2, v1]),
+        [`GET /reports/${v2.id}/diff/${v1.id}`]: () =>
+          json({
+            report_id: v2.id,
+            prev_report_id: v1.id,
+            changes: [],
+            from_version: 1,
+            to_version: 3,
+            grade_change: { old: "A", new: "AA", direction: "up" },
+            metrics: [],
+            reasons: [
+              {
+                source: "auditor",
+                version: 3,
+                code: "key_change",
+                text: "Replanting raised vegetation vigour [score:vegetation_vigor].",
+                citations: ["score:vegetation_vigor"],
+              },
+            ],
+          }),
       }),
     );
 
     expect(
       await screen.findByText("Ecological Performance Report · v3"),
     ).toBeInTheDocument();
+    expect(await screen.findByText("Why it changed")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Replanting raised vegetation vigour [score:vegetation_vigor].",
+      ).previousSibling,
+    ).toHaveTextContent("Auditor");
     expect(screen.getByText("Better.").tagName).toBe("STRONG");
     expect(screen.getByText(/<b>not html<\/b>/)).toBeInTheDocument();
     expect(

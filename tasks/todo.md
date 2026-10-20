@@ -299,7 +299,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test` · **Deps:** T07 · **Files:** `backend/app/tools/geometry.py`, `backend/tests/test_geometry.py`
 
 ### T37 · Report versions and diffs (#49) — D2 · S · Could (only if ahead; re-plan Oct 4) · B6
-- [ ] Each re-rating stores a new version; the diff endpoint lists changed metrics and the reasons
+- [x] Each re-rating stores a new version; the diff endpoint lists changed metrics and the reasons
 
 **Verify:** `make test` · **Deps:** T27 · **Files:** `backend/app/routers/reports.py`, `backend/app/services/diff.py`
 

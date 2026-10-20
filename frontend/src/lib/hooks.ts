@@ -38,6 +38,7 @@ import type {
   QuoteOut,
   RatingRun,
   RegisterIn,
+  ReportDiff,
   ReportOut,
   SiteImages,
   WorldOut,
@@ -336,6 +337,24 @@ export function useReport(id: string | undefined): QueryResult<ReportOut> {
         }),
       ),
     { enabled: Boolean(id) },
+  );
+}
+
+/** What changed from report `prev` to report `id`, and the stored reasons why (T37). */
+export function useReportDiff(
+  id: string | undefined,
+  prev: string | undefined,
+): QueryResult<ReportDiff> {
+  return useApiQuery(
+    queryKeys.reportDiff(id ?? "", prev ?? ""),
+    (api, signal) =>
+      unwrap(
+        api.GET("/reports/{report_id}/diff/{prev}", {
+          params: { path: { report_id: id ?? "", prev: prev ?? "" } },
+          signal,
+        }),
+      ),
+    { enabled: Boolean(id && prev) },
   );
 }
 

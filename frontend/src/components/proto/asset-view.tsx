@@ -322,7 +322,7 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
                   Showing the latest report only: {reports.error.message}
                 </p>
               )}
-              <ReportTab versions={versions} />
+              <ReportTab versions={versions} showReasons />
             </TabsContent>
             <TabsContent value="news">
               <Panel title="News and evidence near this site">
