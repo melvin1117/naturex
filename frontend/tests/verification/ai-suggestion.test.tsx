@@ -161,7 +161,7 @@ describe("AI suggestion on the review page", () => {
                 },
               ],
               documents: [
-                aiReading({ instruction_like_text: true }),
+                aiReading({ instruction_like_text: true, area_ha: "1440.50" }),
                 aiReading({
                   document_id: DOC_MINUTES,
                   doc_type: "assembly_minutes",
@@ -220,10 +220,10 @@ describe("AI suggestion on the review page", () => {
     ).toBeInTheDocument();
     expect(within(title!).getByText("RAN-0042")).toBeInTheDocument();
     expect(
-      within(title!).getByText("(= 144.00 ha, converted by code)", {
+      within(title!).getByText("(= 1,440.5 ha, converted by code)", {
         exact: false,
-      }),
-    ).toBeInTheDocument();
+      }).textContent,
+    ).toContain("1,440.5\u00a0ha");
     expect(minutes).toHaveTextContent(
       "Document 2 · Assembly minutes (consent)",
     );
@@ -304,6 +304,48 @@ describe("AI suggestion on the review page", () => {
     expect(long.textContent).toHaveLength(600);
   });
 
+  it("keeps bidi overrides and zero-width characters literal, inside <bdi>", async () => {
+    const spoof = "\u202Eexe.fdp\u202C Ejido";
+    const hidden = "Eji\u200Bdo\u200D Río\uFEFFClaro";
+    const unbroken = "\u200B".repeat(40) + "A".repeat(300);
+    renderReview({
+      [QUEUE]: () =>
+        json([
+          queueItem({
+            ai_suggestion_status: "completed",
+            ai_suggestion: aiSuggestion({
+              reasons: [spoof],
+              comparisons: [
+                {
+                  document_id: DOC_TITLE,
+                  field: "holder_name",
+                  listing_value: "Río Claro Keepers",
+                  document_value: hidden,
+                  excerpt: unbroken,
+                  verdict: "unclear",
+                  reason: spoof,
+                  compared_by: "model",
+                },
+              ],
+            }),
+          }),
+        ]),
+    });
+    const section = await aiPanel();
+    await within(section).findByText("Consistent with the listing");
+    const untrusted = Array.from(
+      section.querySelectorAll<HTMLElement>("[data-untrusted]"),
+    );
+    for (const text of [spoof, hidden, unbroken]) {
+      const node = untrusted.find((n) => n.textContent === text);
+      expect(node, JSON.stringify(text)).toBeDefined();
+      expect(node!.tagName).toBe("BDI");
+      expect(node!.className).toContain("[overflow-wrap:anywhere]");
+      expect(node!.children).toHaveLength(0);
+    }
+    expect(untrusted.filter((n) => n.textContent === spoof)).toHaveLength(2);
+  });
+
   it("says the check is running, politely, and updates by itself", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const backend = renderReview({
@@ -319,11 +361,14 @@ describe("AI suggestion on the review page", () => {
       ),
     });
     const section = await aiPanel();
-    const status = await within(section).findByRole("status");
+    const status = within(section).getByRole("status");
     expect(status).toHaveAttribute("aria-live", "polite");
-    expect(status).toHaveTextContent(
-      "The AI check is still reading the documents",
+    await waitFor(() =>
+      expect(status).toHaveTextContent(
+        "The AI check is still reading the documents.",
+      ),
     );
+    expect(within(section).getAllByRole("status")).toHaveLength(1);
     expect(backend.calls(QUEUE)).toBe(1);
 
     await act(() => vi.advanceTimersByTimeAsync(AI_POLL_MS));
@@ -331,9 +376,115 @@ describe("AI suggestion on the review page", () => {
     expect(
       await within(section).findByText("Consistent with the listing"),
     ).toBeInTheDocument();
+    expect(within(section).getByRole("status")).toBe(status);
+    expect(status).toHaveTextContent("AI suggestion ready.");
     expect(backend.calls(QUEUE)).toBe(2);
     await act(() => vi.advanceTimersByTimeAsync(AI_POLL_MS * 2));
     expect(backend.calls(QUEUE)).toBe(2);
+  });
+
+  it("announces a check that leaves pending without finishing", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    renderReview({
+      [QUEUE]: sequence(
+        () => json([queueItem({ ai_suggestion_status: "pending" })]),
+        () => json([queueItem({ ai_suggestion_status: "failed" })]),
+      ),
+    });
+    const section = await aiPanel();
+    const status = within(section).getByRole("status");
+    await waitFor(() =>
+      expect(status).toHaveTextContent(/still reading the documents/),
+    );
+
+    await act(() => vi.advanceTimersByTimeAsync(AI_POLL_MS));
+
+    expect(
+      await within(section).findByText("The AI check didn't finish"),
+    ).toBeInTheDocument();
+    expect(status).toHaveTextContent("AI suggestion didn't finish.");
+  });
+
+  it("stops polling once the run is decided, though the cache still says pending", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const backend = renderReview({
+      [RUNS]: sequence(
+        () => json([run()]),
+        () => json([verifiedRun()]),
+      ),
+      [QUEUE]: () => json([queueItem({ ai_suggestion_status: "pending" })]),
+      [APPROVE]: () => json(verifiedRun()),
+    });
+    const section = await aiPanel();
+    await within(section).findByText(
+      "The AI check is still reading the documents",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(await screen.findByText("Decision recorded")).toBeInTheDocument();
+    expect(
+      await within(section).findByText(/Shown while a submission waits/),
+    ).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    const settled = backend.calls(QUEUE);
+
+    await act(() => vi.advanceTimersByTimeAsync(AI_POLL_MS * 3));
+
+    expect(backend.calls(QUEUE)).toBe(settled);
+  });
+
+  it("doesn't poll from a hidden tab, and asks once when it's seen again", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    try {
+      const backend = renderReview({
+        [QUEUE]: () => json([queueItem({ ai_suggestion_status: "pending" })]),
+      });
+      const section = await aiPanel();
+      await within(section).findByText(
+        "The AI check is still reading the documents",
+      );
+      await act(() => vi.advanceTimersByTimeAsync(AI_POLL_MS * 2));
+      expect(backend.calls(QUEUE)).toBe(1);
+
+      hidden.mockReturnValue(false);
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await waitFor(() => expect(backend.calls(QUEUE)).toBe(2));
+      await act(() => vi.advanceTimersByTimeAsync(AI_POLL_MS));
+      expect(backend.calls(QUEUE)).toBe(3);
+    } finally {
+      hidden.mockRestore();
+    }
+  });
+
+  it("says a newer submission is waiting when the queue holds another run", async () => {
+    const backend = renderReview({
+      [QUEUE]: () =>
+        json([
+          queueItem({
+            run: run({ id: "99999999-9999-4999-8999-999999999999" }),
+            ai_suggestion_status: "completed",
+            ai_suggestion: aiSuggestion(),
+          }),
+        ]),
+    });
+    const section = await aiPanel();
+    expect(
+      await within(section).findByText(
+        "A newer submission is waiting for review",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(section).queryByText("Consistent with the listing"),
+    ).not.toBeInTheDocument();
+    expect(backend.calls(RUNS)).toBe(1);
+
+    fireEvent.click(
+      within(section).getByRole("button", { name: "Reload the submission" }),
+    );
+
+    await waitFor(() => expect(backend.calls(RUNS)).toBe(2));
   });
 
   it("explains a check that didn't run", async () => {
@@ -343,7 +494,7 @@ describe("AI suggestion on the review page", () => {
       await within(section).findByText("Not run for this submission"),
     ).toBeInTheDocument();
     expect(within(section).getByText(/The AI check is off in this world/));
-    expect(within(section).queryByRole("status")).not.toBeInTheDocument();
+    expect(within(section).getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("explains a check that failed, with the stored reason", async () => {
@@ -493,6 +644,7 @@ describe("Uploader notice (ADR-0006 §5)", () => {
       expect(note).toHaveTextContent("Your uploads aren't sent to an AI model"),
     );
     expect(note).toHaveTextContent(/only NatureX's sample documents/);
+    expect(note).toHaveTextContent(/read by a reviewer\./);
   });
 
   it("says the check is off where it is", async () => {
@@ -504,6 +656,7 @@ describe("Uploader notice (ADR-0006 §5)", () => {
       ),
     );
     expect(note).toHaveTextContent(/is off here/);
+    expect(note).toHaveTextContent(/read by a reviewer\./);
   });
 
   it("words it conditionally until the world is known", async () => {

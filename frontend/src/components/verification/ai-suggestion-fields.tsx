@@ -67,7 +67,7 @@ const VERDICT_ICON = {
 } satisfies Record<AiComparison["verdict"], unknown>;
 
 /** A document's place in the suggestion: "Document 1 · Land title", as its reasons count. */
-export function documentName(
+function documentName(
   documents: readonly AiDocumentReading[],
   documentId: string,
 ): string {
@@ -145,6 +145,14 @@ export function Comparisons({
   );
 }
 
+const HECTARES = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 });
+
+/** "1,440.5 ha", with a non-breaking space; the API's decimal string as-is if it isn't one. */
+function hectares(value: string): string {
+  const number = Number(value);
+  return `${Number.isFinite(number) ? HECTARES.format(number) : value}\u00a0ha`;
+}
+
 function sentText(doc: AiDocumentReading): string {
   if (!doc.sent_to_model)
     return doc.not_sent_reason
@@ -207,7 +215,7 @@ export function DocumentReadings({
                       {name === "area" && doc.area_ha !== null && (
                         <span className="text-muted-foreground">
                           {" "}
-                          (= {doc.area_ha} ha, converted by code)
+                          (= {hectares(doc.area_ha)}, converted by code)
                         </span>
                       )}
                       <Excerpt text={doc[name].excerpt} />

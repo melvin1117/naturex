@@ -48,7 +48,13 @@ from app.agents.news_scout import GeocodedPlace
 from app.config import Settings, get_settings
 from app.llm import IMAGE_PROMPT_TOKENS, CallRecord, DbCallLog, LLMClient, LLMResult, Tier, cost_usd
 from app.main import app
-from app.models import DocumentType, ListingDocument, LlmCall, VerificationAiSuggestion
+from app.models import (
+    DocumentType,
+    ListingDocument,
+    LlmCall,
+    UserRole,
+    VerificationAiSuggestion,
+)
 from app.sandbox import reset_world
 from app.schemas import AI_SUGGESTION_NOTICE
 from app.services import document_check as service
@@ -71,7 +77,7 @@ from tests import test_verification as tv
 from tests.conftest import requires_db
 from tests.fixtures.verification.generate import INJECTION, INJECTION_ES, TITLE_LINES
 from tests.test_documents import png
-from tests.test_lifecycle import Deferred, World_, _sessions, square
+from tests.test_lifecycle import Deferred, World_, _member, _person, _sessions, square
 from tests.test_llm import FakeTransport, MemoryCallLog, reply
 
 conn = tv.conn
@@ -710,6 +716,33 @@ def test_the_queue_answers_for_one_listing(world: World_) -> None:
     )
     assert invalid.status_code == 422
     assert (steward.status_code, steward.json()["detail"]) == (403, "admin_only")
+
+
+@requires_db
+def test_one_listings_queue_item_keeps_the_queues_exclusions(world: World_) -> None:
+    decided = tv.draft(world)["id"]
+    decided_run = tv.evidence(world, decided)
+    own = tv.draft(world, geojson=square(700, lat=9.5))["id"]
+    tv.evidence(world, own)
+    impartial = _person(world.session, world.id, "Second Admin", UserRole.ADMIN)
+    approved = tv.decide(world, decided, decided_run["id"], "approve", user=impartial)
+    assert approved.status_code == 200, approved.text
+    _member(world.session, world.id, world.community_id, world.admin)
+    admin = tv.client_for(world, world.admin)
+
+    conflicted = admin.get("/admin/verifications", params={"asset_id": own})
+    not_waiting = tv.client_for(world, impartial).get(
+        "/admin/verifications", params={"asset_id": decided}
+    )
+
+    assert (conflicted.status_code, conflicted.json()) == (200, []), "never its own community's"
+    assert (not_waiting.status_code, not_waiting.json()) == (200, []), "decided: not waiting"
+    assert [
+        i["asset_id"]
+        for i in tv.client_for(world, impartial)
+        .get("/admin/verifications", params={"asset_id": own})
+        .json()
+    ] == [own]
 
 
 @requires_db

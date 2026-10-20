@@ -26,7 +26,9 @@ export function untrustedText(
   if (text == null) return null;
   const trimmed = text.trim();
   if (!trimmed) return null;
-  return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max - 1)}…`;
+  // By code points, so an emoji or other astral character at the cap is never split in two.
+  const chars = Array.from(trimmed);
+  return chars.length <= max ? trimmed : `${chars.slice(0, max - 1).join("")}…`;
 }
 
 export const STATUS_TEXT: Record<
@@ -153,11 +155,11 @@ export const UPLOAD_NOTICE: Record<
   },
   samples_only: {
     title: "Your uploads aren't sent to an AI model",
-    body: "In this demo world the AI document check reads only NatureX's sample documents, with an AI model on Nebius Token Factory. Files you upload here are checked by code and read by a NatureX reviewer.",
+    body: "In this demo world the AI document check reads only NatureX's sample documents, with an AI model on Nebius Token Factory. Files you upload here are checked by code and read by a reviewer.",
   },
   off: {
     title: "Your documents aren't sent to an AI model",
-    body: "The AI document check is off here: your documents are checked by code and read by a NatureX reviewer. If that changes, this notice will say so before you submit.",
+    body: "The AI document check is off here: your documents are checked by code and read by a reviewer. If that changes, this notice will say so before you submit.",
   },
   unknown: {
     title: "An AI model may read your documents",
