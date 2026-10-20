@@ -28,6 +28,8 @@ from app.routers.reports import present_report, recent_events
 from app.schemas import (
     AssetCard,
     AssetDetail,
+    AssetOutline,
+    AssetOutlines,
     AssetStatusOut,
     CachedExample,
     EventOut,
@@ -45,7 +47,8 @@ from app.services.cached_example import cached_example
 from app.services.ipo import is_trading
 from app.services.lifecycle import PUBLIC_STATUSES
 from app.services.listings import visible_to
-from app.services.rating_runs import assets_with_active_runs
+from app.services.rating_runs import assets_with_active_runs, latest_run_id
+from app.tools.geometry import outline_rings
 
 router = APIRouter(tags=["assets"])
 
@@ -93,7 +96,34 @@ def list_assets(world: CurrentWorld, session: SessionDep) -> list[AssetCard]:
     return cards(session, world.id, assets)
 
 
-def asset_detail(session: Session, asset: Asset, settings: SettingsDep) -> AssetDetail:
+OUTLINES_MAX_SITES = 300
+"""Sites per `GET /assets/outlines` answer (oldest first); `truncated` says if there are more."""
+
+
+@router.get("/assets/outlines", response_model=AssetOutlines, dependencies=[BROWSE_WORLD])
+def list_outlines(world: CurrentWorld, session: SessionDep, response: Response) -> AssetOutlines:
+    """The boundaries of the world's public sites (listed and suspended), simplified on the
+    server to at most 200 corners each, for the listing map's outlines and overlap hint (T33).
+    Only a hint: T36's overlap check on create and submit is what decides, and it also counts
+    listings under review, which stay private here."""
+    assets = session.exec(
+        select(Asset)
+        .where(Asset.world_id == world.id, col(Asset.status).in_(PUBLIC_STATUSES))
+        .order_by(col(Asset.created_at), col(Asset.id))
+        .limit(OUTLINES_MAX_SITES + 1)
+    ).all()
+    outlines = [
+        AssetOutline(id=asset.id, name=asset.name, rings=outline_rings(asset.geojson))
+        for asset in assets[:OUTLINES_MAX_SITES]
+    ]
+    response.headers["Cache-Control"] = PRIVATE_NO_STORE
+    return AssetOutlines(outlines=outlines, truncated=len(assets) > OUTLINES_MAX_SITES)
+
+
+def asset_detail(
+    session: Session, asset: Asset, settings: SettingsDep, actor: Actor | None = None
+) -> AssetDetail:
+    """The asset page's data; `actor` decides whether `latest_run_id` is shown."""
     report = session.exec(
         select(Report)
         .where(Report.world_id == asset.world_id, Report.asset_id == asset.id)
@@ -129,6 +159,13 @@ def asset_detail(session: Session, asset: Asset, settings: SettingsDep) -> Asset
         trading=is_trading(asset),
         ipo_at=asset.ipo_at,
         cached_example=_cached_example(session, asset, active),
+        # Only for a listing under review, which only its community and admins can load (so
+        # public reads never need the caller's roles: T57).
+        latest_run_id=(
+            latest_run_id(session, asset.world_id, asset.id)
+            if asset.status not in PUBLIC_STATUSES and visible_to(actor, asset)
+            else None
+        ),
     )
 
 
@@ -158,7 +195,7 @@ def get_asset(
     asset = world_asset(session, world.id, asset_id, actor)
     if asset.status not in PUBLIC_STATUSES:
         response.headers["Cache-Control"] = PRIVATE_NO_STORE
-    return asset_detail(session, asset, settings)
+    return asset_detail(session, asset, settings, actor)
 
 
 @router.post(

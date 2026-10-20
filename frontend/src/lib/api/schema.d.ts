@@ -248,6 +248,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/outlines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Outlines
+         * @description The boundaries of the world's public sites (listed and suspended), simplified on the
+         *     server to at most 200 corners each, for the listing map's outlines and overlap hint (T33).
+         *     Only a hint: T36's overlap check on create and submit is what decides, and it also counts
+         *     listings under review, which stay private here.
+         */
+        get: operations["list_outlines_assets_outlines_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assets/{asset_id}": {
         parameters: {
             query?: never;
@@ -1138,6 +1161,39 @@ export interface components {
             ipo_at?: string | null;
             /** @description Demo worlds only: a listing waiting in `rating` because its satellite metrics are missing or their live computation failed points to the nearest precomputed demo site, labelled as a cached example (T60). Always null in the live world. */
             cached_example?: components["schemas"]["CachedExample"] | null;
+            /**
+             * Latest Run Id
+             * @description A listing under review's latest rating run (follow it with `GET /runs/{id}`), for its community's members and same-world admins, who alone can load it (T33). Null for public (listed or suspended) assets and before any run.
+             */
+            latest_run_id?: string | null;
+        };
+        /**
+         * AssetOutline
+         * @description A public site's boundary, simplified for a map (T33).
+         */
+        AssetOutline: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Rings
+             * @description The exterior ring of each part, [lon, lat], simplified to at most 200 corners in all; holes dropped. A hint for drawing and overlap, never a check.
+             */
+            rings: number[][][];
+        };
+        /** AssetOutlines */
+        AssetOutlines: {
+            /** Outlines */
+            outlines: components["schemas"]["AssetOutline"][];
+            /**
+             * Truncated
+             * @description More public sites exist than were returned (oldest first are kept).
+             */
+            truncated: boolean;
         };
         /**
          * AssetStatus
@@ -3223,6 +3279,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    list_outlines_assets_outlines_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetOutlines"];
+                };
             };
         };
     };

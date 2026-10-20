@@ -60,6 +60,10 @@ export const queryKeys = {
   /** The Steward home (T63) and a community's members (T68). */
   communitySummary: (id: string) => ["community", id, "summary"] as const,
   communityMembers: (id: string) => ["community", id, "members"] as const,
+  /** A rating run (`GET /runs/{id}`, T27). */
+  run: (runId: string) => ["run", runId] as const,
+  /** Public sites' simplified boundaries for the listing map (T33). */
+  outlines: () => ["outlines"] as const,
 };
 
 export interface CreateDataLayerOptions {
@@ -161,9 +165,32 @@ export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
     },
     { retain: false },
   );
+  // Every progress event of a run refetches it (T33's live pipeline: duplicates and replays
+  // only cost a coalesced refetch); a listing's status change (T58) refetches the listing and
+  // its ledger, which records the transition.
+  const unsubscribeRunSteps = events.subscribe(
+    "rating_progress",
+    ({ payload }) => {
+      if (typeof payload.run_id === "string")
+        queue(queryKeys.run(payload.run_id));
+    },
+    { retain: false },
+  );
+  const unsubscribeListings = events.subscribe(
+    "listing_status",
+    ({ payload }) => {
+      queue(queryKeys.asset(payload.asset_id));
+      queue(queryKeys.ledger(payload.asset_id));
+      // A newly listed site joins the public outlines.
+      if (payload.to === "listed") queue(queryKeys.outlines());
+    },
+    { retain: false },
+  );
   return () => {
     unsubscribe();
     unsubscribeRuns();
+    unsubscribeRunSteps();
+    unsubscribeListings();
     if (timer) clearTimeout(timer);
   };
 }

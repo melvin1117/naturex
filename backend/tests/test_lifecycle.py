@@ -1484,3 +1484,75 @@ def test_quotes_and_orders_never_reveal_a_private_listing(world: World_) -> None
     # The community sees its own listing isn't tradable (yet).
     mine = client_as(world, world.steward).get(quote)
     assert (mine.status_code, mine.json()["detail"]) == (409, NOT_TRADING)
+
+
+# ----- The listing flow's reads (T33) ----------------------------------------------------------
+
+
+@requires_db
+def test_a_listing_under_review_shows_its_latest_run(world: World_) -> None:
+    asset = draft(world)
+    path = f"/assets/{asset['id']}"
+    assert asset["latest_run_id"] is None
+    assert client_as(world, world.owner).get(path).json()["latest_run_id"] is None
+
+    run_id = submit(world, asset["id"]).json()["run_id"]
+    for user in (world.owner, world.steward, world.admin):
+        assert client_as(world, user).get(path).json()["latest_run_id"] == run_id
+    for user in (world.outsider, world.other_steward):
+        assert client_as(world, user).get(path).status_code == 404
+
+    world.runner.settings = _settings(use_mocks=False)  # no metrics: it stays in rating
+    world.executor.run_all()
+    assert status_of(world, asset["id"]) == (AssetStatus.RATING, "no_satellite_metrics")
+    # Once its events are pruned (T29) a failed run has no record left to point to.
+    world.session.execute(
+        delete(WorldEvent).where(
+            col(WorldEvent.world_id) == world.id,
+            col(WorldEvent.type) == StreamEventType.RATING_PROGRESS,
+        )
+    )
+    world.session.commit()
+    assert client_as(world, world.owner).get(path).json()["latest_run_id"] is None
+
+
+@requires_db
+def test_a_public_asset_never_shows_a_run(world: World_) -> None:
+    asset = draft(world)
+    run_id = submit(world, asset["id"]).json()["run_id"]
+    world.executor.run_all()
+    assert status_of(world, asset["id"])[0] is AssetStatus.LISTED
+    for user in (world.steward, world.admin, world.outsider):
+        detail = client_as(world, user).get(f"/assets/{asset['id']}").json()
+        assert detail["latest_run_id"] is None
+    assert client_as(world, world.outsider).get(f"/runs/{run_id}").status_code == 200
+
+
+@requires_db
+def test_outlines_show_public_sites_of_the_callers_world_only(
+    world: World_, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asset = draft(world)
+    other = draft(world, name="Bosque Norte", geojson=square(1_200, lat=LAT + 0.05))
+    outlines = client_as(world, world.steward).get("/assets/outlines")
+    assert outlines.status_code == 200
+    assert outlines.headers["cache-control"] == "private, no-store"
+    ids = [o["id"] for o in outlines.json()["outlines"]]
+    assert asset["id"] not in ids and other["id"] not in ids  # drafts stay private
+    assert ids, "the sandbox's curated sites are listed"
+
+    submit(world, asset["id"])
+    world.executor.run_all()
+    for user in (world.steward, world.outsider):
+        body_ = client_as(world, user).get("/assets/outlines").json()
+        mine = next(o for o in body_["outlines"] if o["id"] == asset["id"])
+        assert mine["name"] == "Bosque Vivo"
+        assert len(mine["rings"]) == 1 and len(mine["rings"][0]) == 5
+        assert body_["truncated"] is False
+    # Another world's sites never show (anonymous visitors read the live world).
+    live = client_as(world, None).get("/assets/outlines").json()["outlines"]
+    assert asset["id"] not in [o["id"] for o in live]
+
+    monkeypatch.setattr("app.routers.assets.OUTLINES_MAX_SITES", 1)
+    capped = client_as(world, world.steward).get("/assets/outlines").json()
+    assert len(capped["outlines"]) == 1 and capped["truncated"] is True

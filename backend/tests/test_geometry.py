@@ -13,9 +13,11 @@ from app.tools.geometry import (
     MAX_AREA_HA,
     MAX_VERTICES,
     MIN_AREA_HA,
+    OUTLINE_MAX_POINTS,
     OVERLAP_TOLERANCE_HA,
     Problem,
     bare_geometry,
+    outline_rings,
     validate_polygon,
 )
 
@@ -227,3 +229,42 @@ def test_every_problem_is_reported_at_once() -> None:
 
     assert codes(check.problems) == {"too_small", "overlap"}
     assert all(p.message for p in check.problems)
+
+
+# --- Outlines for the listing map (T33) ---------------------------------------------------------
+
+
+def _circle(points: int, radius_deg: float = 0.05) -> dict[str, Any]:
+    ring = [
+        [
+            LON + radius_deg * math.cos(2 * math.pi * i / points),
+            LAT + radius_deg * math.sin(2 * math.pi * i / points),
+        ]
+        for i in range(points)
+    ]
+    return {"type": "Polygon", "coordinates": [[*ring, ring[0]]]}
+
+
+def test_an_outline_keeps_a_simple_ring_rounded_to_a_metre() -> None:
+    rings = outline_rings(square(1_200))
+    assert len(rings) == 1 and len(rings[0]) == 5
+    assert rings[0][0] == [round(LON, 5), round(LAT, 5)]
+
+
+def test_an_outline_is_simplified_under_the_cap() -> None:
+    rings = outline_rings(_circle(5_000))
+    assert 4 <= sum(len(ring) for ring in rings) <= OUTLINE_MAX_POINTS
+    assert len(outline_rings(_circle(5_000), max_points=20)[0]) <= 20
+
+
+def test_an_outline_has_each_parts_exterior_and_no_holes() -> None:
+    a, b = square(1_200), square(1_200, lon=LON + 0.1)
+    multi = {"type": "MultiPolygon", "coordinates": [a["coordinates"], b["coordinates"]]}
+    assert len(outline_rings(multi)) == 2
+    hole = square(400, lat=LAT + 0.002, lon=LON + 0.002)["coordinates"][0]
+    holed = {"type": "Polygon", "coordinates": [square(1_200)["coordinates"][0], hole]}
+    assert len(outline_rings(holed)) == 1
+
+
+def test_an_unreadable_area_has_no_outline() -> None:
+    assert outline_rings({"type": "Point", "coordinates": [0, 0]}) == []

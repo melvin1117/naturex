@@ -18,7 +18,11 @@ import type { ApiClient } from "./api/client";
 import { toApiError, unwrap, type ApiError } from "./api/errors";
 import type {
   AssetCard,
+  AssetCreate,
   AssetDetail,
+  AssetOutlines,
+  AssetSubmitted,
+  AssetUpdate,
   IpoLaunch,
   IpoOut,
   IpoPreview,
@@ -32,6 +36,7 @@ import type {
   PortfolioOut,
   PricePoint,
   QuoteOut,
+  RatingRun,
   RegisterIn,
   ReportOut,
   SiteImages,
@@ -608,6 +613,139 @@ export function useLaunchIpo(
         cache.invalidate(queryKeys.assets());
       },
     },
+  );
+}
+
+// ----- The listing flow (T33): rating runs and the listing lifecycle writes (T58) -----
+
+const RUN_ACTIVE = new Set<RatingRun["status"]>(["queued", "running"]);
+/** While a run is active, refetch it this often even without events: a run whose worker died
+ * only shows as failed (`stale`) when it is read again. */
+const RUN_POLL_MS = 10_000;
+
+/** A rating run (`GET /runs/{id}`). Live: refetches on each of its `rating_progress` events. */
+export function useRatingRun(
+  runId: string | null | undefined,
+): QueryResult<RatingRun> {
+  useLiveConnection(Boolean(runId));
+  const query = useApiQuery(
+    queryKeys.run(runId ?? ""),
+    (api, signal) =>
+      unwrap(
+        api.GET("/runs/{run_id}", {
+          params: { path: { run_id: runId ?? "" } },
+          signal,
+        }),
+      ),
+    { enabled: Boolean(runId) },
+  );
+  const active = query.data ? RUN_ACTIVE.has(query.data.status) : false;
+  const { refetch } = query;
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => void refetch(), RUN_POLL_MS);
+    return () => clearInterval(timer);
+  }, [active, refetch]);
+  return query;
+}
+
+/**
+ * The outlines of the world's public sites (`GET /assets/outlines`, simplified on the server)
+ * for the listing map and its overlap hint. Fetched once per tab and kept: later mounts reuse
+ * it, and a listing becoming public refetches it (`wireLiveUpdates`).
+ */
+export function useAssetOutlines(): QueryResult<AssetOutlines> {
+  const { cache } = useDataLayer();
+  const [cached] = useState(
+    () => cache.getState(queryKeys.outlines()).status === "success",
+  );
+  return useApiQuery(
+    queryKeys.outlines(),
+    (api, signal) => unwrap(api.GET("/assets/outlines", { signal })),
+    { enabled: !cached },
+  );
+}
+
+/**
+ * Refetch a listing and its ledger now, e.g. when its run ended or another run started without
+ * a `listing_status` event reaching this tab.
+ */
+export function useRefreshListing(): (assetId: string) => void {
+  const { cache } = useDataLayer();
+  return useCallback(
+    (assetId: string) => {
+      cache.invalidate(queryKeys.asset(assetId));
+      cache.invalidate(queryKeys.ledger(assetId));
+    },
+    [cache],
+  );
+}
+
+/** Cache the listing a write returned (a new one too) and refresh its ledger. */
+function afterListingWrite(asset: AssetDetail, { cache }: DataLayer) {
+  cache.setData<AssetDetail>(queryKeys.asset(asset.id), () => asset, {
+    seed: true,
+  });
+  cache.invalidate(queryKeys.ledger(asset.id));
+}
+
+/** `POST /assets`: a draft listing. The new listing is cached, so its page shows at once. */
+export function useCreateListing(): MutationResult<AssetCreate, AssetDetail> {
+  return useApiMutation(
+    (api, body: AssetCreate) => unwrap(api.POST("/assets", { body })),
+    { onSuccess: (asset, _vars, layer) => afterListingWrite(asset, layer) },
+  );
+}
+
+/** `PATCH /assets/{id}`: edit a draft (send only the fields that changed). */
+export function useUpdateListing(): MutationResult<
+  { assetId: string; body: AssetUpdate },
+  AssetDetail
+> {
+  return useApiMutation(
+    (api, { assetId, body }: { assetId: string; body: AssetUpdate }) =>
+      unwrap(
+        api.PATCH("/assets/{asset_id}", {
+          params: { path: { asset_id: assetId } },
+          body,
+        }),
+      ),
+    { onSuccess: (asset, _vars, layer) => afterListingWrite(asset, layer) },
+  );
+}
+
+/** `POST /assets/{id}/submit` (202 + `run_id`): the listing moves to `rating`. */
+export function useSubmitListing(): MutationResult<string, AssetSubmitted> {
+  return useApiMutation(
+    (api, assetId: string) =>
+      unwrap(
+        api.POST("/assets/{asset_id}/submit", {
+          params: { path: { asset_id: assetId } },
+        }),
+      ),
+    {
+      onSuccess: ({ asset_id }, _vars, { cache }) => {
+        cache.invalidate(queryKeys.asset(asset_id));
+        cache.invalidate(queryKeys.ledger(asset_id));
+      },
+    },
+  );
+}
+
+/** `POST /assets/{id}/revise` (back to draft) or `…/withdraw` (final). */
+export function useLeaveReview(
+  action: "revise" | "withdraw",
+): MutationResult<string, AssetDetail> {
+  return useApiMutation(
+    (api, assetId: string) => {
+      const params = { params: { path: { asset_id: assetId } } };
+      return unwrap(
+        action === "revise"
+          ? api.POST("/assets/{asset_id}/revise", params)
+          : api.POST("/assets/{asset_id}/withdraw", params),
+      );
+    },
+    { onSuccess: (asset, _vars, layer) => afterListingWrite(asset, layer) },
   );
 }
 

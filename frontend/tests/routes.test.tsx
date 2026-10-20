@@ -90,7 +90,6 @@ describe("routes", () => {
     ["/", MarketplacePage, "Marketplace"],
     ["/portfolio", PortfolioPage, "Your stakes"],
     ["/steward", StewardPage, "Get paid for keeping your land alive"],
-    ["/steward/list", ListPage, "List your land"],
     ["/admin", AdminPage, "Time Machine"],
     ["/judge", JudgePage, "The bees never sent an invoice."],
     ["/dev/ui", DevUiPage, "UI kit"],
@@ -99,6 +98,14 @@ describe("routes", () => {
     render(<Page />, { wrapper: Providers });
     expect(
       screen.getByRole("heading", { level: 1, name: heading }),
+    ).toBeInTheDocument();
+  });
+
+  it("/steward/list shows a loader, then the prototype flow to an anonymous demo visitor", async () => {
+    render(<ListPage />, { wrapper: Providers });
+    expect(screen.getByRole("status")).toHaveTextContent("Loading…");
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "List your land" }),
     ).toBeInTheDocument();
   });
 

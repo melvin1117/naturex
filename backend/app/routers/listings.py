@@ -204,7 +204,7 @@ def create_listing(
         raise _refused(LISTING_LIMIT_REACHED) from None
     session.commit()
     response.headers["Cache-Control"] = NO_STORE
-    return asset_detail(session, asset, settings)
+    return asset_detail(session, asset, settings, granted.actor)
 
 
 @router.patch(
@@ -247,7 +247,7 @@ def edit_listing(
         raise _polygon_error(exc) from None
     session.commit()
     response.headers["Cache-Control"] = NO_STORE
-    return asset_detail(session, asset, settings)
+    return asset_detail(session, asset, settings, granted.actor)
 
 
 @router.post(
@@ -347,7 +347,7 @@ def revise_listing(
         raise _refused(exc.code) from None
     session.commit()
     response.headers["Cache-Control"] = NO_STORE
-    return asset_detail(session, asset, settings)
+    return asset_detail(session, asset, settings, granted.actor)
 
 
 @router.post("/assets/{asset_id}/withdraw", response_model=AssetDetail, responses=_LEAVE_REVIEW)
@@ -365,7 +365,7 @@ def withdraw_listing(
         raise _refused(exc.code) from None
     session.commit()
     response.headers["Cache-Control"] = NO_STORE
-    return asset_detail(session, asset, settings)
+    return asset_detail(session, asset, settings, granted.actor)
 
 
 @router.post(
@@ -395,7 +395,7 @@ def suspend_listing(
         raise _refused(exc.code) from None
     session.commit()
     response.headers["Cache-Control"] = NO_STORE
-    return asset_detail(session, asset, settings)
+    return asset_detail(session, asset, settings, granted.actor)
 
 
 @router.post(
@@ -421,4 +421,4 @@ def resume_listing(
         raise _refused(exc.code) from None
     session.commit()
     response.headers["Cache-Control"] = NO_STORE
-    return asset_detail(session, asset, settings)
+    return asset_detail(session, asset, settings, granted.actor)

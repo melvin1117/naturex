@@ -138,13 +138,22 @@ export class QueryCache {
     return entry.promise;
   }
 
-  /** Patch cached data (e.g. a live `price_tick`). Missing entries are left alone. */
+  /** Patch cached data (e.g. a live `price_tick`). Missing entries are left alone unless `seed`. */
   setData<T>(
     key: QueryKey,
     update: (previous: T | undefined) => T | undefined,
+    /** Also store it when nothing is cached yet (e.g. a resource just created). */
+    { seed = false }: { seed?: boolean } = {},
   ) {
-    const entry = this.#entries.get(hashKey(key));
-    if (!entry || entry.state.data === undefined) return;
+    const entry = seed ? this.#entry(key) : this.#entries.get(hashKey(key));
+    if (!entry) return;
+    if (entry.state.data === undefined) {
+      if (!seed) return;
+      const data = update(undefined);
+      if (data !== undefined)
+        this.#set(entry, { status: "success", data, error: null });
+      return;
+    }
     this.#set(entry, { data: update(entry.state.data as T) });
   }
 

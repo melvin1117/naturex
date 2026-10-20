@@ -165,4 +165,15 @@ describe("QueryCache", () => {
     expect(cache.getState(["asset", "missing"]).data).toBeUndefined();
     expect(listener).toHaveBeenCalled();
   });
+
+  it("seeds a missing entry with setData({ seed: true })", () => {
+    const cache = new QueryCache();
+    cache.setData(["asset", "new"], () => ({ price: "1.00" }), { seed: true });
+    expect(cache.getState(["asset", "new"])).toMatchObject({
+      status: "success",
+      data: { price: "1.00" },
+    });
+    cache.setData(["asset", "none"], () => undefined, { seed: true });
+    expect(cache.getState(["asset", "none"]).status).toBe("idle");
+  });
 });
