@@ -28,7 +28,9 @@ import {
   DOC_MINUTES,
   DOC_TITLE,
   document,
+  panel,
   run,
+  verifiedPanel,
   verifiedRun,
 } from "./fixtures";
 
@@ -49,6 +51,23 @@ const RUNS = `GET /assets/${ASSET_ID}/verification/runs`;
 const DOCS = `GET /assets/${ASSET_ID}/documents`;
 const UPLOAD = `POST /assets/${ASSET_ID}/documents`;
 const SUBMIT = `POST /assets/${ASSET_ID}/verification/runs`;
+const PANEL = `GET /assets/${ASSET_ID}/verification`;
+const REVOKED_RUN = run({
+  id: "99999999-9999-4999-8999-999999999999",
+  is_current: false,
+  level: "revoked",
+  effective_level: "revoked",
+  reviewer_role: "platform_admin",
+  decided_at: "2026-10-19T09:00:00Z",
+  revoke_reason: "A boundary dispute.",
+  revoked_at: "2026-10-19T12:00:00Z",
+});
+const revokedPanel = panel({
+  level: "revoked",
+  badge: "Verification revoked",
+  revoked_at: "2026-10-19T12:00:00Z",
+  ledger_seq: 9,
+});
 
 const unlaunched = (overrides: Partial<AssetDetail> = {}) =>
   assetFixture({
@@ -66,6 +85,7 @@ function renderScreen(routes: Routes = {}) {
     [ASSET]: () => json(unlaunched()),
     [RUNS]: () => json([]),
     [DOCS]: () => json([]),
+    [PANEL]: () => json(panel()),
     ...routes,
   });
   const layer = createDataLayer({
@@ -85,6 +105,8 @@ async function chooseType(name: string) {
   const trigger = screen.getByRole("combobox", { name: "What is it?" });
   fireEvent.keyDown(trigger, { key: "Enter" });
   fireEvent.click(await screen.findByRole("option", { name }));
+  // Radix hands focus back to the trigger once the list has closed.
+  await waitFor(() => expect(trigger).toHaveFocus());
 }
 
 describe("StewardVerifyScreen", () => {
@@ -277,8 +299,11 @@ describe("StewardVerifyScreen", () => {
     ).toBeInTheDocument();
   });
 
-  it("words a verified listing by its evidence and offers the opening offer", async () => {
-    renderScreen({ [RUNS]: () => json([verifiedRun()]) });
+  it("shows the Exchange's badge for a verified listing and offers the opening offer", async () => {
+    renderScreen({
+      [RUNS]: () => json([verifiedRun()]),
+      [PANEL]: () => json(verifiedPanel()),
+    });
     expect(
       await screen.findAllByText(
         "Documents reviewed by NatureX (hackathon process)",
@@ -289,10 +314,17 @@ describe("StewardVerifyScreen", () => {
     ).toHaveAttribute("href", `/steward/assets/${ASSET_ID}/ipo`);
   });
 
-  it("uses the sample wording for a verified run of sample documents", async () => {
+  it("uses the API's sample wording for a verified run of sample documents", async () => {
     renderScreen({
       [RUNS]: () =>
         json([verifiedRun({ evidence_kind: "sample", mode: "demo" })]),
+      [PANEL]: () =>
+        json(
+          verifiedPanel({
+            badge:
+              "Demo verification: sample documents, no real ownership checked",
+          }),
+        ),
     });
     expect(
       await screen.findAllByText(
@@ -307,23 +339,54 @@ describe("StewardVerifyScreen", () => {
   it("keeps saying a revocation stands after a new submission", async () => {
     renderScreen({
       [ASSET]: () => json(unlaunched({ status: "suspended", trading: true })),
-      [RUNS]: () =>
-        json([
-          run(),
-          run({
-            id: "99999999-9999-4999-8999-999999999999",
-            is_current: false,
-            level: "revoked",
-            effective_level: "revoked",
-            revoke_reason: "A boundary dispute.",
-            revoked_at: "2026-10-19T12:00:00Z",
-          }),
-        ]),
+      [RUNS]: () => json([run(), REVOKED_RUN]),
+      [PANEL]: () => json(revokedPanel),
     });
     expect(
       await screen.findByText(/A revocation still stands/),
     ).toBeInTheDocument();
+    expect(screen.getByText("Verification revoked")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Waiting for a reviewer" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("A boundary dispute.")).toBeInTheDocument();
+  });
+
+  it("drops the revocation once a later run was approved, even with a newer submission", async () => {
+    const approved = verifiedRun({
+      id: "aaaaaaaa-0000-4000-8000-000000000000",
+      is_current: false,
+    });
+    renderScreen({
+      [RUNS]: () => json([run(), approved, REVOKED_RUN]),
+      [PANEL]: () => json(panel({ level: "documents_submitted" })),
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Waiting for a reviewer" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("Self-attested by the community"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/A revocation still stands/),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Verification revoked")).not.toBeInTheDocument();
+  });
+
+  it("doesn't upload a file of a type it can't accept", async () => {
+    const backend = renderScreen();
+    await screen.findByText(/No documents yet/);
+    await chooseType("Land title");
+    fireEvent.change(screen.getByLabelText("File"), {
+      target: { files: [new File(["x"], "scan", { type: "" })] },
+    });
+    fireEvent.click(screen.getByRole("checkbox", { name: /authorised/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Upload document" }));
+    expect(
+      await screen.findByText("Choose a PDF, JPEG or PNG file."),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("File")).toHaveFocus();
+    expect(backend.calls(UPLOAD)).toBe(0);
   });
 
   it("won't take documents for a withdrawn listing", async () => {

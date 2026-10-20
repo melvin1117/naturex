@@ -31,6 +31,8 @@ import {
   RUN_ID,
   verifiedRun,
   CHECKLIST,
+  panel,
+  verifiedPanel,
 } from "./fixtures";
 
 vi.mock("next/navigation", () => ({
@@ -50,6 +52,7 @@ const QUEUE = "GET /admin/verifications";
 const ASSET = `GET /assets/${ASSET_ID}`;
 const RUNS = `GET /assets/${ASSET_ID}/verification/runs`;
 const PREVIEW = `GET /assets/${ASSET_ID}/documents/${DOC_MINUTES}/preview`;
+const PANEL = `GET /assets/${ASSET_ID}/verification`;
 const decisionRoute = (d: string) =>
   `POST /admin/assets/${ASSET_ID}/verification/${RUN_ID}/${d}`;
 
@@ -72,6 +75,7 @@ function renderAdmin(
   const backend = fakeBackend({
     "GET /world": () => json(ADMIN_WORLD),
     "GET /assets/outlines": () => json({ outlines: [], truncated: false }),
+    [PANEL]: () => json(panel({ level: "documents_submitted" })),
     [ASSET]: () =>
       json(assetFixture({ name: "Río Claro Forest", geojson: POLYGON })),
     [PREVIEW]: () =>
@@ -120,6 +124,40 @@ describe("ReviewQueueScreen", () => {
       backend.requests.find((r) => r.url.includes("/admin/verifications"))!.url,
     ).searchParams;
     expect(Object.fromEntries(query)).toEqual({ limit: "20", offset: "0" });
+  });
+
+  it("pages through the queue, Next and Previous", async () => {
+    const page = Array.from({ length: 20 }, (_, i) =>
+      queueItem({
+        asset_id: `44444444-0000-4000-8000-${String(i).padStart(12, "0")}`,
+        asset_name: `Site ${i + 1}`,
+      }),
+    );
+    const backend = renderAdmin(<ReviewQueueScreen />, {
+      [QUEUE]: (request) =>
+        json(
+          new URL(request.url).searchParams.get("offset") === "0" ? page : [],
+        ),
+    });
+    expect(
+      await screen.findByText("Site 20", { selector: "p" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(
+      await screen.findByText("No more listings on this page."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(
+      await screen.findByText("Site 1", { selector: "p" }),
+    ).toBeInTheDocument();
+    const offsets = backend.requests
+      .filter((r) => r.url.includes("/admin/verifications"))
+      .map((r) => new URL(r.url).searchParams.get("offset"));
+    expect(offsets).toEqual(["0", "20", "0"]);
   });
 
   it("says when nothing is waiting", async () => {
@@ -179,6 +217,74 @@ describe("ListingReviewScreen", () => {
     expect(
       screen.getByRole("region", { name: "Río Claro Forest map" }),
     ).toBeInTheDocument();
+  });
+
+  it("offers the original only as a download, and explains a preview that failed", async () => {
+    renderAdmin(<ListingReviewScreen assetId={ASSET_ID} />, {
+      [RUNS]: () => json([run()]),
+      [PREVIEW]: () => json({ detail: "boom" }, { status: 500 }),
+    });
+    expect(
+      await screen.findByText(/The preview didn't load/),
+    ).toBeInTheDocument();
+    // The title is a text PDF: no preview is asked for.
+    expect(
+      screen.getByText(
+        "No preview: this PDF's first page holds no scanned image.",
+      ),
+    ).toBeInTheDocument();
+    for (const link of screen.getAllByRole("link", {
+      name: /Download the original/,
+    }))
+      expect(link).toHaveAttribute("download");
+  });
+
+  it("shows the Exchange's badge: a revocation stands through a new submission", async () => {
+    renderAdmin(<ListingReviewScreen assetId={ASSET_ID} />, {
+      [RUNS]: () =>
+        json([
+          run(),
+          run({
+            id: "99999999-9999-4999-8999-999999999999",
+            is_current: false,
+            level: "revoked",
+            effective_level: "revoked",
+          }),
+        ]),
+      [PANEL]: () =>
+        json(panel({ level: "revoked", badge: "Verification revoked" })),
+    });
+    const badge = await screen.findByText("Verification revoked");
+    expect(badge.closest("[data-level]")).toHaveAttribute(
+      "data-level",
+      "revoked",
+    );
+    // The new submission is still reviewed.
+    expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+  });
+
+  it("reloads the run when another decision got there first", async () => {
+    const backend = renderAdmin(<ListingReviewScreen assetId={ASSET_ID} />, {
+      [RUNS]: sequence(
+        () => json([run()]),
+        () => json([verifiedRun()]),
+      ),
+      [PANEL]: sequence(
+        () => json(panel({ level: "documents_submitted" })),
+        () => json(verifiedPanel()),
+      ),
+      [decisionRoute("approve")]: () =>
+        json({ detail: "run_already_decided" }, { status: 409 }),
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /already been decided/,
+    );
+    expect(
+      await screen.findByRole("button", { name: "Revoke verification" }),
+    ).toBeInTheDocument();
+    expect(backend.calls(RUNS)).toBe(2);
+    expect(screen.queryByText("Decision recorded")).not.toBeInTheDocument();
   });
 
   it("approves with an optional note", async () => {
@@ -286,6 +392,28 @@ describe("ListingReviewScreen", () => {
     await waitFor(() => expect(backend.calls(decisionRoute("revoke"))).toBe(1));
     const post = backend.requests.find((r) => r.method === "POST")!;
     expect(await post.json()).toEqual({ reason: "A boundary dispute." });
+  });
+
+  it("sends nothing when the revocation is cancelled", async () => {
+    const backend = renderAdmin(<ListingReviewScreen assetId={ASSET_ID} />, {
+      [RUNS]: () => json([verifiedRun()]),
+    });
+    fireEvent.change(
+      await screen.findByLabelText("Reason for revoking (the steward sees it)"),
+      { target: { value: "A boundary dispute." } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Revoke verification" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Keep it verified" }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(backend.calls(decisionRoute("revoke"))).toBe(0);
+    expect(backend.requests.some((r) => r.method === "POST")).toBe(false);
   });
 
   it("explains a listing it can't find", async () => {

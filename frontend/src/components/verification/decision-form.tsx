@@ -16,9 +16,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import type { ApiError } from "@/lib/api/errors";
 import type { VerificationRun } from "@/lib/api/types";
-import { checkCounts, decisionFailure } from "@/lib/verification";
+import { checkCounts } from "@/lib/verification";
 import type { Decision } from "@/lib/verification-hooks";
 
 export const REASON_MAX = 500;
@@ -26,21 +25,20 @@ export const REASON_MAX = 500;
 /**
  * The reviewer's decision on a listing's current run (ADR-0006 §3). `review` approves (an
  * optional note) or rejects (a reason, required); `revoke` withdraws a verified run (a reason,
- * required, and a confirmation: trading is suspended at once). The backend re-checks it all.
+ * required, and a confirmation: trading is suspended at once). The backend re-checks it all;
+ * its refusals are shown by the caller, which may reload the run.
  */
 export function DecisionForm({
   run,
   listingName,
   kind,
   pending,
-  error,
   onDecide,
 }: {
   run: VerificationRun;
   listingName: string;
   kind: "review" | "revoke";
   pending: Decision | null;
-  error: ApiError | null;
   onDecide: (decision: Decision, reason: string) => void;
 }) {
   const id = useId();
@@ -152,12 +150,6 @@ export function DecisionForm({
           )}
           Revoke verification
         </Button>
-      )}
-
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {decisionFailure(error)}
-        </p>
       )}
 
       <Dialog open={confirming} onOpenChange={setConfirming}>

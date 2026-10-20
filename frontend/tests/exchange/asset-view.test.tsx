@@ -367,6 +367,32 @@ describe("AssetView", () => {
     window.history.replaceState(null, "", "/");
   });
 
+  it("follows the panel's ledger link while the ledger is already open", async () => {
+    nav.search = new URLSearchParams("tab=ledger");
+    window.history.replaceState(null, "", `/asset/${ID}?tab=ledger`);
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /assets/${ID}/verification`]: () =>
+          json({
+            asset_id: ID,
+            level: "verified",
+            badge: "Documents reviewed by NatureX (hackathon process)",
+            checks: [],
+            not_checked: [],
+            ledger_seq: 0,
+          }),
+      }),
+    );
+    const entry = (await screen.findByText("#0")).closest("li")!;
+    expect(entry).not.toHaveFocus();
+
+    fireEvent.click(await screen.findByRole("link", { name: /entry #0/ }));
+    await waitFor(() => expect(entry).toHaveFocus());
+    expect(window.location.hash).toBe("#ledger-entry-0");
+    window.history.replaceState(null, "", "/");
+  });
+
   it("loads the ledger and verifies it on the server", async () => {
     nav.search = new URLSearchParams("tab=ledger");
     const { backend } = renderExchange(<AssetView id={ID} />, routes());

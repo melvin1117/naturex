@@ -34,7 +34,7 @@ const LEVEL_TONE: Record<VerificationLevel, string> = {
 };
 
 /**
- * A verification chip. `children` is the exact badge text (the API's, or `runBadge`'s); the
+ * A verification chip. `children` is the API's exact badge text; the
  * level only picks the icon and tone, so the words never depend on colour.
  */
 export function VerificationBadge({
@@ -130,7 +130,7 @@ export function Checklist({
               How: {item.source}
             </p>
           )}
-          {!detailed && CHECK_NOTE[item.check] && (
+          {CHECK_NOTE[item.check] && (
             <p className="mt-1 text-xs text-muted-foreground">
               {CHECK_NOTE[item.check]}
             </p>

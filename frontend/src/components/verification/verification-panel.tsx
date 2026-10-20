@@ -20,6 +20,28 @@ import { useVerificationPanel } from "@/lib/verification-hooks";
 export const VERIFICATION_PANEL_ID = "verification";
 
 /**
+ * On the asset's own page, follow a ledger link without a router navigation: push the URL (the
+ * router picks up `?tab=ledger`) and announce the new hash, so an already open ledger scrolls
+ * to the entry too. Modified clicks (new tab, new window) keep the browser's behaviour.
+ */
+function followLedgerLink(event: React.MouseEvent<HTMLAnchorElement>) {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  )
+    return;
+  const url = new URL(event.currentTarget.href, window.location.href);
+  if (url.pathname !== window.location.pathname) return;
+  event.preventDefault();
+  window.history.pushState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  window.dispatchEvent(new HashChangeEvent("hashchange"));
+}
+
+/**
  * "How this listing was verified" (ADR-0006 §4), on every Exchange asset page: the API's
  * badge, level, date, reviewer role, each check's result, everything not checked and the
  * ledger entry. Public, so it never shows documents, values or reasons.
@@ -36,7 +58,7 @@ export function VerificationPanel({ assetId }: { assetId: string }) {
       <h2 id="verification-heading" className="font-serif text-3xl">
         How this listing was verified
       </h2>
-      <div className="mt-4" aria-live="polite" aria-busy={panel.isLoading}>
+      <div className="mt-4">
         {panel.data ? (
           <PanelBody data={panel.data} />
         ) : panel.error ? (
@@ -158,6 +180,7 @@ function PanelBody({ data }: { data: VerificationPublic }) {
         {data.ledger_seq != null ? (
           <Link
             href={ledgerEntryHref(data.asset_id, data.ledger_seq)}
+            onClick={followLedgerLink}
             className="inline-flex items-center gap-1.5 font-medium underline underline-offset-4"
           >
             <ScrollText className="size-4" aria-hidden="true" />

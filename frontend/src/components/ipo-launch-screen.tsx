@@ -32,6 +32,7 @@ import {
   SANDBOX_NOTE,
   type PageRefusal,
 } from "@/lib/ipo";
+import { verifyHref } from "@/lib/listing/links";
 import { int } from "@/lib/prototype/format";
 import { unitPriceText } from "@/lib/trade";
 import { useIpoOffer } from "@/lib/use-ipo-offer";
@@ -53,8 +54,7 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
   const launch = useLaunchIpo(assetId);
   const steward = useOptionalStewardCommunity();
   const homeHref = steward ? steward.href("/steward") : "/steward";
-  const verifyPath = `/steward/assets/${assetId}/verify`;
-  const verifyLink = steward ? steward.href(verifyPath) : verifyPath;
+  const verifyLink = verifyHref(assetId, steward?.active?.id ?? null);
   const verifyAction = (code: string | null | undefined) =>
     needsVerification(code) ? (
       <Button asChild size="sm">

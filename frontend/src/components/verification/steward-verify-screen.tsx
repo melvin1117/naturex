@@ -21,7 +21,11 @@ import {
   RunDecision,
   RunHistory,
 } from "@/components/verification/run-decision";
-import type { AssetDetail, VerificationRun } from "@/lib/api/types";
+import type {
+  AssetDetail,
+  VerificationPublic,
+  VerificationRun,
+} from "@/lib/api/types";
 import { isApiAssetId } from "@/lib/asset-detail";
 import { useAsset } from "@/lib/hooks";
 import { NOT_FOUND } from "@/lib/ipo";
@@ -30,13 +34,13 @@ import { assetHref } from "@/lib/trade";
 import {
   currentRun,
   MAX_RUN_DOCUMENTS,
-  runBadge,
   stewardStatus,
   type Tone,
 } from "@/lib/verification";
 import {
   useListingDocuments,
   useSubmitVerification,
+  useVerificationPanel,
   useVerificationRuns,
 } from "@/lib/verification-hooks";
 
@@ -115,6 +119,8 @@ function Loaded({
   communityId: string | null;
 }) {
   const documents = useListingDocuments(asset.id);
+  // The public record says what stands (the asset's revocation included); runs alone can't.
+  const panel = useVerificationPanel(asset.id);
   const submit = useSubmitVerification(asset.id);
   const [selected, setSelected] = useState<string[]>([]);
   const statusRef = useRef<HTMLHeadingElement>(null);
@@ -128,12 +134,10 @@ function Loaded({
   const current = currentRun(runs);
   const earlier = runs.filter((run) => run !== current);
   const closed = CLOSED.has(asset.status);
-  // A newer submission doesn't lift an earlier revocation; only an approval does.
+  // Only an approval lifts a revocation (`assets.verification_revoked_at`), not a newer
+  // submission; when the current run is the revoked one, its status already says so.
   const revocationStands =
-    current !== null &&
-    current.level !== "verified" &&
-    current.level !== "revoked" &&
-    runs.some((r) => r.level === "revoked");
+    panel.data?.level === "revoked" && current?.level !== "revoked";
 
   const toggle = (id: string, on: boolean) =>
     setSelected((prev) =>
@@ -160,7 +164,8 @@ function Loaded({
         <p className="mt-2 max-w-2xl text-muted-foreground">
           Show the Exchange why your community may list this land. Upload your
           documents and submit them; automated checks run at once and a NatureX
-          reviewer decides. The opening offer needs a verified listing.
+          reviewer decides. On the live Exchange, the opening offer needs a
+          verified listing.
         </p>
       </header>
 
@@ -168,6 +173,7 @@ function Loaded({
         <div className="min-w-0 space-y-6">
           <StatusCard
             run={current}
+            record={panel.data}
             asset={asset}
             communityId={communityId}
             revocationStands={revocationStands}
@@ -262,27 +268,31 @@ const TONE: Record<Tone, string> = {
 
 function StatusCard({
   run,
+  record,
   asset,
   communityId,
   revocationStands,
   headingRef,
 }: {
   run: VerificationRun | null;
+  /** The public record: its badge is the Exchange's wording. */
+  record: VerificationPublic | undefined;
   asset: AssetDetail;
   communityId: string | null;
   revocationStands: boolean;
   headingRef: React.Ref<HTMLHeadingElement>;
 }) {
   const status = stewardStatus(run);
-  const level = run?.effective_level ?? "unverified";
   const canLaunch =
-    level === "verified" && asset.status === "listed" && !asset.trading;
+    record?.level === "verified" && asset.status === "listed" && !asset.trading;
   const onExchange = asset.status === "listed" || asset.status === "suspended";
   return (
     <IpoCard aria-labelledby="status-heading" className={cn(TONE[status.tone])}>
-      <VerificationBadge level={run?.level === "revoked" ? "revoked" : level}>
-        {runBadge(run)}
-      </VerificationBadge>
+      {record && (
+        <VerificationBadge level={record.level}>
+          {record.badge}
+        </VerificationBadge>
+      )}
       <h2
         id="status-heading"
         ref={headingRef}

@@ -1,8 +1,8 @@
 /**
- * Listing verification (ADR-0006; API from T69, screens T70): labels, the evidence-specific
- * badge wording, client-side file checks that mirror the backend's, and refusals in words.
- * Pure. Every level, check result and decision shown comes from the API; nothing here
- * decides one.
+ * Listing verification (ADR-0006; API from T69, screens T70): labels, client-side file checks
+ * that mirror the backend's, and refusals in words. Pure. Every level, badge, check result and
+ * decision shown comes from the API (badges from `GET /assets/{id}/verification`, which also
+ * knows whether a revocation still stands); nothing here decides one.
  */
 import type { ApiError } from "./api/errors";
 import { formatWait } from "./api/errors";
@@ -24,37 +24,6 @@ export const ACCEPTED_MEDIA_TYPES = [
   "image/png",
 ] as const;
 export const ACCEPT_ATTRIBUTE = ACCEPTED_MEDIA_TYPES.join(",");
-
-/**
- * The badge texts (ADR-0006 §4 and §6), by evidence, never by deployment mode. The public
- * panel shows the API's `badge`; the steward and reviewer screens read a run, so they word
- * it from the run's level and `evidence_kind` with these same strings.
- */
-export const BADGE = {
-  reviewed: "Documents reviewed by NatureX (hackathon process)",
-  sample: "Demo verification: sample documents, no real ownership checked",
-  selfAttested: "Self-attested by the community",
-  revoked: "Verification revoked",
-} as const;
-
-export function runBadge(
-  run: Pick<
-    VerificationRun,
-    "level" | "effective_level" | "evidence_kind"
-  > | null,
-): string {
-  if (!run) return BADGE.selfAttested;
-  // A revocation stands even once the listing changed (ADR-0006 §1).
-  if (run.level === "revoked") return BADGE.revoked;
-  switch (run.effective_level) {
-    case "verified":
-      return run.evidence_kind === "sample" ? BADGE.sample : BADGE.reviewed;
-    case "revoked":
-      return BADGE.revoked;
-    default:
-      return BADGE.selfAttested;
-  }
-}
 
 export const LEVEL_LABEL: Record<VerificationLevel, string> = {
   unverified: "Not verified",
@@ -174,7 +143,7 @@ export function stewardStatus(run: VerificationRun | null): Status {
   if (!run) {
     return {
       title: "Not verified yet",
-      body: "Exchange visitors see this listing as self-attested by the community. Upload your land documents and submit them for review; the opening offer needs a verified listing.",
+      body: "Exchange visitors see this listing as self-attested by the community. Upload your land documents and submit them for review. On the live Exchange, the opening offer needs a verified listing.",
       tone: "neutral",
     };
   }
@@ -194,7 +163,7 @@ export function stewardStatus(run: VerificationRun | null): Status {
       };
     case "verified":
       return {
-        title: runBadge(run),
+        title: "Verified by a reviewer",
         body: "A reviewer approved this listing after reading the checks. If its name, area, boundary or community changes, it needs a new review.",
         tone: "positive",
       };
@@ -206,7 +175,7 @@ export function stewardStatus(run: VerificationRun | null): Status {
       };
     case "revoked":
       return {
-        title: BADGE.revoked,
+        title: "Verification revoked",
         body: "An approved verification was withdrawn, so trading is paused. Only a reviewer's approval of a new submission resumes it.",
         tone: "negative",
       };

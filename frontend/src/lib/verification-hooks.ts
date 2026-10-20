@@ -3,7 +3,7 @@
  * ./hooks.ts: queries give `{ data, error, isLoading, refetch }`, mutations
  * `{ mutate, mutateAsync, isPending, error }`, and every error is an `ApiError`.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { unwrap } from "./api/errors";
 import type {
@@ -13,7 +13,7 @@ import type {
   VerificationPublic,
   VerificationRun,
 } from "./api/types";
-import { queryKeys, type DataLayer } from "./data-layer";
+import { queryKeys, useDataLayer, type DataLayer } from "./data-layer";
 import {
   useApiMutation,
   useApiQuery,
@@ -118,7 +118,7 @@ function afterVerificationChange(assetId: string, { cache }: DataLayer) {
   cache.invalidate(queryKeys.ledger(assetId));
   cache.invalidate(queryKeys.ipoPreviews(assetId));
   cache.invalidate(queryKeys.assets());
-  cache.invalidate(["review-queue"]);
+  cache.invalidate(queryKeys.reviewQueueAll());
 }
 
 export interface UploadDocument {
@@ -189,6 +189,25 @@ export function useReviewQueue(
     { enabled: meId !== null },
   );
 }
+
+/**
+ * Read a listing's verification and the queue again, e.g. after a decision was refused because
+ * another reviewer or a newer submission got there first.
+ */
+export function useRefreshVerification(assetId: string): () => void {
+  const { cache } = useDataLayer();
+  return useCallback(() => {
+    cache.invalidate(queryKeys.verification(assetId));
+    cache.invalidate(queryKeys.reviewQueueAll());
+  }, [cache, assetId]);
+}
+
+/** Refusals that mean the run on screen is out of date: reload it. */
+export const STALE_DECISION_CODES: ReadonlySet<string> = new Set([
+  "run_superseded",
+  "run_already_decided",
+  "stale_run",
+]);
 
 export type Decision = "approve" | "reject" | "revoke";
 

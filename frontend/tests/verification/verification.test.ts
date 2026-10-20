@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
 import {
-  BADGE,
   checkCounts,
   checkLabel,
   currentRun,
@@ -11,48 +10,12 @@ import {
   fileProblem,
   ledgerEntryHref,
   reviewerLabel,
-  runBadge,
   stewardStatus,
   submitFailure,
   uploadFailure,
 } from "@/lib/verification";
 
 import { CHECKLIST, document, run, verifiedRun } from "./fixtures";
-
-describe("badge wording (ADR-0006 §4, §6)", () => {
-  it("uses the exact strings, by evidence and never by deployment mode", () => {
-    expect(BADGE).toEqual({
-      reviewed: "Documents reviewed by NatureX (hackathon process)",
-      sample: "Demo verification: sample documents, no real ownership checked",
-      selfAttested: "Self-attested by the community",
-      revoked: "Verification revoked",
-    });
-    expect(runBadge(null)).toBe("Self-attested by the community");
-    expect(runBadge(run())).toBe("Self-attested by the community");
-    expect(runBadge(verifiedRun())).toBe(
-      "Documents reviewed by NatureX (hackathon process)",
-    );
-    // Real documents reviewed in a demo deployment keep the review wording.
-    expect(runBadge(verifiedRun({ mode: "demo" }))).toBe(
-      "Documents reviewed by NatureX (hackathon process)",
-    );
-    expect(runBadge(verifiedRun({ evidence_kind: "sample" }))).toBe(
-      "Demo verification: sample documents, no real ownership checked",
-    );
-    expect(
-      runBadge(run({ level: "revoked", effective_level: "revoked" })),
-    ).toBe("Verification revoked");
-    // A revocation stands even once the listing changed.
-    expect(
-      runBadge(run({ level: "revoked", effective_level: "unverified" })),
-    ).toBe("Verification revoked");
-    // A verified run whose listing changed counts as unverified.
-    expect(runBadge(verifiedRun({ effective_level: "unverified" }))).toBe(
-      "Self-attested by the community",
-    );
-    expect(Object.values(BADGE).join(" ")).not.toMatch(/ownership proven/i);
-  });
-});
 
 describe("labels", () => {
   it("names checks, reviewer roles and documents", () => {
@@ -113,8 +76,9 @@ describe("stewardStatus", () => {
   it("explains each state", () => {
     expect(stewardStatus(null).title).toBe("Not verified yet");
     expect(stewardStatus(run()).title).toBe("Waiting for a reviewer");
-    expect(stewardStatus(verifiedRun()).title).toBe(
-      "Documents reviewed by NatureX (hackathon process)",
+    expect(stewardStatus(verifiedRun()).title).toBe("Verified by a reviewer");
+    expect(stewardStatus(null).body).toMatch(
+      /On the live Exchange, the opening offer needs a verified listing/,
     );
     expect(
       stewardStatus(verifiedRun({ fingerprint_matches: false })).title,

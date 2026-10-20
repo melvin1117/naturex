@@ -301,19 +301,26 @@ export function ApiLedgerTab({ assetId }: { assetId: string }) {
 
 /**
  * The entry the page's hash names (`#ledger-entry-<seq>`, e.g. from "How this listing was
- * verified"), once the entries are on screen: scrolled to and focused.
+ * verified"), scrolled to and focused once the entries are on screen, and again whenever the
+ * hash changes while the ledger is open.
  */
 function useLinkedEntry(loaded: boolean): number | null {
   const [seq, setSeq] = useState<number | null>(null);
   useEffect(() => {
     if (!loaded) return;
-    const match = /^#ledger-entry-(\d+)$/.exec(window.location.hash);
-    if (!match) return;
-    const target = document.getElementById(window.location.hash.slice(1));
-    if (!target) return;
-    setSeq(Number(match[1]));
-    target.scrollIntoView({ block: "center" });
-    target.focus({ preventScroll: true });
+    const follow = () => {
+      const match = /^#ledger-entry-(\d+)$/.exec(window.location.hash);
+      const target = match
+        ? document.getElementById(window.location.hash.slice(1))
+        : null;
+      if (!match || !target) return;
+      setSeq(Number(match[1]));
+      target.scrollIntoView({ block: "center" });
+      target.focus({ preventScroll: true });
+    };
+    follow();
+    window.addEventListener("hashchange", follow);
+    return () => window.removeEventListener("hashchange", follow);
   }, [loaded]);
   return seq;
 }

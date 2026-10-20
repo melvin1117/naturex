@@ -26,14 +26,18 @@ import { useAsset, useAssetOutlines } from "@/lib/hooks";
 import { outlinePolygons } from "@/lib/listing/boundary";
 import { ha } from "@/lib/prototype/format";
 import { num } from "@/lib/report-facts";
+import { toApiError } from "@/lib/api/errors";
 import {
   currentRun,
+  decisionFailure,
   LEVEL_LABEL,
-  runBadge,
   type Status,
 } from "@/lib/verification";
 import {
+  STALE_DECISION_CODES,
   useDecideVerification,
+  useRefreshVerification,
+  useVerificationPanel,
   useVerificationRuns,
   type Decision,
 } from "@/lib/verification-hooks";
@@ -129,6 +133,9 @@ function Review({
   runs: VerificationRun[];
 }) {
   const decide = useDecideVerification(asset.id);
+  // The public record is what stands: a revocation lasts until an approval, whatever the runs.
+  const record = useVerificationPanel(asset.id).data;
+  const refresh = useRefreshVerification(asset.id);
   const [pending, setPending] = useState<Decision | null>(null);
   const [done, setDone] = useState<Decision | null>(null);
   const doneRef = useRef<HTMLDivElement>(null);
@@ -150,9 +157,16 @@ function Review({
     if (!current) return;
     setDone(null);
     setPending(decision);
-    const run = await decide.mutate({ decision, runId: current.id, reason });
-    setPending(null);
-    if (run) setDone(decision);
+    try {
+      await decide.mutateAsync({ decision, runId: current.id, reason });
+      setDone(decision);
+    } catch (error) {
+      // Someone else decided, or the steward submitted or changed the listing: show what's
+      // current now, with the refusal explained.
+      if (STALE_DECISION_CODES.has(toApiError(error).code ?? "")) refresh();
+    } finally {
+      setPending(null);
+    }
   };
 
   return (
@@ -164,15 +178,11 @@ function Review({
             {asset.name}
           </h1>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <VerificationBadge
-              level={
-                current?.level === "revoked"
-                  ? "revoked"
-                  : (current?.effective_level ?? "unverified")
-              }
-            >
-              {runBadge(current)}
-            </VerificationBadge>
+            {record && (
+              <VerificationBadge level={record.level}>
+                {record.badge}
+              </VerificationBadge>
+            )}
             <Badge variant="outline">
               Listing: {STATUS_LABEL[asset.status] ?? asset.status}
             </Badge>
@@ -245,7 +255,6 @@ function Review({
                   listingName={asset.name}
                   kind={kind}
                   pending={pending}
-                  error={decide.error}
                   onDecide={(d, r) => void onDecide(d, r)}
                 />
               ) : (
@@ -253,6 +262,11 @@ function Review({
                   <p className="font-medium">{idle?.title}</p>
                   <p className="mt-1 text-muted-foreground">{idle?.body}</p>
                 </div>
+              )}
+              {decide.error && (
+                <p role="alert" className="mt-3 text-sm text-destructive">
+                  {decisionFailure(decide.error)}
+                </p>
               )}
               {current.level !== "documents_submitted" && (
                 <div className="mt-5 border-t border-border pt-4">
