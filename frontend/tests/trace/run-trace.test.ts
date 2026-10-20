@@ -38,7 +38,13 @@ describe("traceRows", () => {
       error: "tavily_unavailable",
       attempts: 2,
     });
-    expect(rows[5]!.kind).toBe("seal");
+    expect(rows[5]).toMatchObject({
+      kind: "seal",
+      model: "nvidia/nemotron-3-super-120b-a12b",
+      tokensIn: 500,
+      tokensOut: 20,
+      costUsd: expect.closeTo(0.0001, 6),
+    });
     expect(rows[0]!.kind).toBe("event");
     expect(rows[1]).toMatchObject({
       agent: "Orchestrator",
@@ -70,12 +76,32 @@ describe("traceRows", () => {
 });
 
 describe("traceTotals", () => {
-  it("sums calls, tokens and cost; time spans the first to the last step", () => {
+  it("uses the backend's totals of a sealed run; time spans the first to the last step", () => {
     expect(traceTotals(runTrace())).toEqual({
-      llmCalls: 3,
-      tokens: 1840 + 310 + 2600 + 420 + 6200 + 980,
+      llmCalls: 4,
+      tokens: 1840 + 310 + 2600 + 420 + 6200 + 980 + 500 + 20,
       durationMs: 20_000,
-      costUsd: expect.closeTo(0.010228, 6),
+      costUsd: expect.closeTo(0.010328, 6),
+    });
+    const totals = {
+      llm_calls: 9,
+      prompt_tokens: 100,
+      completion_tokens: 1,
+      cost_usd: "0.5",
+    };
+    expect(traceTotals(runTrace({ totals }))).toMatchObject({
+      llmCalls: 9,
+      tokens: 101,
+      costUsd: 0.5,
+    });
+  });
+
+  it("sums every step's model calls before the run seals, the done span's too", () => {
+    expect(traceTotals(runTrace({ totals: null }))).toEqual({
+      llmCalls: 4,
+      tokens: 1840 + 310 + 2600 + 420 + 6200 + 980 + 500 + 20,
+      durationMs: 20_000,
+      costUsd: expect.closeTo(0.010328, 6),
     });
   });
 

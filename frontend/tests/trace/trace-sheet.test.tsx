@@ -93,8 +93,10 @@ describe("TraceSheet on a real site", () => {
     expect(items[2]).toHaveTextContent("1,840 in · 310 out");
     expect(items[2]).toHaveTextContent("0.42 s");
     expect(items[3]).toHaveTextContent("Failed");
-    expect(screen.getByText("Model calls").nextSibling).toHaveTextContent("3");
-    expect(screen.getByText("Tokens").nextSibling).toHaveTextContent("12,350");
+    expect(screen.getByText("Model calls").nextSibling).toHaveTextContent("4");
+    expect(screen.getByText("Tokens").nextSibling).toHaveTextContent("12,870");
+    expect(items[5]).toHaveTextContent("Seal the report");
+    expect(items[5]).toHaveTextContent("500 in · 20 out");
     expect(screen.getByText("Time").nextSibling).toHaveTextContent("20.0 s");
     expect(screen.queryByText(/Prototype replay/)).not.toBeInTheDocument();
 
@@ -157,6 +159,54 @@ describe("TraceSheet on a real site", () => {
     expect(
       await screen.findByRole("list", { name: "Run steps" }),
     ).toBeInTheDocument();
+  });
+
+  it("says when a run's trace is gone, without a retry", async () => {
+    renderSheet({
+      [`GET /runs/${RUN_ID}/trace`]: () =>
+        json({ detail: "Not Found" }, { status: 404 }),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Open latest run" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This rating run's trace isn't available",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Try again" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("waits for the site as well as its reports before choosing a run", async () => {
+    const LATEST = "66666666-6666-4666-8666-666666666602";
+    let answer: (response: Response) => void = () => {};
+    const { backend } = renderSheet({
+      [`GET /assets/${ASSET_ID}`]: () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+      [`GET /runs/${LATEST}/trace`]: () => json(runTrace({ run_id: LATEST })),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Open trace" }));
+    await waitFor(() =>
+      expect(backend.calls(`GET /assets/${ASSET_ID}/reports`)).toBe(1),
+    );
+
+    expect(await screen.findByText("Loading rating runs…")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/No rating run has been recorded/),
+    ).not.toBeInTheDocument();
+    expect(backend.calls(`GET /runs/${RUN_ID}/trace`)).toBe(0);
+
+    // The listing's run under review comes first, so it is the one shown.
+    act(() => answer(json({ ...REPORT, id: ASSET_ID, latest_run_id: LATEST })));
+    expect(
+      await screen.findByRole("list", { name: "Run steps" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "Rating run" }),
+    ).toHaveTextContent("Latest run");
+    expect(backend.calls(`GET /runs/${LATEST}/trace`)).toBe(1);
+    expect(backend.calls(`GET /runs/${RUN_ID}/trace`)).toBe(0);
   });
 
   it("explains a site with only seeded reports", async () => {
@@ -227,6 +277,44 @@ describe("TraceSheet away from a real site", () => {
     expect(
       screen.getByRole("tab", { name: "Model calls" }),
     ).toBeInTheDocument();
+  });
+
+  it("says when no model call has been logged yet", async () => {
+    nav.pathname = "/portfolio";
+    renderSheet({
+      "GET /world": () => json(SIGNED_IN_WORLD),
+      "GET /admin/trace": () => json({ asset_id: null, steps: [] }),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Open trace" }));
+
+    expect(
+      await within(await sheet()).findByText(
+        "No model calls have been logged in this world yet.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("shows an error with a retry for the world's model calls", async () => {
+    nav.pathname = "/portfolio";
+    const { backend } = renderSheet({
+      "GET /world": () => json(SIGNED_IN_WORLD),
+      "GET /admin/trace": sequence(
+        () => json({ detail: "boom" }, { status: 500 }),
+        () => json({ asset_id: null, steps: [] }),
+      ),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Open trace" }));
+
+    expect(await within(await sheet()).findByRole("alert")).toHaveTextContent(
+      "We couldn't load the model calls",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(
+      await screen.findByText(
+        "No model calls have been logged in this world yet.",
+      ),
+    ).toBeInTheDocument();
+    expect(backend.calls("GET /admin/trace")).toBe(2);
   });
 
   it("keeps the anonymous prototype's recorded runs", async () => {

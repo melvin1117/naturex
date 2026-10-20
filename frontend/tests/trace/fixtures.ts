@@ -128,14 +128,33 @@ export function runTrace(overrides: Partial<RunTrace> = {}): RunTrace {
         ],
       },
       {
+        // The orchestrator's closing turn rides on `done` with no tokens of its own (T27).
         step: "done",
         status: "succeeded",
         prompt_tokens: 0,
         completion_tokens: 0,
         ts: "2026-10-19T08:00:20Z",
-        llm_calls: [],
+        llm_calls: [
+          {
+            id: 4,
+            agent: "orchestrator",
+            model: SUPER,
+            tier: "orchestrator",
+            status: "ok",
+            prompt_tokens: 500,
+            completion_tokens: 20,
+            latency_ms: 900,
+            cost_usd: "0.000100",
+          },
+        ],
       },
     ],
+    totals: {
+      llm_calls: 4,
+      prompt_tokens: 1840 + 2600 + 6200 + 500,
+      completion_tokens: 310 + 420 + 980 + 20,
+      cost_usd: "0.010328",
+    },
     ...overrides,
   };
 }

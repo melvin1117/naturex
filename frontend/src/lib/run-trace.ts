@@ -90,6 +90,9 @@ export function traceRows(trace: RunTrace): TraceRow[] {
   return trace.steps.map((s, i) => {
     const info = STEP_INFO[s.step];
     const calls = s.llm_calls ?? [];
+    // A span's own token fields can miss calls it carries (the `done` span holds the run's
+    // closing calls with zero tokens of its own), so a span with calls reads from them.
+    const fromCalls = calls.length > 0;
     return {
       key: `${i}-${s.step}`,
       step: s.step,
@@ -98,16 +101,31 @@ export function traceRows(trace: RunTrace): TraceRow[] {
         s.pipeline === "fixed" && info?.kind === "event"
           ? "Fixed pipeline"
           : (info?.agent ?? s.tool ?? s.step),
-      // A step that called a model reads as a model step, whatever its tool.
-      kind: calls.length > 0 ? "llm" : (info?.kind ?? "tool"),
+      // A step that called a model reads as a model step, whatever its tool; sealing stays
+      // the seal.
+      kind:
+        info?.kind === "seal"
+          ? "seal"
+          : fromCalls
+            ? "llm"
+            : (info?.kind ?? "tool"),
       status: s.status,
       statusLabel: STATUS_LABEL[s.status] ?? s.status,
       failed: s.status === "failed",
-      model: s.model ?? null,
-      tokensIn: s.prompt_tokens ?? 0,
-      tokensOut: s.completion_tokens ?? 0,
+      model:
+        s.model ??
+        calls.findLast((c) => c.status === "ok" && c.model)?.model ??
+        null,
+      tokensIn: fromCalls
+        ? calls.reduce((n, c) => n + (c.prompt_tokens ?? 0), 0)
+        : (s.prompt_tokens ?? 0),
+      tokensOut: fromCalls
+        ? calls.reduce((n, c) => n + (c.completion_tokens ?? 0), 0)
+        : (s.completion_tokens ?? 0),
       latencyMs: s.latency_ms ?? null,
-      costUsd: decimalOrZero(s.cost_usd),
+      costUsd: fromCalls
+        ? calls.reduce((n, c) => n + decimalOrZero(c.cost_usd), 0)
+        : decimalOrZero(s.cost_usd),
       attempts: s.attempts ?? null,
       error: s.error ?? null,
       output: s.output ?? null,
@@ -124,6 +142,10 @@ export type TraceTotals = {
   costUsd: number;
 };
 
+/**
+ * The run's totals: the backend's own (`totals`, every call of a sealed run), else, while a
+ * run is in flight or after it failed, the sum of each step's model calls.
+ */
 export function traceTotals(trace: RunTrace): TraceTotals {
   const rows = traceRows(trace);
   const times = trace.steps
@@ -132,15 +154,24 @@ export function traceTotals(trace: RunTrace): TraceTotals {
   const latencies = rows
     .map((r) => r.latencyMs)
     .filter((n): n is number => n !== null);
+  const durationMs =
+    times.length >= 2
+      ? Math.max(...times) - Math.min(...times)
+      : latencies.length
+        ? latencies.reduce((a, b) => a + b, 0)
+        : null;
+  const sealed = trace.totals;
+  if (sealed)
+    return {
+      llmCalls: sealed.llm_calls,
+      tokens: sealed.prompt_tokens + sealed.completion_tokens,
+      durationMs,
+      costUsd: decimalOrZero(sealed.cost_usd),
+    };
   return {
     llmCalls: rows.reduce((n, r) => n + r.calls.length, 0),
     tokens: rows.reduce((n, r) => n + r.tokensIn + r.tokensOut, 0),
-    durationMs:
-      times.length >= 2
-        ? Math.max(...times) - Math.min(...times)
-        : latencies.length
-          ? latencies.reduce((a, b) => a + b, 0)
-          : null,
+    durationMs,
     costUsd: rows.reduce((n, r) => n + r.costUsd, 0),
   };
 }

@@ -3182,6 +3182,8 @@ export interface components {
             status: components["schemas"]["RatingRunStatus"];
             /** Steps */
             steps: components["schemas"]["RunTraceStep"][];
+            /** @description The sealed run's totals; null until the run seals a report */
+            totals?: components["schemas"]["RunTraceTotals"] | null;
         };
         /**
          * RunTraceStep
@@ -3230,6 +3232,20 @@ export interface components {
             } | null;
             /** Llm Calls */
             llm_calls?: components["schemas"]["TraceCall"][];
+        };
+        /**
+         * RunTraceTotals
+         * @description Every model call of a run, as the runner summed them when it sealed the report.
+         */
+        RunTraceTotals: {
+            /** Llm Calls */
+            llm_calls: number;
+            /** Prompt Tokens */
+            prompt_tokens: number;
+            /** Completion Tokens */
+            completion_tokens: number;
+            /** Cost Usd */
+            cost_usd: string;
         };
         /** SharesOut */
         SharesOut: {

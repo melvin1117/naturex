@@ -74,9 +74,16 @@ export function AssetRunsTrace({
     initialRunId,
     asset.data?.latest_run_id,
   ]);
-  const runId = picked ?? initialRunId ?? options[0]?.runId ?? null;
+  // The default run needs both the asset (a listing's latest run) and its reports: choosing
+  // before both answer would show one run, then switch to another (a second fetch).
+  const settled = [asset, reports].every(
+    (q) => q.data !== undefined || q.error,
+  );
+  const runId =
+    picked ?? initialRunId ?? (settled ? options[0]?.runId : null) ?? null;
 
   if (!runId) {
+    if (!settled) return <Loading label="Loading rating runs…" />;
     if (reports.error && !reports.data)
       return (
         <TraceError
@@ -85,7 +92,6 @@ export function AssetRunsTrace({
           retry={reports.refetch}
         />
       );
-    if (!reports.data) return <Loading label="Loading rating runs…" />;
     return (
       <p className="rounded-2xl bg-machine-raised px-4 py-3 text-sm text-machine-muted">
         No rating run has been recorded for this site yet. Its reports were
@@ -97,7 +103,7 @@ export function AssetRunsTrace({
 
   return (
     <>
-      {options.length > 1 && (
+      {settled && options.length > 1 && (
         <Select value={runId} onValueChange={setPicked}>
           <SelectTrigger className={SELECT_CLASS} aria-label="Rating run">
             <SelectValue />
@@ -111,7 +117,7 @@ export function AssetRunsTrace({
           </SelectContent>
         </Select>
       )}
-      {options.length === 1 && (
+      {settled && options.length === 1 && (
         <p className="text-sm text-machine-muted">{options[0]!.label}</p>
       )}
       <RunTraceView key={runId} runId={runId} />

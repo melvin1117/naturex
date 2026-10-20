@@ -7950,6 +7950,17 @@
             },
             "type": "array",
             "title": "Steps"
+          },
+          "totals": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunTraceTotals"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The sealed run's totals; null until the run seals a report"
           }
         },
         "type": "object",
@@ -8100,6 +8111,36 @@
         ],
         "title": "RunTraceStep",
         "description": "A progress span with safe tool-result facts and metadata for every model attempt."
+      },
+      "RunTraceTotals": {
+        "properties": {
+          "llm_calls": {
+            "type": "integer",
+            "title": "Llm Calls"
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "title": "Prompt Tokens"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "title": "Completion Tokens"
+          },
+          "cost_usd": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cost Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "llm_calls",
+          "prompt_tokens",
+          "completion_tokens",
+          "cost_usd"
+        ],
+        "title": "RunTraceTotals",
+        "description": "Every model call of a run, as the runner summed them when it sealed the report."
       },
       "SharesOut": {
         "properties": {

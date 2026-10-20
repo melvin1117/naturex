@@ -474,6 +474,14 @@ def test_run_trace_exposes_real_steps_calls_and_safe_outputs(db: Connection, sit
     ]
     assert trace.steps[-2].model == ULTRA
     assert trace.steps[-2].llm_calls[-1].status == "ok"
+    # The runner's own totals of every call (a closing turn rides on the `done` span with no
+    # tokens of its own, so summing the spans' token fields can miss it).
+    calls = h.log.records
+    assert trace.totals is not None
+    assert trace.totals.llm_calls == len(calls)
+    assert trace.totals.prompt_tokens == sum(r.prompt_tokens for r in calls)
+    assert trace.totals.completion_tokens == sum(r.completion_tokens for r in calls)
+    assert trace.totals.cost_usd == sum((r.cost_usd for r in calls), Decimal(0))
     with sessions(db)() as session:
         assert rating_runs.get_run_trace(session, uuid4(), run_id) is None
         session.execute(delete(WorldEventRow).where(col(WorldEventRow.world_id) == site.world_id))
@@ -487,6 +495,7 @@ def test_run_trace_exposes_real_steps_calls_and_safe_outputs(db: Connection, sit
     assert archived.steps[-1].status == "succeeded"
     assert archived.steps[-1].ts is not None
     assert sum(len(step.llm_calls) for step in archived.steps) == len(h.log.records)
+    assert archived.totals == trace.totals
 
 
 @requires_db

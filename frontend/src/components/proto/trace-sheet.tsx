@@ -114,16 +114,15 @@ export function TraceSheet() {
             value="trace"
             className="machine-scroll min-h-0 overflow-y-auto px-6 pt-4 pb-8"
           >
+            {/* The sheet mounts this only while open (and through its close animation). */}
             {mode.kind === "asset" ? (
-              ui.traceOpen && (
-                <AssetRunsTrace
-                  key={`${mode.assetId}:${ui.traceRunId ?? ""}`}
-                  assetId={mode.assetId}
-                  initialRunId={ui.traceRunId}
-                />
-              )
+              <AssetRunsTrace
+                key={`${mode.assetId}:${ui.traceRunId ?? ""}`}
+                assetId={mode.assetId}
+                initialRunId={ui.traceRunId}
+              />
             ) : mode.kind === "world" ? (
-              ui.traceOpen && <WorldModelCalls />
+              <WorldModelCalls />
             ) : !run ? (
               <p className="text-sm text-machine-muted">No rating runs yet.</p>
             ) : (

@@ -769,17 +769,13 @@ export function useRunTrace(
 
 /**
  * The world's latest logged model calls (`GET /admin/trace`, up to 50, metadata only), for
- * the Agent Trace drawer away from a site. Idle when `enabled` is false.
+ * the Agent Trace drawer away from a site.
  */
-export function useWorldTrace({
-  enabled = true,
-}: { enabled?: boolean } = {}): QueryResult<WorldTrace> {
+export function useWorldTrace(): QueryResult<WorldTrace> {
   const { world } = useWorld();
   const meId = world?.me?.id ?? null;
-  return useApiQuery(
-    queryKeys.worldTrace(meId),
-    (api, signal) => unwrap(api.GET("/admin/trace", { signal })),
-    { enabled },
+  return useApiQuery(queryKeys.worldTrace(meId), (api, signal) =>
+    unwrap(api.GET("/admin/trace", { signal })),
   );
 }
 

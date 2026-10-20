@@ -868,11 +868,23 @@ class RunTraceStep(RatingRunStep):
     llm_calls: list[TraceCall] = Field(default_factory=list)
 
 
+class RunTraceTotals(BaseModel):
+    """Every model call of a run, as the runner summed them when it sealed the report."""
+
+    llm_calls: int
+    prompt_tokens: int
+    completion_tokens: int
+    cost_usd: Decimal
+
+
 class RunTraceOut(BaseModel):
     run_id: UUID
     asset_id: UUID
     status: RatingRunStatus
     steps: list[RunTraceStep]
+    totals: RunTraceTotals | None = Field(
+        default=None, description="The sealed run's totals; null until the run seals a report"
+    )
 
 
 class SimulateQuarterResponse(BaseModel):
