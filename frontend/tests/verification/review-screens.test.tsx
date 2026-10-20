@@ -75,6 +75,7 @@ function renderAdmin(
   const backend = fakeBackend({
     "GET /world": () => json(ADMIN_WORLD),
     "GET /assets/outlines": () => json({ outlines: [], truncated: false }),
+    [QUEUE]: () => json([queueItem()]),
     [PANEL]: () => json(panel({ level: "documents_submitted" })),
     [ASSET]: () =>
       json(assetFixture({ name: "Río Claro Forest", geojson: POLYGON })),
@@ -185,7 +186,7 @@ describe("ReviewQueueScreen", () => {
 });
 
 describe("ListingReviewScreen", () => {
-  it("shows previews, the checklist, the AI slot and the map", async () => {
+  it("shows previews, the checklist, the AI suggestion and the map", async () => {
     renderAdmin(<ListingReviewScreen assetId={ASSET_ID} />, {
       [RUNS]: () => json([run()]),
     });
@@ -213,7 +214,10 @@ describe("ListingReviewScreen", () => {
       expect.stringMatching(/^\/api\/assets\/.+\/documents\/.+$/),
     );
     expect(screen.getByText("no overlap")).toBeInTheDocument();
-    expect(screen.getByText(/untrusted heuristic/)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "AI suggestion" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Untrusted heuristic")).toBeInTheDocument();
     expect(
       screen.getByRole("region", { name: "Río Claro Forest map" }),
     ).toBeInTheDocument();

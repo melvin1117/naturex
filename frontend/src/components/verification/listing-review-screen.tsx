@@ -11,7 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { AiSuggestionSlot } from "@/components/verification/ai-suggestion-slot";
+import { AiSuggestionPanel } from "@/components/verification/ai-suggestion-panel";
 import { DecisionForm } from "@/components/verification/decision-form";
 import { DocumentPreviews } from "@/components/verification/document-previews";
 import { Checklist, VerificationBadge } from "@/components/verification/parts";
@@ -55,7 +55,7 @@ const DONE: Record<Decision, string> = {
 
 /**
  * One listing's review for an admin (T70, ADR-0006 §3): the current run's document previews,
- * checklist and the map, the AI slot, and approve / reject / revoke with a reason.
+ * checklist and the map, the AI document check's untrusted suggestion, and approve / reject / revoke with a reason.
  */
 export function ListingReviewScreen({ assetId }: { assetId: string }) {
   const validId = isApiAssetId(assetId);
@@ -238,7 +238,11 @@ function Review({
                   : " (the listing changed since)"}
               </p>
             </Panel>
-            <AiSuggestionSlot />
+            <AiSuggestionPanel
+              assetId={asset.id}
+              runId={current.id}
+              waiting={current.level === "documents_submitted"}
+            />
             {earlier.length > 0 && (
               <Panel title="Earlier submissions">
                 <RunHistory runs={earlier} />

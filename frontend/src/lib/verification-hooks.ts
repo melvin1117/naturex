@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 
+import { AI_POLL_MS } from "./ai-suggestion";
 import { unwrap } from "./api/errors";
 import type {
   DocumentType,
@@ -188,6 +189,60 @@ export function useReviewQueue(
       ),
     { enabled: meId !== null },
   );
+}
+
+/**
+ * One listing's review-queue item (admins): its current undecided run with the AI document
+ * check's status and untrusted suggestion (T71). `null` when the listing isn't waiting in this
+ * admin's queue. Asks again every `AI_POLL_MS` while it's enabled, the check is pending and the
+ * tab is visible.
+ */
+export function useReviewQueueItem(
+  assetId: string | undefined,
+  { enabled = true }: { enabled?: boolean } = {},
+): QueryResult<ReviewQueueItem | null> {
+  const { world } = useWorld();
+  const meId = world?.me?.id ?? null;
+  const query = useApiQuery(
+    queryKeys.reviewQueueItem(meId, assetId ?? ""),
+    async (api, signal) => {
+      const items = await unwrap(
+        api.GET("/admin/verifications", {
+          params: { query: { asset_id: assetId ?? "", limit: 1 } },
+          signal,
+        }),
+      );
+      return items[0] ?? null;
+    },
+    { enabled: enabled && meId !== null && Boolean(assetId) },
+  );
+  // A decided run leaves the queue, but the cache may still say pending: only poll when enabled.
+  const pending = enabled && query.data?.ai_suggestion_status === "pending";
+  const { refetch } = query;
+  useEffect(() => {
+    if (!pending) return;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const start = () => {
+      timer ??= setInterval(() => void refetch(), AI_POLL_MS);
+    };
+    const stop = () => {
+      clearInterval(timer);
+      timer = undefined;
+    };
+    // A hidden tab doesn't poll; it asks once when it's seen again.
+    const onVisibility = () => {
+      if (document.hidden) return stop();
+      void refetch();
+      start();
+    };
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [pending, refetch]);
+  return query;
 }
 
 /**

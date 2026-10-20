@@ -14,6 +14,7 @@ import {
 import { useOptionalStewardCommunity } from "@/components/shell/steward-community";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { AiUploadNotice } from "@/components/verification/ai-upload-notice";
 import { DocumentSubmitList } from "@/components/verification/document-submit-list";
 import { DocumentUploadForm } from "@/components/verification/document-upload-form";
 import { Checklist, VerificationBadge } from "@/components/verification/parts";
@@ -223,6 +224,9 @@ function Loaded({
               minutes approving the listing, or the cooperative or ejido
               registration.
             </p>
+            <div className="mb-5">
+              <AiUploadNotice />
+            </div>
             <DocumentUploadForm
               assetId={asset.id}
               disabled={closed}

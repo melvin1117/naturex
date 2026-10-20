@@ -620,7 +620,11 @@ def verification_panel(
     "/admin/verifications",
     response_model=list[ReviewQueueItem],
     tags=["admin"],
-    responses={**_AUTH, 403: {"description": "admin_only"}},
+    responses={
+        **_AUTH,
+        403: {"description": "admin_only"},
+        404: {"description": "`not_found`: `asset_id` isn't a listing in the caller's world"},
+    },
 )
 def review_queue(
     granted: ReviewQueue,
@@ -629,15 +633,35 @@ def review_queue(
     checker: Annotated[DocumentChecker, Depends(get_document_checker)],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
+    asset_id: Annotated[
+        UUID | None,
+        Query(
+            description="Only this listing's item: an empty list when it isn't waiting (or is "
+            "the admin's own community's); 404 when it isn't a listing in the caller's world."
+        ),
+    ] = None,
 ) -> list[ReviewQueueItem]:
     """Listings waiting for a reviewer in the caller's world, oldest first, with their current
-    run, one page at a time (`limit`, `offset`). Listings of the admin's own communities are
-    left out (conflict of interest). Each item carries the run's AI document check
-    (`ai_suggestion_status`, `ai_suggestion`): an **untrusted heuristic** read from the
-    documents by AI models, to be shown labelled as such next to its excerpts."""
+    run, one page at a time (`limit`, `offset`), or one listing's (`asset_id`). Listings of the
+    admin's own communities are left out (conflict of interest). Each item carries the run's
+    AI document check (`ai_suggestion_status`, `ai_suggestion`): an **untrusted heuristic** read
+    from the documents by AI models, to be shown labelled as such next to its excerpts."""
     actor = granted.signed_in
+    if (
+        asset_id is not None
+        and session.exec(
+            select(Asset.id).where(Asset.world_id == actor.world_id, Asset.id == asset_id)
+        ).first()
+        is None
+    ):
+        raise _missing()
     rows = verification.review_queue(
-        session, actor.world_id, list(actor.memberships), limit=limit, offset=offset
+        session,
+        actor.world_id,
+        list(actor.memberships),
+        limit=limit,
+        offset=offset,
+        asset_id=asset_id,
     )
     suggestions = suggestions_for(session, actor.world_id, [view.run.id for _, view in rows])
     now = datetime.now(UTC)

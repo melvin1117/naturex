@@ -19,6 +19,7 @@ export const WORLD: WorldOut = {
   ],
   assets: [],
   me: null,
+  document_ai_check: "samples_only",
 };
 
 export function json(body: unknown, init: ResponseInit = {}): Response {

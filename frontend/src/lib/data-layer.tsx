@@ -82,6 +82,9 @@ export const queryKeys = {
   /** One page of the reviewer queue, per account. */
   reviewQueue: (meId: string | null, offset: number) =>
     ["review-queue", meId, offset] as const,
+  /** One listing's queue item, with its AI suggestion (T71). */
+  reviewQueueItem: (meId: string | null, assetId: string) =>
+    ["review-queue", meId, "asset", assetId] as const,
   /** The signed-in account's alerts (T75); `alertsAll` is the prefix for invalidation. */
   alertsAll: () => ["alerts"] as const,
   alerts: (
