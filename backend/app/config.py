@@ -76,6 +76,13 @@ class Settings(BaseSettings):
     # retention and training terms are confirmed. Sandboxes run it, but send only sample
     # documents (`is_sample`) to the model; with USE_MOCKS a fake model runs and nothing leaves.
     verification_ai_live: bool = False
+    # Field evidence (T40): photo uploads per account per rolling hour (429 after; at most 5
+    # photos per listing). MiniCPM-V reads the re-encoded photos (no EXIF, so no location) in
+    # sandboxes; in the live world only with FIELD_EVIDENCE_AI_LIVE=true, off like
+    # VERIFICATION_AI_LIVE until Token Factory's data terms are confirmed. Without the model a
+    # photo is checked (location, date) but never validated, so it can't raise confidence.
+    evidence_uploads_per_hour: int = Field(default=10, ge=1)
+    field_evidence_ai_live: bool = False
 
     nebius_api_key: str = ""
     token_factory_base_url: str = "https://api.tokenfactory.nebius.com/v1/"

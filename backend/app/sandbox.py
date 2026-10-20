@@ -42,6 +42,8 @@ from app.models import (
     DocChunk,
     DocumentFingerprint,
     Event,
+    FieldPhoto,
+    FieldPhotoBlob,
     Holding,
     LedgerEntry,
     ListingDocument,
@@ -83,6 +85,9 @@ _DELETE_ORDER: tuple[type[SQLModel], ...] = (
     ListingDocument,
     DocumentFingerprint,
     VerificationRun,
+    # Field evidence (T40): blobs → photos, before the events they link to.
+    FieldPhotoBlob,
+    FieldPhoto,
     DocChunk,
     AlertRecipient,
     CopilotQuestion,
@@ -167,6 +172,9 @@ def _copy_world_rows(
     for model in (VerificationRun, ListingDocument, VerificationAiSuggestion):
         if session.exec(select(model).where(_world_col(model) == source).limit(1)).first():
             raise RuntimeError(f"world {source} holds verification records, which can't be copied")
+    # Field photos (T40) are a community's activity, uploaded in its own world.
+    if session.exec(select(FieldPhoto).where(FieldPhoto.world_id == source).limit(1)).first():
+        raise RuntimeError(f"world {source} holds field photos, which can't be copied")
     ids: dict[UUID, UUID] = {}
     copied_users: set[UUID] | None = None
     if communities_only:

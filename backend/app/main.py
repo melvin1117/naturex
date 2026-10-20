@@ -29,6 +29,7 @@ from app.routers import (
     communities,
     copilot,
     events,
+    evidence,
     ipo,
     ledger,
     listings,
@@ -41,6 +42,7 @@ from app.routers import (
 )
 from app.sandbox import ensure_live_world
 from app.services.document_check import shutdown_default_checker
+from app.services.field_evidence import shutdown_default_analyzer
 
 settings = get_settings()
 
@@ -103,6 +105,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     validate_mock_settings(settings)
     yield
     shutdown_default_checker()  # T71: queued AI document checks are dropped, not waited for
+    shutdown_default_analyzer()  # T40: queued photo analyses too (they read `failed` later)
 
 
 app = FastAPI(
@@ -122,6 +125,7 @@ app.include_router(assets.router)
 app.include_router(listings.router)
 app.include_router(ipo.router)
 app.include_router(verification.router)
+app.include_router(evidence.router)
 app.include_router(reports.router)
 app.include_router(market.router)
 app.include_router(copilot.router)

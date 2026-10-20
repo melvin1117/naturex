@@ -1074,3 +1074,104 @@ class VerificationAiSuggestion(SQLModel, table=True):
     result: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
     method_version: str
     created_at: datetime = _created_at()
+
+
+class FieldPhoto(SQLModel, table=True):
+    """A steward's geotagged field photo (T40, dev-spec §7.6) and its checks.
+
+    Only the checks' results are kept from the EXIF: whether the position is inside the listing
+    (and how far outside), and the date taken. The position itself and the original file are
+    never stored; the photo is re-encoded without metadata (`field_evidence_photo_blobs`).
+    `observation` holds the perception model's validated labels (untrusted, enum values only).
+    A validated photo has its evidence event (`event_id`), written by code from those labels.
+    Readable only by the listing's community members and same-world admins; the public sees
+    counts and labels only.
+    """
+
+    __tablename__ = "field_evidence_photos"
+    __table_args__ = (
+        UniqueConstraint(
+            "world_id", "asset_id", "id", name="uq_field_evidence_photos_world_asset_id"
+        ),
+        # The same file twice is one piece of evidence, not two.
+        UniqueConstraint("world_id", "asset_id", "sha256", name="uq_field_evidence_photos_sha256"),
+        ForeignKeyConstraint(
+            ["world_id", "asset_id"],
+            ["assets.world_id", "assets.id"],
+            name="fk_field_evidence_photos_asset",
+        ),
+        ForeignKeyConstraint(
+            ["world_id", "uploaded_by"],
+            ["users.world_id", "users.id"],
+            name="fk_field_evidence_photos_uploaded_by",
+        ),
+        Index("ix_field_evidence_photos_world_id_asset_id", "world_id", "asset_id"),
+        CheckConstraint(
+            "gps_check IN ('inside','near','outside','missing')",
+            name="ck_field_evidence_photos_gps_check",
+        ),
+        CheckConstraint(
+            "date_check IN ('ok','missing','future','too_old')",
+            name="ck_field_evidence_photos_date_check",
+        ),
+        CheckConstraint(
+            "analysis_status IN ('pending','completed','failed','not_run')",
+            name="ck_field_evidence_photos_analysis_status",
+        ),
+        # Validated only by code's rules: both geotag checks passed and the analysis completed.
+        CheckConstraint(
+            "NOT validated OR (analysis_status = 'completed' AND gps_check IN ('inside','near')"
+            " AND date_check = 'ok' AND event_id IS NOT NULL)",
+            name="ck_field_evidence_photos_validated",
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    world_id: UUID = Field(foreign_key="worlds.id")
+    asset_id: UUID
+    uploaded_by: UUID | None = None
+    size_bytes: int
+    width: int
+    height: int
+    # sha256 of the uploaded file: duplicate detection within the listing only.
+    sha256: str = Field(sa_column=Column(String(64), nullable=False))
+    gps_check: str
+    gps_distance_m: int | None = None
+    date_check: str
+    taken_on: date | None = None
+    analysis_status: str = "pending"
+    observation: dict[str, Any] | None = Field(default=None, sa_column=Column(JSONB))
+    reasons: list[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSONB, nullable=False, server_default=text("'[]'::jsonb")),
+    )
+    validated: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
+    event_id: UUID | None = Field(default=None, foreign_key="events.id")
+    model: str | None = None
+    method_version: str
+    analysed_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    created_at: datetime = _created_at()
+
+
+class FieldPhotoBlob(SQLModel, table=True):
+    """A field photo's re-encoded JPEG, with no metadata (private storage, as T69's blobs)."""
+
+    __tablename__ = "field_evidence_photo_blobs"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["world_id", "asset_id", "photo_id"],
+            [
+                "field_evidence_photos.world_id",
+                "field_evidence_photos.asset_id",
+                "field_evidence_photos.id",
+            ],
+            name="fk_field_evidence_photo_blobs_photo",
+            ondelete="CASCADE",
+        ),
+        Index("ix_field_evidence_photo_blobs_world_id", "world_id"),
+    )
+
+    photo_id: UUID = Field(primary_key=True)
+    world_id: UUID
+    asset_id: UUID
+    content: bytes = Field(sa_column=Column(LargeBinary, nullable=False))

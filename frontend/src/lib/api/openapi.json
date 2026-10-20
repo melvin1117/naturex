@@ -759,52 +759,6 @@
         }
       }
     },
-    "/assets/{asset_id}/evidence": {
-      "post": {
-        "tags": [
-          "assets"
-        ],
-        "summary": "Upload Evidence",
-        "operationId": "upload_evidence_assets__asset_id__evidence_post",
-        "parameters": [
-          {
-            "name": "asset_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Asset Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EvidenceResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Not allowed: `members_only`"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/assets/{asset_id}/reports": {
       "get": {
         "tags": [
@@ -2178,6 +2132,306 @@
           },
           "409": {
             "description": "`run_superseded` or `not_verified` (the run isn't verified)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assets/{asset_id}/evidence": {
+      "post": {
+        "tags": [
+          "evidence"
+        ],
+        "summary": "Upload Photo",
+        "description": "Upload one geotagged field photo for the listing (its community's owner or stewards).\nThe body is the file. Its EXIF position must be inside the listing (or within 100 m of its\nedge) and its date at most a year old; only those checks' results are kept, never the\nposition. The photo is stored re-encoded, with no metadata, and read by an image model on\nNebius Token Factory when both checks pass (`analysis_status`: poll `GET \u2026/evidence`).",
+        "operationId": "upload_photo_assets__asset_id__evidence_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          },
+          {
+            "name": "content-type",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Content-Type"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldPhotoOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "members_only, treasury_cannot_act"
+          },
+          "404": {
+            "description": "Not found in the caller's world, or not visible to the caller"
+          },
+          "409": {
+            "description": "`listing_closed` (ineligible or withdrawn), `photo_limit_reached` (5 per listing) or `photo_duplicate` (this file is already uploaded)"
+          },
+          "411": {
+            "description": "length_required"
+          },
+          "413": {
+            "description": "`file_too_large`: over 10 MB"
+          },
+          "415": {
+            "description": "`unsupported_media_type`: not JPEG or PNG"
+          },
+          "422": {
+            "description": "The file is refused: empty_file, unsupported_format, media_type_mismatch, image_too_large, image_malformed, trailing_data, embedded_signature, inspection_timeout or inspection_failed"
+          },
+          "429": {
+            "description": "`upload_rate_limited`: see Retry-After"
+          },
+          "503": {
+            "description": "`inspection_busy`: see Retry-After"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "The photo itself (JPEG or PNG, at most 10 MB), with its EXIF.",
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "evidence"
+        ],
+        "summary": "List Photos",
+        "description": "The listing's field photos, oldest first, with each one's checks, and the confidence\nthe next rating would have with the validated ones (from the latest report).",
+        "operationId": "list_photos_assets__asset_id__evidence_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldEvidenceOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "404": {
+            "description": "`not_found`: outside the caller's world, or the caller isn't a member of the listing's community or a same-world admin"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assets/{asset_id}/evidence/summary": {
+      "get": {
+        "tags": [
+          "evidence"
+        ],
+        "summary": "Evidence Summary",
+        "description": "Field evidence in aggregate, for anyone who can see the asset: how many photos, how many\nvalidated, and the land cover and disturbance labels seen in validated ones.",
+        "operationId": "evidence_summary_assets__asset_id__evidence_summary_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldEvidencePublicOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assets/{asset_id}/evidence/{photo_id}/image": {
+      "get": {
+        "tags": [
+          "evidence"
+        ],
+        "summary": "Photo Image",
+        "description": "The photo as stored: a JPEG re-encoded from the decoded pixels, at most 1280 px, with no\nEXIF (so no location). Loaded by `(world_id, asset_id, id)`.",
+        "operationId": "photo_image_assets__asset_id__evidence__photo_id__image_get",
+        "parameters": [
+          {
+            "name": "photo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Photo Id"
+            }
+          },
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The photo re-encoded as a JPEG with no metadata",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "404": {
+            "description": "`not_found` (see the list route) or `photo_not_found`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assets/{asset_id}/evidence/{photo_id}": {
+      "delete": {
+        "tags": [
+          "evidence"
+        ],
+        "summary": "Delete Photo",
+        "description": "Remove a field photo. A rating already sealed keeps citing it; the next one won't.",
+        "operationId": "delete_photo_assets__asset_id__evidence__photo_id__delete",
+        "parameters": [
+          {
+            "name": "photo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Photo Id"
+            }
+          },
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "members_only, treasury_cannot_act"
+          },
+          "404": {
+            "description": "`not_found` or `photo_not_found`"
           },
           "422": {
             "description": "Validation Error",
@@ -5182,6 +5436,55 @@
         "title": "CommunityUpdate",
         "description": "Only the fields sent change; `null` clears `country` or `description`."
       },
+      "ConfidenceEffectOut": {
+        "properties": {
+          "current": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current",
+            "description": "The latest report's confidence."
+          },
+          "projected": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projected",
+            "description": "The next rating's confidence with the evidence counted (same inputs otherwise); null before the first rating."
+          },
+          "points": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Points",
+            "description": "Points validated evidence adds: 14.0 (0.2 \u00d7 (1.0 \u2212 0.3) \u00d7 100), or 0 when nothing is validated yet or the latest report already counts it."
+          },
+          "counted": {
+            "type": "boolean",
+            "title": "Counted",
+            "description": "The latest report already used validated evidence."
+          }
+        },
+        "type": "object",
+        "required": [
+          "current",
+          "projected",
+          "points",
+          "counted"
+        ],
+        "title": "ConfidenceEffectOut"
+      },
       "CopilotDeltaEvent": {
         "properties": {
           "type": {
@@ -5655,22 +5958,356 @@
         "title": "EvidenceKind",
         "description": "Real uploads, or T76's generated fictional samples."
       },
-      "EvidenceResponse": {
+      "FieldEvidenceOut": {
         "properties": {
-          "event": {
-            "$ref": "#/components/schemas/EventOut"
+          "photos": {
+            "items": {
+              "$ref": "#/components/schemas/FieldPhotoOut"
+            },
+            "type": "array",
+            "title": "Photos"
           },
-          "message": {
+          "max_photos": {
+            "type": "integer",
+            "title": "Max Photos"
+          },
+          "validated": {
+            "type": "integer",
+            "title": "Validated"
+          },
+          "ai_analysis": {
             "type": "string",
-            "title": "Message"
+            "enum": [
+              "model",
+              "mock",
+              "off"
+            ],
+            "title": "Ai Analysis",
+            "description": "What reads the photos here: model (MiniCPM-V on Nebius Token Factory), mock (USE_MOCKS) or off (the live world until FIELD_EVIDENCE_AI_LIVE is on)."
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/ConfidenceEffectOut"
           }
         },
         "type": "object",
         "required": [
-          "event",
-          "message"
+          "photos",
+          "max_photos",
+          "validated",
+          "ai_analysis",
+          "confidence"
         ],
-        "title": "EvidenceResponse"
+        "title": "FieldEvidenceOut",
+        "description": "A listing's field photos and their combined effect (the steward's view)."
+      },
+      "FieldEvidencePublicOut": {
+        "properties": {
+          "photos": {
+            "type": "integer",
+            "title": "Photos"
+          },
+          "validated": {
+            "type": "integer",
+            "title": "Validated"
+          },
+          "latest_taken_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Taken On",
+            "description": "Of the validated photos."
+          },
+          "land_cover": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "tree_cover",
+                "shrubland",
+                "grassland",
+                "wetland_vegetation",
+                "open_water",
+                "cropland",
+                "bare_ground",
+                "built_up"
+              ]
+            },
+            "type": "array",
+            "title": "Land Cover",
+            "description": "Seen in validated photos."
+          },
+          "disturbance": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "fire_scar",
+                "clearing_or_logging",
+                "dumping_or_waste",
+                "construction",
+                "erosion",
+                "drought_stress"
+              ]
+            },
+            "type": "array",
+            "title": "Disturbance",
+            "description": "Seen in validated photos."
+          },
+          "counted_in_latest_report": {
+            "type": "boolean",
+            "title": "Counted In Latest Report"
+          }
+        },
+        "type": "object",
+        "required": [
+          "photos",
+          "validated",
+          "latest_taken_on",
+          "land_cover",
+          "disturbance",
+          "counted_in_latest_report"
+        ],
+        "title": "FieldEvidencePublicOut",
+        "description": "Aggregate field evidence for anyone who can see the asset: counts and labels only, never\na photo, a position or who took it."
+      },
+      "FieldPhotoObservationOut": {
+        "properties": {
+          "shows_landscape": {
+            "type": "boolean",
+            "title": "Shows Landscape"
+          },
+          "land_cover": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "tree_cover",
+                "shrubland",
+                "grassland",
+                "wetland_vegetation",
+                "open_water",
+                "cropland",
+                "bare_ground",
+                "built_up"
+              ]
+            },
+            "type": "array",
+            "title": "Land Cover"
+          },
+          "disturbance": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "fire_scar",
+                "clearing_or_logging",
+                "dumping_or_waste",
+                "construction",
+                "erosion",
+                "drought_stress"
+              ]
+            },
+            "type": "array",
+            "title": "Disturbance"
+          },
+          "water_clarity": {
+            "type": "string",
+            "enum": [
+              "clear",
+              "turbid",
+              "polluted",
+              "no_water",
+              "unclear"
+            ],
+            "title": "Water Clarity"
+          },
+          "authenticity_concerns": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "screen_or_print_photo",
+                "edited_or_composited",
+                "watermark_or_stock",
+                "not_a_photo"
+              ]
+            },
+            "type": "array",
+            "title": "Authenticity Concerns"
+          },
+          "instruction_text": {
+            "type": "boolean",
+            "title": "Instruction Text",
+            "description": "The image holds text aimed at an AI model."
+          }
+        },
+        "type": "object",
+        "required": [
+          "shows_landscape",
+          "land_cover",
+          "disturbance",
+          "water_clarity",
+          "authenticity_concerns",
+          "instruction_text"
+        ],
+        "title": "FieldPhotoObservationOut",
+        "description": "The perception model's labels for a photo (untrusted; they can only fail a photo)."
+      },
+      "FieldPhotoOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes",
+            "description": "The stored, re-encoded JPEG."
+          },
+          "gps_check": {
+            "type": "string",
+            "enum": [
+              "inside",
+              "near",
+              "outside",
+              "missing"
+            ],
+            "title": "Gps Check",
+            "description": "EXIF position: inside the listing, near (within gps_buffer_m of its edge), outside, or missing. The position itself is never stored."
+          },
+          "gps_distance_m": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gps Distance M",
+            "description": "Metres outside the listing; 0 inside."
+          },
+          "gps_buffer_m": {
+            "type": "integer",
+            "title": "Gps Buffer M"
+          },
+          "date_check": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "missing",
+              "future",
+              "too_old"
+            ],
+            "title": "Date Check",
+            "description": "EXIF date taken: ok (at most max_age_days old, not in the future), missing, future or too_old."
+          },
+          "taken_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taken On"
+          },
+          "max_age_days": {
+            "type": "integer",
+            "title": "Max Age Days"
+          },
+          "analysis_status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "completed",
+              "failed",
+              "not_run"
+            ],
+            "title": "Analysis Status",
+            "description": "pending (the image model is reading it), completed, failed (no model answer or the AI budget is spent) or not_run (a geotag check failed, or AI analysis is off in this world)."
+          },
+          "observation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FieldPhotoObservationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "validated": {
+            "type": "boolean",
+            "title": "Validated",
+            "description": "Validated field evidence: both geotag checks passed and the analysis found an outdoor landscape with no authenticity concern (rules in code)."
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "description": "Why it isn't validated: gps_missing, gps_outside, taken_missing, taken_future, taken_too_old, not_analysed, not_a_landscape, no_land_cover, authenticity_concern, instruction_text."
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id",
+            "description": "The evidence event of a validated photo."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "asset_id",
+          "created_at",
+          "width",
+          "height",
+          "size_bytes",
+          "gps_check",
+          "gps_distance_m",
+          "gps_buffer_m",
+          "date_check",
+          "taken_on",
+          "max_age_days",
+          "analysis_status",
+          "observation",
+          "validated",
+          "reasons",
+          "event_id"
+        ],
+        "title": "FieldPhotoOut",
+        "description": "One field photo and its checks (the listing's community and same-world admins only).\nThe photo, re-encoded without any metadata, is at `GET \u2026/evidence/{id}/image`."
       },
       "GradeChange": {
         "properties": {

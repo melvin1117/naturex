@@ -91,6 +91,7 @@ from app.services.earth_obs_live import (
     build_live_earth_obs,
     refund_live_rating,
 )
+from app.services.field_evidence import DbEvidenceProvider
 from app.services.lifecycle import is_public
 from app.services.listings import apply_rating_result, lock_asset, note_rating_failure
 from app.services.listings import audience as listing_audience
@@ -217,7 +218,8 @@ class AssetInfo:
 
 
 class EvidenceProvider(Protocol):
-    """Field evidence for the `field_evidence` tool (T40 plugs in its implementation)."""
+    """Field evidence for the `field_evidence` tool: `available` offers the tool, `load` gives
+    the validated photos as events (T40: `services.field_evidence.DbEvidenceProvider`)."""
 
     def available(self, world_id: UUID, asset_id: UUID) -> bool: ...
 
@@ -225,7 +227,7 @@ class EvidenceProvider(Protocol):
 
 
 class NoFieldEvidence:
-    """Until T40: no evidence, so the tool is never offered and the step is `skipped`."""
+    """No evidence, so the tool is never offered and the step is `skipped` (tests)."""
 
     def available(self, world_id: UUID, asset_id: UUID) -> bool:
         return False
@@ -786,9 +788,13 @@ class RunToolbox:
     def _field_evidence(self) -> dict[str, Any]:
         events = self._deps.evidence.load(self._spec.world_id, self._spec.asset_id)
         self.evidence_events = [event for event in events if event.source == "evidence"]
+        validated = [event for event in self.evidence_events if event.validated]
+        # Counts only, as for news: the photos' labels never reach the orchestrator.
         return {
             "items": len(self.evidence_events),
-            "validated": sum(1 for event in self.evidence_events if event.validated),
+            "validated": len(validated),
+            "negative": sum(1 for event in validated if event.direction == -1),
+            "positive": sum(1 for event in validated if event.direction == 1),
         }
 
     def _auditor(self) -> dict[str, Any]:
@@ -1661,6 +1667,7 @@ def build_runner(
         llm_factory=_production_llm(settings, session_factory),
         news=news_runner(settings),
         live_metrics=build_live_earth_obs(settings, session_factory),
+        evidence=DbEvidenceProvider(session_factory),
     )
 
 

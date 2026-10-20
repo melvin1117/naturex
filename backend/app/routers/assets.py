@@ -6,22 +6,21 @@ rating, needs_evidence, ineligible, withdrawn) belongs to its community: only it
 same-world admins see it (`VIEW_COMMUNITY_DATA`); everyone else gets 404, as if it didn't exist.
 The lifecycle's writes are in `app.routers.listings`.
 
-`POST /assets/{id}/evidence` still answers with a stub until the field-evidence agent (T40).
+Field evidence (T40) is in `app.routers.evidence`.
 """
 
 from __future__ import annotations
 
 from collections.abc import Collection
 from dataclasses import asdict
-from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Response, status
 from sqlmodel import Session, col, select
 
-from app.authz import Action, Actor, DenyReason, OptionalActor, asset_ref, denied, require
+from app.authz import Action, Actor, OptionalActor, asset_ref, require
 from app.deps import CurrentWorld, SessionDep, SettingsDep
 from app.models import Asset, AssetStatus, Price, Report
 from app.routers.reports import present_report, recent_events
@@ -32,8 +31,6 @@ from app.schemas import (
     AssetOutlines,
     AssetStatusOut,
     CachedExample,
-    EventOut,
-    EvidenceResponse,
     PricePoint,
     ReportOut,
 )
@@ -196,32 +193,6 @@ def get_asset(
     if asset.status not in PUBLIC_STATUSES:
         response.headers["Cache-Control"] = PRIVATE_NO_STORE
     return asset_detail(session, asset, settings, actor)
-
-
-@router.post(
-    "/assets/{asset_id}/evidence",
-    response_model=EvidenceResponse,
-    dependencies=[require(Action.MANAGE_LISTING, asset_ref)],
-    responses=denied(DenyReason.MEMBERS_ONLY),
-)
-def upload_evidence(
-    asset_id: UUID, world: CurrentWorld, actor: OptionalActor, session: SessionDep
-) -> EvidenceResponse:
-    world_asset(session, world.id, asset_id, actor)
-    event = EventOut(
-        id=uuid4(),
-        asset_id=asset_id,
-        source="evidence",
-        title="Field photo evidence (mock)",
-        url=None,
-        published_at=None,
-        impact_type="other",
-        direction=1,
-        severity=2,
-        summary="Mock geotagged photo analysis: healthy flooded vegetation observed.",
-        created_at=datetime.now(UTC),
-    )
-    return EvidenceResponse(event=event, message="Evidence accepted (mock); confidence updated.")
 
 
 @router.get(

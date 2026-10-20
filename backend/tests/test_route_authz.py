@@ -194,6 +194,13 @@ def test_admin_routes_are_operator_only() -> None:
     ):
         assert actions[("GET", path)] == {Action.VIEW_COMMUNITY_DATA}, path
     assert actions[("GET", "/assets/{asset_id}/verification")] == {Action.BROWSE}
+    # T40: the steward uploads and deletes photos; the community and admins read them; anyone
+    # who can see the asset reads the aggregate.
+    assert actions[("POST", "/assets/{asset_id}/evidence")] == {Action.MANAGE_LISTING}
+    assert actions[("DELETE", "/assets/{asset_id}/evidence/{photo_id}")] == {Action.MANAGE_LISTING}
+    for path in ("/assets/{asset_id}/evidence", "/assets/{asset_id}/evidence/{photo_id}/image"):
+        assert actions[("GET", path)] == {Action.VIEW_COMMUNITY_DATA}, path
+    assert actions[("GET", "/assets/{asset_id}/evidence/summary")] == {Action.BROWSE}
     assert actions[("GET", "/admin/verifications")] == {Action.REVIEW_LISTING}
     for step in ("approve", "reject", "revoke"):
         path = f"/admin/assets/{{asset_id}}/verification/{{run_id}}/{step}"
@@ -318,7 +325,13 @@ OBJECT_ROUTES: dict[tuple[str, str], tuple[str, Callable[[Objects], Any] | None]
     ("POST", "/communities/{community_id}/members"): ("rosa", lambda o: {"user_id": str(o.owner)}),
     ("DELETE", "/communities/{community_id}/members/{user_id}"): ("rosa", None),
     ("GET", "/assets/{asset_id}"): ("arjun", None),
+    # T40's field evidence: the steward's uploads and deletes, the community's and admins'
+    # reads, and the public aggregate.
     ("POST", "/assets/{asset_id}/evidence"): ("rosa", None),
+    ("GET", "/assets/{asset_id}/evidence"): ("rosa", None),
+    ("GET", "/assets/{asset_id}/evidence/summary"): ("arjun", None),
+    ("GET", "/assets/{asset_id}/evidence/{photo_id}/image"): ("rosa", None),
+    ("DELETE", "/assets/{asset_id}/evidence/{photo_id}"): ("rosa", None),
     ("GET", "/assets/{asset_id}/reports"): ("arjun", None),
     ("GET", "/assets/{asset_id}/prices"): ("arjun", None),
     ("GET", "/assets/{asset_id}/quote"): ("arjun", None),
@@ -375,6 +388,8 @@ OWN_WORLD_STATUS: dict[tuple[str, str], tuple[int, str | None]] = {
     # No document has that ID in the caller's world either (T69).
     ("GET", "/assets/{asset_id}/documents/{document_id}"): (404, "document_not_found"),
     ("GET", "/assets/{asset_id}/documents/{document_id}/preview"): (404, "document_not_found"),
+    # No photo has that ID in the caller's world either (T40).
+    ("GET", "/assets/{asset_id}/evidence/{photo_id}/image"): (404, "photo_not_found"),
 }
 # Object IDs that travel in a body or query instead of the path: (persona, body, query), built
 # from the other world's objects. The path, if templated, is filled from the caller's own world.
@@ -483,7 +498,8 @@ def fill(path: str, o: Objects) -> str:
         "report_id": o.report,
         "prev": o.report,
         "run_id": o.run,
-        "document_id": o.report,  # any ID: the asset in the path decides the world
+        "document_id": o.report,
+        "photo_id": o.report,  # any ID: the asset in the path decides the world
         "alert_id": o.alert,
     }
     return re.sub(r"\{([^}]+)\}", lambda m: str(values[m.group(1)]), path)
