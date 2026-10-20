@@ -60,7 +60,7 @@ from app.sandbox import _delete_world_rows, create_world, ensure_live_world
 from app.schemas import NewsScoutOutput, RatingRunStatus
 from app.seed import seed
 from app.services import rating_runs
-from app.services.diff import diff_reports
+from app.services.diff import audited_step, diff_reports
 from app.services.rating import rate_site
 from app.services.rating_runs import (
     GLOBAL_RUNS_LOCK_KEY,
@@ -358,7 +358,7 @@ def test_a_rerate_adds_a_version_and_leaves_the_earlier_one_untouched(
     with sessions(db)() as session:
         after = stored(session)
         first, second = (session.get_one(Report, row["id"]) for row in after)
-        diff = diff_reports(first, second, [second])
+        diff = diff_reports(first, second, [audited_step(second)])
     assert [row["version"] for row in after] == [1, 2]
     assert after[0] == before[0]  # the sealed v1 row is byte-for-byte unchanged
     assert after[1]["id"] != before[0]["id"]

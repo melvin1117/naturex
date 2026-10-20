@@ -23,6 +23,7 @@ from app.schemas import (
     ReportOut,
     ReportSummarySource,
 )
+from app.services.diff import AuditedStep
 from app.services.diff import diff_reports as build_report_diff
 from app.services.listings import visible_to
 from app.tools.earth_obs import NdviPoint
@@ -249,7 +250,10 @@ def get_report(
     response_model=ReportDiff,
     dependencies=[BROWSE_REPORT],
     responses={
-        400: {"description": "The reports belong to different assets."},
+        400: {
+            "description": "The reports belong to different assets, or `prev` is the later "
+            "version (`prev_not_older`)."
+        },
         404: {"description": "Either report is missing, in another world or not visible."},
     },
 )
@@ -259,15 +263,17 @@ def diff_reports(
     """What changed from report `prev` to report `report_id` (two versions of one asset):
     each changed number with its old and new value and delta, the grade change and the reasons
     (stored Auditor citations, events, flags and data versions; no model is called).
-    422 for an invalid ID or when `prev` is a later version than `report_id` (`prev_not_older`)."""
+    400 `prev_not_older` when `prev` is a later version than `report_id`."""
     current, _ = _world_report(session, world.id, report_id, actor)
     previous, _ = _world_report(session, world.id, prev, actor)
     if current.asset_id != previous.asset_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Reports belong to different assets")
     if previous.version > current.version:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "prev_not_older")
-    between = session.exec(
-        select(Report)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "prev_not_older")
+    # Only each version's key changes: a full `auditor_json` also carries the run's trace.
+    key_changes = col(Report.auditor_json)["auditor"]["key_changes"]
+    rows = session.exec(
+        select(Report.version, key_changes)
         .where(
             Report.world_id == world.id,
             Report.asset_id == current.asset_id,
@@ -276,4 +282,5 @@ def diff_reports(
         )
         .order_by(col(Report.version))
     ).all()
-    return build_report_diff(previous, current, between)
+    steps = [AuditedStep(version, changes) for version, changes in rows]
+    return build_report_diff(previous, current, steps)

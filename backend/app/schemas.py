@@ -502,8 +502,8 @@ class MetricChange(BaseModel):
     """One stored number that differs between two report versions (T37)."""
 
     id: str = Field(
-        description="Stable key; `metric:`, `score:` and `valuation:` keys match the "
-        "Auditor's citation IDs (e.g. `metric:landcover.built`, `score:threat_pressure`)."
+        description="Stable key; it matches the Auditor's citation ID where one exists "
+        "(e.g. `metric:landcover.built`, `score:threat_pressure`)."
     )
     label: str
     group: MetricGroup

@@ -345,7 +345,7 @@ def test_diff_validates_its_ids_and_order(client: TestClient, session: Session) 
     invalid = client.get(f"/reports/{second.id}/diff/not-a-uuid")
     missing = client.get(f"/reports/{second.id}/diff/{uuid4()}")
 
-    assert (reversed_.status_code, reversed_.json()["detail"]) == (422, "prev_not_older")
+    assert (reversed_.status_code, reversed_.json()["detail"]) == (400, "prev_not_older")
     assert same.status_code == 200
     assert same.json()["metrics"] == [] and same.json()["reasons"] == []
     assert invalid.status_code == 422
@@ -358,13 +358,25 @@ def test_diff_reasons_span_every_version_between(client: TestClient, session: Se
     world_id = UUID(world["id"])
     first = client.get(f"/assets/{_asset_id(world)}").json()["latest_report"]
     second = _rate_restoration(session, world_id)
+    # As a rating run stores it (T27): the Auditor's cited key changes for v2.
+    key_changes = ["Vegetation recovered [metric:ndvi_mean]."]
+    second.auditor_json = {**(second.auditor_json or {}), "auditor": {"key_changes": key_changes}}
+    session.add(second)
+    session.commit()
     third = _rate_restoration(session, world_id)
 
     span = client.get(f"/reports/{third.id}/diff/{first['id']}").json()
     step = client.get(f"/reports/{third.id}/diff/{second.id}").json()
 
     assert (span["from_version"], span["to_version"]) == (1, 3)
-    assert span["metrics"] and step["metrics"] == [] and step["reasons"] == []
+    assert span["metrics"]
+    audited = [r for r in span["reasons"] if r["source"] == "auditor"]
+    assert [(r["version"], r["text"], r["citations"]) for r in audited] == [
+        (2, key_changes[0], ["metric:ndvi_mean"])
+    ]
+    ndvi = next(m for m in span["metrics"] if m["id"] == "metric:ndvi_mean")
+    assert span["reasons"].index(audited[0]) in ndvi["reason_refs"]
+    assert step["metrics"] == [] and step["reasons"] == []
 
 
 @requires_db

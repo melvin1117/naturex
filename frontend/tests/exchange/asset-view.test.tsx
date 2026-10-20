@@ -256,11 +256,12 @@ describe("AssetView", () => {
       await screen.findByText("Ecological Performance Report · v3"),
     ).toBeInTheDocument();
     expect(await screen.findByText("Why it changed")).toBeInTheDocument();
+    const reason = screen.getByText(/Replanting raised vegetation vigour/);
+    expect(reason.closest("li")).toHaveTextContent(/^Auditor/);
+    // The citation becomes a tag, as in the report summary.
     expect(
-      screen.getByText(
-        "Replanting raised vegetation vigour [score:vegetation_vigor].",
-      ).previousSibling,
-    ).toHaveTextContent("Auditor");
+      within(reason.closest("li")!).getByText("score:vegetation_vigor").tagName,
+    ).toBe("SPAN");
     expect(screen.getByText("Better.").tagName).toBe("STRONG");
     expect(screen.getByText(/<b>not html<\/b>/)).toBeInTheDocument();
     expect(

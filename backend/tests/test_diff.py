@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.models import Report
-from app.services.diff import diff_reports
+from app.services.diff import audited_step, diff_reports
 
 ASSET = uuid4()
 WORLD = uuid4()
@@ -217,7 +217,7 @@ def test_auditor_key_changes_and_adjustment_are_reasons_linked_to_the_metrics_th
         auditor=auditor(),
     )
 
-    diff = diff_reports(older, newer, [newer])
+    diff = diff_reports(older, newer, [audited_step(newer)])
 
     texts = [(r.source, r.code, r.text) for r in diff.reasons]
     assert texts == [
@@ -243,7 +243,7 @@ def test_key_changes_come_from_every_version_in_range_oldest_first() -> None:
     v3 = report(3, auditor=auditor(0, ["Step three [report:previous.health_change]."]))
     v4 = report(4, auditor=auditor(0, ["Outside the range [metric:ndvi_mean]."]))
 
-    diff = diff_reports(v1, v3, [v3, v4, v2, v1])
+    diff = diff_reports(v1, v3, [audited_step(r) for r in (v3, v4, v2, v1)])
 
     assert [(r.version, r.text) for r in diff.reasons] == [
         (2, "Step two [metric:ndvi_mean]."),
@@ -255,7 +255,31 @@ def test_an_unchanged_adjustment_is_not_a_reason() -> None:
     older = report(1, snapshot=rating(score={"auditor_adjustment": -2}))
     newer = report(2, snapshot=rating(score={"auditor_adjustment": -2}), auditor=auditor(-2, []))
 
-    assert diff_reports(older, newer, [newer]).reasons == []
+    assert diff_reports(older, newer, [audited_step(newer)]).reasons == []
+
+
+def test_a_changed_adjustment_without_a_stored_reason_gets_a_fixed_line() -> None:
+    older = report(1, snapshot=rating(score={"auditor_adjustment": -2}))
+    newer = report(2)  # adjustment 0 and no Auditor block
+
+    diff = diff_reports(older, newer, [audited_step(newer)])
+
+    [reason] = diff.reasons
+    assert (reason.source, reason.code, reason.text, reason.citations) == (
+        "auditor",
+        "adjustment",
+        "Auditor adjustment -2 → 0.",
+        ["score:auditor_adjustment"],
+    )
+    assert by_id(diff)["score:auditor_adjustment"].reason_refs == [0]
+
+
+def test_the_adjustment_is_read_from_the_rating_snapshots_not_the_auditor_block() -> None:
+    older = report(1)
+    # The stored Auditor proposed -2, but the sealed rating applied 0: nothing changed.
+    newer = report(2, auditor=auditor(-2, []))
+
+    assert diff_reports(older, newer, [audited_step(newer)]).reasons == []
 
 
 def test_new_relevant_events_and_flags_and_data_versions_are_reasons() -> None:
@@ -275,6 +299,7 @@ def test_new_relevant_events_and_flags_and_data_versions_are_reasons() -> None:
         snapshot=rating(
             metrics={
                 "data_version": "sim-1",
+                "ndvi_mean": 0.55,
                 "simulated": True,
                 "scenario": "encroachment",
                 "scenario_deltas": {"description": "Built-up land spreads into the marsh."},
@@ -286,12 +311,12 @@ def test_new_relevant_events_and_flags_and_data_versions_are_reasons() -> None:
     reasons = [(r.source, r.code, r.text, r.citations) for r in diff_reports(older, newer).reasons]
 
     assert reasons == [
-        ("data", "data_version", "Satellite data version 2026-09 → sim-1.", []),
+        ("data", "data_version", "Satellite data version 2026-09 → sim-1.", ["metric:ndvi_mean"]),
         (
             "scenario",
             "encroachment",
             "Simulated scenario, not an observation: Built-up land spreads into the marsh.",
-            [],
+            ["metric:ndvi_mean"],
         ),
         (
             "event",
@@ -302,6 +327,40 @@ def test_new_relevant_events_and_flags_and_data_versions_are_reasons() -> None:
         ("flag", "listing_gate:forest_loss", "Too much.", []),
         ("flag", "mock_data", "No longer flagged: Mock.", []),
     ]
+
+
+def test_back_to_observed_data_is_a_data_reason_without_a_scenario() -> None:
+    simulated = {
+        "data_version": "sim-2",
+        "simulated": True,
+        "scenario": "encroachment",
+        "scenario_deltas": {"description": "Built-up land spreads into the marsh."},
+        "water_change": -4.6,
+        "landcover": {"trees": 0.5, "water": 0.25, "built": 0.25},
+    }
+    older = report(1, snapshot=rating(metrics=simulated))
+
+    diff = diff_reports(older, report(2))
+
+    [reason] = diff.reasons
+    assert (reason.source, reason.text) == ("data", "Satellite data version sim-2 → 2026-09.")
+    assert reason.citations == [
+        "metric:water_change",
+        "metric:landcover.built",
+        "metric:landcover.water",
+    ]
+    assert by_id(diff)["metric:water_change"].reason_refs == [0]
+
+
+def test_an_event_that_becomes_relevant_is_newly_counted() -> None:
+    event = {"id": EVENT, "relevant": False, "direction": -1, "title": "Dumping reported"}
+    older = report(1, snapshot=rating(events=[event]))
+    newer = report(2, snapshot=rating(events=[{**event, "relevant": True}]))
+
+    [reason] = diff_reports(older, newer).reasons
+
+    assert (reason.source, reason.text) == ("event", "Dumping reported")
+    assert reason.citations == [EVENT, "score:threat_pressure"]
 
 
 def test_an_event_no_longer_counted_is_a_reason() -> None:

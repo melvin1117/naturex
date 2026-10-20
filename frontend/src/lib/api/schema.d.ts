@@ -762,7 +762,7 @@ export interface paths {
          * @description What changed from report `prev` to report `report_id` (two versions of one asset):
          *     each changed number with its old and new value and delta, the grade change and the reasons
          *     (stored Auditor citations, events, flags and data versions; no model is called).
-         *     422 for an invalid ID or when `prev` is a later version than `report_id` (`prev_not_older`).
+         *     400 `prev_not_older` when `prev` is a later version than `report_id`.
          */
         get: operations["diff_reports_reports__report_id__diff__prev__get"];
         put?: never;
@@ -2140,7 +2140,7 @@ export interface components {
         MetricChange: {
             /**
              * Id
-             * @description Stable key; `metric:`, `score:` and `valuation:` keys match the Auditor's citation IDs (e.g. `metric:landcover.built`, `score:threat_pressure`).
+             * @description Stable key; it matches the Auditor's citation ID where one exists (e.g. `metric:landcover.built`, `score:threat_pressure`).
              */
             id: string;
             /** Label */
@@ -5354,7 +5354,7 @@ export interface operations {
                     "application/json": components["schemas"]["ReportDiff"];
                 };
             };
-            /** @description The reports belong to different assets. */
+            /** @description The reports belong to different assets, or `prev` is the later version (`prev_not_older`). */
             400: {
                 headers: {
                     [name: string]: unknown;

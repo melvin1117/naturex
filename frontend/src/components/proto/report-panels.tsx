@@ -421,7 +421,6 @@ function diffRows(report: ReportFacts, prev?: ReportFacts): DiffRow[] {
   ];
 }
 
-/** Report versions, newest first; the picker shows any version and what changed from the one before. */
 const REASON_SOURCE: Record<ReportDiff["reasons"][number]["source"], string> = {
   auditor: "Auditor",
   event: "News",
@@ -465,7 +464,7 @@ function ChangeReasons({
               <Badge variant="secondary" className="mt-0.5 shrink-0">
                 {REASON_SOURCE[r.source]}
               </Badge>
-              <span className="min-w-0 break-words">{r.text}</span>
+              <MarkdownText text={r.text} className="min-w-0 break-words" />
             </li>
           ))}
         </ul>
@@ -474,6 +473,7 @@ function ChangeReasons({
   );
 }
 
+/** Report versions, newest first; the picker shows any version and what changed from the one before. */
 export function ReportTab({
   versions,
   showReasons = false,

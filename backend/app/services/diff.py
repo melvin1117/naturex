@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, NamedTuple
 
 from app.agents.auditor import inline_citations
 from app.models import Report
@@ -30,6 +30,19 @@ _ALIASES: Mapping[str, tuple[str, ...]] = {
 _GRADE_RANK = {grade.value: rank for rank, grade in enumerate(Grade)}  # 0 = best
 
 
+class AuditedStep(NamedTuple):
+    """One report version's stored Auditor key changes (all a diff needs from the versions
+    between its two ends, so the caller needn't load their full `auditor_json`)."""
+
+    version: int
+    key_changes: object
+
+
+def audited_step(report: Report) -> AuditedStep:
+    auditor = (report.auditor_json or {}).get("auditor")
+    return AuditedStep(report.version, _at(auditor, "key_changes") if auditor else None)
+
+
 @dataclass(frozen=True, slots=True)
 class _Spec:
     id: str
@@ -44,7 +57,7 @@ def _rating(report: Report) -> Mapping[str, Any]:
     return rating if isinstance(rating, Mapping) else {}
 
 
-def _at(mapping: Mapping[str, Any], *path: str) -> object:
+def _at(mapping: object, *path: str) -> object:
     node: object = mapping
     for key in path:
         if not isinstance(node, Mapping):
@@ -236,7 +249,12 @@ def _grade_change(older: Report, newer: Report) -> GradeChange | None:
 # ----- reasons ----------------------------------------------------------------------------------
 
 
-def _data_reasons(older: Report, newer: Report) -> list[DiffReason]:
+def _data_reasons(
+    older: Report, newer: Report, metrics: Sequence[MetricChange]
+) -> list[DiffReason]:
+    """A changed data version (and the scenario it simulates), citing the satellite metrics
+    that changed with it."""
+    cited = [metric.id for metric in metrics if metric.id.startswith("metric:")]
     old_version = _at(_rating(older), "metrics", "data_version")
     new_version = _at(_rating(newer), "metrics", "data_version")
     if old_version == new_version:
@@ -247,7 +265,7 @@ def _data_reasons(older: Report, newer: Report) -> list[DiffReason]:
             version=newer.version,
             code="data_version",
             text=f"Satellite data version {old_version or 'unknown'} → {new_version or 'unknown'}.",
-            citations=[],
+            citations=list(cited),
         )
     ]
     description = _at(_rating(newer), "metrics", "scenario_deltas", "description")
@@ -259,7 +277,7 @@ def _data_reasons(older: Report, newer: Report) -> list[DiffReason]:
                 version=newer.version,
                 code=str(scenario) if scenario else None,
                 text=f"Simulated scenario, not an observation: {description}",
-                citations=[],
+                citations=list(cited),
             )
         )
     return reasons
@@ -338,44 +356,52 @@ def _flag_reasons(older: Report, newer: Report) -> list[DiffReason]:
     return [*added, *cleared]
 
 
-def _auditor(report: Report) -> Mapping[str, Any]:
-    auditor = (report.auditor_json or {}).get("auditor")
-    return auditor if isinstance(auditor, Mapping) else {}
+def _signed(value: Decimal) -> str:
+    return f"+{value}" if value > 0 else str(value)
 
 
-def _auditor_reasons(older: Report, newer: Report, between: Sequence[Report]) -> list[DiffReason]:
-    """Each audited version's cited key changes in (older, newer], oldest first; then the
-    newer report's adjustment reason if its adjustment differs from the older one's."""
+def _auditor_reasons(
+    older: Report, newer: Report, steps: Sequence[AuditedStep]
+) -> list[DiffReason]:
+    """Each audited version's cited key changes in (older, newer], oldest first; then, if the
+    adjustment in the rating snapshot changed, the newer Auditor's reason for it (or a fixed
+    line when it stored none)."""
     reasons: list[DiffReason] = []
-    for report in sorted(between, key=lambda r: r.version):
-        if not older.version < report.version <= newer.version:
+    for step in sorted(steps, key=lambda s: s.version):
+        if not older.version < step.version <= newer.version:
             continue
-        for text in _auditor(report).get("key_changes") or []:
+        texts = step.key_changes if isinstance(step.key_changes, list) else []
+        for text in texts:
             if isinstance(text, str) and text.strip():
                 reasons.append(
                     DiffReason(
                         source="auditor",
-                        version=report.version,
+                        version=step.version,
                         code="key_change",
                         text=text,
                         citations=list(dict.fromkeys(inline_citations(text))),
                     )
                 )
-    auditor = _auditor(newer)
-    reason = auditor.get("adjustment_reason")
     old_adjustment = _number(_at(_rating(older), "score", "auditor_adjustment")) or Decimal(0)
-    new_adjustment = _number(auditor.get("auditor_adjustment")) or Decimal(0)
-    if isinstance(reason, str) and reason.strip() and new_adjustment != old_adjustment:
-        citations = list(dict.fromkeys([*inline_citations(reason), "score:auditor_adjustment"]))
-        reasons.append(
-            DiffReason(
-                source="auditor",
-                version=newer.version,
-                code="adjustment",
-                text=reason,
-                citations=citations,
-            )
+    new_adjustment = _number(_at(_rating(newer), "score", "auditor_adjustment")) or Decimal(0)
+    if new_adjustment == old_adjustment:
+        return reasons
+    reason = _at((newer.auditor_json or {}).get("auditor"), "adjustment_reason")
+    stored = isinstance(reason, str) and bool(reason.strip())
+    text = (
+        str(reason)
+        if stored
+        else f"Auditor adjustment {_signed(old_adjustment)} → {_signed(new_adjustment)}."
+    )
+    reasons.append(
+        DiffReason(
+            source="auditor",
+            version=newer.version,
+            code="adjustment",
+            text=text,
+            citations=list(dict.fromkeys([*inline_citations(text), "score:auditor_adjustment"])),
         )
+    )
     return reasons
 
 
@@ -410,21 +436,22 @@ def headline_changes(older: Report, newer: Report) -> list[str]:
     ]
 
 
-def diff_reports(older: Report, newer: Report, between: Sequence[Report] = ()) -> ReportDiff:
+def diff_reports(older: Report, newer: Report, steps: Sequence[AuditedStep] = ()) -> ReportDiff:
     """What changed from ``older`` to ``newer`` (two versions of one asset), and why.
 
-    ``between`` holds the asset's reports with versions in ``(older, newer]`` (``newer``
-    included), whose Auditor key changes explain the steps; others are ignored.
+    ``steps`` holds the stored Auditor key changes of the asset's versions in
+    ``(older, newer]`` (``newer`` included), which explain each step; others are ignored.
     """
     if older.asset_id != newer.asset_id:
         raise ValueError("reports belong to different assets")
     if older.version > newer.version:
         raise ValueError("older is a later version than newer")
+    metrics = _metric_changes(older, newer)
     reasons = [
-        *_data_reasons(older, newer),
+        *_data_reasons(older, newer, metrics),
         *_event_reasons(older, newer),
         *_flag_reasons(older, newer),
-        *_auditor_reasons(older, newer, between),
+        *_auditor_reasons(older, newer, steps),
     ]
     return ReportDiff(
         report_id=newer.id,
@@ -433,6 +460,6 @@ def diff_reports(older: Report, newer: Report, between: Sequence[Report] = ()) -
         from_version=older.version,
         to_version=newer.version,
         grade_change=_grade_change(older, newer),
-        metrics=_link(_metric_changes(older, newer), reasons),
+        metrics=_link(metrics, reasons),
         reasons=reasons,
     )
