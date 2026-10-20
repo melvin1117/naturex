@@ -1,10 +1,11 @@
 "use client";
 
-import { ArrowLeft, Bot, MapPin, MessageCircle } from "lucide-react";
+import { ArrowLeft, Bot, MapPin } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useMemo } from "react";
 
+import { CopilotChat } from "@/components/copilot-chat";
 import { Delta, SiteBackdrop, ValueRange } from "@/components/proto/bits";
 import { PriceChart } from "@/components/proto/charts";
 import { GradeBadge } from "@/components/proto/grade";
@@ -342,26 +343,27 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
             </TabsContent>
           </Tabs>
 
-          <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
+          <aside className="min-w-0 space-y-6 lg:sticky lg:top-24 lg:self-start">
             <Suspense fallback={null}>
               <TradePanel assetId={asset.id} />
             </Suspense>
+            <Suspense fallback={null}>
+              <CopilotChat
+                key={asset.id}
+                assetId={asset.id}
+                assetName={asset.name}
+              />
+            </Suspense>
             <section className="rounded-3xl bg-card p-6 shadow-soft">
-              <h2 className="text-base font-semibold">Ask about this site</h2>
+              <h2 className="text-base font-semibold">How it was rated</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                The Copilot and the Agent Trace for real sites are coming soon.
-                The guided tour shows both on the scripted demo world.
+                The Agent Trace for real sites is coming soon. The guided tour
+                shows it on the scripted demo world.
               </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" disabled>
-                  <MessageCircle aria-hidden="true" />
-                  Open Copilot
-                </Button>
-                <Button variant="ghost" size="sm" disabled>
-                  <Bot aria-hidden="true" />
-                  How it was rated
-                </Button>
-              </div>
+              <Button variant="ghost" size="sm" className="mt-4" disabled>
+                <Bot aria-hidden="true" />
+                How it was rated
+              </Button>
             </section>
           </aside>
         </div>

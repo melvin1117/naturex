@@ -417,9 +417,11 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 > - **Simulated label:** for `simulated` versions, show a "Simulated" label and the `provenance_note`; never show `date_windows` as observation periods (they describe the observed data the deltas start from).
 
 ### T39 · Copilot (RAG) (#53) — D3 · M · Must · E1
-- [ ] Reports and events chunked and embedded (per T06) into pgvector; Nemotron Nano answers only from context with `[R…]`/`[E…]` citations; streamed
+- [x] Reports and events chunked and embedded (per T06) into pgvector; Nemotron Nano answers only from context with `[R…]`/`[E…]` citations; streamed
 
 **Verify:** `make test`; "Why did the price drop?" cites the encroachment event · **Deps:** T27 · **Files:** `backend/app/rag/*.py`, `backend/app/routers/copilot.py`
+
+> **Note from T39:** `POST /copilot` is now an SSE stream (`sources`, `delta`…, `done`; dev-spec §10), not JSON. The index is built lazily per world at question time (no write hooks); citations are `[R{version}]` and `[E{8 hex}]`, checked in code against the retrieved sources. The asset page has a working Copilot (`components/copilot-chat.tsx`); T44 still owns the portfolio-page chat and the impact summary, and the prototype's scripted Copilot sheet is unchanged. Tools (`get_price_history`, `compare_assets`, story E2) are not wired yet.
 
 ### T42 · Demo deploy (#54) — D1 · S · Must
 - [ ] Full app deployed on the T20 host with live keys and `LLM_BUDGET_USD` set; keep-alive ping workflow if the host sleeps (free tiers)

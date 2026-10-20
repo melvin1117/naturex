@@ -46,9 +46,8 @@ def test_create_asset_needs_a_signed_in_member() -> None:
 
 
 @pytest.mark.usefixtures("signed_in")
-def test_admin_and_copilot() -> None:
+def test_admin_simulate_quarter() -> None:
     assert client.post("/admin/simulate/quarter").status_code == 200
-    assert client.post("/copilot", json={"question": "Why did it drop?"}).status_code == 200
 
 
 def test_stub_writes_need_a_session() -> None:

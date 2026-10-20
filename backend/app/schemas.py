@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
@@ -666,19 +666,77 @@ class PortfolioOut(BaseModel):
     impact: ImpactSummary
 
 
+COPILOT_QUESTION_MAX_CHARS = 500
+
+
 class CopilotRequest(BaseModel):
-    question: str
-    asset_id: UUID | None = None
+    question: str = Field(min_length=1, max_length=COPILOT_QUESTION_MAX_CHARS)
+    asset_id: UUID | None = Field(
+        default=None,
+        description="Ask about one asset (it must be visible in the caller's world); "
+        "omit to search every visible asset of the world.",
+    )
+
+    @field_validator("question")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("question is blank")
+        return value
 
 
-class CopilotCitation(BaseModel):
-    ref: str
+class CopilotSource(BaseModel):
+    """A report or news event the Copilot read for this answer; `ref` is its citation label."""
+
+    ref: str = Field(description="Citation label used inline as [ref]: R{version} or E{8 hex}.")
+    kind: Literal["report", "event"]
+    asset_id: UUID
+    asset_name: str
+    title: str
     snippet: str
+    report_id: UUID | None = None
+    event_id: UUID | None = None
+    version: int | None = None
 
 
-class CopilotResponse(BaseModel):
+class CopilotSourcesEvent(BaseModel):
+    """First event: what was retrieved (the caller's world and visible assets only)."""
+
+    type: Literal["sources"] = "sources"
+    sources: list[CopilotSource]
+
+
+class CopilotDeltaEvent(BaseModel):
+    """A piece of the checked answer; the pieces concatenate to `done.answer`."""
+
+    type: Literal["delta"] = "delta"
+    text: str
+
+
+class CopilotDoneEvent(BaseModel):
+    type: Literal["done"] = "done"
     answer: str
-    citations: list[CopilotCitation] = Field(default_factory=list)
+    citations: list[CopilotSource] = Field(
+        description="The sources cited in `answer`, in order of first use; every [ref] in the "
+        "answer is one of them (others were removed before streaming)."
+    )
+    mode: Literal["model", "extractive", "refusal"] = Field(
+        description="model: Nemotron's checked draft; extractive: quoted from the sources by "
+        "code (mocks, or the model failed or is over budget); refusal: not in the record."
+    )
+    model: str | None = None
+
+
+class CopilotErrorEvent(BaseModel):
+    type: Literal["error"] = "error"
+    detail: str
+
+
+CopilotStreamEvent = Annotated[
+    CopilotSourcesEvent | CopilotDeltaEvent | CopilotDoneEvent | CopilotErrorEvent,
+    Field(discriminator="type"),
+]
 
 
 class StreamEvent(BaseModel):

@@ -38,6 +38,7 @@ from app.models import (
     Asset,
     Community,
     CommunityMember,
+    CopilotQuestion,
     DocChunk,
     DocumentFingerprint,
     Event,
@@ -82,6 +83,7 @@ _DELETE_ORDER: tuple[type[SQLModel], ...] = (
     VerificationRun,
     DocChunk,
     AlertRecipient,
+    CopilotQuestion,
     Alert,
     MonitorRun,
     WorldEvent,
@@ -221,7 +223,7 @@ def _copy_world_rows(
     copy_with_new_id(Report, "asset_id", "metrics_id")
     copy_with_new_id(Event, "asset_id")
     copy_with_new_id(Alert, "asset_id", "report_id")
-    copy_with_new_id(DocChunk, "asset_id", "report_id")
+    copy_with_new_id(DocChunk, "asset_id", "report_id", "event_id")
 
     for price in _rows(session, Price, source):
         session.add(

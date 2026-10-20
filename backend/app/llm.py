@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
@@ -63,6 +64,8 @@ class Tier(StrEnum):
     FAST = "fast"
     ORCHESTRATOR = "orchestrator"
     AUDITOR = "auditor"
+    EMBED = "embed"
+    """`MODEL_EMBED` (Qwen3-Embedding-8B, ADR-0003): Copilot retrieval only, never text."""
 
 
 # The first tier gets a retry; each fallback tier gets one attempt (dev-spec §3).
@@ -70,7 +73,11 @@ FALLBACK: dict[Tier, tuple[Tier, ...]] = {
     Tier.AUDITOR: (Tier.AUDITOR, Tier.ORCHESTRATOR, Tier.FAST),
     Tier.ORCHESTRATOR: (Tier.ORCHESTRATOR, Tier.FAST),
     Tier.FAST: (Tier.FAST,),
+    Tier.EMBED: (Tier.EMBED,),
 }
+# `doc_chunks.embedding` is vector(1024); Qwen3-Embedding-8B returns exactly this many numbers
+# with `dimensions=1024` (ADR-0003).
+EMBED_DIMENSIONS = 1024
 
 
 class LLMError(RuntimeError):
@@ -89,6 +96,12 @@ class ChatTransport(Protocol):
     """`OpenAI(...).chat.completions`, or a fake in tests."""
 
     def create(self, **kwargs: Any) -> Any: ...
+
+
+class EmbeddingTransport(Protocol):
+    """`OpenAI(...).embeddings.create`, or a fake in tests."""
+
+    def embed(self, **kwargs: Any) -> Any: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -262,17 +275,24 @@ class LLMClient:
         transport: ChatTransport,
         call_log: CallLog,
         clock: Callable[[], float] = time.perf_counter,
+        embeddings: EmbeddingTransport | None = None,
     ) -> None:
         self._settings = settings
         self._transport = transport
         self._log = call_log
         self._clock = clock
+        self._embeddings = embeddings
+
+    def spent_usd(self) -> Decimal:
+        """Total spend so far in the call log (all agents), for reserve checks."""
+        return self._log.spent_usd()
 
     def model_for(self, tier: Tier) -> str:
         model = {
             Tier.FAST: self._settings.model_fast,
             Tier.ORCHESTRATOR: self._settings.model_orchestrator,
             Tier.AUDITOR: self._settings.model_auditor,
+            Tier.EMBED: self._settings.model_embed,
         }[tier]
         if not model:
             raise ModelNotConfigured(f"MODEL_* for tier {tier} is empty in .env")
@@ -387,6 +407,80 @@ class LLMClient:
             tools=list(tools),
             tool_choice=tool_choice,
         )
+
+    def embed(
+        self,
+        *,
+        agent: str,
+        texts: Sequence[str],
+        world_id: UUID | None = None,
+        asset_id: UUID | None = None,
+    ) -> LLMResult[list[list[float]]]:
+        """One `EMBED_DIMENSIONS`-number vector per text (`MODEL_EMBED`, ADR-0003). Budgeted and
+        logged like every call; a malformed reply (wrong count, size or a non-finite number) is
+        `invalid_output` and retried once."""
+        if self._embeddings is None:
+            raise ModelNotConfigured("this client has no embeddings transport")
+        if not texts:
+            raise ValueError("nothing to embed")
+        model = self.model_for(Tier.EMBED)
+        budget = Decimal(str(self._settings.llm_budget_usd))
+        prompt_estimate = sum(len(t) for t in texts) // CHARS_PER_TOKEN + len(texts)
+        reserve = cost_usd(model, prompt_estimate, 0)
+        failures: list[str] = []
+        for attempt in (1, 2):
+            planned = CallRecord(
+                agent=agent,
+                tier=Tier.EMBED,
+                model=model,
+                status="reserved",
+                prompt_tokens=0,
+                completion_tokens=0,
+                latency_ms=0,
+                cost_usd=reserve,
+                world_id=world_id,
+                asset_id=asset_id,
+            )
+            handle = self._log.reserve(planned, budget)
+            start = self._clock()
+            try:
+                response = self._embeddings.embed(
+                    model=model,
+                    input=list(texts),
+                    dimensions=EMBED_DIMENSIONS,
+                    encoding_format="float",
+                    timeout=REQUEST_TIMEOUT_S,
+                )
+            except openai.APIError as exc:
+                if _classify(exc) == "fail":
+                    self._settle(handle, planned, start, "error", 0, 0, Decimal(0))
+                    raise LLMError(f"{model} rejected the request: {_describe(exc)}") from exc
+                self._settle(handle, planned, start, "error", 0, 0, reserve)
+                failures.append(f"{model}: {_describe(exc)}")
+                continue
+            except Exception:
+                self._settle(handle, planned, start, "error", 0, 0, reserve)
+                raise
+            usage = getattr(response, "usage", None)
+            prompt = int(getattr(usage, "prompt_tokens", 0) or 0)
+            spent = cost_usd(model, prompt, 0) if usage else reserve
+            try:
+                vectors = _vectors(response, len(texts))
+            except (ValueError, LookupError, AttributeError, TypeError) as exc:
+                self._settle(handle, planned, start, "invalid_output", prompt, 0, spent)
+                failures.append(f"{model}: invalid output ({str(exc)[:80]})")
+                continue
+            self._settle(handle, planned, start, "ok", prompt, 0, spent)
+            return LLMResult(
+                value=vectors,
+                model=model,
+                tier=Tier.EMBED,
+                degraded=False,
+                attempts=attempt,
+                reasoning=None,
+                call_id=handle,
+            )
+        raise LLMError(f"{agent}: no usable embeddings after {len(failures)} attempts: {failures}")
 
     def mark(self, result: LLMResult[Any], status: str) -> None:
         """Re-label the logged call that produced `result` (e.g. `rejected` by the caller's
@@ -503,14 +597,34 @@ class LLMClient:
         )
 
 
+def _vectors(response: Any, expected: int) -> list[list[float]]:
+    """The reply's vectors in input order, each `EMBED_DIMENSIONS` finite floats."""
+    data = sorted(response.data, key=lambda item: int(item.index))
+    if len(data) != expected:
+        raise ValueError(f"expected {expected} embeddings, got {len(data)}")
+    vectors: list[list[float]] = []
+    for item in data:
+        vector = [float(x) for x in item.embedding]
+        if len(vector) != EMBED_DIMENSIONS:
+            raise ValueError(f"expected {EMBED_DIMENSIONS} dimensions, got {len(vector)}")
+        if not all(math.isfinite(x) for x in vector):
+            raise ValueError("embedding holds a non-finite number")
+        vectors.append(vector)
+    return vectors
+
+
 class OpenAITransport:
-    """Adapts the OpenAI SDK's overloaded `chat.completions.create` to ChatTransport."""
+    """Adapts the OpenAI SDK's overloaded `chat.completions.create` to ChatTransport, and
+    `embeddings.create` to EmbeddingTransport."""
 
     def __init__(self, sdk: openai.OpenAI) -> None:
         self._sdk = sdk
 
     def create(self, **kwargs: Any) -> Any:
         return self._sdk.chat.completions.create(**kwargs)
+
+    def embed(self, **kwargs: Any) -> Any:
+        return self._sdk.embeddings.create(**kwargs)
 
 
 def token_factory_transport(settings: Settings) -> OpenAITransport:
@@ -539,4 +653,5 @@ def get_llm_client(
     call_log: CallLog = DbCallLog(session_factory)
     if wrap_log is not None:
         call_log = wrap_log(call_log)
-    return LLMClient(settings, token_factory_transport(settings), call_log)
+    transport = token_factory_transport(settings)
+    return LLMClient(settings, transport, call_log, embeddings=transport)

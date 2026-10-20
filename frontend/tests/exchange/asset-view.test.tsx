@@ -152,8 +152,13 @@ describe("AssetView", () => {
     expect(
       await screen.findByRole("link", { name: "Sign in to trade" }),
     ).toHaveAttribute("href", "/login?next=%2Fasset%2Fx");
-    // Still out of scope: Copilot and the trace are disabled, not faked.
-    expect(screen.getByRole("button", { name: "Open Copilot" })).toBeDisabled();
+    // The real Copilot (T39) asks anonymous visitors to sign in; the trace is still disabled.
+    expect(
+      screen.getByRole("link", { name: "Sign in to ask the Copilot" }),
+    ).toHaveAttribute("href", "/login?next=%2Fasset%2Fx");
+    expect(
+      screen.getByRole("button", { name: "How it was rated" }),
+    ).toBeDisabled();
   });
 
   it("says a value is not available instead of showing zero", async () => {
