@@ -23,6 +23,7 @@ from app.db import engine
 from app.middleware import CsrfMiddleware, parse_allowed_origins
 from app.routers import (
     admin,
+    alerts,
     assets,
     auth,
     communities,
@@ -123,6 +124,7 @@ app.include_router(reports.router)
 app.include_router(market.router)
 app.include_router(copilot.router)
 app.include_router(events.router)
+app.include_router(alerts.router)
 app.include_router(admin.router)
 app.include_router(ledger.router)
 app.include_router(world.router)

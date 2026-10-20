@@ -82,6 +82,13 @@ export const queryKeys = {
   /** One page of the reviewer queue, per account. */
   reviewQueue: (meId: string | null, offset: number) =>
     ["review-queue", meId, offset] as const,
+  /** The signed-in account's alerts (T75); `alertsAll` is the prefix for invalidation. */
+  alertsAll: () => ["alerts"] as const,
+  alerts: (
+    meId: string | null,
+    communityId: string | null,
+    before: string | null,
+  ) => ["alerts", meId, communityId, before] as const,
 };
 
 export interface CreateDataLayerOptions {
@@ -204,11 +211,18 @@ export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
     },
     { retain: false },
   );
+  // An alert (T75) reaches only its holders and community, so it's always about this account.
+  const unsubscribeAlerts = events.subscribe(
+    "alert",
+    () => queue(queryKeys.alertsAll()),
+    { retain: false },
+  );
   return () => {
     unsubscribe();
     unsubscribeRuns();
     unsubscribeRunSteps();
     unsubscribeListings();
+    unsubscribeAlerts();
     if (timer) clearTimeout(timer);
   };
 }

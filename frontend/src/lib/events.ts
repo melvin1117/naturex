@@ -55,10 +55,26 @@ export interface ListingStatusPayload {
   report_id?: string;
 }
 
+/**
+ * `alert` payload as published by backend/app/services/alerts.py (T75). Alerts reach only the
+ * asset's holders and its community's members; `GET /alerts` has the read state.
+ */
+export interface AlertPayload {
+  alert_id: string;
+  asset_id: string;
+  asset_name: string;
+  kind: "grade_change" | "health_change" | "news";
+  title: string;
+  message: string;
+  severity: number;
+  report_id: string | null;
+  url: string | null;
+}
+
 export interface LiveEventPayloads {
   price_tick: PriceTickPayload;
   rating_progress: Record<string, unknown>;
-  alert: Record<string, unknown>;
+  alert: AlertPayload;
   listing_status: ListingStatusPayload;
 }
 
@@ -126,11 +142,20 @@ function isPriceTick(payload: Record<string, unknown>): boolean {
   );
 }
 
+function isAlert(payload: Record<string, unknown>): boolean {
+  return (
+    typeof payload.alert_id === "string" &&
+    typeof payload.asset_id === "string" &&
+    typeof payload.title === "string"
+  );
+}
+
 /** Narrow a raw `StreamEvent` to a deliverable `LiveEvent`, or null to drop it. */
 export function toLiveEvent(raw: StreamEvent): LiveEvent | null {
   if (typeof raw.id !== "number" || raw.type === "heartbeat") return null;
   if (!(LIVE_EVENT_TYPES as readonly string[]).includes(raw.type)) return null;
   if (raw.type === "price_tick" && !isPriceTick(raw.payload)) return null;
+  if (raw.type === "alert" && !isAlert(raw.payload)) return null;
   return raw as unknown as LiveEvent;
 }
 

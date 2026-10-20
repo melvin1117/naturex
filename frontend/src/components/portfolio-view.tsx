@@ -3,6 +3,7 @@
 import { Leaf, RefreshCwIcon, Sprout, Trees } from "lucide-react";
 import Link from "next/link";
 
+import { AlertsList } from "@/components/alerts-list";
 import { Delta, SiteThumb, Stat } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
 import { Portfolio as PrototypePortfolio } from "@/components/proto/portfolio";
@@ -120,7 +121,7 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
         />
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
         <Panel title="Holdings">
           {data.holdings.length === 0 ? (
             <div className="py-8 text-center">
@@ -140,7 +141,12 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
             <Holdings holdings={data.holdings} cards={cards} />
           )}
         </Panel>
-        <ImpactCard data={data} />
+        <div className="min-w-0 space-y-8">
+          <Panel title="Alerts">
+            <AlertsList empty="No alerts yet. When a site you back is re-rated or in the news, you'll hear about it here." />
+          </Panel>
+          <ImpactCard data={data} />
+        </div>
       </div>
     </>
   );

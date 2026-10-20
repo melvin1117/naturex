@@ -17,6 +17,9 @@ import { forgetCommunity } from "./active-community";
 import type { ApiClient } from "./api/client";
 import { toApiError, unwrap, type ApiError } from "./api/errors";
 import type {
+  AlertList,
+  AlertOut,
+  AlertsMarked,
   AssetCard,
   AssetCreate,
   AssetDetail,
@@ -475,6 +478,70 @@ export function useMyCommunities(): QueryResult<MyCommunity[]> {
       return unwrap(api.GET("/me/communities", { signal }));
     },
     { enabled: meId != null },
+  );
+}
+
+/**
+ * One page of the signed-in account's alerts with their read state (T75), newest first:
+ * `communityId` narrows to that community's sites (members only), `before` is the previous
+ * page's `next_before`. Live: an `alert` event refetches every page (`wireLiveUpdates`). Idle
+ * for anonymous visitors, who get no alerts.
+ */
+export function useAlerts({
+  communityId,
+  before,
+}: { communityId?: string; before?: string } = {}): QueryResult<AlertList> {
+  const { session } = useDataLayer();
+  const { world } = useWorld();
+  const meId = world?.me?.id ?? null;
+  useLiveConnection(meId != null);
+  return useApiQuery(
+    queryKeys.alerts(meId, communityId ?? null, before ?? null),
+    (api, signal) => {
+      if (session.getSnapshot().world?.me?.id !== meId) {
+        return Promise.reject(new Error("The account changed."));
+      }
+      return unwrap(
+        api.GET("/alerts", {
+          params: { query: { community_id: communityId, before } },
+          signal,
+        }),
+      );
+    },
+    { enabled: meId != null },
+  );
+}
+
+/** Mark one alert read; the alerts list refetches. */
+export function useMarkAlertRead(): MutationResult<string, AlertOut> {
+  return useApiMutation(
+    (api, alertId: string) =>
+      unwrap(
+        api.POST("/alerts/{alert_id}/read", {
+          params: { path: { alert_id: alertId } },
+        }),
+      ),
+    {
+      onSuccess: (_d, _v, { cache }) => cache.invalidate(queryKeys.alertsAll()),
+    },
+  );
+}
+
+/** Mark every alert read (only `communityId`'s sites', if set); the alerts list refetches. */
+export function useMarkAllAlertsRead(): MutationResult<
+  { communityId?: string },
+  AlertsMarked
+> {
+  return useApiMutation(
+    (api, { communityId }: { communityId?: string }) =>
+      unwrap(
+        api.POST("/alerts/read-all", {
+          params: { query: { community_id: communityId } },
+        }),
+      ),
+    {
+      onSuccess: (_d, _v, { cache }) => cache.invalidate(queryKeys.alertsAll()),
+    },
   );
 }
 

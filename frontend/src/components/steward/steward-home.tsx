@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { AlertsList } from "@/components/alerts-list";
 import { Delta, SiteBackdrop, Stat } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
@@ -163,10 +164,11 @@ function Home({ summary }: { summary: CommunitySummary }) {
         <aside className="min-w-0 space-y-6" aria-label="Community">
           {listings.length > 0 && <WalletCard wallet={summary.wallet} />}
           <StewardPanel title="Alerts">
-            <p className="text-sm text-muted-foreground">
-              No alerts yet. You&apos;ll see news and re-ratings about your land
-              here.
-            </p>
+            <AlertsList
+              key={community.id}
+              communityId={community.id}
+              empty="No alerts yet. You'll see news and re-ratings about your land here."
+            />
           </StewardPanel>
           {listings.length > 0 && <Supporters listings={listings} />}
           <MembersPanel

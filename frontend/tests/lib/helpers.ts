@@ -146,13 +146,13 @@ export class FakeEventSource {
   }
 
   /** Simulate a server-sent event, as `format_sse` writes it. */
-  emit(type: string, id: number | null, payload: Record<string, unknown> = {}) {
-    const data = JSON.stringify({
-      id,
-      type,
-      payload,
-      ts: "2026-10-07T00:00:00Z",
-    });
+  emit(
+    type: string,
+    id: number | null,
+    payload: Record<string, unknown> = {},
+    ts = "2026-10-07T00:00:00Z",
+  ) {
+    const data = JSON.stringify({ id, type, payload, ts });
     this.#dispatch(
       type,
       new MessageEvent(type, {

@@ -1,9 +1,10 @@
 """Persisted, world-scoped event bus for polling and Server-Sent Events (T29).
 
 Who sees what (`_visible`, one query per read): events about a listing under review go only to
-its community's members and same-world admins (T58's audience); an `alert` goes only to its
-targets, the holders of `payload["asset_id"]` and the members of that asset's community (T57).
-Both are worked out from the reader's account on every read. A stream re-resolves its session
+its community's members and same-world admins (T58's audience); an `alert` goes only to the
+accounts it was delivered to (`alert_recipients` for `payload["alert_id"]`: the asset's holders
+and its community's members when it was raised, T57/T75). Both are worked out from the reader's
+account on every read. A stream re-resolves its session
 on every poll, so it closes within a poll interval of a logout, expiry or revocation.
 """
 
@@ -33,7 +34,7 @@ from starlette.types import Receive, Scope, Send
 
 from app.auth import Principal, resolve_session
 from app.db import engine
-from app.models import Asset, CommunityMember, Holding, StreamEventType, WorldEvent
+from app.models import AlertRecipient, CommunityMember, StreamEventType, WorldEvent
 from app.schemas import StreamEvent
 
 REPLAY_BATCH_LIMIT = 100
@@ -79,10 +80,12 @@ def _visible(
 
     - **Audience (T58):** an event about a listing under review carries its community; only that
       community's members and same-world admins get it (`ADMINS_ONLY`: admins only).
-    - **Alerts (T57):** an `alert` goes only to its targets, the holders of `payload.asset_id`
-      and the members of that asset's community. An alert without an `asset_id` goes to nobody.
+    - **Alerts (T57, T75):** an `alert` goes only to its recipients, the accounts with an
+      `alert_recipients` row for `payload.alert_id` (the asset's holders and its community's
+      members when it was raised, `services.alerts`), so the stream and `GET /alerts` agree. An
+      alert without a delivered `alert_id` goes to nobody.
 
-    Memberships and holdings are subqueries, so they are as of this read.
+    Memberships and deliveries are subqueries, so they are as of this read.
     """
     audience = col(WorldEvent.audience_community_id)
     is_alert = col(WorldEvent.type) == StreamEventType.ALERT
@@ -94,16 +97,12 @@ def _visible(
     )
     if not viewer.is_admin:
         stmt = stmt.where(or_(audience.is_(None), audience.in_(my_communities)))
-    held = sa_select(sa_cast(col(Holding.asset_id), String)).where(
-        col(Holding.world_id) == world_id,
-        col(Holding.user_id) == viewer.user_id,
-        col(Holding.shares) > 0,
+    delivered = sa_select(sa_cast(col(AlertRecipient.alert_id), String)).where(
+        col(AlertRecipient.world_id) == world_id,
+        col(AlertRecipient.user_id) == viewer.user_id,
     )
-    own = sa_select(sa_cast(col(Asset.id), String)).where(
-        col(Asset.world_id) == world_id, col(Asset.community_id).in_(my_communities)
-    )
-    alert_asset = col(WorldEvent.payload)["asset_id"].astext
-    return stmt.where(or_(~is_alert, alert_asset.in_(held), alert_asset.in_(own)))
+    alert_id = col(WorldEvent.payload)["alert_id"].astext
+    return stmt.where(or_(~is_alert, alert_id.in_(delivered)))
 
 
 async def _empty_stream() -> AsyncIterator[str]:

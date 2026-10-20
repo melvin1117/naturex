@@ -691,6 +691,39 @@ class StreamEvent(BaseModel):
     ts: datetime
 
 
+class AlertOut(BaseModel):
+    """One alert delivered to the signed-in account (T75)."""
+
+    id: UUID
+    asset_id: UUID
+    asset_name: str
+    kind: Literal["grade_change", "health_change", "news"] = Field(
+        description="grade_change / health_change: a re-rate moved the grade or the health "
+        "score by ≥ 5 points; news: a News Scout event of severity ≥ 4"
+    )
+    title: str
+    message: str
+    severity: int = Field(ge=1, le=5)
+    url: str | None = Field(default=None, description="The news article (http/https only)")
+    report_id: UUID | None = Field(default=None, description="The re-rate's report")
+    created_at: datetime
+    read_at: datetime | None = Field(default=None, description="null while unread")
+
+
+class AlertListOut(BaseModel):
+    alerts: list[AlertOut] = Field(description="One page, newest first")
+    unread_count: int = Field(
+        ge=0, description="Unread alerts matching the filter, on every page, not only this one"
+    )
+    next_before: UUID | None = Field(
+        default=None, description="Pass as `before` for the next (older) page; null on the last"
+    )
+
+
+class AlertsMarkedOut(BaseModel):
+    marked: int = Field(ge=0, description="Alerts that were unread and are now read")
+
+
 class RatingRunStatus(StrEnum):
     QUEUED = "queued"
     RUNNING = "running"

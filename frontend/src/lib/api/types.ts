@@ -3,6 +3,9 @@ import type { components } from "./schema";
 
 type Schemas = components["schemas"];
 
+export type AlertOut = Schemas["AlertOut"];
+export type AlertList = Schemas["AlertListOut"];
+export type AlertsMarked = Schemas["AlertsMarkedOut"];
 export type AssetCard = Schemas["AssetCard"];
 export type AssetCreate = Schemas["AssetCreate"];
 export type AssetDetail = Schemas["AssetDetail"];

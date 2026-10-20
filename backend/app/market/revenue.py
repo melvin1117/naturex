@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import secrets
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -293,6 +294,16 @@ def portfolio_impact(allocations: tuple[ImpactAllocation, ...]) -> ImpactInput:
     )
 
 
+_QUARTER_RE = re.compile(r"(\d{4})\s*-?\s*Q([1-4])", re.IGNORECASE)
+
+
+def normalize_quarter_label(label: str) -> str:
+    """One spelling per quarter (`2026Q4`, `2026-Q4`, `2026-q4` → `2026Q4`), so a second label
+    for a quarter already paid can't pay it again (T75). Other labels are only stripped."""
+    match = _QUARTER_RE.fullmatch(label.strip())
+    return f"{match[1]}Q{match[2]}" if match else label.strip()
+
+
 def _existing_payout(
     session: Session, *, world_id: UUID, asset_id: UUID, quarter_label: str
 ) -> LedgerEntry | None:
@@ -303,8 +314,14 @@ def _existing_payout(
             LedgerEntry.kind == LedgerKind.PAYOUT,
         )
     ).all()
+    wanted = normalize_quarter_label(quarter_label)
     return next(
-        (entry for entry in entries if entry.payload.get("quarter_label") == quarter_label), None
+        (
+            entry
+            for entry in entries
+            if normalize_quarter_label(str(entry.payload.get("quarter_label", ""))) == wanted
+        ),
+        None,
     )
 
 
@@ -410,7 +427,7 @@ def pay_quarter(
     Writes one private `payout_lines` row per paid holder (with its nonce and leaf hash) and a
     public ledger entry with aggregates and the commitment over the leaf hashes.
     """
-    if not quarter_label:
+    if not quarter_label.strip():
         raise ValueError("quarter_label must not be empty")
 
     asset = _locked_asset(session, world_id=world_id, asset_id=asset_id)

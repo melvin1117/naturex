@@ -2619,6 +2619,206 @@
         }
       }
     },
+    "/alerts": {
+      "get": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "List Alerts",
+        "description": "My alerts in this world, newest first, a page at a time, with the unread count.",
+        "operationId": "list_alerts_alerts_get",
+        "parameters": [
+          {
+            "name": "community_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only alerts about this community's assets (members only)",
+              "title": "Community Id"
+            },
+            "description": "Only alerts about this community's assets (members only)"
+          },
+          {
+            "name": "unread_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Unread Only"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's `next_before` cursor",
+              "title": "Before"
+            },
+            "description": "The previous page's `next_before` cursor"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertListOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: `treasury_cannot_act`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/alerts/read-all": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Read All Alerts",
+        "description": "Mark every unread alert of mine read (only those about `community_id`'s assets, if set).",
+        "operationId": "read_all_alerts_alerts_read_all_post",
+        "parameters": [
+          {
+            "name": "community_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only alerts about this community's assets (members only)",
+              "title": "Community Id"
+            },
+            "description": "Only alerts about this community's assets (members only)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertsMarkedOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: `treasury_cannot_act`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/alerts/{alert_id}/read": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Read Alert",
+        "description": "Mark one of my alerts read (idempotent). 404 if it wasn't delivered to me here.",
+        "operationId": "read_alert_alerts__alert_id__read_post",
+        "parameters": [
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Alert Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: `treasury_cannot_act`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/simulate/quarter": {
       "post": {
         "tags": [
@@ -3260,6 +3460,156 @@
   },
   "components": {
     "schemas": {
+      "AlertListOut": {
+        "properties": {
+          "alerts": {
+            "items": {
+              "$ref": "#/components/schemas/AlertOut"
+            },
+            "type": "array",
+            "title": "Alerts",
+            "description": "One page, newest first"
+          },
+          "unread_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Unread Count",
+            "description": "Unread alerts matching the filter, on every page, not only this one"
+          },
+          "next_before": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Before",
+            "description": "Pass as `before` for the next (older) page; null on the last"
+          }
+        },
+        "type": "object",
+        "required": [
+          "alerts",
+          "unread_count"
+        ],
+        "title": "AlertListOut"
+      },
+      "AlertOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "asset_name": {
+            "type": "string",
+            "title": "Asset Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "grade_change",
+              "health_change",
+              "news"
+            ],
+            "title": "Kind",
+            "description": "grade_change / health_change: a re-rate moved the grade or the health score by \u2265 5 points; news: a News Scout event of severity \u2265 4"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "severity": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Severity"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "description": "The news article (http/https only)"
+          },
+          "report_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Id",
+            "description": "The re-rate's report"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At",
+            "description": "null while unread"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "asset_id",
+          "asset_name",
+          "kind",
+          "title",
+          "message",
+          "severity",
+          "created_at"
+        ],
+        "title": "AlertOut",
+        "description": "One alert delivered to the signed-in account (T75)."
+      },
+      "AlertsMarkedOut": {
+        "properties": {
+          "marked": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Marked",
+            "description": "Alerts that were unread and are now read"
+          }
+        },
+        "type": "object",
+        "required": [
+          "marked"
+        ],
+        "title": "AlertsMarkedOut"
+      },
       "AssetCard": {
         "properties": {
           "id": {

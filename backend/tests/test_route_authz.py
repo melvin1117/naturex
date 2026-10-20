@@ -56,6 +56,7 @@ from app.routers.runs import get_rating_runner
 from app.sandbox import create_world, ensure_live_world
 from app.seed import LIVE_WORLD_ID, seed
 from app.seed import WORLD_ID as TEMPLATE_WORLD_ID
+from app.services import alerts
 from tests.conftest import alembic_cfg, requires_db
 from tests.test_geometry import square as geometry_square
 from tests.worlds import drop_worlds, start_demo
@@ -264,6 +265,7 @@ class Objects:
     run: UUID
     community: UUID
     owner: UUID
+    alert: UUID
 
 
 def objects(session: Session, world: World) -> Objects:
@@ -289,9 +291,19 @@ def objects(session: Session, world: World) -> Objects:
             "trigger": "api",
         },
     )
+    # T75: an alert delivered to the asset's community (Rosa, the owner).
+    draft = alerts.rating_alert(
+        asset.name,
+        alerts.RatingSnapshot(Decimal(75), "A"),
+        alerts.RatingSnapshot(Decimal(65), "BBB"),
+        report_id=report,
+    )
+    assert draft is not None
+    alert = alerts.raise_alert(session, world.id, asset, draft)
+    assert alert is not None
     session.commit()
     owner = persona(session, world.id, "rosa").id
-    return Objects(world, asset.id, report, run, asset.community_id, owner)
+    return Objects(world, asset.id, report, run, asset.community_id, owner, alert.id)
 
 
 # (method, path) → (the persona who could do it in its own world, its request body)
@@ -314,6 +326,8 @@ OBJECT_ROUTES: dict[tuple[str, str], tuple[str, Callable[[Objects], Any] | None]
     ("GET", "/ledger/{asset_id}/verify"): ("arjun", None),
     ("GET", "/runs/{run_id}"): ("arjun", None),
     ("GET", "/runs/{run_id}/trace"): ("arjun", None),
+    # T75: the caller's own alerts (Rosa owns the asset, so she got the alert in her world).
+    ("POST", "/alerts/{alert_id}/read"): ("rosa", None),
     # T58's listing lifecycle: the community's own listing management, and admin moderation.
     ("PATCH", "/assets/{asset_id}"): ("rosa", lambda o: {"name": "Renamed"}),
     ("POST", "/assets/{asset_id}/submit"): ("rosa", None),
@@ -398,6 +412,19 @@ ID_ROUTES: dict[tuple[str, str], tuple[str, IdIn | None, IdIn | None, str]] = {
         "user_not_found",
     ),
 }
+# T75: filtering my alerts by another world's community.
+ID_ROUTES[("GET", "/alerts")] = (
+    "rosa",
+    None,
+    lambda o: {"community_id": str(o.community)},
+    "not_found",
+)
+ID_ROUTES[("POST", "/alerts/read-all")] = (
+    "rosa",
+    None,
+    lambda o: {"community_id": str(o.community)},
+    "not_found",
+)
 # Routes whose `*_id` body or query fields aren't world objects (none yet); each needs a reason.
 ID_EXCEPTIONS: dict[tuple[str, str], str] = {}
 
@@ -447,6 +474,7 @@ def fill(path: str, o: Objects) -> str:
         "prev": o.report,
         "run_id": o.run,
         "document_id": o.report,  # any ID: the asset in the path decides the world
+        "alert_id": o.alert,
     }
     return re.sub(r"\{([^}]+)\}", lambda m: str(values[m.group(1)]), path)
 
@@ -862,6 +890,25 @@ def test_an_outsider_on_a_hidden_tamper_target_is_not_found(
 # --- Events: T58's audience and T57's alert targets, together ------------------------------------
 
 
+def delivered(
+    session: Session,
+    world_id: UUID,
+    asset_id: UUID | None,
+    payload: dict[str, Any] | None = None,
+    *,
+    audience: UUID | None = None,
+) -> Any:
+    """An `alert` event as T75 raises it: delivered (`alert_recipients`) to the asset's holders
+    and community members as of now, then published; `audience` adds T58's scope."""
+    asset = session.exec(
+        select(Asset).where(Asset.world_id == world_id, Asset.id == asset_id)
+    ).one()
+    draft = alerts.AlertDraft(alerts.AlertKind.NEWS, "Test alert", "m", 4, f"test:{uuid4()}")
+    alert_id = alerts.deliver_alert(session, world_id, asset, draft)
+    body = {"alert_id": str(alert_id), "asset_id": str(asset_id), **(payload or {})}
+    return events.publish(session, world_id, "alert", body, audience=audience)
+
+
 @requires_db
 def test_audience_and_alert_targets_apply_together(session: Session, client: TestClient) -> None:
     mine = objects(session, create_world(session))
@@ -874,8 +921,8 @@ def test_audience_and_alert_targets_apply_together(session: Session, client: Tes
     admins = events.publish(
         session, world_id, "listing_status", target, audience=events.ADMINS_ONLY
     )
-    public_alert = events.publish(session, world_id, "alert", target)
-    scoped_alert = events.publish(session, world_id, "alert", target, audience=mine.community)
+    public_alert = delivered(session, world_id, mine.asset)
+    scoped_alert = delivered(session, world_id, mine.asset, audience=mine.community)
     session.commit()
 
     seen: dict[str, set[int]] = {}
@@ -914,8 +961,8 @@ def test_a_member_of_another_community_gets_neither_scoped_events_nor_alerts(
     )
     target = {"asset_id": str(mine.asset)}
     scoped = events.publish(session, world_id, "listing_status", target, audience=mine.community)
-    alert = events.publish(session, world_id, "alert", target)
-    scoped_alert = events.publish(session, world_id, "alert", target, audience=mine.community)
+    alert = delivered(session, world_id, mine.asset)
+    scoped_alert = delivered(session, world_id, mine.asset, audience=mine.community)
     tick = events.publish(session, world_id, "price_tick", target)
     session.commit()
     start_demo(client, session, mine.world, persona_key="mia")
@@ -964,8 +1011,9 @@ def test_alerts_reach_only_holders_and_the_assets_community(
     world_id = mine.world.id
     arjun = persona(session, world_id, "arjun")
     session.add(Holding(world_id=world_id, user_id=arjun.id, asset_id=mine.asset, shares=5))
-    targeted = events.publish(session, world_id, "alert", {"asset_id": str(mine.asset)})
-    untargeted = events.publish(session, world_id, "alert", {"message": "no asset"})
+    targeted = delivered(session, world_id, mine.asset)
+    untargeted = events.publish(session, world_id, "alert", {"message": "never delivered"})
+    forged = events.publish(session, world_id, "alert", {"asset_id": str(mine.asset)})
     tick = events.publish(session, world_id, "price_tick", {"asset_id": str(mine.asset)})
     session.commit()
     since = {"since_id": targeted.id - 1}
@@ -977,14 +1025,14 @@ def test_alerts_reach_only_holders_and_the_assets_community(
 
     assert seen["arjun"] == seen["rosa"] == [targeted.id, tick.id]  # holder; owner
     assert seen["mia"] == seen["admin"] == [tick.id]  # neither holds nor belongs
-    assert untargeted.id not in {i for ids in seen.values() for i in ids}
+    assert not {untargeted.id, forged.id} & {i for ids in seen.values() for i in ids}
 
 
 @requires_db
 def test_anonymous_readers_never_get_alerts(session: Session, client: TestClient) -> None:
     live = ensure_live_world(session)
     asset = session.exec(select(Asset.id).where(Asset.world_id == live.id)).first()
-    alert = events.publish(session, live.id, "alert", {"asset_id": str(asset)})
+    alert = delivered(session, live.id, asset)
     tick = events.publish(session, live.id, "price_tick", {"asset_id": str(asset)})
     session.commit()
 
@@ -1062,7 +1110,7 @@ async def test_a_stream_delivers_alerts_only_to_their_targets(
         asset = setup.exec(select(Asset.id).where(Asset.world_id == world_id)).first()
         arjun = persona(setup, world_id, "arjun")
         setup.add(Holding(world_id=world_id, user_id=arjun.id, asset_id=asset, shares=5))
-        first = events.publish(setup, world_id, "alert", {"asset_id": str(asset), "n": "first"})
+        first = delivered(setup, world_id, asset, {"n": "first"})
         setup.commit()
         mia = persona(setup, world_id, "mia")
 
@@ -1083,7 +1131,7 @@ async def test_a_stream_delivers_alerts_only_to_their_targets(
                 .where(col(Holding.world_id) == world_id, col(Holding.user_id) == arjun_id)
                 .values(shares=0)
             )
-            second = events.publish(db, world_id, "alert", {"asset_id": str(asset), "n": "second"})
+            second = delivered(db, world_id, asset, {"n": "second"})
             db.commit()
 
         assert '"n":"second"' not in await _streamed(world_id, arjun_auth, second.id - 1)

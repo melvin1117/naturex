@@ -1,4 +1,4 @@
-.PHONY: ci lint test migrate seed fe-check check-client eval e2e task-map board
+.PHONY: ci lint test migrate seed fe-check check-client eval e2e task-map board rerate-all news-sweep
 
 # Run before every PR: the same checks GitHub CI runs. Start Postgres first: docker compose up -d
 ci:
@@ -26,6 +26,13 @@ check-keys:
 
 seed:
 	cd backend && uv run python -m app.seed
+
+# T75 monitoring jobs (idempotent, budget-capped); ARGS e.g. ARGS="--period 2026Q4 --max-usd 1"
+rerate-all:
+	cd backend && uv run python -m app.jobs.rerate_all $(ARGS)
+
+news-sweep:
+	cd backend && uv run python -m app.jobs.news_sweep $(ARGS)
 
 # Frontend lint (ESLint + Prettier), types, unit tests and build. Needs Node 22 + Corepack.
 fe-check:

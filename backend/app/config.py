@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     # Once LLM_BUDGET_USD minus spend falls below this, API-triggered runs use the fixed
     # pipeline without any model, keeping the rest for Time Machine and listings. 0 = off.
     llm_reserve_usd: float = Field(default=0.0, ge=0)
+    # Each run of a monitoring job (T75: rerate_all, news_sweep) stops before its own LLM spend
+    # could pass this; LLM_BUDGET_USD stays the global hard cap.
+    monitor_job_budget_usd: float = Field(default=2.0, ge=0)
     # Exact origins (scheme://host[:port], comma separated) allowed to send POST, PUT, PATCH and
     # DELETE requests (T66, ADR-0005). Every deployment must set its public frontend origin.
     allowed_origins: str = "http://localhost:3000"

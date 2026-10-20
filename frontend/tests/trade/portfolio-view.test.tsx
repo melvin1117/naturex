@@ -35,6 +35,8 @@ function renderPortfolio(routes: Routes = {}) {
     "GET /world": () => json(SIGNED_IN_WORLD),
     "GET /assets": () => json(cards),
     "GET /portfolio": () => json(portfolio()),
+    "GET /alerts": () =>
+      json({ alerts: [], unread_count: 0, next_before: null }),
     ...routes,
   });
   const layer = createDataLayer({
@@ -77,6 +79,37 @@ async function tableRow() {
 beforeEach(() => FakeEventSource.reset());
 
 describe("PortfolioView", () => {
+  it("shows my alerts next to my stakes (T75)", async () => {
+    renderPortfolio({
+      "GET /alerts": () =>
+        json({
+          alerts: [
+            {
+              id: "11111111-1111-4111-8111-111111111111",
+              asset_id: ASSET_ID,
+              asset_name: "Xochimilco Wetland",
+              kind: "health_change",
+              title: "Xochimilco Wetland: health fell 6.0 points",
+              message: "Health 76.2 → 70.2 (−6.0 points).",
+              severity: 3,
+              url: null,
+              report_id: null,
+              created_at: "2026-10-19T08:00:00Z",
+              read_at: null,
+            },
+          ],
+          unread_count: 1,
+          next_before: null,
+        }),
+    });
+
+    const alerts = await screen.findByRole("list", { name: "Alerts" });
+    expect(
+      within(alerts).getByText("Xochimilco Wetland: health fell 6.0 points"),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Mark all read" })).toBeVisible();
+  });
+
   it("shows cash, totals and each holding exactly as the API sends them", async () => {
     renderPortfolio({ "GET /portfolio": () => json(HELD) });
 
