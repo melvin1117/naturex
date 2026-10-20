@@ -221,6 +221,7 @@ def test_duplicate_registration_is_a_generic_409_case_insensitively(client: Test
         ({"email": EMAIL, "password": PASSWORD, "name": "   "}, "name"),
         ({"email": EMAIL, "password": PASSWORD, "name": "n" * 81}, "name"),
         ({"email": "a" * 250 + "@x.io", "password": PASSWORD, "name": "Ro"}, "email"),
+        ({"email": EMAIL, "password": PASSWORD, "name": PASSWORD + "Ana"}, "name"),
     ],
 )
 @requires_db
@@ -233,6 +234,57 @@ def test_registration_validates_input_without_echoing_it(
     assert [e["loc"][-1] for e in res.json()["detail"]] == [field]
     assert payload["password"] not in res.text
     assert all("input" not in e for e in res.json()["detail"])
+
+
+@pytest.mark.parametrize(
+    "name", [PASSWORD, PASSWORD + "Ana Investor", "Ana " + PASSWORD.upper(), f" {PASSWORD} "]
+)
+@requires_db
+def test_display_name_cannot_contain_the_password(client: TestClient, name: str) -> None:
+    """The display name is public: a password typed into it (or pasted) must never be stored."""
+    res = client.post("/auth/register", json={"email": EMAIL, "password": PASSWORD, "name": name})
+
+    assert res.status_code == 422
+    assert [(e["loc"][-1], e["type"]) for e in res.json()["detail"]] == [
+        ("name", "name_contains_password")
+    ]
+    assert PASSWORD.casefold() not in res.text.casefold()
+    assert "nx_session" not in res.cookies
+
+
+@requires_db
+def test_a_display_name_sharing_words_with_the_password_is_fine(client: TestClient) -> None:
+    res = client.post(
+        "/auth/register", json={"email": EMAIL, "password": PASSWORD, "name": "Correct Horse"}
+    )
+
+    assert res.status_code == 201
+
+
+@pytest.mark.parametrize(
+    ("password", "name"),
+    [
+        ("  hunter2hunter2  ", "hunter2hunter2"),  # edge spaces don't hide the password
+        ("straße-is-long", "STRASSE-IS-LONG Ana"),  # casefold
+        ("ｆｕｌｌｗｉｄｔｈ-pass", "fullwidth-pass Ana"),  # NFKC
+    ],
+)
+@requires_db
+def test_the_password_is_found_whatever_its_spacing_case_or_form(
+    client: TestClient, password: str, name: str
+) -> None:
+    res = client.post("/auth/register", json={"email": EMAIL, "password": password, "name": name})
+
+    assert [(e["loc"][-1], e["type"]) for e in res.json()["detail"]] == [
+        ("name", "name_contains_password")
+    ]
+
+
+@requires_db
+def test_a_too_short_password_is_only_a_password_error(client: TestClient) -> None:
+    res = client.post("/auth/register", json={"email": EMAIL, "password": "an", "name": "Ana"})
+
+    assert [e["loc"][-1] for e in res.json()["detail"]] == ["password"]
 
 
 # --- Sessions --------------------------------------------------------------------------------
