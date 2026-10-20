@@ -94,8 +94,13 @@ export interface Explanation {
 
 const VERIFICATION: Explanation = {
   title: "Verification comes first",
-  body: "The opening offer stays closed until this listing's land documents are verified. Once a reviewer approves them, you can launch.",
+  body: "The opening offer stays closed until this listing's land documents are verified: upload them and submit them for review, and once a NatureX reviewer approves them you can launch. A revoked verification keeps it closed too, so supporters only back land whose papers were reviewed.",
 };
+
+/** The codes that mean "verify the listing first" (T69's IPO gate). */
+export function needsVerification(code: string | null | undefined): boolean {
+  return code === "not_verified" || code === "verification_required";
+}
 
 /** Why `launchable` is false (`blocked_reason`), or why the launch was refused with it. */
 export function blockedExplanation(code: string): Explanation {

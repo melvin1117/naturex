@@ -1,6 +1,13 @@
 "use client";
 
-import { ArrowRight, Check, ExternalLink, Settings, Users } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  ExternalLink,
+  Settings,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 
 import { Delta, SiteBackdrop, Stat } from "@/components/proto/bits";
@@ -20,6 +27,7 @@ import { listingAction, sharePct, STATUS_LABEL, units } from "@/lib/community";
 import { useCommunitySummary } from "@/lib/community-hooks";
 import { useWorld } from "@/lib/hooks";
 import { marketCard, type MarketCard } from "@/lib/market-cards";
+import { verifyHref } from "@/lib/listing/links";
 import { COMMUNITY_ROLE_LABEL, withCommunity } from "@/lib/navigation";
 import { date, ha, quarterLabel } from "@/lib/prototype/format";
 import { moneyText, unitPriceText } from "@/lib/trade";
@@ -266,6 +274,40 @@ function ActionButton({
   );
 }
 
+/** The listing's verification screen (T70); not for a withdrawn or ineligible listing. */
+function VerifyLink({
+  listing,
+  communityId,
+  tone,
+}: {
+  listing: ListingSummary;
+  communityId: string;
+  tone: "image" | "plain";
+}) {
+  const status = listing.asset.status;
+  if (status === "withdrawn" || status === "ineligible") return null;
+  return (
+    <Button
+      asChild
+      size={tone === "image" ? "default" : "sm"}
+      variant="ghost"
+      className={
+        tone === "image"
+          ? "bg-white/15 text-white hover:bg-white/25 hover:text-white"
+          : ""
+      }
+    >
+      <Link
+        href={verifyHref(listing.asset.id, communityId)}
+        aria-label={`Verification of ${listing.asset.name}`}
+      >
+        <ShieldCheck aria-hidden="true" />
+        Verification
+      </Link>
+    </Button>
+  );
+}
+
 function statusLine(listing: ListingSummary, card: MarketCard): string {
   if (card.trading) return "Open to supporters";
   if (listing.next_action === "launch_ipo")
@@ -343,6 +385,11 @@ function FeaturedListing({
               communityId={communityId}
               tone="image"
             />
+            <VerifyLink
+              listing={listing}
+              communityId={communityId}
+              tone="image"
+            />
           </div>
         </div>
       </div>
@@ -375,7 +422,14 @@ function ListingRow({
           )}
         </p>
       </div>
-      <ActionButton listing={listing} communityId={communityId} tone="plain" />
+      <div className="flex flex-wrap items-center gap-2">
+        <VerifyLink listing={listing} communityId={communityId} tone="plain" />
+        <ActionButton
+          listing={listing}
+          communityId={communityId}
+          tone="plain"
+        />
+      </div>
     </li>
   );
 }

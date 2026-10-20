@@ -362,6 +362,24 @@ describe("IpoLaunchScreen", () => {
     expect(backend.calls(LAUNCH)).toBe(0);
   });
 
+  it("links a listing that needs verification to its verification screen", async () => {
+    renderLaunch({
+      [PREVIEW]: (request) =>
+        previewFor(request, {
+          launchable: false,
+          blocked_reason: "not_verified",
+        }),
+    });
+    await steps();
+
+    expect(
+      await screen.findByRole("link", { name: "Verify this listing" }),
+    ).toHaveAttribute("href", `/steward/assets/${ASSET_ID}/verify`);
+    expect(
+      screen.getByText(/A revoked verification keeps it closed/),
+    ).toBeInTheDocument();
+  });
+
   it("explains a price that rounds to zero and keeps the form", async () => {
     renderLaunch({ [PREVIEW]: () => refused(409, "ipo_price_too_low") });
 

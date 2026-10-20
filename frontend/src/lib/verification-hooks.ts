@@ -1,0 +1,239 @@
+/**
+ * Data hooks for listing verification (T70 over the T69 API, ADR-0006). Same contract as
+ * ./hooks.ts: queries give `{ data, error, isLoading, refetch }`, mutations
+ * `{ mutate, mutateAsync, isPending, error }`, and every error is an `ApiError`.
+ */
+import { useEffect, useState } from "react";
+
+import { unwrap } from "./api/errors";
+import type {
+  DocumentType,
+  ListingDocument,
+  ReviewQueueItem,
+  VerificationPublic,
+  VerificationRun,
+} from "./api/types";
+import { queryKeys, type DataLayer } from "./data-layer";
+import {
+  useApiMutation,
+  useApiQuery,
+  useWorld,
+  type MutationResult,
+  type QueryResult,
+} from "./hooks";
+
+/** "How this listing was verified": public, for anyone who can see the asset. */
+export function useVerificationPanel(
+  assetId: string | undefined,
+): QueryResult<VerificationPublic> {
+  return useApiQuery(
+    queryKeys.verificationPanel(assetId ?? ""),
+    (api, signal) =>
+      unwrap(
+        api.GET("/assets/{asset_id}/verification", {
+          params: { path: { asset_id: assetId ?? "" } },
+          signal,
+        }),
+      ),
+    { enabled: Boolean(assetId) },
+  );
+}
+
+/** Every run of a listing, newest first (its community's members and same-world admins). */
+export function useVerificationRuns(
+  assetId: string | undefined,
+  { enabled = true }: { enabled?: boolean } = {},
+): QueryResult<VerificationRun[]> {
+  return useApiQuery(
+    queryKeys.verificationRuns(assetId ?? ""),
+    (api, signal) =>
+      unwrap(
+        api.GET("/assets/{asset_id}/verification/runs", {
+          params: { path: { asset_id: assetId ?? "" } },
+          signal,
+        }),
+      ),
+    { enabled: enabled && Boolean(assetId) },
+  );
+}
+
+/** A listing's uploaded documents, submitted or not, oldest first. */
+export function useListingDocuments(
+  assetId: string | undefined,
+): QueryResult<ListingDocument[]> {
+  return useApiQuery(
+    queryKeys.verificationDocuments(assetId ?? ""),
+    (api, signal) =>
+      unwrap(
+        api.GET("/assets/{asset_id}/documents", {
+          params: { path: { asset_id: assetId ?? "" } },
+          signal,
+        }),
+      ),
+    { enabled: Boolean(assetId) },
+  );
+}
+
+/**
+ * A document's sanitised PNG preview as an object URL (revoked on unmount), never the
+ * original bytes. Idle when the document has no preview.
+ */
+export function useDocumentPreview(
+  assetId: string,
+  document: Pick<ListingDocument, "id" | "has_preview">,
+): {
+  url: string | null;
+  error: QueryResult<Blob>["error"];
+  isLoading: boolean;
+} {
+  const query = useApiQuery(
+    queryKeys.documentPreview(assetId, document.id),
+    (api, signal) =>
+      unwrap(
+        api.GET("/assets/{asset_id}/documents/{document_id}/preview", {
+          params: { path: { asset_id: assetId, document_id: document.id } },
+          parseAs: "blob",
+          signal,
+        }),
+      ) as Promise<Blob>,
+    { enabled: document.has_preview },
+  );
+  const [url, setUrl] = useState<string | null>(null);
+  const blob = query.data;
+  useEffect(() => {
+    if (!blob || typeof URL.createObjectURL !== "function") return;
+    const objectUrl = URL.createObjectURL(blob);
+    setUrl(objectUrl);
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+      setUrl(null);
+    };
+  }, [blob]);
+  return { url, error: query.error, isLoading: query.isLoading };
+}
+
+function afterVerificationChange(assetId: string, { cache }: DataLayer) {
+  cache.invalidate(queryKeys.verification(assetId));
+  cache.invalidate(queryKeys.asset(assetId));
+  cache.invalidate(queryKeys.ledger(assetId));
+  cache.invalidate(queryKeys.ipoPreviews(assetId));
+  cache.invalidate(queryKeys.assets());
+  cache.invalidate(["review-queue"]);
+}
+
+export interface UploadDocument {
+  file: File;
+  docType: DocumentType;
+}
+
+/** Upload one document; the request body is the file itself (T69). Never retried. */
+export function useUploadDocument(
+  assetId: string,
+): MutationResult<UploadDocument, ListingDocument> {
+  return useApiMutation(
+    (api, { file, docType }: UploadDocument) =>
+      unwrap(
+        api.POST("/assets/{asset_id}/documents", {
+          params: {
+            path: { asset_id: assetId },
+            query: { doc_type: docType },
+            header: { "content-type": file.type },
+          },
+          // The file goes as-is: the backend inspects its bytes.
+          body: file as unknown as string,
+          bodySerializer: (body: unknown) => body as BodyInit,
+        }),
+      ),
+    {
+      onSuccess: (_doc, _vars, { cache }) =>
+        cache.invalidate(queryKeys.verificationDocuments(assetId)),
+    },
+  );
+}
+
+/** Submit 1–3 uploaded documents for review: a new current run with its checklist. */
+export function useSubmitVerification(
+  assetId: string,
+): MutationResult<string[], VerificationRun> {
+  return useApiMutation(
+    (api, documentIds: string[]) =>
+      unwrap(
+        api.POST("/assets/{asset_id}/verification/runs", {
+          params: { path: { asset_id: assetId } },
+          body: { document_ids: documentIds },
+        }),
+      ),
+    {
+      onSuccess: (_run, _vars, layer) =>
+        afterVerificationChange(assetId, layer),
+    },
+  );
+}
+
+/** One page of listings waiting for a reviewer, oldest first (admins). */
+export function useReviewQueue(
+  offset: number,
+  limit: number,
+): QueryResult<ReviewQueueItem[]> {
+  const { world } = useWorld();
+  const meId = world?.me?.id ?? null;
+  return useApiQuery(
+    queryKeys.reviewQueue(meId, offset),
+    (api, signal) =>
+      unwrap(
+        api.GET("/admin/verifications", {
+          params: { query: { limit, offset } },
+          signal,
+        }),
+      ),
+    { enabled: meId !== null },
+  );
+}
+
+export type Decision = "approve" | "reject" | "revoke";
+
+export interface DecideVerification {
+  decision: Decision;
+  runId: string;
+  /** Required to reject or revoke; optional to approve. */
+  reason: string;
+}
+
+/** Approve, reject or revoke a listing's run, with a reason (admins). Never retried. */
+export function useDecideVerification(
+  assetId: string,
+): MutationResult<DecideVerification, VerificationRun> {
+  return useApiMutation(
+    (api, { decision, runId, reason }: DecideVerification) => {
+      const params = { path: { asset_id: assetId, run_id: runId } };
+      const text = reason.trim();
+      switch (decision) {
+        case "approve":
+          return unwrap(
+            api.POST("/admin/assets/{asset_id}/verification/{run_id}/approve", {
+              params,
+              body: { reason: text || null },
+            }),
+          );
+        case "reject":
+          return unwrap(
+            api.POST("/admin/assets/{asset_id}/verification/{run_id}/reject", {
+              params,
+              body: { reason: text },
+            }),
+          );
+        case "revoke":
+          return unwrap(
+            api.POST("/admin/assets/{asset_id}/verification/{run_id}/revoke", {
+              params,
+              body: { reason: text },
+            }),
+          );
+      }
+    },
+    {
+      onSuccess: (_run, _vars, layer) =>
+        afterVerificationChange(assetId, layer),
+    },
+  );
+}

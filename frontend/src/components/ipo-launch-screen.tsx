@@ -1,5 +1,7 @@
 "use client";
 
+import { ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
@@ -15,6 +17,7 @@ import { IpoOfferInputs } from "@/components/ipo-offer-inputs";
 import { IpoLaunched, IpoOutcome } from "@/components/ipo-outcome";
 import { IpoPriceSteps } from "@/components/ipo-preview";
 import { useOptionalStewardCommunity } from "@/components/shell/steward-community";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { toApiError, type ApiError } from "@/lib/api/errors";
 import type { IpoPreview } from "@/lib/api/types";
@@ -24,6 +27,7 @@ import {
   blockedExplanation,
   ipoRefusal,
   isPageRefusal,
+  needsVerification,
   PRICE_CHANGED,
   SANDBOX_NOTE,
   type PageRefusal,
@@ -49,6 +53,17 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
   const launch = useLaunchIpo(assetId);
   const steward = useOptionalStewardCommunity();
   const homeHref = steward ? steward.href("/steward") : "/steward";
+  const verifyPath = `/steward/assets/${assetId}/verify`;
+  const verifyLink = steward ? steward.href(verifyPath) : verifyPath;
+  const verifyAction = (code: string | null | undefined) =>
+    needsVerification(code) ? (
+      <Button asChild size="sm">
+        <Link href={verifyLink}>
+          <ShieldCheck aria-hidden="true" />
+          Verify this listing
+        </Link>
+      </Button>
+    ) : undefined;
 
   // A refused launch is about the offer as it was: editing it clears the refusal.
   const resetLaunch = launch.reset;
@@ -205,6 +220,7 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
             {previewRefusal?.kind === "blocked" ? (
               <BlockedAlert
                 explanation={previewRefusal.explanation}
+                action={verifyAction(previewRefusal.code)}
                 onRetry={() => void preview.refetch()}
               />
             ) : previewRefusal?.kind === "error" ? (
@@ -238,6 +254,7 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
             <BlockedAlert
               className="mt-4"
               explanation={blockedExplanation(current.blocked_reason)}
+              action={verifyAction(current.blocked_reason)}
               onRetry={() => void preview.refetch()}
             />
           )}
@@ -253,6 +270,7 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
               ref={refusalRef}
               className="mt-4"
               explanation={launchBlocked.explanation}
+              action={verifyAction(launchBlocked.code)}
               onRetry={() => void preview.refetch()}
             />
           )}

@@ -37,6 +37,18 @@ export type StreamEventType = Schemas["StreamEventType"];
 export type WorldAsset = Schemas["WorldAssetOut"];
 export type WorldOut = Schemas["WorldOut"];
 
+// Listing verification (T69 API, T70 screens; ADR-0006).
+export type CheckResult = Schemas["VerificationCheckOut"]["result"];
+export type DocumentType = Schemas["DocumentType"];
+export type ListingDocument = Schemas["ListingDocumentOut"];
+export type PublicCheck = Schemas["PublicCheckOut"];
+export type ReviewerRole = Schemas["ReviewerRole"];
+export type ReviewQueueItem = Schemas["ReviewQueueItem"];
+export type VerificationCheck = Schemas["VerificationCheckOut"];
+export type VerificationLevel = Schemas["VerificationLevel"];
+export type VerificationPublic = Schemas["VerificationPublicOut"];
+export type VerificationRun = Schemas["VerificationRunOut"];
+
 // Steward home and community management (T63).
 export type CommunityOut = Schemas["CommunityOut"];
 export type CommunityCreate = Schemas["CommunityCreate"];

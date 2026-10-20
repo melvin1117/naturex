@@ -25,6 +25,10 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TradePanel } from "@/components/trade-panel";
+import {
+  VerificationHeroBadge,
+  VerificationPanel,
+} from "@/components/verification/verification-panel";
 import { WorldGate } from "@/components/world-provider";
 import type { ApiError } from "@/lib/api/errors";
 import type { AssetDetail, SiteImages } from "@/lib/api/types";
@@ -179,6 +183,7 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
                 <MapPin className="size-3.5" aria-hidden="true" />
                 {place}
               </span>
+              <VerificationHeroBadge assetId={asset.id} />
               {asset.status === "suspended" && (
                 <span className="rounded-full bg-clay px-2.5 py-0.5 text-xs font-medium text-white">
                   Trading paused
@@ -362,6 +367,9 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
         </div>
       )}
 
+      <div className="mt-8">
+        <VerificationPanel assetId={asset.id} />
+      </div>
       <DataAttribution facts={latest} images={images.data} />
     </>
   );

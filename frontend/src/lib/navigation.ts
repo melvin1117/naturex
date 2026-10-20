@@ -33,7 +33,10 @@ export const APP_NAV: Record<AppKey, NavItem[]> = {
     { href: "/steward", label: "Community home" },
     { href: "/steward/list", label: "List land", tour: "nav-list" },
   ],
-  admin: [{ href: "/admin", label: "Time Machine" }],
+  admin: [
+    { href: "/admin", label: "Time Machine" },
+    { href: "/admin/verifications", label: "Verifications" },
+  ],
 };
 
 /** An app's home matches only itself; other items match their subpaths too. */

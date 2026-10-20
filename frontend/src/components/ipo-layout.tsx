@@ -63,16 +63,21 @@ export function IpoLoading({ children }: { children: ReactNode }) {
   );
 }
 
-/** Why the launch can't go ahead, in words; `onRetry` adds "Check again". */
+/**
+ * Why the launch can't go ahead, in words; `onRetry` adds "Check again", `action` a way to
+ * fix it (e.g. the verification screen).
+ */
 export function BlockedAlert({
   explanation,
   className,
   onRetry,
+  action,
   ref,
 }: {
   explanation: Explanation;
   className?: string;
   onRetry?: () => void;
+  action?: ReactNode;
   ref?: Ref<HTMLDivElement>;
 }) {
   return (
@@ -81,16 +86,16 @@ export function BlockedAlert({
       <AlertTitle>{explanation.title}</AlertTitle>
       <AlertDescription>
         <p>{explanation.body}</p>
-        {onRetry && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-2"
-            onClick={onRetry}
-          >
-            <RefreshCwIcon aria-hidden="true" />
-            Check again
-          </Button>
+        {(onRetry || action) && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {action}
+            {onRetry && (
+              <Button variant="outline" size="sm" onClick={onRetry}>
+                <RefreshCwIcon aria-hidden="true" />
+                Check again
+              </Button>
+            )}
+          </div>
         )}
       </AlertDescription>
     </Alert>
