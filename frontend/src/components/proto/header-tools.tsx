@@ -32,7 +32,11 @@ import {
 export function PrototypeHeaderTools({ app }: { app: AppKey }) {
   const pathname = usePathname();
   const { world, openCopilot, openTrace } = usePrototype();
-  const signedIn = Boolean(useWorld().world?.me);
+  const { world: apiWorld, status } = useWorld();
+  const signedIn = Boolean(apiWorld?.me);
+  // Until the world answers we don't know whose alerts to show: a plain bell, not the
+  // prototype's scripted ones.
+  const loading = !apiWorld && (status === "idle" || status === "loading");
   // Alerts follow the persona you're viewing as, the same account that trades.
   const trader: TraderKey | null =
     app === "admin" ? null : actingTrader(world.persona);
@@ -62,8 +66,10 @@ export function PrototypeHeaderTools({ app }: { app: AppKey }) {
         <Bot aria-hidden="true" />
         <span className="sr-only xl:not-sr-only">Agent Trace</span>
       </Button>
-      {signedIn ? (
-        <AccountAlertsBell />
+      {loading ? (
+        <PendingAlertsBell />
+      ) : signedIn ? (
+        <AccountAlertsBell accountId={apiWorld?.me?.id ?? null} />
       ) : (
         trader && <AlertsBell trader={trader} />
       )}
@@ -76,12 +82,12 @@ export function PrototypeHeaderTools({ app }: { app: AppKey }) {
  * when it changes, and the list with mark read, mark all read and links to each site. Live
  * `alert` events refetch it (`wireLiveUpdates`).
  */
-function AccountAlertsBell() {
+function AccountAlertsBell({ accountId }: { accountId: string | null }) {
   const [open, setOpen] = useState(false);
   const alerts = useAlerts();
   const loaded = alerts.data !== undefined;
   const unread = alerts.data?.unread_count ?? 0;
-  const announcement = useCountAnnouncement(loaded ? unread : null);
+  const announcement = useCountAnnouncement(loaded ? unread : null, accountId);
   const label = unread
     ? `Alerts, ${unread} unread`
     : loaded
@@ -129,6 +135,21 @@ function AccountAlertsBell() {
         {announcement}
       </span>
     </>
+  );
+}
+
+/** The bell while the world loads: no count and nothing to open yet. */
+function PendingAlertsBell() {
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label="Alerts"
+      disabled
+      data-tour="alerts-bell"
+    >
+      <Bell aria-hidden="true" />
+    </Button>
   );
 }
 
@@ -205,16 +226,36 @@ function AlertsBell({ trader }: { trader: TraderKey }) {
 
 /**
  * What a polite live region says about the unread count: nothing on the first load (the
- * bell's label has it), then the new count whenever more alerts arrive.
+ * bell's label has it) or for another account's first load, then the new count whenever more
+ * alerts arrive. The text is cleared first, so a count heard before is announced again.
  */
-function useCountAnnouncement(count: number | null): string {
-  const previous = useRef<number | null>(null);
+function useCountAnnouncement(
+  count: number | null,
+  accountId: string | null,
+): string {
+  const previous = useRef<{ accountId: string | null; count: number } | null>(
+    null,
+  );
   const [text, setText] = useState("");
   useEffect(() => {
-    if (count === null) return;
-    if (previous.current !== null && count > previous.current)
-      setText(`${count} unread ${count === 1 ? "alert" : "alerts"}`);
-    previous.current = count;
-  }, [count]);
+    const before = previous.current;
+    if (count === null || (before && before.accountId !== accountId)) {
+      previous.current = null;
+      setText("");
+      if (count === null) return;
+    }
+    const last = previous.current?.count ?? null;
+    previous.current = { accountId, count };
+    if (last === null || count <= last) return;
+    setText("");
+    const timer = setTimeout(
+      () => setText(`${count} unread ${count === 1 ? "alert" : "alerts"}`),
+      ANNOUNCE_DELAY_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [count, accountId]);
   return text;
 }
+
+/** Long enough for screen readers to notice the live region was emptied. */
+const ANNOUNCE_DELAY_MS = 100;

@@ -21,7 +21,11 @@ vi.mock("next/navigation", () => ({
 }));
 
 beforeAll(stubBrowserApis);
-beforeEach(() => FakeEventSource.reset());
+beforeEach(() => {
+  FakeEventSource.reset();
+  // The prototype world (and its scripted alerts) persists across renders.
+  localStorage.clear();
+});
 
 const WETLAND = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
@@ -49,6 +53,18 @@ const NEWS = alert({
   message: "A fire burned part of the buffer zone.",
   severity: 5,
 });
+
+const ALERT_EVENT = {
+  alert_id: alert().id,
+  asset_id: WETLAND,
+  asset_name: "Xochimilco Wetland",
+  kind: "grade_change",
+  title: alert().title,
+  message: alert().message,
+  severity: 4,
+  report_id: null,
+  url: null,
+};
 
 function list(alerts: AlertOut[]): AlertList {
   return {
@@ -174,7 +190,101 @@ describe("Header bell, signed in (#199)", () => {
     expect(
       await screen.findByRole("button", { name: "Alerts, 2 unread" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("2 unread alerts");
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("2 unread alerts"),
+    );
+  });
+
+  it("announces a count it announced before again", async () => {
+    let alerts = [NEWS];
+    renderExchange(<PrototypeHeaderTools app="exchange" />, {
+      "GET /world": () => json(SIGNED_IN_WORLD),
+      "GET /alerts": () => json(list(alerts)),
+    });
+    await screen.findByRole("button", { name: "Alerts, 1 unread" });
+    await waitFor(() => expect(FakeEventSource.instances).not.toHaveLength(0));
+    const status = screen.getByRole("status");
+    const heard: string[] = [];
+    const observer = new MutationObserver(() =>
+      heard.push(status.textContent ?? ""),
+    );
+    observer.observe(status, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+    const source = FakeEventSource.latest();
+    act(() => source.open());
+    const arrive = async (next: AlertOut[], id: number) => {
+      alerts = next;
+      act(() => source.emit("alert", id, ALERT_EVENT));
+      await screen.findByRole("button", {
+        name: `Alerts, ${next.length} unread`,
+      });
+    };
+
+    await arrive([alert(), NEWS], 9);
+    await waitFor(() => expect(status).toHaveTextContent("2 unread alerts"));
+    await arrive([NEWS], 10);
+    await arrive([alert(), NEWS], 11);
+    await waitFor(() => expect(heard.at(-1)).toBe("2 unread alerts"));
+    observer.disconnect();
+
+    // Emptied before each announcement, so the repeated "2 unread alerts" is spoken again.
+    expect(heard.filter(Boolean)).toEqual([
+      "2 unread alerts",
+      "2 unread alerts",
+    ]);
+    expect(heard.at(-2)).toBe("");
+  });
+
+  it("doesn't announce another account's count when the account changes", async () => {
+    const other = {
+      ...SIGNED_IN_WORLD,
+      me: {
+        ...SIGNED_IN_WORLD.me!,
+        id: "55555555-5555-4555-8555-555555555555",
+      },
+    };
+    let alerts = [NEWS];
+    const { layer } = renderExchange(<PrototypeHeaderTools app="exchange" />, {
+      "GET /world": () => json(SIGNED_IN_WORLD),
+      "GET /alerts": () => json(list(alerts)),
+    });
+    await screen.findByRole("button", { name: "Alerts, 1 unread" });
+
+    alerts = [
+      alert(),
+      NEWS,
+      alert({ id: "22222222-2222-4222-8222-222222222222" }),
+    ];
+    act(() => layer.session.set(other));
+
+    expect(
+      await screen.findByRole("button", { name: "Alerts, 3 unread" }),
+    ).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+
+  it("shows a plain bell while the world loads", async () => {
+    const { backend } = renderExchange(
+      <>
+        <AddScriptedAlert />
+        <PrototypeHeaderTools app="exchange" />
+      </>,
+      { "GET /world": () => new Promise<Response>(() => {}) },
+    );
+    await waitFor(() => expect(backend.calls("GET /world")).toBe(1));
+    fireEvent.click(screen.getByRole("button", { name: "Add scripted alert" }));
+
+    const bell = screen.getByRole("button", { name: "Alerts" });
+    expect(bell).toBeDisabled();
+    expect(bell).toHaveTextContent("");
+    expect(
+      screen.queryByRole("button", { name: /unread/ }),
+    ).not.toBeInTheDocument();
+    expect(backend.calls("GET /alerts")).toBe(0);
   });
 
   it("shows the bell in the admin app too", async () => {
@@ -226,6 +336,12 @@ describe("Header bell, anonymous prototype", () => {
       </>,
     );
     await waitFor(() => expect(backend.calls("GET /world")).toBe(1));
+    // A plain bell until the world answers, then the scripted one.
+    await waitFor(() =>
+      expect(
+        document.querySelector("[data-tour='alerts-bell']"),
+      ).not.toBeDisabled(),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Add scripted alert" }));
 
     // The scripted bell is unchanged (its visible badge adds to its name).
