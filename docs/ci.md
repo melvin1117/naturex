@@ -18,10 +18,11 @@ Until the app dirs exist, each component workflow runs a `*/ detect` job and **s
 | `frontend` | detect · lint · typecheck · test · build | every PR, push to `main`, manual |
 | `database` | detect · migrate (upgrade / downgrade / upgrade + seed) | every PR, push to `main`, manual |
 | `security` | gitleaks (always); dependency-review + CodeQL **public repos only** | every PR, push to `main`, manual |
+| `e2e` | real accounts (T74): Playwright drives both apps on the real stack, `USE_MOCKS=true`; uploads the report and traces on failure | PRs touching `frontend/`, `backend/` or the E2E harness, manual |
 | `task-map` | regenerate `tasks/task-map.{html,json}` from issues; commits to `main` only if changed (`[skip ci]`) | issue opened/closed/assigned/edited, push to `main` touching `tasks/todo.md`, daily, manual |
 | AI / evals | **not yet** — deferred until T09 (LLM client) | — |
 
-No path filters on triggers (every PR runs every workflow). Heavy jobs are gated on whether the component is present in the commit. Superseded runs are cancelled via `concurrency`.
+No path filters on triggers (every PR runs every workflow), except `e2e`: it only runs on PRs that touch `frontend/`, `backend/`, `scripts/e2e-backend.sh` or its workflow, to save Actions minutes. Heavy jobs are gated on whether the component is present in the commit. Superseded runs are cancelled via `concurrency`.
 
 ## Team rule: every change goes through a PR
 
@@ -57,9 +58,21 @@ make fe-check                # all of the above
 # OpenAPI client drift
 ./scripts/generate-client.sh
 make check-client
+
+# Real-account E2E (T74): needs Postgres (docker compose up -d), uv and Node 22
+make e2e
 ```
 
-`make eval` and `make e2e` are stubs until T47 / T46 — do not treat them as green CI.
+`make eval` is a stub until T47 — do not treat it as green CI.
+
+### Real-account E2E (`make e2e`, T74)
+
+One Playwright journey through both apps on the real stack (`frontend/e2e/real-accounts.spec.ts`): an owner registers, creates a community, draws a polygon by clicking the real map, lists it and waits for the rating, uploads documents; an admin approves them in the review queue; the owner launches the IPO; an anonymous visitor browses but can't trade; a second account registers, buys and sells; the portfolio and the community home reflect it; everyone signs out. It also checks that the investor is refused (403) on Steward and admin actions.
+
+- **Isolated and idempotent.** `frontend/playwright.config.ts` starts both servers through Playwright's `webServer` and stops them afterwards: the API on port 8100 via `scripts/e2e-backend.sh`, which drops and recreates the `naturex_e2e` database (never `naturex`; the name must contain `e2e`), migrates, seeds and creates the E2E admin; and a production build of the frontend in `.next-e2e` (so your `.next` is untouched) on port 3100. Accounts and names are unique per run. Override with `E2E_API_PORT`, `E2E_WEB_PORT` and `E2E_DATABASE_URL`; `E2E_SKIP_BUILD=1` reuses the last build while iterating on the spec (only with the same `E2E_API_PORT`, which the build bakes into the `/api` proxy).
+- **No keys.** The script sets every relevant variable itself (`USE_MOCKS=true`, `ENVIRONMENT=test`, live Earth Engine and the AI document check off, empty API keys), so a developer's `.env` can't leak in. The browser refuses every request that leaves the machine (map tiles). Mock listing metrics stay fresh until about 2026-12-30 (dev-spec §6.2); after that the listing lands in `needs_evidence` and the journey fails until the mock's `data_version` moves.
+- **The admin.** There's no admin sign-up: the script runs the operator CLI, `python -m app.cli create-admin --password-stdin`, with a test-only password, in the throwaway database.
+- **Debugging.** The HTML report is in `frontend/playwright-report` (`pnpm exec playwright show-report`); a failure keeps a trace and screenshots in `frontend/test-results`. In CI both are uploaded as the `e2e-playwright-report` artifact.
 
 ## Runtime pins
 
@@ -122,7 +135,7 @@ Settings → Branches → Branch protection rule for `main`:
 12. `database / migrate` (includes `alembic check`: models must match migrations)
 13. `security / gitleaks`
 
-Do **not** require `security / dependency-review` or `security / codeql` unless the repo is public (or GHAS is enabled); otherwise they are skipped and would block merges if marked required.
+Do **not** require `security / dependency-review` or `security / codeql` unless the repo is public (or GHAS is enabled); otherwise they are skipped and would block merges if marked required. Don't require `e2e / real accounts` either: it's path-filtered, so a PR that doesn't touch the apps never reports it and would wait forever.
 
 ## What CI cannot prove locally
 

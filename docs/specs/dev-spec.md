@@ -1254,6 +1254,7 @@ Secrets stay server-side only; never commit `.env` (commit `.env.example`).
 | Contract | JSON-schema validation of News Scout / Auditor outputs using recorded fixtures |
 | Integration | Full rating on the 3 demo sites with cached earth-obs data; snapshot the report fields |
 | E2E (Playwright) | Demo script: list → rate → buy → next quarter → inject event → alert → Copilot answer |
+| E2E real accounts (Playwright, T74) | Both apps on the real stack, review-mode verification: register → community → draw and list → rating → documents → admin approves → IPO → second account buys and sells → portfolio and community home → sign out; investor 403s, anonymous read-only (`make e2e`, docs/ci.md) |
 | LLM eval | See §18 (≥ 30 hand-labelled news items, Auditor faithfulness, schema reliability) |
 
 ## 14. Performance & cost
