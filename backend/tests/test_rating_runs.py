@@ -443,8 +443,10 @@ def test_run_trace_exposes_real_steps_calls_and_safe_outputs(db: Connection, sit
         archived = rating_runs.get_run_trace(session, site.world_id, run_id)
     assert archived is not None
     assert archived.status is RatingRunStatus.SUCCEEDED
-    assert [step.step for step in archived.steps] == STEPS[2:-1]
-    assert archived.steps[0].output == trace.steps[2].output
+    assert [step.step for step in archived.steps] == STEPS
+    assert archived.steps[2].output == trace.steps[2].output
+    assert archived.steps[-1].status == "succeeded"
+    assert archived.steps[-1].ts is not None
     assert sum(len(step.llm_calls) for step in archived.steps) == len(h.log.records)
 
 
@@ -707,6 +709,12 @@ def test_required_step_failure_fails_the_run_without_a_report(db: Connection, si
     assert list(versions) == [1]
     status = run_status(db, site.world_id, run_id)
     assert status.status is RatingRunStatus.FAILED and status.error == events[-1]["error"]
+    with sessions(db)() as session:
+        trace = rating_runs.get_run_trace(session, site.world_id, run_id)
+    assert trace is not None and trace.status is RatingRunStatus.FAILED
+    assert trace.steps[-1].step == "done" and trace.steps[-1].status == "failed"
+    assert trace.steps[-1].error == events[-1]["error"]
+    assert trace.steps[2].step == "earth_obs" and trace.steps[2].status == "failed"
 
 
 # ----- caps -------------------------------------------------------------------------------------

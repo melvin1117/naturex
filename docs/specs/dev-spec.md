@@ -487,7 +487,7 @@ create index on live_rating_requests (run_id);
 | `POST /admin/simulate/quarter` | Trigger re-rate of all assets with next `data_version` |
 | `POST /admin/simulate/event` | Inject preset event (fire, encroachment, drought, restoration, protection) |
 | `GET /admin/trace?asset_id=` | Latest 50 logged LLM attempts in the caller's world, optionally filtered to a visible asset; metadata only |
-| `GET /runs/{run_id}/trace` | World-scoped per-run progress spans, model attempts, tokens, latency and safe tool-result summaries (falls back to the sealed report after event pruning) |
+| `GET /runs/{run_id}/trace` | World-scoped per-run progress spans, model attempts, tokens, latency and safe tool-result summaries (full trace snapshotted with the sealed report for event pruning; older reports have only tool spans) |
 | `GET /ledger/{asset_id}` | Ledger entries (hashes, kinds, timestamps) |
 | `GET /ledger/{asset_id}/verify` | Recomputes the chain → `{valid, entries, broken_at?}` |
 | `POST /admin/tamper-demo` | *(DEMO_MODE only)* mutates a copy of one entry to show verification failing |

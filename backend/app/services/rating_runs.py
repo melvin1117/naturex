@@ -1218,6 +1218,14 @@ class RatingRunner:
                 ),
                 audience=spec.audience,
             )
+            events = _run_events(session, spec.world_id, spec.run_id)
+            if events is None:
+                raise RuntimeError("completed rating run has no progress events")
+            record["trace_steps"] = [
+                {"payload": payload, "ts": ts.isoformat()} for payload, ts in events.events
+            ]
+            report.auditor_json = {**(report.auditor_json or {}), "run": record}
+            session.add(report)
             session.commit()
 
     def _fail(self, progress: RunProgress, code: str, started: float) -> None:
@@ -1505,7 +1513,12 @@ def get_run_trace(session: Session, world_id: UUID, run_id: UUID) -> RunTraceOut
         if report is None:
             return None
         stored = (report.auditor_json or {}).get("run") or {}
-        spans = [(step, None) for step in stored.get("steps", [])]
+        archived = stored.get("trace_steps")
+        spans = (
+            [(item["payload"], datetime.fromisoformat(item["ts"])) for item in archived]
+            if archived is not None
+            else [(step, None) for step in stored.get("steps", [])]
+        )
     return RunTraceOut(
         run_id=run_id,
         asset_id=run.asset_id,
