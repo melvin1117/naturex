@@ -34,6 +34,7 @@ from sqlmodel import Session, SQLModel, col, select
 
 from app.models import (
     Alert,
+    AlertRecipient,
     Asset,
     Community,
     CommunityMember,
@@ -46,6 +47,7 @@ from app.models import (
     ListingDocumentBlob,
     LlmCall,
     Metrics,
+    MonitorRun,
     Order,
     PayoutLine,
     Price,
@@ -79,7 +81,9 @@ _DELETE_ORDER: tuple[type[SQLModel], ...] = (
     DocumentFingerprint,
     VerificationRun,
     DocChunk,
+    AlertRecipient,
     Alert,
+    MonitorRun,
     WorldEvent,
     Order,
     Holding,
@@ -216,7 +220,7 @@ def _copy_world_rows(
     copy_with_new_id(Metrics, "asset_id")
     copy_with_new_id(Report, "asset_id", "metrics_id")
     copy_with_new_id(Event, "asset_id")
-    copy_with_new_id(Alert, "asset_id")
+    copy_with_new_id(Alert, "asset_id", "report_id")
     copy_with_new_id(DocChunk, "asset_id", "report_id")
 
     for price in _rows(session, Price, source):

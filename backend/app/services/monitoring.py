@@ -1,0 +1,414 @@
+"""The monitoring loop (T75, dev-spec §9): `rerate_all` and `news_sweep`.
+
+- **`rerate_all`** re-rates every listed asset of a world through the rating service (T27's
+  `RatingRunner`, trigger `scheduled`), which raises the re-rate alerts with the sealed report
+  (`services.alerts.alert_on_rerate`), then pays the quarter's revenue (T41's `pay_quarter`,
+  once per asset and quarter).
+- **`news_sweep`** runs News Scout per listed asset, stores new relevant events (`events`) and
+  raises an alert for each event of severity ≥ 4 (`services.alerts.news_alert`).
+
+**Idempotent.** Each job claims `(job, period, asset)` in `monitor_runs` with one
+`INSERT … ON CONFLICT` (the primary key picks the winner): a `done` or `skipped` claim is never
+redone, a running one is left alone unless it went stale (`CLAIM_STALE_AFTER`, e.g. a crashed
+job), and a `failed` one is retried by the next run. Alerts are deduplicated by cause and payouts
+by quarter, so even a retried asset never alerts or pays twice.
+
+**Budget-capped.** Before each asset the job checks the LLM spend (`llm_calls`, the same ledger
+`LLM_BUDGET_USD` caps): it stops when the next asset's worst case (`RERATE_ESTIMATE_USD`,
+`NEWS_ESTIMATE_USD`) could pass `LLM_BUDGET_USD` or this run's own `MONITOR_JOB_BUDGET_USD`.
+The rating runs' own caps (one per asset, per world, global per hour) still apply; a global cap
+stops the job.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
+from datetime import date, timedelta
+from decimal import Decimal
+from typing import Literal, Protocol
+from uuid import UUID
+
+from sqlalchemy import func, or_, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlmodel import Session, col, select
+
+from app.agents.news_scout import NewsScoutAsset
+from app.market.revenue import CommunityStakeMissing, PayoutAlreadyApplied, pay_quarter
+from app.models import Alert, Asset, AssetStatus, Event, EventSource, MonitorRun
+from app.schemas import NewsScoutItem, NewsScoutOutput, RatingRunStatus
+from app.services.alerts import news_alert, raise_alert, safe_url
+from app.services.rating import latest_report
+from app.services.rating_runs import (
+    AssetNotRateable,
+    RunInProgress,
+    RunnerBusy,
+    RunRateLimited,
+    get_run,
+)
+
+log = logging.getLogger(__name__)
+
+Job = Literal["rerate_all", "news_sweep"]
+RERATE: Job = "rerate_all"
+NEWS_SWEEP: Job = "news_sweep"
+CLAIM_STALE_AFTER = timedelta(hours=1)
+# Worst-case LLM spend of one asset, checked before starting it (generous on purpose).
+RERATE_ESTIMATE_USD = Decimal("0.50")
+NEWS_ESTIMATE_USD = Decimal("0.05")
+DETAIL_MAX = 200
+RATE_LIMITED = frozenset({"rating_rate_limited", "rating_global_limit"})
+
+SessionFactory = Callable[[], Session]
+
+
+# --- pure ---------------------------------------------------------------------------------------
+
+
+def quarter_label(day: date) -> str:
+    """`2026Q4`: the period of `rerate_all` and the payout's `quarter_label`."""
+    return f"{day.year}Q{(day.month - 1) // 3 + 1}"
+
+
+def day_label(day: date) -> str:
+    """`2026-10-19`: the period of `news_sweep`."""
+    return day.isoformat()
+
+
+@dataclass(frozen=True, slots=True)
+class Budget:
+    llm_budget_usd: Decimal
+    """`LLM_BUDGET_USD`: the global hard cap."""
+    job_cap_usd: Decimal
+    """`MONITOR_JOB_BUDGET_USD`: this run's own cap."""
+    per_asset_usd: Decimal
+    """The worst case of the next asset."""
+
+
+def budget_stop(budget: Budget, *, spent_total: Decimal, spent_at_start: Decimal) -> str | None:
+    """Why the job must stop before the next asset, or None to go on.
+
+    `spent_total` is all LLM spend so far (every caller); `spent_at_start` the same figure when
+    the job began, so the difference is (at most) this job's spend.
+    """
+    if spent_total + budget.per_asset_usd > budget.llm_budget_usd:
+        return "llm_budget_exhausted"
+    if (spent_total - spent_at_start) + budget.per_asset_usd > budget.job_cap_usd:
+        return "job_budget_exhausted"
+    return None
+
+
+# --- claims -------------------------------------------------------------------------------------
+
+
+def claim(session: Session, job: Job, period: str, world_id: UUID, asset_id: UUID) -> bool:
+    """Atomically claim the asset for this job and period; False if it's done, skipped or in
+    progress elsewhere. Commits."""
+    table = MonitorRun.__table__  # type: ignore[attr-defined]
+    stale = func.now() - CLAIM_STALE_AFTER
+    stmt = (
+        pg_insert(table)
+        .values(job=job, period=period, asset_id=asset_id, world_id=world_id, status="running")
+        .on_conflict_do_update(
+            index_elements=["job", "period", "asset_id"],
+            set_={"status": "running", "detail": None, "updated_at": func.now()},
+            where=or_(
+                table.c.status == "failed",
+                (table.c.status == "running") & (table.c.updated_at < stale),
+            ),
+        )
+        .returning(table.c.job)
+    )
+    won = session.execute(stmt).first() is not None
+    session.commit()
+    return won
+
+
+def finish(
+    session: Session,
+    job: Job,
+    period: str,
+    asset_id: UUID,
+    status: Literal["done", "failed", "skipped"],
+    detail: str | None = None,
+) -> None:
+    session.execute(
+        update(MonitorRun)
+        .where(
+            col(MonitorRun.job) == job,
+            col(MonitorRun.period) == period,
+            col(MonitorRun.asset_id) == asset_id,
+        )
+        .values(
+            status=status,
+            detail=detail[:DETAIL_MAX] if detail else None,
+            updated_at=func.now(),
+        )
+    )
+    session.commit()
+
+
+# --- shared -------------------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class JobReport:
+    job: Job
+    period: str
+    world_id: UUID
+    done: list[UUID] = field(default_factory=list)
+    skipped: list[tuple[UUID, str]] = field(default_factory=list)
+    failed: list[tuple[UUID, str]] = field(default_factory=list)
+    stopped: str | None = None
+    alerts: int = 0
+    events: int = 0
+    payouts: int = 0
+
+    def summary(self) -> str:
+        return (
+            f"{self.job} {self.period} world={self.world_id}: done={len(self.done)} "
+            f"skipped={len(self.skipped)} failed={len(self.failed)} alerts={self.alerts} "
+            f"events={self.events} payouts={self.payouts}"
+            + (f" stopped={self.stopped}" if self.stopped else "")
+        )
+
+
+def listed_assets(session: Session, world_id: UUID) -> list[Asset]:
+    """The world's listed assets in a stable order (suspended ones aren't monitored)."""
+    return list(
+        session.exec(
+            select(Asset)
+            .where(Asset.world_id == world_id, Asset.status == AssetStatus.LISTED)
+            .order_by(col(Asset.name), col(Asset.id))
+        ).all()
+    )
+
+
+class Runner(Protocol):
+    """The part of T27's `RatingRunner` the job uses (it executes the run before returning)."""
+
+    def start(
+        self,
+        world_id: UUID,
+        asset_id: UUID,
+        *,
+        trigger: Literal["scheduled"],
+        max_runs_per_hour: int | None = None,
+    ) -> UUID: ...
+
+
+Spend = Callable[[], Decimal]
+
+
+# --- rerate_all ---------------------------------------------------------------------------------
+
+
+def rerate_all(
+    session_factory: SessionFactory,
+    runner: Runner,
+    *,
+    world_id: UUID,
+    period: str,
+    spend: Spend,
+    llm_budget_usd: Decimal,
+    job_cap_usd: Decimal,
+) -> JobReport:
+    """Re-rate every listed asset once per period, then pay its quarterly revenue."""
+    report = JobReport(RERATE, period, world_id)
+    with session_factory() as session:
+        assets = [asset.id for asset in listed_assets(session, world_id)]
+    budget = Budget(llm_budget_usd, job_cap_usd, RERATE_ESTIMATE_USD)
+    at_start = spend()
+    for asset_id in assets:
+        stop = budget_stop(budget, spent_total=spend(), spent_at_start=at_start)
+        if stop is not None:
+            report.stopped = stop
+            break
+        with session_factory() as session:
+            if not claim(session, RERATE, period, world_id, asset_id):
+                report.skipped.append((asset_id, "claimed"))
+                continue
+        status, detail = _rerate_one(session_factory, runner, world_id, asset_id, len(assets))
+        with session_factory() as session:
+            finish(session, RERATE, period, asset_id, status, detail)
+        if status == "done":
+            report.done.append(asset_id)
+        elif status == "skipped":
+            report.skipped.append((asset_id, detail or ""))
+        else:
+            report.failed.append((asset_id, detail or ""))
+        if _pay(session_factory, world_id, asset_id, period):
+            report.payouts += 1
+        if detail in RATE_LIMITED:  # every later asset would be refused too
+            report.stopped = detail
+            break
+    with session_factory() as session:
+        report.alerts = _alerts_for_reports(session, world_id, report.done)
+    return report
+
+
+def _rerate_one(
+    session_factory: SessionFactory,
+    runner: Runner,
+    world_id: UUID,
+    asset_id: UUID,
+    asset_count: int,
+) -> tuple[Literal["done", "failed", "skipped"], str | None]:
+    try:
+        run_id = runner.start(
+            world_id, asset_id, trigger="scheduled", max_runs_per_hour=asset_count + 1
+        )
+    except AssetNotRateable as exc:
+        return "skipped", exc.code
+    except LookupError:
+        return "skipped", "asset_not_found"
+    except RunRateLimited as exc:
+        return "failed", exc.code
+    except RunInProgress:
+        return "failed", "run_in_progress"
+    except RunnerBusy:
+        return "failed", "rating_busy"
+    with session_factory() as session:
+        run = get_run(session, world_id, run_id)
+    if run is None:
+        return "failed", "run_not_found"
+    if run.status in (RatingRunStatus.SUCCEEDED, RatingRunStatus.DEGRADED):
+        return "done", f"run={run_id} status={run.status.value}"
+    return "failed", run.error or run.status.value
+
+
+def _pay(session_factory: SessionFactory, world_id: UUID, asset_id: UUID, period: str) -> bool:
+    """Pay the quarter's revenue from the latest report's value (T41). Once per asset and
+    quarter; an asset without a report value or a recorded community stake isn't paid."""
+    with session_factory() as session:
+        latest = latest_report(session, world_id, asset_id)
+        if latest is None or latest.value_mid is None:
+            return False
+        try:
+            pay_quarter(
+                session,
+                world_id=world_id,
+                asset_id=asset_id,
+                value_mid=latest.value_mid,
+                quarter_label=period,
+            )
+        except PayoutAlreadyApplied:
+            session.rollback()
+            return False
+        except CommunityStakeMissing:
+            session.rollback()
+            log.info("no community stake recorded for %s; no payout", asset_id)
+            return False
+        session.commit()
+        return True
+
+
+def _alerts_for_reports(session: Session, world_id: UUID, asset_ids: Sequence[UUID]) -> int:
+    """How many alerts the re-rated assets' latest reports raised (for the job summary)."""
+    if not asset_ids:
+        return 0
+    reports = [latest_report(session, world_id, asset_id) for asset_id in asset_ids]
+    ids = [r.id for r in reports if r is not None]
+    return session.exec(
+        select(func.count())
+        .select_from(Alert)
+        .where(Alert.world_id == world_id, col(Alert.report_id).in_(ids))
+    ).one()
+
+
+# --- news_sweep ---------------------------------------------------------------------------------
+
+NewsFn = Callable[[NewsScoutAsset], NewsScoutOutput]
+
+
+def news_asset(asset: Asset) -> NewsScoutAsset:
+    return NewsScoutAsset(
+        id=asset.id,
+        name=asset.name,
+        centroid_lat=asset.centroid_lat or 0.0,
+        centroid_lon=asset.centroid_lon or 0.0,
+        country=asset.country,
+    )
+
+
+def news_sweep(
+    session_factory: SessionFactory,
+    news: NewsFn,
+    *,
+    world_id: UUID,
+    period: str,
+    spend: Spend,
+    llm_budget_usd: Decimal,
+    job_cap_usd: Decimal,
+) -> JobReport:
+    """Run News Scout once per listed asset and period; store new events and alert on
+    severity ≥ 4."""
+    report = JobReport(NEWS_SWEEP, period, world_id)
+    with session_factory() as session:
+        targets = [(asset.id, news_asset(asset)) for asset in listed_assets(session, world_id)]
+    budget = Budget(llm_budget_usd, job_cap_usd, NEWS_ESTIMATE_USD)
+    at_start = spend()
+    for asset_id, target in targets:
+        stop = budget_stop(budget, spent_total=spend(), spent_at_start=at_start)
+        if stop is not None:
+            report.stopped = stop
+            break
+        with session_factory() as session:
+            if not claim(session, NEWS_SWEEP, period, world_id, asset_id):
+                report.skipped.append((asset_id, "claimed"))
+                continue
+        try:
+            output = news(target)
+        except Exception as exc:  # News Scout or its LLM failed: retry on the next run
+            log.warning("news sweep failed for %s: %s", asset_id, type(exc).__name__)
+            with session_factory() as session:
+                finish(session, NEWS_SWEEP, period, asset_id, "failed", type(exc).__name__)
+            report.failed.append((asset_id, type(exc).__name__))
+            continue
+        with session_factory() as session:
+            stored, alerted = record_news(session, world_id, asset_id, output.events)
+            session.commit()
+            finish(session, NEWS_SWEEP, period, asset_id, "done", f"events={stored}")
+        report.done.append(asset_id)
+        report.events += stored
+        report.alerts += alerted
+    return report
+
+
+def record_news(
+    session: Session, world_id: UUID, asset_id: UUID, items: Sequence[NewsScoutItem]
+) -> tuple[int, int]:
+    """Store the relevant events not stored yet and raise their alerts, in the caller's
+    transaction. Returns (events stored, alerts raised)."""
+    asset = session.exec(
+        select(Asset).where(Asset.world_id == world_id, Asset.id == asset_id)
+    ).one()
+    stored = alerted = 0
+    for item in items:
+        if not item.relevant:
+            continue
+        url = safe_url(item.url)
+        same = select(Event.id).where(Event.world_id == world_id, Event.asset_id == asset_id)
+        same = same.where(Event.url == url) if url else same.where(Event.title == item.title)
+        if session.exec(same.limit(1)).first() is None:
+            session.add(
+                Event(
+                    world_id=world_id,
+                    asset_id=asset_id,
+                    source=EventSource.TAVILY,
+                    title=item.title,
+                    url=url,
+                    published_at=item.published_at,
+                    impact_type=item.impact_type,
+                    direction=item.direction,
+                    severity=item.severity,
+                    summary=item.summary,
+                )
+            )
+            stored += 1
+        draft = news_alert(asset_id, asset.name, item)
+        if draft is not None and raise_alert(session, world_id, asset, draft) is not None:
+            alerted += 1
+    session.flush()
+    return stored, alerted

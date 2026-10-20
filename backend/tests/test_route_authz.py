@@ -56,6 +56,7 @@ from app.routers.runs import get_rating_runner
 from app.sandbox import create_world, ensure_live_world
 from app.seed import LIVE_WORLD_ID, seed
 from app.seed import WORLD_ID as TEMPLATE_WORLD_ID
+from app.services import alerts
 from tests.conftest import alembic_cfg, requires_db
 from tests.test_geometry import square as geometry_square
 from tests.worlds import drop_worlds, start_demo
@@ -264,6 +265,7 @@ class Objects:
     run: UUID
     community: UUID
     owner: UUID
+    alert: UUID
 
 
 def objects(session: Session, world: World) -> Objects:
@@ -289,9 +291,19 @@ def objects(session: Session, world: World) -> Objects:
             "trigger": "api",
         },
     )
+    # T75: an alert delivered to the asset's community (Rosa, the owner).
+    draft = alerts.rating_alert(
+        asset.name,
+        alerts.RatingSnapshot(Decimal(75), "A"),
+        alerts.RatingSnapshot(Decimal(65), "BBB"),
+        report_id=report,
+    )
+    assert draft is not None
+    alert = alerts.raise_alert(session, world.id, asset, draft)
+    assert alert is not None
     session.commit()
     owner = persona(session, world.id, "rosa").id
-    return Objects(world, asset.id, report, run, asset.community_id, owner)
+    return Objects(world, asset.id, report, run, asset.community_id, owner, alert.id)
 
 
 # (method, path) → (the persona who could do it in its own world, its request body)
@@ -314,6 +326,8 @@ OBJECT_ROUTES: dict[tuple[str, str], tuple[str, Callable[[Objects], Any] | None]
     ("GET", "/ledger/{asset_id}/verify"): ("arjun", None),
     ("GET", "/runs/{run_id}"): ("arjun", None),
     ("GET", "/runs/{run_id}/trace"): ("arjun", None),
+    # T75: the caller's own alerts (Rosa owns the asset, so she got the alert in her world).
+    ("POST", "/alerts/{alert_id}/read"): ("rosa", None),
     # T58's listing lifecycle: the community's own listing management, and admin moderation.
     ("PATCH", "/assets/{asset_id}"): ("rosa", lambda o: {"name": "Renamed"}),
     ("POST", "/assets/{asset_id}/submit"): ("rosa", None),
@@ -447,6 +461,7 @@ def fill(path: str, o: Objects) -> str:
         "prev": o.report,
         "run_id": o.run,
         "document_id": o.report,  # any ID: the asset in the path decides the world
+        "alert_id": o.alert,
     }
     return re.sub(r"\{([^}]+)\}", lambda m: str(values[m.group(1)]), path)
 

@@ -1,0 +1,74 @@
+# T75: the daily news sweep (dev-spec §9). Runs `python -m app.jobs.news_sweep` against the
+# deployed database: News Scout per listed live asset, new events stored, alerts on severity ≥ 4.
+# The job is idempotent (one claim per asset and day) and budget-capped (MONITOR_JOB_BUDGET_USD
+# per run, LLM_BUDGET_USD overall), so a manual re-run or a retry never alerts or spends twice.
+#
+# Fail safe: without the secrets (forks, or before T20 deploys a database) it only logs a notice
+# and succeeds. Secrets: NEWS_SWEEP_DATABASE_URL, NEBIUS_API_KEY, TAVILY_API_KEY. Variables:
+# MODEL_FAST (the Nemotron Nano model ID), optional LLM_BUDGET_USD and MONITOR_JOB_BUDGET_USD.
+name: news-sweep
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: news-sweep
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    name: news-sweep / run
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - id: secrets
+        name: Check configuration
+        working-directory: .
+        env:
+          DATABASE_URL: ${{ secrets.NEWS_SWEEP_DATABASE_URL }}
+          NEBIUS_API_KEY: ${{ secrets.NEBIUS_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          MODEL_FAST: ${{ vars.MODEL_FAST }}
+        run: |
+          if [ -n "$DATABASE_URL" ] && [ -n "$NEBIUS_API_KEY" ] && [ -n "$TAVILY_API_KEY" ] && [ -n "$MODEL_FAST" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::news sweep skipped: NEWS_SWEEP_DATABASE_URL, NEBIUS_API_KEY, TAVILY_API_KEY or MODEL_FAST is not set."
+          fi
+
+      - name: Check out repository
+        if: steps.secrets.outputs.configured == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        if: steps.secrets.outputs.configured == 'true'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Sync dependencies
+        if: steps.secrets.outputs.configured == 'true'
+        run: uv sync --frozen --no-dev
+
+      - name: Run the news sweep
+        if: steps.secrets.outputs.configured == 'true'
+        env:
+          ENVIRONMENT: production
+          USE_MOCKS: "false"
+          DATABASE_URL: ${{ secrets.NEWS_SWEEP_DATABASE_URL }}
+          NEBIUS_API_KEY: ${{ secrets.NEBIUS_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          MODEL_FAST: ${{ vars.MODEL_FAST }}
+          LLM_BUDGET_USD: ${{ vars.LLM_BUDGET_USD || '20' }}
+          MONITOR_JOB_BUDGET_USD: ${{ vars.MONITOR_JOB_BUDGET_USD || '2' }}
+        run: uv run python -m app.jobs.news_sweep

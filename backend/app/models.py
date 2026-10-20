@@ -538,15 +538,78 @@ class Order(SQLModel, table=True):
 
 
 class Alert(SQLModel, table=True):
+    """A monitoring alert about one asset (T75): a re-rate that moved health by ≥ 5 points or
+    changed the grade, or a news event of severity ≥ 4. Who received it is `AlertRecipient`."""
+
     __tablename__ = "alerts"
+    __table_args__ = (
+        # Target of the recipients' composite foreign key (T75).
+        UniqueConstraint("world_id", "id", name="uq_alerts_world_id_id"),
+        # One alert per cause (a report, a news article), so jobs can be re-run (T75).
+        UniqueConstraint("world_id", "dedupe_key", name="uq_alerts_world_id_dedupe_key"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     world_id: UUID = Field(foreign_key="worlds.id", index=True)
     asset_id: UUID = Field(foreign_key="assets.id", index=True)
-    kind: str | None = None
+    kind: str | None = None  # grade_change | health_change | news (T75)
+    title: str | None = None
     message: str | None = None
     severity: int | None = None
+    dedupe_key: str | None = None
+    report_id: UUID | None = Field(default=None, foreign_key="reports.id")
+    url: str | None = None  # the news article (http/https only)
     created_at: datetime = _created_at()
+
+
+class AlertRecipient(SQLModel, table=True):
+    """An alert delivered to one account (T75): the asset's holders and its community's members
+    when the alert was raised. `read_at` is the account's read/unread state."""
+
+    __tablename__ = "alert_recipients"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["world_id", "alert_id"],
+            ["alerts.world_id", "alerts.id"],
+            name="fk_alert_recipients_alert",
+        ),
+        ForeignKeyConstraint(
+            ["world_id", "user_id"], ["users.world_id", "users.id"], name="fk_alert_recipients_user"
+        ),
+        Index("ix_alert_recipients_world_id_user_id", "world_id", "user_id"),
+    )
+
+    alert_id: UUID = Field(primary_key=True)
+    user_id: UUID = Field(primary_key=True)
+    world_id: UUID
+    read_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    created_at: datetime = _created_at()
+
+
+class MonitorRun(SQLModel, table=True):
+    """One job's claim on one asset for one period (T75): `rerate_all` per quarter, `news_sweep`
+    per day. The primary key makes the jobs idempotent: a `done` claim is never redone."""
+
+    __tablename__ = "monitor_runs"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["world_id", "asset_id"], ["assets.world_id", "assets.id"], name="fk_monitor_runs_asset"
+        ),
+        CheckConstraint("job IN ('rerate_all','news_sweep')", name="ck_monitor_runs_job"),
+        CheckConstraint(
+            "status IN ('running','done','failed','skipped')", name="ck_monitor_runs_status"
+        ),
+        Index("ix_monitor_runs_world_id", "world_id"),
+    )
+
+    job: str = Field(primary_key=True)
+    period: str = Field(primary_key=True)
+    asset_id: UUID = Field(primary_key=True)
+    world_id: UUID
+    status: str
+    detail: str | None = None
+    created_at: datetime = _created_at()
+    updated_at: datetime = _created_at()
 
 
 class DocChunk(SQLModel, table=True):

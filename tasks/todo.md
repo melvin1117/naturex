@@ -522,11 +522,11 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make e2e` green locally and in CI · **Deps:** T18, T22, T23, T33, T63, T64, T70 · **Files:** `frontend/e2e/real-accounts.spec.ts`, `frontend/playwright.config.ts`, `Makefile`, `.github/workflows/e2e.yml`, `backend/app/cli.py`
 
 ### T75 · Monitoring loop: scheduled re-rate, news sweep and alerts (#168) — D1 · M · Should · D1 D3 D4 C3
-- [ ] `jobs/rerate_all.py` and `jobs/news_sweep.py` (idempotent, budget-capped; the sweep runs daily via GitHub Actions) re-rate live listed assets through the rating service
-- [ ] Alerts on health Δ ≥ 5, a grade change or news severity ≥ 4, to the asset's holders and its community's members only; each quarter pays out via T41
-- [ ] An alerts list in both apps (read/unread) fed by real `alert` events
+- [x] `rerate_all` and `news_sweep` (`backend/app/jobs/`, logic in `services/monitoring.py`; idempotent via `monitor_runs` claims, budget-capped; the sweep runs daily via GitHub Actions) re-rate live listed assets through the rating service
+- [x] Alerts on health Δ ≥ 5, a grade change or news severity ≥ 4, to the asset's holders and its community's members only; each quarter pays out via T41
+- [x] An alerts list in both apps (read/unread) fed by real `alert` events
 
-**Verify:** `make test`; manual: a grade-changing re-rate alerts a holder and the owner · **Deps:** T27, T41, T57 · **Files:** `jobs/*.py`, `backend/app/services/alerts.py`, `.github/workflows/news-sweep.yml`, `frontend/src/components/proto/alert-toaster.tsx`
+**Verify:** `make test`; manual: a grade-changing re-rate alerts a holder and the owner · **Deps:** T27, T41, T57 · **Files:** `backend/app/jobs/*.py`, `backend/app/services/{alerts,monitoring}.py`, `backend/app/routers/alerts.py`, `backend/migrations/versions/0017_monitoring_alerts.py`, `.github/workflows/news-sweep.yml`, `frontend/src/components/alerts-list.tsx`, `frontend/src/components/proto/alert-toaster.tsx`
 
 ### T76 · Verification demo mode (sample documents, auto-approval) (#169) — D3 · S · Must · A9 J1
 - [ ] `VERIFICATION_MODE=demo` (default `review`): `POST /assets/{id}/documents/sample` (404 in review mode) generates watermarked fictional documents; `mode` write-once and `evidence_kind` derived by trigger, both in the fingerprint

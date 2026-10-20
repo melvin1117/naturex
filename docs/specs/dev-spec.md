@@ -129,7 +129,7 @@ naturex/
 │   ├── data/coefficients.csv          # cited published values; never raw ESVD data (licence)
 │   ├── data/demo_sites/*.geojson + cached metrics JSON
 │   └── tests/
-├── jobs/
+├── backend/app/jobs/                # as built (T75): inside the backend package, `python -m app.jobs.…`
 │   ├── rerate_all.py                 # job entrypoint (in-process, GitHub Actions, or Nebius Serverless Job)
 │   └── news_sweep.py
 ├── evals/ (news.jsonl, scenarios/, run.py, results.md)
@@ -389,7 +389,23 @@ create table orders (
 create table alerts (
   id uuid primary key default gen_random_uuid(),
   asset_id uuid references assets(id), kind text, message text,
-  severity smallint, created_at timestamptz default now()
+  severity smallint, created_at timestamptz default now(),
+  title text, dedupe_key text,              -- T75 (0017): one alert per cause, unique per world
+  report_id uuid references reports(id), url text,
+  unique (world_id, id), unique (world_id, dedupe_key)
+);
+create table alert_recipients (       -- T75: who got an alert, and each one's read state
+  alert_id uuid, user_id uuid, world_id uuid not null, read_at timestamptz,
+  created_at timestamptz default now(), primary key (alert_id, user_id),
+  foreign key (world_id, alert_id) references alerts (world_id, id),
+  foreign key (world_id, user_id) references users (world_id, id)
+);
+create table monitor_runs (           -- T75: a job's claim on (period, asset); makes jobs idempotent
+  job text check (job in ('rerate_all','news_sweep')), period text, asset_id uuid,
+  world_id uuid not null, status text check (status in ('running','done','failed','skipped')),
+  detail text, created_at timestamptz default now(), updated_at timestamptz default now(),
+  primary key (job, period, asset_id),
+  foreign key (world_id, asset_id) references assets (world_id, id)
 );
 
 create table doc_chunks (             -- RAG
@@ -482,6 +498,7 @@ create index on live_rating_requests (run_id);
 | `GET /assets/{id}/quote?side=&qty=` | Price of an order now, slippage included (`engine.preview`); `max_qty` with a session (T18); `trade_blocked_reason` when the user can't trade the asset (T57); 409 `not_trading` like orders (T59) |
 | `POST /orders` | `{asset_id, side, qty}` → Market Engine → fill; 409 `not_trading` unless the asset is `listed` and its IPO launched (T59) |
 | `GET /portfolio` | Holdings, values, P&L, impact |
+| `GET /alerts?unread_only=&limit=` · `POST /alerts/{id}/read` · `POST /alerts/read-all` | The signed-in account's own alerts with read/unread state and the unread count; mark one (idempotent; 404 `not_found` unless delivered to me in this world) or all read (T75) |
 | `POST /copilot` | `{question, asset_id?}` → grounded answer + citations (streamed) |
 | `GET /events/stream` | SSE: price ticks, alerts, rating progress, listing status changes (polling fallback `GET /events?since=` or `?since_id=`); events about a listing under review reach only its community and same-world admins (T58) |
 | `POST /admin/simulate/quarter` | Trigger re-rate of all assets with next `data_version` |
@@ -565,7 +582,7 @@ Every route is scoped to the caller's world, which comes from the session: anony
 - **Listings:** each with its marketplace card (`app/services/asset_cards.cards()`, the same as `/assets` and `/communities/{id}/assets`; the latest two reports per asset are loaded once, by a window query, and shared with the summary, so the route's query count doesn't grow with the number of listings), `next_action` (`draft` → `continue_listing`, `rating` → `rating_in_progress`, `needs_evidence` → `add_evidence`, `listed` before the IPO → `launch_ipo` for the owner or `awaiting_ipo` for stewards and admins, launched (listed or `suspended`) → `view_on_exchange`, `suspended` before its IPO, `ineligible`/`withdrawn` → `none`), its wallet, holders, share split (offered, sold from the float, retained; `null` before the IPO) and the latest report's Auditor `recommendations`.
 - **Wallet** (per listing and summed): `balance` is `assets.community_wallet`; `ipo_proceeds` is Σ `round_cash(qty × fill_price)` over the primary `orders` rows (exactly what the engine credited); `community_fund_payouts` is Σ `community_wallet_credit` of the public `payout` ledger entries; so `balance = ipo_proceeds + community_fund_payouts` (tested). `retained_dividends` is the treasury's own `payout_lines` (its retained stake's dividends, paid to its cash, not the wallet); `total_received` adds them. `payouts` lists the latest 12 quarterly payouts (revenue, community fund, dividends total, the treasury's dividend, holder count).
 - **Holders, privacy:** investors with a positive holding, the treasury excluded (its stake is the retained stake). The summary counts them and ranks the top 5 per listing by shares and % of total shares, **without names or account IDs**, even though only members see it: the home doesn't need identities, and members could otherwise watch individual investors (T67's rule, ADR-0005 §6).
-- **Alerts** aren't in the summary yet (T75); the home shows an empty state.
+- **Alerts** (T75) aren't in the summary: the home's Alerts panel reads `GET /alerts` and shows the ones about the community's own sites.
 
 **As built (T73).** The world comes from the session, never a client value (ADR-0005 §2).
 - **Resolution** (`deps.world_for`, `deps.current_world`): no session or a `password` session → the live world (label `live`; `deps.live_world` is a plain read, 503 `world_unavailable` if it's missing); a `demo` session → its own sandbox (`sandbox.is_sandbox`; `last_seen_at` bumped at most every 5 minutes so it isn't pruned). Anything else (a demo session on the live world, the template or a deleted world, a password session outside the live world, an unknown session kind) is refused with 401 `auth_required`, never served. A session whose account was deleted no longer resolves, so it reads the live world anonymously.
@@ -595,7 +612,7 @@ Every route is scoped to the caller's world, which comes from the session: anony
   | `GET /reports/{id}`, `…/diff/{prev}` · `GET /runs/{id}` · `GET /admin/trace?asset_id=` | `browse` (the report's / run's / traced asset; the world without `asset_id`) |
   | `GET /communities/{id}` | `browse` (community), T68 |
   | `POST /orders` | `trade` (the ordered asset), re-checked after the locks |
-  | `GET /portfolio`, `POST /copilot`, `GET /me`, `GET /me/communities` | `use_own_account` (world; Copilot's `asset_id` must be in the world) |
+  | `GET /portfolio`, `POST /copilot`, `GET /me`, `GET /me/communities`, `GET /alerts`, `POST /alerts/{id}/read`, `POST /alerts/read-all` | `use_own_account` (world; Copilot's `asset_id` must be in the world; alerts read only the caller's own deliveries, T75) |
   | `POST /assets` | `manage_listing` (the listing about to exist in the body's community: `new_listing_ref`, 404 outside the world) |
   | `PATCH /assets/{id}`, `POST /assets/{id}/submit`, `…/revise`, `…/withdraw` | `manage_listing` (asset), T58 |
   | `GET /communities/{id}/assets` | `view_community_data` (community), T58 |
@@ -1111,6 +1128,17 @@ Invariants (unit-tested): cash is never negative; shares are conserved; the pric
 Both reuse the backend code with a different entrypoint:
 - **Default (free):** `rerate_all` runs in-process when the Time Machine calls `/admin/simulate/quarter` (`LOCAL_JOBS=true`); `news_sweep` runs daily from a GitHub Actions cron that calls a protected backend endpoint.
 - **Optional upgrade:** if Nebius AI Cloud credits arrive, run both as Nebius Serverless Jobs from the backend image (`backend/Dockerfile`) **(verify)**.
+
+**As built (T75): monitoring loop and alerts.**
+- **Entry points** live in the backend package so they're linted, typed and tested: `cd backend && uv run python -m app.jobs.rerate_all [--world ID] [--period 2026Q4] [--max-usd N]` and `… app.jobs.news_sweep [--period 2026-10-19]` (`make rerate-all` / `make news-sweep`, `ARGS=…`). The default world is the live world; the logic is `app/services/monitoring.py`.
+- **`rerate_all`** re-rates every `listed` asset through T27's `RatingRunner` (run inline, trigger `scheduled`, the per-world cap raised to the asset count; the global cap still applies and stops the job), then pays the quarter's revenue through T41's `pay_quarter` with `quarter_label` = the period (`2026Q4`) and the latest report's `value_mid`; `PayoutAlreadyApplied` makes the payout once per asset and quarter, and an asset with no recorded community stake isn't paid. Price re-anchoring after a re-rate is still T38's.
+- **`news_sweep`** runs News Scout per `listed` asset (the fixture with `USE_MOCKS=true`), stores each new relevant item in `events` (`source = tavily`, deduplicated per asset by URL, else title) and alerts on severity ≥ 4. It doesn't re-rate (the optional re-rate stays for T38).
+- **Idempotent:** each job claims `(job, period, asset)` in `monitor_runs` with one `INSERT … ON CONFLICT DO UPDATE … WHERE` (the primary key picks the winner): `done`/`skipped` are never redone, `running` is left alone unless older than 1 h (a crashed job), `failed` is retried by the next run. Alerts are unique per cause and payouts per quarter, so a retried asset can't alert or pay twice.
+- **Budget-capped:** before each asset the job reads the `llm_calls` spend and stops (`llm_budget_exhausted` / `job_budget_exhausted`) if the next asset's worst case ($0.50 re-rate, $0.05 news) could pass `LLM_BUDGET_USD` or this run's `MONITOR_JOB_BUDGET_USD` (default 2; `--max-usd` overrides). The exit code is 1 when an asset failed (retried next run).
+- **Alerts** (`app/services/alerts.py`): a re-rate alerts when health moved ≥ 5 points or the grade changed (a first rating never alerts), raised inside T27's `_store` in the same transaction as the report, so **every** re-rate (API, listing, Time Machine, scheduled) alerts; News Scout items alert on `relevant` and severity ≥ 4. Kinds `grade_change` / `health_change` / `news`; titles and messages are built from the stored numbers (a news alert quotes the News Scout summary, its link kept only if http(s)); severity: downgrade or a drop ≥ 10 points 4, another drop 3, an improvement 2, news its own severity. `dedupe_key` = `report:{id}` or `news:{asset}:{article}`.
+- **Delivery:** one `alert_recipients` row per holder (shares > 0, treasuries excluded) and community member at the moment it's raised, plus one `alert` stream event (payload `alert_id`, `asset_id`, `asset_name`, `kind`, `title`, `message`, `severity`, `report_id`, `url`; T57's `_visible` sends it to the same people). `GET /alerts` lists only the caller's own rows in the session's world, so nobody else and no other world sees them.
+- **UI:** an Alerts panel on the Exchange's "Your stakes" and the Steward home (only the community's sites; no "mark all" there, since it would read alerts not shown), refetched on every `alert` event; signed-in accounts also get a toast per live alert (`AlertToaster`).
+- **Daily sweep:** `.github/workflows/news-sweep.yml` (cron 05:23 UTC + manual) runs `app.jobs.news_sweep` directly against `NEWS_SWEEP_DATABASE_URL` with `NEBIUS_API_KEY`, `TAVILY_API_KEY` and the `MODEL_FAST` variable; without them (forks, or before T20 deploys a database) it logs a notice and succeeds. This replaces "a cron that calls a protected backend endpoint" above: no machine-token endpoint is exposed.
 
 ## 10. Copilot (RAG)
 - **Indexing:** on each new report, chunk the `summary_md`, key metrics and events (~500 tokens each), embed them and upsert into `doc_chunks`.

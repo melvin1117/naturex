@@ -893,6 +893,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Alerts
+         * @description My alerts in this world, newest first, with the total unread count.
+         */
+        get: operations["list_alerts_alerts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read All Alerts
+         * @description Mark every unread alert of mine read.
+         */
+        post: operations["read_all_alerts_alerts_read_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/{alert_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read Alert
+         * @description Mark one of my alerts read (idempotent). 404 if it wasn't delivered to me here.
+         */
+        post: operations["read_alert_alerts__alert_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/simulate/quarter": {
         parameters: {
             query?: never;
@@ -1214,6 +1274,77 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AlertListOut */
+        AlertListOut: {
+            /**
+             * Alerts
+             * @description Newest first
+             */
+            alerts: components["schemas"]["AlertOut"][];
+            /**
+             * Unread Count
+             * @description All unread alerts, not only those listed
+             */
+            unread_count: number;
+        };
+        /**
+         * AlertOut
+         * @description One alert delivered to the signed-in account (T75).
+         */
+        AlertOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /** Asset Name */
+            asset_name: string;
+            /**
+             * Kind
+             * @description grade_change / health_change: a re-rate moved the grade or the health score by ≥ 5 points; news: a News Scout event of severity ≥ 4
+             * @enum {string}
+             */
+            kind: "grade_change" | "health_change" | "news";
+            /** Title */
+            title: string;
+            /** Message */
+            message: string;
+            /** Severity */
+            severity: number;
+            /**
+             * Url
+             * @description The news article (http/https only)
+             */
+            url?: string | null;
+            /**
+             * Report Id
+             * @description The re-rate's report
+             */
+            report_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Read At
+             * @description null while unread
+             */
+            read_at?: string | null;
+        };
+        /** AlertsMarkedOut */
+        AlertsMarkedOut: {
+            /**
+             * Marked
+             * @description Alerts that were unread and are now read
+             */
+            marked: number;
+        };
         /** AssetCard */
         AssetCard: {
             /**
@@ -5616,6 +5747,110 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_alerts_alerts_get: {
+        parameters: {
+            query?: {
+                unread_only?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertListOut"];
+                };
+            };
+            /** @description Not allowed: `treasury_cannot_act` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_all_alerts_alerts_read_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertsMarkedOut"];
+                };
+            };
+            /** @description Not allowed: `treasury_cannot_act` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    read_alert_alerts__alert_id__read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alert_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertOut"];
+                };
+            };
+            /** @description Not allowed: `treasury_cannot_act` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

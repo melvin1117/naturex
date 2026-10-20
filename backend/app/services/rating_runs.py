@@ -80,6 +80,7 @@ from app.schemas import (
     RunTraceOut,
     RunTraceStep,
 )
+from app.services.alerts import alert_on_rerate
 from app.services.earth_obs_live import (
     EARTH_ENGINE_BUSY,
     LiveEarthObs,
@@ -133,7 +134,7 @@ def _cap_retry_after(oldest: datetime, now: datetime) -> int:
     return min(max(remaining, 1), int(RUN_WINDOW.total_seconds()))
 
 
-Trigger = Literal["api", "time_machine", "listing"]
+Trigger = Literal["api", "time_machine", "listing", "scheduled"]
 
 
 class RunError(Exception):
@@ -1218,6 +1219,9 @@ class RatingRunner:
                 ),
                 audience=spec.audience,
             )
+            # T75: health Δ ≥ 5 or a grade change alerts the holders and the community, with
+            # the report (same transaction, so no alert without its report).
+            alert_on_rerate(session, spec.world_id, asset, previous, report)
             events = _run_events(session, spec.world_id, spec.run_id)
             if events is None:
                 raise RuntimeError("completed rating run has no progress events")
@@ -1561,22 +1565,29 @@ def default_runner() -> RatingRunner:
             from app.config import get_settings
             from app.db import engine
 
-            settings = get_settings()
-
             def session_factory() -> Session:
                 return Session(engine)
 
-            _default_runner = RatingRunner(
-                session_factory=session_factory,
-                settings=settings,
-                executor=ThreadPoolExecutor(
-                    max_workers=RUN_WORKERS, thread_name_prefix="rating-run"
-                ),
-                llm_factory=_production_llm(settings, session_factory),
-                news=news_runner(settings),
-                live_metrics=build_live_earth_obs(settings, session_factory),
+            _default_runner = build_runner(
+                get_settings(),
+                session_factory,
+                ThreadPoolExecutor(max_workers=RUN_WORKERS, thread_name_prefix="rating-run"),
             )
         return _default_runner
+
+
+def build_runner(
+    settings: Settings, session_factory: Callable[[], Session], executor: Executor
+) -> RatingRunner:
+    """A production runner on `executor` (the API's thread pool; T75's jobs run inline)."""
+    return RatingRunner(
+        session_factory=session_factory,
+        settings=settings,
+        executor=executor,
+        llm_factory=_production_llm(settings, session_factory),
+        news=news_runner(settings),
+        live_metrics=build_live_earth_obs(settings, session_factory),
+    )
 
 
 def start_rating_run(
