@@ -19,7 +19,7 @@ Nothing wrote `doc_chunks` before this revision; any rows are dropped, since the
 source kind, hash or model and the indexer rebuilds them on demand.
 
 Revision ID: 0018
-Revises: 0016
+Revises: 0017
 Create Date: 2026-10-19
 """
 
@@ -29,7 +29,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0018"
-down_revision: str | Sequence[str] | None = "0016"
+down_revision: str | Sequence[str] | None = "0017"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
