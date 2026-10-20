@@ -408,10 +408,15 @@ create table monitor_runs (           -- T75: a job's claim on (period, asset); 
   foreign key (world_id, asset_id) references assets (world_id, id)
 );
 
-create table doc_chunks (             -- RAG
+create table doc_chunks (             -- RAG (T39, migration 0018)
   id uuid primary key default gen_random_uuid(),
-  asset_id uuid references assets(id), report_id uuid references reports(id),
-  content text, embedding vector(1024)  -- match embed model dim (verify)
+  asset_id uuid references assets(id),
+  source_kind text not null check (source_kind in ('report','event')),
+  report_id uuid references reports(id), event_id uuid references events(id),  -- exactly one, per source_kind
+  seq int not null,                     -- unique per source
+  content text not null, content_sha256 char(64) not null, embed_model text not null,
+  embedding vector(1024),               -- Qwen3-Embedding-8B with dimensions=1024 (ADR-0003)
+  created_at timestamptz default now()
 );
 
 create table ledger_entries (         -- Nature Ledger: append-only, hash-chained per asset
@@ -499,7 +504,7 @@ create index on live_rating_requests (run_id);
 | `POST /orders` | `{asset_id, side, qty}` → Market Engine → fill; 409 `not_trading` unless the asset is `listed` and its IPO launched (T59) |
 | `GET /portfolio` | Holdings, values, P&L, impact |
 | `GET /alerts?community_id=&unread_only=&before=&limit=` · `POST /alerts/{id}/read` · `POST /alerts/read-all?community_id=` | The signed-in account's own alerts, newest first, 20 per page (`limit` ≤ 50; `next_before` is the next page's `before` cursor) with the unread count for the filter; mark one (idempotent) or all read. `community_id` narrows to that community's sites and is accepted only from its members; anything not delivered to me in this world (an alert, a cursor, a community I'm not in) is 404 `not_found` (T75) |
-| `POST /copilot` | `{question, asset_id?}` → grounded answer + citations (streamed) |
+| `POST /copilot` | `{question (1-500 chars), asset_id?}` → SSE stream: `sources`, `delta`…, `done` `{answer, citations, mode}` (§10, T39); `use_own_account`, `asset_id` must be visible in the world (404); 429 `copilot_rate_limited`, 503 `copilot_unavailable` |
 | `GET /events/stream` | SSE: price ticks, alerts, rating progress, listing status changes (polling fallback `GET /events?since=` or `?since_id=`); events about a listing under review reach only its community and same-world admins (T58) |
 | `POST /admin/simulate/quarter` | Trigger re-rate of all assets with next `data_version` |
 | `POST /admin/simulate/event` | Inject preset event (fire, encroachment, drought, restoration, protection) |
@@ -1142,9 +1147,14 @@ Both reuse the backend code with a different entrypoint:
 - **Daily sweep:** `.github/workflows/news-sweep.yml` (cron 05:23 UTC + manual) runs `app.jobs.news_sweep` directly against `NEWS_SWEEP_DATABASE_URL` (a least-privilege role used only by this job) with `NEBIUS_API_KEY`, `TAVILY_API_KEY` and the `MODEL_FAST` and `LLM_BUDGET_USD` variables; without them (forks, or before T20 deploys a database) it logs a notice and succeeds. The checkout doesn't persist the token. This replaces "a cron that calls a protected backend endpoint" above: no machine-token endpoint is exposed.
 
 ## 10. Copilot (RAG)
-- **Indexing:** on each new report, chunk the `summary_md`, key metrics and events (~500 tokens each), embed them and upsert into `doc_chunks`.
-- **Query:** retrieve the top 6 chunks (filtered by asset if given), then send them to Nemotron Nano with an instruction to answer only from the context and cite `[R{version}]` / `[E{id}]`.
-- The Copilot may also call `get_price_history` and `compare_assets` as tools.
+Implemented in T39 (`backend/app/rag/`, `routers/copilot.py`, `frontend/src/components/copilot-chat.tsx`).
+- **Indexing (lazy, idempotent):** before a question is answered, `rag.index.index_assets` brings `doc_chunks` up to date for the assets in scope: each asset's latest 5 reports and 20 news events (`events` rows) are chunked by pure functions (`rag.chunking`: a facts chunk with the stored scores, grade, value range, fair value per share and the change since the previous version, then the stored `summary_md` in ≤ 1,800-character pieces, ~500 tokens; one chunk per event). A source whose chunks' hashes and embedding model are unchanged is skipped; changed sources are replaced and sources outside the window removed, under a per-world advisory lock. Chunk text never names a database ID, so a sandbox copy has the same `content_sha256` and reuses the vector already computed for that text and model (sandboxes cost no embedding calls). Embeddings: `MODEL_EMBED` (`Qwen/Qwen3-Embedding-8B`, `dimensions=1024`, Qwen3's query instruction on questions) through `LLMClient.embed` (tier `embed`), budgeted and logged like every call (`agent=copilot_embed`). If embedding fails, new chunks are skipped and retrieval uses what is indexed.
+- **Tenant isolation:** retrieval reads only the caller's world and only assets the caller may see (`authz.can_see`: listed/suspended, plus listings under review for their community and same-world admins), the same rule as `GET /assets/{id}`; an event is visible with its asset. Exact cosine ranking over that small set (no ANN index: a post-filtered ANN scan could return fewer rows than asked; migration 0018).
+- **Query:** the top 6 chunks (of `asset_id` if given, else of up to 50 visible assets) above a minimum similarity, grouped by source and labelled `[R{version}]` (reports; `R{version}-2`… if two sites share a version in one answer) or `[E{first 8 hex digits of the event ID}]`. No relevant chunk: the answer is "not in the record" with no model call.
+- **Answer:** Nemotron Nano (`MODEL_FAST`, reasoning off) gets the sources escaped and fenced as untrusted data and returns a Pydantic-validated `{answer, insufficient}`. Code then removes every citation that isn't a retrieved source, and rejects a draft that cites nothing, cited an unknown source or uses a number that isn't in the sources or the question (`agents.guards`); a rejected draft is marked `rejected` in `llm_calls` and asked again once. After that, or when the model fails or `LLM_BUDGET_USD` is reached, the answer is **extractive**: quoted sentences from the top 3 sources with their citations, written by code (this is also the `USE_MOCKS=true` path, with deterministic hash embeddings, so CI needs no keys). `insufficient` gives the "not in the record" refusal.
+- **Streaming:** `POST /copilot` answers `text/event-stream` (FastAPI `EventSourceResponse`): `sources` (what was retrieved) right after retrieval, then `delta` pieces of the **checked** answer, then `done` `{answer, citations, mode: model | extractive | refusal, model}`, or `error`. The answer is validated before it streams, so its first piece arrives after the model finishes (a deliberate trade-off against token streaming, which couldn't hold back an invented number or citation); the `sources` event shows progress at once.
+- **Caps:** questions ≤ 500 characters; `COPILOT_CALLS_PER_WORLD_PER_HOUR` (default 60) Copilot answer calls per world (429 `copilot_rate_limited`); `LLM_BUDGET_USD` stays the global hard cap. A question that can't be embedded is 503 `copilot_unavailable`.
+- Not yet: the Copilot doesn't call `get_price_history` / `compare_assets` as tools (story E2's side-by-side comparison), and price rows aren't indexed; the reports' fair value per share explains price moves.
 
 ## 11. Frontend pages & key components
 | Page | Components | Notes |

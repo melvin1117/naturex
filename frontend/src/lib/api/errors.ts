@@ -17,6 +17,10 @@ const CODE_MESSAGES: Record<string, string> = {
   demo_session_only: "Only a demo session can do that.",
   too_many_event_streams:
     "Live updates are busy right now; they will keep refreshing every few seconds.",
+  copilot_rate_limited:
+    "The Copilot has answered a lot of questions in this sandbox this hour. Try again later.",
+  copilot_unavailable:
+    "The Copilot can't search the record right now. Try again in a little while.",
 };
 
 export class ApiError extends Error {

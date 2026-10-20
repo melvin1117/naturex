@@ -851,7 +851,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ask Copilot */
+        /**
+         * Ask Copilot
+         * @description Stream a grounded answer: `sources`, then `delta` pieces, then `done` (or `error`).
+         */
         post: operations["ask_copilot_copilot_post"];
         delete?: never;
         options?: never;
@@ -1764,26 +1767,107 @@ export interface components {
             /** Description */
             description?: string | null;
         };
-        /** CopilotCitation */
-        CopilotCitation: {
-            /** Ref */
-            ref: string;
-            /** Snippet */
-            snippet: string;
+        /**
+         * CopilotDeltaEvent
+         * @description A piece of the checked answer; the pieces concatenate to `done.answer`.
+         */
+        CopilotDeltaEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "delta";
+            /** Text */
+            text: string;
+        };
+        /** CopilotDoneEvent */
+        CopilotDoneEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "done";
+            /** Answer */
+            answer: string;
+            /**
+             * Citations
+             * @description The sources cited in `answer`, in order of first use; every [ref] in the answer is one of them (others were removed before streaming).
+             */
+            citations: components["schemas"]["CopilotSource"][];
+            /**
+             * Mode
+             * @description model: Nemotron's checked draft; extractive: quoted from the sources by code (mocks, or the model failed or is over budget); refusal: not in the record.
+             * @enum {string}
+             */
+            mode: "model" | "extractive" | "refusal";
+            /** Model */
+            model?: string | null;
+        };
+        /** CopilotErrorEvent */
+        CopilotErrorEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "error";
+            /** Detail */
+            detail: string;
         };
         /** CopilotRequest */
         CopilotRequest: {
             /** Question */
             question: string;
-            /** Asset Id */
+            /**
+             * Asset Id
+             * @description Ask about one asset (it must be visible in the caller's world); omit to search every visible asset of the world.
+             */
             asset_id?: string | null;
         };
-        /** CopilotResponse */
-        CopilotResponse: {
-            /** Answer */
-            answer: string;
-            /** Citations */
-            citations?: components["schemas"]["CopilotCitation"][];
+        /**
+         * CopilotSource
+         * @description A report or news event the Copilot read for this answer; `ref` is its citation label.
+         */
+        CopilotSource: {
+            /**
+             * Ref
+             * @description Citation label used inline as [ref]: R{version} or E{8 hex}.
+             */
+            ref: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "report" | "event";
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /** Asset Name */
+            asset_name: string;
+            /** Title */
+            title: string;
+            /** Snippet */
+            snippet: string;
+            /** Report Id */
+            report_id?: string | null;
+            /** Event Id */
+            event_id?: string | null;
+            /** Version */
+            version?: number | null;
+        };
+        /**
+         * CopilotSourcesEvent
+         * @description First event: what was retrieved (the caller's world and visible assets only).
+         */
+        CopilotSourcesEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "sources";
+            /** Sources */
+            sources: components["schemas"]["CopilotSource"][];
         };
         /** DateWindow */
         DateWindow: {
@@ -5677,7 +5761,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CopilotResponse"];
+                    "text/event-stream": unknown;
                 };
             };
             /** @description Not allowed: `treasury_cannot_act` */
@@ -5695,6 +5779,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description `copilot_rate_limited`: the world's hourly Copilot calls are used up */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `copilot_unavailable`: the question can't be embedded (no key, provider down, or LLM_BUDGET_USD reached) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

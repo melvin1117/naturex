@@ -13,6 +13,14 @@ export type AssetOutlines = Schemas["AssetOutlines"];
 export type AssetSubmitted = Schemas["AssetSubmitted"];
 export type AssetUpdate = Schemas["AssetUpdate"];
 export type CommunityRole = Schemas["CommunityRole"];
+export type CopilotRequest = Schemas["CopilotRequest"];
+export type CopilotSource = Schemas["CopilotSource"];
+/** One `data:` item of the `POST /copilot` SSE stream (T39). */
+export type CopilotStreamEvent =
+  | Schemas["CopilotSourcesEvent"]
+  | Schemas["CopilotDeltaEvent"]
+  | Schemas["CopilotDoneEvent"]
+  | Schemas["CopilotErrorEvent"];
 export type EventOut = Schemas["EventOut"];
 export type HoldingOut = Schemas["HoldingOut"];
 export type IpoLaunch = Schemas["IpoLaunch"];

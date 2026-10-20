@@ -612,15 +612,49 @@ class MonitorRun(SQLModel, table=True):
     updated_at: datetime = _created_at()
 
 
+class ChunkSource(StrEnum):
+    REPORT = "report"
+    EVENT = "event"
+
+
 class DocChunk(SQLModel, table=True):
+    """One embedded piece of a report or news event for the Copilot's retrieval (T39).
+
+    Rows are per world like their source, so retrieval filters by `world_id` (and the caller's
+    visible assets) before ranking. `content` never names the source's IDs, so a world copy
+    keeps the same text and hash and reuses the vector (`content_sha256` + `embed_model`)."""
+
     __tablename__ = "doc_chunks"
+    __table_args__ = (
+        Index(
+            "uq_doc_chunks_report_seq",
+            "report_id",
+            "seq",
+            unique=True,
+            postgresql_where=text("report_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_doc_chunks_event_seq",
+            "event_id",
+            "seq",
+            unique=True,
+            postgresql_where=text("event_id IS NOT NULL"),
+        ),
+        Index("ix_doc_chunks_content_sha256", "content_sha256", "embed_model"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     world_id: UUID = Field(foreign_key="worlds.id", index=True)
     asset_id: UUID = Field(foreign_key="assets.id", index=True)
+    source_kind: ChunkSource = Field(sa_column=_enum_column(ChunkSource))
     report_id: UUID | None = Field(default=None, foreign_key="reports.id")
+    event_id: UUID | None = Field(default=None, foreign_key="events.id")
+    seq: int = 0
     content: str
+    content_sha256: str = Field(max_length=64)
+    embed_model: str
     embedding: list[float] | None = Field(default=None, sa_column=Column(Vector(1024)))
+    created_at: datetime = _created_at()
 
 
 class LedgerEntry(SQLModel, table=True):

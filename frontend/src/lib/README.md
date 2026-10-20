@@ -166,6 +166,7 @@ It forwards only the session cookie, never calls `GET /world` (the browser owns 
 | `ipo.ts`, `use-ipo-offer.ts`          | IPO launch screen (T64): offering bounds (tested against `openapi.json`), parsing, refusals in words; `useIpoOffer` debounces the preview and decides what can launch.                      |
 | `use-debounced.ts`                    | `useDebounced(value, ms)`: a value once it stops changing (trade quotes, IPO previews). Memoize objects and tuples.                                                                         |
 | `market-cards.ts`, `asset-detail.ts`  | Marketplace cards (sort, grade filter, media-route thumbnails) and asset-page helpers (boundary, prices, events).                                                                           |
+| `copilot.ts`                          | Copilot (T39): reads the `POST /copilot` SSE stream (`askCopilot`, `SseParser`); `answerParts` links `[ref]` citations.                                                                     |
 
 ## The listing flow (T33)
 

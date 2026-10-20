@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # Each run of a monitoring job (T75: rerate_all, news_sweep) stops before its own LLM spend
     # could pass this; LLM_BUDGET_USD stays the global hard cap.
     monitor_job_budget_usd: float = Field(default=2.0, ge=0)
+    # Copilot (T39): each world may make this many Copilot answer calls (Nemotron attempts)
+    # per rolling hour (429 `copilot_rate_limited` after); LLM_BUDGET_USD stays the global cap.
+    copilot_calls_per_world_per_hour: int = Field(default=60, ge=1)
     # Exact origins (scheme://host[:port], comma separated) allowed to send POST, PUT, PATCH and
     # DELETE requests (T66, ADR-0005). Every deployment must set its public frontend origin.
     allowed_origins: str = "http://localhost:3000"

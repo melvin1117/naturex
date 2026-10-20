@@ -25,6 +25,7 @@ from app.market.revenue import pay_quarter
 from app.models import (
     Alert,
     Asset,
+    ChunkSource,
     Community,
     CommunityMember,
     CommunityRole,
@@ -525,10 +526,29 @@ def test_full_template_round_trips_through_create_and_reset(session: Session) ->
     session.add(report)
     session.flush()
     session.add(
-        DocChunk(world_id=WORLD_ID, asset_id=TEMPLATE_ASSET, report_id=report.id, content="x")
+        DocChunk(
+            world_id=WORLD_ID,
+            asset_id=TEMPLATE_ASSET,
+            source_kind=ChunkSource.REPORT,
+            report_id=report.id,
+            content="x",
+            content_sha256="0" * 64,
+            embed_model="m",
+        )
     )
+    event = Event(world_id=WORLD_ID, asset_id=TEMPLATE_ASSET, source=EventSource.ADMIN, title="t")
+    session.add(event)
+    session.flush()
     session.add(
-        Event(world_id=WORLD_ID, asset_id=TEMPLATE_ASSET, source=EventSource.ADMIN, title="t")
+        DocChunk(
+            world_id=WORLD_ID,
+            asset_id=TEMPLATE_ASSET,
+            source_kind=ChunkSource.EVENT,
+            event_id=event.id,
+            content="y",
+            content_sha256="1" * 64,
+            embed_model="m",
+        )
     )
     session.add(Alert(world_id=WORLD_ID, asset_id=TEMPLATE_ASSET, kind="grade", message="m"))
     append(
@@ -554,13 +574,24 @@ def test_full_template_round_trips_through_create_and_reset(session: Session) ->
         copied_report = session.exec(
             select(Report).where(Report.world_id == world_id, Report.version == 2)
         ).one()
-        chunk = session.exec(select(DocChunk).where(DocChunk.world_id == world_id)).one()
+        chunk = session.exec(
+            select(DocChunk).where(
+                DocChunk.world_id == world_id, DocChunk.source_kind == ChunkSource.REPORT
+            )
+        ).one()
+        event_chunk = session.exec(
+            select(DocChunk).where(
+                DocChunk.world_id == world_id, DocChunk.source_kind == ChunkSource.EVENT
+            )
+        ).one()
+        copied_event = session.exec(select(Event).where(Event.world_id == world_id)).one()
         entry = session.exec(
             select(LedgerEntry).where(LedgerEntry.world_id == world_id, LedgerEntry.seq == 1)
         ).one()
         assert copied_metrics.asset_id == wetland.id
         assert copied_report.metrics_id == copied_metrics.id != metrics.id
         assert chunk.report_id == copied_report.id
+        assert event_chunk.event_id == copied_event.id != event.id
         assert entry.ref_id == copied_report.id
         assert len(session.exec(select(Event).where(Event.world_id == world_id)).all()) == 1
         assert len(session.exec(select(Alert).where(Alert.world_id == world_id)).all()) == 1
