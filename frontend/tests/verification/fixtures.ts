@@ -157,6 +157,7 @@ export function queueItem(
     asset_status: "listed",
     community_id: "66666666-6666-4666-8666-666666666666",
     run: run(),
+    ai_suggestion_status: "not_run",
     ...overrides,
   };
 }

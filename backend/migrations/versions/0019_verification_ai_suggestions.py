@@ -8,7 +8,7 @@ Rows are written once: the existing `verification_immutable()` trigger refuses U
 DELETE except under the whole-world delete opt-in (sandbox reset and prune), and TRUNCATE.
 
 Revision ID: 0019
-Revises: 0016
+Revises: 0018
 Create Date: 2026-10-19
 """
 
@@ -19,7 +19,7 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 revision: str = "0019"
-down_revision: str | Sequence[str] | None = "0016"
+down_revision: str | Sequence[str] | None = "0018"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

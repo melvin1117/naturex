@@ -617,7 +617,9 @@ export interface paths {
          * Submit Verification
          * @description Submit 1–3 uploaded documents for review: a new current run with its deterministic
          *     checklist (accepted format, not reused, boundary free, consent document attached) and the
-         *     fingerprint of what it vouches for. Any earlier run stops being current.
+         *     fingerprint of what it vouches for. Any earlier run stops being current. Once committed,
+         *     the AI document check (T71) runs in the background where it's on; its untrusted suggestion
+         *     is for the reviewer only and never changes the checklist or the level.
          */
         post: operations["submit_verification_assets__asset_id__verification_runs_post"];
         delete?: never;
@@ -659,7 +661,9 @@ export interface paths {
          * Review Queue
          * @description Listings waiting for a reviewer in the caller's world, oldest first, with their current
          *     run, one page at a time (`limit`, `offset`). Listings of the admin's own communities are
-         *     left out (conflict of interest).
+         *     left out (conflict of interest). Each item carries the run's AI document check
+         *     (`ai_suggestion_status`, `ai_suggestion`): an **untrusted heuristic** read from the
+         *     documents by AI models, to be shown labelled as such next to its excerpts.
          */
         get: operations["review_queue_admin_verifications_get"];
         put?: never;
@@ -1277,6 +1281,140 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AiComparisonOut
+         * @description One field of one document compared with the listing: both values, the excerpt, the verdict
+         *     and why. `compared_by`: `model` (Nemotron, holder name and place) or `code` (always the area,
+         *     and fields that couldn't or mustn't go to a model).
+         */
+        AiComparisonOut: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "holder_name" | "place" | "area";
+            /** Listing Value */
+            listing_value: string | null;
+            /** Document Value */
+            document_value: string | null;
+            /** Excerpt */
+            excerpt: string | null;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "match" | "mismatch" | "unclear" | "not_applicable";
+            /** Reason */
+            reason: string;
+            /**
+             * Compared By
+             * @enum {string}
+             */
+            compared_by: "model" | "code";
+        };
+        /**
+         * AiDocumentReadingOut
+         * @description What the model read from one document's sanitised preview (T71).
+         */
+        AiDocumentReadingOut: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            doc_type: components["schemas"]["DocumentType"];
+            /** Sent To Model */
+            sent_to_model: boolean;
+            /**
+             * Not Sent Reason
+             * @description `no_preview`: the document has no sanitised preview (a PDF without a scanned image on page 1). `not_sample`: a sandbox sends only sample documents.
+             */
+            not_sent_reason: ("no_preview" | "not_sample") | null;
+            /** Readable */
+            readable: boolean;
+            holder_name: components["schemas"]["AiExtractedField"];
+            parcel_id: components["schemas"]["AiExtractedField"];
+            place: components["schemas"]["AiExtractedField"];
+            /** @description The number and unit as read, e.g. `144 ha`. */
+            area: components["schemas"]["AiExtractedField"];
+            /**
+             * Area Ha
+             * @description The area in hectares, converted in code, when the area comparison used it.
+             */
+            area_ha: string | null;
+            issue_date: components["schemas"]["AiExtractedField"];
+            /**
+             * Instruction Like Text
+             * @description Text aimed at an AI model was found: a sign of manipulation.
+             */
+            instruction_like_text: boolean;
+        };
+        /**
+         * AiExtractedField
+         * @description A value a model read off a document, and the verbatim excerpt around it. Attacker-written
+         *     text: render it as plain text, never as HTML or Markdown.
+         */
+        AiExtractedField: {
+            /** Value */
+            value: string | null;
+            /** Excerpt */
+            excerpt: string | null;
+        };
+        /**
+         * AiSuggestionOut
+         * @description The AI document check of a run (T71, ADR-0006 §2), for the reviewer only. **Untrusted
+         *     heuristic**: show it labelled as such, next to its excerpts; it never changed a check or the
+         *     level. `status: failed` means no model answered (or the budget was spent): `suggestion` is
+         *     null. A run has no AI suggestion while the check is pending or when it doesn't run (the live
+         *     world while `VERIFICATION_AI_LIVE=false`): see the queue item's `ai_suggestion_status`.
+         */
+        AiSuggestionOut: {
+            /**
+             * Trust
+             * @default untrusted_heuristic
+             * @constant
+             */
+            trust: "untrusted_heuristic";
+            /**
+             * Notice
+             * @default Untrusted AI heuristic: read from the uploaded documents by AI models, which can be wrong or manipulated by the documents themselves. It never changes the checks or the verification level; a person decides.
+             */
+            notice: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "completed" | "failed";
+            /** Suggestion */
+            suggestion: ("consistent" | "inconsistent" | "unreadable") | null;
+            /** Reasons */
+            reasons: string[];
+            /** Comparisons */
+            comparisons: components["schemas"]["AiComparisonOut"][];
+            /** Documents */
+            documents: components["schemas"]["AiDocumentReadingOut"][];
+            /** Flags */
+            flags: string[];
+            /** Models */
+            models: string[];
+            /** Method Version */
+            method_version: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** AlertListOut */
         AlertListOut: {
             /**
@@ -3013,6 +3151,14 @@ export interface components {
             /** Community Id */
             community_id: string | null;
             run: components["schemas"]["VerificationRunOut"];
+            /**
+             * Ai Suggestion Status
+             * @description The run's AI document check: `pending` (queued or running, for up to 15 minutes after submission), `not_run` (off in this world, or no document may be sent to a model), `completed`, or `failed` (no model answer, a spent budget, an error, a lost job or a stored result that no longer reads).
+             * @enum {string}
+             */
+            ai_suggestion_status: "pending" | "not_run" | "completed" | "failed";
+            /** @description The AI document check's result: an untrusted heuristic (see its `trust` and `notice`). Present when `ai_suggestion_status` is `completed`, and when `failed` with a stored result; null otherwise. */
+            ai_suggestion?: components["schemas"]["AiSuggestionOut"] | null;
         };
         /**
          * ReviewerRole
