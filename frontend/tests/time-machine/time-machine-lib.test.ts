@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
 import {
+  alertBatches,
   eventFailure,
+  MAX_ALERT_IDS,
+  mergeSentAlerts,
   quarterFailure,
+  quarterOutcomeText,
+  quarterProgressText,
   ratingChange,
   stoppedText,
   trackQuarterRun,
@@ -11,7 +16,7 @@ import {
   type QuarterRun,
 } from "@/lib/time-machine";
 
-import { STATE } from "./fixtures";
+import { QUARTER, sentAlert, STATE } from "./fixtures";
 
 const error = (
   code: string | null,
@@ -47,6 +52,19 @@ describe("failures", () => {
     expect(eventFailure(error("run_in_progress")).refresh).toBe(false);
     expect(eventFailure(error("event_not_recorded", 503)).refresh).toBe(true);
     expect(eventFailure(error("time_machine_sandbox_only")).refresh).toBe(true);
+  });
+
+  it("never refetches for limits, busy raters or the budget", () => {
+    for (const code of [
+      "rating_rate_limited",
+      "rating_global_limit",
+      "rating_busy",
+      "llm_budget_exhausted",
+      "admin_only",
+    ]) {
+      expect(quarterFailure(error(code, 429)).refresh).toBe(false);
+      expect(eventFailure(error(code, 429)).refresh).toBe(false);
+    }
   });
 
   it("states the wait for limits and busy raters", () => {
@@ -127,5 +145,66 @@ describe("trackQuarterRun", () => {
     ).toBeNull();
     expect(trackQuarterRun(runs, queued("a"))).toBeNull();
     expect(trackQuarterRun(runs, { step: "queued" })).toBeNull();
+  });
+});
+
+describe("quarter progress and outcome", () => {
+  const names = new Map([["asset-a", "Xochimilco Wetland"]]);
+
+  it("counts only the runs that started", () => {
+    expect(quarterProgressText(new Map(), names)).toBe(
+      "Starting the re-rates…",
+    );
+    expect(
+      quarterProgressText(
+        new Map([
+          ["a", { assetId: "asset-a", done: true }],
+          ["b", { assetId: "asset-b", done: false }],
+        ]),
+        names,
+      ),
+    ).toBe("Re-rating sites: 2 started, 1 done. Latest: Xochimilco Wetland.");
+  });
+
+  it("says what was done and skipped, and what a replay found done", () => {
+    expect(quarterOutcomeText(QUARTER)).toBe("Q4 2026: 1 done, 1 skipped.");
+    const [hero, forest] = QUARTER.assets;
+    expect(
+      quarterOutcomeText({
+        ...QUARTER,
+        replayed: true,
+        assets: [
+          { ...hero!, status: "already_done" },
+          forest!,
+          { ...forest!, status: "failed" },
+          { ...forest!, status: "stopped" },
+          { ...forest!, status: "in_progress" },
+        ],
+      }),
+    ).toBe(
+      "Q4 2026 (replayed): 0 done, 1 skipped, 1 already done, 1 failed, 1 still rating, 1 stopped.",
+    );
+  });
+});
+
+describe("sent alert batches", () => {
+  it("asks for each id once, at most 50 per request", () => {
+    const ids = Array.from({ length: 120 }, (_, i) => `a${i}`);
+    const batches = alertBatches([...ids, "a3"]);
+    expect(batches.map((b) => b.length)).toEqual([50, 50, 20]);
+    expect(batches.flat()).toEqual(ids);
+    expect(MAX_ALERT_IDS).toBe(50);
+    expect(alertBatches([])).toEqual([]);
+  });
+
+  it("merges the batches newest first, ties in their order", () => {
+    const at = (id: string, created_at: string) =>
+      sentAlert(id, { created_at });
+    expect(
+      mergeSentAlerts([
+        [at("b1", "2026-10-20T10:00:00Z"), at("b2", "2026-10-20T09:00:00Z")],
+        [at("c1", "2026-10-20T11:00:00Z"), at("c2", "2026-10-20T10:00:00Z")],
+      ]).map((a) => a.id),
+    ).toEqual(["c1", "b1", "c2", "b2"]);
   });
 });

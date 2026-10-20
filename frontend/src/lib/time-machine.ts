@@ -3,13 +3,23 @@
  * outcome and the live progress of a quarter. Pure, so the panel stays presentational.
  */
 import { formatWait, type ApiError } from "./api/errors";
-import type { AssetRating, SimulatedAsset, TimeMachine } from "./api/types";
+import type {
+  AssetRating,
+  SentAlert,
+  SimulatedAsset,
+  SimulateQuarter,
+  TimeMachine,
+} from "./api/types";
+import { quarterLabel } from "./prototype/format";
 import { num } from "./report-facts";
 
 export type TimeMachineFailure = {
   title: string;
   message: string;
-  /** The world moved under the admin: refetch the Time Machine state. */
+  /**
+   * The world moved under the admin (dev-spec §9): the panel refetches the Time Machine state
+   * and the sites only when this is true, never for limits, busy raters or the budget.
+   */
   refresh: boolean;
 };
 
@@ -17,6 +27,11 @@ export const SANDBOX_ONLY: Omit<TimeMachineFailure, "refresh"> = {
   title: "The Time Machine runs in demo sandboxes only",
   message:
     "Real listings in the live world are never moved by simulated quarters or events. Open a demo session as the demo admin to try it.",
+};
+
+export const ADMIN_ONLY: Omit<TimeMachineFailure, "refresh"> = {
+  title: "Admins only",
+  message: "Only a platform admin can run the Time Machine.",
 };
 
 /** Why the Time Machine can't be used in this world, or null when it can (T38 `available`). */
@@ -38,11 +53,7 @@ function common(error: ApiError): TimeMachineFailure | null {
     case "template_world":
       return { ...SANDBOX_ONLY, refresh: true };
     case "admin_only":
-      return {
-        title: "Admins only",
-        message: "Only a platform admin can run the Time Machine.",
-        refresh: false,
-      };
+      return { ...ADMIN_ONLY, refresh: false };
     case "rating_rate_limited":
     case "rating_global_limit":
       return {
@@ -246,4 +257,61 @@ export function trackQuarterRun(
     return new Map(runs).set(runId, { ...run, done: true });
   }
   return null;
+}
+
+/**
+ * The quarter's live progress, counting only the runs that started (a skipped site never
+ * starts one, and a replay skips the sites already done).
+ */
+export function quarterProgressText(
+  runs: ReadonlyMap<string, QuarterRun>,
+  names: ReadonlyMap<string, string>,
+): string {
+  if (runs.size === 0) return "Starting the re-rates…";
+  const done = [...runs.values()].filter((r) => r.done);
+  const last = done.at(-1);
+  const latest = last ? `. Latest: ${names.get(last.assetId) ?? "a site"}` : "";
+  return `Re-rating sites: ${runs.size} started, ${done.length} done${latest}.`;
+}
+
+const OUTCOME_PARTS: [SimulatedAsset["status"], string][] = [
+  ["already_done", "already done"],
+  ["failed", "failed"],
+  ["in_progress", "still rating"],
+  ["stopped", "stopped"],
+];
+
+/** What the quarter did, from its response: "x done, y skipped" and any other outcome. */
+export function quarterOutcomeText(result: SimulateQuarter): string {
+  const count = (status: SimulatedAsset["status"]) =>
+    result.assets.filter((a) => a.status === status).length;
+  const parts = [`${count("rerated")} done`, `${count("skipped")} skipped`];
+  for (const [status, label] of OUTCOME_PARTS) {
+    const n = count(status);
+    if (n > 0) parts.push(`${n} ${label}`);
+  }
+  const replay = result.replayed ? " (replayed)" : "";
+  return `${quarterLabel(result.period)}${replay}: ${parts.join(", ")}.`;
+}
+
+/** `GET /admin/alerts` takes at most this many ids per request. */
+export const MAX_ALERT_IDS = 50;
+
+/** The ids to ask for, once each, in requests of at most `MAX_ALERT_IDS`. */
+export function alertBatches(ids: readonly string[]): string[][] {
+  const unique = [...new Set(ids)];
+  const batches: string[][] = [];
+  for (let i = 0; i < unique.length; i += MAX_ALERT_IDS) {
+    batches.push(unique.slice(i, i + MAX_ALERT_IDS));
+  }
+  return batches;
+}
+
+/** The batches' alerts in one list, newest first like each response (ties keep their order). */
+export function mergeSentAlerts(batches: readonly SentAlert[][]): SentAlert[] {
+  return batches
+    .flat()
+    .map((alert, i) => ({ alert, i, t: Date.parse(alert.created_at) }))
+    .sort((a, b) => b.t - a.t || a.i - b.i)
+    .map(({ alert }) => alert);
 }

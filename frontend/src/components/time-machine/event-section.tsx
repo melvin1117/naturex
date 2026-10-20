@@ -2,7 +2,7 @@
 
 import { TriangleAlertIcon, Zap } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Panel } from "@/components/proto/report-panels";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { toApiError } from "@/lib/api/errors";
 import type { AssetCard, EventPreset, SimulateEvent } from "@/lib/api/types";
 import { quarterLabel } from "@/lib/prototype/format";
 import { eventFailure } from "@/lib/time-machine";
@@ -103,17 +104,24 @@ export function EventSection({
   presets,
   assets,
   onRefresh,
+  onPendingChange,
 }: {
   presets: EventPreset[];
   /** Listed sites of this world. */
   assets: AssetCard[];
   onRefresh: () => void;
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const inject = useSimulateEvent();
   const hero = assets.find((a) => a.site_key === HERO_SITE) ?? assets[0];
   const [assetId, setAssetId] = useState<string | undefined>(undefined);
   const [presetName, setPresetName] = useState<string | undefined>(undefined);
   const [confirming, setConfirming] = useState(false);
+  // What was asked for, so the progress names it even if the lists change meanwhile.
+  const [requested, setRequested] = useState<{
+    asset: string;
+    preset: string;
+  } | null>(null);
   const asset = assets.find((a) => a.id === assetId) ?? hero;
   const preset =
     presets.find((p) => p.preset === presetName) ??
@@ -123,17 +131,23 @@ export function EventSection({
   const resultName =
     assets.find((a) => a.id === inject.data?.event.asset_id)?.name ?? "";
 
+  useEffect(() => {
+    onPendingChange?.(inject.isPending);
+    return () => onPendingChange?.(false);
+  }, [inject.isPending, onPendingChange]);
+
   const run = async () => {
     if (!asset || !preset) return;
-    const result = await inject.mutate({
-      asset_id: asset.id,
-      preset: preset.preset,
-    });
-    if (!result) onRefresh();
+    setRequested({ asset: asset.name, preset: preset.label.toLowerCase() });
+    try {
+      await inject.mutateAsync({ asset_id: asset.id, preset: preset.preset });
+    } catch (error) {
+      if (eventFailure(toApiError(error)).refresh) onRefresh();
+    }
   };
 
   return (
-    <Panel title="Inject an event">
+    <Panel title="Inject an event" headingLevel="h2">
       {assets.length === 0 || !asset || !preset ? (
         <p className="text-sm text-muted-foreground">
           No listed sites yet. Events can only be injected into a listed site.
@@ -143,7 +157,11 @@ export function EventSection({
           <div className="min-w-0 space-y-4">
             <div className="grid gap-2">
               <Label htmlFor="event-asset">Site</Label>
-              <Select value={asset.id} onValueChange={setAssetId}>
+              <Select
+                value={asset.id}
+                onValueChange={setAssetId}
+                disabled={inject.isPending}
+              >
                 <SelectTrigger id="event-asset" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -158,7 +176,11 @@ export function EventSection({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="event-preset">Event</Label>
-              <Select value={preset.preset} onValueChange={setPresetName}>
+              <Select
+                value={preset.preset}
+                onValueChange={setPresetName}
+                disabled={inject.isPending}
+              >
                 <SelectTrigger id="event-preset" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -184,7 +206,7 @@ export function EventSection({
                     <Zap aria-hidden="true" />
                   )}
                   {inject.isPending
-                    ? `Re-rating ${asset.name}…`
+                    ? `Re-rating ${requested?.asset ?? asset.name}…`
                     : `Inject ${preset.label.toLowerCase()}`}
                 </Button>
               </DialogTrigger>
@@ -221,7 +243,8 @@ export function EventSection({
             </Dialog>
             <p role="status" aria-live="polite" className="text-sm">
               {inject.isPending &&
-                `Applying ${preset.label.toLowerCase()} and re-rating ${asset.name}…`}
+                requested &&
+                `Applying ${requested.preset} and re-rating ${requested.asset}…`}
             </p>
           </div>
           <div className="min-w-0">

@@ -11,6 +11,7 @@ import {
   ReferenceDot,
   ResponsiveContainer,
   Tooltip,
+  usePlotArea,
   XAxis,
   YAxis,
 } from "recharts";
@@ -19,7 +20,7 @@ import { price as fmtPrice, shortDate } from "@/lib/prototype/format";
 
 const AXIS = { fontSize: 11, fill: "var(--muted-foreground)" };
 
-function ChartTooltip({
+export function ChartTooltip({
   active,
   payload,
   label,
@@ -27,12 +28,13 @@ function ChartTooltip({
   labelOf = (l) => String(l ?? ""),
 }: {
   active?: boolean;
-  payload?: { value: number }[];
+  payload?: { value: number; payload?: { synthetic?: boolean } }[];
   label?: string | number;
   format: (v: number) => string;
   labelOf?: (label: string | number | undefined) => string;
 }) {
-  if (!active || !payload?.length) return null;
+  // A point drawn only to carry the line on to a later marker isn't a recorded price.
+  if (!active || !payload?.length || payload[0].payload?.synthetic) return null;
   return (
     <div className="rounded-xl bg-card px-3 py-2 text-xs shadow-lift ring-1 ring-border">
       <div className="text-muted-foreground">{labelOf(label)}</div>
@@ -68,9 +70,52 @@ export type ChartMarker = {
   kind: "ipo" | "rerate" | "event";
   label: string;
   direction: number | null;
-  /** How many earlier markers sit on (nearly) the same point: drawn that far to the left. */
+  /** How many earlier markers sit on (nearly) the same point: fanned out that many slots. */
   stack: number;
 };
+
+export type PlotArea = { x: number; y: number; width: number; height: number };
+
+const MARKER_R = 8;
+// Radius plus half the stroke: the whole marker stays inside the plot.
+const MARKER_PAD = MARKER_R + 1;
+const MARKER_STEP = 18;
+const MARKER_ROWS = 3;
+const MARKER_COLUMNS = 2;
+
+const clamp = (v: number, lo: number, hi: number) =>
+  Math.min(Math.max(v, lo), Math.max(lo, hi));
+
+/**
+ * Where a marker is drawn. One on its own sits on its point; markers on the same point stack
+ * upwards (downwards near the top), then in a second column toward the middle of the chart,
+ * at most `MARKER_ROWS × MARKER_COLUMNS` slots (later ones share the last). Always inside the
+ * plot: never over the Y-axis labels, and one at the right edge (after the last price) stays
+ * there.
+ */
+export function markerPosition(
+  cx: number,
+  cy: number,
+  stack: number,
+  plot: PlotArea | undefined,
+): { x: number; y: number } {
+  const slot = Math.min(stack, MARKER_ROWS * MARKER_COLUMNS - 1);
+  const row = slot % MARKER_ROWS;
+  const column = Math.floor(slot / MARKER_ROWS);
+  if (!plot) return { x: cx, y: cy - row * MARKER_STEP };
+  const top = plot.y + MARKER_PAD;
+  const bottom = plot.y + plot.height - MARKER_PAD;
+  const inward = cx > plot.x + plot.width / 2 ? -1 : 1;
+  const up = cy - row * MARKER_STEP;
+  return {
+    x: clamp(
+      cx + inward * column * MARKER_STEP,
+      plot.x + MARKER_PAD,
+      plot.x + plot.width - MARKER_PAD,
+    ),
+    y: clamp(up < top ? cy + row * MARKER_STEP : up, top, bottom),
+  };
+}
 
 const DAY_MS = 86_400_000;
 
@@ -214,22 +259,24 @@ function MarkerShape({
   cy?: number;
   marker: ChartMarker;
 }) {
+  const plot = usePlotArea();
   if (cx == null || cy == null) return <g />;
   const { fill, stroke, ink } = markerColors(marker);
+  const { x, y } = markerPosition(cx, cy, marker.stack, plot);
   return (
     <g>
       <title>{`${marker.n}. ${marker.label}`}</title>
       <circle
-        cx={cx}
-        cy={cy}
-        r={8}
+        cx={x}
+        cy={y}
+        r={MARKER_R}
         fill={fill}
         stroke={stroke}
         strokeWidth={2}
       />
       <text
-        x={cx}
-        y={cy}
+        x={x}
+        y={y}
         textAnchor="middle"
         dominantBaseline="central"
         fontSize={9}
@@ -263,7 +310,9 @@ export function PriceChart({
   const end = Math.max(last?.t ?? 0, ...series.marks.map((m) => m.t));
   // The last price holds until the latest marker, so the line runs on to it.
   const plotted =
-    last && end > last.t ? [...data, { ...last, t: end, reason: null }] : data;
+    last && end > last.t
+      ? [...data, { ...last, t: end, reason: null, synthetic: true }]
+      : data;
   const intraday = end - start < 2 * DAY_MS;
   const tick = (ms: number) => (intraday ? timeLabel(ms) : dayLabel(ms));
   const label = (ms: number) =>
@@ -333,11 +382,7 @@ export function PriceChart({
                 x={m.t}
                 y={m.price}
                 shape={(props: { cx?: number; cy?: number }) => (
-                  <MarkerShape
-                    cx={props.cx == null ? undefined : props.cx - m.stack * 18}
-                    cy={props.cy}
-                    marker={m}
-                  />
+                  <MarkerShape cx={props.cx} cy={props.cy} marker={m} />
                 )}
               />
             ))}

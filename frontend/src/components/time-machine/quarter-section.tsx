@@ -1,7 +1,7 @@
 "use client";
 
 import { FastForward, TriangleAlertIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "cn";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -17,11 +17,14 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { toApiError } from "@/lib/api/errors";
 import type { TimeMachine, TimeMachineQuarter } from "@/lib/api/types";
 import { useLiveEvent } from "@/lib/hooks";
 import { quarterLabel } from "@/lib/prototype/format";
 import {
   quarterFailure,
+  quarterOutcomeText,
+  quarterProgressText,
   trackQuarterRun,
   type QuarterRun,
 } from "@/lib/time-machine";
@@ -78,12 +81,14 @@ export function QuarterSection({
   listed,
   names,
   onRefresh,
+  onPendingChange,
 }: {
   state: TimeMachine;
-  /** Listed sites a quarter re-rates, for the progress count. */
+  /** Listed sites a quarter re-rates, for the confirmation. */
   listed: number;
   names: ReadonlyMap<string, string>;
   onRefresh: () => void;
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const quarter = useSimulateQuarter();
   const [confirming, setConfirming] = useState<TimeMachineQuarter | null>(null);
@@ -96,15 +101,21 @@ export function QuarterSection({
     { enabled: quarter.isPending },
   );
 
+  useEffect(() => {
+    onPendingChange?.(quarter.isPending);
+    return () => onPendingChange?.(false);
+  }, [quarter.isPending, onPendingChange]);
+
   const run = async (next: TimeMachineQuarter) => {
     setRuns(new Map());
-    const result = await quarter.mutate(next.period);
-    if (!result) onRefresh();
+    try {
+      await quarter.mutateAsync(next.period);
+    } catch (error) {
+      if (quarterFailure(toApiError(error)).refresh) onRefresh();
+    }
   };
 
   const failure = quarter.error ? quarterFailure(quarter.error) : null;
-  const done = [...runs.values()].filter((r) => r.done);
-  const last = done.at(-1);
   const next = state.next;
   const canRun = Boolean(next) && state.local_jobs;
 
@@ -189,10 +200,9 @@ export function QuarterSection({
           </span>
         </div>
         <p role="status" aria-live="polite" className="mt-4 text-sm">
-          {quarter.isPending &&
-            `Re-rating sites: ${done.length} of ${Math.max(listed, runs.size)} done${
-              last ? `. Latest: ${names.get(last.assetId) ?? "a site"}` : ""
-            }.`}
+          {quarter.isPending
+            ? quarterProgressText(runs, names)
+            : quarter.data && quarterOutcomeText(quarter.data)}
         </p>
       </section>
 

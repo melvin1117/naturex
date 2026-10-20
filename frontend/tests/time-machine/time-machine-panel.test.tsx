@@ -85,6 +85,23 @@ async function confirmQuarter() {
   fireEvent.click(within(dialog).getByRole("button", { name: "Run Q4 2026" }));
 }
 
+async function confirmEvent() {
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Inject encroachment" }),
+  );
+  fireEvent.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "Inject and re-rate",
+    }),
+  );
+}
+
+function pending() {
+  let finish: (r: Response) => void = () => {};
+  const route = () => new Promise<Response>((resolve) => (finish = resolve));
+  return { route, finish: (r: Response) => finish(r) };
+}
+
 async function bodyOf(request: Request | undefined) {
   return request ? ((await request.clone().json()) as unknown) : undefined;
 }
@@ -195,6 +212,7 @@ describe("TimeMachinePanel", () => {
     expect(
       await screen.findByRole("button", { name: "Running the quarter…" }),
     ).toBeDisabled();
+    expect(screen.getByText("Starting the re-rates…")).toBeInTheDocument();
     await waitFor(() => expect(FakeEventSource.instances).not.toHaveLength(0));
     act(() => {
       const source = FakeEventSource.latest();
@@ -220,7 +238,7 @@ describe("TimeMachinePanel", () => {
     });
     expect(
       screen.getByText(
-        "Re-rating sites: 1 of 2 done. Latest: Xochimilco Wetland.",
+        "Re-rating sites: 1 started, 1 done. Latest: Xochimilco Wetland.",
       ),
     ).toBeInTheDocument();
 
@@ -234,6 +252,15 @@ describe("TimeMachinePanel", () => {
     const result = await screen.findByRole("region", {
       name: "Quarter result",
     });
+    expect(
+      screen.getByText("Q4 2026: 1 done, 1 skipped.", { selector: "p" }),
+    ).toHaveAttribute("role", "status");
+    expect(
+      within(result).getByRole("heading", {
+        level: 3,
+        name: "Q4 2026: restoration",
+      }),
+    ).toBeInTheDocument();
     const rows = within(result).getAllByRole("row");
     expect(rows).toHaveLength(3);
     const hero = rows[1]!;
@@ -447,5 +474,199 @@ describe("TimeMachinePanel", () => {
     );
     await waitFor(() => expect(backend.calls("GET /world")).toBe(1));
     expect(backend.calls("GET /admin/time-machine")).toBe(0);
+  });
+
+  it("names the panel's sections in one outline", async () => {
+    renderPanel();
+    await nextQuarterButton();
+    expect(
+      screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent),
+    ).toEqual(["Now: Q3 2026", "Inject an event", "Reset the demo"]);
+  });
+
+  it.each([
+    ["rating_rate_limited", 429, "Too many ratings right now"],
+    ["rating_busy", 503, "The raters are busy"],
+    ["llm_budget_exhausted", 503, "The AI budget is spent"],
+  ])(
+    "explains a %s quarter refusal without refetching",
+    async (code, status, title) => {
+      const backend = renderPanel({
+        "POST /admin/simulate/quarter": conflict(code, status),
+      });
+      await confirmQuarter();
+      expect(await screen.findByText(title)).toBeInTheDocument();
+      await act(async () => new Promise((r) => setTimeout(r, 20)));
+      expect(backend.calls("GET /admin/time-machine")).toBe(1);
+      expect(backend.calls("GET /assets")).toBe(1);
+    },
+  );
+
+  it.each([
+    ["stale_metrics", 409, true],
+    ["event_not_recorded", 503, true],
+    ["asset_not_listed", 409, true],
+    ["run_in_progress", 409, false],
+    ["no_current_metrics", 409, false],
+    ["rating_busy", 503, false],
+    ["conflict_of_interest", 403, false],
+  ])(
+    "refetches after a %s preset refusal only when the world moved",
+    async (code, status, refetches) => {
+      const backend = renderPanel({
+        "POST /admin/simulate/event": conflict(code, status),
+      });
+      await confirmEvent();
+      await screen.findByRole("alert");
+      await act(async () => new Promise((r) => setTimeout(r, 20)));
+      expect(backend.calls("GET /admin/time-machine") > 1).toBe(refetches);
+      expect(backend.calls("GET /assets") > 1).toBe(refetches);
+    },
+  );
+
+  it("counts only the runs that started, then what a replay skipped and found done", async () => {
+    const run = pending();
+    renderPanel({ "POST /admin/simulate/quarter": run.route });
+    await confirmQuarter();
+    await waitFor(() => expect(FakeEventSource.instances).not.toHaveLength(0));
+    act(() => {
+      const source = FakeEventSource.latest();
+      source.open();
+      source.emit("rating_progress", 1, {
+        run_id: "run-1",
+        asset_id: HERO,
+        step: "queued",
+        trigger: "time_machine",
+      });
+    });
+    // Two listed sites, but only one run started: the other is skipped.
+    expect(
+      screen.getByText("Re-rating sites: 1 started, 0 done."),
+    ).toBeInTheDocument();
+    await act(async () =>
+      run.finish(
+        json({
+          ...QUARTER,
+          replayed: true,
+          assets_rerated: 0,
+          assets: [
+            { ...QUARTER.assets[0], status: "already_done", alert_ids: [] },
+            QUARTER.assets[1],
+          ],
+        }),
+      ),
+    );
+    expect(
+      await screen.findByText(
+        "Q4 2026 (replayed): 0 done, 1 skipped, 1 already done.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Replayed: only unfinished work ran"),
+    ).toBeVisible();
+  });
+
+  it("asks for more than 50 alerts in parallel batches and shows them all", async () => {
+    const ids = Array.from({ length: 60 }, (_, i) => `alert-${i}`);
+    const backend = renderPanel({
+      "POST /admin/simulate/quarter": () =>
+        json({
+          ...QUARTER,
+          alerts: ids.length,
+          assets: [
+            { ...QUARTER.assets[0], alert_ids: ids.slice(0, 40) },
+            // An id listed twice is asked for once.
+            { ...QUARTER.assets[1], alert_ids: [...ids.slice(40), "alert-0"] },
+          ],
+        }),
+    });
+    await confirmQuarter();
+    const phone = await screen.findByRole("list", { name: "Alerts sent" });
+    expect(within(phone).getAllByRole("listitem")).toHaveLength(60);
+    const asked = backend.requests
+      .filter((r) => new URL(r.url).pathname.endsWith("/admin/alerts"))
+      .map((r) => new URL(r.url).searchParams.getAll("ids"));
+    expect(asked.map((batch) => batch.length)).toEqual([50, 10]);
+    expect(asked.flat()).toEqual(ids);
+  });
+
+  it("shows the phone preview's load error with a retry", async () => {
+    let fail = true;
+    renderPanel({
+      "POST /admin/simulate/event": () => json(EVENT),
+      "GET /admin/alerts": (request) =>
+        fail
+          ? json({ detail: "boom" }, { status: 500 })
+          : json(
+              new URL(request.url).searchParams
+                .getAll("ids")
+                .map((id) => sentAlert(id)),
+            ),
+    });
+    await confirmEvent();
+    expect(
+      await screen.findByText("We couldn't load the alerts"),
+    ).toBeInTheDocument();
+    fail = false;
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    const phone = await screen.findByRole("list", { name: "Alerts sent" });
+    expect(within(phone).getAllByRole("listitem")).toHaveLength(2);
+    // In UTC, like the price chart.
+    expect(within(phone).getAllByText("10:00 UTC")).toHaveLength(2);
+  });
+
+  it("disables Reset while a quarter runs", async () => {
+    const run = pending();
+    renderPanel({ "POST /admin/simulate/quarter": run.route });
+    const reset = await screen.findByRole("button", { name: "Reset the demo" });
+    expect(reset).toBeEnabled();
+    await confirmQuarter();
+    await waitFor(() => expect(reset).toBeDisabled());
+    expect(reset).toHaveAccessibleDescription(
+      "Available once the running quarter or event finishes.",
+    );
+    await act(async () => run.finish(json(QUARTER)));
+    await waitFor(() => expect(reset).toBeEnabled());
+  });
+
+  it("disables Reset and the pickers while an event runs, naming the requested site", async () => {
+    const run = pending();
+    renderPanel({ "POST /admin/simulate/event": run.route });
+    const reset = await screen.findByRole("button", { name: "Reset the demo" });
+    const site = await screen.findByRole("combobox", { name: "Site" });
+    fireEvent.keyDown(site, { key: "Enter" });
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Sumidero Forest" }),
+    );
+    await confirmEvent();
+    expect(
+      await screen.findByRole("button", { name: "Re-rating Sumidero Forest…" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText("Applying encroachment and re-rating Sumidero Forest…"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Site" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Event" })).toBeDisabled();
+    expect(reset).toBeDisabled();
+    await act(async () =>
+      run.finish(
+        json({ ...EVENT, event: { ...EVENT.event, asset_id: FOREST } }),
+      ),
+    );
+    await waitFor(() => expect(reset).toBeEnabled());
+    expect(screen.getByRole("combobox", { name: "Site" })).toBeEnabled();
+  });
+
+  it("tells a signed-in non-admin the panel is for admins", async () => {
+    renderPanel(
+      {},
+      { ...WORLD, me: { ...DEMO_ADMIN_WORLD.me!, is_admin: false } },
+    );
+    expect(await screen.findByText("Admins only")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Only a platform admin can run the Time Machine/),
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Next quarter/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Reset/ })).toBeNull();
   });
 });

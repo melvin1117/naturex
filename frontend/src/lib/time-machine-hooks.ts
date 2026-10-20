@@ -20,6 +20,7 @@ import {
   type MutationResult,
   type QueryResult,
 } from "./hooks";
+import { alertBatches, mergeSentAlerts } from "./time-machine";
 
 /** The world's quarter, the next one, the timeline and the presets. Admins only. */
 export function useTimeMachine(): QueryResult<TimeMachine> {
@@ -56,18 +57,27 @@ export function useSimulateEvent(): MutationResult<
   );
 }
 
-/** The alerts a quarter or event sent, as their recipients got them (`GET /admin/alerts`). */
+/**
+ * The alerts a quarter or event sent, as their recipients got them (`GET /admin/alerts`): in
+ * parallel requests of at most 50 ids, merged newest first.
+ */
 export function useSentAlerts(
   ids: readonly string[],
 ): QueryResult<SentAlert[]> {
   return useApiQuery(
     queryKeys.sentAlerts(ids),
-    (api, signal) =>
-      unwrap(
-        api.GET("/admin/alerts", {
-          params: { query: { ids: [...ids] } },
-          signal,
-        }),
+    async (api, signal) =>
+      mergeSentAlerts(
+        await Promise.all(
+          alertBatches(ids).map((batch) =>
+            unwrap(
+              api.GET("/admin/alerts", {
+                params: { query: { ids: batch } },
+                signal,
+              }),
+            ),
+          ),
+        ),
       ),
     { enabled: ids.length > 0 },
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { RotateCcw, TriangleAlertIcon } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { Panel } from "@/components/proto/report-panels";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -22,24 +22,33 @@ import { useWorld } from "@/lib/hooks";
 /** "Reset the demo" (`POST /world/reset`): demo sandboxes only, after a confirmation. */
 export function ResetSection({
   onReset,
+  busy = false,
   className,
 }: {
   onReset: () => void;
+  /** A quarter or event is running: resetting under it would race the re-rates. */
+  busy?: boolean;
   className?: string;
 }) {
   const { resetWorld, isResetting, resetError } = useWorld();
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
+  const busyId = useId();
 
   return (
-    <Panel title="Reset the demo" className={className}>
+    <Panel title="Reset the demo" headingLevel="h2" className={className}>
       <p className="text-sm text-muted-foreground">
         Puts this sandbox back to the start: the first quarter, the original
         ratings, prices, holdings and alerts. The live world is never reset.
       </p>
       <Dialog open={confirming} onOpenChange={setConfirming}>
         <DialogTrigger asChild>
-          <Button variant="outline" className="mt-4" disabled={isResetting}>
+          <Button
+            variant="outline"
+            className="mt-4"
+            disabled={isResetting || busy}
+            aria-describedby={busy ? busyId : undefined}
+          >
             {isResetting ? (
               <Spinner aria-hidden="true" role="presentation" />
             ) : (
@@ -81,6 +90,11 @@ export function ResetSection({
           </form>
         </DialogContent>
       </Dialog>
+      {busy && (
+        <p id={busyId} className="mt-3 text-sm text-muted-foreground">
+          Available once the running quarter or event finishes.
+        </p>
+      )}
       <p role="status" aria-live="polite" className="mt-3 text-sm">
         {done && !isResetting && "The sandbox is back at the start."}
       </p>

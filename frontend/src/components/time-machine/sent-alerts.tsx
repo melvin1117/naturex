@@ -7,11 +7,14 @@ import { LoadError } from "@/components/proto/load-error";
 import { Spinner } from "@/components/ui/spinner";
 import { useSentAlerts } from "@/lib/time-machine-hooks";
 
+// UTC with its label, like the price chart's times.
 function clock(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-GB", {
+  const time = new Date(iso).toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "UTC",
   });
+  return `${time} UTC`;
 }
 
 function reach(n: number) {
