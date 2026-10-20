@@ -241,13 +241,18 @@ def test_a_polygon_is_computed_once_then_served_from_the_cache(conn: Connection)
 
 
 def test_a_slow_computation_times_out_and_frees_its_slot_once_it_stops() -> None:
-    slow = FakeEarthEngine(delay_s=0.6)
+    gate = threading.Event()
+    slow = FakeEarthEngine(gate=gate, delay_s=0.001)
     live = memory_service(slow, timeout_s=0.1)
-    started = time.monotonic()
-    with pytest.raises(LiveMetricsError) as failed:
-        live.compute(POLYGON)
-    assert failed.value.code == EARTH_ENGINE_TIMEOUT and time.monotonic() - started < 0.5
-    time.sleep(0.8)  # the abandoned call reached its next checkpoint and stopped
+    try:
+        with pytest.raises(LiveMetricsError) as failed:
+            live.compute(POLYGON)
+        assert failed.value.code == EARTH_ENGINE_TIMEOUT
+        assert not live._slots.acquire(blocking=False)  # timed-out worker still owns the slot
+    finally:
+        gate.set()
+    assert live._slots.acquire(timeout=5)  # worker stopped and released its slot
+    live._slots.release()
     assert live.cached(POLYGON) is None  # nothing half-computed is cached
     slow.delay_s = 0.0
     assert live.compute(POLYGON).data_version == LIVE_DATA_VERSION

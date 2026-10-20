@@ -40,6 +40,7 @@ from concurrent.futures import Executor, ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from math import ceil
 from typing import Any, Literal, Protocol, cast
 from uuid import UUID, uuid4
 
@@ -113,6 +114,17 @@ NOT_COMPUTED = frozenset({"stale", f"earth_obs_failed:{EARTH_ENGINE_BUSY}"})
 LIVE_METRICS_PENDING = "live_metrics_pending"
 """Live Earth Engine is on but this polygon isn't computed yet, and the run may not compute it
 (only a listing submit, which counts against the live-rating quota, may)."""
+
+
+def _cap_retry_after(oldest: datetime, now: datetime) -> int:
+    remaining = ceil((oldest + RUN_WINDOW - now).total_seconds())
+    if remaining > RUN_WINDOW.total_seconds():
+        log.warning(
+            "retry_after_clamped: rating event is %.3fs ahead of database time",
+            (oldest - now).total_seconds(),
+        )
+    return min(max(remaining, 1), int(RUN_WINDOW.total_seconds()))
+
 
 Trigger = Literal["api", "time_machine", "listing"]
 
@@ -912,15 +924,11 @@ class RatingRunner:
                 raise RunInProgress(run.run_id)
         queued = sorted(run.queued_at for run in recent.values() if run.queued_at is not None)
         if len(queued) >= cap:
-            retry_after = queued[len(queued) - cap] + RUN_WINDOW - now
-            raise RunRateLimited(max(1, int(retry_after.total_seconds()) + 1))
+            raise RunRateLimited(_cap_retry_after(queued[len(queued) - cap], now))
         global_cap = self.settings.rating_runs_global_per_hour
         oldest = _global_cap_reached(session, now, global_cap)
         if oldest is not None:
-            retry_after = oldest + RUN_WINDOW - now
-            raise RunRateLimited(
-                max(1, int(retry_after.total_seconds()) + 1), code="rating_global_limit"
-            )
+            raise RunRateLimited(_cap_retry_after(oldest, now), code="rating_global_limit")
         if on_queue is not None:
             on_queue(session, asset, spec.run_id)
         spec = replace(spec, audience=listing_audience(asset))
