@@ -27,9 +27,9 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Literal
 
+import shapely
 from pyproj import CRS, Transformer
 from shapely.geometry import MultiPolygon, Point, Polygon, shape
-from shapely.ops import transform
 
 from app.tools.scoring import CONFIDENCE_WEIGHTS, EVIDENCE_NONE, EVIDENCE_VALIDATED
 
@@ -159,8 +159,11 @@ def distance_to_area_m(geojson: Mapping[str, Any], lat: float, lon: float) -> in
     area = _area(geojson)
     centre = area.centroid
     laea = CRS.from_proj4(f"+proj=laea +lat_0={centre.y} +lon_0={centre.x} +datum=WGS84 +units=m")
-    project = Transformer.from_crs("EPSG:4326", laea, always_xy=True).transform
-    metres = transform(project, area).distance(transform(project, Point(lon, lat)))
+    # (x, y) arrays in, (x, y) arrays out: `interleaved=False` (the stubs only type the default).
+    project: Any = Transformer.from_crs("EPSG:4326", laea, always_xy=True).transform
+    metres = shapely.transform(area, project, interleaved=False).distance(
+        shapely.transform(Point(lon, lat), project, interleaved=False)
+    )
     return int(-(-metres // 1))
 
 

@@ -311,7 +311,8 @@ def store_photo(
         asset.geojson, inspection.gps_lat, inspection.gps_lon, inspection.taken_at, today
     )
     analyse = geotag.passed and mode != "off"
-    with Image.open(io.BytesIO(jpeg)) as stored:  # our own re-encoded JPEG, not the upload
+    # The worker's re-encoded JPEG, not the upload; only its header is read here.
+    with Image.open(io.BytesIO(jpeg), formats=["JPEG"]) as stored:
         width, height = stored.size
     photo = FieldPhoto(
         world_id=world_id,
