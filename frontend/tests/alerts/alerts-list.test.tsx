@@ -106,11 +106,11 @@ describe("AlertsList", () => {
     const items = within(await screen.findByRole("list", { name: "Alerts" }))
       .getAllByRole("listitem")
       .map((li) => li.textContent);
-    expect(items[0]).toContain("Xochimilco Wetland downgraded to BBB(unread)");
+    expect(items[0]).toContain("Xochimilco Wetland downgraded to BBB (unread)");
     expect(items[0]).toContain(
       "Health 72.0 → 64.5 (−7.5 points). Grade A → BBB.",
     );
-    expect(items[1]).toContain("Fire reported near Osa Forest(unread)");
+    expect(items[1]).toContain("Fire reported near Osa Forest (unread)");
     expect(screen.getByText("2 unread")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Osa Forest" })).toHaveAttribute(
       "href",

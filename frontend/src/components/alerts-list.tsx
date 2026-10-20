@@ -171,25 +171,25 @@ function AlertItem({ alert }: { alert: AlertOut }) {
       <div className="min-w-0 flex-1 text-sm">
         <p
           className={cn(
-            "flex items-center gap-2",
+            "text-pretty",
             unread ? "font-semibold" : "font-medium text-muted-foreground",
           )}
         >
           {unread && (
             <span
-              className="size-2 shrink-0 rounded-full bg-primary"
+              className="mr-1.5 mb-0.5 inline-block size-2 rounded-full bg-primary align-middle"
               aria-hidden="true"
             />
           )}
-          <span className="min-w-0 text-pretty">{alert.title}</span>
-          {unread && <span className="sr-only">(unread)</span>}
+          {alert.title}
+          {unread && <span className="sr-only"> (unread)</span>}
         </p>
         {alert.message && (
           <p className="mt-0.5 text-pretty text-muted-foreground">
             {alert.message}
           </p>
         )}
-        <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           <Link
             href={assetHref(alert.asset_id)}
             className="font-medium text-foreground hover:underline"
@@ -213,6 +213,21 @@ function AlertItem({ alert }: { alert: AlertOut }) {
               </a>
             </>
           )}
+          {unread && (
+            <>
+              <span aria-hidden="true">·</span>
+              <Button
+                variant="link"
+                size="xs"
+                className="h-auto p-0 text-xs font-medium has-[>svg]:px-0"
+                disabled={markRead.isPending}
+                onClick={() => void markRead.mutate(alert.id)}
+              >
+                Mark read
+                <span className="sr-only">: {alert.title}</span>
+              </Button>
+            </>
+          )}
         </p>
         {markRead.error && (
           <p role="alert" className="mt-1 text-xs text-destructive">
@@ -220,18 +235,6 @@ function AlertItem({ alert }: { alert: AlertOut }) {
           </p>
         )}
       </div>
-      {unread && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="shrink-0"
-          disabled={markRead.isPending}
-          onClick={() => void markRead.mutate(alert.id)}
-        >
-          Mark read
-          <span className="sr-only">: {alert.title}</span>
-        </Button>
-      )}
     </li>
   );
 }

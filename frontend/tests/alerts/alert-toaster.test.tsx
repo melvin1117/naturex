@@ -1,5 +1,5 @@
 import { act, render, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AlertToaster } from "@/components/proto/alert-toaster";
 import { WorldProvider } from "@/components/world-provider";
@@ -38,27 +38,37 @@ function payload(id: string) {
   };
 }
 
+const NOW = Date.parse("2026-10-07T00:00:00Z");
+
 beforeEach(() => {
   FakeEventSource.reset();
   sonner.custom.mockClear();
+  vi.spyOn(Date, "now").mockReturnValue(NOW);
 });
+
+afterEach(() => vi.restoreAllMocks());
+
+async function renderToaster() {
+  const backend = fakeBackend({ "GET /world": () => json(SIGNED_IN_WORLD) });
+  const layer = createDataLayer({
+    baseUrl: BASE,
+    fetch: backend.fetch,
+    createEventSource: createFakeEventSource,
+  });
+  render(
+    <WorldProvider dataLayer={layer}>
+      <PrototypeProvider>
+        <AlertToaster />
+      </PrototypeProvider>
+    </WorldProvider>,
+  );
+  await waitFor(() => expect(FakeEventSource.instances).not.toHaveLength(0));
+  return FakeEventSource.latest();
+}
 
 describe("AlertToaster", () => {
   it("toasts each real alert once, even when a reconnect replays it", async () => {
-    const backend = fakeBackend({ "GET /world": () => json(SIGNED_IN_WORLD) });
-    const layer = createDataLayer({
-      baseUrl: BASE,
-      fetch: backend.fetch,
-      createEventSource: createFakeEventSource,
-    });
-    render(
-      <WorldProvider dataLayer={layer}>
-        <PrototypeProvider>
-          <AlertToaster />
-        </PrototypeProvider>
-      </WorldProvider>,
-    );
-    await waitFor(() => expect(FakeEventSource.instances).not.toHaveLength(0));
+    await renderToaster();
 
     act(() => {
       const source = FakeEventSource.latest();
@@ -72,5 +82,18 @@ describe("AlertToaster", () => {
     });
 
     expect(sonner.custom).toHaveBeenCalledTimes(2);
+  });
+
+  it("doesn't toast the old alerts a new page's stream replays", async () => {
+    const source = await renderToaster();
+
+    act(() => {
+      source.open();
+      // Retained from earlier today: listed in Alerts, not news anymore.
+      source.emit("alert", 3, payload("old"), "2026-10-06T21:00:00Z");
+      source.emit("alert", 4, payload("just before"), "2026-10-06T23:59:50Z");
+    });
+
+    expect(sonner.custom).toHaveBeenCalledTimes(1);
   });
 });

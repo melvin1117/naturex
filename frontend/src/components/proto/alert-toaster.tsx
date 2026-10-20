@@ -9,6 +9,9 @@ import { useLiveEvent, useWorld } from "@/lib/hooks";
 import { usePrototype } from "@/lib/prototype/store";
 import { PERSONAS } from "@/lib/prototype/world";
 
+/** How old (vs. page load) a replayed alert may be and still toast; allows some clock skew. */
+const REPLAY_GRACE_MS = 30_000;
+
 /**
  * New alerts arrive as a phone-style notification. Signed in, they're the account's real
  * `alert` events (T75: only the asset's holders and community get them); the anonymous
@@ -17,9 +20,17 @@ import { PERSONAS } from "@/lib/prototype/world";
 export function AlertToaster() {
   const { world } = useWorld();
   const signedIn = world?.me != null;
+  const mountedAt = useRef<number | null>(null);
+  useEffect(() => {
+    mountedAt.current = Date.now();
+  }, []);
   useLiveEvent(
     "alert",
-    ({ payload }) => {
+    ({ payload, ts }) => {
+      // A new stream replays the world's retained events (24 h) on every page load; only
+      // alerts raised around or after this page opened are news worth a toast.
+      const since = (mountedAt.current ?? Date.now()) - REPLAY_GRACE_MS;
+      if (Date.parse(ts) < since) return;
       toast.custom(
         () => (
           <AlertCard
