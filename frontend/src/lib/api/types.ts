@@ -31,6 +31,7 @@ export type LegendEntry = Schemas["LegendEntry"];
 export type LedgerVerify = Schemas["LedgerVerifyOut"];
 export type LoginIn = Schemas["LoginIn"];
 export type MeOut = Schemas["MeOut"];
+export type MetricChange = Schemas["MetricChange"];
 export type MyCommunity = Schemas["MyCommunityOut"];
 export type OrderCreate = Schemas["OrderCreate"];
 export type OrderOut = Schemas["OrderOut"];
