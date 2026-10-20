@@ -7,7 +7,7 @@ from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
@@ -315,9 +315,68 @@ def test_get_report_and_diff(client: TestClient, session: Session) -> None:
     assert res.status_code == 200
     assert res.json() == first
     assert diff.status_code == 200
-    changes = diff.json()["changes"]
+    body = diff.json()
+    changes = body["changes"]
     assert changes[0] == "health_score: 76.20 → 87.10"
     assert changes[1] == "grade: A → AA"
+    assert (body["from_version"], body["to_version"]) == (1, 2)
+    assert body["grade_change"] == {"old": "A", "new": "AA", "direction": "up"}
+    metrics = {metric["id"]: metric for metric in body["metrics"]}
+    health = metrics["score:health"]
+    assert (D(health["old"]), D(health["new"]), D(health["delta"])) == (
+        D("76.20"),
+        D("87.10"),
+        D("10.90"),
+    )
+    assert metrics["metric:ndvi_mean"]["group"] == "satellite"
+    assert all(D(m["delta"]) != 0 for m in body["metrics"] if m["change"] == "changed")
+    assert body["reasons"][0]["text"] == f"Satellite data version {first['data_version']} → sim-1."
+    assert body["reasons"][1]["source"] == "scenario"
+
+
+@requires_db
+def test_diff_validates_its_ids_and_order(client: TestClient, session: Session) -> None:
+    world = _world(client)
+    first = client.get(f"/assets/{_asset_id(world)}").json()["latest_report"]
+    second = _rate_restoration(session, UUID(world["id"]))
+
+    reversed_ = client.get(f"/reports/{first['id']}/diff/{second.id}")
+    same = client.get(f"/reports/{first['id']}/diff/{first['id']}")
+    invalid = client.get(f"/reports/{second.id}/diff/not-a-uuid")
+    missing = client.get(f"/reports/{second.id}/diff/{uuid4()}")
+
+    assert (reversed_.status_code, reversed_.json()["detail"]) == (400, "prev_not_older")
+    assert same.status_code == 200
+    assert same.json()["metrics"] == [] and same.json()["reasons"] == []
+    assert invalid.status_code == 422
+    assert (missing.status_code, missing.json()["detail"]) == (404, "not_found")
+
+
+@requires_db
+def test_diff_reasons_span_every_version_between(client: TestClient, session: Session) -> None:
+    world = _world(client)
+    world_id = UUID(world["id"])
+    first = client.get(f"/assets/{_asset_id(world)}").json()["latest_report"]
+    second = _rate_restoration(session, world_id)
+    # As a rating run stores it (T27): the Auditor's cited key changes for v2.
+    key_changes = ["Vegetation recovered [metric:ndvi_mean]."]
+    second.auditor_json = {**(second.auditor_json or {}), "auditor": {"key_changes": key_changes}}
+    session.add(second)
+    session.commit()
+    third = _rate_restoration(session, world_id)
+
+    span = client.get(f"/reports/{third.id}/diff/{first['id']}").json()
+    step = client.get(f"/reports/{third.id}/diff/{second.id}").json()
+
+    assert (span["from_version"], span["to_version"]) == (1, 3)
+    assert span["metrics"]
+    audited = [r for r in span["reasons"] if r["source"] == "auditor"]
+    assert [(r["version"], r["text"], r["citations"]) for r in audited] == [
+        (2, key_changes[0], ["metric:ndvi_mean"])
+    ]
+    ndvi = next(m for m in span["metrics"] if m["id"] == "metric:ndvi_mean")
+    assert span["reasons"].index(audited[0]) in ndvi["reason_refs"]
+    assert step["metrics"] == [] and step["reasons"] == []
 
 
 @requires_db

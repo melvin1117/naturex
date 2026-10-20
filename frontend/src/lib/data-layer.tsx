@@ -41,6 +41,8 @@ export const queryKeys = {
   prices: (assetId: string) => ["prices", assetId] as const,
   report: (id: string) => ["report", id] as const,
   reports: (assetId: string) => ["reports", assetId] as const,
+  /** Two sealed reports never change, so a diff is never invalidated (T37). */
+  reportDiff: (id: string, prev: string) => ["report-diff", id, prev] as const,
   ledger: (assetId: string) => ["ledger", assetId] as const,
   siteImages: (siteKey: string) => ["site-images", siteKey] as const,
   portfolio: () => ["portfolio"] as const,

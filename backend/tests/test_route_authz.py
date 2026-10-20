@@ -508,9 +508,11 @@ def test_a_diff_against_another_worlds_report_is_not_found(
     start_demo(client, session, mine.world)
 
     other = client.get(f"/reports/{mine.report}/diff/{theirs.report}")
+    reversed_ = client.get(f"/reports/{theirs.report}/diff/{mine.report}")
     own = client.get(f"/reports/{mine.report}/diff/{mine.report}")
 
     assert (other.status_code, other.json()["detail"]) == (404, "not_found")
+    assert (reversed_.status_code, reversed_.json()["detail"]) == (404, "not_found")
     assert own.status_code == 200
 
 
