@@ -1,7 +1,8 @@
 """The one client for every model call (dev-spec §3, ADR-0003, T09).
 
 All AI calls go through Nebius Token Factory (OpenAI-compatible API). This module:
-- routes a *tier* (fast / orchestrator / auditor) to the model ID configured in `.env`;
+- routes a *tier* (fast / orchestrator / auditor, and perception for images: ADR-0003's one
+  non-Nemotron vision model, `MODEL_MULTIMODAL`) to the model ID configured in `.env`;
 - asks for structured output with `response_format` `json_schema` in the OpenAI shape
   (`name`, `schema`, `strict`) and validates it with Pydantic (T02: the raw-schema shape
   in the Token Factory docs returns 422);
@@ -54,6 +55,10 @@ PRICES_PER_M: dict[str, tuple[Decimal, Decimal]] = {
 }
 # Conservative lower bound on characters per token, so the prompt reserve overestimates.
 CHARS_PER_TOKEN = 2
+# Prompt tokens reserved per image part, instead of counting its base64 characters (a 1600 px
+# preview would reserve over a million "tokens"). MiniCPM-V 4.5 encodes an image of up to
+# 1.8 MP in at most about 640 tokens (9 slices + a thumbnail, 64 each); this leaves 3x margin.
+IMAGE_PROMPT_TOKENS = 2_048
 # Postgres advisory-lock key that serialises budget reservations across processes.
 BUDGET_LOCK_KEY = 0x4E584C4C
 REQUEST_TIMEOUT_S = 60.0
@@ -66,6 +71,8 @@ class Tier(StrEnum):
     AUDITOR = "auditor"
     EMBED = "embed"
     """`MODEL_EMBED` (Qwen3-Embedding-8B, ADR-0003): Copilot retrieval only, never text."""
+    PERCEPTION = "perception"
+    """Images only (MODEL_MULTIMODAL): it reads, and Nemotron judges (ADR-0003)."""
 
 
 # The first tier gets a retry; each fallback tier gets one attempt (dev-spec §3).
@@ -74,6 +81,7 @@ FALLBACK: dict[Tier, tuple[Tier, ...]] = {
     Tier.ORCHESTRATOR: (Tier.ORCHESTRATOR, Tier.FAST),
     Tier.FAST: (Tier.FAST,),
     Tier.EMBED: (Tier.EMBED,),
+    Tier.PERCEPTION: (Tier.PERCEPTION,),  # no other vision model on Token Factory to fall to
 }
 # `doc_chunks.embedding` is vector(1024); Qwen3-Embedding-8B returns exactly this many numbers
 # with `dimensions=1024` (ADR-0003).
@@ -238,10 +246,31 @@ def _prices(model: str) -> tuple[Decimal, Decimal]:
     return PRICES_PER_M[model]
 
 
+def _without_images(messages: Sequence[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+    """The messages with each `image_url` content part emptied, and how many there were."""
+    images = 0
+    out: list[dict[str, Any]] = []
+    for message in messages:
+        content = message.get("content")
+        if isinstance(content, list):
+            parts = []
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "image_url":
+                    images += 1
+                    parts.append({"type": "image_url"})
+                else:
+                    parts.append(part)
+            message = {**message, "content": parts}
+        out.append(message)
+    return out, images
+
+
 def _reserve_usd(model: str, messages: Sequence[dict[str, Any]], max_tokens: int) -> Decimal:
     """Worst-case cost of one attempt: generous prompt estimate plus the full output cap."""
-    prompt_chars = len(json.dumps(messages, default=str))
-    return cost_usd(model, prompt_chars // CHARS_PER_TOKEN + 1, max_tokens)
+    text_only, images = _without_images(messages)
+    prompt_chars = len(json.dumps(text_only, default=str))
+    prompt_tokens = prompt_chars // CHARS_PER_TOKEN + 1 + images * IMAGE_PROMPT_TOKENS
+    return cost_usd(model, prompt_tokens, max_tokens)
 
 
 def _strip_wrappers(text: str) -> str:
@@ -293,6 +322,7 @@ class LLMClient:
             Tier.ORCHESTRATOR: self._settings.model_orchestrator,
             Tier.AUDITOR: self._settings.model_auditor,
             Tier.EMBED: self._settings.model_embed,
+            Tier.PERCEPTION: self._settings.model_multimodal,
         }[tier]
         if not model:
             raise ModelNotConfigured(f"MODEL_* for tier {tier} is empty in .env")

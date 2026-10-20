@@ -1712,7 +1712,7 @@
           "verification"
         ],
         "summary": "Submit Verification",
-        "description": "Submit 1\u20133 uploaded documents for review: a new current run with its deterministic\nchecklist (accepted format, not reused, boundary free, consent document attached) and the\nfingerprint of what it vouches for. Any earlier run stops being current.",
+        "description": "Submit 1\u20133 uploaded documents for review: a new current run with its deterministic\nchecklist (accepted format, not reused, boundary free, consent document attached) and the\nfingerprint of what it vouches for. Any earlier run stops being current. Once committed,\nthe AI document check (T71) runs in the background where it's on; its untrusted suggestion\nis for the reviewer only and never changes the checklist or the level.",
         "operationId": "submit_verification_assets__asset_id__verification_runs_post",
         "parameters": [
           {
@@ -1878,7 +1878,7 @@
           "admin"
         ],
         "summary": "Review Queue",
-        "description": "Listings waiting for a reviewer in the caller's world, oldest first, with their current\nrun, one page at a time (`limit`, `offset`). Listings of the admin's own communities are\nleft out (conflict of interest).",
+        "description": "Listings waiting for a reviewer in the caller's world, oldest first, with their current\nrun, one page at a time (`limit`, `offset`). Listings of the admin's own communities are\nleft out (conflict of interest). Each item carries the run's AI document check\n(`ai_suggestion_status`, `ai_suggestion`): an **untrusted heuristic** read from the\ndocuments by AI models, to be shown labelled as such next to its excerpts.",
         "operationId": "review_queue_admin_verifications_get",
         "parameters": [
           {
@@ -3512,6 +3512,315 @@
   },
   "components": {
     "schemas": {
+      "AiComparisonOut": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "holder_name",
+              "place",
+              "area"
+            ],
+            "title": "Field"
+          },
+          "listing_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Listing Value"
+          },
+          "document_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Value"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "match",
+              "mismatch",
+              "unclear",
+              "not_applicable"
+            ],
+            "title": "Verdict"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "compared_by": {
+            "type": "string",
+            "enum": [
+              "model",
+              "code"
+            ],
+            "title": "Compared By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "field",
+          "listing_value",
+          "document_value",
+          "excerpt",
+          "verdict",
+          "reason",
+          "compared_by"
+        ],
+        "title": "AiComparisonOut",
+        "description": "One field of one document compared with the listing: both values, the excerpt, the verdict\nand why. `compared_by`: `model` (Nemotron, holder name and place) or `code` (always the area,\nand fields that couldn't or mustn't go to a model)."
+      },
+      "AiDocumentReadingOut": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "doc_type": {
+            "$ref": "#/components/schemas/DocumentType"
+          },
+          "sent_to_model": {
+            "type": "boolean",
+            "title": "Sent To Model"
+          },
+          "not_sent_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "no_preview",
+                  "not_sample"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Sent Reason",
+            "description": "`no_preview`: the document has no sanitised preview (a PDF without a scanned image on page 1). `not_sample`: a sandbox sends only sample documents."
+          },
+          "readable": {
+            "type": "boolean",
+            "title": "Readable"
+          },
+          "holder_name": {
+            "$ref": "#/components/schemas/AiExtractedField"
+          },
+          "parcel_id": {
+            "$ref": "#/components/schemas/AiExtractedField"
+          },
+          "place": {
+            "$ref": "#/components/schemas/AiExtractedField"
+          },
+          "area": {
+            "$ref": "#/components/schemas/AiExtractedField",
+            "description": "The number and unit as read, e.g. `144 ha`."
+          },
+          "area_ha": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area Ha",
+            "description": "The area in hectares, converted in code, when the area comparison used it."
+          },
+          "issue_date": {
+            "$ref": "#/components/schemas/AiExtractedField"
+          },
+          "instruction_like_text": {
+            "type": "boolean",
+            "title": "Instruction Like Text",
+            "description": "Text aimed at an AI model was found: a sign of manipulation."
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "doc_type",
+          "sent_to_model",
+          "not_sent_reason",
+          "readable",
+          "holder_name",
+          "parcel_id",
+          "place",
+          "area",
+          "area_ha",
+          "issue_date",
+          "instruction_like_text"
+        ],
+        "title": "AiDocumentReadingOut",
+        "description": "What the model read from one document's sanitised preview (T71)."
+      },
+      "AiExtractedField": {
+        "properties": {
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "excerpt"
+        ],
+        "title": "AiExtractedField",
+        "description": "A value a model read off a document, and the verbatim excerpt around it. Attacker-written\ntext: render it as plain text, never as HTML or Markdown."
+      },
+      "AiSuggestionOut": {
+        "properties": {
+          "trust": {
+            "type": "string",
+            "const": "untrusted_heuristic",
+            "title": "Trust",
+            "default": "untrusted_heuristic"
+          },
+          "notice": {
+            "type": "string",
+            "title": "Notice",
+            "default": "Untrusted AI heuristic: read from the uploaded documents by AI models, which can be wrong or manipulated by the documents themselves. It never changes the checks or the verification level; a person decides."
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "consistent",
+                  "inconsistent",
+                  "unreadable"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          },
+          "comparisons": {
+            "items": {
+              "$ref": "#/components/schemas/AiComparisonOut"
+            },
+            "type": "array",
+            "title": "Comparisons"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/AiDocumentReadingOut"
+            },
+            "type": "array",
+            "title": "Documents"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models"
+          },
+          "method_version": {
+            "type": "string",
+            "title": "Method Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "status",
+          "suggestion",
+          "reasons",
+          "comparisons",
+          "documents",
+          "flags",
+          "models",
+          "method_version",
+          "created_at"
+        ],
+        "title": "AiSuggestionOut",
+        "description": "The AI document check of a run (T71, ADR-0006 \u00a72), for the reviewer only. **Untrusted\nheuristic**: show it labelled as such, next to its excerpts; it never changed a check or the\nlevel. `status: failed` means no model answered (or the budget was spent): `suggestion` is\nnull. A run has no AI suggestion while the check is pending or when it doesn't run (the live\nworld while `VERIFICATION_AI_LIVE=false`): see the queue item's `ai_suggestion_status`."
+      },
       "AlertListOut": {
         "properties": {
           "alerts": {
@@ -7553,6 +7862,28 @@
           },
           "run": {
             "$ref": "#/components/schemas/VerificationRunOut"
+          },
+          "ai_suggestion_status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "not_run",
+              "completed",
+              "failed"
+            ],
+            "title": "Ai Suggestion Status",
+            "description": "The run's AI document check: `pending` (queued or running, for up to 15 minutes after submission), `not_run` (off in this world, or no document may be sent to a model), `completed`, or `failed` (no model answer, a spent budget, an error, a lost job or a stored result that no longer reads)."
+          },
+          "ai_suggestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AiSuggestionOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The AI document check's result: an untrusted heuristic (see its `trust` and `notice`). Present when `ai_suggestion_status` is `completed`, and when `failed` with a stored result; null otherwise."
           }
         },
         "type": "object",
@@ -7561,7 +7892,8 @@
           "asset_name",
           "asset_status",
           "community_id",
-          "run"
+          "run",
+          "ai_suggestion_status"
         ],
         "title": "ReviewQueueItem",
         "description": "A listing waiting for a reviewer: its current, undecided run."

@@ -40,6 +40,7 @@ from app.routers import (
     world,
 )
 from app.sandbox import ensure_live_world
+from app.services.document_check import shutdown_default_checker
 
 settings = get_settings()
 
@@ -101,6 +102,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         prepare_live_world()
     validate_mock_settings(settings)
     yield
+    shutdown_default_checker()  # T71: queued AI document checks are dropped, not waited for
 
 
 app = FastAPI(

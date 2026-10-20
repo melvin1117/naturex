@@ -17,14 +17,15 @@ Anyone who can see the asset: `GET /assets/{id}/verification`, the public "How t
 verified" panel (check names and results only, plus what was not checked).
 
 Reviewer (an admin, never on its own community's listing, `REVIEW_LISTING`): the queue at
-`GET /admin/verifications`, and `POST /admin/assets/{id}/verification/{run_id}/approve`,
+`GET /admin/verifications` (with each run's AI document check, T71: an untrusted heuristic shown
+only here), and `POST /admin/assets/{id}/verification/{run_id}/approve`,
 `…/reject` and `…/revoke` (the last two need a reason). A refused step is 409 with a code.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -70,6 +71,12 @@ from app.schemas import (
     VerificationSubmit,
 )
 from app.services import verification
+from app.services.document_check import (
+    DocumentChecker,
+    get_document_checker,
+    suggestion_status,
+    suggestions_for,
+)
 from app.services.listings import OVERLAP
 from app.services.verification import (
     CHECKS_FAILED,
@@ -494,10 +501,13 @@ def submit_verification(
     granted: ManageListing,
     session: SessionDep,
     response: Response,
+    checker: Annotated[DocumentChecker, Depends(get_document_checker)],
 ) -> VerificationRunOut:
     """Submit 1–3 uploaded documents for review: a new current run with its deterministic
     checklist (accepted format, not reused, boundary free, consent document attached) and the
-    fingerprint of what it vouches for. Any earlier run stops being current."""
+    fingerprint of what it vouches for. Any earlier run stops being current. Once committed,
+    the AI document check (T71) runs in the background where it's on; its untrusted suggestion
+    is for the reviewer only and never changes the checklist or the level."""
     actor = granted.signed_in
     ref = _ref(granted)
     try:
@@ -518,6 +528,7 @@ def submit_verification(
         session.rollback()
         raise _missing() from None
     session.commit()
+    checker.schedule(ref.world_id, ref.asset_id, view.run.id)
     response.headers["Cache-Control"] = NO_STORE
     return run_out(view)
 
@@ -615,16 +626,21 @@ def review_queue(
     granted: ReviewQueue,
     session: SessionDep,
     response: Response,
+    checker: Annotated[DocumentChecker, Depends(get_document_checker)],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[ReviewQueueItem]:
     """Listings waiting for a reviewer in the caller's world, oldest first, with their current
     run, one page at a time (`limit`, `offset`). Listings of the admin's own communities are
-    left out (conflict of interest)."""
+    left out (conflict of interest). Each item carries the run's AI document check
+    (`ai_suggestion_status`, `ai_suggestion`): an **untrusted heuristic** read from the
+    documents by AI models, to be shown labelled as such next to its excerpts."""
     actor = granted.signed_in
     rows = verification.review_queue(
         session, actor.world_id, list(actor.memberships), limit=limit, offset=offset
     )
+    suggestions = suggestions_for(session, actor.world_id, [view.run.id for _, view in rows])
+    now = datetime.now(UTC)
     response.headers["Cache-Control"] = PRIVATE_NO_STORE
     return [
         ReviewQueueItem(
@@ -633,6 +649,16 @@ def review_queue(
             asset_status=AssetStatusOut(asset.status.value),
             community_id=asset.community_id,
             run=run_out(view),
+            ai_suggestion_status=suggestion_status(
+                checker.settings,
+                actor.world_id,
+                stored=view.run.id in suggestions,
+                stored_out=suggestions.get(view.run.id),
+                documents=view.documents,
+                submitted_at=view.run.created_at,
+                now=now,
+            ),
+            ai_suggestion=suggestions.get(view.run.id),
         )
         for asset, view in rows
     ]

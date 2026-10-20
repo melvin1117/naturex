@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     document_uploads_per_hour: int = Field(default=20, ge=1)
     document_quota_community_bytes: int = Field(default=100 * 1024 * 1024, ge=1)
     document_quota_world_bytes: int = Field(default=1024 * 1024 * 1024, ge=1)
+    # The AI document check (T71, ADR-0006 §5) in the live world: off until Token Factory's data
+    # retention and training terms are confirmed. Sandboxes run it, but send only sample
+    # documents (`is_sample`) to the model; with USE_MOCKS a fake model runs and nothing leaves.
+    verification_ai_live: bool = False
 
     nebius_api_key: str = ""
     token_factory_base_url: str = "https://api.tokenfactory.nebius.com/v1/"
