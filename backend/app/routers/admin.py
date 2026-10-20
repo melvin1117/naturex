@@ -35,6 +35,7 @@ from app.deps import CurrentWorld, SessionDep, SettingsDep
 from app.llm import DbCallLog
 from app.models import Alert, AlertRecipient, Asset, LlmCall
 from app.schemas import (
+    AlertKindOut,
     AssetRatingOut,
     EventOut,
     EventPresetOut,
@@ -50,7 +51,7 @@ from app.schemas import (
     TraceStep,
 )
 from app.services import time_machine
-from app.services.alerts import NEWS_ALERT_SEVERITY, AlertKindOut
+from app.services.alerts import NEWS_ALERT_SEVERITY
 from app.services.rating_runs import (
     AssetNotRateable,
     RunError,

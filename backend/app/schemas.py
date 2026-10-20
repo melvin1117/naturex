@@ -868,16 +868,20 @@ class StreamEvent(BaseModel):
     ts: datetime
 
 
+AlertKindOut = Literal["grade_change", "health_change", "news"]
+ALERT_KIND_DESCRIPTION = (
+    "grade_change / health_change: a re-rate moved the grade or the health score by ≥ 5 points; "
+    "news: a News Scout event of severity ≥ 4"
+)
+
+
 class AlertOut(BaseModel):
     """One alert delivered to the signed-in account (T75)."""
 
     id: UUID
     asset_id: UUID
     asset_name: str
-    kind: Literal["grade_change", "health_change", "news"] = Field(
-        description="grade_change / health_change: a re-rate moved the grade or the health "
-        "score by ≥ 5 points; news: a News Scout event of severity ≥ 4"
-    )
+    kind: AlertKindOut = Field(description=ALERT_KIND_DESCRIPTION)
     title: str
     message: str
     severity: int = Field(ge=1, le=5)
@@ -1131,7 +1135,7 @@ class SentAlertOut(BaseModel):
     id: UUID
     asset_id: UUID
     asset_name: str
-    kind: Literal["grade_change", "health_change", "news"]
+    kind: AlertKindOut = Field(description=ALERT_KIND_DESCRIPTION)
     title: str
     message: str
     severity: int = Field(ge=1, le=5)

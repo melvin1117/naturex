@@ -11,7 +11,7 @@ import logging
 from collections.abc import Callable, Iterator
 from concurrent.futures import Executor, Future
 from dataclasses import replace
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -1281,3 +1281,47 @@ def test_only_admins_read_sent_alerts(client: TestClient, api_session: Session) 
     res = client.get("/admin/alerts", params={"ids": [str(UUID(int=1))]})
 
     assert (res.status_code, res.json()["detail"]) == (403, "admin_only")
+
+
+@requires_db
+def test_sent_alerts_are_newest_first_once_each_even_without_recipients(
+    client: TestClient, api_session: Session
+) -> None:
+    sandbox = start_demo(client, api_session, persona_key="admin")
+    asset = api_session.exec(
+        select(Asset).where(Asset.world_id == sandbox.id, Asset.site_key == "wetland_mx")
+    ).one()
+    now = datetime.now(UTC)
+    older, newer = (
+        Alert(
+            world_id=sandbox.id,
+            asset_id=asset.id,
+            kind=kind,
+            title=title,
+            message="m",
+            severity=4,
+            created_at=now - age,
+        )
+        for kind, title, age in (
+            ("news", "Older", timedelta(hours=1)),
+            ("health_change", "Newer", timedelta(0)),
+        )
+    )
+    api_session.add_all([older, newer])
+    api_session.flush()
+
+    res = client.get("/admin/alerts", params={"ids": [str(older.id), str(newer.id), str(older.id)]})
+
+    assert res.status_code == 200, res.text
+    sent = res.json()
+    assert [(a["title"], a["kind"], a["recipients"]) for a in sent] == [
+        ("Newer", "health_change", 0),
+        ("Older", "news", 0),
+    ]
+
+
+@requires_db
+def test_sent_alerts_need_a_session() -> None:
+    res = TestClient(app).get("/admin/alerts", params={"ids": [str(UUID(int=1))]})
+
+    assert res.status_code == 401
