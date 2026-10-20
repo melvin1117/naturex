@@ -113,7 +113,7 @@ export function listingOutcome(
       return outcome(
         "needs_evidence",
         "Needs more evidence",
-        `${gateReasons(reason).join(" ") || "The rating isn't confident enough yet."} To list, the rating must be at least 70% confident. Add geotagged field photos (validated photos add 14 points of confidence) and submit it again, or revise the listing.`,
+        `${gateReasons(reason).join(" ") || "The rating isn't confident enough yet."} To list, the rating must be at least 70% confident. Add geotagged field photos (validated photos raise confidence by a fixed amount) and submit it again, or revise the listing.`,
         { canRevise: true, canWithdraw: true },
       );
     case "ineligible":

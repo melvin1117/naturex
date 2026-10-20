@@ -9,7 +9,7 @@ import type { FieldEvidencePublic } from "@/lib/api/types";
 import {
   DISTURBANCE_LABEL,
   LAND_COVER_LABEL,
-  shortDate,
+  monthYear,
 } from "@/lib/field-evidence";
 import { useFieldEvidenceSummary } from "@/lib/field-evidence-hooks";
 
@@ -73,8 +73,8 @@ function Summary({ summary }: { summary: FieldEvidencePublic }) {
           ? "1 geotagged photo"
           : `${summary.validated} geotagged photos`}{" "}
         taken on the listing&apos;s land
-        {summary.latest_taken_on
-          ? `, the latest on ${shortDate(summary.latest_taken_on)}`
+        {summary.latest_taken_month
+          ? `, the latest in ${monthYear(summary.latest_taken_month)}`
           : ""}
         , passed the location and date checks and an image model&apos;s review.{" "}
         {summary.counted_in_latest_report

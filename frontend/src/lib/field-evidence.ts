@@ -100,7 +100,7 @@ function locationCheck(photo: FieldPhoto): PhotoCheck {
       return {
         ...base,
         state: "fail",
-        detail: `Taken ${metres(photo.gps_distance_m ?? 0)} outside the boundary (at most ${photo.gps_buffer_m} m).`,
+        detail: `Taken more than ${photo.gps_buffer_m} m outside the boundary.`,
       };
     case "missing":
       return {
@@ -147,7 +147,7 @@ function analysisCheck(photo: FieldPhoto, geotagPassed: boolean): PhotoCheck {
         ...base,
         state: "skipped",
         detail: geotagPassed
-          ? "Not run: AI analysis is off on the live Exchange for now."
+          ? "Not run: AI analysis is off for now, so the photo can't count as evidence."
           : "Not run: the location and date must pass first.",
       };
     case "completed":
@@ -230,17 +230,36 @@ export function confidenceStory(evidence: FieldEvidence): ConfidenceStory {
   if (validated === 0)
     return {
       title: "No validated photo yet",
-      body: "One validated photo raises the rating's confidence by 14 points: the evidence term of the confidence formula goes from 0.3 to 1.0.",
+      body: "A validated photo raises the rating's confidence by a fixed amount: the evidence term of the confidence formula goes from 0.3 to 1.0.",
     };
   if (confidence.current == null || confidence.projected == null)
     return {
       title: `+${points.toFixed(0)} points at the first rating`,
-      body: "Validated field evidence raises the rating's confidence by 14 points once the listing is rated.",
+      body: `Validated field evidence raises the rating's confidence by ${points.toFixed(0)} points once the listing is rated.`,
+    };
+  if (!reachesListing(evidence))
+    return {
+      title: `${pct(confidence.current)} → ${pct(confidence.projected)} at the next rating`,
+      body: `Validated field evidence adds ${points.toFixed(0)} points of confidence, but a listing needs at least ${pct(confidence.listing_min)} to list, so it would still need more evidence. Newer satellite data can raise it further, or you can revise the listing.`,
     };
   return {
     title: `${pct(confidence.current)} → ${pct(confidence.projected)} at the next rating`,
     body: `Validated field evidence adds ${points.toFixed(0)} points of confidence, by the fixed formula; the AI never sets the number. It counts when the listing is rated again.`,
   };
+}
+
+/** Whether the next rating's projected confidence reaches the listing gate's minimum. */
+export function reachesListing(evidence: FieldEvidence): boolean {
+  const { projected, listing_min } = evidence.confidence;
+  return projected != null && Number(projected) >= Number(listing_min);
+}
+
+/** "Oct 2026" for the API's `YYYY-MM`: the public sees the month of a visit, never the day. */
+export function monthYear(month: string): string {
+  return new Date(`${month.slice(0, 7)}-15T12:00:00Z`).toLocaleDateString(
+    "en-GB",
+    { month: "short", year: "numeric", timeZone: "UTC" },
+  );
 }
 
 function pct(value: string | null | undefined): string {

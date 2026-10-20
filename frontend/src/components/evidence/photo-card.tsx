@@ -9,6 +9,17 @@ import {
 } from "lucide-react";
 import { cn } from "cn";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -139,19 +150,63 @@ export function PhotoCard({
           <p className="text-xs text-muted-foreground">
             Uploaded {shortDate(photo.created_at)}
           </p>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onDelete(photo)}
-            disabled={deleting}
-            aria-label={`Delete photo ${index}`}
-          >
-            <Trash2 aria-hidden="true" />
-            Delete
-          </Button>
+          <DeletePhoto
+            photo={photo}
+            index={index}
+            onDelete={onDelete}
+            deleting={deleting}
+          />
         </div>
       </figcaption>
     </figure>
+  );
+}
+
+/** Delete, after a confirmation: the photo and its evidence go for good. */
+function DeletePhoto({
+  photo,
+  index,
+  onDelete,
+  deleting,
+}: {
+  photo: FieldPhoto;
+  index: number;
+  onDelete: (photo: FieldPhoto) => void;
+  deleting: boolean;
+}) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={deleting}
+          aria-label={`Delete photo ${index}`}
+        >
+          <Trash2 aria-hidden="true" />
+          {deleting ? "Deleting…" : "Delete"}
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete photo {index}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {photo.validated
+              ? "The photo and its evidence are removed, so the next rating won't count it. A rating already made keeps what it cited."
+              : "The photo is removed for good."}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep it</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            onClick={() => onDelete(photo)}
+          >
+            Delete photo
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

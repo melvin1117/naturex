@@ -17,7 +17,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { AssetDetail, FieldEvidence, FieldPhoto } from "@/lib/api/types";
 import { isApiAssetId } from "@/lib/asset-detail";
-import { confidenceStory } from "@/lib/field-evidence";
+import { confidenceStory, reachesListing } from "@/lib/field-evidence";
 import { useDeletePhoto, useFieldEvidence } from "@/lib/field-evidence-hooks";
 import { useAsset, useSubmitListing } from "@/lib/hooks";
 import { NOT_FOUND } from "@/lib/ipo";
@@ -42,9 +42,17 @@ const AI_NOTICE: Record<
     body: "Photos that pass the location and date checks get fixed demo labels. Nothing is sent to an AI provider.",
   },
   off: {
-    title: "AI analysis is off on the live Exchange for now",
-    body: "Photos are checked for location and date, but can't count as evidence until image analysis is switched on.",
+    title: "AI analysis is off for now",
+    body: "Your photos are stored and checked for location and date, but no photo is sent to an AI model until our provider's data terms are confirmed. Until then they can't count as evidence or raise the rating's confidence.",
   },
+};
+
+/** Who sees the photo itself, by AI mode: the model only when it's really on. */
+const SENT_TO: Record<FieldEvidence["ai_analysis"], string> = {
+  model:
+    "To label it, the photo (without location data) is sent to an image model on Nebius Token Factory.",
+  mock: "It isn't sent to any AI provider.",
+  off: "It isn't sent to any AI model while AI analysis is off.",
 };
 
 /**
@@ -214,8 +222,9 @@ function Loaded({
                     The photo&apos;s GPS position and date are read once to
                     check them against the boundary; only the result is kept.
                     The photo is stored without any location data, and only your
-                    community and NatureX admins can see it. The public sees
-                    counts and labels, never the photos.
+                    community and NatureX admins can see it.{" "}
+                    {SENT_TO[evidence.ai_analysis]} The public sees counts,
+                    labels and the month of your latest photo, never the photos.
                   </p>
                 </AlertDescription>
               </Alert>
@@ -258,10 +267,13 @@ function ConfidenceCard({
   useEffect(() => {
     if (submitted) headingRef.current?.focus();
   }, [submitted]);
+  // Only when the projection reaches the gate: otherwise the new rating would leave the
+  // listing needing evidence again (the story explains why).
   const canResubmit =
     asset.status === "needs_evidence" &&
     evidence.validated > 0 &&
-    !evidence.confidence.counted;
+    !evidence.confidence.counted &&
+    reachesListing(evidence);
   const onExchange = asset.status === "listed" || asset.status === "suspended";
 
   const resubmit = async () => {

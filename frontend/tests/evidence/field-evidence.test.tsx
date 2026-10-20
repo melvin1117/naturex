@@ -87,7 +87,7 @@ function photo(overrides: Partial<FieldPhoto> = {}): FieldPhoto {
 const OUTSIDE = photo({
   id: PHOTO_2,
   gps_check: "outside",
-  gps_distance_m: 1240,
+  gps_distance_m: null,
   analysis_status: "not_run",
   observation: null,
   validated: false,
@@ -106,6 +106,7 @@ function evidence(overrides: Partial<FieldEvidence> = {}): FieldEvidence {
       projected: "66.0",
       points: "0.0",
       counted: false,
+      listing_min: "70.0",
     },
     ...overrides,
   };
@@ -119,7 +120,14 @@ const VALIDATED = evidence({
     projected: "80.0",
     points: "14.0",
     counted: false,
+    listing_min: "70.0",
   },
+});
+
+/** Still below the gate with the photo: 50.0 → 64.0. */
+const STILL_SHORT = evidence({
+  ...VALIDATED,
+  confidence: { ...VALIDATED.confidence, current: "50.0", projected: "64.0" },
 });
 
 const needsEvidence = (overrides: Partial<AssetDetail> = {}) =>
@@ -175,7 +183,7 @@ describe("field evidence words", () => {
     );
     const far = photoChecks(OUTSIDE);
     expect(far.map((c) => c.state)).toEqual(["fail", "pass", "skipped"]);
-    expect(far[0]!.detail).toContain("1.2 km");
+    expect(far[0]!.detail).toBe("Taken more than 100 m outside the boundary.");
     expect(far[2]!.detail).toBe(
       "Not run: the location and date must pass first.",
     );
@@ -205,9 +213,29 @@ describe("field evidence words", () => {
         projected: "80.0",
         points: "0.0",
         counted: true,
+        listing_min: "70.0",
       },
     });
     expect(confidenceStory(counted).title).toBe("Counted in the latest rating");
+    expect(confidenceStory(STILL_SHORT).body).toContain(
+      "needs at least 70.0% to list, so it would still need more evidence",
+    );
+    expect(confidenceStory(evidence()).body).not.toMatch(/\d+ points/);
+  });
+
+  it("never hard-codes the points: it says the API's", () => {
+    const other = evidence({
+      validated: 1,
+      confidence: {
+        current: null,
+        projected: null,
+        points: "9.0",
+        counted: false,
+        listing_min: "70.0",
+      },
+    });
+    expect(confidenceStory(other).title).toBe("+9 points at the first rating");
+    expect(confidenceStory(other).body).toContain("by 9 points");
   });
 
   it("checks a file before uploading it", () => {
@@ -356,6 +384,70 @@ describe("FieldEvidenceScreen", () => {
     ).toHaveAttribute("href", expect.stringContaining(`asset=${ASSET_ID}`));
   });
 
+  it("explains a listing still short of the gate and offers no new rating", async () => {
+    const backend = renderScreen({ [LIST]: () => json(STILL_SHORT) });
+    expect(
+      await screen.findByRole("heading", {
+        name: "50.0% → 64.0% at the next rating",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/so it would still need more evidence/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Submit for a new rating" }),
+    ).not.toBeInTheDocument();
+    expect(backend.calls(SUBMIT)).toBe(0);
+  });
+
+  it("says when AI analysis is off that photos aren't sent and can't count", async () => {
+    const stored = photo({
+      analysis_status: "not_run",
+      observation: null,
+      validated: false,
+      reasons: ["not_analysed"],
+      event_id: null,
+    });
+    renderScreen({
+      [LIST]: () => json(evidence({ ai_analysis: "off", photos: [stored] })),
+    });
+    expect(
+      await screen.findByText("AI analysis is off for now"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/no photo is sent to an AI model/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/isn't sent to any AI model while AI analysis is off/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/AI analysis is off for now, so the photo can't count/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Doesn't count")).toBeInTheDocument();
+  });
+
+  it("asks before deleting a photo, and cancelling sends nothing", async () => {
+    const backend = renderScreen({
+      [LIST]: () => json(VALIDATED),
+      [DELETE(PHOTO_1)]: () => new Response(null, { status: 204 }),
+    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Delete photo 1" }),
+    );
+    const dialog = await screen.findByRole("alertdialog", {
+      name: "Delete photo 1?",
+    });
+    expect(
+      within(dialog).getByText(/the next rating won't count it/),
+    ).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Keep it" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+    expect(backend.calls(DELETE(PHOTO_1))).toBe(0);
+    expect(screen.getByText("Counts as evidence")).toBeInTheDocument();
+  });
+
   it("deletes a photo and explains a refused upload", async () => {
     const backend = renderScreen({
       [LIST]: sequence(
@@ -367,6 +459,12 @@ describe("FieldEvidenceScreen", () => {
     });
     fireEvent.click(
       await screen.findByRole("button", { name: "Delete photo 2" }),
+    );
+    expect(backend.calls(DELETE(PHOTO_2))).toBe(0);
+    fireEvent.click(
+      within(
+        await screen.findByRole("alertdialog", { name: "Delete photo 2?" }),
+      ).getByRole("button", { name: "Delete photo" }),
     );
     await waitFor(() => expect(backend.calls(DELETE(PHOTO_2))).toBe(1));
     await waitFor(() =>
@@ -428,7 +526,7 @@ describe("FieldEvidencePanel", () => {
     renderPanel({
       photos: 3,
       validated: 2,
-      latest_taken_on: "2026-10-18",
+      latest_taken_month: "2026-10",
       land_cover: ["wetland_vegetation", "open_water"],
       disturbance: [],
       counted_in_latest_report: true,
@@ -440,13 +538,16 @@ describe("FieldEvidencePanel", () => {
     expect(within(seen).getByText("Wetland vegetation")).toBeInTheDocument();
     expect(screen.getByText("None seen")).toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/the latest in Oct 2026, passed/),
+    ).toBeInTheDocument();
   });
 
   it("has an empty state", async () => {
     renderPanel({
       photos: 0,
       validated: 0,
-      latest_taken_on: null,
+      latest_taken_month: null,
       land_cover: [],
       disturbance: [],
       counted_in_latest_report: false,
