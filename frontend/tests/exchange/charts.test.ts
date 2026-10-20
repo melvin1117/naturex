@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  chartMarkers,
   ndviSummary,
   priceSeries,
   priceSummary,
@@ -26,7 +27,71 @@ describe("priceSeries", () => {
       false,
     );
     expect(data.map((d) => d.t)).toEqual(PRICES.map((p) => Date.parse(p.t)));
-    expect(marks.map((m) => [m.event.id, m.price])).toEqual([["in", 21]]);
+    // An event recorded after the last price sits on it; one before the first is left off.
+    expect(marks.map((m) => [m.event.id, m.price])).toEqual([
+      ["in", 21],
+      ["after", 22],
+    ]);
+  });
+
+  it("places an event at the moment it was recorded when it has one", () => {
+    const { marks } = priceSeries(
+      PRICES,
+      [
+        {
+          id: "day",
+          date: "2026-10-19",
+          at: "2026-10-19T13:00:00Z",
+          direction: -1,
+        },
+      ],
+      false,
+    );
+    expect(marks.map((m) => [m.event.id, m.price])).toEqual([["day", 22]]);
+  });
+
+  it("numbers every marker in time order with a label", () => {
+    const series = priceSeries(
+      [...PRICES, { t: "2026-10-19T18:00:00Z", price: 19, reason: "rerate" }],
+      [
+        {
+          id: "fire",
+          date: "2026-10-19T17:00:00Z",
+          direction: -1,
+          title: "Fire at X (simulated)",
+        },
+        {
+          id: "law",
+          date: "2026-10-19T08:00:00Z",
+          direction: 1,
+          title: "New protection law",
+        },
+        { id: "quiet", date: "2026-10-19T09:00:00Z", direction: 0 },
+      ],
+      false,
+    );
+    expect(
+      chartMarkers(series).map((m) => [m.n, m.kind, m.label, m.price]),
+    ).toEqual([
+      [1, "ipo", "Opening price", 20],
+      [2, "event", "New protection law (positive)", 21],
+      [3, "event", "News event", 21],
+      [4, "event", "Fire at X (simulated) (negative)", 22],
+      [5, "rerate", "Re-rated: price moved toward the new fair price", 19],
+    ]);
+  });
+
+  it("spreads markers that sit on the same point", () => {
+    const series = priceSeries(
+      [...PRICES, { t: "2026-10-19T18:00:00Z", price: 19, reason: "rerate" }],
+      [{ id: "fire", date: "2026-10-19T18:00:01Z", direction: -1 }],
+      false,
+    );
+    expect(chartMarkers(series).map((m) => [m.kind, m.stack])).toEqual([
+      ["ipo", 0],
+      ["rerate", 0],
+      ["event", 1],
+    ]);
   });
 
   it("keeps the last price per day when asked", () => {

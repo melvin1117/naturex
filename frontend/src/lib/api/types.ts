@@ -89,3 +89,14 @@ export type ListingSummary = Schemas["ListingSummaryOut"];
 export type NextAction = Schemas["NextAction"];
 export type PayoutSummary = Schemas["PayoutSummaryOut"];
 export type Wallet = Schemas["WalletOut"];
+
+// Time Machine (T38 API, T43 admin panel).
+export type AssetRating = Schemas["AssetRatingOut"];
+export type EventPreset = Schemas["EventPresetOut"];
+export type SentAlert = Schemas["SentAlertOut"];
+export type SimulatedAsset = Schemas["SimulatedAssetOut"];
+export type SimulateEvent = Schemas["SimulateEventResponse"];
+export type SimulateEventRequest = Schemas["SimulateEventRequest"];
+export type SimulateQuarter = Schemas["SimulateQuarterResponse"];
+export type TimeMachine = Schemas["TimeMachineOut"];
+export type TimeMachineQuarter = Schemas["TimeMachineQuarter"];
