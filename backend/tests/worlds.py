@@ -8,6 +8,8 @@ a private sandbox create one plus a DEMO session for a persona in it, standing i
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import date
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
@@ -16,8 +18,11 @@ from sqlmodel import Session, col, select
 
 from app.auth import SESSION_COOKIE, Principal, start_session
 from app.authz import Actor
+from app.config import Settings
 from app.models import SessionKind, User, UserKind, World
+from app.routers.admin import TimeMachineEnv
 from app.sandbox import _delete_world_rows, create_world
+from app.services.rating_runs import InlineExecutor, RatingRunner, news_runner
 
 
 def start_demo(
@@ -83,3 +88,23 @@ def stub_actor(world: World, *, is_admin: bool = False) -> Actor:
         is_admin=is_admin,
         session_kind=SessionKind.DEMO,
     )
+
+
+def mock_time_machine_env(session: Session) -> TimeMachineEnv:
+    """The Time Machine (T38) on the test session's connection: T27's runner in mock mode
+    (fixed pipeline, no model), run inline, with no LLM spend; override `get_time_machine_env`."""
+    conn = session.connection()
+
+    def sessions() -> Session:
+        return Session(bind=conn, join_transaction_mode="create_savepoint")
+
+    cfg = Settings(_env_file=None, use_mocks=True)
+    runner = RatingRunner(
+        session_factory=sessions,
+        settings=cfg,
+        executor=InlineExecutor(),
+        llm_factory=lambda wrap: None,
+        news=news_runner(cfg),
+        today=lambda: date(2026, 10, 7),
+    )
+    return TimeMachineEnv(session_factory=sessions, runner=runner, spend=lambda: Decimal(0))

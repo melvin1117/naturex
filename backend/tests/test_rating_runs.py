@@ -421,7 +421,10 @@ def test_orchestrated_run_stores_a_sealed_audited_report(db: Connection, site: S
             .order_by(col(LedgerEntry.seq))
         ).all()
         assert verify(entries).valid is True
-        last = entries[-1]
+        # The report, then the price re-anchored to it (T38), both pointing at the report.
+        last, anchor = entries[-2], entries[-1]
+        assert anchor.kind == "price_anchor" and anchor.ref_id == report.id
+        assert anchor.payload["fair_value_per_share"] == str(report.fair_value_per_share)
         assert last.kind == "report" and last.ref_id == report.id
         assert last.payload["health_score"] == str(expected.score.health)
         assert last.payload["audit"]["auditor_adjustment"] == -2
@@ -901,9 +904,10 @@ def test_no_account_identifiers_in_ledger_report_or_events(db: Connection, site:
     report = run_report(db, site.world_id, run_id)
     with sessions(db)() as session:
         users = session.exec(select(User.id)).all()
-        entry = session.exec(select(LedgerEntry).where(LedgerEntry.ref_id == report.id)).one()
+        entries = session.exec(select(LedgerEntry).where(LedgerEntry.ref_id == report.id)).all()
+    assert {entry.kind for entry in entries} == {"report", "price_anchor"}  # T38 re-anchor
     stored = [
-        entry.payload,
+        *(entry.payload for entry in entries),
         report.auditor_json,
         report.flags,
         *progress(db, site.world_id, run_id),

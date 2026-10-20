@@ -36,7 +36,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
-from concurrent.futures import Executor, ThreadPoolExecutor
+from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -71,6 +71,7 @@ from app.agents.orchestrator import (
 from app.config import Settings
 from app.events import lock_world_publisher, publish
 from app.llm import CallLog, CallRecord, LLMClient, LLMError, LLMResult
+from app.market.anchoring import reanchor_on_rerate
 from app.models import Asset, AssetStatus, Report, StreamEventType, World, WorldEvent
 from app.schemas import (
     NewsScoutOutput,
@@ -186,6 +187,9 @@ class RunSpec:
     audience: UUID | None = None
     """Live-event audience: None for a public asset; the listing's community while it's under
     review (T58), so its progress never reaches the public stream."""
+    metrics: EarthObsMetrics | None = None
+    """Metrics computed by the caller (T38's Time Machine: a quarter or an event preset applied
+    to the asset's current state) instead of the loader's; they must describe the asset."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,6 +309,14 @@ def _describes_polygon(asset: AssetInfo, metrics: EarthObsMetrics) -> bool:
         metrics_lat=metrics.centroid.lat,
         metrics_lon=metrics.centroid.lon,
     )
+
+
+def given_metrics_fit(asset: AssetInfo, metrics: EarthObsMetrics) -> bool:
+    """Caller-computed metrics (T38) describe the run's asset: a curated site's own key, or for a
+    new polygon its area and centroid (never a curated site's data)."""
+    if asset.site_key is not None:
+        return metrics.site_key == asset.site_key
+    return _describes_polygon(asset, metrics)
 
 
 def asset_info(asset: Asset) -> AssetInfo:
@@ -671,6 +683,11 @@ class RunToolbox:
                 raise AssertionError(tool)
 
     def _load_metrics(self) -> EarthObsMetrics:
+        given = self._spec.metrics
+        if given is not None:
+            if not given_metrics_fit(self._asset, given):
+                raise ToolFailed("foreign_metrics", retryable=False)
+            return given
         return resolve_metrics(
             self._deps.metrics_loader,
             self._asset,
@@ -870,6 +887,7 @@ class RatingRunner:
         trigger: Trigger = "api",
         max_runs_per_hour: int | None = None,
         on_queue: QueueHook | None = None,
+        metrics: EarthObsMetrics | None = None,
     ) -> UUID:
         """Record a queued run and hand it to a worker; returns its `run_id`.
 
@@ -880,7 +898,8 @@ class RatingRunner:
         publisher lock) and writes once every check passed, just before `queued` is published,
         so its writes commit with the queued run or not at all. Without it, listings under
         review are refused (`asset_is_draft`, `asset_not_listed`): they are rated through
-        submit only.
+        submit only. ``metrics`` (T38's Time Machine) replaces the loader's metrics for this run;
+        its scenario is the run's.
         """
         if not self._slots.acquire(blocking=False):
             raise RunnerBusy()
@@ -889,8 +908,9 @@ class RatingRunner:
                 run_id=uuid4(),
                 world_id=world_id,
                 asset_id=asset_id,
-                scenario=scenario or "baseline",
+                scenario=metrics.scenario if metrics is not None else scenario or "baseline",
                 trigger=trigger,
+                metrics=metrics,
             )
             cap = max_runs_per_hour or self.settings.rating_runs_per_world_per_hour
             spec = self._enqueue(spec, cap, on_queue)
@@ -1230,6 +1250,9 @@ class RatingRunner:
             # T75: health Δ ≥ 5 or a grade change alerts the holders and the community, with
             # the report (same transaction, so no alert without its report).
             alert_on_rerate(session, spec.world_id, asset, previous, report)
+            # T38: a re-rate of a trading asset pulls its price toward the new fair value.
+            if previous is not None:
+                reanchor_on_rerate(session, asset, report)
             events = _run_events(session, spec.world_id, spec.run_id)
             if events is None:
                 raise RuntimeError("completed rating run has no progress events")
@@ -1562,6 +1585,19 @@ def get_run_trace(session: Session, world_id: UUID, run_id: UUID) -> RunTraceOut
 
 
 # ----- the process-wide runner ------------------------------------------------------------------
+
+
+class InlineExecutor(Executor):
+    """Runs each rating run in the calling thread, so the caller waits for every run it starts
+    (T75's jobs, T38's Time Machine)."""
+
+    def submit(self, fn: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Future[Any]:
+        future: Future[Any] = Future()
+        try:
+            future.set_result(fn(*args, **kwargs))
+        except BaseException as exc:
+            future.set_exception(exc)
+        return future
 
 
 _default_runner: RatingRunner | None = None

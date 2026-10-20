@@ -2893,13 +2893,49 @@
         }
       }
     },
+    "/admin/time-machine": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Time Machine",
+        "description": "The world's Time Machine quarter, the next one and the event presets (T38).",
+        "operationId": "get_time_machine_admin_time_machine_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeMachineOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: `admin_only`"
+          }
+        }
+      }
+    },
     "/admin/simulate/quarter": {
       "post": {
         "tags": [
           "admin"
         ],
         "summary": "Simulate Quarter",
+        "description": "Advance the world to the next Time Machine quarter (or replay the current one): re-rate\nevery listed asset with that quarter's scenario, re-anchor prices, alert and pay the\nquarter's revenue (T38). Runs inline, so the answer is what actually happened; progress also\nstreams as `rating_progress` events (trigger `time_machine`).",
         "operationId": "simulate_quarter_admin_simulate_quarter_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateQuarterRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2913,6 +2949,19 @@
           },
           "403": {
             "description": "Not allowed: `admin_only`"
+          },
+          "409": {
+            "description": "`quarter_mismatch` (not the world's next or current quarter; see `GET /admin/time-machine`), `timeline_end` (reset the demo to start again) or `local_jobs_disabled` (`LOCAL_JOBS=false`)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
@@ -2923,7 +2972,7 @@
           "admin"
         ],
         "summary": "Simulate Event",
-        "description": "Stub event for an asset in the caller's world (T38 persists it and re-rates).",
+        "description": "Inject an event preset into one asset of the caller's world: its deterministic effect on\nthe metrics, a re-rate (alert and price re-anchor as for any re-rate), then the stored event\nand, for severity \u2265 4, its own alert (T38). The world's quarter doesn't move.",
         "operationId": "simulate_event_admin_simulate_event_post",
         "requestBody": {
           "content": {
@@ -2948,6 +2997,15 @@
           },
           "403": {
             "description": "Not allowed: `admin_only`, `conflict_of_interest`"
+          },
+          "409": {
+            "description": "`asset_not_listed`, `no_current_metrics` (no stored rating to start from) or `run_in_progress` (Location: the active run)"
+          },
+          "429": {
+            "description": "`rating_rate_limited` or `rating_global_limit`; see Retry-After"
+          },
+          "503": {
+            "description": "`rating_busy`, `llm_budget_exhausted`, or `rerate_failed` (Location: the run; nothing was stored)"
           },
           "422": {
             "description": "Validation Error",
@@ -4553,6 +4611,90 @@
         ],
         "title": "AssetOutlines"
       },
+      "AssetRatingOut": {
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Report Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "health_score": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Score"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade"
+          },
+          "data_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Version"
+          },
+          "simulated": {
+            "type": "boolean",
+            "title": "Simulated"
+          },
+          "fair_value_per_share": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fair Value Per Share"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price",
+            "description": "Null before the IPO."
+          }
+        },
+        "type": "object",
+        "required": [
+          "report_id",
+          "version",
+          "simulated"
+        ],
+        "title": "AssetRatingOut",
+        "description": "An asset's latest report and price at one moment, as stored."
+      },
       "AssetStatus": {
         "type": "string",
         "enum": [
@@ -5450,6 +5592,59 @@
           "created_at"
         ],
         "title": "EventOut"
+      },
+      "EventPresetOut": {
+        "properties": {
+          "preset": {
+            "type": "string",
+            "enum": [
+              "fire",
+              "encroachment",
+              "drought",
+              "restoration",
+              "protection"
+            ],
+            "title": "Preset"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "impact_type": {
+            "type": "string",
+            "title": "Impact Type"
+          },
+          "direction": {
+            "type": "integer",
+            "title": "Direction",
+            "description": "-1 harms the site, 1 helps it."
+          },
+          "severity": {
+            "type": "integer",
+            "title": "Severity"
+          },
+          "alerts": {
+            "type": "boolean",
+            "title": "Alerts",
+            "description": "Severity \u2265 4: the event itself alerts the holders and community (besides any alert the re-rate raises)."
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "The generic effect; curated sites use their own scripted encroachment and restoration."
+          }
+        },
+        "type": "object",
+        "required": [
+          "preset",
+          "label",
+          "impact_type",
+          "direction",
+          "severity",
+          "alerts",
+          "description"
+        ],
+        "title": "EventPresetOut"
       },
       "EvidenceKind": {
         "type": "string",
@@ -8197,6 +8392,70 @@
           "event": {
             "$ref": "#/components/schemas/EventOut"
           },
+          "preset": {
+            "type": "string",
+            "enum": [
+              "fire",
+              "encroachment",
+              "drought",
+              "restoration",
+              "protection"
+            ],
+            "title": "Preset"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "data_version": {
+            "type": "string",
+            "title": "Data Version"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "The deterministic change applied to the metrics."
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssetRatingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssetRatingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "alert_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Alert Ids"
+          },
           "alert_created": {
             "type": "boolean",
             "title": "Alert Created"
@@ -8205,32 +8464,226 @@
         "type": "object",
         "required": [
           "event",
+          "preset",
+          "period",
+          "data_version",
+          "description",
           "alert_created"
         ],
         "title": "SimulateEventResponse"
       },
+      "SimulateQuarterRequest": {
+        "properties": {
+          "period": {
+            "type": "string",
+            "pattern": "^\\d{4}Q[1-4]$",
+            "title": "Period",
+            "description": "The quarter to run: the world's next quarter (advances it) or its current one (replays it: only what failed is redone, nothing is paid twice)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "period"
+        ],
+        "title": "SimulateQuarterRequest"
+      },
       "SimulateQuarterResponse": {
         "properties": {
+          "step": {
+            "type": "integer",
+            "title": "Step"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          },
           "data_version": {
             "type": "string",
             "title": "Data Version"
+          },
+          "payout_label": {
+            "type": "string",
+            "title": "Payout Label",
+            "description": "The payouts' `quarter_label`, e.g. `2026Q4-sim-1`."
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed",
+            "description": "True when the world was already at this quarter."
           },
           "assets_rerated": {
             "type": "integer",
             "title": "Assets Rerated"
           },
-          "message": {
-            "type": "string",
-            "title": "Message"
+          "assets_failed": {
+            "type": "integer",
+            "title": "Assets Failed"
+          },
+          "assets_skipped": {
+            "type": "integer",
+            "title": "Assets Skipped"
+          },
+          "payouts": {
+            "type": "integer",
+            "title": "Payouts"
+          },
+          "alerts": {
+            "type": "integer",
+            "title": "Alerts"
+          },
+          "stopped": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stopped",
+            "description": "`llm_budget_exhausted`, `job_budget_exhausted` or a rate limit: later assets weren't re-rated; replay the quarter to finish them."
+          },
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/SimulatedAssetOut"
+            },
+            "type": "array",
+            "title": "Assets"
           }
         },
         "type": "object",
         "required": [
+          "step",
+          "period",
+          "scenario",
           "data_version",
+          "payout_label",
+          "replayed",
           "assets_rerated",
-          "message"
+          "assets_failed",
+          "assets_skipped",
+          "payouts",
+          "alerts",
+          "assets"
         ],
-        "title": "SimulateQuarterResponse"
+        "title": "SimulateQuarterResponse",
+        "description": "What a Time Machine quarter actually did, per listed asset."
+      },
+      "SimulatedAssetOut": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "rerated",
+              "already_done",
+              "skipped",
+              "failed",
+              "in_progress",
+              "stopped"
+            ],
+            "title": "Status"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail",
+            "description": "Why it was skipped, failed or stopped (`no_time_machine_version`, `no_current_metrics`, `rating_rate_limited`, `llm_budget_exhausted`, a run error\u2026)."
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssetRatingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssetRatingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "alert_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Alert Ids"
+          },
+          "payout": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "paid",
+                  "already_paid",
+                  "skipped",
+                  "failed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payout"
+          },
+          "payout_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payout Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "name",
+          "status"
+        ],
+        "title": "SimulatedAssetOut"
       },
       "SiteImages": {
         "properties": {
@@ -8499,6 +8952,97 @@
           "attributions"
         ],
         "title": "ThumbnailImage"
+      },
+      "TimeMachineOut": {
+        "properties": {
+          "step": {
+            "type": "integer",
+            "title": "Step"
+          },
+          "current": {
+            "$ref": "#/components/schemas/TimeMachineQuarter"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TimeMachineQuarter"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The quarter `POST /admin/simulate/quarter` advances to; null at the end of the timeline (reset the demo to start again)."
+          },
+          "timeline": {
+            "items": {
+              "$ref": "#/components/schemas/TimeMachineQuarter"
+            },
+            "type": "array",
+            "title": "Timeline"
+          },
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/EventPresetOut"
+            },
+            "type": "array",
+            "title": "Presets"
+          },
+          "local_jobs": {
+            "type": "boolean",
+            "title": "Local Jobs",
+            "description": "False: `Next quarter` is off (`LOCAL_JOBS=false`)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "step",
+          "current",
+          "next",
+          "timeline",
+          "presets",
+          "local_jobs"
+        ],
+        "title": "TimeMachineOut",
+        "description": "Where the caller's world stands on the Time Machine timeline (T38)."
+      },
+      "TimeMachineQuarter": {
+        "properties": {
+          "step": {
+            "type": "integer",
+            "title": "Step",
+            "description": "0 is the observed baseline."
+          },
+          "period": {
+            "type": "string",
+            "title": "Period",
+            "description": "The quarter it is shown as, e.g. `2026Q4`."
+          },
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          },
+          "data_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Version",
+            "description": "`sim-N` for a simulated quarter; null for the observed baseline."
+          }
+        },
+        "type": "object",
+        "required": [
+          "step",
+          "period",
+          "scenario",
+          "data_version"
+        ],
+        "title": "TimeMachineQuarter",
+        "description": "One entry of the Time Machine timeline (`data/demo_sites/scenarios.json`)."
       },
       "TopHolderOut": {
         "properties": {

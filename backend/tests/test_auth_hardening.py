@@ -255,7 +255,11 @@ def test_multipart_bodies_pass_the_media_check_but_are_still_origin_checked(
 
 @pytest.mark.usefixtures("signed_in")
 def test_a_post_without_a_body_needs_no_media_type(client: TestClient) -> None:
-    assert client.post("/admin/simulate/quarter").status_code == 200
+    res = client.post("/admin/simulate/quarter")
+
+    # Reached the route (its body is required since T38), not refused by the media check (415).
+    assert res.status_code == 422
+    assert res.json()["detail"][0]["loc"] == ["body"]
 
 
 # --- Startup validation ----------------------------------------------------------------------

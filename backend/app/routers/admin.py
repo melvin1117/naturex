@@ -1,18 +1,23 @@
 """Time Machine, event injection, and call log. Tamper demo lives on the ledger router.
 
-The Time Machine and event injection are operator actions: admins only, in their own world
-(`Action.OPERATE`; a demo admin persona operates only its sandbox). The agent trace is a read
-(`Action.BROWSE`, ADR-0005 §3 matrix row 1).
+The Time Machine (`GET /admin/time-machine`, `POST /admin/simulate/quarter`) and event injection
+(`POST /admin/simulate/event`) are operator actions: admins only, in their own world
+(`Action.OPERATE`; a demo admin persona operates only its sandbox). Their logic is
+`app/services/time_machine.py` (T38). The agent trace is a read (`Action.BROWSE`, ADR-0005 §3
+matrix row 1).
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import threading
+from collections.abc import Callable
+from dataclasses import dataclass
+from decimal import Decimal
 from typing import Annotated, Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from fastapi import APIRouter, Query
-from sqlmodel import col, select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlmodel import Session, col, select
 
 from app.authz import (
     Action,
@@ -25,16 +30,37 @@ from app.authz import (
     denied,
     require,
 )
-from app.deps import CurrentWorld, SessionDep
+from app.config import get_settings
+from app.deps import CurrentWorld, SessionDep, SettingsDep
+from app.llm import DbCallLog
 from app.models import LlmCall
 from app.schemas import (
+    AssetRatingOut,
     EventOut,
+    EventPresetOut,
+    SimulatedAssetOut,
     SimulateEventRequest,
     SimulateEventResponse,
+    SimulateQuarterRequest,
     SimulateQuarterResponse,
+    TimeMachineOut,
+    TimeMachineQuarter,
     TraceOut,
     TraceStep,
 )
+from app.services import time_machine
+from app.services.alerts import NEWS_ALERT_SEVERITY
+from app.services.rating_runs import (
+    AssetNotRateable,
+    InlineExecutor,
+    RatingRunner,
+    RunError,
+    RunInProgress,
+    RunnerBusy,
+    RunRateLimited,
+    build_runner,
+)
+from app.tools.scenarios import ScenarioVersion
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -62,17 +88,194 @@ def trace_target(
     return WorldRef(world_id) if asset_id is None else asset_ref_in(session, world_id, asset_id)
 
 
+@dataclass(frozen=True, slots=True)
+class TimeMachineEnv:
+    """What the Time Machine runs with: sessions, an inline rating runner and the LLM spend."""
+
+    session_factory: Callable[[], Session]
+    runner: RatingRunner
+    spend: Callable[[], Decimal]
+
+
+_env: TimeMachineEnv | None = None
+_env_lock = threading.Lock()
+
+
+def get_time_machine_env() -> TimeMachineEnv:
+    """The process-wide Time Machine environment (runs execute in the request's thread)."""
+    global _env
+    with _env_lock:
+        if _env is None:
+            from app.db import engine
+
+            def session_factory() -> Session:
+                return Session(engine)
+
+            _env = TimeMachineEnv(
+                session_factory=session_factory,
+                runner=build_runner(get_settings(), session_factory, InlineExecutor()),
+                spend=DbCallLog(session_factory).spent_usd,
+            )
+        return _env
+
+
+TimeMachineEnvDep = Annotated[TimeMachineEnv, Depends(get_time_machine_env)]
+
+
+def _quarter_out(quarter: ScenarioVersion, step: int) -> TimeMachineQuarter:
+    return TimeMachineQuarter(
+        step=step,
+        period=quarter.period,
+        scenario=quarter.scenario,
+        data_version=quarter.data_version,
+    )
+
+
+def _rating_out(view: time_machine.RatingView | None) -> AssetRatingOut | None:
+    if view is None:
+        return None
+    return AssetRatingOut(
+        report_id=view.report_id,
+        version=view.version,
+        health_score=view.health_score,
+        grade=view.grade,
+        data_version=view.data_version,
+        simulated=view.simulated,
+        fair_value_per_share=view.fair_value_per_share,
+        price=view.price,
+    )
+
+
+def _run_error(exc: Exception) -> HTTPException:
+    """A rating run that couldn't start, as T27's `POST /assets/{id}/rate` answers it."""
+    if isinstance(exc, RunInProgress):
+        return HTTPException(
+            status.HTTP_409_CONFLICT, "run_in_progress", headers={"Location": f"/runs/{exc.run_id}"}
+        )
+    if isinstance(exc, RunRateLimited):
+        return HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            exc.code,
+            headers={"Retry-After": str(exc.retry_after_s)},
+        )
+    if isinstance(exc, RunnerBusy):
+        return HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "rating_busy",
+            headers={"Retry-After": str(exc.retry_after_s)},
+        )
+    if isinstance(exc, AssetNotRateable):
+        return HTTPException(status.HTTP_409_CONFLICT, exc.code)
+    if isinstance(exc, time_machine.RerateFailed):
+        return HTTPException(exc.status, exc.code, headers={"Location": f"/runs/{exc.run_id}"})
+    if isinstance(exc, time_machine.TimeMachineRefused):
+        return HTTPException(exc.status, exc.code)
+    return HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
+
+
+@router.get(
+    "/time-machine",
+    response_model=TimeMachineOut,
+    dependencies=[OPERATE],
+    responses=ADMIN_ONLY_RESPONSE,
+)
+def get_time_machine(
+    world: CurrentWorld, session: SessionDep, settings: SettingsDep
+) -> TimeMachineOut:
+    """The world's Time Machine quarter, the next one and the event presets (T38)."""
+    at = time_machine.state(session, world.id)
+    return TimeMachineOut(
+        step=at.step,
+        current=_quarter_out(at.current, at.step),
+        next=None if at.next is None else _quarter_out(at.next, at.step + 1),
+        timeline=[_quarter_out(quarter, step) for step, quarter in enumerate(at.timeline)],
+        presets=[
+            EventPresetOut(
+                preset=preset.name,
+                label=preset.label,
+                impact_type=preset.impact_type,
+                direction=preset.direction,
+                severity=preset.severity,
+                alerts=preset.severity >= NEWS_ALERT_SEVERITY,
+                description=preset.deltas.description,
+            )
+            for preset in time_machine.presets()
+        ],
+        local_jobs=settings.local_jobs,
+    )
+
+
 @router.post(
     "/simulate/quarter",
     response_model=SimulateQuarterResponse,
     dependencies=[OPERATE],
-    responses=ADMIN_ONLY_RESPONSE,
+    responses={
+        **ADMIN_ONLY_RESPONSE,
+        409: {
+            "description": "`quarter_mismatch` (not the world's next or current quarter; see "
+            "`GET /admin/time-machine`), `timeline_end` (reset the demo to start again) or "
+            "`local_jobs_disabled` (`LOCAL_JOBS=false`)"
+        },
+    },
 )
-def simulate_quarter(world: CurrentWorld) -> SimulateQuarterResponse:
+def simulate_quarter(
+    body: SimulateQuarterRequest,
+    world: CurrentWorld,
+    session: SessionDep,
+    settings: SettingsDep,
+    env: TimeMachineEnvDep,
+) -> SimulateQuarterResponse:
+    """Advance the world to the next Time Machine quarter (or replay the current one): re-rate
+    every listed asset with that quarter's scenario, re-anchor prices, alert and pay the
+    quarter's revenue (T38). Runs inline, so the answer is what actually happened; progress also
+    streams as `rating_progress` events (trigger `time_machine`)."""
+    if not settings.local_jobs:
+        raise HTTPException(status.HTTP_409_CONFLICT, "local_jobs_disabled")
+    world_id = world.id
+    session.commit()  # end the read transaction: the runs use their own sessions
+    try:
+        outcome = time_machine.next_quarter(
+            env.session_factory,
+            env.runner,
+            world_id=world_id,
+            period=body.period,
+            spend=env.spend,
+            llm_budget_usd=Decimal(str(settings.llm_budget_usd)),
+            job_cap_usd=Decimal(str(settings.monitor_job_budget_usd)),
+            runs_per_hour=settings.rating_runs_per_world_per_hour,
+        )
+    except time_machine.TimeMachineRefused as exc:
+        raise _run_error(exc) from exc
+    version = outcome.version
+    assert version.data_version is not None
     return SimulateQuarterResponse(
-        data_version="sim-1",
-        assets_rerated=3,
-        message="Mock re-rate of all listed assets to data_version sim-1.",
+        step=outcome.step,
+        period=version.period,
+        scenario=version.scenario,
+        data_version=version.data_version,
+        payout_label=time_machine.payout_label(version),
+        replayed=outcome.replayed,
+        assets_rerated=outcome.count("rerated"),
+        assets_failed=outcome.count("failed"),
+        assets_skipped=outcome.count("skipped"),
+        payouts=outcome.payouts,
+        alerts=outcome.alerts,
+        stopped=outcome.stopped,
+        assets=[
+            SimulatedAssetOut(
+                asset_id=asset.asset_id,
+                name=asset.name,
+                status=asset.status,
+                detail=asset.detail,
+                run_id=asset.run_id,
+                before=_rating_out(asset.before),
+                after=_rating_out(asset.after),
+                alert_ids=asset.alert_ids,
+                payout=asset.payout,
+                payout_detail=asset.payout_detail,
+            )
+            for asset in outcome.assets
+        ],
     )
 
 
@@ -81,24 +284,69 @@ def simulate_quarter(world: CurrentWorld) -> SimulateQuarterResponse:
     response_model=SimulateEventResponse,
     # On the asset, so an admin in the asset's community is refused (`conflict_of_interest`).
     dependencies=[require(Action.OPERATE, injected_asset_ref)],
-    responses=denied(DenyReason.ADMIN_ONLY, DenyReason.CONFLICT_OF_INTEREST),
+    responses={
+        **denied(DenyReason.ADMIN_ONLY, DenyReason.CONFLICT_OF_INTEREST),
+        409: {
+            "description": "`asset_not_listed`, `no_current_metrics` (no stored rating to start "
+            "from) or `run_in_progress` (Location: the active run)"
+        },
+        429: {"description": "`rating_rate_limited` or `rating_global_limit`; see Retry-After"},
+        503: {
+            "description": "`rating_busy`, `llm_budget_exhausted`, or `rerate_failed` "
+            "(Location: the run; nothing was stored)"
+        },
+    },
 )
-def simulate_event(body: SimulateEventRequest, world: CurrentWorld) -> SimulateEventResponse:
-    """Stub event for an asset in the caller's world (T38 persists it and re-rates)."""
-    event = EventOut(
-        id=uuid4(),
-        asset_id=body.asset_id,
-        source="admin",
-        title=f"Injected preset: {body.preset}",
-        url=None,
-        published_at=None,
-        impact_type=body.preset if body.preset != "protection" else "protection",
-        direction=1 if body.preset in {"restoration", "protection"} else -1,
-        severity=4 if body.preset in {"fire", "encroachment", "drought"} else 2,
-        summary=f"Admin Time Machine injected '{body.preset}' (mock).",
-        created_at=datetime.now(UTC),
+def simulate_event(
+    body: SimulateEventRequest,
+    world: CurrentWorld,
+    session: SessionDep,
+    settings: SettingsDep,
+    env: TimeMachineEnvDep,
+) -> SimulateEventResponse:
+    """Inject an event preset into one asset of the caller's world: its deterministic effect on
+    the metrics, a re-rate (alert and price re-anchor as for any re-rate), then the stored event
+    and, for severity ≥ 4, its own alert (T38). The world's quarter doesn't move."""
+    world_id = world.id
+    session.commit()
+    try:
+        outcome = time_machine.inject_event(
+            env.session_factory,
+            env.runner,
+            world_id=world_id,
+            asset_id=body.asset_id,
+            preset_name=body.preset,
+            spend=env.spend,
+            llm_budget_usd=Decimal(str(settings.llm_budget_usd)),
+        )
+    except (LookupError, RunError, time_machine.TimeMachineRefused) as exc:
+        raise _run_error(exc) from exc
+    event = outcome.event
+    assert outcome.version.data_version is not None
+    return SimulateEventResponse(
+        event=EventOut(
+            id=event.id,
+            asset_id=event.asset_id,
+            source=event.source.value,
+            title=event.title,
+            url=event.url,
+            published_at=event.published_at,
+            impact_type=event.impact_type,
+            direction=event.direction,
+            severity=event.severity,
+            summary=event.summary,
+            created_at=event.created_at,
+        ),
+        preset=outcome.preset.name,
+        period=outcome.version.period,
+        data_version=outcome.version.data_version,
+        description=outcome.description,
+        run_id=outcome.run_id,
+        before=_rating_out(outcome.before),
+        after=_rating_out(outcome.after),
+        alert_ids=outcome.alert_ids,
+        alert_created=bool(outcome.alert_ids),
     )
-    return SimulateEventResponse(event=event, alert_created=True)
 
 
 @router.get("/trace", response_model=TraceOut, dependencies=[require(Action.BROWSE, trace_target)])

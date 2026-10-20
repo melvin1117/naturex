@@ -72,7 +72,10 @@ LandcoverClass = Literal[
     "bare",
     "snow_and_ice",
 ]
-ScenarioName = Literal["baseline", "restoration", "encroachment"]
+ScenarioName = Literal["baseline", "restoration", "encroachment", "fire", "drought", "protection"]
+"""The committed timeline (``baseline`` → ``restoration`` → ``encroachment``, T13) plus the
+event presets the Time Machine applies to an asset's current metrics (T38); only timeline
+versions have committed files."""
 
 
 class LandcoverTransfer(BaseModel):
@@ -236,7 +239,11 @@ _MOCK_NATURAL = ("water", "trees", "grass", "flooded_vegetation", "shrub_and_scr
 
 
 def is_mock_metrics(metrics: EarthObsMetrics) -> bool:
-    return metrics.data_version.startswith(MOCK_DATA_VERSION_PREFIX)
+    """Mock data, or a Time Machine version simulated from mock data (T38)."""
+    observed = metrics.observed_data_version or metrics.data_version
+    return metrics.data_version.startswith(MOCK_DATA_VERSION_PREFIX) or observed.startswith(
+        MOCK_DATA_VERSION_PREFIX
+    )
 
 
 def mock_listing_metrics(

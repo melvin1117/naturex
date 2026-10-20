@@ -12,6 +12,7 @@ import ast
 import hashlib
 import re
 from collections.abc import Callable, Iterator
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,7 @@ import app
 from app.communities import create_community
 from app.config import get_settings
 from app.ledger import LedgerPrivacyError, append, canonical, check_public_payload, entries_for
+from app.market.anchoring import reanchor_on_rerate
 from app.market.offering import Offering
 from app.market.revenue import pay_quarter
 from app.models import (
@@ -33,8 +35,6 @@ from app.models import (
     AssetStatus,
     Community,
     DocumentType,
-    Event,
-    EventSource,
     Holding,
     LedgerEntry,
     LedgerKind,
@@ -57,7 +57,9 @@ from app.services.listings import (
     update_draft,
     withdraw,
 )
+from app.services.time_machine import record_event
 from app.tools.documents import Inspection
+from app.tools.scenarios import EVENT_PRESETS, preset_version
 from tests.conftest import alembic_cfg, requires_db
 
 ASSET_ID = DEMO_SITES[0].id
@@ -284,6 +286,28 @@ def _produce_price_anchor(session: Session) -> None:
     session.flush()
     price = preview(session, WORLD_ID, listing.id, Offering()).terms.price
     launch(session, WORLD_ID, listing.id, Offering(), expected_price=price)
+    # A re-rate re-anchors the price (T38) with its own `price_anchor` entry.
+    rerated = Report(
+        world_id=WORLD_ID,
+        asset_id=listing.id,
+        version=2,
+        health_score=curated.health_score,
+        grade=curated.grade,
+        confidence=curated.confidence,
+        value_mid=curated.value_mid,
+        fair_value_per_share=price * 2,
+    )
+    session.add(rerated)
+    session.flush()
+    assert reanchor_on_rerate(session, listing, rerated) is not None
+
+
+def _produce_event(session: Session) -> None:
+    """A Time Machine preset (T38) on an asset whose community is named after a person."""
+    asset = session.get_one(Asset, ASSET_ID)
+    preset = EVENT_PRESETS["fire"]
+    version = preset_version("fire", 0, "2026Q3")
+    record_event(session, asset, preset, version, preset.deltas.description, day=date(2026, 10, 1))
 
 
 def _produce_verification(session: Session) -> None:
@@ -345,6 +369,7 @@ _REAL_PRODUCERS: dict[LedgerKind, Callable[[Session], None]] = {
     LedgerKind.PAYOUT: _produce_payout,
     LedgerKind.LISTING: _produce_listing,
     LedgerKind.PRICE_ANCHOR: _produce_price_anchor,
+    LedgerKind.EVENT: _produce_event,
     LedgerKind.VERIFICATION: _produce_verification,
 }
 
@@ -372,27 +397,6 @@ def _spec_payload(session: Session, kind: LedgerKind) -> dict[str, Any]:
             "value_mid": "1000000.00",
             "fair_value_per_share": "7.9200",
             "summary_sha256": hashlib.sha256(b"summary").hexdigest(),
-        }
-    if kind is LedgerKind.EVENT:
-        event = Event(
-            world_id=WORLD_ID,
-            asset_id=ASSET_ID,
-            source=EventSource.ADMIN,
-            title="Fire near the wetland",
-            url="https://example.org/news/fire",
-            impact_type="fire",
-            direction=-1,
-            severity=4,
-        )
-        session.add(event)
-        session.flush()
-        return {
-            "title": event.title,
-            "url": event.url,
-            "impact_type": event.impact_type,
-            "direction": event.direction,
-            "severity": event.severity,
-            "source": event.source,
         }
     raise AssertionError(f"no spec payload for {kind}")
 

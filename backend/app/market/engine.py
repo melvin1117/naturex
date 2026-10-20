@@ -11,6 +11,8 @@ where the community's retained stake counts as a holding.
 
 from __future__ import annotations
 
+import hashlib
+import random
 from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
@@ -401,6 +403,35 @@ def max_fillable_qty(market: MarketState, trader: Position, side: OrderSide) -> 
     return low
 
 
+def clamp_shock(draw: Decimal) -> Decimal:
+    """A noise draw clamped to ±3σ, so one draw can't swing the price."""
+    return min(max(draw, -MAX_NOISE), MAX_NOISE)
+
+
+def seeded_shock(key: str) -> Decimal:
+    """A deterministic ε ~ N(0, σ) for `key` (e.g. a report ID), clamped to ±3σ.
+
+    The same key always gives the same draw, so a re-anchor can be recomputed from its ledger
+    entry and a replayed re-rate never moves the price differently. 6 decimal places."""
+    seed = int.from_bytes(hashlib.sha256(f"naturex-reanchor:{key}".encode()).digest()[:8], "big")
+    draw = Decimal(str(random.Random(seed).gauss(0.0, float(NOISE_SIGMA))))
+    return clamp_shock(draw).quantize(Decimal("0.000001"))
+
+
+def anchor_price(
+    price: Decimal, fair_value: Decimal, reason: PriceReason, shock: Decimal
+) -> PriceChange:
+    """price ← (price + α × (fair_value − price)) × (1 + ε) for a given ε (clamped to ±3σ),
+    with α = 0.35 on a re-rate and 0.05 per tick; 4 decimals, never below `MIN_PRICE`."""
+    alphas = {PriceReason.RERATE: ALPHA_RERATE, PriceReason.TICK: ALPHA_TICK}
+    if reason not in alphas:
+        raise ValueError(f"re-anchoring needs reason rerate or tick, got {reason}")
+    if fair_value < 0:
+        raise ValueError(f"fair value must not be negative, got {fair_value}")
+    anchored = price + alphas[reason] * (fair_value - price)
+    return PriceChange(_price(anchored * (1 + clamp_shock(shock))), reason)
+
+
 def reanchor(
     price: Decimal, fair_value: Decimal, reason: PriceReason, noise: NoiseSource
 ) -> PriceChange:
@@ -409,12 +440,5 @@ def reanchor(
     price ← (price + α × (fair_value − price)) × (1 + ε), with α = 0.35 on a re-rate and
     0.05 per tick, and ε ~ N(0, 0.3%) clamped to ±3σ so one draw can't swing the price.
     """
-    alphas = {PriceReason.RERATE: ALPHA_RERATE, PriceReason.TICK: ALPHA_TICK}
-    if reason not in alphas:
-        raise ValueError(f"re-anchoring needs reason rerate or tick, got {reason}")
-    if fair_value < 0:
-        raise ValueError(f"fair value must not be negative, got {fair_value}")
     draw = Decimal(str(noise.gauss(0.0, float(NOISE_SIGMA))))
-    shock = min(max(draw, -MAX_NOISE), MAX_NOISE)
-    anchored = price + alphas[reason] * (fair_value - price)
-    return PriceChange(_price(anchored * (1 + shock)), reason)
+    return anchor_price(price, fair_value, reason, draw)

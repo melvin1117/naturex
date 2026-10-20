@@ -352,6 +352,7 @@ def reset_world(session: Session, world_id: UUID) -> World:
     _delete_world_rows(session, world_id, keep_world=True, keep_users={u.id for u in keep.values()})
     _copy_world_rows(session, TEMPLATE_WORLD_ID, world_id, keep_personas=keep)
     world.last_seen_at = _now()
+    world.time_machine_step = 0  # the copied reports are the template's baseline (T38)
     session.add(world)
     session.commit()
     session.refresh(world)

@@ -175,11 +175,18 @@ class StreamEventType(StrEnum):
 
 class World(SQLModel, table=True):
     __tablename__ = "worlds"
+    __table_args__ = (
+        CheckConstraint("time_machine_step >= 0", name="ck_worlds_time_machine_step"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     label: str = Field(index=True)
     created_at: datetime = _created_at()
     last_seen_at: datetime = _created_at()  # bumped on each visit; stale sandboxes are pruned (T31)
+    # Time Machine quarters advanced (T38): an index into the scenario timeline, 0 = baseline.
+    time_machine_step: int = Field(
+        default=0, sa_type=SmallInteger, sa_column_kwargs={"server_default": text("0")}
+    )
 
 
 class User(SQLModel, table=True):
@@ -404,6 +411,9 @@ class Metrics(SQLModel, table=True):
     forest_loss_ha: Decimal | None = Field(default=None, max_digits=12, decimal_places=2)
     biomass_t_ha: Decimal | None = Field(default=None, max_digits=12, decimal_places=2)
     cloud_free_obs: int | None = None
+    # The full Earth observation document the rating used (T38), so a Time Machine preset can
+    # start from the asset's current state; NULL on rows written before migration 0020.
+    provenance: dict[str, Any] | None = Field(default=None, sa_column=Column(JSONB))
     created_at: datetime = _created_at()
 
 
