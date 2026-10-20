@@ -1,14 +1,16 @@
 """Price re-anchoring after a re-rate (T38, dev-spec §8 "Re-rating / ticks").
 
-A sealed re-rate of a trading asset pulls its price toward the report's new fair value per
-share: ``price ← (price + 0.35 × (fair_value − price)) × (1 + ε)`` (`engine.anchor_price`). The
-noise ε is drawn deterministically from the report's ID (`engine.seeded_shock`), so the move can
-be recomputed from its ledger entry and never comes from a model.
+A sealed re-rate of a trading asset whose metrics `data_version` or health score changed pulls
+its price toward the report's new fair value per share (a re-rate with unchanged inputs never
+moves the price): ``price ← (price + 0.35 × (fair_value − price)) × (1 + ε)``
+(`engine.anchor_price`). The noise ε is drawn deterministically from the report's ID
+(`engine.seeded_shock`), so the move can be recomputed from its ledger entry and never comes
+from a model.
 
 `reanchor_on_rerate` runs in the rating run's own transaction, right after the report and its
-alert (T27's `_store`), so every re-rate re-anchors whatever started it (API, scheduled job,
-Time Machine). It writes a `prices` row (`reason = 'rerate'`), a public `price_anchor` ledger
-entry with every term and a `price_tick` live event.
+alert (T27's `_store`), so every re-rate that changed something re-anchors whatever started it
+(API, scheduled job, Time Machine). It writes a `prices` row (`reason = 'rerate'`), a public
+`price_anchor` ledger entry with every term and a `price_tick` live event.
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ from sqlmodel import Session, col, select
 from app.events import publish
 from app.ledger import append
 from app.market.engine import ALPHA_RERATE, PriceReason, anchor_price, seeded_shock
-from app.models import Asset, LedgerKind, Price, Report, StreamEventType
+from app.models import Asset, LedgerKind, Metrics, Price, Report, StreamEventType
 from app.services.listings import audience as listing_audience
 
 FORMULA = "price ← (price + α × (fair_value_per_share − price)) × (1 + ε), α = 0.35"
@@ -47,14 +49,39 @@ def latest_price(session: Session, world_id: UUID, asset_id: UUID) -> Price | No
     ).first()
 
 
+def _data_version(session: Session, report: Report) -> str | None:
+    if report.metrics_id is None:
+        return None
+    return session.exec(select(Metrics.data_version).where(Metrics.id == report.metrics_id)).first()
+
+
+def rating_changed(session: Session, previous: Report, report: Report) -> bool:
+    """The re-rate changed its inputs or result: another metrics `data_version` or health."""
+    return previous.health_score != report.health_score or _data_version(
+        session, previous
+    ) != _data_version(session, report)
+
+
 def reanchor_on_rerate(
-    session: Session, asset: Asset, report: Report, *, now: datetime | None = None
+    session: Session,
+    asset: Asset,
+    previous: Report | None,
+    report: Report,
+    *,
+    now: datetime | None = None,
 ) -> Reanchor | None:
     """Re-anchor a trading asset's price to `report` in the caller's transaction (the caller
-    holds the asset row lock and commits). None when there's nothing to anchor: no IPO yet
-    (no shares, no price), or a report without a fair value per share."""
+    holds the asset row lock and commits). None when there's nothing to anchor: a first rating
+    (no `previous` report), an asset that isn't trading (no IPO yet: no shares, no price), a
+    report without a fair value per share, or a re-rate that changed neither the metrics'
+    `data_version` nor the health score."""
+    # Imported here: `services.ipo` imports the rating runner, which imports this module.
+    from app.services.ipo import is_trading
+
     fair_value = report.fair_value_per_share
-    if asset.ipo_at is None or fair_value is None:
+    if previous is None or not is_trading(asset) or fair_value is None:
+        return None
+    if not rating_changed(session, previous, report):
         return None
     last = latest_price(session, asset.world_id, asset.id)
     if last is None:

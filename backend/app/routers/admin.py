@@ -30,7 +30,6 @@ from app.authz import (
     denied,
     require,
 )
-from app.config import get_settings
 from app.deps import CurrentWorld, SessionDep, SettingsDep
 from app.llm import DbCallLog
 from app.models import LlmCall
@@ -52,13 +51,11 @@ from app.services import time_machine
 from app.services.alerts import NEWS_ALERT_SEVERITY
 from app.services.rating_runs import (
     AssetNotRateable,
-    InlineExecutor,
-    RatingRunner,
     RunError,
     RunInProgress,
     RunnerBusy,
     RunRateLimited,
-    build_runner,
+    default_runner,
 )
 from app.tools.scenarios import ScenarioVersion
 
@@ -90,10 +87,11 @@ def trace_target(
 
 @dataclass(frozen=True, slots=True)
 class TimeMachineEnv:
-    """What the Time Machine runs with: sessions, an inline rating runner and the LLM spend."""
+    """What the Time Machine runs with: sessions, the API's rating runner (its runs execute
+    inline in the request, under the runner's shared concurrency slots) and the LLM spend."""
 
     session_factory: Callable[[], Session]
-    runner: RatingRunner
+    runner: time_machine.Runner
     spend: Callable[[], Decimal]
 
 
@@ -102,7 +100,8 @@ _env_lock = threading.Lock()
 
 
 def get_time_machine_env() -> TimeMachineEnv:
-    """The process-wide Time Machine environment (runs execute in the request's thread)."""
+    """The process-wide Time Machine environment (runs execute in the request's thread, on the
+    API's runner, so they count against the same `MAX_PENDING_RUNS` as `POST /assets/{id}/rate`)."""
     global _env
     with _env_lock:
         if _env is None:
@@ -113,7 +112,7 @@ def get_time_machine_env() -> TimeMachineEnv:
 
             _env = TimeMachineEnv(
                 session_factory=session_factory,
-                runner=build_runner(get_settings(), session_factory, InlineExecutor()),
+                runner=default_runner(),
                 spend=DbCallLog(session_factory).spent_usd,
             )
         return _env
@@ -129,6 +128,18 @@ def _quarter_out(quarter: ScenarioVersion, step: int) -> TimeMachineQuarter:
         scenario=quarter.scenario,
         data_version=quarter.data_version,
     )
+
+
+def _simulated_version(version: ScenarioVersion) -> str:
+    """A simulated quarter's or preset's `sim-…` label (the observed baseline has none)."""
+    if version.data_version is None:
+        raise RuntimeError(f"{version.period} is not a simulated version")
+    return version.data_version
+
+
+def _refuse_outside_sandbox(world_id: UUID) -> None:
+    if not time_machine.available(world_id):
+        raise HTTPException(status.HTTP_409_CONFLICT, time_machine.SANDBOX_ONLY)
 
 
 def _rating_out(view: time_machine.RatingView | None) -> AssetRatingOut | None:
@@ -182,9 +193,14 @@ def _run_error(exc: Exception) -> HTTPException:
 def get_time_machine(
     world: CurrentWorld, session: SessionDep, settings: SettingsDep
 ) -> TimeMachineOut:
-    """The world's Time Machine quarter, the next one and the event presets (T38)."""
+    """The world's Time Machine quarter, the next one and the event presets (T38). `available`
+    is false outside a sandbox (the live world): hide the controls, both actions answer 409
+    `time_machine_sandbox_only`."""
     at = time_machine.state(session, world.id)
+    available = time_machine.available(world.id)
     return TimeMachineOut(
+        available=available,
+        unavailable_reason=None if available else time_machine.SANDBOX_ONLY,
         step=at.step,
         current=_quarter_out(at.current, at.step),
         next=None if at.next is None else _quarter_out(at.next, at.step + 1),
@@ -213,7 +229,8 @@ def get_time_machine(
         **ADMIN_ONLY_RESPONSE,
         409: {
             "description": "`quarter_mismatch` (not the world's next or current quarter; see "
-            "`GET /admin/time-machine`), `timeline_end` (reset the demo to start again) or "
+            "`GET /admin/time-machine`), `timeline_end` (reset the demo to start again), "
+            "`time_machine_sandbox_only` (not a sandbox: the live world) or "
             "`local_jobs_disabled` (`LOCAL_JOBS=false`)"
         },
     },
@@ -229,6 +246,7 @@ def simulate_quarter(
     every listed asset with that quarter's scenario, re-anchor prices, alert and pay the
     quarter's revenue (T38). Runs inline, so the answer is what actually happened; progress also
     streams as `rating_progress` events (trigger `time_machine`)."""
+    _refuse_outside_sandbox(world.id)
     if not settings.local_jobs:
         raise HTTPException(status.HTTP_409_CONFLICT, "local_jobs_disabled")
     world_id = world.id
@@ -247,12 +265,11 @@ def simulate_quarter(
     except time_machine.TimeMachineRefused as exc:
         raise _run_error(exc) from exc
     version = outcome.version
-    assert version.data_version is not None
     return SimulateQuarterResponse(
         step=outcome.step,
         period=version.period,
         scenario=version.scenario,
-        data_version=version.data_version,
+        data_version=_simulated_version(version),
         payout_label=time_machine.payout_label(version),
         replayed=outcome.replayed,
         assets_rerated=outcome.count("rerated"),
@@ -288,12 +305,15 @@ def simulate_quarter(
         **denied(DenyReason.ADMIN_ONLY, DenyReason.CONFLICT_OF_INTEREST),
         409: {
             "description": "`asset_not_listed`, `no_current_metrics` (no stored rating to start "
-            "from) or `run_in_progress` (Location: the active run)"
+            "from), `time_machine_sandbox_only` (not a sandbox: the live world), "
+            "`run_in_progress` (Location: the active run) or `stale_metrics` (the asset was "
+            "re-rated meanwhile; Location: the run; nothing was stored, try again)"
         },
         429: {"description": "`rating_rate_limited` or `rating_global_limit`; see Retry-After"},
         503: {
-            "description": "`rating_busy`, `llm_budget_exhausted`, or `rerate_failed` "
-            "(Location: the run; nothing was stored)"
+            "description": "`rating_busy`, `llm_budget_exhausted`, `rerate_failed` "
+            "(Location: the run; nothing was stored) or `event_not_recorded` (Location: the "
+            "run; the re-rate is sealed but its event isn't stored)"
         },
     },
 )
@@ -306,7 +326,9 @@ def simulate_event(
 ) -> SimulateEventResponse:
     """Inject an event preset into one asset of the caller's world: its deterministic effect on
     the metrics, a re-rate (alert and price re-anchor as for any re-rate), then the stored event
-    and, for severity ≥ 4, its own alert (T38). The world's quarter doesn't move."""
+    and, for severity ≥ 4, its own alert (T38). The world's quarter doesn't move. Allowed with
+    `LOCAL_JOBS=false` (one asset, one run)."""
+    _refuse_outside_sandbox(world.id)
     world_id = world.id
     session.commit()
     try:
@@ -322,7 +344,6 @@ def simulate_event(
     except (LookupError, RunError, time_machine.TimeMachineRefused) as exc:
         raise _run_error(exc) from exc
     event = outcome.event
-    assert outcome.version.data_version is not None
     return SimulateEventResponse(
         event=EventOut(
             id=event.id,
@@ -339,7 +360,7 @@ def simulate_event(
         ),
         preset=outcome.preset.name,
         period=outcome.version.period,
-        data_version=outcome.version.data_version,
+        data_version=_simulated_version(outcome.version),
         description=outcome.description,
         run_id=outcome.run_id,
         before=_rating_out(outcome.before),

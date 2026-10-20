@@ -270,28 +270,28 @@ def _produce_price_anchor(session: Session) -> None:
         select(Report).where(Report.world_id == WORLD_ID, Report.asset_id == ASSET_ID)
     ).first()
     assert curated is not None
-    session.add(
-        Report(
-            world_id=WORLD_ID,
-            asset_id=listing.id,
-            version=1,
-            health_score=curated.health_score,
-            grade=curated.grade,
-            confidence=curated.confidence,
-            value_mid=curated.value_mid,
-        )
+    first = Report(
+        world_id=WORLD_ID,
+        asset_id=listing.id,
+        version=1,
+        health_score=curated.health_score,
+        grade=curated.grade,
+        confidence=curated.confidence,
+        value_mid=curated.value_mid,
     )
+    session.add(first)
     listing.status = AssetStatus.LISTED
     session.add(listing)
     session.flush()
     price = preview(session, WORLD_ID, listing.id, Offering()).terms.price
     launch(session, WORLD_ID, listing.id, Offering(), expected_price=price)
-    # A re-rate re-anchors the price (T38) with its own `price_anchor` entry.
+    # A re-rate that moved the health re-anchors the price (T38) with its own `price_anchor`.
+    assert curated.health_score is not None
     rerated = Report(
         world_id=WORLD_ID,
         asset_id=listing.id,
         version=2,
-        health_score=curated.health_score,
+        health_score=curated.health_score - 1,
         grade=curated.grade,
         confidence=curated.confidence,
         value_mid=curated.value_mid,
@@ -299,7 +299,7 @@ def _produce_price_anchor(session: Session) -> None:
     )
     session.add(rerated)
     session.flush()
-    assert reanchor_on_rerate(session, listing, rerated) is not None
+    assert reanchor_on_rerate(session, listing, first, rerated) is not None
 
 
 def _produce_event(session: Session) -> None:

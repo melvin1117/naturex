@@ -969,7 +969,9 @@ export interface paths {
         };
         /**
          * Get Time Machine
-         * @description The world's Time Machine quarter, the next one and the event presets (T38).
+         * @description The world's Time Machine quarter, the next one and the event presets (T38). `available`
+         *     is false outside a sandbox (the live world): hide the controls, both actions answer 409
+         *     `time_machine_sandbox_only`.
          */
         get: operations["get_time_machine_admin_time_machine_get"];
         put?: never;
@@ -1016,7 +1018,8 @@ export interface paths {
          * Simulate Event
          * @description Inject an event preset into one asset of the caller's world: its deterministic effect on
          *     the metrics, a re-rate (alert and price re-anchor as for any re-rate), then the stored event
-         *     and, for severity ≥ 4, its own alert (T38). The world's quarter doesn't move.
+         *     and, for severity ≥ 4, its own alert (T38). The world's quarter doesn't move. Allowed with
+         *     `LOCAL_JOBS=false` (one asset, one run).
          */
         post: operations["simulate_event_admin_simulate_event_post"];
         delete?: never;
@@ -3585,6 +3588,16 @@ export interface components {
          * @description Where the caller's world stands on the Time Machine timeline (T38).
          */
         TimeMachineOut: {
+            /**
+             * Available
+             * @description False outside a sandbox (the live world): hide the Time Machine; both actions answer 409 `time_machine_sandbox_only`.
+             */
+            available: boolean;
+            /**
+             * Unavailable Reason
+             * @description Why `available` is false.
+             */
+            unavailable_reason?: "time_machine_sandbox_only" | null;
             /** Step */
             step: number;
             current: components["schemas"]["TimeMachineQuarter"];
@@ -6434,7 +6447,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description `quarter_mismatch` (not the world's next or current quarter; see `GET /admin/time-machine`), `timeline_end` (reset the demo to start again) or `local_jobs_disabled` (`LOCAL_JOBS=false`) */
+            /** @description `quarter_mismatch` (not the world's next or current quarter; see `GET /admin/time-machine`), `timeline_end` (reset the demo to start again), `time_machine_sandbox_only` (not a sandbox: the live world) or `local_jobs_disabled` (`LOCAL_JOBS=false`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6481,7 +6494,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description `asset_not_listed`, `no_current_metrics` (no stored rating to start from) or `run_in_progress` (Location: the active run) */
+            /** @description `asset_not_listed`, `no_current_metrics` (no stored rating to start from), `time_machine_sandbox_only` (not a sandbox: the live world), `run_in_progress` (Location: the active run) or `stale_metrics` (the asset was re-rated meanwhile; Location: the run; nothing was stored, try again) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6504,7 +6517,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description `rating_busy`, `llm_budget_exhausted`, or `rerate_failed` (Location: the run; nothing was stored) */
+            /** @description `rating_busy`, `llm_budget_exhausted`, `rerate_failed` (Location: the run; nothing was stored) or `event_not_recorded` (Location: the run; the re-rate is sealed but its event isn't stored) */
             503: {
                 headers: {
                     [name: string]: unknown;

@@ -5,8 +5,10 @@
 # payouts unique per quarter) and budget-capped (MONITOR_JOB_BUDGET_USD per run, LLM_BUDGET_USD
 # overall), so a manual re-run or a retry never re-rates, alerts or pays twice.
 #
-# Scheduled near the end of each quarter (the 28th of March, June, September and December), so
-# the default period is the quarter being closed. A manual run may name another `period`
+# Scheduled near the end of each quarter, on the 28th and again on the 30th of March, June,
+# September and December, so the default period is the quarter being closed. The second run is a
+# retry in the same window: the claims make it finish only what the first one didn't (a missed
+# schedule, a failure or a budget stop) and never re-rate, alert or pay twice. A manual run may name another `period`
 # (`YYYYQn`, never in the future) and a lower `max_usd`; both are validated by the job (exit 2).
 # The demo's Time Machine doesn't use this: it runs in-process (`POST /admin/simulate/quarter`).
 #
@@ -26,6 +28,7 @@ name: rerate-all
 on:
   schedule:
     - cron: "41 6 28 3,6,9,12 *"
+    - cron: "41 6 30 3,6,9,12 *"
   workflow_dispatch:
     inputs:
       period:

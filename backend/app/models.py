@@ -618,6 +618,7 @@ class MonitorRun(SQLModel, table=True):
     world_id: UUID
     status: str
     detail: str | None = None
+    run_id: UUID | None = None  # the rating run that settled a re-rate claim (T38)
     created_at: datetime = _created_at()
     updated_at: datetime = _created_at()
 

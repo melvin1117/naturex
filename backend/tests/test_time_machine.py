@@ -7,22 +7,25 @@ T75's job tests do.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Iterator
+from concurrent.futures import Executor, Future
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
 from fastapi.testclient import TestClient
-from sqlalchemy import Connection, create_engine
+from sqlalchemy import Connection, create_engine, inspect
 from sqlmodel import Session, col, func, select
 
 from app.config import Settings, get_settings
 from app.db import get_session
 from app.main import app
-from app.market.anchoring import FORMULA
+from app.market.anchoring import FORMULA, rating_changed, reanchor_on_rerate
 from app.market.engine import (
     ALPHA_RERATE,
     MAX_NOISE,
@@ -45,15 +48,28 @@ from app.models import (
     Price,
     Report,
     User,
+    UserKind,
+    UserRole,
     World,
     WorldEvent,
 )
 from app.routers.admin import get_time_machine_env
-from app.sandbox import create_world, reset_world
+from app.sandbox import create_world, ensure_live_world, reset_world
 from app.seed import seed
 from app.services import time_machine as tm
-from app.services.rating import rate_site
-from app.services.rating_runs import InlineExecutor, RatingRunner, RunRateLimited, news_runner
+from app.services.ipo import is_trading
+from app.services.monitoring import pay_period
+from app.services.rating import latest_report, rate_site
+from app.services.rating_runs import (
+    STALE_METRICS,
+    AssetNotRateable,
+    InlineExecutor,
+    RatingRunner,
+    RunnerBusy,
+    RunRateLimited,
+    get_run,
+    news_runner,
+)
 from app.tools.earth_obs import (
     EarthObsMetrics,
     is_mock_metrics,
@@ -71,10 +87,11 @@ from app.tools.scenarios import (
     preset_version,
     timeline_version,
 )
+from app.worlds import LIVE_WORLD_ID
 from app.worlds import WORLD_ID as TEMPLATE_WORLD_ID
 from tests.conftest import alembic_cfg, requires_db
 from tests.test_llm import settings
-from tests.worlds import mock_time_machine_env, start_demo
+from tests.worlds import mock_time_machine_env, sign_in, start_demo
 
 SPEC = load_scenario_spec()
 SITES = sorted(SPEC.sites)
@@ -509,14 +526,22 @@ def test_a_rate_limit_stops_the_quarter(db: Connection, world_id: UUID) -> None:
 
 
 @requires_db
-def test_the_template_world_never_runs_the_time_machine(db: Connection) -> None:
-    with pytest.raises(tm.TimeMachineRefused, match="template_world"):
-        quarter(db, TEMPLATE_WORLD_ID, "2026Q4")
+@pytest.mark.parametrize("protected", [TEMPLATE_WORLD_ID, LIVE_WORLD_ID])
+def test_the_time_machine_runs_in_sandboxes_only(db: Connection, protected: UUID) -> None:
     with sessions(db)() as session:
-        asset = session.exec(select(Asset.id).where(Asset.world_id == TEMPLATE_WORLD_ID)).first()
-    assert asset is not None
-    with pytest.raises(tm.TimeMachineRefused, match="template_world"):
-        inject(db, TEMPLATE_WORLD_ID, asset, "fire")
+        ensure_live_world(session)
+        asset = session.exec(select(Asset.id).where(Asset.world_id == protected)).first()
+    assert asset is not None and not tm.available(protected)
+    reports, events = count(db, Report, protected), count(db, Event, protected)
+
+    with pytest.raises(tm.TimeMachineRefused, match=tm.SANDBOX_ONLY) as refused:
+        quarter(db, protected, "2026Q4")
+    assert refused.value.status == 409
+    with pytest.raises(tm.TimeMachineRefused, match=tm.SANDBOX_ONLY):
+        inject(db, protected, asset, "fire")
+
+    assert step_of(db, protected) == 0
+    assert (count(db, Report, protected), count(db, Event, protected)) == (reports, events)
 
 
 @requires_db
@@ -540,6 +565,227 @@ def test_a_reset_rewinds_the_time_machine(db: Connection, world_id: UUID) -> Non
 
     assert step_of(db, world_id) == 0
     assert quarter(db, world_id, "2026Q4").replayed is False  # claims went with the assets
+
+
+@requires_db
+def test_two_concurrent_next_quarters_advance_the_world_once(
+    db: Connection, world_id: UUID, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = quarter(db, world_id, "2026Q4")
+    reports = count(db, Report, world_id)
+    # The second request read step 0 before the first one advanced the world: its conditional
+    # update matches nothing and it replays the quarter instead of advancing it again.
+    real, reads = tm.world_step, []
+
+    def stale_once(session: Session, wid: UUID) -> int:
+        reads.append(wid)
+        return 0 if len(reads) == 1 else real(session, wid)
+
+    monkeypatch.setattr(tm, "world_step", stale_once)
+
+    second = quarter(db, world_id, "2026Q4")
+
+    assert (first.replayed, second.replayed, second.step, step_of(db, world_id)) == (
+        False,
+        True,
+        1,
+        1,
+    )
+    assert len(reads) == 2
+    assert {a.status for a in second.assets} == {"already_done"}
+    assert count(db, Report, world_id) == reports
+
+
+@requires_db
+def test_a_failed_payout_is_paid_by_a_replay_without_rerating(
+    db: Connection, world_id: UUID, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = pay_period
+
+    def broken(*_: Any, **__: Any) -> Any:
+        raise RuntimeError("ledger unavailable")
+
+    monkeypatch.setattr(tm, "pay_period", broken)
+    first = quarter(db, world_id, "2026Q4")
+
+    assert {a.status for a in first.assets} == {"rerated"}
+    assert {(a.payout, a.payout_detail) for a in first.assets} == {
+        ("failed", "payout_failed:RuntimeError")
+    }
+    assert count(db, LedgerEntry, world_id, LedgerEntry.kind == LedgerKind.PAYOUT) == 0
+    reports = count(db, Report, world_id)
+    monkeypatch.setattr(tm, "pay_period", real)
+
+    replay = quarter(db, world_id, "2026Q4")
+
+    assert {(a.status, a.payout) for a in replay.assets} == {("already_done", "paid")}
+    assert count(db, Report, world_id) == reports
+    payouts = count(db, LedgerEntry, world_id, LedgerEntry.kind == LedgerKind.PAYOUT)
+    assert payouts == len(replay.assets)
+
+
+@requires_db
+def test_only_assets_without_a_time_machine_version_are_paid_when_skipped(
+    db: Connection, world_id: UUID
+) -> None:
+    class NotRateable:
+        def start(self, *_: Any, **__: Any) -> UUID:
+            raise AssetNotRateable("asset_not_listed")
+
+    outcome = quarter(db, world_id, "2026Q4", run=NotRateable())
+
+    assert {(a.status, a.detail, a.payout) for a in outcome.assets} == {
+        ("skipped", "asset_not_listed", None)
+    }
+    assert count(db, LedgerEntry, world_id, LedgerEntry.kind == LedgerKind.PAYOUT) == 0
+
+
+@requires_db
+def test_a_busy_runner_stops_the_quarter(db: Connection, world_id: UUID) -> None:
+    class Busy:
+        def start(self, *_: Any, **__: Any) -> UUID:
+            raise RunnerBusy()
+
+    outcome = quarter(db, world_id, "2026Q4", run=Busy())
+
+    assert outcome.stopped == "rating_busy"
+    assert (outcome.assets[0].status, outcome.assets[0].detail) == ("failed", "rating_busy")
+    assert {a.status for a in outcome.assets[1:]} == {"stopped"}
+
+
+class Parked(Executor):
+    """Holds submitted runs until `run_all`, so a pooled run keeps its runner slot."""
+
+    def __init__(self) -> None:
+        self.parked: list[Callable[[], Any]] = []
+
+    def submit(self, fn: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Future[Any]:
+        self.parked.append(lambda: fn(*args, **kwargs))
+        return Future()
+
+    def run_all(self) -> None:
+        while self.parked:
+            self.parked.pop()()
+
+
+@requires_db
+def test_quarter_runs_share_the_runners_slots_with_pooled_runs(
+    db: Connection, world_id: UUID
+) -> None:
+    cfg = settings(use_mocks=True)
+    pool = Parked()
+    shared = RatingRunner(
+        session_factory=sessions(db),
+        settings=cfg,
+        executor=pool,
+        llm_factory=lambda wrap: None,
+        news=news_runner(cfg),
+        today=lambda: date(2026, 10, 7),
+        max_pending=1,
+    )
+    wetland = site(db, world_id, "wetland_mx")
+    shared.start(world_id, wetland.id, trigger="api")  # a pooled run holds the only slot
+
+    busy = quarter(db, world_id, "2026Q4", run=shared)
+
+    assert busy.stopped == "rating_busy" and busy.assets[0].detail == "rating_busy"
+    pool.run_all()  # the pooled run ends and gives its slot back
+
+    done = quarter(db, world_id, "2026Q4", run=shared)
+
+    # Each inline run gives the slot back, so one slot re-rates the whole quarter.
+    assert done.replayed and {a.status for a in done.assets} == {"rerated"}
+    assert not pool.parked
+
+
+@requires_db
+def test_current_metrics_fall_back_to_the_committed_version_without_provenance(
+    db: Connection, world_id: UUID
+) -> None:
+    wetland = site(db, world_id, "wetland_mx")
+    with sessions(db)() as session:
+        asset = session.get_one(Asset, wetland.id)
+        report = latest_report(session, world_id, wetland.id)
+        assert report is not None and report.metrics_id is not None
+        row = session.get_one(Metrics, report.metrics_id)
+        row.provenance = None  # a row written before migration 0020
+        session.add(row)
+        session.commit()
+
+        assert tm.current_metrics(session, world_id, asset) == load_site_metrics(
+            "wetland_mx", "baseline"
+        )
+
+        row.data_version = "2025Q1"  # rated with another version than the committed one
+        session.add(row)
+        session.commit()
+        assert tm.current_metrics(session, world_id, asset) is None
+
+        asset.site_key = None  # a new polygon has no committed versions
+        assert tm.current_metrics(session, world_id, asset) is None
+
+
+@requires_db
+def test_reanchoring_needs_a_change_a_previous_report_a_trading_asset_and_a_fair_value(
+    db: Connection, world_id: UUID
+) -> None:
+    wetland = site(db, world_id, "wetland_mx")
+    prices = count(db, Price, world_id)
+    with sessions(db)() as session:
+        asset = session.get_one(Asset, wetland.id)
+        previous = latest_report(session, world_id, wetland.id)
+        assert previous is not None and previous.health_score is not None
+        assert is_trading(asset)
+
+        def rerated(**changes: Any) -> Report:
+            fields: dict[str, Any] = {
+                "world_id": world_id,
+                "asset_id": asset.id,
+                "version": previous.version + 1,
+                "health_score": previous.health_score,
+                "grade": previous.grade,
+                "confidence": previous.confidence,
+                "value_mid": previous.value_mid,
+                "fair_value_per_share": previous.fair_value_per_share,
+                "metrics_id": previous.metrics_id,
+            }
+            return Report(**(fields | changes))
+
+        moved = rerated(health_score=previous.health_score - 5)
+        assert rating_changed(session, previous, moved)
+        assert not rating_changed(session, previous, rerated())
+        assert reanchor_on_rerate(session, asset, None, moved) is None  # a first rating
+        assert reanchor_on_rerate(session, asset, previous, rerated()) is None  # unchanged
+        assert (
+            reanchor_on_rerate(session, asset, previous, rerated(fair_value_per_share=None)) is None
+        )
+        asset.ipo_at = None  # not trading yet
+        assert reanchor_on_rerate(session, asset, previous, moved) is None
+        session.rollback()
+    assert count(db, Price, world_id) == prices
+
+
+@requires_db
+def test_a_rerate_with_unchanged_inputs_doesnt_move_the_price(
+    db: Connection, world_id: UUID
+) -> None:
+    wetland = site(db, world_id, "wetland_mx")
+    rate = runner(db)
+    rate.start(world_id, wetland.id, trigger="api", inline=True)  # may differ from the seed
+    reports, prices = count(db, Report, world_id), count(db, Price, world_id)
+    with sessions(db)() as session:
+        first = latest_report(session, world_id, wetland.id)
+
+    run_id = rate.start(world_id, wetland.id, trigger="api", inline=True)
+
+    with sessions(db)() as session:
+        run = get_run(session, world_id, run_id)
+        second = latest_report(session, world_id, wetland.id)
+        assert first is not None and second is not None
+        assert not rating_changed(session, first, second)
+    assert run is not None and run.report_id == second.id
+    assert count(db, Report, world_id) == reports + 1
+    assert count(db, Price, world_id) == prices
 
 
 # --- event presets ------------------------------------------------------------------------------
@@ -658,6 +904,109 @@ def test_a_failed_preset_rerate_stores_no_event(db: Connection, world_id: UUID) 
     assert count(db, Event, world_id, Event.source == "admin") == 0
 
 
+@requires_db
+def test_a_preset_never_overwrites_a_rerate_sealed_meanwhile(
+    db: Connection, world_id: UUID
+) -> None:
+    wetland = site(db, world_id, "wetland_mx")
+    real = runner(db)
+
+    class Interleaved:
+        """Another re-rate of the asset seals between the preset's read and its run."""
+
+        def start(self, world_id: UUID, asset_id: UUID, **kwargs: Any) -> UUID:
+            real.start(world_id, asset_id, trigger="api", inline=True)
+            return real.start(world_id, asset_id, **kwargs)
+
+    reports = count(db, Report, world_id)
+
+    with pytest.raises(tm.RerateFailed) as stale:
+        inject(db, world_id, wetland.id, "encroachment", run=Interleaved())
+
+    assert (stale.value.code, stale.value.status, stale.value.error) == (
+        STALE_METRICS,
+        409,
+        STALE_METRICS,
+    )
+    with sessions(db)() as session:
+        latest = tm.rating_view(session, world_id, wetland.id)
+    assert count(db, Report, world_id) == reports + 1  # only the interleaved re-rate
+    assert latest is not None and latest.data_version == "2026Q3"
+    assert count(db, Event, world_id, Event.source == "admin") == 0
+
+
+@requires_db
+def test_a_preset_event_that_fails_to_store_is_retried_once(
+    db: Connection, world_id: UUID, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    forest = site(db, world_id, "restoration_forest")
+    real, calls = tm.record_event, []
+
+    def flaky(*args: Any, **kwargs: Any) -> Any:
+        calls.append(kwargs["run_id"])
+        if len(calls) == 1:
+            raise RuntimeError("connection reset")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(tm, "record_event", flaky)
+
+    outcome = inject(db, world_id, forest.id, "fire")
+
+    assert calls == [outcome.run_id, outcome.run_id]
+    assert count(db, Event, world_id, Event.source == "admin") == 1
+    with sessions(db)() as session:
+        assert outcome.run_id is not None
+        found = tm.recorded_event(session, world_id, forest.id, outcome.run_id)
+    assert found is not None and found.id == outcome.event.id
+
+
+@requires_db
+def test_a_preset_event_that_cant_be_stored_logs_its_run_and_stores_once_later(
+    db: Connection,
+    world_id: UUID,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    forest = site(db, world_id, "restoration_forest")
+    reports = count(db, Report, world_id)
+
+    def broken(*_: Any, **__: Any) -> Any:
+        raise RuntimeError("connection reset")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(tm, "record_event", broken)
+        with (
+            caplog.at_level(logging.ERROR, logger=tm.__name__),
+            pytest.raises(tm.RerateFailed) as failed,
+        ):
+            inject(db, world_id, forest.id, "fire")
+
+    run_id = failed.value.run_id
+    assert (failed.value.code, failed.value.status) == (tm.EVENT_NOT_RECORDED, 503)
+    assert "recoverable" in caplog.text and str(run_id) in caplog.text
+    assert count(db, Report, world_id) == reports + 1  # the re-rate is sealed
+    assert count(db, Event, world_id, Event.source == "admin") == 0
+    with sessions(db)() as session:
+        report = latest_report(session, world_id, forest.id)
+    assert report is not None
+    job = tm._Injection(
+        world_id=world_id,
+        asset_id=forest.id,
+        preset=EVENT_PRESETS["fire"],
+        version=preset_version("fire", 0, "2026Q3"),
+        description="recovered",
+        day=date(2026, 10, 7),
+        run_id=run_id,
+        report_id=report.id,
+    )
+
+    first, _, _ = tm._store_event(sessions(db), job)
+    again, _, _ = tm._store_event(sessions(db), job)
+
+    assert first.id == again.id
+    assert count(db, Event, world_id, Event.source == "admin") == 1
+
+
 # --- API ----------------------------------------------------------------------------------------
 
 
@@ -764,3 +1113,123 @@ def test_next_quarter_is_off_without_local_jobs(client: TestClient, api_session:
 
     assert (res.status_code, res.json()["detail"]) == (409, "local_jobs_disabled")
     assert client.get("/admin/time-machine").json()["local_jobs"] is False
+
+
+def _env_with(api_session: Session, run: Any) -> None:
+    env = replace(mock_time_machine_env(api_session), runner=run)
+    app.dependency_overrides[get_time_machine_env] = lambda: env
+
+
+@requires_db
+def test_the_api_maps_preset_errors(client: TestClient, api_session: Session) -> None:
+    sandbox = start_demo(client, api_session, persona_key="admin")
+    wetland, mangrove = (
+        api_session.exec(
+            select(Asset).where(Asset.world_id == sandbox.id, Asset.site_key == key)
+        ).one()
+        for key in ("wetland_mx", "mangrove_mx")
+    )
+
+    def fire(asset: Asset) -> Any:
+        return client.post(
+            "/admin/simulate/event", json={"asset_id": str(asset.id), "preset": "fire"}
+        )
+
+    class Limited:
+        def start(self, *_: Any, **__: Any) -> UUID:
+            raise RunRateLimited(42)
+
+    class NoReport:
+        def start(self, *_: Any, **__: Any) -> UUID:
+            return UUID(int=7)
+
+    _env_with(api_session, Limited())
+    limited = fire(wetland)
+    assert (limited.status_code, limited.json()["detail"]) == (429, "rating_rate_limited")
+    assert limited.headers["Retry-After"] == "42"
+
+    _env_with(api_session, NoReport())
+    failed = fire(wetland)
+    assert (failed.status_code, failed.json()["detail"]) == (503, "rerate_failed")
+    assert failed.headers["Location"] == f"/runs/{UUID(int=7)}"
+
+    report = latest_report(api_session, sandbox.id, mangrove.id)
+    assert report is not None and report.metrics_id is not None
+    row = api_session.get_one(Metrics, report.metrics_id)
+    row.provenance = None
+    mangrove.site_key = None  # neither a stored document nor a committed version
+    wetland.status = AssetStatus.SUSPENDED
+    api_session.add_all([row, mangrove, wetland])
+    api_session.commit()
+
+    missing = fire(mangrove)
+    assert (missing.status_code, missing.json()["detail"]) == (409, "no_current_metrics")
+    unlisted = fire(wetland)
+    assert (unlisted.status_code, unlisted.json()["detail"]) == (409, "asset_not_listed")
+    assert count_events(api_session, sandbox.id) == 0
+
+
+def count_events(session: Session, world_id: UUID) -> int:
+    return session.exec(
+        select(func.count()).select_from(Event).where(Event.world_id == world_id)
+    ).one()
+
+
+@requires_db
+def test_the_live_world_has_no_time_machine(client: TestClient, api_session: Session) -> None:
+    ensure_live_world(api_session)
+    admin = User(
+        world_id=LIVE_WORLD_ID,
+        name="Live Admin",
+        role=UserRole.ADMIN,
+        kind=UserKind.PERSON,
+        email=f"live.admin.{uuid4().hex}@example.org",
+        is_admin=True,
+    )
+    api_session.add(admin)
+    api_session.commit()
+    sign_in(client, api_session, admin)
+    asset = api_session.exec(select(Asset).where(Asset.world_id == LIVE_WORLD_ID)).first()
+    assert asset is not None
+    events = count_events(api_session, LIVE_WORLD_ID)
+
+    state = client.get("/admin/time-machine")
+
+    assert state.status_code == 200, state.text
+    assert (state.json()["available"], state.json()["unavailable_reason"]) == (
+        False,
+        tm.SANDBOX_ONLY,
+    )
+    for res in (
+        client.post("/admin/simulate/quarter", json={"period": "2026Q4"}),
+        client.post("/admin/simulate/event", json={"asset_id": str(asset.id), "preset": "fire"}),
+    ):
+        assert (res.status_code, res.json()["detail"]) == (409, tm.SANDBOX_ONLY)
+    assert client.get("/admin/time-machine").json()["step"] == 0
+    assert count_events(api_session, LIVE_WORLD_ID) == events
+
+
+@requires_db
+def test_migration_0020_downgrades_and_upgrades() -> None:
+    cfg = alembic_cfg()
+    command.upgrade(cfg, "head")
+    engine = create_engine(get_settings().database_url)
+
+    def columns() -> set[tuple[str, str]]:
+        with engine.connect() as conn:
+            found = inspect(conn)
+            return {
+                (table, column["name"])
+                for table in ("worlds", "metrics", "monitor_runs")
+                for column in found.get_columns(table)
+            }
+
+    added = {("worlds", "time_machine_step"), ("metrics", "provenance"), ("monitor_runs", "run_id")}
+    try:
+        assert added <= columns()
+        command.downgrade(cfg, "0019")
+        assert not added & columns()
+    finally:
+        command.upgrade(cfg, "head")
+        assert added <= columns()
+        engine.dispose()

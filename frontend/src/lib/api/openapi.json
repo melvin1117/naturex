@@ -2899,7 +2899,7 @@
           "admin"
         ],
         "summary": "Get Time Machine",
-        "description": "The world's Time Machine quarter, the next one and the event presets (T38).",
+        "description": "The world's Time Machine quarter, the next one and the event presets (T38). `available`\nis false outside a sandbox (the live world): hide the controls, both actions answer 409\n`time_machine_sandbox_only`.",
         "operationId": "get_time_machine_admin_time_machine_get",
         "responses": {
           "200": {
@@ -2951,7 +2951,7 @@
             "description": "Not allowed: `admin_only`"
           },
           "409": {
-            "description": "`quarter_mismatch` (not the world's next or current quarter; see `GET /admin/time-machine`), `timeline_end` (reset the demo to start again) or `local_jobs_disabled` (`LOCAL_JOBS=false`)"
+            "description": "`quarter_mismatch` (not the world's next or current quarter; see `GET /admin/time-machine`), `timeline_end` (reset the demo to start again), `time_machine_sandbox_only` (not a sandbox: the live world) or `local_jobs_disabled` (`LOCAL_JOBS=false`)"
           },
           "422": {
             "description": "Validation Error",
@@ -2972,7 +2972,7 @@
           "admin"
         ],
         "summary": "Simulate Event",
-        "description": "Inject an event preset into one asset of the caller's world: its deterministic effect on\nthe metrics, a re-rate (alert and price re-anchor as for any re-rate), then the stored event\nand, for severity \u2265 4, its own alert (T38). The world's quarter doesn't move.",
+        "description": "Inject an event preset into one asset of the caller's world: its deterministic effect on\nthe metrics, a re-rate (alert and price re-anchor as for any re-rate), then the stored event\nand, for severity \u2265 4, its own alert (T38). The world's quarter doesn't move. Allowed with\n`LOCAL_JOBS=false` (one asset, one run).",
         "operationId": "simulate_event_admin_simulate_event_post",
         "requestBody": {
           "content": {
@@ -2999,13 +2999,13 @@
             "description": "Not allowed: `admin_only`, `conflict_of_interest`"
           },
           "409": {
-            "description": "`asset_not_listed`, `no_current_metrics` (no stored rating to start from) or `run_in_progress` (Location: the active run)"
+            "description": "`asset_not_listed`, `no_current_metrics` (no stored rating to start from), `time_machine_sandbox_only` (not a sandbox: the live world), `run_in_progress` (Location: the active run) or `stale_metrics` (the asset was re-rated meanwhile; Location: the run; nothing was stored, try again)"
           },
           "429": {
             "description": "`rating_rate_limited` or `rating_global_limit`; see Retry-After"
           },
           "503": {
-            "description": "`rating_busy`, `llm_budget_exhausted`, or `rerate_failed` (Location: the run; nothing was stored)"
+            "description": "`rating_busy`, `llm_budget_exhausted`, `rerate_failed` (Location: the run; nothing was stored) or `event_not_recorded` (Location: the run; the re-rate is sealed but its event isn't stored)"
           },
           "422": {
             "description": "Validation Error",
@@ -8955,6 +8955,24 @@
       },
       "TimeMachineOut": {
         "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "description": "False outside a sandbox (the live world): hide the Time Machine; both actions answer 409 `time_machine_sandbox_only`."
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "time_machine_sandbox_only"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason",
+            "description": "Why `available` is false."
+          },
           "step": {
             "type": "integer",
             "title": "Step"
@@ -8995,6 +9013,7 @@
         },
         "type": "object",
         "required": [
+          "available",
           "step",
           "current",
           "next",

@@ -920,6 +920,13 @@ class EventPresetOut(BaseModel):
 class TimeMachineOut(BaseModel):
     """Where the caller's world stands on the Time Machine timeline (T38)."""
 
+    available: bool = Field(
+        description="False outside a sandbox (the live world): hide the Time Machine; both "
+        "actions answer 409 `time_machine_sandbox_only`."
+    )
+    unavailable_reason: Literal["time_machine_sandbox_only"] | None = Field(
+        default=None, description="Why `available` is false."
+    )
     step: int
     current: TimeMachineQuarter
     next: TimeMachineQuarter | None = Field(

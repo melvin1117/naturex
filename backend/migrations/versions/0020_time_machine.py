@@ -7,6 +7,8 @@
   deltas, NDVI series…; dev-spec §7.4 "As built (T19)" deferred it to T38), so an event preset
   can apply its deltas to an asset's current state. NULL on rows written before this revision:
   curated sites then fall back to their committed versions.
+- `monitor_runs.run_id`: the rating run that settled a re-rate claim, so a replayed Time
+  Machine quarter reports the earlier run's ID without parsing the claim's detail.
 
 Revision ID: 0020
 Revises: 0019
@@ -34,9 +36,11 @@ def upgrade() -> None:
     )
     op.create_check_constraint("ck_worlds_time_machine_step", "worlds", "time_machine_step >= 0")
     op.add_column("metrics", sa.Column("provenance", JSONB(), nullable=True))
+    op.add_column("monitor_runs", sa.Column("run_id", sa.Uuid(), nullable=True))
 
 
 def downgrade() -> None:
+    op.drop_column("monitor_runs", "run_id")
     op.drop_column("metrics", "provenance")
     op.drop_constraint("ck_worlds_time_machine_step", "worlds", type_="check")
     op.drop_column("worlds", "time_machine_step")
