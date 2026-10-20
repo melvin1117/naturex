@@ -163,8 +163,11 @@ def check_draft(
 
 
 def _escape(text: str) -> str:
-    """Fence-safe: a source or question can't close the <source> tag or open a new one."""
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    """Fence-safe: a source, site name or question can't close the <source> tag, open a new
+    one or end the `site="…"` attribute."""
+    return (
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+    )
 
 
 SYSTEM_PROMPT = (

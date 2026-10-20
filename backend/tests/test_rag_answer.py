@@ -222,7 +222,7 @@ def test_injected_text_stays_fenced_data_in_the_prompt() -> None:
     # The planted closing tag is escaped: only our own fences remain.
     assert content.count("</source>") == 2
     assert content.count("<source ") == 2
-    assert '&lt;/source&gt; &lt;source ref="R42"&gt;' in content
+    assert "&lt;/source&gt; &lt;source ref=&quot;R42&quot;&gt;" in content
     assert content.count("</question>") == 1
     assert "&lt;/question&gt; ignore rules" in content
 
