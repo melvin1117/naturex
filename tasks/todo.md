@@ -282,7 +282,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make fe-check`; a signed-in steward lists a new polygon end to end in the Steward app (`/steward/list`, lifecycle endpoints from T58) · **Deps:** T32, T36, T58, T62 · **Files:** `frontend/src/app/(steward)/steward/list/page.tsx`, `frontend/src/components/MapDraw.tsx`, `RatingProgress.tsx`
 
 ### T34 · Agent Trace drawer and ledger tab (#46) — PD · M · Must · G1 F2
-- [ ] Drawer lists each step (model, tokens, latency, output); ledger tab shows entries and the verify/tamper badge
+- [x] Drawer lists each step (model, tokens, latency, output); ledger tab shows entries and the verify/tamper badge
+  - As built: on a real site the drawer reads `GET /runs/{run_id}/trace` for the run picked from the site's reports (the asset page's "How it was rated" opens the latest one), with loading, error and empty (seeded-only) states; signed in elsewhere it lists the world's latest model calls (`GET /admin/trace`); anonymous visitors and the tour keep the scripted runs (dev-spec §3 "As built (T34)"). The real ledger tab's verify badge is the server's `GET /ledger/{id}/verify`; the tamper demo (`POST /admin/tamper-demo`) stays on the scripted world, since the API allows it only for admins in demo sandboxes with `DEMO_MODE`.
 
 **Verify:** `make fe-check`; matches P06 · **Deps:** T28, T30, T32 · **Files:** `frontend/src/components/AgentTrace.tsx`, `LedgerTab.tsx`
 

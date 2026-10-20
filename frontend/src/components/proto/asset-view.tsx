@@ -49,6 +49,7 @@ import {
   price as fmtPrice,
   quarterLabel,
 } from "@/lib/prototype/format";
+import { usePrototype } from "@/lib/prototype/store";
 import { num, reportFacts, type ReportFacts } from "@/lib/report-facts";
 
 const TABS = ["overview", "price", "report", "news", "ledger"] as const;
@@ -126,6 +127,7 @@ function NotFound() {
 
 function AssetLoaded({ asset }: { asset: AssetDetail }) {
   const pathname = usePathname();
+  const { openTrace } = usePrototype();
   const params = useSearchParams();
   const tabParam = params.get("tab") as Tab | null;
   const tab: Tab = tabParam && TABS.includes(tabParam) ? tabParam : "overview";
@@ -357,10 +359,19 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
             <section className="rounded-3xl bg-card p-6 shadow-soft">
               <h2 className="text-base font-semibold">How it was rated</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                The Agent Trace for real sites is coming soon. The guided tour
-                shows it on the scripted demo world.
+                The Agent Trace shows every step of a rating run: which model or
+                tool ran, tokens, time and a summary of its output.
               </p>
-              <Button variant="ghost" size="sm" className="mt-4" disabled>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={() =>
+                  openTrace(
+                    asset.latest_report?.run_id ?? asset.latest_run_id ?? null,
+                  )
+                }
+              >
                 <Bot aria-hidden="true" />
                 How it was rated
               </Button>

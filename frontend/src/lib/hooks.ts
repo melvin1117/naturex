@@ -42,9 +42,11 @@ import type {
   RatingRun,
   RegisterIn,
   ReportDiff,
+  RunTrace,
   ReportOut,
   SiteImages,
   WorldOut,
+  WorldTrace,
 } from "./api/types";
 import {
   queryKeys,
@@ -733,6 +735,52 @@ export function useRatingRun(
     return () => clearInterval(timer);
   }, [active, refetch]);
   return query;
+}
+
+/**
+ * A rating run's Agent Trace (`GET /runs/{id}/trace`, T28): its spans, model attempts, tokens,
+ * latency and safe tool-result summaries. Live: a run's `rating_progress` events refetch it
+ * (`queryKeys.runTrace` sits under `queryKeys.run`), and an active run is re-read every 10 s.
+ */
+export function useRunTrace(
+  runId: string | null | undefined,
+): QueryResult<RunTrace> {
+  useLiveConnection(Boolean(runId));
+  const query = useApiQuery(
+    queryKeys.runTrace(runId ?? ""),
+    (api, signal) =>
+      unwrap(
+        api.GET("/runs/{run_id}/trace", {
+          params: { path: { run_id: runId ?? "" } },
+          signal,
+        }),
+      ),
+    { enabled: Boolean(runId) },
+  );
+  const active = query.data ? RUN_ACTIVE.has(query.data.status) : false;
+  const { refetch } = query;
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => void refetch(), RUN_POLL_MS);
+    return () => clearInterval(timer);
+  }, [active, refetch]);
+  return query;
+}
+
+/**
+ * The world's latest logged model calls (`GET /admin/trace`, up to 50, metadata only), for
+ * the Agent Trace drawer away from a site. Idle when `enabled` is false.
+ */
+export function useWorldTrace({
+  enabled = true,
+}: { enabled?: boolean } = {}): QueryResult<WorldTrace> {
+  const { world } = useWorld();
+  const meId = world?.me?.id ?? null;
+  return useApiQuery(
+    queryKeys.worldTrace(meId),
+    (api, signal) => unwrap(api.GET("/admin/trace", { signal })),
+    { enabled },
+  );
 }
 
 /**

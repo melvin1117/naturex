@@ -72,6 +72,8 @@ client = OpenAI(base_url=settings.TOKEN_FACTORY_BASE_URL, api_key=settings.NEBIU
 ```
 Every call goes through a wrapper that logs `model, prompt_tokens, completion_tokens, latency_ms, agent, asset_id` to `llm_calls`. Surface this in an **"Agent trace" drawer** in the UI: it shows judges exactly how Nemotron is used.
 
+**As built (T34), the drawer** (`components/proto/trace-sheet.tsx` + `components/agent-trace.tsx`, pure helpers in `lib/run-trace.ts`): on a real site (`/asset/<uuid>`, opened from the header's Agent Trace button or the asset page's "How it was rated"), it lists the site's rating runs (each report's `run_id`, plus a listing's `latest_run_id`; seeded reports have none and say so) and shows the chosen run from `GET /runs/{run_id}/trace`: per step the agent or tool, the answering model, tokens in/out, latency, cost, status, and on expand the error, every model attempt and the safe output summary, with totals (model calls, tokens, time from the first to the last span, cost). An active run refetches on its `rating_progress` events and every 10 s. Signed in away from a site, the drawer shows the world's latest model calls (`GET /admin/trace`). Anonymous visitors away from a real site, and the guided tour, keep the prototype's recorded runs.
+
 **As built (T09), `backend/app/llm.py`:**
 - `LLMClient.structured()` (Pydantic-validated JSON), `.text()` and `.tool_step()` (one step of a tool loop; the caller runs the tools). All three take an `agent` name and a `Tier`: `fast`, `orchestrator` or `auditor`, which map to `MODEL_FAST`, `MODEL_ORCHESTRATOR` and `MODEL_AUDITOR`.
 - **Reasoning is off unless `reasoning=True`.** The reasoning text is returned on the result.

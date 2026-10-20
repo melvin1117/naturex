@@ -1,9 +1,11 @@
 "use client";
 
 import { ChevronDown, Cpu, Lock, Wrench } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "cn";
 
+import { AssetRunsTrace, WorldModelCalls } from "@/components/agent-trace";
 import { SampleTag } from "@/components/proto/bits";
 import {
   Select,
@@ -23,8 +25,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MODELS } from "@/lib/prototype/data";
 import { date } from "@/lib/prototype/format";
 import { useTour } from "@/components/proto/tour";
+import { useWorld } from "@/lib/hooks";
 import { usePrototype } from "@/lib/prototype/store";
 import { runTotals, type TraceStep } from "@/lib/prototype/trace";
+import { traceMode } from "@/lib/run-trace";
 
 const TRIGGER: Record<string, string> = {
   listing: "New listing",
@@ -33,9 +37,21 @@ const TRIGGER: Record<string, string> = {
   seed: "Auditor review",
 };
 
+/**
+ * The Agent Trace drawer. On a real site (`/asset/<uuid>`) it reads that site's rating runs from
+ * `GET /runs/{id}/trace`; signed in elsewhere, the world's latest model calls; anonymous
+ * visitors away from a real site and the guided tour keep the prototype's recorded runs.
+ */
 export function TraceSheet() {
   const { world, ui, closeTrace } = usePrototype();
   const tour = useTour();
+  const pathname = usePathname();
+  const { world: apiWorld } = useWorld();
+  const mode = traceMode({
+    pathname,
+    signedIn: Boolean(apiWorld?.me),
+    tourActive: tour.active,
+  });
   const runs = [...world.runs].reverse();
   const [picked, setPicked] = useState<string | null>(null);
   const runId = picked ?? ui.traceRunId ?? runs[0]?.id;
@@ -78,7 +94,7 @@ export function TraceSheet() {
                 value="trace"
                 className="text-machine-muted data-[state=active]:bg-machine-line data-[state=active]:text-machine-ink"
               >
-                Runs
+                {mode.kind === "world" ? "Model calls" : "Runs"}
               </TabsTrigger>
               <TabsTrigger
                 value="routing"
@@ -98,7 +114,17 @@ export function TraceSheet() {
             value="trace"
             className="machine-scroll min-h-0 overflow-y-auto px-6 pt-4 pb-8"
           >
-            {!run ? (
+            {mode.kind === "asset" ? (
+              ui.traceOpen && (
+                <AssetRunsTrace
+                  key={`${mode.assetId}:${ui.traceRunId ?? ""}`}
+                  assetId={mode.assetId}
+                  initialRunId={ui.traceRunId}
+                />
+              )
+            ) : mode.kind === "world" ? (
+              ui.traceOpen && <WorldModelCalls />
+            ) : !run ? (
               <p className="text-sm text-machine-muted">No rating runs yet.</p>
             ) : (
               <>
