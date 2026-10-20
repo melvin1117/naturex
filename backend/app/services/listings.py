@@ -42,8 +42,6 @@ from app.models import (
     Asset,
     AssetStatus,
     Community,
-    Event,
-    EventSource,
     LedgerEntry,
     LedgerKind,
     Metrics,
@@ -52,6 +50,7 @@ from app.models import (
     World,
 )
 from app.services.earth_obs_live import LiveQuota, LiveQuotaExceeded, reserve_live_rating
+from app.services.field_evidence import has_uncounted_evidence
 from app.services.lifecycle import (
     NO_SATELLITE_METRICS,
     OPEN_STATUSES,
@@ -455,22 +454,10 @@ def update_draft(
 
 
 def has_new_evidence(session: Session, asset: Asset) -> bool:
-    """Field evidence (T40) recorded since the report that sent the listing to
-    `needs_evidence`. Until T40 stores evidence, only newer metrics can reopen it."""
-    since = session.exec(
-        select(Report.created_at)
-        .where(Report.world_id == asset.world_id, Report.asset_id == asset.id)
-        .order_by(col(Report.version).desc())
-        .limit(1)
-    ).first()
-    query = select(Event.id).where(
-        Event.world_id == asset.world_id,
-        Event.asset_id == asset.id,
-        Event.source == EventSource.EVIDENCE,
-    )
-    if since is not None:
-        query = query.where(col(Event.created_at) > since)
-    return session.exec(query.limit(1)).first() is not None
+    """Field evidence (T40) the latest report doesn't count yet: a validated photo that's still
+    there, while that report's confidence evidence term is below validated. A deleted photo no
+    longer counts, and deleting and re-uploading one the report counted adds nothing."""
+    return has_uncounted_evidence(session, asset.world_id, asset.id)
 
 
 def report_data_version(session: Session, asset: Asset) -> str | None:

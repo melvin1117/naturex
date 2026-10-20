@@ -8,14 +8,16 @@ world's listing 404):
   a worker with a timeout; the EXIF GPS position and date are checked against the listing, then
   only a re-encoded JPEG without metadata is stored. When both checks pass, the image model
   labels it in the background; code decides whether it's validated evidence.
-- `DELETE /assets/{id}/evidence/{photo_id}`: remove a photo (the next rating stops counting it).
+- `DELETE /assets/{id}/evidence/{photo_id}`: remove a photo and its evidence event (the next
+  rating stops counting it).
 
 The listing's community members and same-world admins (`VIEW_COMMUNITY_DATA`; 404 for anyone
-else): `GET /assets/{id}/evidence` (every photo's checks and the confidence effect) and the
-re-encoded photo at `GET /assets/{id}/evidence/{photo_id}/image`.
+else): `GET /assets/{id}/evidence` (every photo's checks and the confidence effect), one photo's
+checks at `GET /assets/{id}/evidence/{photo_id}` (the upload's `Location`) and the re-encoded
+photo at `GET /assets/{id}/evidence/{photo_id}/image`.
 
 Anyone who can see the asset: `GET /assets/{id}/evidence/summary`, counts and labels of the
-validated photos only: never a photo, a position or who took it.
+validated photos only: never a photo, a position, who took it or the day.
 """
 
 from __future__ import annotations
@@ -218,7 +220,8 @@ def upload_photo(
     The body is the file. Its EXIF position must be inside the listing (or within 100 m of its
     edge) and its date at most a year old; only those checks' results are kept, never the
     position. The photo is stored re-encoded, with no metadata, and read by an image model on
-    Nebius Token Factory when both checks pass (`analysis_status`: poll `GET …/evidence`)."""
+    Nebius Token Factory when both checks pass and AI analysis is on (`analysis_status`: poll
+    the `Location`, `GET …/evidence/{photo_id}`)."""
     world_id, asset_id = _ref(granted)
     media = content_type.split(";", 1)[0].strip().lower()
     if media not in PHOTO_MEDIA_TYPES:
@@ -262,7 +265,7 @@ def upload_photo(
         analyzer.schedule(world_id, asset_id, photo.id)
         session.refresh(photo)
     response.headers["Cache-Control"] = NO_STORE
-    response.headers["Location"] = f"/assets/{asset_id}/evidence/{photo.id}/image"
+    response.headers["Location"] = f"/assets/{asset_id}/evidence/{photo.id}"
     return evidence.photo_out(photo, now)
 
 
@@ -293,6 +296,27 @@ def evidence_summary(
     validated, and the land cover and disturbance labels seen in validated ones."""
     asset = world_asset(session, world.id, asset_id, actor)
     return evidence.public_view(session, world.id, asset.id)
+
+
+@router.get(
+    "/assets/{asset_id}/evidence/{photo_id}",
+    response_model=FieldPhotoOut,
+    responses={
+        **_AUTH,
+        404: {"description": f"`not_found` (see the list route) or `{PHOTO_NOT_FOUND}`"},
+    },
+)
+def get_photo(
+    photo_id: UUID, granted: CommunityEvidence, session: SessionDep, response: Response
+) -> FieldPhotoOut:
+    """One field photo's checks (the upload's `Location`; poll it while `pending`)."""
+    world_id, asset_id = _ref(granted)
+    try:
+        photo = evidence.photo_of(session, world_id, asset_id, photo_id)
+    except PhotoNotFound:
+        raise _missing(PHOTO_NOT_FOUND) from None
+    response.headers["Cache-Control"] = PRIVATE_NO_STORE
+    return evidence.photo_out(photo, datetime.now(UTC))
 
 
 @router.get(
@@ -334,7 +358,8 @@ def photo_image(photo_id: UUID, granted: CommunityEvidence, session: SessionDep)
     },
 )
 def delete_photo(photo_id: UUID, granted: ManageListing, session: SessionDep) -> Response:
-    """Remove a field photo. A rating already sealed keeps citing it; the next one won't."""
+    """Remove a field photo with its image and evidence event. A rating already sealed keeps its
+    own copy of what it cited; the next one won't count the photo."""
     world_id, asset_id = _ref(granted)
     try:
         evidence.delete_photo(session, world_id, asset_id, photo_id)

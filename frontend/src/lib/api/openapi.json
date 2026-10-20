@@ -2152,7 +2152,7 @@
           "evidence"
         ],
         "summary": "Upload Photo",
-        "description": "Upload one geotagged field photo for the listing (its community's owner or stewards).\nThe body is the file. Its EXIF position must be inside the listing (or within 100 m of its\nedge) and its date at most a year old; only those checks' results are kept, never the\nposition. The photo is stored re-encoded, with no metadata, and read by an image model on\nNebius Token Factory when both checks pass (`analysis_status`: poll `GET \u2026/evidence`).",
+        "description": "Upload one geotagged field photo for the listing (its community's owner or stewards).\nThe body is the file. Its EXIF position must be inside the listing (or within 100 m of its\nedge) and its date at most a year old; only those checks' results are kept, never the\nposition. The photo is stored re-encoded, with no metadata, and read by an image model on\nNebius Token Factory when both checks pass and AI analysis is on (`analysis_status`: poll\nthe `Location`, `GET \u2026/evidence/{photo_id}`).",
         "operationId": "upload_photo_assets__asset_id__evidence_post",
         "parameters": [
           {
@@ -2329,6 +2329,120 @@
         }
       }
     },
+    "/assets/{asset_id}/evidence/{photo_id}": {
+      "get": {
+        "tags": [
+          "evidence"
+        ],
+        "summary": "Get Photo",
+        "description": "One field photo's checks (the upload's `Location`; poll it while `pending`).",
+        "operationId": "get_photo_assets__asset_id__evidence__photo_id__get",
+        "parameters": [
+          {
+            "name": "photo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Photo Id"
+            }
+          },
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldPhotoOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "404": {
+            "description": "`not_found` (see the list route) or `photo_not_found`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "evidence"
+        ],
+        "summary": "Delete Photo",
+        "description": "Remove a field photo with its image and evidence event. A rating already sealed keeps its\nown copy of what it cited; the next one won't count the photo.",
+        "operationId": "delete_photo_assets__asset_id__evidence__photo_id__delete",
+        "parameters": [
+          {
+            "name": "photo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Photo Id"
+            }
+          },
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "members_only, treasury_cannot_act"
+          },
+          "404": {
+            "description": "`not_found` or `photo_not_found`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/assets/{asset_id}/evidence/{photo_id}/image": {
       "get": {
         "tags": [
@@ -2376,62 +2490,6 @@
           },
           "404": {
             "description": "`not_found` (see the list route) or `photo_not_found`"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/assets/{asset_id}/evidence/{photo_id}": {
-      "delete": {
-        "tags": [
-          "evidence"
-        ],
-        "summary": "Delete Photo",
-        "description": "Remove a field photo. A rating already sealed keeps citing it; the next one won't.",
-        "operationId": "delete_photo_assets__asset_id__evidence__photo_id__delete",
-        "parameters": [
-          {
-            "name": "photo_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Photo Id"
-            }
-          },
-          {
-            "name": "asset_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Asset Id"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "401": {
-            "description": "auth_required"
-          },
-          "403": {
-            "description": "members_only, treasury_cannot_act"
-          },
-          "404": {
-            "description": "`not_found` or `photo_not_found`"
           },
           "422": {
             "description": "Validation Error",
@@ -5474,6 +5532,12 @@
             "type": "boolean",
             "title": "Counted",
             "description": "The latest report already used validated evidence."
+          },
+          "listing_min": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Listing Min",
+            "description": "The confidence a rating needs to list (the listing gate's minimum); a `projected` below it would still leave the listing needing evidence."
           }
         },
         "type": "object",
@@ -5481,7 +5545,8 @@
           "current",
           "projected",
           "points",
-          "counted"
+          "counted",
+          "listing_min"
         ],
         "title": "ConfidenceEffectOut"
       },
@@ -5983,7 +6048,7 @@
               "off"
             ],
             "title": "Ai Analysis",
-            "description": "What reads the photos here: model (MiniCPM-V on Nebius Token Factory), mock (USE_MOCKS) or off (the live world until FIELD_EVIDENCE_AI_LIVE is on)."
+            "description": "What reads the photos: model (MiniCPM-V on Nebius Token Factory, only with FIELD_EVIDENCE_AI_LIVE), mock (USE_MOCKS: a fake model, nothing sent) or off (no photo is sent to a model, so none is validated)."
           },
           "confidence": {
             "$ref": "#/components/schemas/ConfidenceEffectOut"
@@ -6010,18 +6075,18 @@
             "type": "integer",
             "title": "Validated"
           },
-          "latest_taken_on": {
+          "latest_taken_month": {
             "anyOf": [
               {
                 "type": "string",
-                "format": "date"
+                "pattern": "^\\d{4}-\\d{2}$"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Latest Taken On",
-            "description": "Of the validated photos."
+            "title": "Latest Taken Month",
+            "description": "`YYYY-MM` the latest validated photo was taken (never the day)."
           },
           "land_cover": {
             "items": {
@@ -6066,7 +6131,7 @@
         "required": [
           "photos",
           "validated",
-          "latest_taken_on",
+          "latest_taken_month",
           "land_cover",
           "disturbance",
           "counted_in_latest_report"
@@ -6205,7 +6270,7 @@
               }
             ],
             "title": "Gps Distance M",
-            "description": "Metres outside the listing; 0 inside."
+            "description": "Metres outside the listing's edge for `near` (at most gps_buffer_m); 0 inside; null when outside (only that it's over gps_buffer_m is kept) or missing."
           },
           "gps_buffer_m": {
             "type": "integer",
@@ -6247,7 +6312,7 @@
               "not_run"
             ],
             "title": "Analysis Status",
-            "description": "pending (the image model is reading it), completed, failed (no model answer or the AI budget is spent) or not_run (a geotag check failed, or AI analysis is off in this world)."
+            "description": "pending (the image model is reading it), completed, failed (no model answer, the AI budget is spent, or the analysis was lost) or not_run (a geotag check failed, or AI analysis is off: then the photo can't be validated)."
           },
           "observation": {
             "anyOf": [

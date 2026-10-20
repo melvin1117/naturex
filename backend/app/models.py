@@ -1080,8 +1080,9 @@ class FieldPhoto(SQLModel, table=True):
     """A steward's geotagged field photo (T40, dev-spec §7.6) and its checks.
 
     Only the checks' results are kept from the EXIF: whether the position is inside the listing
-    (and how far outside), and the date taken. The position itself and the original file are
-    never stored; the photo is re-encoded without metadata (`field_evidence_photo_blobs`).
+    (and how far outside, only when within the buffer), and the date taken. The position itself
+    and the original file are never stored; the photo is re-encoded without metadata
+    (`field_evidence_photo_blobs`).
     `observation` holds the perception model's validated labels (untrusted, enum values only).
     A validated photo has its evidence event (`event_id`), written by code from those labels.
     Readable only by the listing's community members and same-world admins; the public sees
@@ -1105,7 +1106,8 @@ class FieldPhoto(SQLModel, table=True):
             ["users.world_id", "users.id"],
             name="fk_field_evidence_photos_uploaded_by",
         ),
-        Index("ix_field_evidence_photos_world_id_asset_id", "world_id", "asset_id"),
+        Index("ix_field_evidence_photos_world_id_uploaded_by", "world_id", "uploaded_by"),
+        Index("ix_field_evidence_photos_event_id", "event_id"),
         CheckConstraint(
             "gps_check IN ('inside','near','outside','missing')",
             name="ck_field_evidence_photos_gps_check",
@@ -1117,6 +1119,12 @@ class FieldPhoto(SQLModel, table=True):
         CheckConstraint(
             "analysis_status IN ('pending','completed','failed','not_run')",
             name="ck_field_evidence_photos_analysis_status",
+        ),
+        CheckConstraint("size_bytes > 0", name="ck_field_evidence_photos_size_bytes"),
+        # A distance only within the buffer: an outside photo's would say where it was taken.
+        CheckConstraint(
+            "gps_distance_m IS NULL OR (gps_distance_m >= 0 AND gps_check IN ('inside','near'))",
+            name="ck_field_evidence_photos_gps_distance_m",
         ),
         # Validated only by code's rules: both geotag checks passed and the analysis completed.
         CheckConstraint(

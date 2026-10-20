@@ -198,7 +198,11 @@ def test_admin_routes_are_operator_only() -> None:
     # who can see the asset reads the aggregate.
     assert actions[("POST", "/assets/{asset_id}/evidence")] == {Action.MANAGE_LISTING}
     assert actions[("DELETE", "/assets/{asset_id}/evidence/{photo_id}")] == {Action.MANAGE_LISTING}
-    for path in ("/assets/{asset_id}/evidence", "/assets/{asset_id}/evidence/{photo_id}/image"):
+    for path in (
+        "/assets/{asset_id}/evidence",
+        "/assets/{asset_id}/evidence/{photo_id}",
+        "/assets/{asset_id}/evidence/{photo_id}/image",
+    ):
         assert actions[("GET", path)] == {Action.VIEW_COMMUNITY_DATA}, path
     assert actions[("GET", "/assets/{asset_id}/evidence/summary")] == {Action.BROWSE}
     assert actions[("GET", "/admin/verifications")] == {Action.REVIEW_LISTING}
@@ -330,6 +334,7 @@ OBJECT_ROUTES: dict[tuple[str, str], tuple[str, Callable[[Objects], Any] | None]
     ("POST", "/assets/{asset_id}/evidence"): ("rosa", None),
     ("GET", "/assets/{asset_id}/evidence"): ("rosa", None),
     ("GET", "/assets/{asset_id}/evidence/summary"): ("arjun", None),
+    ("GET", "/assets/{asset_id}/evidence/{photo_id}"): ("rosa", None),
     ("GET", "/assets/{asset_id}/evidence/{photo_id}/image"): ("rosa", None),
     ("DELETE", "/assets/{asset_id}/evidence/{photo_id}"): ("rosa", None),
     ("GET", "/assets/{asset_id}/reports"): ("arjun", None),
@@ -389,6 +394,7 @@ OWN_WORLD_STATUS: dict[tuple[str, str], tuple[int, str | None]] = {
     ("GET", "/assets/{asset_id}/documents/{document_id}"): (404, "document_not_found"),
     ("GET", "/assets/{asset_id}/documents/{document_id}/preview"): (404, "document_not_found"),
     # No photo has that ID in the caller's world either (T40).
+    ("GET", "/assets/{asset_id}/evidence/{photo_id}"): (404, "photo_not_found"),
     ("GET", "/assets/{asset_id}/evidence/{photo_id}/image"): (404, "photo_not_found"),
 }
 # Object IDs that travel in a body or query instead of the path: (persona, body, query), built

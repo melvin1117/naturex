@@ -38,9 +38,9 @@ from app.agents.field_evidence import (
     photo_messages,
     read_photo,
 )
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.llm import LLMClient, LLMError, LLMResult, Tier
-from app.main import app
+from app.main import app, recover_field_evidence
 from app.models import (
     Asset,
     AssetStatus,
@@ -61,13 +61,13 @@ from app.services.field_evidence import (
     EvidenceAnalyzer,
     get_evidence_analyzer,
 )
+from app.services.listings import has_new_evidence
 from app.services.rating import rate_site
 from app.tools import documents as docs
 from app.tools.earth_obs import load_site_metrics
 from app.tools.field_evidence import (
     AUTHENTICITY_CONCERN,
     EVIDENCE_POINTS,
-    GPS_BUFFER_M,
     GPS_OUTSIDE,
     INSTRUCTION_TEXT,
     NOT_A_LANDSCAPE,
@@ -145,10 +145,18 @@ def test_the_position_is_inside_near_or_outside_the_listing() -> None:
     assert check_location(AREA, *INSIDE) == ("inside", 0)
     near, distance = check_location(AREA, *NEAR)
     assert near == "near" and 30 <= (distance or 0) <= 60
-    outside, far = check_location(AREA, *FAR)
-    assert outside == "outside" and (far or 0) > GPS_BUFFER_M
+    assert check_location(AREA, *FAR) == ("outside", None), "an outside distance is never kept"
     assert check_location(AREA, None, None) == ("missing", None)
     assert check_location({"type": "Feature", "geometry": AREA}, *INSIDE) == ("inside", 0)
+
+
+ANTIPODE = (-LAT, LON + 180 if LON < 0 else LON - 180)
+
+
+def test_a_hostile_position_far_away_is_outside_not_an_error() -> None:
+    """The local projection degenerates towards the antipode; such points are just outside."""
+    for lat, lon in (ANTIPODE, (0.0, 0.0), (-89.9, 0.0), (LAT, LON + 90)):
+        assert check_location(AREA, lat, lon) == ("outside", None), (lat, lon)
 
 
 def test_the_date_must_be_recent_and_not_in_the_future() -> None:
@@ -191,7 +199,8 @@ def test_the_event_is_written_by_code_from_the_labels() -> None:
     good = event_fields(healthy(), date(2026, 10, 1))
     assert (good.direction, good.impact_type, good.severity) == (1, "other", 1)
     assert good.title == "Field photo shows wetland vegetation and open water"
-    assert "2026-10-01" in good.summary and "No signs of disturbance." in good.summary
+    assert "in October 2026" in good.summary and "No signs of disturbance." in good.summary
+    assert "2026-10-01" not in good.summary and " 1 " not in good.summary, "the month only"
 
     burnt = event_fields(healthy(disturbance=("dumping_or_waste", "fire_scar")), None)
     assert (burnt.direction, burnt.impact_type, burnt.severity) == (-1, "fire", 1)
@@ -269,13 +278,14 @@ def test_the_confidence_effect_is_exact_and_counted_once() -> None:
     assert (unrated.current, unrated.projected, unrated.points) == (None, None, Decimal("14.0"))
 
 
-def test_ai_analysis_runs_in_sandboxes_and_only_by_opt_in_in_the_live_world() -> None:
+def test_no_photo_reaches_a_real_model_in_any_world_without_the_opt_in() -> None:
     sandbox = UUID(int=42)
-    assert evidence.ai_mode(_settings(), sandbox) == "mock"
-    assert evidence.ai_mode(_settings(use_mocks=False), sandbox) == "model"
-    assert evidence.ai_mode(_settings(use_mocks=False), LIVE_WORLD_ID) == "off"
-    live = _settings(use_mocks=False, field_evidence_ai_live=True)
-    assert evidence.ai_mode(live, LIVE_WORLD_ID) == "model"
+    for world_id in (sandbox, LIVE_WORLD_ID):
+        assert evidence.ai_mode(_settings(), world_id) == "mock"
+        assert evidence.ai_mode(_settings(use_mocks=False), world_id) == "off"
+        live = _settings(use_mocks=False, field_evidence_ai_live=True)
+        assert evidence.ai_mode(live, world_id) == "model"
+    assert Settings.model_fields["field_evidence_ai_live"].default is False, "off by default"
 
 
 # ----- the inspector's photo mode ---------------------------------------------------------------
@@ -526,6 +536,8 @@ def test_a_steward_uploads_a_photo_and_code_validates_it(
     assert (created["analysis_status"], created["validated"]) == ("pending", False)
     assert response.headers["cache-control"] == "no-store"
     assert "lat" not in json.dumps(created) and "lon" not in json.dumps(created)
+    location = response.headers["location"]
+    assert location == f"/assets/{asset_id}/evidence/{created['id']}"
 
     drain(analyzer)
     listed = client_as(world, world.steward).get(f"/assets/{asset_id}/evidence")
@@ -540,10 +552,16 @@ def test_a_steward_uploads_a_photo_and_code_validates_it(
         "projected": None,
         "points": "14.0",
         "counted": False,
+        "listing_min": "70.0",
     }
     event = world.session.get_one(Event, UUID(only["event_id"]))
     assert event.source is EventSource.EVIDENCE and event.direction == 1
     assert event.title == "Field photo shows wetland vegetation and open water"
+    taken_on = date.fromisoformat(only["taken_on"])
+    assert event.published_at == taken_on.replace(day=1), "the visit's month, not its day"
+    assert taken_on.isoformat() not in (event.summary or "")
+    polled = client_as(world, world.steward).get(location)
+    assert polled.status_code == 200 and polled.json() == only
 
     image = client_as(world, world.owner).get(f"/assets/{asset_id}/evidence/{only['id']}/image")
     assert image.status_code == 200 and image.headers["content-type"] == "image/jpeg"
@@ -564,7 +582,9 @@ def test_failed_geotag_checks_never_reach_the_model(
 
     assert (far["gps_check"], far["analysis_status"]) == ("outside", "not_run")
     assert far["reasons"] == ["gps_outside", "not_analysed"]
-    assert far["gps_distance_m"] > GPS_BUFFER_M
+    assert far["gps_distance_m"] is None, "never how far outside"
+    row = world.session.get_one(FieldPhoto, UUID(far["id"]))
+    assert row.gps_distance_m is None
     assert bare["reasons"] == ["gps_missing", "taken_missing", "not_analysed"]
     assert old["reasons"] == ["taken_too_old", "not_analysed"]
     deferred = analyzer.executor
@@ -670,10 +690,11 @@ def test_the_public_sees_aggregate_labels_never_photos_or_positions(
     body = res.json()
     assert body["photos"] == 1 and body["validated"] == 1
     assert body["land_cover"] == ["wetland_vegetation", "open_water"]
+    assert body["latest_taken_month"] == taken()[:7].replace(":", "-"), "the month, never the day"
     assert set(body) == {
         "photos",
         "validated",
-        "latest_taken_on",
+        "latest_taken_month",
         "land_cover",
         "disturbance",
         "counted_in_latest_report",
@@ -719,24 +740,48 @@ def test_a_sandbox_reset_removes_the_worlds_photos(
 # ----- end to end: the Orchestrator's tool and the listing gate ---------------------------------
 
 
+@pytest.mark.parametrize(
+    ("answer", "direction", "tally"),
+    [
+        (None, 1, {"negative": 0, "positive": 1}),
+        (
+            reading(land_cover=["tree_cover"], disturbance=["fire_scar"]),
+            -1,
+            {"negative": 1, "positive": 0},
+        ),
+    ],
+    ids=["healthy", "disturbance"],
+)
 @requires_db
 def test_a_validated_photo_lifts_a_needs_evidence_listing_over_the_gate(
-    world: World_, analyzer: EvidenceAnalyzer
+    world: World_,
+    analyzer: EvidenceAnalyzer,
+    answer: PhotoReading | None,
+    direction: int,
+    tally: dict[str, int],
 ) -> None:
     """Stale satellite data puts a new listing at 66.0 confidence (needs_evidence). One
-    validated photo: the run offers `field_evidence`, the evidence term goes 0.3 → 1.0, the
-    confidence is exactly 14.0 higher, health is unchanged, and the gate lists it."""
+    validated photo, healthy or showing damage: the run offers `field_evidence`, the evidence
+    term goes 0.3 → 1.0, the confidence is exactly 14.0 higher, health is unchanged (a
+    disturbance photo is a −1 event that never feeds threat pressure), and the gate lists it.
+    Then deleting and uploading the photo again is no new evidence."""
+    if answer is not None:
+        analyzer.llm_factory = lambda: Recorder(answer)
     world.runner.evidence = DbEvidenceProvider(_sessions(world.session.connection()))
     asset = needs_evidence(world)
     asset_id = UUID(asset["id"])
     before = _latest(world, asset_id)
     assert not world.runner.evidence.available(world.id, asset_id)
 
-    assert upload(world, asset_id, good_photo()).status_code == 201
+    data = good_photo()
+    assert upload(world, asset_id, data).status_code == 201
     drain(analyzer)
     view = client_as(world, world.steward).get(f"/assets/{asset_id}/evidence").json()
     assert Decimal(view["confidence"]["current"]) == before.confidence
     assert Decimal(view["confidence"]["projected"]) == before.confidence + EVIDENCE_POINTS
+    assert Decimal(view["confidence"]["listing_min"]) == Decimal(70)
+    (event,) = _evidence_events(world, asset_id)
+    assert event.direction == direction
 
     age_submission(world, asset_id)
     saved = world.runner.metrics_loader
@@ -755,14 +800,35 @@ def test_a_validated_photo_lifts_a_needs_evidence_listing_over_the_gate(
     assert score["confidence_components"]["evidence"] == "1.0000"
     (cited,) = [e for e in stored["rating"]["events"] if e["source"] == "evidence"]
     assert cited["validated"] is True and cited["severity"] == 1
+    assert cited["direction"] == direction
     steps = {step["step"]: step for step in stored["run"]["steps"]}
     assert steps["evidence"]["status"] == "ok"
-    assert steps["evidence"]["output"] == {"items": 1, "validated": 1, "negative": 0, "positive": 1}
+    assert steps["evidence"]["output"] == {"items": 1, "validated": 1, **tally}
 
     view = client_as(world, world.steward).get(f"/assets/{asset_id}/evidence").json()
     assert view["confidence"]["counted"] is True and view["confidence"]["points"] == "0.0"
     public = client_as(world, world.outsider).get(f"/assets/{asset_id}/evidence/summary").json()
     assert public["counted_in_latest_report"] is True
+
+    # The report counts it: the same photo deleted and uploaded again isn't new evidence.
+    (photo_id,) = [p["id"] for p in view["photos"]]
+    deleted = client_as(world, world.steward).delete(f"/assets/{asset_id}/evidence/{photo_id}")
+    assert deleted.status_code == 204
+    assert upload(world, asset_id, data).status_code == 201
+    drain(analyzer)
+    assert len(_evidence_events(world, asset_id)) == 1
+    assert not has_new_evidence(world.session, world.session.get_one(Asset, asset_id))
+
+
+def _evidence_events(w: World_, asset_id: UUID | str) -> list[Event]:
+    w.session.expire_all()
+    return list(
+        w.session.exec(
+            select(Event).where(
+                Event.asset_id == UUID(str(asset_id)), Event.source == EventSource.EVIDENCE
+            )
+        ).all()
+    )
 
 
 def _latest(w: World_, asset_id: UUID) -> Report:
@@ -772,3 +838,166 @@ def _latest(w: World_, asset_id: UUID) -> Report:
     ).first()
     assert report is not None and report.confidence is not None
     return report
+
+
+# ----- hostile positions, AI off, failures and deletes over the API -----------------------------
+
+
+@requires_db
+def test_a_hostile_gps_position_is_outside_not_a_server_error(
+    world: World_, analyzer: EvidenceAnalyzer
+) -> None:
+    asset_id = draft(world)["id"]
+    for seed, where in enumerate((ANTIPODE, (0.0, 0.0))):
+        res = upload(world, asset_id, good_photo(seed, where))
+        assert res.status_code == 201, res.text
+        body = res.json()
+        assert (body["gps_check"], body["gps_distance_m"]) == ("outside", None)
+        assert body["analysis_status"] == "not_run"
+
+
+@requires_db
+def test_with_ai_off_photos_are_stored_and_checked_but_never_validated(
+    world: World_, analyzer: EvidenceAnalyzer
+) -> None:
+    """No mocks and no FIELD_EVIDENCE_AI_LIVE: nothing goes to a model, in a sandbox too."""
+    app.dependency_overrides[get_settings] = lambda: _settings(use_mocks=False)
+    asset_id = draft(world)["id"]
+    res = upload(world, asset_id, good_photo())
+    assert res.status_code == 201, res.text
+    body = res.json()
+    assert (body["gps_check"], body["date_check"]) == ("inside", "ok")
+    assert (body["analysis_status"], body["validated"]) == ("not_run", False)
+    assert body["reasons"] == [NOT_ANALYSED]
+    deferred = analyzer.executor
+    assert isinstance(deferred, Deferred) and deferred.jobs == []
+    view = client_as(world, world.steward).get(f"/assets/{asset_id}/evidence").json()
+    assert (view["ai_analysis"], view["validated"]) == ("off", 0)
+    assert view["confidence"]["points"] == "0.0"
+    assert world.session.exec(select(LlmCall).where(LlmCall.world_id == world.id)).all() == []
+
+
+def _pending(w: World_, asset_id: UUID, seed: int = 0) -> FieldPhoto:
+    found = docs.run_worker(good_photo(seed), docs.MEDIA_JPEG, photo=True)
+    stored = evidence.store_photo(
+        w.session,
+        world_id=w.id,
+        asset_id=asset_id,
+        uploaded_by=w.steward.id,
+        sha256=f"{seed:064x}",
+        inspection=found,
+        mode="model",
+        today=datetime.now(UTC).date(),
+    )
+    w.session.commit()
+    assert stored.analysis_status == "pending"
+    return stored
+
+
+def _analyzer(w: World_, llm: Any) -> EvidenceAnalyzer:
+    return EvidenceAnalyzer(_sessions(w.session.connection()), _settings(), Deferred(), llm)
+
+
+@requires_db
+def test_any_analysis_failure_marks_the_photo_failed(
+    world: World_, caplog: pytest.LogCaptureFixture
+) -> None:
+    asset_id = UUID(draft(world)["id"])
+    stored = _pending(world, asset_id)
+
+    def broken() -> Recorder:
+        raise RuntimeError("secret model text")
+
+    _analyzer(world, broken).run(world.id, asset_id, stored.id)
+
+    world.session.expire_all()
+    row = world.session.get_one(FieldPhoto, stored.id)
+    assert (row.analysis_status, row.validated, row.reasons) == ("failed", False, [NOT_ANALYSED])
+    assert "RuntimeError" in caplog.text and "secret model text" not in caplog.text
+    assert _evidence_events(world, asset_id) == []
+
+
+@requires_db
+def test_a_restart_fails_lost_analyses_and_a_late_answer_cant_flip_them(world: World_) -> None:
+    asset_id = UUID(draft(world)["id"])
+    lost, late, fresh = (_pending(world, asset_id, seed) for seed in range(3))
+    for row in (lost, late):
+        row.created_at = datetime.now(UTC) - evidence.PENDING_TIMEOUT - timedelta(minutes=1)
+        world.session.add(row)
+    world.session.commit()
+
+    # Startup after a restart: the old one was lost (`late` too, as it's as old).
+    assert recover_field_evidence(_sessions(world.session.connection())) == 2
+    world.session.expire_all()
+    assert world.session.get_one(FieldPhoto, lost.id).analysis_status == "failed"
+    assert world.session.get_one(FieldPhoto, lost.id).reasons == [NOT_ANALYSED]
+    assert world.session.get_one(FieldPhoto, fresh.id).analysis_status == "pending"
+
+    # Its answer arriving now changes nothing.
+    analyzer = _analyzer(world, lambda: Recorder(reading()))
+    analyzer.run(world.id, asset_id, lost.id)
+    world.session.expire_all()
+    assert world.session.get_one(FieldPhoto, lost.id).analysis_status == "failed"
+
+    # Without a restart, an answer after the timeout is dropped too: the steward already saw
+    # `failed`, so it doesn't turn into validated evidence.
+    another = _pending(world, asset_id, 7)
+    another.created_at = datetime.now(UTC) - evidence.PENDING_TIMEOUT
+    world.session.add(another)
+    world.session.commit()
+    analyzer.run(world.id, asset_id, another.id)
+    world.session.expire_all()
+    row = world.session.get_one(FieldPhoto, another.id)
+    assert (row.analysis_status, row.validated, row.event_id) == ("failed", False, None)
+
+    analyzer.run(world.id, asset_id, fresh.id)
+    world.session.expire_all()
+    assert world.session.get_one(FieldPhoto, fresh.id).validated is True
+    assert len(_evidence_events(world, asset_id)) == 1
+
+
+@requires_db
+def test_a_photo_deleted_while_its_analysis_runs_gets_no_event(world: World_) -> None:
+    asset_id = UUID(draft(world)["id"])
+    photo_id = _pending(world, asset_id).id
+    sessions = _sessions(world.session.connection())
+
+    class DeletedMeanwhile(Recorder):
+        def structured(self, **kwargs: Any) -> LLMResult[Any]:
+            with sessions() as session:
+                evidence.delete_photo(session, world.id, asset_id, photo_id)
+                session.commit()
+            return super().structured(**kwargs)
+
+    _analyzer(world, lambda: DeletedMeanwhile(reading())).run(world.id, asset_id, photo_id)
+
+    world.session.expire_all()
+    assert world.session.get(FieldPhoto, photo_id) is None
+    assert _evidence_events(world, asset_id) == []
+
+
+@requires_db
+def test_a_deleted_photo_is_no_longer_new_evidence_and_its_event_goes(
+    world: World_, analyzer: EvidenceAnalyzer
+) -> None:
+    asset_id = needs_evidence(world)["id"]
+    asset = world.session.get_one(Asset, UUID(asset_id))
+    data = good_photo()
+    photo_id = upload(world, asset_id, data).json()["id"]
+    drain(analyzer)
+    assert has_new_evidence(world.session, asset)
+    (event,) = _evidence_events(world, asset_id)
+    event_id = str(event.id)
+
+    deleted = client_as(world, world.steward).delete(f"/assets/{asset_id}/evidence/{photo_id}")
+    assert deleted.status_code == 204
+    assert _evidence_events(world, asset_id) == [], "feeds stop showing it"
+    assert not has_new_evidence(world.session, asset)
+    assets = client_as(world, world.steward).get(f"/assets/{asset_id}").json()
+    assert event_id not in json.dumps(assets.get("recent_events", []))
+
+    # The same file again: one event, not two, and it's new evidence again (nothing counted it).
+    assert upload(world, asset_id, data).status_code == 201
+    drain(analyzer)
+    assert len(_evidence_events(world, asset_id)) == 1
+    assert has_new_evidence(world.session, asset)

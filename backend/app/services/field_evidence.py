@@ -7,15 +7,24 @@
   from the EXIF, only the checks' results (inside the listing or how far outside, the date). At
   most `MAX_PHOTOS_PER_ASSET` per listing, each file once.
 - **Analysis** (`EvidenceAnalyzer`): when both geotag checks pass, the image model labels the
-  photo on a worker thread, never inside a request or a transaction. `ai_mode`: sandboxes use
-  MiniCPM-V; the live world only with `FIELD_EVIDENCE_AI_LIVE=true`; `USE_MOCKS=true` runs a
-  fake model in-process. Code then decides (`evidence_verdict`); a validated photo gets an
-  `events` row (`source='evidence'`) in the same transaction, written by code from its labels.
+  photo on a worker thread, never inside a request or a transaction. `ai_mode`: until Token
+  Factory's data terms are confirmed no uploaded photo goes to a real model in any world, so
+  MiniCPM-V runs only with `FIELD_EVIDENCE_AI_LIVE=true` (`off` otherwise: stored and
+  geotag-checked, `not_run`, never validated); `USE_MOCKS=true` runs a fake model in-process.
+  Code then decides (`evidence_verdict`); a validated photo gets an `events` row
+  (`source='evidence'`) in the same transaction, written by code from its labels. An analysis
+  that fails in any way marks the photo `failed`; one still `pending` after `PENDING_TIMEOUT`
+  was lost (it reads `failed`, is stored `failed` at startup, and a late answer can't flip it).
+- **Delete** (`delete_photo`): the photo, its image and its evidence event (with the event's
+  Copilot chunks) go together; a sealed report keeps its own copy of what it cited.
 - **The tool** (`DbEvidenceProvider`): the Orchestrator is offered `field_evidence` when the
   listing has validated photos; it loads them as Auditor events (`validated=True`), which set
-  the confidence evidence term (+14.0 points) and never feed threat pressure.
-- **Errors:** no model answer, a spent budget or a missing key mark the photo `failed`; neither
-  the image, prompts, answers nor error messages are logged (only an error's type and frames).
+  the confidence evidence term (+14.0 points) and never feed threat pressure. They're new
+  evidence for a `needs_evidence` listing only while the latest report doesn't count them
+  (`has_uncounted_evidence`).
+- **Errors:** any failure (no model answer, a spent budget, a missing key or an unexpected
+  error) marks the photo `failed`; neither the image, prompts, answers nor error messages are
+  logged (only an error's type and frames).
 """
 
 from __future__ import annotations
@@ -33,7 +42,7 @@ from typing import Any, Final, Literal
 from uuid import UUID
 
 from PIL import Image
-from sqlalchemy import func
+from sqlalchemy import delete, func
 from sqlmodel import Session, col, select
 
 from app.agents.auditor import AuditEvent
@@ -43,6 +52,7 @@ from app.llm import LLMError
 from app.models import (
     Asset,
     AssetStatus,
+    DocChunk,
     Event,
     EventSource,
     FieldPhoto,
@@ -69,8 +79,9 @@ from app.tools.field_evidence import (
     event_fields,
     evidence_verdict,
     labels_of,
+    visit_month,
 )
-from app.worlds import LIVE_WORLD_ID
+from app.tools.scoring import EVIDENCE_VALIDATED, GATE_MIN_CONFIDENCE
 
 log = logging.getLogger(__name__)
 
@@ -101,13 +112,13 @@ class PhotoNotFound(LookupError):
 
 
 def ai_mode(settings: Settings, world_id: UUID) -> AiMode:
-    """`mock` with USE_MOCKS; `off` in the live world until FIELD_EVIDENCE_AI_LIVE; else
-    `model` (sandboxes)."""
+    """`mock` with USE_MOCKS; otherwise `model` only with FIELD_EVIDENCE_AI_LIVE, in every
+    world (T71's precedent: no uploaded photo reaches a real model until Token Factory's data
+    terms are confirmed), else `off`. `world_id` is kept for a future per-world rule."""
+    del world_id
     if settings.use_mocks:
         return "mock"
-    if world_id == LIVE_WORLD_ID and not settings.field_evidence_ai_live:
-        return "off"
-    return "model"
+    return "model" if settings.field_evidence_ai_live else "off"
 
 
 # ----- reads ------------------------------------------------------------------------------------
@@ -131,6 +142,20 @@ def photo_count(session: Session, world_id: UUID, asset_id: UUID) -> int:
             .where(FieldPhoto.world_id == world_id, FieldPhoto.asset_id == asset_id)
         ).one()
     )
+
+
+def photo_of(session: Session, world_id: UUID, asset_id: UUID, photo_id: UUID) -> FieldPhoto:
+    """One photo, loaded by `(world_id, asset_id, id)`; raises PhotoNotFound."""
+    photo = session.exec(
+        select(FieldPhoto).where(
+            FieldPhoto.world_id == world_id,
+            FieldPhoto.asset_id == asset_id,
+            FieldPhoto.id == photo_id,
+        )
+    ).one_or_none()
+    if photo is None:
+        raise PhotoNotFound(photo_id)
+    return photo
 
 
 def photo_image(session: Session, world_id: UUID, asset_id: UUID, photo_id: UUID) -> bytes:
@@ -169,10 +194,12 @@ def _observation(stored: dict[str, Any] | None) -> Observation | None:
     )
 
 
+def _lost(photo: FieldPhoto, now: datetime) -> bool:
+    return photo.analysis_status == PENDING and now - photo.created_at >= PENDING_TIMEOUT
+
+
 def _status(photo: FieldPhoto, now: datetime) -> str:
-    if photo.analysis_status == PENDING and now - photo.created_at >= PENDING_TIMEOUT:
-        return FAILED
-    return photo.analysis_status
+    return FAILED if _lost(photo, now) else photo.analysis_status
 
 
 def photo_out(photo: FieldPhoto, now: datetime) -> FieldPhotoOut:
@@ -238,26 +265,48 @@ def steward_view(
             projected=effect.projected,
             points=effect.points,
             counted=effect.counted,
+            listing_min=GATE_MIN_CONFIDENCE.quantize(Decimal("0.1")),
         ),
     )
 
 
 def public_view(session: Session, world_id: UUID, asset_id: UUID) -> FieldEvidencePublicOut:
-    """Counts and labels of validated photos: no photo, position, date of upload or uploader."""
+    """Counts and labels of validated photos: no photo, position, uploader, date of upload or
+    day of the visit (its month only)."""
     photos = photos_of(session, world_id, asset_id)
     validated = [photo for photo in photos if photo.validated]
     observations = [o for photo in validated if (o := _observation(photo.observation))]
     cover, signs = labels_of(observations)
     _, term = _latest_confidence(session, world_id, asset_id)
     dates = [photo.taken_on for photo in validated if photo.taken_on is not None]
+    latest = max(dates, default=None)
     return FieldEvidencePublicOut(
         photos=len(photos),
         validated=len(validated),
-        latest_taken_on=max(dates, default=None),
+        latest_taken_month=f"{latest:%Y-%m}" if latest else None,
         land_cover=cover,
         disturbance=signs,
-        counted_in_latest_report=term is not None and term >= Decimal("1"),
+        counted_in_latest_report=term is not None and term >= EVIDENCE_VALIDATED,
     )
+
+
+def has_uncounted_evidence(session: Session, world_id: UUID, asset_id: UUID) -> bool:
+    """New evidence for a `needs_evidence` listing: a photo is validated now and the latest
+    report didn't count field evidence. The term is all-or-nothing, so once a report counts
+    it, more photos (or the same one deleted and uploaded again) can't raise confidence."""
+    _, term = _latest_confidence(session, world_id, asset_id)
+    if term is not None and term >= EVIDENCE_VALIDATED:
+        return False
+    found = session.exec(
+        select(FieldPhoto.id)
+        .where(
+            FieldPhoto.world_id == world_id,
+            FieldPhoto.asset_id == asset_id,
+            col(FieldPhoto.validated).is_(True),
+        )
+        .limit(1)
+    ).first()
+    return found is not None
 
 
 # ----- writes -----------------------------------------------------------------------------------
@@ -340,20 +389,34 @@ def store_photo(
 
 
 def delete_photo(session: Session, world_id: UUID, asset_id: UUID, photo_id: UUID) -> None:
-    """Delete a photo and its image (the caller commits). Its evidence event stays as history;
-    the next rating no longer counts it. Raises PhotoNotFound."""
+    """Delete a photo, its image and its evidence event with the event's Copilot chunks (the
+    caller commits), so feeds stop showing it and the next rating stops counting it; a sealed
+    report keeps its own copy of what it cited. The photo row is locked first, so an analysis
+    finishing meanwhile is waited for and its event is seen. Raises PhotoNotFound."""
     _lock_asset(session, world_id, asset_id)
     photo = session.exec(
-        select(FieldPhoto).where(
+        select(FieldPhoto)
+        .where(
             FieldPhoto.world_id == world_id,
             FieldPhoto.asset_id == asset_id,
             FieldPhoto.id == photo_id,
         )
+        .with_for_update()
     ).one_or_none()
     if photo is None:
         raise PhotoNotFound(photo_id)
+    event_id = photo.event_id
     session.delete(photo)  # the blob goes with it (ON DELETE CASCADE)
     session.flush()
+    if event_id is not None:
+        session.execute(
+            delete(DocChunk).where(
+                col(DocChunk.world_id) == world_id, col(DocChunk.event_id) == event_id
+            )
+        )
+        session.execute(
+            delete(Event).where(col(Event.world_id) == world_id, col(Event.id) == event_id)
+        )
 
 
 def finish_analysis(
@@ -367,7 +430,9 @@ def finish_analysis(
     now: datetime,
 ) -> FieldPhoto | None:
     """Record a pending photo's analysis and, if code validates it, its evidence event, in one
-    transaction (the caller commits). None when the photo is gone or no longer pending."""
+    transaction (the caller commits). None when the photo is gone or no longer pending. An
+    answer arriving after PENDING_TIMEOUT is dropped and the photo stored `failed`, as the
+    steward already sees it."""
     photo = session.exec(
         select(FieldPhoto)
         .where(
@@ -380,6 +445,8 @@ def finish_analysis(
     ).one_or_none()
     if photo is None:
         return None
+    if _lost(photo, now):
+        observation, model = None, None
     validated, reasons = evidence_verdict(_geotag(photo), observation)
     if validated and observation is not None:
         fields = event_fields(observation, photo.taken_on)
@@ -388,7 +455,7 @@ def finish_analysis(
             asset_id=asset_id,
             source=EventSource.EVIDENCE,
             title=fields.title,
-            published_at=photo.taken_on,
+            published_at=visit_month(photo.taken_on) if photo.taken_on else None,
             impact_type=fields.impact_type,
             direction=fields.direction,
             severity=fields.severity,
@@ -452,6 +519,29 @@ class EvidenceAnalyzer:
             log.error(
                 "field photo %s analysis failed: %s\n%s", photo_id, type(exc).__name__, _frames(exc)
             )
+            self._fail(world_id, asset_id, photo_id)
+
+    def _fail(self, world_id: UUID, asset_id: UUID, photo_id: UUID) -> None:
+        """Store `failed` (not_analysed) so the photo never stays `pending`."""
+        try:
+            with self.session_factory() as session:
+                finish_analysis(
+                    session,
+                    world_id=world_id,
+                    asset_id=asset_id,
+                    photo_id=photo_id,
+                    observation=None,
+                    model=None,
+                    now=self.clock(),
+                )
+                session.commit()
+        except Exception as exc:
+            log.error(
+                "field photo %s not marked failed: %s\n%s",
+                photo_id,
+                type(exc).__name__,
+                _frames(exc),
+            )
 
     def _run(self, world_id: UUID, asset_id: UUID, photo_id: UUID) -> None:
         with self.session_factory() as session:
@@ -484,6 +574,28 @@ class EvidenceAnalyzer:
                 now=self.clock(),
             )
             session.commit()
+
+
+def fail_lost_analyses(session: Session, now: datetime) -> int:
+    """Store `failed` (not_analysed) on every photo still `pending` after PENDING_TIMEOUT, in
+    every world (run at startup: a restart drops the queue). Returns how many (the caller
+    commits)."""
+    lost = session.exec(
+        select(FieldPhoto)
+        .where(
+            FieldPhoto.analysis_status == PENDING,
+            col(FieldPhoto.created_at) <= now - PENDING_TIMEOUT,
+        )
+        .with_for_update(skip_locked=True)
+    ).all()
+    for photo in lost:
+        _, reasons = evidence_verdict(_geotag(photo), None)
+        photo.analysis_status = FAILED
+        photo.reasons = list(reasons)
+        photo.analysed_at = now
+        session.add(photo)
+    session.flush()
+    return len(lost)
 
 
 # ----- the `field_evidence` tool ----------------------------------------------------------------

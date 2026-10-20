@@ -533,7 +533,10 @@ class FieldPhotoOut(BaseModel):
         description="EXIF position: inside the listing, near (within gps_buffer_m of its "
         "edge), outside, or missing. The position itself is never stored."
     )
-    gps_distance_m: int | None = Field(description="Metres outside the listing; 0 inside.")
+    gps_distance_m: int | None = Field(
+        description="Metres outside the listing's edge for `near` (at most gps_buffer_m); 0 "
+        "inside; null when outside (only that it's over gps_buffer_m is kept) or missing."
+    )
     gps_buffer_m: int
     date_check: DateCheck = Field(
         description="EXIF date taken: ok (at most max_age_days old, not in the future), "
@@ -543,8 +546,8 @@ class FieldPhotoOut(BaseModel):
     max_age_days: int
     analysis_status: AnalysisStatus = Field(
         description="pending (the image model is reading it), completed, failed (no model "
-        "answer or the AI budget is spent) or not_run (a geotag check failed, or AI analysis "
-        "is off in this world)."
+        "answer, the AI budget is spent, or the analysis was lost) or not_run (a geotag check "
+        "failed, or AI analysis is off: then the photo can't be validated)."
     )
     observation: FieldPhotoObservationOut | None
     validated: bool = Field(
@@ -570,6 +573,10 @@ class ConfidenceEffectOut(BaseModel):
         "when nothing is validated yet or the latest report already counts it."
     )
     counted: bool = Field(description="The latest report already used validated evidence.")
+    listing_min: Decimal = Field(
+        description="The confidence a rating needs to list (the listing gate's minimum); a "
+        "`projected` below it would still leave the listing needing evidence."
+    )
 
 
 class FieldEvidenceOut(BaseModel):
@@ -579,8 +586,9 @@ class FieldEvidenceOut(BaseModel):
     max_photos: int
     validated: int
     ai_analysis: AiAnalysisMode = Field(
-        description="What reads the photos here: model (MiniCPM-V on Nebius Token Factory), "
-        "mock (USE_MOCKS) or off (the live world until FIELD_EVIDENCE_AI_LIVE is on)."
+        description="What reads the photos: model (MiniCPM-V on Nebius Token Factory, only "
+        "with FIELD_EVIDENCE_AI_LIVE), mock (USE_MOCKS: a fake model, nothing sent) or off "
+        "(no photo is sent to a model, so none is validated)."
     )
     confidence: ConfidenceEffectOut
 
@@ -591,7 +599,10 @@ class FieldEvidencePublicOut(BaseModel):
 
     photos: int
     validated: int
-    latest_taken_on: date | None = Field(description="Of the validated photos.")
+    latest_taken_month: str | None = Field(
+        pattern=r"^\d{4}-\d{2}$",
+        description="`YYYY-MM` the latest validated photo was taken (never the day).",
+    )
     land_cover: list[LandCover] = Field(description="Seen in validated photos.")
     disturbance: list[Disturbance] = Field(description="Seen in validated photos.")
     counted_in_latest_report: bool

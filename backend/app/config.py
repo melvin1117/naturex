@@ -77,10 +77,11 @@ class Settings(BaseSettings):
     # documents (`is_sample`) to the model; with USE_MOCKS a fake model runs and nothing leaves.
     verification_ai_live: bool = False
     # Field evidence (T40): photo uploads per account per rolling hour (429 after; at most 5
-    # photos per listing). MiniCPM-V reads the re-encoded photos (no EXIF, so no location) in
-    # sandboxes; in the live world only with FIELD_EVIDENCE_AI_LIVE=true, off like
-    # VERIFICATION_AI_LIVE until Token Factory's data terms are confirmed. Without the model a
-    # photo is checked (location, date) but never validated, so it can't raise confidence.
+    # photos per listing). MiniCPM-V reads the re-encoded photos (no EXIF, so no location) only
+    # with FIELD_EVIDENCE_AI_LIVE=true, in every world: until Token Factory's data terms are
+    # confirmed no uploaded photo goes to a real model (T71's precedent). Off, a photo is stored
+    # and checked (location, date) but never validated, so it can't raise confidence. With
+    # USE_MOCKS a fake model labels photos and nothing is sent.
     evidence_uploads_per_hour: int = Field(default=10, ge=1)
     field_evidence_ai_live: bool = False
 

@@ -6,6 +6,7 @@ from decimal import Decimal
 
 import pytest
 from alembic import command
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import DBAPIError
 from sqlmodel import Session, select
@@ -273,6 +274,42 @@ def test_payout_lines_migration_downgrades_and_upgrades() -> None:
             "fk_payout_lines_asset",
             "fk_payout_lines_user",
         }
+    finally:
+        engine.dispose()
+
+
+def test_migrations_have_a_single_head() -> None:
+    """Two branches merged with migrations off the same parent would leave two heads, and
+    `alembic upgrade head` would refuse to run: re-chain the newer one before merging."""
+    heads = ScriptDirectory.from_config(alembic_cfg()).get_heads()
+    assert len(heads) == 1, f"several Alembic heads: {heads}"
+
+
+@requires_db
+def test_field_evidence_migration_downgrades_and_upgrades() -> None:
+    """T40 (0021): the photo tables, their FK indexes and CHECKs come and go."""
+    cfg = alembic_cfg()
+    command.upgrade(cfg, "head")
+    revision = ScriptDirectory.from_config(cfg).get_revision("0021")
+    assert revision is not None and isinstance(revision.down_revision, str)
+    command.downgrade(cfg, revision.down_revision)
+    engine = create_engine(get_settings().database_url)
+    try:
+        tables = set(inspect(engine).get_table_names())
+        assert not {"field_evidence_photos", "field_evidence_photo_blobs"} & tables
+        command.upgrade(cfg, "head")
+        inspector = inspect(engine)
+        indexes = {i["name"] for i in inspector.get_indexes("field_evidence_photos")}
+        assert {
+            "ix_field_evidence_photos_world_id_uploaded_by",
+            "ix_field_evidence_photos_event_id",
+        } <= indexes
+        assert "ix_field_evidence_photos_world_id_asset_id" not in indexes, "the unique keys serve"
+        checks = {c["name"] for c in inspector.get_check_constraints("field_evidence_photos")}
+        assert {
+            "ck_field_evidence_photos_size_bytes",
+            "ck_field_evidence_photos_gps_distance_m",
+        } <= checks
     finally:
         engine.dispose()
 

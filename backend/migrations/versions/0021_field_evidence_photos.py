@@ -3,8 +3,12 @@
 - `field_evidence_photos`: one steward photo per row with its deterministic checks (EXIF GPS
   inside the listing or how far outside, the date taken), the perception model's validated
   labels and, once validated by code's rules, its evidence event. The EXIF position and the
-  original file are never stored. Composite `(world_id, asset_id)` and `(world_id, uploaded_by)`
-  foreign keys keep it in its world (ADR-0005); the same file is accepted once per listing.
+  original file are never stored, nor the distance of a photo taken outside it. Composite
+  `(world_id, asset_id)` and `(world_id, uploaded_by)` foreign keys keep it in its world
+  (ADR-0005); `event_id` is a plain foreign key, since `events` has no `(world_id, id)` key yet
+  (as `doc_chunks.event_id`, 0018). The same file is accepted once per listing. The
+  `(world_id, asset_id, …)` unique keys serve the per-listing reads; `uploaded_by` and
+  `event_id` have their own indexes for their foreign keys.
 - `field_evidence_photo_blobs`: the re-encoded JPEG (no metadata), deleted with its photo.
 
 Revision ID: 0021
@@ -84,13 +88,21 @@ def upgrade() -> None:
             "analysis_status IN ('pending','completed','failed','not_run')",
             name="ck_field_evidence_photos_analysis_status",
         ),
+        sa.CheckConstraint("size_bytes > 0", name="ck_field_evidence_photos_size_bytes"),
+        sa.CheckConstraint(
+            "gps_distance_m IS NULL OR (gps_distance_m >= 0 AND gps_check IN ('inside','near'))",
+            name="ck_field_evidence_photos_gps_distance_m",
+        ),
         sa.CheckConstraint(
             "NOT validated OR (analysis_status = 'completed' AND gps_check IN ('inside','near')"
             " AND date_check = 'ok' AND event_id IS NOT NULL)",
             name="ck_field_evidence_photos_validated",
         ),
     )
-    op.create_index("ix_field_evidence_photos_world_id_asset_id", _PHOTOS, ["world_id", "asset_id"])
+    op.create_index(
+        "ix_field_evidence_photos_world_id_uploaded_by", _PHOTOS, ["world_id", "uploaded_by"]
+    )
+    op.create_index("ix_field_evidence_photos_event_id", _PHOTOS, ["event_id"])
     op.create_table(
         _BLOBS,
         sa.Column("photo_id", UUID(as_uuid=True), primary_key=True),

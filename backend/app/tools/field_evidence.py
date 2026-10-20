@@ -4,8 +4,10 @@ Everything that can move a number is here, in code:
 
 - **Geotag checks** (`check_geotag`): the photo's EXIF GPS position must lie inside the
   listing's polygon or within `GPS_BUFFER_M` of its edge (measured in a local equal-area
-  projection), and its EXIF original date must be at most `MAX_PHOTO_AGE_DAYS` old and not in
-  the future (one day of tolerance for time zones: EXIF dates carry none).
+  projection; a point over `FAR_FROM_AREA_M` from the centroid, e.g. the antipode, is
+  `outside` without projecting it), and its EXIF original date must be at most
+  `MAX_PHOTO_AGE_DAYS` old and not in the future (one day of tolerance for time zones: EXIF
+  dates carry none). Only a `near` photo keeps its distance; an `outside` one keeps none.
 - **Validation** (`evidence_verdict`): a photo is validated evidence only when both geotag
   checks pass **and** the perception model's observation (enum labels only, never numbers or
   free text) shows an outdoor landscape with at least one land-cover label, no authenticity
@@ -13,14 +15,16 @@ Everything that can move a number is here, in code:
   a value.
 - **The evidence event** (`event_fields`): direction and impact type come from fixed label
   tables; severity is always `EVIDENCE_SEVERITY`; title and summary are written by code from the
-  labels. Field evidence never feeds threat pressure (`split_field_evidence`): a steward's few
-  photos corroborate the satellite and news picture, they don't re-price it.
+  labels, and date the visit to its month only (`visit_month`). Field evidence never feeds
+  threat pressure (`split_field_evidence`): a steward's few photos corroborate the satellite
+  and news picture, they don't re-price it.
 - **The confidence effect** (`confidence_effect`): the §7.4 evidence term goes from 0.3 to 1.0,
   so a rating with validated evidence gains exactly 0.2 × 0.7 × 100 = 14.0 points of confidence.
 """
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -28,7 +32,7 @@ from decimal import Decimal
 from typing import Any, Literal
 
 import shapely
-from pyproj import CRS, Transformer
+from pyproj import CRS, Geod, Transformer
 from shapely.geometry import MultiPolygon, Point, Polygon, shape
 
 from app.tools.scoring import CONFIDENCE_WEIGHTS, EVIDENCE_NONE, EVIDENCE_VALIDATED
@@ -37,6 +41,9 @@ METHOD_VERSION = "naturex-field-evidence/1.0"
 MAX_PHOTOS_PER_ASSET = 5
 GPS_BUFFER_M = 100
 """Phone GPS is good to a few metres in the open, worse under canopy; a boundary path counts."""
+FAR_FROM_AREA_M = 1_000_000
+"""Past this geodesic distance from the centroid a point is `outside` without being projected:
+the local projection degenerates towards the antipode."""
 MAX_PHOTO_AGE_DAYS = 365
 FUTURE_TOLERANCE = timedelta(days=1)
 EVIDENCE_SEVERITY = 1
@@ -119,7 +126,8 @@ INSTRUCTION_TEXT = "instruction_text"
 class GeotagCheck:
     gps: GpsCheck
     distance_m: int | None
-    """Metres from the polygon's edge (0 inside); None without a position."""
+    """Metres from the polygon's edge: 0 inside, up to GPS_BUFFER_M near; None outside (never
+    kept: it would say where the photographer was) or without a position."""
     taken: DateCheck
     taken_on: date | None
 
@@ -153,29 +161,39 @@ def _area(geojson: Mapping[str, Any]) -> Polygon | MultiPolygon:
     return area
 
 
-def distance_to_area_m(geojson: Mapping[str, Any], lat: float, lon: float) -> int:
+_GEOD = Geod(ellps="WGS84")
+
+
+def distance_to_area_m(geojson: Mapping[str, Any], lat: float, lon: float) -> int | None:
     """Metres from (lat, lon) to the listing's polygon (0 inside or on the edge), in a Lambert
-    azimuthal equal-area projection centred on the polygon, rounded up to the metre."""
+    azimuthal equal-area projection centred on the polygon, rounded up to the metre. None when
+    the point is over FAR_FROM_AREA_M from the centroid (geodesic) or the projection fails."""
     area = _area(geojson)
     centre = area.centroid
+    _, _, from_centre = _GEOD.inv(centre.x, centre.y, lon, lat)
+    if not math.isfinite(from_centre) or from_centre > FAR_FROM_AREA_M:
+        return None
     laea = CRS.from_proj4(f"+proj=laea +lat_0={centre.y} +lon_0={centre.x} +datum=WGS84 +units=m")
     # (x, y) arrays in, (x, y) arrays out: `interleaved=False` (the stubs only type the default).
     project: Any = Transformer.from_crs("EPSG:4326", laea, always_xy=True).transform
     metres = shapely.transform(area, project, interleaved=False).distance(
         shapely.transform(Point(lon, lat), project, interleaved=False)
     )
-    return int(-(-metres // 1))
+    if not math.isfinite(metres):
+        return None
+    return math.ceil(metres)
 
 
 def check_location(
     geojson: Mapping[str, Any], lat: float | None, lon: float | None
 ) -> tuple[GpsCheck, int | None]:
+    """(the check, metres from the edge for `inside` and `near` only)."""
     if lat is None or lon is None:
         return "missing", None
     distance = distance_to_area_m(geojson, lat, lon)
-    if distance == 0:
-        return "inside", 0
-    return ("near" if distance <= GPS_BUFFER_M else "outside"), distance
+    if distance is None or distance > GPS_BUFFER_M:
+        return "outside", None
+    return ("inside" if distance == 0 else "near"), distance
 
 
 def check_taken(taken_at: str | None, uploaded_on: date) -> tuple[DateCheck, date | None]:
@@ -269,11 +287,22 @@ def _words(labels: Iterable[str]) -> str:
     return f"{', '.join(names[:-1])} and {names[-1]}"
 
 
+_MONTHS = (
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+)  # fmt: skip
+
+
+def visit_month(taken_on: date) -> date:
+    """The first of the month a photo was taken: public text and dates never give the day."""
+    return taken_on.replace(day=1)
+
+
 def event_fields(observation: Observation, taken_on: date | None) -> EventFields:
     """The evidence event of a validated photo, written by code from its labels."""
     disturbances = [d for d in DISTURBANCE_IMPACT if d in observation.disturbance]
     cover = [label for label in LABELS if label in observation.land_cover]
-    when = f" on {taken_on.isoformat()}" if taken_on else ""
+    when = f" in {_MONTHS[taken_on.month - 1]} {taken_on.year}" if taken_on else ""
     seen = _words(cover) or "no clear land cover"
     if disturbances:
         direction: Literal[-1, 0, 1] = -1

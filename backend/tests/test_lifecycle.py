@@ -17,6 +17,7 @@ import pytest
 from alembic import command
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection, Engine, create_engine, delete
+from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import Session, col, select
 
 from app import events as event_bus
@@ -35,6 +36,7 @@ from app.models import (
     CommunityRole,
     Event,
     EventSource,
+    FieldPhoto,
     LedgerEntry,
     LedgerKind,
     Report,
@@ -958,10 +960,7 @@ def test_low_confidence_needs_evidence_and_new_evidence_allows_a_resubmit(world:
     assert transitions(world, asset["id"])[-1] == "rated"
     assert client_as(world, world.outsider).get(f"/assets/{asset['id']}").status_code == 404
 
-    world.session.add(
-        Event(world_id=world.id, asset_id=UUID(asset["id"]), source=EventSource.EVIDENCE)
-    )
-    world.session.commit()
+    _validated_photo(world, UUID(asset["id"]))
     assert submit(world, asset["id"]).status_code == 202
     world.executor.run_all()
     assert status_of(world, asset["id"]) == (AssetStatus.LISTED, None)
@@ -979,21 +978,52 @@ def test_newer_satellite_data_allows_a_resubmit(world: World_) -> None:
     assert status_of(world, asset["id"]) == (AssetStatus.LISTED, None)
 
 
-@requires_db
-def test_evidence_older_than_the_report_does_not_count(world: World_) -> None:
-    asset = needs_evidence(world)
-    report = world.session.exec(select(Report).where(Report.asset_id == UUID(asset["id"]))).one()
-    world.session.add(
-        Event(
-            world_id=world.id,
-            asset_id=UUID(asset["id"]),
-            source=EventSource.EVIDENCE,
-            created_at=report.created_at - timedelta(minutes=1),
-        )
+def _validated_photo(w: World_, asset_id: UUID) -> FieldPhoto:
+    """A validated field photo (T40) with its evidence event, stored as the analyzer would."""
+    event = Event(world_id=w.id, asset_id=asset_id, source=EventSource.EVIDENCE, direction=1)
+    w.session.add(event)
+    w.session.flush()
+    photo = FieldPhoto(
+        world_id=w.id,
+        asset_id=asset_id,
+        uploaded_by=w.steward.id,
+        size_bytes=1,
+        width=1,
+        height=1,
+        sha256=uuid4().hex * 2,
+        gps_check="inside",
+        gps_distance_m=0,
+        date_check="ok",
+        analysis_status="completed",
+        validated=True,
+        event_id=event.id,
+        method_version="test",
     )
+    w.session.add(photo)
+    w.session.commit()
+    return photo
+
+
+@requires_db
+def test_only_validated_evidence_the_latest_report_doesnt_count_is_new(world: World_) -> None:
+    asset = needs_evidence(world)
+    asset_id = UUID(asset["id"])
+    row = world.session.get_one(Asset, asset_id)
+    world.session.add(Event(world_id=world.id, asset_id=asset_id, source=EventSource.EVIDENCE))
     world.session.commit()
-    row = world.session.get_one(Asset, UUID(asset["id"]))
-    assert has_new_evidence(world.session, row) is False
+    assert has_new_evidence(world.session, row) is False, "an event without a validated photo"
+
+    _validated_photo(world, asset_id)
+    assert has_new_evidence(world.session, row) is True
+
+    report = world.session.exec(select(Report).where(Report.asset_id == asset_id)).one()
+    stored = dict(report.auditor_json or {})
+    stored["rating"]["score"]["confidence_components"]["evidence"] = "1.0000"
+    report.auditor_json = stored
+    flag_modified(report, "auditor_json")
+    world.session.add(report)
+    world.session.commit()
+    assert has_new_evidence(world.session, row) is False, "the report already counts it"
 
 
 @requires_db

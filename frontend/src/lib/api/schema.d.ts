@@ -740,7 +740,8 @@ export interface paths {
          *     The body is the file. Its EXIF position must be inside the listing (or within 100 m of its
          *     edge) and its date at most a year old; only those checks' results are kept, never the
          *     position. The photo is stored re-encoded, with no metadata, and read by an image model on
-         *     Nebius Token Factory when both checks pass (`analysis_status`: poll `GET …/evidence`).
+         *     Nebius Token Factory when both checks pass and AI analysis is on (`analysis_status`: poll
+         *     the `Location`, `GET …/evidence/{photo_id}`).
          */
         post: operations["upload_photo_assets__asset_id__evidence_post"];
         delete?: never;
@@ -770,6 +771,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/{asset_id}/evidence/{photo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Photo
+         * @description One field photo's checks (the upload's `Location`; poll it while `pending`).
+         */
+        get: operations["get_photo_assets__asset_id__evidence__photo_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Photo
+         * @description Remove a field photo with its image and evidence event. A rating already sealed keeps its
+         *     own copy of what it cited; the next one won't count the photo.
+         */
+        delete: operations["delete_photo_assets__asset_id__evidence__photo_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assets/{asset_id}/evidence/{photo_id}/image": {
         parameters: {
             query?: never;
@@ -786,26 +812,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/assets/{asset_id}/evidence/{photo_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Photo
-         * @description Remove a field photo. A rating already sealed keeps citing it; the next one won't.
-         */
-        delete: operations["delete_photo_assets__asset_id__evidence__photo_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2061,6 +2067,11 @@ export interface components {
              * @description The latest report already used validated evidence.
              */
             counted: boolean;
+            /**
+             * Listing Min
+             * @description The confidence a rating needs to list (the listing gate's minimum); a `projected` below it would still leave the listing needing evidence.
+             */
+            listing_min: string;
         };
         /**
          * CopilotDeltaEvent
@@ -2284,7 +2295,7 @@ export interface components {
             validated: number;
             /**
              * Ai Analysis
-             * @description What reads the photos here: model (MiniCPM-V on Nebius Token Factory), mock (USE_MOCKS) or off (the live world until FIELD_EVIDENCE_AI_LIVE is on).
+             * @description What reads the photos: model (MiniCPM-V on Nebius Token Factory, only with FIELD_EVIDENCE_AI_LIVE), mock (USE_MOCKS: a fake model, nothing sent) or off (no photo is sent to a model, so none is validated).
              * @enum {string}
              */
             ai_analysis: "model" | "mock" | "off";
@@ -2301,10 +2312,10 @@ export interface components {
             /** Validated */
             validated: number;
             /**
-             * Latest Taken On
-             * @description Of the validated photos.
+             * Latest Taken Month
+             * @description `YYYY-MM` the latest validated photo was taken (never the day).
              */
-            latest_taken_on: string | null;
+            latest_taken_month: string | null;
             /**
              * Land Cover
              * @description Seen in validated photos.
@@ -2380,7 +2391,7 @@ export interface components {
             gps_check: "inside" | "near" | "outside" | "missing";
             /**
              * Gps Distance M
-             * @description Metres outside the listing; 0 inside.
+             * @description Metres outside the listing's edge for `near` (at most gps_buffer_m); 0 inside; null when outside (only that it's over gps_buffer_m is kept) or missing.
              */
             gps_distance_m: number | null;
             /** Gps Buffer M */
@@ -2397,7 +2408,7 @@ export interface components {
             max_age_days: number;
             /**
              * Analysis Status
-             * @description pending (the image model is reading it), completed, failed (no model answer or the AI budget is spent) or not_run (a geotag check failed, or AI analysis is off in this world).
+             * @description pending (the image model is reading it), completed, failed (no model answer, the AI budget is spent, or the analysis was lost) or not_run (a geotag check failed, or AI analysis is off: then the photo can't be validated).
              * @enum {string}
              */
             analysis_status: "pending" | "completed" | "failed" | "not_run";
@@ -6307,7 +6318,7 @@ export interface operations {
             };
         };
     };
-    photo_image_assets__asset_id__evidence__photo_id__image_get: {
+    get_photo_assets__asset_id__evidence__photo_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -6319,13 +6330,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The photo re-encoded as a JPEG with no metadata */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "image/jpeg": string;
+                    "application/json": components["schemas"]["FieldPhotoOut"];
                 };
             };
             /** @description auth_required */
@@ -6387,6 +6398,52 @@ export interface operations {
                 content?: never;
             };
             /** @description `not_found` or `photo_not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    photo_image_assets__asset_id__evidence__photo_id__image_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                photo_id: string;
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The photo re-encoded as a JPEG with no metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_found` (see the list route) or `photo_not_found` */
             404: {
                 headers: {
                     [name: string]: unknown;
