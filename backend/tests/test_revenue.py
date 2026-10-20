@@ -32,6 +32,7 @@ from app.market.revenue import (
     payout_lines_commitment,
     portfolio_impact,
     quarterly_revenue,
+    site_impact,
     split_revenue,
     verify_payout_commitment,
 )
@@ -146,6 +147,31 @@ def test_impact_for_holding_is_pro_rata_to_total_shares() -> None:
     assert result.area_ha == D("25.0000")
     assert result.carbon_stock_tco2 == D("250.0000")
     assert result.services_usd_year == D("50000.00")
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [None, D("-1"), D("-0.0001"), D("NaN"), D("Infinity"), D("-Infinity"), D("0")],
+)
+def test_site_impact_counts_a_missing_negative_or_non_finite_figure_as_zero(
+    missing: Decimal | None,
+) -> None:
+    assert site_impact(
+        area_ha=missing if missing is not None else D("0"),
+        carbon_stock_tco2=missing,
+        services_usd_year=missing,
+    ) == ImpactInput(area_ha=D("0"), carbon_stock_tco2=D("0"), services_usd_year=D("0"))
+
+
+def test_site_impact_keeps_known_figures() -> None:
+    assert site_impact(
+        area_ha=D("12.5"), carbon_stock_tco2=D("3400.25"), services_usd_year=D("2669511")
+    ) == ImpactInput(
+        area_ha=D("12.5"), carbon_stock_tco2=D("3400.25"), services_usd_year=D("2669511")
+    )
+    assert site_impact(
+        area_ha=D("12.5"), carbon_stock_tco2=None, services_usd_year=D("-3")
+    ) == ImpactInput(area_ha=D("12.5"), carbon_stock_tco2=D("0"), services_usd_year=D("0"))
 
 
 def test_impact_rejects_negative_inputs() -> None:

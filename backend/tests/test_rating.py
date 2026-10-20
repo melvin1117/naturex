@@ -14,16 +14,20 @@ from sqlmodel import Session, col, select
 
 from app.config import get_settings
 from app.ledger import entries_for, verify
+from app.market.revenue import site_impact
 from app.models import Asset, LedgerEntry, LedgerKind, Metrics, Price, Report, World
 from app.sandbox import create_world
 from app.seed import DEMO_SITES, TOTAL_SHARES, WORLD_ID, demo_ipo_price, demo_rating, seed
 from app.services.rating import (
     RATING_METHOD_VERSION,
+    ReportImpact,
     SiteRating,
     latest_report,
+    latest_report_impacts,
     observed_until,
     rate_asset,
     rate_site,
+    report_carbon_stock,
 )
 from app.tools.earth_obs import ScenarioName, load_site_metrics
 from app.tools.scoring import Grade, grade_at_least
@@ -202,6 +206,49 @@ def _reports(session: Session, asset_id: UUID) -> list[Report]:
             select(Report).where(Report.asset_id == asset_id).order_by(col(Report.version))
         ).all()
     )
+
+
+def _carbon_report(stock: object) -> Report:
+    return Report(
+        world_id=WORLD_ID,
+        asset_id=UUID(int=1),
+        version=1,
+        auditor_json={"rating": {"valuation": {"carbon": {"total_stock_tco2": stock}}}},
+    )
+
+
+@pytest.mark.parametrize(
+    ("stock", "expected"),
+    [(3400.25, Decimal("3400.25")), ("12", Decimal("12")), (7, Decimal("7"))],
+)
+def test_report_carbon_stock_reads_the_valuation_snapshot(stock: object, expected: Decimal) -> None:
+    assert report_carbon_stock(_carbon_report(stock)) == expected
+
+
+@pytest.mark.parametrize("stock", [None, True, False, "n/a", "", [1], {"t": 1}])
+def test_report_carbon_stock_ignores_a_missing_or_non_numeric_value(stock: object) -> None:
+    assert report_carbon_stock(_carbon_report(stock)) is None
+
+
+@pytest.mark.parametrize(
+    "auditor_json",
+    [None, {}, {"rating": None}, {"rating": {"valuation": []}}, {"rating": {"valuation": {}}}],
+)
+def test_report_carbon_stock_is_none_without_a_carbon_snapshot(
+    auditor_json: dict[str, object] | None,
+) -> None:
+    report = Report(world_id=WORLD_ID, asset_id=UUID(int=1), version=1, auditor_json=auditor_json)
+    assert report_carbon_stock(report) is None
+
+
+@pytest.mark.parametrize("stock", [-5, "-0.5", "NaN", float("nan"), "Infinity"])
+def test_a_negative_or_non_finite_carbon_stock_counts_as_zero_impact(stock: object) -> None:
+    impact = site_impact(
+        area_ha=Decimal("1"),
+        carbon_stock_tco2=report_carbon_stock(_carbon_report(stock)),
+        services_usd_year=None,
+    )
+    assert impact.carbon_stock_tco2 == 0
 
 
 @requires_db
@@ -399,3 +446,36 @@ def test_visitor_worlds_copy_reports_with_remapped_metrics_and_ledger(session: S
         [entry] = entries_for(session, asset.id)
         assert entry.ref_id == copy.id
         assert verify([entry]).valid
+
+
+@requires_db
+def test_latest_report_impacts_match_each_assets_latest_report(session: Session) -> None:
+    assets = [_template_asset(session, site) for site in sorted(EXPECTED)]
+    hero = assets[0]
+    previous = latest_report(session, WORLD_ID, hero.id)
+    assert previous is not None
+    session.add(
+        Report(
+            world_id=WORLD_ID,
+            asset_id=hero.id,
+            version=previous.version + 1,
+            value_mid=Decimal("10.00"),
+            auditor_json={"rating": {"valuation": {"carbon": {"total_stock_tco2": 4.5}}}},
+        )
+    )
+    session.flush()
+
+    impacts = latest_report_impacts(session, WORLD_ID, [a.id for a in assets] + [UUID(int=7)])
+
+    assert impacts[hero.id] == ReportImpact(
+        value_mid=Decimal("10.00"), carbon_stock_tco2=Decimal("4.5")
+    )
+    for asset in assets:
+        report = latest_report(session, WORLD_ID, asset.id)
+        assert report is not None
+        assert impacts[asset.id] == ReportImpact(
+            value_mid=report.value_mid, carbon_stock_tco2=report_carbon_stock(report)
+        )
+        assert impacts[asset.id].carbon_stock_tco2 is not None
+    assert UUID(int=7) not in impacts
+    assert latest_report_impacts(session, WORLD_ID, []) == {}
