@@ -407,8 +407,10 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ## Week 4 · Monitoring loop, Copilot, evals, deploy (Mon Oct 19 – Fri Oct 23)
 
 ### T38 · Time Machine, re-rating and alerts (#52) — D1 · M · Must · D1–D4
-- [ ] "Next quarter" re-rates each asset with the next scenario version; event presets (fire, encroachment, drought, restoration, protection); prices re-anchor
-- [ ] "Next quarter" and presets reuse T75's re-rate, alerts and payout entrypoints (re-plan Oct 18: the real monitoring loop moved to **T75**)
+- [x] "Next quarter" re-rates each asset with the next scenario version; event presets (fire, encroachment, drought, restoration, protection); prices re-anchor
+- [x] "Next quarter" and presets reuse T75's re-rate, alerts and payout entrypoints (re-plan Oct 18: the real monitoring loop moved to **T75**)
+- [x] `rerate_all` scheduled quarterly (`.github/workflows/rerate-all.yml`, safe without secrets)
+- Handoff to T43: `GET /admin/time-machine` (current/next quarter, timeline, presets), `POST /admin/simulate/quarter {period}` (per-asset before/after health, grade, price, alerts, payout) and `POST /admin/simulate/event {asset_id, preset}`; reset is `POST /world/reset`. See dev-spec §9 "As built (T38)" and §8 (re-anchoring).
 
 **Verify:** `make test`; manual encroachment gives grade A → BBB and an alert · **Deps:** T27, T16, T29, T41, T68, T75 · **Files:** `backend/app/routers/admin.py`, `jobs/*.py`, `.github/workflows/news-sweep.yml`
 
