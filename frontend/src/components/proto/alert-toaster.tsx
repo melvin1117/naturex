@@ -111,9 +111,9 @@ export function AlertCard({
         <BellRing className="size-4" />
       </span>
       <div className="min-w-0 text-sm">
-        <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-          <span>{from}</span>
-          <span>{time}</span>
+        <div className="flex items-start justify-between gap-2 text-[11px] text-muted-foreground">
+          <span className="min-w-0">{from}</span>
+          <span className="shrink-0 whitespace-nowrap">{time}</span>
         </div>
         <div className="mt-0.5 font-semibold">{title}</div>
         <div className="mt-0.5 text-muted-foreground">{message}</div>
