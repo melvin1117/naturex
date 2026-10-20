@@ -438,7 +438,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 > **Note from T13:** reports and charts built on a simulated version (`simulated: true`, `data_version` `sim-N`) must show a visible "Simulated" label and must not render `date_windows` as observation periods.
 
 ### T44 · Copilot and impact UI (#56) — PD · M · Must · E1 E3
-- [ ] Chat on asset and portfolio pages (streaming, citations link to sources); impact summary on the portfolio
+- [x] Chat on asset and portfolio pages (streaming, citations link to sources); impact summary on the portfolio
+  - As built: `components/copilot-chat.tsx` takes an optional `assetId`. The asset page asks about its site (T39); "Your stakes" (`/portfolio`) asks world-wide (`POST /copilot` without `asset_id`), with world-wide suggestions and each citation chip named after its site ("Osa Forest · Report v2") and linking to that site's report or news tab. `GET /portfolio` now fills `impact` from each site's latest report through T41's `impact_for_holding` (it was hard-coded to zero), so the impact card shows the account's hectares, tCO₂ and services per year. The header's Copilot button still opens the prototype's scripted sheet.
 
 **Verify:** `make fe-check` · **Deps:** T39, T41 · **Files:** `frontend/src/components/CopilotChat.tsx`, `ImpactSummary.tsx`
 

@@ -15,7 +15,7 @@ behind a new membership can't still buy. The portfolio is the caller's own accou
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Literal, cast, get_args
 from uuid import UUID
 
@@ -62,12 +62,19 @@ from app.market.engine import (
     preview,
 )
 from app.market.portfolio import HoldingValue, portfolio_totals, value_holding
+from app.market.revenue import (
+    ImpactAllocation,
+    impact_for_holding,
+    portfolio_impact,
+    site_impact,
+)
 from app.models import (
     Asset,
     Holding,
     Order,
     OrderSide,
     Price,
+    Report,
     StreamEventType,
     User,
     World,
@@ -83,6 +90,7 @@ from app.schemas import (
 )
 from app.services.ipo import NOT_TRADING, is_trading
 from app.services.listings import visible_to
+from app.services.rating import latest_report
 
 router = APIRouter(tags=["market"])
 
@@ -169,6 +177,21 @@ def _locked_asset(session: Session, world_id: UUID, asset_id: UUID) -> Asset:
     if asset is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
     return asset
+
+
+def _carbon_stock(report: Report) -> Decimal | None:
+    """The report's stored carbon stock (`rating.valuation.carbon.total_stock_tco2`), if any."""
+    node: object = report.auditor_json or {}
+    for key in ("rating", "valuation", "carbon", "total_stock_tco2"):
+        if not isinstance(node, dict):
+            return None
+        node = node.get(key)
+    if isinstance(node, bool) or not isinstance(node, int | float | str | Decimal):
+        return None
+    try:
+        return Decimal(str(node))
+    except InvalidOperation:
+        return None
 
 
 def _latest_price(session: Session, asset: Asset) -> Decimal | None:
@@ -409,12 +432,27 @@ def get_portfolio(
 
     out: list[HoldingOut] = []
     values: list[HoldingValue] = []
+    impacts: list[ImpactAllocation] = []
     for holding in holdings:
         asset = session.exec(
             select(Asset).where(Asset.world_id == world.id, Asset.id == holding.asset_id)
         ).first()
         if asset is None:
             continue
+        report = latest_report(session, world.id, asset.id)
+        if report is not None and 0 < holding.shares <= asset.total_shares:
+            impacts.append(
+                impact_for_holding(
+                    str(asset.id),
+                    shares=holding.shares,
+                    total_shares=asset.total_shares,
+                    impact=site_impact(
+                        area_ha=asset.area_ha,
+                        carbon_stock_tco2=_carbon_stock(report),
+                        services_usd_year=report.value_mid,
+                    ),
+                )
+            )
         mark_price = _latest_price(session, asset)
         value = value_holding(
             shares=holding.shares, avg_cost=holding.avg_cost, mark_price=mark_price
@@ -435,7 +473,8 @@ def get_portfolio(
         )
     totals = portfolio_totals(actor.cash_balance, values, starting_cash=STARTING_CASH)
 
-    # Pro-rata impact comes from the stored report (T19 + T41 impact_for_holding); zero for now.
+    # Each holding's share of its site's area, carbon stock and annual services (T41, T44).
+    impact = portfolio_impact(tuple(impacts))
     return PortfolioOut(
         cash_balance=actor.cash_balance,
         holdings=out,
@@ -447,8 +486,8 @@ def get_portfolio(
         starting_cash=STARTING_CASH,
         since_start=totals.since_start,
         impact=ImpactSummary(
-            ha_protected=Decimal("0.00"),
-            t_co2_stored=Decimal("0.00"),
-            services_usd_yr=Decimal("0.00"),
+            ha_protected=impact.area_ha,
+            t_co2_stored=impact.carbon_stock_tco2,
+            services_usd_yr=impact.services_usd_year,
         ),
     )

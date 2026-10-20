@@ -279,6 +279,22 @@ def impact_for_holding(
     )
 
 
+def site_impact(
+    *, area_ha: Decimal, carbon_stock_tco2: Decimal | None, services_usd_year: Decimal | None
+) -> ImpactInput:
+    """A site's impact metrics from its listing and latest report; a figure the report lacks
+    (or a negative one) counts as zero rather than being guessed."""
+
+    def known(value: Decimal | None) -> Decimal:
+        return value if value is not None and value.is_finite() and value > 0 else Decimal("0")
+
+    return ImpactInput(
+        area_ha=known(area_ha),
+        carbon_stock_tco2=known(carbon_stock_tco2),
+        services_usd_year=known(services_usd_year),
+    )
+
+
 def portfolio_impact(allocations: tuple[ImpactAllocation, ...]) -> ImpactInput:
     """Aggregate pro-rata impact metrics across a portfolio, then quantize once."""
     return ImpactInput(

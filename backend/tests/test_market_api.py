@@ -48,6 +48,7 @@ from app.routers.market import get_quote, place_order
 from app.sandbox import _delete_world_rows, create_world, ensure_live_world, reset_world
 from app.schemas import OrderCreate
 from app.seed import WORLD_ID, demo_ipo_price, seed
+from app.services.rating import latest_report
 from app.tools.earth_obs import load_site_metrics
 from tests.conftest import alembic_cfg, requires_db
 from tests.worlds import start_demo
@@ -587,6 +588,46 @@ def test_a_holding_without_a_price_is_left_out_of_the_totals(
     assert D(body["holdings_value"]) == D(priced["market_value"])
     assert D(body["cost_basis"]) == D(priced["cost_basis"])
     assert D(body["total_value"]) == D(body["cash_balance"]) + D(priced["market_value"])
+
+
+@requires_db
+def test_portfolio_impact_is_each_holdings_share_of_its_sites_latest_report(
+    client: TestClient, session: Session
+) -> None:
+    world = _world(client)
+    wetland, forest = _asset_id(world), _asset_id(world, "restoration_forest")
+    _buy(client, wetland, 100)
+    _buy(client, forest, 40)
+
+    impact = client.get("/portfolio").json()["impact"]
+
+    area = carbon = services = D("0")
+    for asset_id, shares in ((wetland, 100), (forest, 40)):
+        asset = session.get(Asset, UUID(asset_id))
+        assert asset is not None
+        report = latest_report(session, asset.world_id, asset.id)
+        assert report is not None and report.value_mid is not None
+        stock = D(str(report.auditor_json["rating"]["valuation"]["carbon"]["total_stock_tco2"]))  # type: ignore[index]
+        fraction = D(shares) / D(asset.total_shares)
+        area += asset.area_ha * fraction
+        carbon += stock * fraction
+        services += report.value_mid * fraction
+    # Pro-rata with T41's `impact_for_holding`, summed then rounded once (`portfolio_impact`).
+    assert D(impact["ha_protected"]) == area.quantize(D("0.0001"), ROUND_HALF_UP)
+    assert D(impact["t_co2_stored"]) == carbon.quantize(D("0.0001"), ROUND_HALF_UP)
+    assert D(impact["services_usd_yr"]) == cents(services)
+    assert D(impact["ha_protected"]) > 0 and D(impact["t_co2_stored"]) > 0
+
+
+@requires_db
+def test_empty_portfolio_has_no_impact(client: TestClient) -> None:
+    impact = client.get("/portfolio").json()["impact"]
+
+    assert {k: D(v) for k, v in impact.items()} == {
+        "ha_protected": D("0"),
+        "t_co2_stored": D("0"),
+        "services_usd_yr": D("0"),
+    }
 
 
 @requires_db
