@@ -72,7 +72,14 @@ from app.config import Settings
 from app.events import lock_world_publisher, publish
 from app.llm import CallLog, CallRecord, LLMClient, LLMError, LLMResult
 from app.models import Asset, AssetStatus, Report, StreamEventType, World, WorldEvent
-from app.schemas import NewsScoutOutput, RatingRunOut, RatingRunStatus, RatingRunStep
+from app.schemas import (
+    NewsScoutOutput,
+    RatingRunOut,
+    RatingRunStatus,
+    RatingRunStep,
+    RunTraceOut,
+    RunTraceStep,
+)
 from app.services.earth_obs_live import (
     EARTH_ENGINE_BUSY,
     LiveEarthObs,
@@ -624,6 +631,7 @@ class RunToolbox:
                 "attempts": attempts,
                 "latency_ms": latency_ms,
                 "error": error,
+                "output": summary if error is None else None,
                 **usage(self._drain(), agent=_TOOL_AGENT.get(tool)),
             }
         )
@@ -1210,6 +1218,14 @@ class RatingRunner:
                 ),
                 audience=spec.audience,
             )
+            events = _run_events(session, spec.world_id, spec.run_id)
+            if events is None:
+                raise RuntimeError("completed rating run has no progress events")
+            record["trace_steps"] = [
+                {"payload": payload, "ts": ts.isoformat()} for payload, ts in events.events
+            ]
+            report.auditor_json = {**(report.auditor_json or {}), "run": record}
+            session.add(report)
             session.commit()
 
     def _fail(self, progress: RunProgress, code: str, started: float) -> None:
@@ -1480,6 +1496,44 @@ def get_run(
         steps=[_step_out(payload, ts) for payload, ts in run.events],
         created_at=run.events[0][1],
         updated_at=run.last_at,
+    )
+
+
+def get_run_trace(session: Session, world_id: UUID, run_id: UUID) -> RunTraceOut | None:
+    """Read the scoped run's spans, or the sealed report's snapshot after event pruning."""
+    run = get_run(session, world_id, run_id)
+    if run is None:
+        return None
+    events = _run_events(session, world_id, run_id)
+    spans: list[tuple[dict[str, Any], datetime | None]]
+    if events is not None:
+        spans = [(payload, ts) for payload, ts in events.events]
+    else:
+        report = _report_for_run(session, world_id, run_id, run.asset_id)
+        if report is None:
+            return None
+        stored = (report.auditor_json or {}).get("run") or {}
+        archived = stored.get("trace_steps")
+        spans = (
+            [(item["payload"], datetime.fromisoformat(item["ts"])) for item in archived]
+            if archived is not None
+            else [(step, None) for step in stored.get("steps", [])]
+        )
+    return RunTraceOut(
+        run_id=run_id,
+        asset_id=run.asset_id,
+        status=run.status,
+        steps=[
+            RunTraceStep.model_validate(
+                {
+                    **_step_out(payload, ts).model_dump(),
+                    "attempts": payload.get("attempts"),
+                    "output": payload.get("output"),
+                    "llm_calls": payload.get("llm_calls", []),
+                }
+            )
+            for payload, ts in spans
+        ],
     )
 
 

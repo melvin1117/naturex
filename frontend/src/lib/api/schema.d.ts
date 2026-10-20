@@ -934,7 +934,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Trace */
+        /**
+         * Get Trace
+         * @description Recent call metadata for this world or asset; for per-run tool spans use /runs/{id}/trace.
+         */
         get: operations["get_trace_admin_trace_get"];
         put?: never;
         post?: never;
@@ -1136,6 +1139,26 @@ export interface paths {
          *     A run of a listing under review is its community's and same-world admins' only (T58).
          */
         get: operations["get_rating_run_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{run_id}/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Rating Run Trace
+         * @description A run's progress spans and model-attempt metadata; no prompts or raw model output.
+         */
+        get: operations["get_rating_run_trace_runs__run_id__trace_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2677,6 +2700,70 @@ export interface components {
          * @enum {string}
          */
         ReviewerRole: "platform_admin" | "partner_reviewer";
+        /** RunTraceOut */
+        RunTraceOut: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            status: components["schemas"]["RatingRunStatus"];
+            /** Steps */
+            steps: components["schemas"]["RunTraceStep"][];
+        };
+        /**
+         * RunTraceStep
+         * @description A progress span with safe tool-result facts and metadata for every model attempt.
+         */
+        RunTraceStep: {
+            /**
+             * Step
+             * @description queued, started, earth_obs, valuation, news, evidence, audit, fallback or done
+             */
+            step: string;
+            /** Status */
+            status: string;
+            /** Tool */
+            tool?: string | null;
+            /**
+             * Pipeline
+             * @description orchestrator or fixed
+             */
+            pipeline?: string | null;
+            /** Model */
+            model?: string | null;
+            /**
+             * Prompt Tokens
+             * @default 0
+             */
+            prompt_tokens: number;
+            /**
+             * Completion Tokens
+             * @default 0
+             */
+            completion_tokens: number;
+            /** Latency Ms */
+            latency_ms?: number | null;
+            /** Cost Usd */
+            cost_usd?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Ts */
+            ts?: string | null;
+            /** Attempts */
+            attempts?: number | null;
+            /** Output */
+            output?: {
+                [key: string]: unknown;
+            } | null;
+            /** Llm Calls */
+            llm_calls?: components["schemas"]["TraceCall"][];
+        };
         /** SharesOut */
         SharesOut: {
             /** Shares Offered */
@@ -2850,6 +2937,27 @@ export interface components {
              */
             pct_of_shares: string;
         };
+        /** TraceCall */
+        TraceCall: {
+            /** Id */
+            id?: number | null;
+            /** Agent */
+            agent?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Tier */
+            tier?: string | null;
+            /** Status */
+            status: string;
+            /** Prompt Tokens */
+            prompt_tokens?: number | null;
+            /** Completion Tokens */
+            completion_tokens?: number | null;
+            /** Latency Ms */
+            latency_ms?: number | null;
+            /** Cost Usd */
+            cost_usd: string;
+        };
         /** TraceOut */
         TraceOut: {
             /** Asset Id */
@@ -2860,20 +2968,25 @@ export interface components {
         /** TraceStep */
         TraceStep: {
             /** Agent */
-            agent: string;
+            agent: string | null;
             /** Model */
-            model: string;
+            model: string | null;
             /** Prompt Tokens */
-            prompt_tokens: number;
+            prompt_tokens: number | null;
             /** Completion Tokens */
-            completion_tokens: number;
+            completion_tokens: number | null;
             /** Latency Ms */
-            latency_ms: number;
+            latency_ms: number | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Status
+             * @default ok
+             */
+            status: string;
         };
         /**
          * UserKind
@@ -5853,6 +5966,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RatingRunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_rating_run_trace_runs__run_id__trace_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunTraceOut"];
                 };
             };
             /** @description Validation Error */

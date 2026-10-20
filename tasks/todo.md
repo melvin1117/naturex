@@ -248,9 +248,10 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`; a live run on the hero site completes · **Deps:** T26, T19, T72 · **Files:** `backend/app/agents/orchestrator.py`, `backend/app/services/rating.py`
 
 ### T28 · Agent Trace API (#40) — D3 · S · Must · G1
-- [ ] Per-run trace: steps, model, tokens, latency, tool calls, outputs (from `llm_calls` + spans); optional Langfuse export
+- [x] Per-run trace: steps, model, tokens, latency, tool calls, safe tool-result summaries (from `llm_calls` snapshots + progress spans); optional Langfuse export deferred
+  - As built: `GET /runs/{run_id}/trace` is scoped to the caller's world and asset visibility; reads live progress events or the full sealed-report trace snapshot after event pruning (older reports keep their legacy tool-only snapshot). `GET /admin/trace?asset_id=` reads real world-scoped `llm_calls` metadata (up to 50 newest), never synthetic model calls. No prompts or raw model responses are exposed.
 
-**Verify:** `make test`; trace for a live run · **Deps:** T09, T27 · **Files:** `backend/app/routers/admin.py`, `backend/app/tracing.py`
+**Verify:** `make test`; trace for an orchestrated run · **Deps:** T09, T27 · **Files:** `backend/app/routers/admin.py`, `backend/app/routers/runs.py`, `backend/app/services/rating_runs.py`
 
 ### T29 · Live events (SSE) (#41) — D1 · M · Must
 - [x] `GET /events/stream` sends rating progress, price ticks and alerts for the visitor's world; polling fallback `GET /events?since=`
