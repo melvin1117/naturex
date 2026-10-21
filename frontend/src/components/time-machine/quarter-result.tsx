@@ -61,7 +61,8 @@ export function QuarterResult({ result }: { result: SimulateQuarter }) {
         </p>
       ) : (
         <div
-          className="-mx-6 overflow-x-auto px-6"
+          // This wrapper scrolls, not the table's own container, so arrow keys scroll it.
+          className="-mx-6 overflow-x-auto rounded-xl px-6 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&_[data-slot=table-container]]:overflow-visible"
           // Scrolls sideways on a phone: focusable so the keyboard can scroll it too.
           tabIndex={0}
           role="group"
@@ -77,7 +78,7 @@ export function QuarterResult({ result }: { result: SimulateQuarter }) {
                 <TableHead>Outcome</TableHead>
                 <TableHead>Health</TableHead>
                 <TableHead>Grade</TableHead>
-                <TableHead>Price</TableHead>
+                <TableHead>Stake price</TableHead>
                 <TableHead className="text-right">Alerts</TableHead>
                 <TableHead>Payout</TableHead>
               </TableRow>

@@ -41,12 +41,17 @@ export function ResetSection({
         Puts this sandbox back to the start: the first quarter, the original
         ratings, prices, holdings and alerts. The live world is never reset.
       </p>
-      <Dialog open={confirming} onOpenChange={setConfirming}>
+      <Dialog
+        open={confirming}
+        onOpenChange={(open) => setConfirming(open && !isResetting)}
+      >
         <DialogTrigger asChild>
+          {/* aria-disabled while resetting keeps focus here after the dialog closes. */}
           <Button
             variant="outline"
-            className="mt-4"
-            disabled={isResetting || busy}
+            className="mt-4 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+            disabled={busy}
+            aria-disabled={isResetting || undefined}
             aria-describedby={busy ? busyId : undefined}
           >
             {isResetting ? (

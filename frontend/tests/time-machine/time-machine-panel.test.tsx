@@ -211,7 +211,7 @@ describe("TimeMachinePanel", () => {
 
     expect(
       await screen.findByRole("button", { name: "Running the quarter…" }),
-    ).toBeDisabled();
+    ).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByText("Starting the re-rates…")).toBeInTheDocument();
     await waitFor(() => expect(FakeEventSource.instances).not.toHaveLength(0));
     act(() => {
@@ -271,13 +271,15 @@ describe("TimeMachinePanel", () => {
     expect(within(hero).getByText("Health 76.2 to 81.3")).toBeInTheDocument();
     expect(within(hero).getByText("Grade A to AA")).toBeInTheDocument();
     expect(
-      within(hero).getByText("Price $21.47 to $23.10"),
+      within(hero).getByText("Stake price $21.47 to $23.10"),
     ).toBeInTheDocument();
     expect(hero).toHaveTextContent("Paid");
     const forest = rows[2]!;
     expect(forest).toHaveTextContent("Skipped");
     expect(forest).toHaveTextContent("no scripted scenario for this site");
-    expect(within(forest).getByText("Price $15.00 to —")).toBeInTheDocument();
+    expect(
+      within(forest).getByText("Stake price $15.00 to —"),
+    ).toBeInTheDocument();
     expect(within(result).getByText("Simulated · sim-1")).toBeInTheDocument();
 
     const phone = await within(result).findByRole("list", {
@@ -641,7 +643,7 @@ describe("TimeMachinePanel", () => {
     await confirmEvent();
     expect(
       await screen.findByRole("button", { name: "Re-rating Sumidero Forest…" }),
-    ).toBeDisabled();
+    ).toHaveAttribute("aria-disabled", "true");
     expect(
       screen.getByText("Applying encroachment and re-rating Sumidero Forest…"),
     ).toBeInTheDocument();
@@ -655,6 +657,41 @@ describe("TimeMachinePanel", () => {
     );
     await waitFor(() => expect(reset).toBeEnabled());
     expect(screen.getByRole("combobox", { name: "Site" })).toBeEnabled();
+  });
+
+  it("keeps a running action's button focusable but won't reopen its dialog", async () => {
+    const quarterRun = pending();
+    const eventRun = pending();
+    renderPanel({
+      "POST /admin/simulate/quarter": quarterRun.route,
+      "POST /admin/simulate/event": eventRun.route,
+    });
+    await confirmQuarter();
+    const quarter = await screen.findByRole("button", {
+      name: "Running the quarter…",
+    });
+    expect(quarter).toBeEnabled();
+    fireEvent.click(quarter);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await act(async () => quarterRun.finish(json(QUARTER)));
+
+    await confirmEvent();
+    const inject = await screen.findByRole("button", {
+      name: /^Re-rating /,
+    });
+    expect(inject).toBeEnabled();
+    fireEvent.click(inject);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await act(async () => eventRun.finish(json(EVENT)));
+  });
+
+  it("announces what an injected event did once it finishes", async () => {
+    renderPanel({ "POST /admin/simulate/event": () => json(EVENT) });
+    await confirmEvent();
+    const status = await screen.findByText(/: health .* to .*, grade /, {
+      selector: "[role=status] span",
+    });
+    expect(status.textContent).toMatch(/stake price \$/);
   });
 
   it("tells a signed-in non-admin the panel is for admins", async () => {
