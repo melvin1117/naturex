@@ -1327,19 +1327,25 @@ def test_the_public_panel_still_says_revoked_after_an_edit(world: World_) -> Non
 def test_a_busy_process_answers_503_at_once(world: World_, monkeypatch: pytest.MonkeyPatch) -> None:
     asset_id = draft(world)["id"]
     monkeypatch.setattr(verification_routes, "run_worker", lambda *a, **k: pytest.fail("ran"))
-    held = [docs.try_acquire_slot() for _ in range(docs.MAX_CONCURRENT_INSPECTIONS)]
-    try:
-        assert all(held)
-        started = time.monotonic()
-        response = upload(world, asset_id, png())
-        elapsed = time.monotonic() - started
-    finally:
-        for _ in held:
-            docs.release_slot()
+    blocking_calls: list[bool] = []
+
+    class FullSlots:
+        """Every slot taken; records whether the request asked to wait for one."""
+
+        def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
+            blocking_calls.append(blocking)
+            return False
+
+        def release(self) -> None:
+            pytest.fail("released a slot it never took")
+
+    monkeypatch.setattr(docs, "_slots", FullSlots())
+
+    response = upload(world, asset_id, png())
 
     assert (response.status_code, response.json()["detail"]) == (503, "inspection_busy")
     assert response.headers["retry-after"] == "5"
-    assert elapsed < 2, "never waits for a slot"
+    assert blocking_calls == [False], "never waits for a slot"
     assert stored(world, asset_id) == 0
 
 
