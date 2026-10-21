@@ -34,9 +34,11 @@ export function FieldEvidencePanel({
 }) {
   const summary = useFieldEvidenceSummary(assetId);
   const communities = useMyCommunities();
-  const member =
+  const addHref =
     communityId !== null &&
-    (communities.data ?? []).some((c) => c.id === communityId);
+    (communities.data ?? []).some((c) => c.id === communityId)
+      ? evidenceHref(assetId, communityId)
+      : null;
   return (
     <section
       id={FIELD_EVIDENCE_PANEL_ID}
@@ -51,9 +53,8 @@ export function FieldEvidencePanel({
         Field evidence
       </h2>
       <p className="mt-2 max-w-2xl text-sm text-pretty text-muted-foreground">
-        Geotagged photos the site&apos;s community takes on the land, checked
-        against its boundary, that can raise the rating&apos;s confidence. Only
-        counts and labels appear here, never a photo or a location.
+        Geotagged photos from the site&apos;s community, checked against its
+        boundary, can raise the rating&apos;s confidence.
       </p>
       {summary.data ? (
         <Summary summary={summary.data} />
@@ -74,9 +75,9 @@ export function FieldEvidencePanel({
           Loading the field evidence…
         </p>
       )}
-      {member && communityId && (
+      {addHref && (
         <Button asChild variant="outline" size="sm" className="mt-5">
-          <Link href={evidenceHref(assetId, communityId)}>
+          <Link href={addHref}>
             <Camera aria-hidden="true" />
             Add field photos
           </Link>

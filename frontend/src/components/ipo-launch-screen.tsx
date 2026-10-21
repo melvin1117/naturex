@@ -202,7 +202,7 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
         </p>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           Geotagged field photos of the land can raise the next rating&apos;s
-          confidence, one of the steps in this price.{" "}
+          confidence, which sets part of this price.{" "}
           <Link
             href={evidenceHref(assetId, steward?.active?.id ?? null)}
             className="font-medium text-foreground underline underline-offset-4 hover:no-underline"

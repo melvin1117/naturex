@@ -561,16 +561,13 @@ describe("FieldEvidencePanel", () => {
     return backend;
   }
 
-  it("says in one line what field evidence is", async () => {
+  it("says in one sentence what field evidence is", async () => {
     renderPanel(EMPTY);
     const panel = await screen.findByRole("region", { name: "Field evidence" });
     expect(
       within(panel).getByText(
-        /Geotagged photos the site's community takes on the land, checked against its boundary, that can raise the rating's confidence/,
+        "Geotagged photos from the site's community, checked against its boundary, can raise the rating's confidence.",
       ),
-    ).toBeVisible();
-    expect(
-      within(panel).getByText(/never a photo or a location/),
     ).toBeVisible();
   });
 

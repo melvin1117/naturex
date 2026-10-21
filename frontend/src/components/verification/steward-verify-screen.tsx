@@ -30,6 +30,7 @@ import type {
 import { isApiAssetId } from "@/lib/asset-detail";
 import { useAsset } from "@/lib/hooks";
 import { NOT_FOUND } from "@/lib/ipo";
+import { evidenceHref } from "@/lib/field-evidence";
 import { ipoHref } from "@/lib/listing/links";
 import { assetHref } from "@/lib/trade";
 import {
@@ -168,6 +169,18 @@ function Loaded({
           reviewer decides. On the live Exchange, the opening offer needs a
           verified listing.
         </p>
+        {!closed && (
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+            Geotagged field photos of the land can raise the rating&apos;s
+            confidence.{" "}
+            <Link
+              href={evidenceHref(asset.id, communityId)}
+              className="font-medium text-foreground underline underline-offset-4 hover:no-underline"
+            >
+              Add field photos
+            </Link>
+          </p>
+        )}
       </header>
 
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
