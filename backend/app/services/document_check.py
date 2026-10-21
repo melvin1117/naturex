@@ -62,6 +62,7 @@ from app.models import (
     VerificationAiSuggestion,
     VerificationLevel,
     VerificationRun,
+    VerificationRunDocument,
 )
 from app.schemas import AiSuggestionOut, AiSuggestionResult
 from app.worlds import LIVE_WORLD_ID
@@ -150,10 +151,16 @@ def _prepare(
         ).one_or_none()
     documents = session.exec(
         select(ListingDocument)
+        .join(
+            VerificationRunDocument,
+            (col(VerificationRunDocument.world_id) == col(ListingDocument.world_id))
+            & (col(VerificationRunDocument.asset_id) == col(ListingDocument.asset_id))
+            & (col(VerificationRunDocument.document_id) == col(ListingDocument.id)),
+        )
         .where(
             ListingDocument.world_id == world_id,
             ListingDocument.asset_id == asset_id,
-            ListingDocument.run_id == run_id,
+            VerificationRunDocument.run_id == run_id,
         )
         .order_by(col(ListingDocument.created_at), col(ListingDocument.id))
     ).all()

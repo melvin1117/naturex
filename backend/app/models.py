@@ -951,7 +951,8 @@ class DocumentFingerprint(SQLModel, table=True):
 class ListingDocument(SQLModel, table=True):
     """An uploaded verification document's metadata (ADR-0006 §5): sensitive personal data,
     readable only by the listing's community members and same-world admins. The bytes live in
-    `listing_document_blobs`. Linked to at most one run of its own asset, once, at submission.
+    `listing_document_blobs`. Linked to runs of its own asset through
+    `verification_run_documents` (a run waiting for a decision carries into the next, #210).
     """
 
     __tablename__ = "listing_documents"
@@ -961,12 +962,6 @@ class ListingDocument(SQLModel, table=True):
             ["world_id", "asset_id"],
             ["assets.world_id", "assets.id"],
             name="fk_listing_documents_asset",
-        ),
-        # A document links only to a run of its own asset.
-        ForeignKeyConstraint(
-            ["world_id", "asset_id", "run_id"],
-            ["verification_runs.world_id", "verification_runs.asset_id", "verification_runs.id"],
-            name="fk_listing_documents_run",
         ),
         ForeignKeyConstraint(
             ["world_id", "private_fingerprint", "asset_id"],
@@ -982,15 +977,11 @@ class ListingDocument(SQLModel, table=True):
             ["users.world_id", "users.id"],
             name="fk_listing_documents_uploaded_by",
         ),
-        Index("ix_listing_documents_world_id_asset_id_run_id", "world_id", "asset_id", "run_id"),
-        # The deferred completeness check looks documents up by run alone.
-        Index("ix_listing_documents_run_id", "run_id", postgresql_where=text("run_id IS NOT NULL")),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     world_id: UUID = Field(foreign_key="worlds.id")
     asset_id: UUID
-    run_id: UUID | None = None
     doc_type: DocumentType = Field(sa_column=_enum_column(DocumentType))
     media_type: str
     size_bytes: int
@@ -1009,6 +1000,34 @@ class ListingDocument(SQLModel, table=True):
     is_sample: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
     uploaded_by: UUID | None = None  # null once the account is deleted (anonymised, K5)
     created_at: datetime = _created_at()
+
+
+class VerificationRunDocument(SQLModel, table=True):
+    """One document of one run (#210, migration 0022): a run links each document it covers, and
+    a document may be in several runs of its own asset (a waiting run's documents carry into the
+    next submission). Immutable (`verification_immutable`); a deferred trigger checks at commit
+    that a run has exactly `document_count` links, so none is added or removed afterwards."""
+
+    __tablename__ = "verification_run_documents"
+    __table_args__ = (
+        # Both ends on the same asset and world.
+        ForeignKeyConstraint(
+            ["world_id", "asset_id", "run_id"],
+            ["verification_runs.world_id", "verification_runs.asset_id", "verification_runs.id"],
+            name="fk_verification_run_documents_run",
+        ),
+        ForeignKeyConstraint(
+            ["world_id", "asset_id", "document_id"],
+            ["listing_documents.world_id", "listing_documents.asset_id", "listing_documents.id"],
+            name="fk_verification_run_documents_document",
+        ),
+        Index("ix_verification_run_documents_document", "world_id", "asset_id", "document_id"),
+    )
+
+    run_id: UUID = Field(primary_key=True)
+    document_id: UUID = Field(primary_key=True)
+    world_id: UUID = Field(foreign_key="worlds.id")
+    asset_id: UUID
 
 
 class ListingDocumentBlob(SQLModel, table=True):

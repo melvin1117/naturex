@@ -5,7 +5,8 @@ Steward (the listing's community owner or stewards, `MANAGE_LISTING`):
 - `POST /assets/{id}/documents?doc_type=…`: upload one document; the request body is the file
   (`Content-Type: application/pdf | image/jpeg | image/png`, ≤ 5 MB). It's inspected in a worker
   with a timeout before anything is stored (`app.tools.documents`).
-- `POST /assets/{id}/verification/runs`: submit 1–3 uploaded documents for review.
+- `POST /assets/{id}/verification/runs`: submit 1–3 uploaded documents for review; while the
+  current run still waits for a decision, its documents stay in the new run (#210).
 
 The listing's community members and same-world admins (`VIEW_COMMUNITY_DATA`; **404 for anyone
 else**, so a document's existence never leaks): `GET /assets/{id}/documents`, the file itself at
@@ -18,7 +19,8 @@ verified" panel (check names and results only, plus what was not checked).
 
 Reviewer (an admin, never on its own community's listing, `REVIEW_LISTING`): the queue at
 `GET /admin/verifications` (with each run's AI document check, T71: an untrusted heuristic shown
-only here), and `POST /admin/assets/{id}/verification/{run_id}/approve`,
+only here), the decided listings at `GET /admin/verifications/decided` (#211), and
+`POST /admin/assets/{id}/verification/{run_id}/approve`,
 `…/reject` and `…/revoke` (the last two need a reason). A refused step is 409 with a code.
 """
 
@@ -26,7 +28,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
@@ -56,10 +58,12 @@ from app.models import (
     DocumentType,
     LedgerEntry,
     LedgerKind,
+    ListingDocument,
     VerificationLevel,
 )
 from app.schemas import (
     AssetStatusOut,
+    DecidedListingItem,
     ListingDocumentOut,
     PublicCheckOut,
     ReviewQueueItem,
@@ -82,12 +86,14 @@ from app.services.verification import (
     CHECKS_FAILED,
     DOCUMENT_ALREADY_SUBMITTED,
     DOCUMENT_LIMIT_REACHED,
+    DOCUMENT_NOT_IN_SUBMISSION,
     DOCUMENT_REUSED,
     LISTING_CLOSED,
     RUN_ALREADY_DECIDED,
     RUN_SUPERSEDED,
     STALE_RUN,
     STORAGE_QUOTA_EXCEEDED,
+    SUBMISSION_FULL,
     DocumentNotFound,
     RunNotFound,
     RunView,
@@ -189,8 +195,21 @@ def _refused(code: str) -> HTTPException:
     return HTTPException(status.HTTP_409_CONFLICT, code, headers={"Cache-Control": NO_STORE})
 
 
-def _document_out(document: Any) -> ListingDocumentOut:
-    return ListingDocumentOut.model_validate(document)
+def _document_out(document: ListingDocument, *, submitted: bool) -> ListingDocumentOut:
+    return ListingDocumentOut(
+        id=document.id,
+        asset_id=document.asset_id,
+        submitted=submitted,
+        doc_type=document.doc_type,
+        media_type=document.media_type,
+        size_bytes=document.size_bytes,
+        page_count=document.page_count,
+        width=document.width,
+        height=document.height,
+        has_preview=document.has_preview,
+        commitment=document.commitment,
+        created_at=document.created_at,
+    )
 
 
 def run_out(view: RunView) -> VerificationRunOut:
@@ -207,7 +226,7 @@ def run_out(view: RunView) -> VerificationRunOut:
         mode=run.mode,
         evidence_kind=run.evidence_kind,
         checklist=[VerificationCheckOut.model_validate(item) for item in run.checklist],
-        documents=[_document_out(document) for document in view.documents],
+        documents=[_document_out(document, submitted=True) for document in view.documents],
         created_at=run.created_at,
         reviewer_role=run.reviewer_role,
         reason=run.reason,
@@ -388,7 +407,7 @@ def upload_document(
     session.commit()
     response.headers["Cache-Control"] = NO_STORE
     response.headers["Location"] = f"/assets/{ref.asset_id}/documents/{document.id}"
-    return _document_out(document)
+    return _document_out(document, submitted=False)
 
 
 @router.get(
@@ -402,8 +421,9 @@ def list_documents(
     """The listing's documents, submitted or not, oldest first."""
     ref = _ref(granted)
     documents = verification.documents_of(session, ref.world_id, ref.asset_id)
+    submitted = verification.submitted_ids(session, ref.world_id, ref.asset_id)
     response.headers["Cache-Control"] = PRIVATE_NO_STORE
-    return [_document_out(document) for document in documents]
+    return [_document_out(document, submitted=document.id in submitted) for document in documents]
 
 
 _FILE_RESPONSE: Responses = {
@@ -493,7 +513,12 @@ def preview_document(
             "description": "`not_found`, or `document_not_found` (a document that isn't one of "
             "this listing's)"
         },
-        409: {"description": f"`{LISTING_CLOSED}` or `{DOCUMENT_ALREADY_SUBMITTED}`"},
+        409: {
+            "description": f"`{LISTING_CLOSED}`, `{DOCUMENT_ALREADY_SUBMITTED}` (a new document "
+            f"was in a run before), `{DOCUMENT_NOT_IN_SUBMISSION}` (a removed document isn't in "
+            f"the waiting run) or `{SUBMISSION_FULL}` (the waiting run's documents and the new "
+            "ones are more than 3: remove some)"
+        },
     },
 )
 def submit_verification(
@@ -505,7 +530,10 @@ def submit_verification(
 ) -> VerificationRunOut:
     """Submit 1–3 uploaded documents for review: a new current run with its deterministic
     checklist (accepted format, not reused, boundary free, consent document attached) and the
-    fingerprint of what it vouches for. Any earlier run stops being current. Once committed,
+    fingerprint of what it vouches for. Any earlier run stops being current. **Adding to a
+    submission:** while the current run still waits for a decision, its documents are kept in
+    the new run (except `remove_document_ids`), so the reviewer sees everything; at most 3 in
+    all. After a decision, a submission starts afresh. Once committed,
     the AI document check (T71) runs in the background where it's on; its untrusted suggestion
     is for the reviewer only and never changes the checklist or the level."""
     actor = granted.signed_in
@@ -517,6 +545,7 @@ def submit_verification(
             asset_id=ref.asset_id,
             submitted_by=actor.user_id,
             document_ids=body.document_ids,
+            remove_document_ids=body.remove_document_ids,
         )
     except DocumentNotFound:
         session.rollback()
@@ -686,6 +715,61 @@ def review_queue(
         )
         for asset, view in rows
     ]
+
+
+DecidedLevel = Literal["verified", "rejected", "revoked"]
+
+
+@router.get(
+    "/admin/verifications/decided",
+    response_model=list[DecidedListingItem],
+    tags=["admin"],
+    responses={**_AUTH, 403: {"description": "admin_only"}},
+)
+def decided_verifications(
+    granted: ReviewQueue,
+    session: SessionDep,
+    response: Response,
+    level: Annotated[
+        DecidedLevel | None,
+        Query(description="Only listings whose current run is at this level; all three if absent."),
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[DecidedListingItem]:
+    """Listings in the caller's world whose current run was decided (verified, rejected or
+    revoked), the latest decision first, one page at a time (`limit`, `offset`), so a reviewer
+    can find a listing again after deciding it. Each item's run carries its decision; the
+    review page (`GET /assets/{id}/verification/runs`) has the full history. A listing with a
+    newer submission waiting is in the queue instead. Listings of the admin's own communities
+    are left out (conflict of interest)."""
+    actor = granted.signed_in
+    rows = verification.decided_listings(
+        session,
+        actor.world_id,
+        list(actor.memberships),
+        level=VerificationLevel(level) if level is not None else None,
+        limit=limit,
+        offset=offset,
+    )
+    response.headers["Cache-Control"] = PRIVATE_NO_STORE
+    out = []
+    for asset, view in rows:
+        run = view.run
+        last = run.revoked_at or run.decided_at
+        if last is None:  # pragma: no cover - a decided run has a decision time (DB check)
+            raise RuntimeError(f"decided run {run.id} has no decision time")
+        out.append(
+            DecidedListingItem(
+                asset_id=asset.id,
+                asset_name=asset.name,
+                asset_status=AssetStatusOut(asset.status.value),
+                community_id=asset.community_id,
+                run=run_out(view),
+                last_decision_at=last,
+            )
+        )
+    return out
 
 
 _DECISION: Responses = {

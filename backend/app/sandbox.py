@@ -60,6 +60,7 @@ from app.models import (
     UserSession,
     VerificationAiSuggestion,
     VerificationRun,
+    VerificationRunDocument,
     World,
     WorldEvent,
 )
@@ -79,8 +80,10 @@ _DELETE_ORDER: tuple[type[SQLModel], ...] = (
     UserSession,
     LedgerEntry,
     PayoutLine,
-    # Verification (T69, T71): AI suggestions and blobs → documents → bindings and runs.
+    # Verification (T69, T71, #210): AI suggestions, run links and blobs → documents →
+    # bindings and runs.
     VerificationAiSuggestion,
+    VerificationRunDocument,
     ListingDocumentBlob,
     ListingDocument,
     DocumentFingerprint,
@@ -169,7 +172,12 @@ def _copy_world_rows(
     # Verification (T69) is per world too: document fingerprints are keyed by world and a run's
     # input fingerprint covers the community's ID, which a copy remaps, so a copied run could
     # never match. Templates hold none; T76 creates sandboxes' demo runs in each world instead.
-    for model in (VerificationRun, ListingDocument, VerificationAiSuggestion):
+    for model in (
+        VerificationRun,
+        ListingDocument,
+        VerificationRunDocument,
+        VerificationAiSuggestion,
+    ):
         if session.exec(select(model).where(_world_col(model) == source).limit(1)).first():
             raise RuntimeError(f"world {source} holds verification records, which can't be copied")
     # Field photos (T40) are a community's activity, uploaded in its own world.

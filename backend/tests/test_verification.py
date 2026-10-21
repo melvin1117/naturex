@@ -52,6 +52,7 @@ from app.models import (
     UserRole,
     VerificationLevel,
     VerificationRun,
+    VerificationRunDocument,
 )
 from app.routers import verification as verification_routes
 from app.routers.runs import get_rating_runner
@@ -282,11 +283,11 @@ def test_a_steward_uploads_a_document_that_only_the_community_and_admins_read(
         "image/png",
         len(data),
     )
-    assert (body["width"], body["height"], body["has_preview"], body["run_id"]) == (
+    assert (body["width"], body["height"], body["has_preview"], body["submitted"]) == (
         1_000,
         800,
         True,
-        None,
+        False,
     )
     assert "private_fingerprint" not in body and "nonce" not in str(body)
     url = f"/assets/{asset['id']}/documents/{body['id']}"
@@ -517,7 +518,7 @@ def test_a_run_has_a_deterministic_checklist_with_values_and_sources(world: Worl
         "title",
         "assembly_minutes",
     }
-    assert all(document["run_id"] == run["id"] for document in run["documents"])
+    assert all(document["submitted"] for document in run["documents"])
     runs = client_for(world, world.owner).get(f"/assets/{asset['id']}/verification/runs").json()
     assert [r["id"] for r in runs] == [run["id"]]
     assert ledger(world, asset["id"], LedgerKind.VERIFICATION) == [], "submitting isn't decided"
@@ -568,20 +569,113 @@ def test_submitting_needs_the_listings_own_unsubmitted_documents(world: World_) 
     assert outsider.status_code == 404
 
 
+def runs_of(w: World_, asset_id: str | UUID) -> list[dict[str, Any]]:
+    response = client_for(w, w.steward).get(f"/assets/{asset_id}/verification/runs")
+    assert response.status_code == 200, response.text
+    return list(response.json())
+
+
+def doc_ids(run: dict[str, Any]) -> set[str]:
+    return {document["id"] for document in run["documents"]}
+
+
 @requires_db
-def test_a_new_run_supersedes_the_current_one(world: World_) -> None:
+def test_adding_a_document_while_a_run_waits_keeps_the_earlier_ones(world: World_) -> None:
+    """#210: the new run covers the waiting run's documents and the new one; the reviewer sees
+    all three, and the superseded run still reads as it was submitted."""
     asset = draft(world)
-    first = evidence(world, asset["id"], 1)
-    second = evidence(world, asset["id"], 2)
+    first = evidence(world, asset["id"])
+    extra = uploaded(world, asset["id"], png(77, 77), doc_type="entity_registration")
 
+    added = submit_run(world, asset["id"], [extra])
     stale = decide(world, asset["id"], first["id"], "approve")
-    runs = client_for(world, world.steward).get(f"/assets/{asset['id']}/verification/runs").json()
 
+    assert added.status_code == 201, added.text
+    second = added.json()
+    assert doc_ids(second) == doc_ids(first) | {extra}
+    assert second["fingerprint_matches"] and "3 documents" in second["checklist"][0]["found"]
     assert (stale.status_code, stale.json()["detail"]) == (409, "run_superseded")
-    assert [(r["id"], r["is_current"]) for r in runs] == [
-        (second["id"], True),
-        (first["id"], False),
+    runs = runs_of(world, asset["id"])
+    assert [(r["id"], r["is_current"], len(r["documents"])) for r in runs] == [
+        (second["id"], True, 3),
+        (first["id"], False, 2),
     ]
+    assert runs[1]["input_fingerprint"] == first["input_fingerprint"], "write-once"
+    assert runs[1]["fingerprint_matches"], "the superseded run still matches its own documents"
+    (item,) = client_for(world, world.admin).get("/admin/verifications").json()
+    assert (item["run"]["id"], doc_ids(item["run"])) == (second["id"], doc_ids(second))
+    listed_docs = client_for(world, world.steward).get(f"/assets/{asset['id']}/documents").json()
+    assert all(document["submitted"] for document in listed_docs)
+
+    approved = decide(world, asset["id"], second["id"], "approve")
+    assert approved.status_code == 200, approved.text
+    (entry,) = ledger(world, asset["id"], LedgerKind.VERIFICATION)
+    commitments = {document["commitment"] for document in second["documents"]}
+    assert {c["commitment"] for c in entry.payload["document_commitments"]} == commitments
+
+
+@requires_db
+def test_a_submission_holds_at_most_three_documents(world: World_) -> None:
+    asset = draft(world)
+    first = evidence(world, asset["id"])
+    title, minutes = (
+        (d["id"] for d in first["documents"] if d["doc_type"] == "title"),
+        (d["id"] for d in first["documents"] if d["doc_type"] == "assembly_minutes"),
+    )
+    title_id, minutes_id = next(title), next(minutes)
+    one = uploaded(world, asset["id"], png(70, 70), doc_type="other")
+    two = uploaded(world, asset["id"], png(71, 71), doc_type="entity_registration")
+
+    full = submit_run(world, asset["id"], [one, two])
+    again = submit_run(world, asset["id"], [minutes_id])
+    not_in_it = client_for(world, world.steward).post(
+        f"/assets/{asset['id']}/verification/runs",
+        json={"document_ids": [one], "remove_document_ids": [two]},
+    )
+    assert (full.status_code, full.json()["detail"]) == (409, "submission_full")
+    assert (again.status_code, again.json()["detail"]) == (409, "document_already_submitted")
+    assert (not_in_it.status_code, not_in_it.json()["detail"]) == (
+        409,
+        "document_not_in_submission",
+    )
+    assert [r["id"] for r in runs_of(world, asset["id"])] == [first["id"]], "nothing changed"
+
+    swapped = client_for(world, world.steward).post(
+        f"/assets/{asset['id']}/verification/runs",
+        json={"document_ids": [one, two], "remove_document_ids": [title_id]},
+    )
+
+    assert swapped.status_code == 201, swapped.text
+    assert doc_ids(swapped.json()) == {minutes_id, one, two}
+    assert doc_ids(runs_of(world, asset["id"])[1]) == {title_id, minutes_id}
+
+
+@requires_db
+def test_after_a_decision_a_submission_starts_afresh(world: World_) -> None:
+    """A decided run's documents were judged: they stay in its record and don't carry over."""
+    asset = draft(world)
+    first = evidence(world, asset["id"])
+    assert decide(world, asset["id"], first["id"], "reject", reason="Blurry").status_code == 200
+    fresh = uploaded(world, asset["id"], png(90, 90), doc_type="assembly_minutes")
+
+    removing = client_for(world, world.steward).post(
+        f"/assets/{asset['id']}/verification/runs",
+        json={"document_ids": [fresh], "remove_document_ids": [first["documents"][0]["id"]]},
+    )
+    second = submit_run(world, asset["id"], [fresh])
+
+    assert (removing.status_code, removing.json()["detail"]) == (
+        409,
+        "document_not_in_submission",
+    )
+    assert second.status_code == 201, second.text
+    assert doc_ids(second.json()) == {fresh}
+    rejected = runs_of(world, asset["id"])[1]
+    assert (rejected["level"], rejected["reason"], doc_ids(rejected)) == (
+        "rejected",
+        "Blurry",
+        doc_ids(first),
+    )
 
 
 @requires_db
@@ -711,8 +805,16 @@ def test_runs_and_documents_are_write_once_in_the_database(world: World_) -> Non
     assert "write-once" in _raises_in_db(
         world, "UPDATE listing_documents SET doc_type = 'other' WHERE id = :id", id=document_id
     )
-    assert "write-once" in _raises_in_db(
-        world, "UPDATE listing_documents SET run_id = NULL WHERE id = :id", id=document_id
+    assert "immutable" in _raises_in_db(
+        world,
+        "DELETE FROM verification_run_documents WHERE document_id = :id",
+        id=document_id,
+    )
+    assert "immutable" in _raises_in_db(
+        world,
+        "UPDATE verification_run_documents SET document_id = :other WHERE document_id = :id",
+        id=document_id,
+        other=run["documents"][1]["id"],
     )
     assert "immutable" in _raises_in_db(
         world,
@@ -781,10 +883,13 @@ def test_documents_cant_be_linked_to_a_run_after_it_was_submitted(world: World_)
 
     message = _raises_in_db(
         world,
-        "UPDATE listing_documents SET run_id = :run WHERE id = :id",
+        "INSERT INTO verification_run_documents (run_id, document_id, world_id, asset_id) "
+        "VALUES (:run, :id, :world_id, :asset_id)",
         "SET CONSTRAINTS ALL IMMEDIATE",
         run=run["id"],
         id=late,
+        world_id=world.id,
+        asset_id=asset["id"],
     )
 
     assert "has 3 documents, not 2" in message
@@ -798,12 +903,15 @@ def test_a_document_links_only_to_a_run_of_its_own_asset(world: World_) -> None:
 
     message = _raises_in_db(
         world,
-        "UPDATE listing_documents SET run_id = :run WHERE id = :id",
+        "INSERT INTO verification_run_documents (run_id, document_id, world_id, asset_id) "
+        "VALUES (:run, :id, :world_id, :asset_id)",
         run=run["id"],
         id=foreign,
+        world_id=world.id,
+        asset_id=asset["id"],
     )
 
-    assert "fk_listing_documents_run" in message
+    assert "fk_verification_run_documents_document" in message
 
 
 # ----- the fingerprint makes edits unverified ---------------------------------------------------
@@ -1098,7 +1206,13 @@ def test_a_sandbox_reset_deletes_its_verification_records(world: World_) -> None
 
     reset_world(world.session, sandbox.id)
 
-    for model in (VerificationRun, ListingDocument, ListingDocumentBlob, DocumentFingerprint):
+    for model in (
+        VerificationRun,
+        VerificationRunDocument,
+        ListingDocument,
+        ListingDocumentBlob,
+        DocumentFingerprint,
+    ):
         rows = world.session.exec(select(model).where(_world_col(model) == sandbox.id)).all()
         assert rows == [], model.__name__
 
@@ -1414,6 +1528,78 @@ def test_the_review_queue_pages_in_two_queries(world: World_) -> None:
 
 
 @requires_db
+def test_decided_listings_newest_decision_first_by_level_and_paged(world: World_) -> None:
+    """#211: a reviewer finds listings again after deciding them; waiting ones stay queued."""
+    approved, rejected, revoked, waiting = (
+        draft(world, geojson=square(700, lat=lat))["id"] for lat in (9.9, 9.7, 9.5, 9.3)
+    )
+    verified(world, approved, seed_byte=1)
+    run = evidence(world, rejected, seed_byte=2)
+    assert decide(world, rejected, run["id"], "reject", reason="Blurry").status_code == 200
+    run = verified(world, revoked, seed_byte=3)
+    assert decide(world, revoked, run["id"], "revoke", reason="Disputed").status_code == 200
+    evidence(world, waiting, seed_byte=4)
+    admin = client_for(world, world.admin)
+
+    def ids(**params: Any) -> list[str]:
+        response = admin.get("/admin/verifications/decided", params=params)
+        assert response.status_code == 200, response.text
+        assert response.headers["cache-control"] == "private, no-store"
+        return [item["asset_id"] for item in response.json()]
+
+    everything = admin.get("/admin/verifications/decided").json()
+    assert [item["asset_id"] for item in everything] == [revoked, rejected, approved]
+    assert [item["run"]["level"] for item in everything] == ["revoked", "rejected", "verified"]
+    assert everything[0]["last_decision_at"] == everything[0]["run"]["revoked_at"]
+    assert everything[1]["run"]["reason"] == "Blurry"
+    assert all(len(item["run"]["documents"]) == 2 for item in everything)
+    assert ids(level="verified") == [approved]
+    assert ids(level="rejected") == [rejected]
+    assert ids(level="revoked") == [revoked]
+    assert ids(limit=1, offset=1) == [rejected]
+    assert ids(offset=3) == []
+    for bad in ({"level": "documents_submitted"}, {"limit": 101}, {"offset": -1}):
+        assert admin.get("/admin/verifications/decided", params=bad).status_code == 422
+    statements, stop = _selects(world.session)
+    try:
+        verification.decided_listings(world.session, world.id)
+    finally:
+        stop()
+    assert len(statements) == 2, statements
+
+
+@requires_db
+def test_decided_listings_are_world_scoped_and_admin_only(world: World_) -> None:
+    asset = draft(world)
+    verified(world, asset["id"])
+    impartial = _person(world.session, world.id, "Second Admin", UserRole.ADMIN)
+    _member(world.session, world.id, world.community_id, world.admin)
+    elsewhere = create_world(world.session)
+    other_admin = world.session.exec(
+        select(User).where(User.world_id == elsewhere.id, User.role == UserRole.ADMIN)
+    ).first()
+    assert other_admin is not None
+    path = "/admin/verifications/decided"
+
+    mine = client_for(world, impartial).get(path).json()
+    conflicted = client_for(world, world.admin).get(path).json()
+    steward = client_for(world, world.steward).get(path)
+    investor = client_for(world, world.outsider).get(path)
+    other_world = client_for(world, other_admin).get(path)
+    other_world_runs = client_for(world, other_admin).get(
+        f"/assets/{asset['id']}/verification/runs"
+    )
+
+    assert [item["asset_id"] for item in mine] == [asset["id"]]
+    assert conflicted == [], "an admin never reviews its own community's listings"
+    assert (steward.status_code, steward.json()["detail"]) == (403, "admin_only")
+    assert (investor.status_code, investor.json()["detail"]) == (403, "admin_only")
+    assert TestClient(app).get(path).status_code == 401
+    assert (other_world.status_code, other_world.json()) == (200, [])
+    assert (other_world_runs.status_code, other_world_runs.json()["detail"]) == (404, "not_found")
+
+
+@requires_db
 def test_the_preview_never_reads_the_original(world: World_) -> None:
     asset_id = draft(world)["id"]
     document = uploaded(world, asset_id, png())
@@ -1472,15 +1658,19 @@ def test_a_run_commits_with_its_documents_and_nothing_can_be_linked_later(
         run_id = run.id
 
     with Session(committed.engine) as session:
-        session.execute(
-            update(ListingDocument).where(col(ListingDocument.id) == late).values(run_id=run_id)
+        session.add(
+            VerificationRunDocument(
+                run_id=run_id, document_id=late, world_id=committed.world_id, asset_id=asset_id
+            )
         )
         with pytest.raises(DBAPIError, match="has 3 documents, not 2"):
             session.commit()
 
     with Session(committed.engine) as session:
         linked = session.exec(
-            select(ListingDocument.id).where(ListingDocument.run_id == run_id)
+            select(VerificationRunDocument.document_id).where(
+                VerificationRunDocument.run_id == run_id
+            )
         ).all()
         assert sorted(linked) == sorted([title, minutes])
 
@@ -1551,6 +1741,7 @@ def test_the_migration_wont_drop_verification_ledger_entries(committed: Committe
             reason="Unreadable",
         )
         session.commit()
+        run_id = run.id
     try:
         with pytest.raises(RuntimeError, match="verification ledger entries exist"):
             command.downgrade(cfg, "0015")
@@ -1560,3 +1751,75 @@ def test_the_migration_wont_drop_verification_ledger_entries(committed: Committe
     with committed.engine.connect() as connection:
         version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
     assert version == head
+    with Session(committed.engine) as session:
+        linked = session.exec(
+            select(VerificationRunDocument.document_id).where(
+                VerificationRunDocument.run_id == run_id
+            )
+        ).all()
+    assert linked == [minutes], "the run keeps its document whichever way the migrations ran"
+
+
+@requires_db
+def test_the_migration_wont_squeeze_a_carried_document_into_one_run(
+    committed: Committed,
+) -> None:
+    """0022's downgrade: a document in two runs (#210) can't go back to a single `run_id`."""
+    cfg = alembic_cfg()
+    asset_id = _committed_draft(committed)
+    minutes = _store(committed, asset_id, png(), DocumentType.ASSEMBLY_MINUTES)
+    title = _store(committed, asset_id, png(), DocumentType.TITLE)
+    with Session(committed.engine) as session:
+        for document in (minutes, title):
+            verification.submit_run(
+                session,
+                world_id=committed.world_id,
+                asset_id=asset_id,
+                submitted_by=committed.owner_id,
+                document_ids=[document],
+            )
+        session.commit()
+    try:
+        with pytest.raises(RuntimeError, match="1 documents are linked to more than one"):
+            command.downgrade(cfg, "0021")
+    finally:
+        command.upgrade(cfg, "head")
+    with Session(committed.engine) as session:
+        links = session.exec(
+            select(VerificationRunDocument.document_id).where(
+                VerificationRunDocument.asset_id == asset_id
+            )
+        ).all()
+    assert sorted(links) == sorted([minutes, minutes, title])
+
+
+@requires_db
+def test_the_migration_moves_links_both_ways(committed: Committed) -> None:
+    cfg = alembic_cfg()
+    asset_id = _committed_draft(committed)
+    minutes = _store(committed, asset_id, png(), DocumentType.ASSEMBLY_MINUTES)
+    with Session(committed.engine) as session:
+        run_id = verification.submit_run(
+            session,
+            world_id=committed.world_id,
+            asset_id=asset_id,
+            submitted_by=committed.owner_id,
+            document_ids=[minutes],
+        ).run.id
+        session.commit()
+    try:
+        command.downgrade(cfg, "0021")
+        with committed.engine.connect() as connection:
+            restored = connection.execute(
+                text("SELECT run_id FROM listing_documents WHERE id = :id"), {"id": minutes}
+            ).scalar()
+        assert restored == run_id
+    finally:
+        command.upgrade(cfg, "head")
+    with Session(committed.engine) as session:
+        links = session.exec(
+            select(VerificationRunDocument.document_id).where(
+                VerificationRunDocument.run_id == run_id
+            )
+        ).all()
+    assert links == [minutes]
