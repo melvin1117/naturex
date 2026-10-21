@@ -17,9 +17,9 @@ import { MarkdownText } from "@/components/markdown-text";
 import { SampleTag } from "@/components/proto/bits";
 import { NdviChart } from "@/components/proto/charts";
 import { GradeBadge } from "@/components/proto/grade";
+import { ReportChanges } from "@/components/proto/report-changes";
 import { SiteMap } from "@/components/proto/site-map";
 import { VerificationBadge } from "@/components/proto/verification";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -28,8 +28,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import type { ReportDiff } from "@/lib/api/types";
-import { useReportDiff } from "@/lib/hooks";
 import {
   LANDCOVER,
   LANDCOVER_ORDER,
@@ -389,7 +387,8 @@ type DiffRow = [
   (v: number) => string,
 ];
 
-function diffRows(report: ReportFacts, prev?: ReportFacts): DiffRow[] {
+/** The prototype has no diff API: it compares its own report facts in the browser. */
+function prototypeDiffRows(report: ReportFacts, prev?: ReportFacts): DiffRow[] {
   return [
     ["Health", report.health, prev?.health, (v) => v.toFixed(1)],
     [
@@ -421,66 +420,17 @@ function diffRows(report: ReportFacts, prev?: ReportFacts): DiffRow[] {
   ];
 }
 
-const REASON_SOURCE: Record<ReportDiff["reasons"][number]["source"], string> = {
-  auditor: "Auditor",
-  event: "News",
-  flag: "Flag",
-  data: "Data",
-  scenario: "Scenario",
-};
-
-/** Why a report changed since `prevId`: stored reasons from the diff API (T37). */
-function ChangeReasons({
-  reportId,
-  prevId,
-}: {
-  reportId: string;
-  prevId: string;
-}) {
-  const diff = useReportDiff(reportId, prevId);
-  if (!diff.data)
-    return (
-      <p className="mt-4 text-xs text-muted-foreground" aria-live="polite">
-        {diff.error
-          ? "We couldn't load why it changed."
-          : "Loading why it changed…"}
-      </p>
-    );
-  const { reasons } = diff.data;
-  return (
-    <div className="mt-5">
-      <h4 className="text-sm font-medium">Why it changed</h4>
-      {reasons.length === 0 ? (
-        <p className="mt-2 text-sm text-muted-foreground">
-          No reasons were recorded between these versions.
-        </p>
-      ) : (
-        <ul className="mt-2 space-y-2">
-          {reasons.map((r, i) => (
-            <li
-              key={`${i}-${r.text}`}
-              className="flex items-start gap-2 text-sm"
-            >
-              <Badge variant="secondary" className="mt-0.5 shrink-0">
-                {REASON_SOURCE[r.source]}
-              </Badge>
-              <MarkdownText text={r.text} className="min-w-0 break-words" />
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 /** Report versions, newest first; the picker shows any version and what changed from the one before. */
 export function ReportTab({
   versions,
-  showReasons = false,
+  live = false,
 }: {
   versions: ReportFacts[];
-  /** Load the reasons from the diff API (real assets only, not the prototype). */
-  showReasons?: boolean;
+  /**
+   * A real asset: the changes, grade change and reasons come from the diff API. The prototype
+   * (false) has no API and compares its own report facts in the browser.
+   */
+  live?: boolean;
 }) {
   const [picked, setPicked] = useState<string | null>(null);
   const index = Math.max(
@@ -580,6 +530,12 @@ export function ReportTab({
             <p className="text-sm text-muted-foreground">
               This is the first rating, so there&apos;s nothing to compare yet.
             </p>
+          ) : live ? (
+            <ReportChanges
+              key={`${report.id}:${prev.id}`}
+              reportId={report.id}
+              prevId={prev.id}
+            />
           ) : (
             <table className="w-full text-sm">
               <thead className="text-left text-xs text-muted-foreground">
@@ -594,44 +550,43 @@ export function ReportTab({
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {diffRows(report, prev).map(([label, now, before, f]) => {
-                  const diff =
-                    now === null || before === null || before === undefined
-                      ? 0
-                      : now - before;
-                  return (
-                    <tr key={label}>
-                      <td className="py-2">{label}</td>
-                      <td className="tabular py-2 text-right text-muted-foreground">
-                        {before === null || before === undefined
-                          ? "—"
-                          : f(before)}
-                      </td>
-                      <td className="tabular py-2 text-right">
-                        <span className="inline-flex items-center gap-1">
-                          {Math.abs(diff) > 1e-6 &&
-                            (diff > 0 ? (
-                              <ArrowUpRight
-                                className="size-3.5 text-muted-foreground"
-                                aria-label="up"
-                              />
-                            ) : (
-                              <ArrowDownRight
-                                className="size-3.5 text-muted-foreground"
-                                aria-label="down"
-                              />
-                            ))}
-                          {now === null ? "—" : f(now)}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {prototypeDiffRows(report, prev).map(
+                  ([label, now, before, f]) => {
+                    const diff =
+                      now === null || before === null || before === undefined
+                        ? 0
+                        : now - before;
+                    return (
+                      <tr key={label}>
+                        <td className="py-2">{label}</td>
+                        <td className="tabular py-2 text-right text-muted-foreground">
+                          {before === null || before === undefined
+                            ? "—"
+                            : f(before)}
+                        </td>
+                        <td className="tabular py-2 text-right">
+                          <span className="inline-flex items-center gap-1">
+                            {Math.abs(diff) > 1e-6 &&
+                              (diff > 0 ? (
+                                <ArrowUpRight
+                                  className="size-3.5 text-muted-foreground"
+                                  aria-label="up"
+                                />
+                              ) : (
+                                <ArrowDownRight
+                                  className="size-3.5 text-muted-foreground"
+                                  aria-label="down"
+                                />
+                              ))}
+                            {now === null ? "—" : f(now)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  },
+                )}
               </tbody>
             </table>
-          )}
-          {prev && showReasons && (
-            <ChangeReasons reportId={report.id} prevId={prev.id} />
           )}
         </Panel>
         <Panel title="Stewardship actions">

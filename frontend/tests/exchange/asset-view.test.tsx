@@ -273,7 +273,7 @@ describe("AssetView", () => {
     ).toBeInTheDocument();
     expect(await screen.findByText("Why it changed")).toBeInTheDocument();
     const reason = screen.getByText(/Replanting raised vegetation vigour/);
-    expect(reason.closest("li")).toHaveTextContent(/^Auditor/);
+    expect(reason.closest("li")).toHaveTextContent(/^Reason 1\s*Auditor/);
     // The citation becomes a tag, as in the report summary.
     expect(
       within(reason.closest("li")!).getByText("score:vegetation_vigor").tagName,
@@ -285,9 +285,11 @@ describe("AssetView", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("What changed since v1")).toBeInTheDocument();
     expect(screen.getByText("Was A in report v1")).toBeInTheDocument();
-    expect(
-      screen.getByText("Fair price per unit").parentElement,
-    ).toHaveTextContent("$21.47");
+    // The table comes from the diff API (#189), not from comparing reports in the browser.
+    expect(screen.getByText("Grade").closest("tr")).toHaveTextContent(
+      "GradeAAAUpgraded",
+    );
+    expect(screen.queryByText("Fair price per unit")).toBeNull();
   });
 
   it("shows a very small p-value as p < 0.01", async () => {
