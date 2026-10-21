@@ -6,12 +6,8 @@ import type { Map as LeafletMap } from "leaflet";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
+import { IMAGERY_ATTRIBUTION, IMAGERY_URL } from "@/lib/imagery";
 import type { LatLng } from "@/lib/prototype/data";
-
-export const IMAGERY_URL =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-export const IMAGERY_ATTRIBUTION =
-  "Imagery © Esri, Maxar, Earthstar Geographics";
 
 /** Satellite basemap, the site boundary and (optionally) the Dynamic World overlay. */
 export function SiteMap({

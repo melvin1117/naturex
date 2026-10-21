@@ -24,6 +24,7 @@ import type {
 } from "@/lib/api/types";
 import { SUMMARY_TICK_REFRESH_MS } from "@/lib/community-hooks";
 import { createDataLayer } from "@/lib/data-layer";
+import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { PrototypeProvider } from "@/lib/prototype/store";
 import { stewardAssetId } from "@/components/shell/steward-community";
 
@@ -628,6 +629,30 @@ describe("the community home", () => {
       await waitFor(() => expect(supporters).toHaveTextContent(text));
     },
   );
+
+  it("draws a featured listing's boundary when it has no thumbnail", async () => {
+    const outline = [
+      [
+        [-99.1, 19.28],
+        [-99.09, 19.28],
+        [-99.09, 19.29],
+        [-99.1, 19.28],
+      ],
+    ];
+    setup(<StewardPage />, {
+      routes: {
+        [`GET /communities/${SELVA.id}/summary`]: () =>
+          json(summary({ listings: [listing({ asset: card({ outline }) })] })),
+      },
+    });
+    const featured = await screen.findByRole("region", {
+      name: "Xochimilco Wetland",
+    });
+    expect(within(featured).getByText(IMAGERY_ATTRIBUTION)).toBeInTheDocument();
+    expect(
+      featured.querySelectorAll("[data-boundary-map] img").length,
+    ).toBeGreaterThan(0);
+  });
 
   it("lists the alerts about the community's own sites (T75)", async () => {
     const mine = {
