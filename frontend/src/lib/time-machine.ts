@@ -204,6 +204,7 @@ const DETAIL_LABEL: Record<string, string> = {
   rating_rate_limited: "the hourly rating limit",
   rating_global_limit: "the hourly rating limit",
   rating_busy: "every rating worker was busy",
+  run_in_progress: "a rating was still running for this site",
 };
 
 export function detailText(detail: string | null | undefined): string | null {

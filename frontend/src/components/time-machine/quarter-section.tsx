@@ -109,9 +109,11 @@ export function QuarterSection({
   const quarter = useSimulateQuarter();
   const [started, setStarted] = useState<string | null>(null);
   // A job running in this sandbox wins (a reload, another tab, or a refused second start);
-  // otherwise the job this panel started.
+  // then the job this panel started; then the sandbox's last one, so a reload still shows
+  // what it did and offers to finish it.
   const latest = state.quarter_job;
-  const jobId = latest && isJobActive(latest) ? latest.id : started;
+  const jobId =
+    latest && isJobActive(latest) ? latest.id : (started ?? latest?.id ?? null);
   const job = useQuarterJob(jobId);
   const result = jobId && job.data?.id === jobId ? job.data : undefined;
   const [confirming, setConfirming] = useState<TimeMachineQuarter | null>(null);

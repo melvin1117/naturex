@@ -819,6 +819,40 @@ describe("TimeMachinePanel", () => {
       expect(backend.calls("POST /admin/simulate/quarter")).toBe(0);
     });
 
+    it("shows the sandbox's last quarter after a reload and offers to finish it", async () => {
+      renderPanel({
+        "GET /admin/time-machine": () =>
+          json({
+            ...AT_Q4,
+            quarter_job: { id: JOB_ID, status: "done", period: "2026Q4" },
+          }),
+        [JOB_ROUTE]: () =>
+          json(
+            quarterJob({
+              ...QUARTER,
+              assets: [
+                QUARTER.assets[0]!,
+                {
+                  ...QUARTER.assets[1]!,
+                  status: "failed",
+                  detail: "run_in_progress",
+                  payout: null,
+                },
+              ],
+            }),
+          ),
+      });
+      expect(
+        await screen.findByRole("region", { name: "Quarter result" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Finish Q4 2026" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Next quarter: Q1 2027" }),
+      ).toBeEnabled();
+    });
+
     it("says a queued job is waiting for a worker", async () => {
       renderPanel({
         "POST /admin/simulate/quarter": accepted,
