@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Stat } from "@/components/proto/bits";
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -116,31 +116,48 @@ describe("useReturnFocus", () => {
 });
 
 describe("Table", () => {
-  it("leaves the scroll container alone by default", () => {
-    const { container } = render(
-      <Table>
-        <TableBody>
-          <TableRow>
-            <TableCell>1</TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>,
+  const table = (scrollLabel?: string) => (
+    <Table scrollLabel={scrollLabel}>
+      <TableBody>
+        <TableRow>
+          <TableCell>1</TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
+  );
+
+  /** jsdom has no layout: give every element these widths for the test. */
+  function widths(scrollWidth: number, clientWidth: number) {
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(
+      scrollWidth,
     );
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(
+      clientWidth,
+    );
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("leaves the scroll container alone by default", () => {
+    widths(900, 300);
+    const { container } = render(table());
     const scroller = container.querySelector("[data-slot=table-container]");
     expect(scroller).not.toHaveAttribute("tabindex");
     expect(screen.queryByRole("region")).not.toBeInTheDocument();
   });
 
-  it("makes a labelled, focusable scroll region with scrollLabel", () => {
-    render(
-      <Table scrollLabel="Your stakes, by site">
-        <TableBody>
-          <TableRow>
-            <TableCell>1</TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>,
-    );
+  it("adds no tab stop with scrollLabel while the table fits", () => {
+    widths(300, 300);
+    const { container } = render(table("Your stakes, by site"));
+    expect(
+      container.querySelector("[data-slot=table-container]"),
+    ).not.toHaveAttribute("tabindex");
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+  });
+
+  it("makes a labelled, focusable scroll region while the table overflows", () => {
+    widths(900, 300);
+    render(table("Your stakes, by site"));
     const region = screen.getByRole("region", {
       name: "Your stakes, by site",
     });
