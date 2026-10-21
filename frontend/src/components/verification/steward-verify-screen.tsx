@@ -11,6 +11,7 @@ import {
   IpoLoading,
   IpoShell,
 } from "@/components/ipo-layout";
+import { ScreenSkeleton } from "@/components/page-skeletons";
 import { useOptionalStewardCommunity } from "@/components/shell/steward-community";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -95,11 +96,7 @@ export function StewardVerifyScreen({ assetId }: { assetId: string }) {
     );
   }
   if (!asset.data || !runs.data) {
-    return (
-      <IpoShell homeHref={homeHref}>
-        <IpoLoading>Loading the verification record…</IpoLoading>
-      </IpoShell>
-    );
+    return <ScreenSkeleton label="Loading the verification record…" />;
   }
   return (
     <IpoShell homeHref={homeHref}>
@@ -293,7 +290,7 @@ function Loaded({
                 onRetry={() => void documents.refetch()}
               />
             ) : (
-              <IpoLoading>Loading your documents…</IpoLoading>
+              <IpoLoading rows={3}>Loading your documents…</IpoLoading>
             )}
           </IpoCard>
         </div>

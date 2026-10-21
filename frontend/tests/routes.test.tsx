@@ -103,7 +103,9 @@ describe("routes", () => {
 
   it("/steward/list shows a loader, then the prototype flow to an anonymous demo visitor", async () => {
     render(<ListPage />, { wrapper: Providers });
-    expect(screen.getByRole("status")).toHaveTextContent("Loading…");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Loading the listing form…",
+    );
     expect(
       await screen.findByRole("heading", { level: 1, name: "List your land" }),
     ).toBeInTheDocument();

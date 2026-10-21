@@ -1307,7 +1307,12 @@ describe("the details step (review fixes)", () => {
           answer = () => resolve(json(SIGNED_IN_WORLD));
         }),
     });
-    expect(await screen.findByText("Loading…")).toBeVisible();
+    // The listing page's shape, not a spinner (#219), with one status naming the wait.
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Loading the listing form…",
+    );
+    expect(document.querySelector("[data-skeleton=page]")).toBeInTheDocument();
+    expect(document.querySelector(".animate-spin")).toBeNull();
     expect(screen.queryByText(/Prefilled for the demo site/)).toBeNull();
     act(() => answer());
     expect(await realForm()).toBeVisible();

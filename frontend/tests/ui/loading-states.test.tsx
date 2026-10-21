@@ -199,7 +199,7 @@ describe("route loading states", () => {
 
   it.each([
     ["/admin", "Time Machine"],
-    ["/admin/verifications", "Verification queue"],
+    ["/admin/verifications", "Verifications"],
     ["/portfolio", "Your stakes"],
   ])("%s draws its real heading", (route, heading) => {
     const { Loading } = LOADERS.find((l) => l.route === route)!;

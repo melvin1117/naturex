@@ -4,14 +4,10 @@ import { ArrowRight, Info, MapPinOff, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import {
-  ErrorAlert,
-  IpoCard,
-  IpoLoading,
-  IpoShell,
-} from "@/components/ipo-layout";
+import { ErrorAlert, IpoCard, IpoShell } from "@/components/ipo-layout";
 import { PhotoCard } from "@/components/evidence/photo-card";
 import { PhotoUploadForm } from "@/components/evidence/photo-upload-form";
+import { ScreenSkeleton } from "@/components/page-skeletons";
 import { useOptionalStewardCommunity } from "@/components/shell/steward-community";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -98,11 +94,7 @@ export function FieldEvidenceScreen({ assetId }: { assetId: string }) {
     );
   }
   if (!asset.data || !evidence.data) {
-    return (
-      <IpoShell homeHref={homeHref}>
-        <IpoLoading>Loading the field evidence…</IpoLoading>
-      </IpoShell>
-    );
+    return <ScreenSkeleton label="Loading the field evidence…" />;
   }
   return (
     <IpoShell homeHref={homeHref}>

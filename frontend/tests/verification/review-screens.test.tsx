@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { QueueSkeleton } from "@/components/page-skeletons";
 import { ListingReviewScreen } from "@/components/verification/listing-review-screen";
 import { ReviewQueueScreen } from "@/components/verification/review-queue-screen";
 import { WorldProvider } from "@/components/world-provider";
@@ -186,6 +187,37 @@ describe("ReviewQueueScreen", () => {
     expect(offsets).toEqual(["0", "20", "0"]);
   });
 
+  it("loads in the page's shape: the same heading as its skeleton, rows, no spinner (#219)", async () => {
+    const skeleton = render(<QueueSkeleton />);
+    const skeletonHeading = screen.getByRole("heading", { level: 1 }).outerHTML;
+    const skeletonIntro = skeleton.container.querySelector("p.mt-3")?.outerHTML;
+    skeleton.unmount();
+
+    let answer: (response: Response) => void = () => {};
+    renderAdmin(<ReviewQueueScreen />, {
+      [QUEUE]: () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    });
+    expect(screen.getByRole("heading", { level: 1 }).outerHTML).toBe(
+      skeletonHeading,
+    );
+    expect(document.querySelector("p.mt-3")?.outerHTML).toBe(skeletonIntro);
+    expect(
+      await screen.findByText("Loading the queue…", {
+        selector: "[role=status]",
+      }),
+    ).toBeInTheDocument();
+    expect(document.querySelector("[data-skeleton=queue]")).not.toBeNull();
+    expect(document.querySelector(".animate-spin")).toBeNull();
+    act(() => answer(json([])));
+    expect(
+      await screen.findByText("Nothing is waiting for review."),
+    ).toBeInTheDocument();
+    expect(document.querySelector("[data-skeleton]")).toBeNull();
+  });
+
   it("says when nothing is waiting", async () => {
     renderAdmin(<ReviewQueueScreen />, { [QUEUE]: () => json([]) });
     expect(
@@ -346,6 +378,20 @@ describe("ReviewQueueScreen decided views (#211)", () => {
 });
 
 describe("ListingReviewScreen", () => {
+  it("loads in the shape of its route's skeleton, not a spinner (#219)", async () => {
+    renderAdmin(<ListingReviewScreen assetId={ASSET_ID} />, {
+      [RUNS]: () => json([run()]),
+    });
+    expect(document.querySelector("[data-skeleton=review]")).not.toBeNull();
+    expect(document.querySelector(".animate-spin")).toBeNull();
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "Río Claro Forest",
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("shows previews, the checklist, the AI suggestion and the map", async () => {
     renderAdmin(<ListingReviewScreen assetId={ASSET_ID} />, {
       [RUNS]: () => json([run()]),

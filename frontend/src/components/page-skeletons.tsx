@@ -10,6 +10,7 @@ import { useOptionalStewardCommunity } from "@/components/shell/steward-communit
 import { TimeMachineHeading } from "@/components/time-machine/time-machine-heading";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ReviewQueueHeading } from "@/components/verification/review-queue-heading";
 import { skeletonKind, type SkeletonKind } from "@/lib/route-skeleton";
 
 /**
@@ -354,9 +355,43 @@ export function TimeMachineSkeleton({ label }: { label?: string }) {
   );
 }
 
+/** Rows of listings in the verification area, as `QueueRow` and `DecidedRow` draw them. */
+export function QueueRowsSkeleton({
+  label = "Loading the queue…",
+  className,
+}: {
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <LoadingRegion name="queue" label={label} className={className}>
+      <div className="space-y-3">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-card p-5 shadow-soft"
+          >
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-7 w-56 max-w-full" />
+              <div className="flex flex-wrap gap-2">
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-5 w-16 rounded-full" />
+                <Skeleton className="h-5 w-28 rounded-full" />
+              </div>
+              <Skeleton className="h-3 w-48 max-w-full" />
+              <Skeleton className="h-4 w-40 max-w-full" />
+            </div>
+            <Skeleton className="h-9 w-28 shrink-0 rounded-full" />
+          </div>
+        ))}
+      </div>
+    </LoadingRegion>
+  );
+}
+
 /**
- * The verification queue: its heading (as `ReviewQueueScreen` draws it, owned by #210/#211;
- * extract a shared heading once that lands) and rows of listings.
+ * The verification area: its heading (the screen's own, shared), the views' tab bar, then rows
+ * of listings, where `ReviewQueueScreen` draws them.
  */
 export function QueueSkeleton({
   label = "Loading the queue…",
@@ -365,30 +400,14 @@ export function QueueSkeleton({
 }) {
   return (
     <div className="mx-auto max-w-5xl px-4 pt-10 pb-16 sm:px-6">
-      <h1 className="font-serif text-5xl leading-none tracking-tight sm:text-6xl">
-        Verification queue
-      </h1>
-      <p className="mt-3 max-w-2xl text-muted-foreground">
-        Listings whose communities submitted land documents, oldest first. Read
-        the documents, the automated checks and the map, then approve or reject
-        with a reason. Your own communities&apos; listings never appear here.
-      </p>
-      <LoadingRegion name="queue" label={label} className="mt-8">
-        <div className="space-y-3">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between gap-4 rounded-3xl bg-card p-5 shadow-soft"
-            >
-              <div className="min-w-0 flex-1">
-                <Skeleton className="h-5 w-48 max-w-full" />
-                <Skeleton className="mt-2 h-4 w-72 max-w-full" />
-              </div>
-              <Skeleton className="h-9 w-24 shrink-0 rounded-full" />
-            </div>
-          ))}
-        </div>
-      </LoadingRegion>
+      <ReviewQueueHeading />
+      <div
+        aria-hidden="true"
+        className="mt-8 flex h-11 w-[21.5rem] max-w-full items-center rounded-full bg-card p-1 shadow-soft"
+      >
+        <Skeleton className="h-full w-20 rounded-full" />
+      </div>
+      <QueueRowsSkeleton label={label} className="mt-6" />
     </div>
   );
 }
@@ -399,7 +418,7 @@ export function PageSkeleton({ label = "Loading…" }: { label?: string }) {
     <LoadingRegion
       name="page"
       label={label}
-      className="mx-auto max-w-5xl px-4 pt-10 pb-16 sm:px-6"
+      className="mx-auto max-w-6xl px-4 pt-10 pb-16 sm:px-6"
     >
       <Line box="h-5" className="h-3.5 w-36" />
       <Line box="mt-3 h-12 sm:h-15" className="h-10 w-full max-w-md sm:h-12" />
