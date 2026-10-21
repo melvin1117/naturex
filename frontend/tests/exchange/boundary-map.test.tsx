@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { BoundaryMap } from "@/components/boundary-map";
 import { FeatureSiteCard, SiteCard } from "@/components/proto/site-card";
@@ -100,6 +100,22 @@ describe("the featured card", () => {
 });
 
 describe("BoundaryMap", () => {
+  it("fits a backdrop to its container's measured shape", () => {
+    const rect = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({ width: 1600, height: 400 } as DOMRect);
+    try {
+      const { container } = render(
+        <BoundaryMap rings={[RING]} frame="container" />,
+      );
+      expect(
+        container.querySelector("[data-boundary-map] svg"),
+      ).toHaveAttribute("viewBox", "0 0 1600 400");
+    } finally {
+      rect.mockRestore();
+    }
+  });
+
   it("renders nothing for an unusable outline", () => {
     const { container } = render(
       <BoundaryMap

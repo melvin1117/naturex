@@ -2,7 +2,7 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import Image from "next/image";
 import { cn } from "cn";
 
-import { BACKDROP_FRAME, BoundaryMap } from "@/components/boundary-map";
+import { BoundaryMap } from "@/components/boundary-map";
 import type { LonLatRing } from "@/lib/boundary-map";
 import { money, signedPct } from "@/lib/prototype/format";
 
@@ -166,7 +166,7 @@ export function SiteBackdrop({
       {map && (
         <BoundaryMap
           rings={outline}
-          frame={BACKDROP_FRAME}
+          frame="container"
           creditClassName="right-3 left-auto bottom-2"
         />
       )}
