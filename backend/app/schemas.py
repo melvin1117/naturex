@@ -307,6 +307,22 @@ class AssetOutlines(BaseModel):
     )
 
 
+class PlaceOut(BaseModel):
+    """A place found by name (OpenStreetMap Nominatim), for flying the listing map there."""
+
+    label: str
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    bbox: tuple[float, float, float, float] | None = Field(
+        default=None, description="South, west, north, east in degrees, when Nominatim has one."
+    )
+
+
+class PlaceSearchOut(BaseModel):
+    results: list[PlaceOut]
+    attribution: str = Field(description="Credit to show next to the results.")
+
+
 class EventOut(BaseModel):
     id: UUID
     asset_id: UUID

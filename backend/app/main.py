@@ -36,6 +36,7 @@ from app.routers import (
     listings,
     market,
     media,
+    places,
     reports,
     runs,
     verification,
@@ -153,6 +154,7 @@ app.include_router(admin.router)
 app.include_router(ledger.router)
 app.include_router(world.router)
 app.include_router(media.router)
+app.include_router(places.router)
 app.include_router(runs.router)
 
 

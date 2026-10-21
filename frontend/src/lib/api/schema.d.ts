@@ -1310,6 +1310,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/places/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search Places */
+        get: operations["search_places_places_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assets/{asset_id}/rate": {
         parameters: {
             query?: never;
@@ -3114,6 +3131,38 @@ export interface components {
             role: components["schemas"]["UserRole"];
             /** Cash Balance */
             cash_balance: string;
+        };
+        /**
+         * PlaceOut
+         * @description A place found by name (OpenStreetMap Nominatim), for flying the listing map there.
+         */
+        PlaceOut: {
+            /** Label */
+            label: string;
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /**
+             * Bbox
+             * @description South, west, north, east in degrees, when Nominatim has one.
+             */
+            bbox?: [
+                number,
+                number,
+                number,
+                number
+            ] | null;
+        };
+        /** PlaceSearchOut */
+        PlaceSearchOut: {
+            /** Results */
+            results: components["schemas"]["PlaceOut"][];
+            /**
+             * Attribution
+             * @description Credit to show next to the results.
+             */
+            attribution: string;
         };
         /** PortfolioOut */
         PortfolioOut: {
@@ -7458,6 +7507,58 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    search_places_places_search_get: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaceSearchOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description place_search_busy */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description place_search_unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

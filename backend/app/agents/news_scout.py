@@ -311,15 +311,20 @@ class NominatimRateLimiter:
         self._last_slot_at: float | None = None
         self._lock = threading.Lock()
 
-    def wait(self) -> None:
+    def wait(self, max_wait_s: float | None = None) -> bool:
+        """Wait for this process's next request slot. With `max_wait_s`, give up (False, no slot
+        taken) instead of waiting longer than that, so a busy request can answer 429."""
         with self._lock:
             now = self._clock()
             previous = self._last_slot_at
             slot = now if previous is None else max(now, previous + NOMINATIM_MIN_INTERVAL_S)
-            self._last_slot_at = slot
             delay = slot - now
+            if max_wait_s is not None and delay > max_wait_s:
+                return False
+            self._last_slot_at = slot
         if delay > 0:
             self._sleep(delay)
+        return True
 
 
 _DEFAULT_NOMINATIM_RATE_LIMITER = NominatimRateLimiter()
