@@ -274,7 +274,7 @@ describe("TradePanel", () => {
     const status = await screen.findByRole("status");
     await waitFor(() =>
       expect(status).toHaveTextContent(
-        "Bought 10 units at $20.02 each. You paid $200.20. Play money now $9,799.80; 10 units held. Your first stake in this site.",
+        "Bought 10 units at $20.02 each. You paid $200.20. Play money now $9,799.80; 10 units held. You now hold a stake in this site.",
       ),
     );
     expect(backend.calls(ORDER)).toBe(1);

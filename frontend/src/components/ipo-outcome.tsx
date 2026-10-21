@@ -82,8 +82,10 @@ export function IpoLaunched({
   ipo: IpoOut;
   homeHref: string;
 }) {
+  // Both shares as the launch set them: the retained percentage, and the units on offer.
   const kept = decimal(ipo.retained_pct);
-  const offered = kept === null ? null : 100 - kept;
+  const offered =
+    ipo.total_shares > 0 ? (ipo.shares_offered / ipo.total_shares) * 100 : null;
   // The outcome replaces the form the owner scrolled down: bring its top (the ring) into view,
   // after the heading took focus. Focus stays on the heading.
   const top = useRef<HTMLDivElement>(null);
@@ -100,7 +102,7 @@ export function IpoLaunched({
             className="mx-auto"
             segments={[
               { columns: Math.round(kept), className: "fill-primary" },
-              { columns: 100 - Math.round(kept), className: "fill-lime" },
+              { columns: Math.round(offered), className: "fill-lime" },
             ]}
             reveal={{ duration: DURATION.reveal }}
             label={`Your community keeps ${pct(kept)} of the stake; ${pct(offered)} is on offer to supporters.`}

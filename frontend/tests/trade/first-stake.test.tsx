@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { announce, isFirstStake, Receipt } from "@/components/trade-summary";
+import { announce, opensStake, Receipt } from "@/components/trade-summary";
 import type { OrderOut } from "@/lib/api/types";
 
 function order(overrides: Partial<OrderOut> = {}): OrderOut {
@@ -22,28 +22,32 @@ function order(overrides: Partial<OrderOut> = {}): OrderOut {
   } as OrderOut;
 }
 
-describe("the first stake (#216)", () => {
-  it("is a buy that opened the holding", () => {
-    expect(isFirstStake(order())).toBe(true);
-    expect(isFirstStake(order({ shares_held: 25 }))).toBe(false);
-    expect(isFirstStake(order({ side: "sell", shares_held: 10 }))).toBe(false);
+describe("a buy that opens a stake (#216)", () => {
+  it("is a buy that opened the holding (a first stake, or one after selling out)", () => {
+    expect(opensStake(order())).toBe(true);
+    expect(opensStake(order({ shares_held: 25 }))).toBe(false);
+    expect(opensStake(order({ side: "sell", shares_held: 10 }))).toBe(false);
   });
 
   it("gets one more line, pointing to Your stakes, and says so to screen readers", () => {
     render(<Receipt order={order()} community="Laguna Viva" />);
-    expect(screen.getByText(/Your first stake in Laguna Viva/)).toBeVisible();
+    expect(
+      screen.getByText(/You now hold a stake in Laguna Viva/),
+    ).toBeVisible();
     expect(screen.getByRole("link", { name: "Your stakes" })).toHaveAttribute(
       "href",
       "/portfolio",
     );
-    expect(announce(order())).toMatch(/Your first stake in this site\.$/);
+    expect(announce(order())).toMatch(/You now hold a stake in this site\.$/);
   });
 
-  it("a later stake keeps the plain receipt", () => {
+  it("adding to a stake keeps the plain receipt", () => {
     render(
       <Receipt order={order({ shares_held: 25 })} community="Laguna Viva" />,
     );
-    expect(screen.queryByText(/first stake/)).not.toBeInTheDocument();
-    expect(announce(order({ shares_held: 25 }))).not.toMatch(/first stake/);
+    expect(screen.queryByText(/now hold a stake/)).not.toBeInTheDocument();
+    expect(announce(order({ shares_held: 25 }))).not.toMatch(
+      /now hold a stake/,
+    );
   });
 });
