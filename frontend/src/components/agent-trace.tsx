@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowRight,
   ChevronDown,
   CircleDot,
   Cpu,
@@ -8,6 +9,7 @@ import {
   RefreshCwIcon,
   Wrench,
 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { cn } from "cn";
 
@@ -22,10 +24,11 @@ import {
 } from "@/components/ui/select";
 import type { ApiError } from "@/lib/api/errors";
 import type { RunTrace } from "@/lib/api/types";
-import { MODEL_CALLS_EMPTY } from "@/lib/empty-states";
+import { curatedSite, MODEL_CALLS_EMPTY } from "@/lib/empty-states";
 import {
   useAsset,
   useAssetReports,
+  useAssets,
   useRunTrace,
   useWorldTrace,
 } from "@/lib/hooks";
@@ -84,7 +87,7 @@ export function AssetRunsTrace({
     picked ?? initialRunId ?? (settled ? options[0]?.runId : null) ?? null;
 
   if (!runId) {
-    if (!settled) return <Loading label="Loading rating runs…" />;
+    if (!settled) return <MachineRowsSkeleton label="Loading rating runs…" />;
     if (reports.error && !reports.data)
       return (
         <TraceError
@@ -141,7 +144,8 @@ export function RunTraceView({ runId }: { runId: string }) {
         retry={trace.error.status === 404 ? undefined : trace.refetch}
       />
     );
-  if (!trace.data) return <Loading label="Loading the trace…" />;
+  if (!trace.data)
+    return <MachineRowsSkeleton label="Loading the trace…" className="mt-4" />;
   return <RunTraceBody trace={trace.data} />;
 }
 
@@ -304,6 +308,7 @@ function RealStepRow({ row }: { row: TraceRow }) {
  */
 export function WorldModelCalls() {
   const trace = useWorldTrace();
+  const assets = useAssets();
   if (!trace.data && trace.error)
     return (
       <TraceError
@@ -312,7 +317,8 @@ export function WorldModelCalls() {
         retry={trace.refetch}
       />
     );
-  if (!trace.data) return <Loading label="Loading model calls…" />;
+  if (!trace.data)
+    return <MachineRowsSkeleton label="Loading model calls…" intro />;
   const calls = trace.data.steps;
   const howItWasRated = (
     <>
@@ -321,7 +327,8 @@ export function WorldModelCalls() {
       step of its rating runs.
     </>
   );
-  if (calls.length === 0)
+  if (calls.length === 0) {
+    const site = curatedSite(assets.data);
     return (
       <div className="rounded-2xl bg-machine-raised px-4 py-4 text-sm">
         <p className="font-medium text-machine-ink">
@@ -329,8 +336,19 @@ export function WorldModelCalls() {
         </p>
         <p className="mt-1 text-machine-muted">{MODEL_CALLS_EMPTY.body}</p>
         <p className="mt-3 text-machine-muted">{howItWasRated}</p>
+        {site && (
+          // On a site's page, this drawer shows that site's rating runs.
+          <Link
+            href={`/asset/${site.id}`}
+            className="mt-3 inline-flex items-center gap-1.5 font-medium text-lime underline-offset-4 hover:underline"
+          >
+            See how {site.name} was rated
+            <ArrowRight className="size-4" aria-hidden="true" />
+          </Link>
+        )}
       </div>
     );
+  }
   return (
     <>
       <p className="text-sm text-machine-muted">
@@ -372,10 +390,6 @@ export function WorldModelCalls() {
       </ol>
     </>
   );
-}
-
-function Loading({ label }: { label: string }) {
-  return <MachineRowsSkeleton label={label} />;
 }
 
 function TraceError({

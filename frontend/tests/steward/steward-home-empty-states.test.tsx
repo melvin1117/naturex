@@ -170,7 +170,7 @@ describe("steward home empty states", () => {
     setup(() => json(summary([listing()])));
     const actions = await panel("Stewardship actions");
     expect(actions).toHaveTextContent(
-      "Mock ratings don't include the Auditor's recommendations. A live rating lists concrete steps here that would strengthen the grade.",
+      "Mock ratings don't include the Auditor's recommendations. A live rating may list concrete steps here that would strengthen the grade.",
     );
     expect(actions).not.toHaveTextContent(/once a site has been rated/);
   });
@@ -198,7 +198,7 @@ describe("steward home empty states", () => {
       "The first payout comes when the next quarter runs",
     );
     expect(await panel("Stewardship actions")).toHaveTextContent(
-      "The Auditor's latest report suggests no stewardship actions.",
+      "The latest rating lists no stewardship actions.",
     );
   });
 
