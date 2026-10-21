@@ -14,7 +14,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { AiSuggestionPanel } from "@/components/verification/ai-suggestion-panel";
 import { DecisionForm } from "@/components/verification/decision-form";
 import { DocumentPreviews } from "@/components/verification/document-previews";
-import { reviewViewHref } from "@/components/verification/review-queue-screen";
 import { Checklist, VerificationBadge } from "@/components/verification/parts";
 import {
   RunDecision,
@@ -32,6 +31,7 @@ import {
   currentRun,
   decisionFailure,
   LEVEL_LABEL,
+  reviewViewHref,
   type Status,
 } from "@/lib/verification";
 import {

@@ -308,6 +308,28 @@ export function ledgerEntryId(seq: number): string {
   return `ledger-entry-${seq}`;
 }
 
+/** The admin verification area's views (#211): the queue, then each decision. */
+export const REVIEW_VIEWS = [
+  "waiting",
+  "verified",
+  "rejected",
+  "revoked",
+] as const;
+export type ReviewView = (typeof REVIEW_VIEWS)[number];
+
+export function reviewView(value: string | null | undefined): ReviewView {
+  return (REVIEW_VIEWS as readonly string[]).includes(value ?? "")
+    ? (value as ReviewView)
+    : "waiting";
+}
+
+/** The admin verifications page on one view: `/admin/verifications?view=…`. */
+export function reviewViewHref(view: ReviewView): string {
+  return view === "waiting"
+    ? "/admin/verifications"
+    : `/admin/verifications?view=${view}`;
+}
+
 export function adminReviewHref(assetId: string): string {
   return `/admin/verifications/${assetId}`;
 }

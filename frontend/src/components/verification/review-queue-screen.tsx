@@ -27,6 +27,10 @@ import {
   DOC_TYPE_LABEL,
   LEVEL_LABEL,
   reviewerLabel,
+  reviewView,
+  reviewViewHref,
+  REVIEW_VIEWS,
+  type ReviewView,
 } from "@/lib/verification";
 import {
   useDecidedVerifications,
@@ -36,33 +40,12 @@ import {
 
 export const QUEUE_PAGE = 20;
 
-export const REVIEW_VIEWS = [
-  "waiting",
-  "verified",
-  "rejected",
-  "revoked",
-] as const;
-export type ReviewView = (typeof REVIEW_VIEWS)[number];
-
 const VIEW_LABEL: Record<ReviewView, string> = {
   waiting: "Waiting",
   verified: "Verified",
   rejected: "Rejected",
   revoked: "Revoked",
 };
-
-export function reviewView(value: string | null | undefined): ReviewView {
-  return (REVIEW_VIEWS as readonly string[]).includes(value ?? "")
-    ? (value as ReviewView)
-    : "waiting";
-}
-
-/** The admin verifications page on one view: `/admin/verifications?view=…`. */
-export function reviewViewHref(view: ReviewView): string {
-  return view === "waiting"
-    ? "/admin/verifications"
-    : `/admin/verifications?view=${view}`;
-}
 
 /**
  * The admin verification area (T70, #211; ADR-0006 §3): listings waiting for a decision, oldest
@@ -325,7 +308,7 @@ function DecidedRow({ item }: { item: DecidedListingItem }) {
             {run.level === "revoked" ? "Revoked" : "Decided"}{" "}
             {date(item.last_decision_at)}
           </span>
-          {reviewer && <span>· {reviewer}</span>}
+          {reviewer && <span>by {reviewer}</span>}
           <Badge variant="secondary">
             {STATUS_LABEL[item.asset_status] ?? item.asset_status}
           </Badge>

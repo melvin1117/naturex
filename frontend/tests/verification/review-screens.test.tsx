@@ -9,13 +9,11 @@ import {
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ListingReviewScreen } from "@/components/verification/listing-review-screen";
-import {
-  ReviewQueueScreen,
-  reviewView,
-} from "@/components/verification/review-queue-screen";
+import { ReviewQueueScreen } from "@/components/verification/review-queue-screen";
 import { WorldProvider } from "@/components/world-provider";
 import type { DecidedListingItem } from "@/lib/api/types";
 import { createDataLayer } from "@/lib/data-layer";
+import { reviewView } from "@/lib/verification";
 
 import { stubBrowserApis } from "../exchange/render";
 import {

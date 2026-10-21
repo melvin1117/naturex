@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 
-import {
-  ReviewQueueScreen,
-  reviewView,
-} from "@/components/verification/review-queue-screen";
+import { ReviewQueueScreen } from "@/components/verification/review-queue-screen";
+import { reviewView } from "@/lib/verification";
 
 export const metadata: Metadata = { title: "Verifications" };
 
