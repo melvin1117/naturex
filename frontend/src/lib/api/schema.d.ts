@@ -1103,12 +1103,35 @@ export interface paths {
         put?: never;
         /**
          * Simulate Quarter
-         * @description Advance the world to the next Time Machine quarter (or replay the current one): re-rate
-         *     every listed asset with that quarter's scenario, re-anchor prices, alert and pay the
-         *     quarter's revenue (T38). Runs inline, so the answer is what actually happened; progress also
-         *     streams as `rating_progress` events (trigger `time_machine`).
+         * @description Advance the world to the next Time Machine quarter (or replay the current one), then
+         *     re-rate every listed asset with that quarter's scenario, re-anchor prices, alert and pay the
+         *     quarter's revenue in the background (T38, #201). Answers 202 with the job (Location: `GET
+         *     /admin/simulate/quarter/{job_id}`) once the world has moved; poll it for each asset's result.
+         *     Progress also streams as `rating_progress` events (trigger `time_machine`).
          */
         post: operations["simulate_quarter_admin_simulate_quarter_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/simulate/quarter/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Quarter Job
+         * @description A quarter job of the caller's world and each asset's result so far (#201). A job whose
+         *     process died (no heartbeat for `JOB_STALE_AFTER`) is taken over and resumed by this read
+         *     (with `LOCAL_JOBS=true`): the claims make it finish without re-rating or paying twice.
+         */
+        get: operations["get_quarter_job_admin_simulate_quarter__job_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3336,6 +3359,97 @@ export interface components {
             result: "pass" | "warn" | "fail";
         };
         /**
+         * QuarterJobOut
+         * @description A `Next quarter` running in the background (#201): `POST /admin/simulate/quarter`
+         *     answers 202 with it, `GET /admin/simulate/quarter/{job_id}` reads it. `assets` grows as each
+         *     asset's re-rate and payout settle; the totals count those assets.
+         */
+        QuarterJobOut: {
+            /** Step */
+            step: number;
+            /** Period */
+            period: string;
+            /** Scenario */
+            scenario: string;
+            /** Data Version */
+            data_version: string;
+            /**
+             * Payout Label
+             * @description The payouts' `quarter_label`, e.g. `2026Q4-sim-1`.
+             */
+            payout_label: string;
+            /**
+             * Replayed
+             * @description True when the world was already at this quarter.
+             */
+            replayed: boolean;
+            /** Assets Rerated */
+            assets_rerated: number;
+            /** Assets Failed */
+            assets_failed: number;
+            /** Assets Skipped */
+            assets_skipped: number;
+            /** Payouts */
+            payouts: number;
+            /** Alerts */
+            alerts: number;
+            /**
+             * Stopped
+             * @description `llm_budget_exhausted`, `job_budget_exhausted` or a rate limit: later assets weren't re-rated; replay the quarter to finish them.
+             */
+            stopped?: string | null;
+            /** Assets */
+            assets: components["schemas"]["SimulatedAssetOut"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Status
+             * @description `queued`, `running`, `done` (every asset settled; some may have failed: replay to retry them), `stopped` (see `stopped`; replay to finish) or `failed` (see `error`; replay to finish).
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "stopped" | "failed";
+            /**
+             * Error
+             * @description Why the job itself failed (`job_failed:<Exception>`).
+             */
+            error?: string | null;
+            /**
+             * Asset Count
+             * @description The listed assets the quarter re-rates; null until it starts.
+             */
+            asset_count?: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Finished At */
+            finished_at?: string | null;
+        };
+        /** QuarterJobRef */
+        QuarterJobRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "stopped" | "failed";
+            /** Period */
+            period: string;
+        };
+        /**
          * QuoteOut
          * @description The price of an order now, before confirming it (play money). Nothing is reserved: the
          *     order fills at the price when it's placed.
@@ -3861,47 +3975,6 @@ export interface components {
              */
             period: string;
         };
-        /**
-         * SimulateQuarterResponse
-         * @description What a Time Machine quarter actually did, per listed asset.
-         */
-        SimulateQuarterResponse: {
-            /** Step */
-            step: number;
-            /** Period */
-            period: string;
-            /** Scenario */
-            scenario: string;
-            /** Data Version */
-            data_version: string;
-            /**
-             * Payout Label
-             * @description The payouts' `quarter_label`, e.g. `2026Q4-sim-1`.
-             */
-            payout_label: string;
-            /**
-             * Replayed
-             * @description True when the world was already at this quarter.
-             */
-            replayed: boolean;
-            /** Assets Rerated */
-            assets_rerated: number;
-            /** Assets Failed */
-            assets_failed: number;
-            /** Assets Skipped */
-            assets_skipped: number;
-            /** Payouts */
-            payouts: number;
-            /** Alerts */
-            alerts: number;
-            /**
-             * Stopped
-             * @description `llm_budget_exhausted`, `job_budget_exhausted` or a rate limit: later assets weren't re-rated; replay the quarter to finish them.
-             */
-            stopped?: string | null;
-            /** Assets */
-            assets: components["schemas"]["SimulatedAssetOut"][];
-        };
         /** SimulatedAssetOut */
         SimulatedAssetOut: {
             /**
@@ -4079,6 +4152,8 @@ export interface components {
              * @description False: `Next quarter` is off (`LOCAL_JOBS=false`).
              */
             local_jobs: boolean;
+            /** @description The world's latest `Next quarter` job (#201), so a reloaded panel follows a running one; null before the first. */
+            quarter_job?: components["schemas"]["QuarterJobRef"] | null;
         };
         /**
          * TimeMachineQuarter
@@ -7238,12 +7313,12 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SimulateQuarterResponse"];
+                    "application/json": components["schemas"]["QuarterJobOut"];
                 };
             };
             /** @description Not allowed: `admin_only` */
@@ -7253,8 +7328,53 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description `quarter_mismatch` (not the world's next or current quarter; see `GET /admin/time-machine`), `timeline_end` (reset the demo to start again), `time_machine_sandbox_only` (not a sandbox: the live world) or `local_jobs_disabled` (`LOCAL_JOBS=false`) */
+            /** @description `quarter_mismatch` (not the world's next or current quarter; see `GET /admin/time-machine`), `timeline_end` (reset the demo to start again), `time_machine_sandbox_only` (not a sandbox: the live world), `local_jobs_disabled` (`LOCAL_JOBS=false`) or `quarter_job_running` (the world already runs a quarter; Location: that job) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_quarter_job_admin_simulate_quarter__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuarterJobOut"];
+                };
+            };
+            /** @description Not allowed: `admin_only` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a quarter job of this world */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

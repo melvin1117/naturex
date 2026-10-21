@@ -1054,22 +1054,31 @@ def test_the_api_runs_the_time_machine_for_the_demo_admin(
 
     res = client.post("/admin/simulate/quarter", json={"period": "2026Q4"})
 
-    assert res.status_code == 200, res.text
-    body = res.json()
+    # 202 with the job (#201); the test env runs it inline, so polling finds it done.
+    assert res.status_code == 202, res.text
+    assert res.headers["Location"] == f"/admin/simulate/quarter/{res.json()['id']}"
+    polled = client.get(res.headers["Location"])
+    assert polled.status_code == 200, polled.text
+    body = polled.json()
+    assert body == res.json() and body["status"] == "done" and body["error"] is None
     assert (body["step"], body["data_version"], body["payout_label"], body["replayed"]) == (
         1,
         "sim-1",
         "2026Q4-sim-1",
         False,
     )
+    assert body["asset_count"] == len(body["assets"]) and body["finished_at"]
     assert body["assets_rerated"] == len(body["assets"]) == body["payouts"] > 0
     hero = next(a for a in body["assets"] if a["name"].startswith("Xochimilco"))
     assert (hero["before"]["grade"], hero["after"]["grade"]) == ("A", "AA")
     assert hero["after"]["simulated"] is True and hero["run_id"]
     assert Decimal(hero["after"]["price"]) != Decimal(hero["before"]["price"])
-    assert client.get("/admin/time-machine").json()["step"] == 1
+    state = client.get("/admin/time-machine").json()
+    assert state["step"] == 1
+    assert state["quarter_job"] == {"id": body["id"], "status": "done", "period": "2026Q4"}
 
     replay = client.post("/admin/simulate/quarter", json={"period": "2026Q4"}).json()
+    assert replay["id"] != body["id"] and replay["status"] == "done"
     assert replay["replayed"] is True and replay["assets_rerated"] == 0
     assert {a["status"] for a in replay["assets"]} == {"already_done"}
 

@@ -1092,6 +1092,15 @@ class EventPresetOut(BaseModel):
     )
 
 
+QuarterJobStatus = Literal["queued", "running", "done", "stopped", "failed"]
+
+
+class QuarterJobRef(BaseModel):
+    id: UUID
+    status: QuarterJobStatus
+    period: str
+
+
 class TimeMachineOut(BaseModel):
     """Where the caller's world stands on the Time Machine timeline (T38)."""
 
@@ -1111,6 +1120,11 @@ class TimeMachineOut(BaseModel):
     timeline: list[TimeMachineQuarter]
     presets: list[EventPresetOut]
     local_jobs: bool = Field(description="False: `Next quarter` is off (`LOCAL_JOBS=false`).")
+    quarter_job: QuarterJobRef | None = Field(
+        default=None,
+        description="The world's latest `Next quarter` job (#201), so a reloaded panel follows "
+        "a running one; null before the first.",
+    )
 
 
 class SimulateQuarterRequest(BaseModel):
@@ -1171,6 +1185,28 @@ class SimulateQuarterResponse(BaseModel):
         "assets weren't re-rated; replay the quarter to finish them.",
     )
     assets: list[SimulatedAssetOut]
+
+
+class QuarterJobOut(SimulateQuarterResponse):
+    """A `Next quarter` running in the background (#201): `POST /admin/simulate/quarter`
+    answers 202 with it, `GET /admin/simulate/quarter/{job_id}` reads it. `assets` grows as each
+    asset's re-rate and payout settle; the totals count those assets."""
+
+    id: UUID
+    status: QuarterJobStatus = Field(
+        description="`queued`, `running`, `done` (every asset settled; some may have failed: "
+        "replay to retry them), `stopped` (see `stopped`; replay to finish) or `failed` (see "
+        "`error`; replay to finish)."
+    )
+    error: str | None = Field(
+        default=None, description="Why the job itself failed (`job_failed:<Exception>`)."
+    )
+    asset_count: int | None = Field(
+        default=None, description="The listed assets the quarter re-rates; null until it starts."
+    )
+    created_at: datetime
+    updated_at: datetime
+    finished_at: datetime | None = None
 
 
 class SimulateEventRequest(BaseModel):
