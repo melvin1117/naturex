@@ -363,7 +363,7 @@ function TurnView({
                     onClick={onNavigate}
                     className="inline-flex max-w-full items-center gap-1 rounded-full bg-card px-2.5 py-1 text-xs font-medium hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   >
-                    <span className="font-mono text-muted-foreground">
+                    <span className="shrink-0 font-mono whitespace-nowrap text-muted-foreground">
                       {s.ref}
                     </span>
                     <span className="truncate">{label(s)}</span>
@@ -401,14 +401,14 @@ function AnswerText({
             href={sourceHref(part.source)}
             onClick={onNavigate}
             aria-label={`Source ${part.ref}: ${label(part.source)}`}
-            className="mx-0.5 rounded bg-card px-1 font-mono text-xs font-medium underline-offset-2 hover:underline"
+            className="mx-0.5 rounded bg-card px-1 font-mono text-xs font-medium whitespace-nowrap underline-offset-2 hover:underline"
           >
             {part.ref}
           </Link>
         ) : (
           <span
             key={i}
-            className="mx-0.5 font-mono text-xs text-muted-foreground"
+            className="mx-0.5 font-mono text-xs whitespace-nowrap text-muted-foreground"
           >
             {part.ref}
           </span>

@@ -87,7 +87,7 @@ export function AccountCopilot({
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-fit text-muted-foreground"
+                className="-ml-3 w-fit text-muted-foreground"
               >
                 {siteId ? "Ask about another site" : "Narrow to one site"}
                 <ChevronDown aria-hidden="true" />
