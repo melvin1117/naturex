@@ -9,11 +9,12 @@ import { CopilotChat } from "@/components/copilot-chat";
 import { FieldEvidencePanel } from "@/components/evidence/field-evidence-panel";
 import { AssetBodySkeleton } from "@/components/page-skeletons";
 import { Delta, SiteBackdrop, ValueRange } from "@/components/proto/bits";
-import { PriceChart } from "@/components/proto/charts";
+import { PriceChart, PriceChartSkeleton } from "@/components/proto/charts";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
 import { ApiLedgerTab } from "@/components/proto/ledger-panels";
 import { LoadError } from "@/components/proto/load-error";
+import { PriceTick } from "@/components/live-number";
 import {
   LandPanel,
   NewsList,
@@ -25,7 +26,6 @@ import {
 } from "@/components/proto/report-panels";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TradePanel } from "@/components/trade-panel";
 import {
@@ -231,7 +231,7 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
                     Stake price · play money
                   </div>
                   <div className="tabular text-4xl font-light tracking-tight">
-                    {current === null ? "—" : fmtPrice(current)}
+                    <PriceTick value={current} format={fmtPrice} tone="image" />
                   </div>
                   {change !== null && (
                     <Delta
@@ -466,13 +466,7 @@ function PricePanel({
           retry={retry}
         />
       ) : loading ? (
-        <p
-          role="status"
-          className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground"
-        >
-          <Spinner aria-hidden="true" role="presentation" />
-          Loading prices…
-        </p>
+        <PriceChartSkeleton />
       ) : points.length > 1 ? (
         <PriceChart prices={points} events={news} perDay={false} />
       ) : (

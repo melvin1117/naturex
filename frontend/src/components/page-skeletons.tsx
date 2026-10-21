@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "cn";
 
 import { LoadingRegion } from "@/components/loading-region";
+import { MarketplaceHeading } from "@/components/proto/marketplace-heading";
 import { useOptionalStewardCommunity } from "@/components/shell/steward-community";
 import { TimeMachineHeading } from "@/components/time-machine/time-machine-heading";
 import { Button } from "@/components/ui/button";
@@ -158,6 +159,115 @@ export function AssetPageSkeleton({ label }: { label?: string }) {
       </Link>
       <div className="mt-4">
         <AssetBodySkeleton label={label} />
+      </div>
+    </div>
+  );
+}
+
+/** The Marketplace's stat strip beside its heading, while the sites load. */
+export function MarketStatsSkeleton() {
+  return (
+    <div
+      className="grid grid-cols-3 gap-6 rounded-3xl bg-card px-6 py-4 shadow-soft"
+      aria-hidden="true"
+      data-skeleton="market-stats"
+    >
+      {[0, 1, 2].map((i) => (
+        <StatBones key={i} />
+      ))}
+    </div>
+  );
+}
+
+/** A site card: the 16:9 image, name and place, the two stats, the sparkline, the footer. */
+function SiteCardBones() {
+  return (
+    <div className="flex flex-col overflow-hidden rounded-3xl bg-card shadow-soft">
+      <Skeleton className="aspect-[16/9] w-full rounded-none" />
+      <div className="flex flex-1 flex-col gap-4 p-5">
+        <div>
+          <div className="flex h-[1.375rem] items-center">
+            <Skeleton className="h-4 w-3/4" />
+          </div>
+          <div className="mt-1 flex h-5 items-center">
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          {[0, 1].map((i) => (
+            <div key={i}>
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="mt-2 h-6 w-24" />
+              <Skeleton className="mt-1.5 h-3 w-28 max-w-full" />
+            </div>
+          ))}
+        </div>
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <div className="mt-auto flex items-center justify-between gap-3 border-t pt-3">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-20" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The Marketplace below its heading (#219): the top-rated feature card on its photographic
+ * ground, the "All sites" row with its filters, then site cards.
+ */
+export function MarketBoardSkeleton({
+  label = "Loading sites…",
+}: {
+  label?: string;
+}) {
+  return (
+    <LoadingRegion name="marketplace" label={label}>
+      <div className="grid gap-8 rounded-[2rem] bg-lichen p-6 shadow-lift sm:p-8 lg:grid-cols-[auto_1fr_auto] lg:items-center lg:gap-10 lg:p-10">
+        <Skeleton className="mx-auto size-[188px] rounded-full bg-card/70 lg:mx-0" />
+        <div className="min-w-0 space-y-5">
+          <div>
+            <Skeleton className="h-6 w-56 rounded-full bg-card/70" />
+            <Skeleton className="mt-3 h-10 w-3/4 bg-card/70 sm:h-12" />
+            <Skeleton className="mt-3 h-4 w-48 bg-card/70" />
+          </div>
+          <Skeleton className="h-16 w-full max-w-md bg-card/70" />
+        </div>
+        <div className="flex flex-col gap-4 rounded-3xl bg-card/40 p-5 lg:w-64">
+          <Skeleton className="h-10 w-16 rounded-full bg-card/70" />
+          <div>
+            <Skeleton className="h-3 w-32 bg-card/70" />
+            <Skeleton className="mt-2 h-8 w-28 bg-card/70" />
+            <Skeleton className="mt-2 h-4 w-36 bg-card/70" />
+          </div>
+          <Skeleton className="h-9 w-full rounded-full bg-card/70" />
+        </div>
+      </div>
+      <div className="mt-12">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h2 className="text-xl font-semibold">All sites</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <Skeleton className="h-10 w-72 max-w-full rounded-full bg-card" />
+            <Skeleton className="h-9 w-44 rounded-full bg-card" />
+          </div>
+        </div>
+        <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <SiteCardBones key={i} />
+          ))}
+        </div>
+      </div>
+    </LoadingRegion>
+  );
+}
+
+/** The whole Marketplace, for its route's `loading.tsx`: the real heading, then the board. */
+export function MarketplaceSkeleton({ label }: { label?: string }) {
+  return (
+    <div className="mx-auto max-w-7xl px-4 pt-10 sm:px-6">
+      <MarketplaceHeading stats={<MarketStatsSkeleton />} />
+      <div className="mt-8">
+        <MarketBoardSkeleton label={label} />
       </div>
     </div>
   );
@@ -517,6 +627,7 @@ const ROUTE_SKELETON: Record<
   SkeletonKind,
   (props: { label: string }) => React.ReactNode
 > = {
+  marketplace: MarketplaceSkeleton,
   asset: AssetPageSkeleton,
   portfolio: PortfolioSkeleton,
   "steward-home": StewardHomeSkeleton,

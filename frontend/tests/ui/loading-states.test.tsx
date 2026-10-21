@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -14,8 +14,10 @@ import {
   RouteSkeleton,
   ScreenSkeleton,
 } from "@/components/page-skeletons";
+import { TourProvider } from "@/components/proto/tour";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HANDOFF_MS, resetLoadingChains } from "@/lib/loading-chain";
+import { PrototypeProvider } from "@/lib/prototype/store";
 import { skeletonKind } from "@/lib/route-skeleton";
 
 declare global {
@@ -41,6 +43,15 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
 });
+
+/** Like app/layout.tsx: the Marketplace heading offers the guided tour. */
+function Shell({ children }: { children: ReactNode }) {
+  return (
+    <PrototypeProvider>
+      <TourProvider>{children}</TourProvider>
+    </PrototypeProvider>
+  );
+}
 
 /** The one region on screen. */
 function region() {
@@ -173,8 +184,9 @@ const LOADERS = Object.entries(
 });
 
 describe("route loading states", () => {
-  it("covers the asset page, portfolio, steward and admin routes", () => {
+  it("covers the Marketplace, asset page, portfolio, steward and admin routes", () => {
     expect(LOADERS.map((l) => l.route).sort()).toEqual([
+      "/",
       "/admin",
       "/admin/verifications",
       "/admin/verifications/x",
@@ -194,7 +206,7 @@ describe("route loading states", () => {
       // A screen folder's pages (`/steward/assets/x/verify`) share its loading state; the
       // opening offer has its own, with the checklist band (#216).
       const page = route === "/steward/assets/x" ? `${route}/verify` : route;
-      render(<Loading />);
+      render(<Loading />, { wrapper: Shell });
       expect(region()).toHaveAttribute("data-skeleton", skeletonKind(page));
       expect(screen.getAllByRole("status")).toHaveLength(1);
       expect(document.querySelector(".animate-spin")).toBeNull();
@@ -202,12 +214,13 @@ describe("route loading states", () => {
   );
 
   it.each([
+    ["/", "Marketplace"],
     ["/admin", "Time Machine"],
     ["/admin/verifications", "Verifications"],
     ["/portfolio", "Your stakes"],
   ])("%s draws its real heading", (route, heading) => {
     const { Loading } = LOADERS.find((l) => l.route === route)!;
-    render(<Loading />);
+    render(<Loading />, { wrapper: Shell });
     expect(
       screen.getByRole("heading", { name: heading, level: 1 }),
     ).toBeVisible();
@@ -225,6 +238,7 @@ describe("route loading states", () => {
 
 describe("RouteSkeleton", () => {
   it.each([
+    ["/", "marketplace"],
     ["/asset/35df5b9e-90ff-4205-a82e-9ca6e0e06729", "asset"],
     ["/portfolio", "portfolio"],
     ["/steward", "steward-home"],
@@ -238,7 +252,9 @@ describe("RouteSkeleton", () => {
     ["/steward/list", "page"],
   ])("draws %s's shape with the gate's label", (path, shape) => {
     nav.pathname = path;
-    render(<RouteSkeleton label="Checking your session…" />);
+    render(<RouteSkeleton label="Checking your session…" />, {
+      wrapper: Shell,
+    });
     expect(region()).toHaveAttribute("data-skeleton", shape);
     expect(screen.getByRole("status")).toHaveTextContent(
       "Checking your session…",

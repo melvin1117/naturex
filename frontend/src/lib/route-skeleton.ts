@@ -5,6 +5,7 @@
  * a blank frame in between. A test checks every `loading.tsx` against this map.
  */
 export type SkeletonKind =
+  | "marketplace"
   | "asset"
   | "portfolio"
   | "steward-home"
@@ -18,6 +19,7 @@ export type SkeletonKind =
 
 export function skeletonKind(pathname: string): SkeletonKind {
   const path = pathname.replace(/\/+$/, "") || "/";
+  if (path === "/") return "marketplace";
   if (/^\/asset\/[^/]+$/.test(path)) return "asset";
   if (path === "/portfolio") return "portfolio";
   if (path === "/steward") return "steward-home";

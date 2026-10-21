@@ -16,6 +16,8 @@ import {
   YAxis,
 } from "recharts";
 
+import { LoadingRegion } from "@/components/loading-region";
+import { Skeleton } from "@/components/ui/skeleton";
 import { price as fmtPrice, shortDate } from "@/lib/prototype/format";
 
 const AXIS = { fontSize: 11, fill: "var(--muted-foreground)" };
@@ -508,5 +510,37 @@ export function NdviChart({
         </LineChart>
       </ResponsiveContainer>
     </div>
+  );
+}
+
+/**
+ * The price chart while its history loads (#219): the plot's height, its axis labels and the
+ * area as blocks, so the chart replaces it without a jump and without a spinner.
+ */
+export function PriceChartSkeleton({
+  height = 280,
+  label = "Loading prices…",
+}: {
+  height?: number;
+  label?: string;
+}) {
+  return (
+    <LoadingRegion name="price-chart" label={label}>
+      <div style={{ height }} className="flex gap-2 pt-3">
+        <div className="flex w-12 shrink-0 flex-col justify-between pb-7">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-3 w-10" />
+          ))}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Skeleton className="flex-1 rounded-2xl" />
+          <div className="mt-3 flex h-4 items-center justify-between">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-3 w-12" />
+            ))}
+          </div>
+        </div>
+      </div>
+    </LoadingRegion>
   );
 }

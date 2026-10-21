@@ -136,7 +136,7 @@ describe("skeletonKind", () => {
     ["/admin", "time-machine"],
     ["/admin/verifications", "queue"],
     ["/admin/verifications/abc", "review"],
-    ["/", "page"],
+    ["/", "marketplace"],
   ])("%s → %s", (path, kind) => {
     expect(skeletonKind(path)).toBe(kind);
   });
