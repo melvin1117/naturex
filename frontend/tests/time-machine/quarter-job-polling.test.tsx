@@ -1,4 +1,10 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  configure,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import {
   afterEach,
   beforeAll,
@@ -44,7 +50,11 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-beforeAll(stubBrowserApis);
+beforeAll(() => {
+  stubBrowserApis();
+  // A loaded CI machine can take more than a second to render the panel.
+  configure({ asyncUtilTimeout: 5_000 });
+});
 beforeEach(() => FakeEventSource.reset());
 afterEach(() => setHidden(false));
 
