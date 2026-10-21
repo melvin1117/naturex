@@ -74,8 +74,11 @@ The API and database keep their names (`shares`, `ipo`, `orders`, `community_wal
   - Overlap: "This boundary overlaps the Xochimilco Wetland site. Adjust the edge to continue."
   - Not enough play money: "You have $420 of play money. This needs $1,000."
 - Waking server: "Waking up the NatureX servers… this takes about 30 seconds on our free host."
+- Loading: a page-shaped skeleton, never a centred spinner for a page; one status names what's loading ("Loading the site…"). After 8 seconds without an answer it says why, without claiming what it can't know: "Still loading. The NatureX servers may be waking up, which takes about 30 seconds on our free host."
 - Fallbacks are never errors: "Live satellite service is busy, so we're showing a cached example from a nearby site."
 - Empty states invite the next action: "No stakes yet. Explore the Marketplace to back a site."
+  - In one or two sentences they say what will appear, what makes it appear and, where there is one, the next action.
+  - They never contradict the screen: under a rated site, not "once a site has been rated" but "Mock ratings don't include the Auditor's recommendations. A live rating lists concrete steps here that would strengthen the grade."
 
 ## 7. Tour hints
 - Two layers on every step, each one or two sentences:
