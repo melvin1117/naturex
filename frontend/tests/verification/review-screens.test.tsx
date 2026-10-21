@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -111,10 +112,10 @@ describe("ReviewQueueScreen", () => {
       name: "Listings waiting for review",
     });
     expect(
-      within(list).getByText("Río Claro Forest", { selector: "p" }),
+      within(list).getByRole("heading", { level: 2, name: "Río Claro Forest" }),
     ).toBeInTheDocument();
     expect(
-      within(list).getByText("Selva Norte", { selector: "p" }),
+      within(list).getByRole("heading", { level: 2, name: "Selva Norte" }),
     ).toBeInTheDocument();
     expect(within(list).getAllByText("Real documents")).toHaveLength(2);
     expect(within(list).getByText("Failed")).toBeInTheDocument();
@@ -141,7 +142,7 @@ describe("ReviewQueueScreen", () => {
         ),
     });
     expect(
-      await screen.findByText("Site 20", { selector: "p" }),
+      await screen.findByRole("heading", { name: "Site 20" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
 
@@ -153,7 +154,7 @@ describe("ReviewQueueScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Previous" }));
     expect(
-      await screen.findByText("Site 1", { selector: "p" }),
+      await screen.findByRole("heading", { name: "Site 1" }),
     ).toBeInTheDocument();
     const offsets = backend.requests
       .filter((r) => r.url.includes("/admin/verifications"))
@@ -318,6 +319,11 @@ describe("ListingReviewScreen", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
     expect(await screen.findByText(/Write a reason/)).toBeInTheDocument();
     expect(backend.calls(decisionRoute("reject"))).toBe(0);
+    // Focus goes to the reason, which now describes the error.
+    const reason = screen.getByLabelText("Reason or note for the steward");
+    expect(reason).toHaveFocus();
+    expect(reason).toHaveAttribute("aria-invalid", "true");
+    expect(reason).toHaveAccessibleDescription(/Write a reason/);
 
     fireEvent.change(screen.getByLabelText("Reason or note for the steward"), {
       target: { value: "  The minutes are unsigned.  " },
@@ -326,6 +332,27 @@ describe("ListingReviewScreen", () => {
     await screen.findByText("Decision recorded");
     const post = backend.requests.find((r) => r.method === "POST")!;
     expect(await post.json()).toEqual({ reason: "The minutes are unsigned." });
+  });
+
+  it("keeps the clicked button focusable while a decision is sent", async () => {
+    let finish: (r: Response) => void = () => {};
+    const backend = renderAdmin(<ListingReviewScreen assetId={ASSET_ID} />, {
+      [RUNS]: () => json([run()]),
+      [decisionRoute("approve")]: () =>
+        new Promise<Response>((resolve) => (finish = resolve)),
+    });
+    const approve = await screen.findByRole("button", { name: "Approve" });
+    approve.focus();
+    fireEvent.click(approve);
+    await waitFor(() =>
+      expect(approve).toHaveAttribute("aria-disabled", "true"),
+    );
+    expect(approve).toBeEnabled();
+    expect(approve).toHaveFocus();
+    fireEvent.click(approve);
+    expect(backend.calls(decisionRoute("approve"))).toBe(1);
+    await act(async () => finish(json(verifiedRun())));
+    expect(await screen.findByText("Decision recorded")).toBeInTheDocument();
   });
 
   it("can't approve a run with a failed check", async () => {
@@ -417,6 +444,9 @@ describe("ListingReviewScreen", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
     expect(backend.calls(decisionRoute("revoke"))).toBe(0);
+    expect(
+      screen.getByRole("button", { name: "Revoke verification" }),
+    ).toHaveFocus();
     expect(backend.requests.some((r) => r.method === "POST")).toBe(false);
   });
 
