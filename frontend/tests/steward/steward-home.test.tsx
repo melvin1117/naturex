@@ -783,11 +783,13 @@ describe("community settings", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Enter the account ID they shared with you.",
     );
+    expect(field).toHaveFocus();
     fireEvent.change(field, {
       target: { value: "12345678-1234-4234-8234-123456789012" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/No account/);
+    expect(field).toHaveFocus();
     fireEvent.change(field, { target: { value: newcomer } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(await screen.findByText("Lucía is now a steward.")).toBeVisible();

@@ -341,6 +341,7 @@ function ListingWizard({
                 )}
               </span>
               {label}
+              {i < step && <span className="sr-only">, done</span>}
             </span>
           </li>
         ))}

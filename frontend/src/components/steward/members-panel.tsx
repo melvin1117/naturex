@@ -1,7 +1,7 @@
 "use client";
 
 import { TriangleAlertIcon, UserMinus } from "lucide-react";
-import { useId, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 
 import { LoadError } from "@/components/proto/load-error";
 import { StewardPanel } from "@/components/steward/panel";
@@ -163,6 +163,7 @@ function AddSteward({ communityId }: { communityId: string }) {
   const [userId, setUserId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [added, setAdded] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -170,6 +171,7 @@ function AddSteward({ communityId }: { communityId: string }) {
     const value = userId.trim();
     if (!UUID.test(value)) {
       setError("Enter the account ID they shared with you.");
+      inputRef.current?.focus();
       return;
     }
     setError(null);
@@ -179,6 +181,7 @@ function AddSteward({ communityId }: { communityId: string }) {
       setAdded(`${member.name} is now a steward.`);
     } catch (failure) {
       setError(memberFailure(toApiError(failure)));
+      inputRef.current?.focus();
     }
   }
 
@@ -191,6 +194,7 @@ function AddSteward({ communityId }: { communityId: string }) {
       <Label htmlFor={`${id}-user`}>Add a steward by account ID</Label>
       <div className="flex gap-2">
         <Input
+          ref={inputRef}
           id={`${id}-user`}
           value={userId}
           onChange={(e) => {
