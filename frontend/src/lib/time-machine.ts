@@ -7,10 +7,11 @@ import type {
   AssetRating,
   SentAlert,
   SimulatedAsset,
+  SimulateEvent,
   SimulateQuarter,
   TimeMachine,
 } from "./api/types";
-import { quarterLabel } from "./prototype/format";
+import { price, quarterLabel } from "./prototype/format";
 import { num } from "./report-facts";
 
 export type TimeMachineFailure = {
@@ -232,6 +233,26 @@ export function ratingChange(
     grade: [before?.grade ?? null, after?.grade ?? null],
     price: [num(before?.price), num(after?.price)],
   };
+}
+
+/** An injected event's heading: the stored event title, else the preset and the site. */
+export function eventTitle(result: SimulateEvent, name: string): string {
+  return result.event.title ?? `${result.preset} at ${name}`;
+}
+
+/** What an injected event did, in words: the panel's live region says it once it's done. */
+export function eventOutcomeText(result: SimulateEvent, name: string): string {
+  const change = ratingChange(result.before, result.after);
+  const pair = (values: [string | null, string | null]) =>
+    `${values[0] ?? "none"} to ${values[1] ?? "none"}`;
+  const fmt = (value: number | null, format: (n: number) => string) =>
+    value === null ? null : format(value);
+  const health = change.health.map((h) => fmt(h, (n) => n.toFixed(1)));
+  const prices = change.price.map((p) => fmt(p, price));
+  return (
+    `${eventTitle(result, name)}: health ${pair([health[0], health[1]])}, ` +
+    `grade ${pair(change.grade)}, stake price ${pair([prices[0], prices[1]])}.`
+  );
 }
 
 /** One run of a quarter, as its `rating_progress` events report it. */

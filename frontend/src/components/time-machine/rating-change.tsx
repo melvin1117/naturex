@@ -69,7 +69,7 @@ export function changeCells(
     ),
     price: (
       <Pair
-        label={`Price ${priceText(p0)} to ${priceText(p1)}`}
+        label={`Stake price ${priceText(p0)} to ${priceText(p1)}`}
         before={<span className="tabular">{priceText(p0)}</span>}
         after={<span className="tabular font-medium">{priceText(p1)}</span>}
       />

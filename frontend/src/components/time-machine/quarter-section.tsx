@@ -135,13 +135,18 @@ export function QuarterSection({
         <div className="mt-8 flex flex-wrap items-center gap-3">
           <Dialog
             open={confirming !== null}
-            onOpenChange={(open) => setConfirming(open ? next : null)}
+            onOpenChange={(open) =>
+              setConfirming(open && !quarter.isPending ? next : null)
+            }
           >
             <DialogTrigger asChild>
+              {/* aria-disabled, not disabled, while it runs: the dialog hands focus back
+                  here, and a disabled button would drop it to the page. */}
               <Button
                 size="lg"
-                className="bg-lime text-machine hover:bg-lime/90"
-                disabled={!canRun || quarter.isPending}
+                className="bg-lime text-machine hover:bg-lime/90 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                disabled={!canRun}
+                aria-disabled={quarter.isPending || undefined}
                 data-tour="next-quarter"
               >
                 {quarter.isPending ? (

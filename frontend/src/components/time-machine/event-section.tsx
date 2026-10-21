@@ -30,7 +30,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { toApiError } from "@/lib/api/errors";
 import type { AssetCard, EventPreset, SimulateEvent } from "@/lib/api/types";
 import { quarterLabel } from "@/lib/prototype/format";
-import { eventFailure } from "@/lib/time-machine";
+import { eventFailure, eventOutcomeText, eventTitle } from "@/lib/time-machine";
 import { useSimulateEvent } from "@/lib/time-machine-hooks";
 
 import { changeCells } from "./rating-change";
@@ -71,9 +71,7 @@ function EventResult({
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-base font-semibold">
-          {result.event.title ?? `${result.preset} at ${name}`}
-        </h3>
+        <h3 className="text-base font-semibold">{eventTitle(result, name)}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           {result.description}
         </p>
@@ -87,7 +85,7 @@ function EventResult({
         <dd>{cells.health}</dd>
         <dt className="text-muted-foreground">Grade</dt>
         <dd>{cells.grade}</dd>
-        <dt className="text-muted-foreground">Price</dt>
+        <dt className="text-muted-foreground">Stake price</dt>
         <dd>{cells.price}</dd>
       </dl>
       <Button asChild variant="outline" size="sm">
@@ -194,10 +192,16 @@ export function EventSection({
               </Select>
             </div>
             <PresetFacts preset={preset} />
-            <Dialog open={confirming} onOpenChange={setConfirming}>
+            <Dialog
+              open={confirming}
+              onOpenChange={(open) => setConfirming(open && !inject.isPending)}
+            >
               <DialogTrigger asChild>
+                {/* aria-disabled, not disabled, while it runs: the dialog hands focus back
+                    here, and a disabled button would drop it to the page. */}
                 <Button
-                  disabled={inject.isPending}
+                  aria-disabled={inject.isPending || undefined}
+                  className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
                   data-tour="inject-encroachment"
                 >
                   {inject.isPending ? (
@@ -242,9 +246,14 @@ export function EventSection({
               </DialogContent>
             </Dialog>
             <p role="status" aria-live="polite" className="text-sm">
-              {inject.isPending &&
-                requested &&
-                `Applying ${requested.preset} and re-rating ${requested.asset}…`}
+              {inject.isPending
+                ? requested &&
+                  `Applying ${requested.preset} and re-rating ${requested.asset}…`
+                : inject.data && (
+                    <span className="sr-only">
+                      {eventOutcomeText(inject.data, resultName)}
+                    </span>
+                  )}
             </p>
           </div>
           <div className="min-w-0">
