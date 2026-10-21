@@ -81,7 +81,7 @@ export function WorldGate({
     );
   }
 
-  if (fallback) return fallback;
+  if (fallback !== undefined) return fallback;
   return (
     <div
       role="status"

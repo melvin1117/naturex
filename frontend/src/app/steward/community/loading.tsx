@@ -1,5 +1,5 @@
-import { PageSkeleton } from "@/components/page-skeletons";
+import { CommunitySettingsSkeleton } from "@/components/page-skeletons";
 
 export default function Loading() {
-  return <PageSkeleton label="Loading your community…" />;
+  return <CommunitySettingsSkeleton />;
 }

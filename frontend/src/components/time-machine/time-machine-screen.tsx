@@ -23,6 +23,7 @@ import { useTimeMachine } from "@/lib/time-machine-hooks";
 import { EventSection } from "./event-section";
 import { QuarterSection } from "./quarter-section";
 import { ResetSection } from "./reset-section";
+import { TimeMachineHeading } from "./time-machine-heading";
 
 /**
  * `/admin`: the real Time Machine for a signed-in admin (the layout lets only admins in, and a
@@ -66,17 +67,7 @@ export function TimeMachinePanel() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 pt-10 pb-16 sm:px-6">
-      <p className="text-sm text-muted-foreground">
-        Control room · play money only
-      </p>
-      <h1 className="mt-1 font-serif text-5xl leading-none tracking-tight sm:text-6xl">
-        Time Machine
-      </h1>
-      <p className="mt-3 max-w-2xl text-muted-foreground">
-        Move this sandbox forward a quarter or inject an event, and watch
-        ratings, stake prices and alerts respond. Every change is a real
-        re-rate, stored and labelled simulated.
-      </p>
+      <TimeMachineHeading />
 
       {notAdmin ? (
         <Alert className="mt-8 max-w-2xl">

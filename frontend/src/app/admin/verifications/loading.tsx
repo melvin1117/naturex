@@ -1,5 +1,5 @@
-import { AdminListSkeleton } from "@/components/page-skeletons";
+import { QueueSkeleton } from "@/components/page-skeletons";
 
 export default function Loading() {
-  return <AdminListSkeleton />;
+  return <QueueSkeleton />;
 }
