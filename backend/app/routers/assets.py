@@ -39,6 +39,7 @@ from app.services.asset_cards import (
     change_pct,
     is_mock_report,
     shown_status_reason,
+    thumbnail_outline_of,
 )
 from app.services.cached_example import cached_example
 from app.services.ipo import is_trading
@@ -148,6 +149,7 @@ def asset_detail(
         primary_shares_remaining=asset.primary_shares_remaining,
         community_wallet=asset.community_wallet,
         site_key=asset.site_key,
+        outline=thumbnail_outline_of(asset),
         mock=is_mock_report(report),
         latest_report=present_report(session, report, asset, settings) if report else None,
         recent_events=recent_events(session, asset),

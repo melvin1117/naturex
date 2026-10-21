@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import importlib.util
+import json
 import math
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -18,6 +21,7 @@ from app.tools.geometry import (
     Problem,
     bare_geometry,
     outline_rings,
+    thumbnail_outline,
     validate_polygon,
 )
 
@@ -234,11 +238,14 @@ def test_every_problem_is_reported_at_once() -> None:
 # --- Outlines for the listing map (T33) ---------------------------------------------------------
 
 
-def _circle(points: int, radius_deg: float = 0.05) -> dict[str, Any]:
+def circle(
+    points: int, radius_deg: float = 0.05, lat: float = LAT, lon: float = LON
+) -> dict[str, Any]:
+    """GeoJSON Polygon: a circle of `points` corners around lat/lon."""
     ring = [
         [
-            LON + radius_deg * math.cos(2 * math.pi * i / points),
-            LAT + radius_deg * math.sin(2 * math.pi * i / points),
+            lon + radius_deg * math.cos(2 * math.pi * i / points),
+            lat + radius_deg * math.sin(2 * math.pi * i / points),
         ]
         for i in range(points)
     ]
@@ -252,9 +259,9 @@ def test_an_outline_keeps_a_simple_ring_rounded_to_a_metre() -> None:
 
 
 def test_an_outline_is_simplified_under_the_cap() -> None:
-    rings = outline_rings(_circle(5_000))
+    rings = outline_rings(circle(5_000))
     assert 4 <= sum(len(ring) for ring in rings) <= OUTLINE_MAX_POINTS
-    assert len(outline_rings(_circle(5_000), max_points=20)[0]) <= 20
+    assert len(outline_rings(circle(5_000), max_points=20)[0]) <= 20
 
 
 def test_an_outline_has_each_parts_exterior_and_no_holes() -> None:
@@ -264,6 +271,31 @@ def test_an_outline_has_each_parts_exterior_and_no_holes() -> None:
     hole = square(400, lat=LAT + 0.002, lon=LON + 0.002)["coordinates"][0]
     holed = {"type": "Polygon", "coordinates": [square(1_200)["coordinates"][0], hole]}
     assert len(outline_rings(holed)) == 1
+
+
+def test_a_thumbnail_outline_has_at_most_64_corners_over_every_part() -> None:
+    assert sum(len(ring) for ring in thumbnail_outline(circle(5_000))) <= 64
+    far = circle(3_000, lat=LAT + 0.3)["coordinates"]
+    multi = {"type": "MultiPolygon", "coordinates": [circle(3_000)["coordinates"], far]}
+    rings = thumbnail_outline(multi)
+    assert len(rings) == 2 and sum(len(ring) for ring in rings) <= 64
+
+
+def test_the_outline_migration_backfills_like_the_app() -> None:
+    """0022 freezes its own copy of the simplification; today it matches the app's."""
+    path = Path(__file__).parents[1] / "migrations/versions/0022_asset_outline.py"
+    spec = importlib.util.spec_from_file_location("migration_0022", path)
+    assert spec and spec.loader
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    multi = {
+        "type": "MultiPolygon",
+        "coordinates": [circle(3_000)["coordinates"], circle(400, lat=LAT + 0.3)["coordinates"]],
+    }
+    for geojson in (square(1_200), circle(5_000), multi, {"type": "Point", "coordinates": [0, 0]}):
+        assert migration._outline(geojson) == thumbnail_outline(geojson)
+        feature = {"type": "Feature", "properties": {}, "geometry": geojson}
+        assert migration._outline(json.dumps(feature)) == thumbnail_outline(geojson)
 
 
 def test_an_unreadable_area_has_no_outline() -> None:

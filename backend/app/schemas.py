@@ -248,6 +248,13 @@ class SuspendRequest(BaseModel):
     reason: Literal["moderation", "data_dispute", "community_request"]
 
 
+_OUTLINE_DESCRIPTION = (
+    "The boundary's exterior ring per part, [lon, lat], simplified to at most 64 corners in "
+    "all (holes dropped) when the area was saved: drawn on the card and hero maps. Empty for "
+    "a curated site (it has a precomputed thumbnail) or an area that can't be read."
+)
+
+
 class AssetCard(BaseModel):
     id: UUID
     name: str
@@ -280,9 +287,7 @@ class AssetCard(BaseModel):
     site_key: str | None = None
     outline: list[list[list[float]]] = Field(
         default_factory=list,
-        description="The boundary's exterior ring per part, [lon, lat], simplified to at most "
-        "64 corners in all (holes dropped): drawn on the card's map when the site has no "
-        "precomputed thumbnail. Empty if the area can't be read.",
+        description=_OUTLINE_DESCRIPTION,
     )
     sparkline: list[Decimal] = Field(
         default_factory=list,
@@ -432,6 +437,7 @@ class AssetDetail(BaseModel):
     primary_shares_remaining: int
     community_wallet: Decimal
     site_key: str | None = None
+    outline: list[list[list[float]]] = Field(default_factory=list, description=_OUTLINE_DESCRIPTION)
     mock: bool = Field(default=False, description=_MOCK_DESCRIPTION)
     latest_report: ReportOut | None = None
     recent_events: list[EventOut] = Field(default_factory=list)

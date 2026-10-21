@@ -249,6 +249,15 @@ def outline_rings(
     ]
 
 
+THUMBNAIL_OUTLINE_MAX_POINTS = 64
+"""Corners of a listing's stored thumbnail outline (`Asset.outline`): enough for a card map."""
+
+
+def thumbnail_outline(geojson: Mapping[str, Any]) -> list[list[list[float]]]:
+    """The outline stored with a listing's area for its card and hero maps (#212)."""
+    return outline_rings(geojson, max_points=THUMBNAIL_OUTLINE_MAX_POINTS)
+
+
 def geometry_sha256(geojson: Mapping[str, Any]) -> str:
     """A commitment to the bare geometry (canonical JSON), for ledger entries of drafts."""
     canonical = json.dumps(bare_geometry(geojson), sort_keys=True, separators=(",", ":"))
