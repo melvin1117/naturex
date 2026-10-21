@@ -1703,7 +1703,7 @@ export interface components {
             site_key?: string | null;
             /**
              * Outline
-             * @description The boundary's exterior ring per part, [lon, lat], simplified to at most 64 corners in all (holes dropped): drawn on the card's map when the site has no precomputed thumbnail. Empty if the area can't be read.
+             * @description The boundary's exterior ring per part, [lon, lat], simplified to at most 64 corners in all (holes dropped) when the area was saved: drawn on the card and hero maps. Empty for a curated site (it has a precomputed thumbnail) or an area that can't be read.
              */
             outline?: number[][][];
             /**
@@ -1795,6 +1795,11 @@ export interface components {
             community_wallet: string;
             /** Site Key */
             site_key?: string | null;
+            /**
+             * Outline
+             * @description The boundary's exterior ring per part, [lon, lat], simplified to at most 64 corners in all (holes dropped) when the area was saved: drawn on the card and hero maps. Empty for a curated site (it has a precomputed thumbnail) or an area that can't be read.
+             */
+            outline?: number[][][];
             /**
              * Mock
              * @description True when the latest report was rated from USE_MOCKS placeholder metrics (T58), not observed satellite data: show it as mock data.

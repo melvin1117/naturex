@@ -17,13 +17,10 @@ from app.services.ipo import is_trading
 from app.services.listings import RATING_STALE
 from app.services.rating_runs import assets_with_active_runs
 from app.tools.earth_obs import MOCK_FLAG
-from app.tools.geometry import outline_rings
 
 _HUNDRED = Decimal(100)
 # Marketplace sparkline length: the latest prices per card, oldest first.
 SPARKLINE_POINTS = 30
-CARD_OUTLINE_MAX_POINTS = 64
-"""Corners of a card's boundary outline (all parts together): enough to draw it on a thumbnail."""
 
 
 def _price_per_asset(
@@ -127,6 +124,12 @@ def is_mock_report(report: Report | None) -> bool:
     )
 
 
+def thumbnail_outline_of(asset: Asset) -> list[list[list[float]]]:
+    """The stored outline for the card and hero maps; none for a curated site, which has a
+    precomputed thumbnail (#212). Never recomputed per request."""
+    return [] if asset.site_key else (asset.outline or [])
+
+
 def shown_status_reason(asset: Asset, active: Collection[UUID]) -> str | None:
     """The stored reason, or `rating_stale` for a listing in `rating` whose run died (a
     worker crash leaves no failure to record)."""
@@ -177,7 +180,7 @@ def cards(
                 value_high=latest.value_high if latest else None,
                 cover_image_url=asset.cover_image_url,
                 site_key=asset.site_key,
-                outline=outline_rings(asset.geojson, max_points=CARD_OUTLINE_MAX_POINTS),
+                outline=thumbnail_outline_of(asset),
                 sparkline=sparklines.get(asset.id, []),
                 trading=is_trading(asset),
             )

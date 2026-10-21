@@ -369,6 +369,11 @@ class Asset(SQLModel, table=True):
     description: str | None = None
     cover_image_url: str | None = None
     geojson: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
+    # The boundary simplified for a thumbnail map, set with the area (#212); NULL for curated
+    # sites, which have precomputed thumbnails.
+    outline: list[list[list[float]]] | None = Field(
+        default=None, sa_column=Column(JSONB, nullable=True)
+    )
     area_ha: Decimal = Field(max_digits=12, decimal_places=2)
     centroid_lat: float | None = None
     centroid_lon: float | None = None
