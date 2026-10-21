@@ -3,7 +3,6 @@
 import { TriangleAlertIcon } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
 
-import { markCommunityCreated } from "@/components/steward/focus";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -175,9 +174,7 @@ export function CreateCommunityForm({
       submitLabel="Create community"
       pendingLabel="Creating…"
       onSubmit={async (body) => {
-        const community = await create.mutateAsync(body);
-        markCommunityCreated();
-        onCreated(community);
+        onCreated(await create.mutateAsync(body));
       }}
     />
   );

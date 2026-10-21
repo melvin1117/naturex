@@ -87,7 +87,7 @@ export function DetailsStep({
   }
 
   return (
-    <StepCard aria-labelledby="listing-details-title">
+    <StepCard>
       <h2 id="listing-details-title" className="mb-5 text-lg font-semibold">
         Site details
       </h2>

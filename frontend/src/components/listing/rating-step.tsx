@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
 import { GradeBadge } from "@/components/proto/grade";
-import { focusIfLost } from "@/components/steward/focus";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,6 +35,7 @@ import {
   type ListingFailure,
 } from "@/lib/listing";
 import { evidenceHref } from "@/lib/field-evidence";
+import { focusIfLost, useRestoreFocusAfterPending } from "@/lib/focus";
 import { ha } from "@/lib/prototype/format";
 import { num, reportFacts } from "@/lib/report-facts";
 
@@ -115,16 +115,17 @@ export function RatingStep({
   );
   const outcome = listingOutcome(asset);
   const draft = asset.status === "draft";
-  // "Rate this site" disables, then gives way to the run: keep focus on this card's title.
+  // "Rate this site" disables while it submits. If the listing leaves draft, the run replaces
+  // the button: focus its card's title. If the submit fails, focus returns to the button.
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const rateRef = useRef<HTMLButtonElement>(null);
   const busy = submit.isPending || submittedRunId !== null;
-  const shown = useRef({ draft, busy });
+  useRestoreFocusAfterPending(draft && busy, rateRef);
+  const wasDraft = useRef(draft);
   useEffect(() => {
-    const was = shown.current;
-    if (was.draft === draft && was.busy === busy) return;
-    shown.current = { draft, busy };
-    focusIfLost(titleRef.current);
-  }, [draft, busy]);
+    if (wasDraft.current && !draft) focusIfLost(titleRef.current);
+    wasDraft.current = draft;
+  }, [draft]);
 
   async function rate() {
     setFailure(null);
@@ -193,6 +194,7 @@ export function RatingStep({
                 </Button>
               </div>
               <Button
+                ref={rateRef}
                 size="lg"
                 onClick={() => void rate()}
                 disabled={submit.isPending || submittedRunId !== null}

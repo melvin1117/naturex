@@ -1,9 +1,8 @@
 "use client";
 
 import { Upload } from "lucide-react";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 
-import { focusIfLost } from "@/components/steward/focus";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -16,6 +15,7 @@ import {
   photoUploadFailure,
 } from "@/lib/field-evidence";
 import { useUploadPhoto } from "@/lib/field-evidence-hooks";
+import { useRestoreFocusAfterPending } from "@/lib/focus";
 
 type Field = "file" | "consent";
 
@@ -73,11 +73,7 @@ export function PhotoUploadForm({
   const pending = upload.isPending;
   // The submit button disables while uploading, which drops focus: give it back after.
   const submitRef = useRef<HTMLButtonElement>(null);
-  const wasPending = useRef(pending);
-  useEffect(() => {
-    if (wasPending.current && !pending) focusIfLost(submitRef.current);
-    wasPending.current = pending;
-  }, [pending]);
+  useRestoreFocusAfterPending(pending, submitRef);
   const errorId = (field: Field) => `${id}-${field}-error`;
 
   return (

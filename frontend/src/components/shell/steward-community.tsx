@@ -14,6 +14,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
@@ -33,6 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { CreateCommunityForm } from "@/components/steward/community-form";
+import { FocusFirstHeading } from "@/components/steward/focus-first-heading";
 import { NotACommunityMember } from "@/components/steward/not-a-member";
 import {
   COMMUNITY_PARAM,
@@ -247,6 +249,11 @@ export function StewardGate({ children }: { children: ReactNode }) {
   const { world } = useWorld();
   const { query, communities } = useStewardCommunity();
   const assetId = stewardAssetId(usePathname());
+  // The account whose community was just created here: the page that replaces the form takes
+  // focus once. Cleared if another account signs in (signing out unmounts the gate).
+  const [createdBy, setCreatedBy] = useState<string | null>(null);
+  const meId = world?.me?.id ?? null;
+  if (createdBy !== null && createdBy !== meId) setCreatedBy(null);
 
   if (world?.me == null) return children;
 
@@ -279,7 +286,12 @@ export function StewardGate({ children }: { children: ReactNode }) {
     }
 
     if (assetId === null) {
-      return <CreateCommunityEmptyState meId={world.me.id} />;
+      return (
+        <CreateCommunityEmptyState
+          meId={world.me.id}
+          onCreated={() => setCreatedBy(meId)}
+        />
+      );
     }
   }
 
@@ -290,6 +302,8 @@ export function StewardGate({ children }: { children: ReactNode }) {
       </AssetMembershipGate>
     );
   }
+  if (createdBy === meId)
+    return <FocusFirstHeading>{children}</FocusFirstHeading>;
   return children;
 }
 
@@ -338,7 +352,13 @@ function AssetMembershipGate({
   );
 }
 
-function CreateCommunityEmptyState({ meId }: { meId: string }) {
+function CreateCommunityEmptyState({
+  meId,
+  onCreated,
+}: {
+  meId: string;
+  onCreated: () => void;
+}) {
   const { select } = useStewardCommunity();
   return (
     <section
@@ -399,7 +419,10 @@ function CreateCommunityEmptyState({ meId }: { meId: string }) {
             Play money only: nothing here is a real security or investment.
           </p>
           <CreateCommunityForm
-            onCreated={(community) => select(community.id)}
+            onCreated={(community) => {
+              select(community.id);
+              onCreated();
+            }}
           />
         </div>
       </div>

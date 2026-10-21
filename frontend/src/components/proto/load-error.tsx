@@ -17,7 +17,7 @@ export function LoadError({
   return (
     <Alert variant="destructive">
       <TriangleAlertIcon aria-hidden="true" />
-      <AlertTitle>{title}</AlertTitle>
+      <AlertTitle className="line-clamp-none">{title}</AlertTitle>
       <AlertDescription>
         <p>{error.message}</p>
         <Button

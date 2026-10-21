@@ -29,6 +29,7 @@ import {
   useMeId,
   useRemoveMember,
 } from "@/lib/community-hooks";
+import { useRestoreFocusAfterPending } from "@/lib/focus";
 import { COMMUNITY_ROLE_LABEL } from "@/lib/navigation";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -164,6 +165,8 @@ function AddSteward({ communityId }: { communityId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [added, setAdded] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // "Add" disables while it runs: focus returns to the field, ready for the next ID or a fix.
+  useRestoreFocusAfterPending(add.isPending, inputRef);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -181,7 +184,6 @@ function AddSteward({ communityId }: { communityId: string }) {
       setAdded(`${member.name} is now a steward.`);
     } catch (failure) {
       setError(memberFailure(toApiError(failure)));
-      inputRef.current?.focus();
     }
   }
 
