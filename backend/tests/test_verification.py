@@ -1155,20 +1155,27 @@ def test_the_steward_home_sends_the_live_owner_to_verify_before_the_offer(live: 
     each decision reaches the community's members as an alert, never the reason."""
     asset_id = listed(live)["id"]
     assert summary_listing(live, live.owner, asset_id)["next_action"] == "verify"
+    blocked = ipo_preview(live, asset_id).json()
+    assert blocked["verification"]["required"] is True
+    assert blocked["verification"]["level"] == "unverified"
 
     run = evidence(live, asset_id)
     waiting = summary_listing(live, live.owner, asset_id)
     assert waiting["next_action"] == "verification_in_review"
-    assert (waiting["verification"]["level"], waiting["verification"]["run_id"]) == (
-        "documents_submitted",
-        run["id"],
-    )
+    assert (
+        waiting["verification"]["level"],
+        waiting["verification"]["in_review"],
+        waiting["verification"]["run_id"],
+    ) == ("documents_submitted", True, run["id"])
+    # Submitting alerts nobody: only a reviewer's decision does.
+    assert alert_titles(live, live.owner) == []
 
     rejected = decide(live, asset_id, run["id"], "reject", reason="The minutes aren't signed.")
     assert rejected.status_code == 200, rejected.text
     after_reject = summary_listing(live, live.steward, asset_id)
     assert after_reject["next_action"] == "verify"
     assert after_reject["verification"]["level"] == "rejected"
+    assert after_reject["verification"]["decision"] == "rejected"
     assert after_reject["verification"]["reason"] == "The minutes aren't signed."
     assert after_reject["verification"]["decided_at"] is not None
 
@@ -1178,12 +1185,18 @@ def test_the_steward_home_sends_the_live_owner_to_verify_before_the_offer(live: 
     assert ready["next_action"] == "launch_ipo"
     assert ready["verification"] | {"decided_at": None} == {
         "level": "verified",
+        "in_review": False,
         "required": False,
+        "decision": "verified",
         "decided_at": None,
         "reason": "Signed.",
         "run_id": second["id"],
     }
     assert summary_listing(live, live.steward, asset_id)["next_action"] == "awaiting_ipo"
+    # The preview reads the same standing as the gate, in one answer.
+    preview = ipo_preview(live, asset_id).json()
+    assert (preview["launchable"], preview["verification"]["level"]) == (True, "verified")
+    assert preview["verification"]["required"] is False
 
     name = live.session.get_one(Asset, UUID(asset_id)).name
     expected = [  # newest first
@@ -1219,6 +1232,64 @@ def test_a_revocation_sends_holders_and_members_an_alert_and_the_home_to_verify(
     assert ("verification", f"{name}: verification revoked") not in alert_titles(
         world, world.other_steward
     )
+
+    # A new submission waits: the revocation still stands, as the public panel says, in review.
+    second = evidence(world, asset_id, seed_byte=2)
+    panel = client_for(world, world.outsider).get(f"/assets/{asset_id}/verification").json()
+    waiting = summary_listing(world, world.owner, asset_id)
+    assert panel["level"] == waiting["verification"]["level"] == "revoked"
+    assert waiting["verification"]["in_review"] is True
+    assert waiting["next_action"] == "verification_in_review"
+    # Rejected: still revoked everywhere; the latest decision is the rejection, with its reason.
+    assert decide(world, asset_id, second["id"], "reject", reason="Unsigned").status_code == 200
+    panel = client_for(world, world.outsider).get(f"/assets/{asset_id}/verification").json()
+    after = summary_listing(world, world.owner, asset_id)
+    assert panel["level"] == after["verification"]["level"] == "revoked"
+    assert (after["verification"]["decision"], after["verification"]["reason"]) == (
+        "rejected",
+        "Unsigned",
+    )
+    assert after["next_action"] == "verify"
+
+
+@requires_db
+def test_a_sandbox_listing_in_review_can_still_open(world: World_) -> None:
+    asset_id = listed(world)["id"]
+    run = evidence(world, asset_id)
+    home = summary_listing(world, world.owner, asset_id)
+    assert home["next_action"] == "launch_ipo"
+    assert home["verification"] | {"run_id": None} == {
+        "level": "documents_submitted",
+        "in_review": True,
+        "required": False,
+        "decision": None,
+        "decided_at": None,
+        "reason": None,
+        "run_id": None,
+    }
+    assert home["verification"]["run_id"] == run["id"]
+    preview = ipo_preview(world, asset_id).json()
+    assert (preview["launchable"], preview["verification"]["in_review"]) == (True, True)
+
+
+@requires_db
+def test_a_verified_live_listing_that_is_edited_must_verify_again(live: World_) -> None:
+    asset_id = draft(live)["id"]
+    verified(live, asset_id)
+    redrawn = client_for(live, live.steward).patch(
+        f"/assets/{asset_id}", json={"geojson": square(1_250)}
+    )
+    assert redrawn.status_code == 200, redrawn.text
+    assert client_for(live, live.steward).post(f"/assets/{asset_id}/submit").status_code == 202
+    live.executor.run_all()
+
+    home = summary_listing(live, live.owner, asset_id)
+    assert home["next_action"] == "verify"
+    assert (home["verification"]["level"], home["verification"]["required"]) == (
+        "unverified",
+        True,
+    )
+    assert home["verification"]["decision"] is None
 
 
 @requires_db

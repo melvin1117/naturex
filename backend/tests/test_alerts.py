@@ -26,6 +26,7 @@ from app.models import (
     StreamEventType,
     User,
     UserKind,
+    VerificationLevel,
     World,
 )
 from app.sandbox import create_world, ensure_live_world
@@ -146,20 +147,20 @@ def test_news_keys_are_stable_per_asset_and_article() -> None:
 
 def test_a_verification_decision_alerts_once_per_run_and_level_without_its_reason() -> None:
     run = uuid4()
-    approved = verification_alert("Laguna Viva", run, "verified")
-    rejected = verification_alert("Laguna Viva", run, "rejected")
-    revoked = verification_alert("Laguna Viva", run, "revoked")
+    approved = verification_alert("Laguna Viva", run, VerificationLevel.VERIFIED)
+    rejected = verification_alert("Laguna Viva", run, VerificationLevel.REJECTED)
+    revoked = verification_alert("Laguna Viva", run, VerificationLevel.REVOKED)
     assert approved is not None and rejected is not None and revoked is not None
     assert {d.kind for d in (approved, rejected, revoked)} == {AlertKind.VERIFICATION}
     assert (approved.title, approved.severity) == ("Laguna Viva: land documents verified", 2)
     assert (rejected.title, rejected.severity) == ("Laguna Viva: documents not approved", 3)
     assert (revoked.title, revoked.severity) == ("Laguna Viva: verification revoked", 4)
-    assert "submit again" in rejected.message
+    assert "Verification on the Steward home" in rejected.message
     assert "until new documents are approved" in revoked.message
     keys = {d.dedupe_key for d in (approved, rejected, revoked)}
     assert keys == {f"verification:{run}:{level}" for level in ("verified", "rejected", "revoked")}
-    assert verification_alert("Laguna Viva", run, "documents_submitted") is None
-    assert verification_alert("Laguna Viva", run, "unverified") is None
+    assert verification_alert("Laguna Viva", run, VerificationLevel.DOCUMENTS_SUBMITTED) is None
+    assert verification_alert("Laguna Viva", run, VerificationLevel.UNVERIFIED) is None
 
 
 @pytest.mark.parametrize(

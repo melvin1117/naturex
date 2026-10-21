@@ -43,6 +43,7 @@ from app.models import (
     StreamEventType,
     User,
     UserKind,
+    VerificationLevel,
 )
 from app.schemas import AlertKindOut, AlertOut, NewsScoutItem
 from app.services.listings import audience as listing_audience
@@ -207,19 +208,19 @@ def news_alert(asset_id: UUID, asset_name: str, item: NewsScoutItem) -> AlertDra
     )
 
 
-_VERIFICATION_ALERT: dict[str, tuple[str, str, int]] = {
-    "verified": (
+_VERIFICATION_ALERT: dict[VerificationLevel, tuple[str, str, int]] = {
+    VerificationLevel.VERIFIED: (
         "{name}: land documents verified",
         "A NatureX reviewer approved the community's land documents for this listing.",
         2,
     ),
-    "rejected": (
+    VerificationLevel.REJECTED: (
         "{name}: documents not approved",
         "A NatureX reviewer didn't approve the land documents submitted for this listing. "
-        "Members can read why on its verification page and submit again.",
+        "Its community can read why under Verification on the Steward home, and submit again.",
         3,
     ),
-    "revoked": (
+    VerificationLevel.REVOKED: (
         "{name}: verification revoked",
         "A NatureX reviewer revoked this listing's verification. The opening offer and "
         "trading stay closed until new documents are approved.",
@@ -228,7 +229,9 @@ _VERIFICATION_ALERT: dict[str, tuple[str, str, int]] = {
 }
 
 
-def verification_alert(asset_name: str, run_id: UUID, level: str) -> AlertDraft | None:
+def verification_alert(
+    asset_name: str, run_id: UUID, level: VerificationLevel
+) -> AlertDraft | None:
     """The alert a verification decision raises (#216): approved, rejected or revoked, once per
     run and decision; None for any other level. Never the reviewer's reason or identity."""
     template = _VERIFICATION_ALERT.get(level)
@@ -240,7 +243,7 @@ def verification_alert(asset_name: str, run_id: UUID, level: str) -> AlertDraft 
         title=title.format(name=asset_name)[:TITLE_MAX],
         message=message[:MESSAGE_MAX],
         severity=severity,
-        dedupe_key=f"verification:{run_id}:{level}",
+        dedupe_key=f"verification:{run_id}:{level.value}",
     )
 
 

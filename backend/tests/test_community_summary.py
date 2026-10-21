@@ -42,23 +42,39 @@ from app.sandbox import create_world, ensure_live_world
 from app.schemas import NextAction
 from app.seed import LIVE_WORLD_ID, seed
 from app.services.community_summary import (
-    NOT_REQUIRED,
     RECENT_PAYOUTS,
-    VerificationFacts,
     Wallet,
     holder_summary,
     ipo_proceeds,
     next_action,
     share_split,
     total_wallet,
-    verification_facts,
     wallet_credit,
 )
-from app.services.verification import RunView
+from app.services.verification import RunView, Standing, standing
 from tests.conftest import alembic_cfg, requires_db
 from tests.test_geometry import square
 
 # --- Pure functions -----------------------------------------------------------------------------
+
+
+def stands(
+    level: VerificationLevel = VerificationLevel.UNVERIFIED,
+    *,
+    required: bool = False,
+    revoked: bool = False,
+    in_review: bool = False,
+) -> Standing:
+    return Standing(level, in_review=in_review, required=required, revoked=revoked)
+
+
+FREE = stands()
+NEEDED = stands(required=True)
+IN_REVIEW = stands(VerificationLevel.DOCUMENTS_SUBMITTED, required=True, in_review=True)
+REVOKED = stands(VerificationLevel.REVOKED, required=True, revoked=True)
+RESUBMITTED = stands(VerificationLevel.REVOKED, required=True, revoked=True, in_review=True)
+# A sandbox needs no verification: a waiting submission doesn't hold the offer back.
+SANDBOX_IN_REVIEW = stands(VerificationLevel.DOCUMENTS_SUBMITTED, in_review=True)
 
 
 @pytest.mark.parametrize(
@@ -79,23 +95,21 @@ from tests.test_geometry import square
 def test_next_action_follows_the_status_the_launch_and_the_role(
     status: AssetStatus, launched: bool, owner: bool, expected: NextAction
 ) -> None:
-    assert next_action(status, launched=launched, can_launch=owner) is expected
-
-
-NEEDED = VerificationFacts(VerificationLevel.UNVERIFIED, required=True, revoked=False)
-IN_REVIEW = VerificationFacts(VerificationLevel.DOCUMENTS_SUBMITTED, required=True, revoked=False)
-REVOKED = VerificationFacts(VerificationLevel.REVOKED, required=True, revoked=True)
-RESUBMITTED = VerificationFacts(VerificationLevel.DOCUMENTS_SUBMITTED, required=True, revoked=True)
+    action = next_action(
+        status, launched=launched, can_manage=True, can_launch=owner, verification=FREE
+    )
+    assert action is expected
 
 
 @pytest.mark.parametrize(
     ("status", "launched", "owner", "verification", "expected"),
     [
-        # The opening offer waits for verification: the next step is to verify, for everyone.
+        # The opening offer waits for verification: a member's next step is to verify.
         (AssetStatus.LISTED, False, True, NEEDED, NextAction.VERIFY),
         (AssetStatus.LISTED, False, False, NEEDED, NextAction.VERIFY),
         (AssetStatus.LISTED, False, True, IN_REVIEW, NextAction.VERIFICATION_IN_REVIEW),
-        (AssetStatus.LISTED, False, True, NOT_REQUIRED, NextAction.LAUNCH_IPO),
+        (AssetStatus.LISTED, False, True, FREE, NextAction.LAUNCH_IPO),
+        (AssetStatus.LISTED, False, True, SANDBOX_IN_REVIEW, NextAction.LAUNCH_IPO),
         # A revocation pauses trading (and blocks the offer) until a new run is approved.
         (AssetStatus.SUSPENDED, True, True, REVOKED, NextAction.VERIFY),
         (AssetStatus.SUSPENDED, False, False, REVOKED, NextAction.VERIFY),
@@ -107,17 +121,36 @@ RESUBMITTED = VerificationFacts(VerificationLevel.DOCUMENTS_SUBMITTED, required=
         (AssetStatus.WITHDRAWN, False, True, REVOKED, NextAction.NONE),
     ],
 )
-def test_next_action_sends_the_steward_to_verify_before_the_locked_offer(
+def test_next_action_sends_members_to_verify_before_the_locked_offer(
     status: AssetStatus,
     launched: bool,
     owner: bool,
-    verification: VerificationFacts,
+    verification: Standing,
     expected: NextAction,
 ) -> None:
-    assert (
-        next_action(status, launched=launched, can_launch=owner, verification=verification)
-        is expected
+    action = next_action(
+        status, launched=launched, can_manage=True, can_launch=owner, verification=verification
     )
+    assert action is expected
+
+
+@pytest.mark.parametrize(
+    ("status", "launched", "verification", "expected"),
+    [
+        (AssetStatus.LISTED, False, NEEDED, NextAction.AWAITING_VERIFICATION),
+        (AssetStatus.LISTED, False, IN_REVIEW, NextAction.AWAITING_VERIFICATION),
+        (AssetStatus.SUSPENDED, True, REVOKED, NextAction.AWAITING_VERIFICATION),
+        (AssetStatus.LISTED, False, FREE, NextAction.AWAITING_IPO),
+        (AssetStatus.LISTED, True, FREE, NextAction.VIEW_ON_EXCHANGE),
+    ],
+)
+def test_a_non_member_is_never_offered_to_verify_or_launch(
+    status: AssetStatus, launched: bool, verification: Standing, expected: NextAction
+) -> None:
+    action = next_action(
+        status, launched=launched, can_manage=False, can_launch=False, verification=verification
+    )
+    assert action is expected
 
 
 def _view(level: VerificationLevel, *, matches: bool = True, **fields: Any) -> RunView:
@@ -136,54 +169,64 @@ def _view(level: VerificationLevel, *, matches: bool = True, **fields: Any) -> R
 
 
 NOON = datetime(2026, 10, 12, 12, tzinfo=UTC)
+LATER = datetime(2026, 10, 14, tzinfo=UTC)
 
 
-def test_verification_facts_follow_the_ipo_gate() -> None:
-    assert verification_facts(None, revoked_at=None, live=False) == NOT_REQUIRED
-    assert verification_facts(None, revoked_at=None, live=True) == NEEDED
+def test_the_standing_follows_the_ipo_gate() -> None:
+    assert standing(None, revoked_at=None, live=False) == FREE
+    assert standing(None, revoked_at=None, live=True) == NEEDED
     verified = _view(VerificationLevel.VERIFIED, decided_at=NOON, reason="Matches the map.")
-    facts = verification_facts(verified, revoked_at=None, live=True)
-    assert (facts.level, facts.required, facts.decided_at, facts.reason) == (
+    facts = standing(verified, revoked_at=None, live=True)
+    assert (facts.level, facts.required, facts.decision, facts.decided_at, facts.reason) == (
         VerificationLevel.VERIFIED,
         False,
+        VerificationLevel.VERIFIED,
         NOON,
         "Matches the map.",
     )
     # A verified run the listing has since outgrown is unverified again, and blocks the offer.
-    stale = verification_facts(
+    stale = standing(
         _view(VerificationLevel.VERIFIED, matches=False, decided_at=NOON),
         revoked_at=None,
         live=True,
     )
-    assert (stale.level, stale.required, stale.decided_at) == (
+    assert (stale.level, stale.required, stale.decision, stale.run_id) == (
         VerificationLevel.UNVERIFIED,
         True,
         None,
+        None,
     )
     # Sandboxes need no verification, but a rejection still shows with its reason.
-    rejected = verification_facts(
+    rejected = standing(
         _view(VerificationLevel.REJECTED, decided_at=NOON, reason="Unsigned minutes."),
         revoked_at=None,
         live=False,
     )
-    assert (rejected.level, rejected.required, rejected.reason) == (
+    assert (rejected.level, rejected.required, rejected.decision, rejected.reason) == (
         VerificationLevel.REJECTED,
         False,
+        VerificationLevel.REJECTED,
         "Unsigned minutes.",
+    )
+    # A sandbox submission waits for a reviewer without blocking the offer.
+    waiting = standing(_view(VerificationLevel.DOCUMENTS_SUBMITTED), revoked_at=None, live=False)
+    assert (waiting.level, waiting.in_review, waiting.required) == (
+        VerificationLevel.DOCUMENTS_SUBMITTED,
+        True,
+        False,
     )
 
 
 def test_a_revocation_stands_until_an_approval_even_in_a_sandbox() -> None:
-    later = datetime(2026, 10, 14, tzinfo=UTC)
-    revoked = verification_facts(
+    revoked = standing(
         _view(
             VerificationLevel.REVOKED,
             decided_at=NOON,
             reason="Fine.",
-            revoked_at=later,
+            revoked_at=LATER,
             revoke_reason="Disputed title.",
         ),
-        revoked_at=later,
+        revoked_at=LATER,
         live=False,
     )
     assert (revoked.level, revoked.required, revoked.revoked) == (
@@ -191,22 +234,40 @@ def test_a_revocation_stands_until_an_approval_even_in_a_sandbox() -> None:
         True,
         True,
     )
-    assert (revoked.decided_at, revoked.reason) == (later, "Disputed title.")
-    # A new submission waits for a reviewer: in review, still blocking.
-    waiting = verification_facts(
-        _view(VerificationLevel.DOCUMENTS_SUBMITTED), revoked_at=later, live=False
+    assert (revoked.decision, revoked.decided_at, revoked.reason) == (
+        VerificationLevel.REVOKED,
+        LATER,
+        "Disputed title.",
     )
-    assert (waiting.level, waiting.required, waiting.in_review, waiting.reason) == (
-        VerificationLevel.DOCUMENTS_SUBMITTED,
+    # A newer submission waits: the revocation still stands (as on the public panel), in review.
+    waiting = standing(_view(VerificationLevel.DOCUMENTS_SUBMITTED), revoked_at=LATER, live=False)
+    assert (waiting.level, waiting.in_review, waiting.required) == (
+        VerificationLevel.REVOKED,
         True,
         True,
-        None,
+    )
+    assert (waiting.decision, waiting.decided_at) == (VerificationLevel.REVOKED, LATER)
+    # The newer submission was rejected: still revoked, and the latest decision is the rejection.
+    rejected = standing(
+        _view(VerificationLevel.REJECTED, decided_at=NOON, reason="Still unsigned."),
+        revoked_at=LATER,
+        live=False,
+    )
+    assert (rejected.level, rejected.in_review, rejected.decision, rejected.reason) == (
+        VerificationLevel.REVOKED,
+        False,
+        VerificationLevel.REJECTED,
+        "Still unsigned.",
     )
     # The listing changed since: the revocation is what stands.
-    changed = verification_facts(
-        _view(VerificationLevel.DOCUMENTS_SUBMITTED, matches=False), revoked_at=later, live=False
+    changed = standing(
+        _view(VerificationLevel.DOCUMENTS_SUBMITTED, matches=False), revoked_at=LATER, live=False
     )
-    assert (changed.level, changed.decided_at) == (VerificationLevel.REVOKED, later)
+    assert (changed.level, changed.in_review, changed.decided_at) == (
+        VerificationLevel.REVOKED,
+        False,
+        LATER,
+    )
 
 
 def test_ipo_proceeds_round_each_purchase_like_the_engine() -> None:
@@ -443,7 +504,9 @@ def test_listings_show_their_next_action_per_role(session: Session, client: Test
     listed = next(item for item in body["listings"] if item["asset"]["status"] == "listed")
     assert listed["verification"] == {
         "level": "unverified",
+        "in_review": False,
         "required": True,
+        "decision": None,
         "decided_at": None,
         "reason": None,
         "run_id": None,
@@ -458,6 +521,14 @@ def test_listings_show_their_next_action_per_role(session: Session, client: Test
     body = summary_of(sign_in(client, session, steward), community.id).json()
     listed = next(item for item in body["listings"] if item["asset"]["status"] == "listed")
     assert listed["next_action"] == "verify"
+
+    # A same-world admin reads the home too, but isn't a member: told what it waits for, never
+    # offered to verify or launch it.
+    admin = person(session, "Ops", is_admin=True)
+    body = summary_of(sign_in(client, session, admin), community.id).json()
+    assert body["role"] is None
+    listed = next(item for item in body["listings"] if item["asset"]["status"] == "listed")
+    assert listed["next_action"] == "awaiting_verification"
 
 
 @DB

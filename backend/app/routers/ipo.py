@@ -53,6 +53,7 @@ from app.services.ipo import (
     preview,
 )
 from app.services.listings import RUN_IN_PROGRESS
+from app.services.verification import verification_out
 
 router = APIRouter(tags=["ipo"])
 
@@ -136,7 +137,8 @@ def preview_ipo(
 ) -> IpoPreviewOut:
     """The price the owner would launch at now: every term of `ipo_price =
     fair_value_per_share`, computed by the market engine from the latest report, and whether
-    the launch would go ahead (`launchable`, else `blocked_reason`). Writes nothing; a later
+    the launch would go ahead (`launchable`, else `blocked_reason`), with where the listing's
+    verification stands (#216). Writes nothing; a later
     report can change it, so the launch confirms it with `expected_price`."""
     ref = _ref(granted)
     try:
@@ -146,7 +148,13 @@ def preview_ipo(
     except LookupError:
         raise _missing() from None
     response.headers["Cache-Control"] = PRIVATE_NO_STORE
-    return IpoPreviewOut(**_terms_out(q), launchable=q.launchable, blocked_reason=q.blocked_reason)
+    assert q.verification is not None  # a preview always reads it
+    return IpoPreviewOut(
+        **_terms_out(q),
+        launchable=q.launchable,
+        blocked_reason=q.blocked_reason,
+        verification=verification_out(q.verification),
+    )
 
 
 @router.post(

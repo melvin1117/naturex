@@ -64,7 +64,6 @@ from app.schemas import (
     CommunityUpdate,
     HoldersOut,
     ListingSummaryOut,
-    ListingVerificationOut,
     MyCommunityOut,
     PayoutSummaryOut,
     SharesOut,
@@ -73,6 +72,7 @@ from app.schemas import (
 )
 from app.services.asset_cards import cards, latest_reports
 from app.services.community_summary import Wallet, summarize
+from app.services.verification import verification_out
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["communities"])
@@ -378,6 +378,7 @@ def summary(granted: CommunityData, session: SessionDep, response: Response) -> 
         community.world_id,
         assets,
         latest={asset_id: versions[0] for asset_id, versions in reports.items()},
+        can_manage=role is not None,
         can_launch=role == CommunityRole.OWNER,
     )
     card_of = {
@@ -392,13 +393,7 @@ def summary(granted: CommunityData, session: SessionDep, response: Response) -> 
             ListingSummaryOut(
                 asset=card_of[listing.asset.id],
                 next_action=listing.next_action,
-                verification=ListingVerificationOut(
-                    level=listing.verification.level,
-                    required=listing.verification.required,
-                    decided_at=listing.verification.decided_at,
-                    reason=listing.verification.reason,
-                    run_id=listing.verification.run_id,
-                ),
+                verification=verification_out(listing.verification),
                 ipo_at=listing.asset.ipo_at,
                 wallet=_wallet_out(listing.wallet),
                 holders=HoldersOut(

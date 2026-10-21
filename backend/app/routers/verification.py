@@ -595,29 +595,19 @@ def verification_panel(
     asset = _asset(session, granted)
     view = verification.current_view(session, asset)
     response.headers["Cache-Control"] = PRIVATE_NO_STORE
-    revoked = asset.verification_revoked_at is not None
-    current_revoked = (
-        view is not None
-        and view.fingerprint_matches
-        and view.run.level is VerificationLevel.REVOKED
-    )
-    if revoked and not current_revoked:
+    # One derivation with the gate and the Steward home (`Standing.level`).
+    stands = verification.listing_standing(session, asset, view)
+    if view is None or not view.fingerprint_matches or stands.level is not view.run.level:
         # A revocation stands until an approval, even once a new run is submitted or the
         # listing changed: the panel keeps saying so (its latest decision is the revocation).
+        revoked = stands.level is VerificationLevel.REVOKED
         return VerificationPublicOut(
             asset_id=asset.id,
-            level=VerificationLevel.REVOKED,
-            badge=badge(VerificationLevel.REVOKED),
-            revoked_at=asset.verification_revoked_at,
+            level=stands.level,
+            badge=badge(stands.level),
+            revoked_at=asset.verification_revoked_at if revoked else None,
             not_checked=list(NOT_CHECKED),
-            ledger_seq=_ledger_seq(session, asset, None),
-        )
-    if view is None or not view.fingerprint_matches:
-        return VerificationPublicOut(
-            asset_id=asset.id,
-            level=VerificationLevel.UNVERIFIED,
-            badge=badge(VerificationLevel.UNVERIFIED),
-            not_checked=list(NOT_CHECKED),
+            ledger_seq=_ledger_seq(session, asset, None) if revoked else None,
         )
     run = view.run
     return VerificationPublicOut(
