@@ -1,4 +1,7 @@
 /** The trade panel's quote table and receipt: the API's numbers, formatted, never computed. */
+import Link from "next/link";
+import { cn } from "cn";
+
 import type { OrderOut, QuoteOut } from "@/lib/api/types";
 import { int } from "@/lib/prototype/format";
 import {
@@ -73,12 +76,21 @@ export function QuoteTable({
 export function announce(order: OrderOut): string {
   const verb = order.side === "buy" ? "Bought" : "Sold";
   const paid = order.side === "buy" ? "You paid" : "You received";
+  const first = isFirstStake(order) ? " Your first stake in this site." : "";
   return `${verb} ${int(order.qty)} units at ${unitPriceText(order.fill_price)} each. ${paid} ${moneyText(
     order.total,
-  )}. Play money now ${moneyText(order.cash_balance)}; ${int(order.shares_held)} units held.`;
+  )}. Play money now ${moneyText(order.cash_balance)}; ${int(order.shares_held)} units held.${first}`;
 }
 
-/** The fill as the order returned it: totals, and the balance and holding right after it. */
+/** The order opened the holding: every unit held came from this buy. */
+export function isFirstStake(order: OrderOut): boolean {
+  return order.side === "buy" && order.shares_held === order.qty;
+}
+
+/**
+ * The fill as the order returned it: totals, and the balance and holding right after it. A
+ * first stake gets one more line (#216): where to follow it. Sober, as market confirmations are.
+ */
 export function Receipt({
   order,
   community,
@@ -87,9 +99,13 @@ export function Receipt({
   community: string;
 }) {
   const bought = order.side === "buy";
+  const first = isFirstStake(order);
   return (
     <div
-      className="nx-rise mt-5 rounded-2xl border border-lime/60 bg-lime/10 p-4"
+      className={cn(
+        "mt-5 rounded-2xl border border-lime/60 bg-lime/10 p-4",
+        first ? "nx-wash" : "nx-rise",
+      )}
       data-tour="trade-receipt"
     >
       <p className="text-sm font-medium">
@@ -107,6 +123,18 @@ export function Receipt({
         />
         <ReceiptCell label="Units held" value={int(order.shares_held)} />
       </dl>
+      {first && (
+        <p className="mt-3 text-sm">
+          Your first stake in {community}. Follow its rating and alerts in{" "}
+          <Link
+            href="/portfolio"
+            className="font-medium underline underline-offset-4"
+          >
+            Your stakes
+          </Link>
+          .
+        </p>
+      )}
       {order.primary_qty > 0 && (
         <p className="mt-2 text-xs text-muted-foreground">
           {int(order.primary_qty)} opening units:{" "}
