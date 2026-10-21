@@ -95,7 +95,7 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
   const pnlPct = decimal(data.unrealized_pnl_pct);
   return (
     <>
-      <div className="mt-8 grid gap-4 rounded-3xl bg-card p-6 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
+      <dl className="mt-8 grid gap-4 rounded-3xl bg-card p-6 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           label="Play money available"
           value={moneyText(data.cash_balance)}
@@ -121,7 +121,7 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
           value={signedMoneyText(data.unrealized_pnl)}
           sub="on the stakes you hold, at today's prices"
         />
-      </div>
+      </dl>
 
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
         <div className="min-w-0 space-y-8">

@@ -107,7 +107,7 @@ function AccountAlertsBell({ accountId }: { accountId: string | null }) {
             <Bell aria-hidden="true" />
             {unread > 0 && (
               <span
-                className="tabular absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-clay px-1 text-[10px] font-semibold text-white"
+                className="tabular absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-clay-ink px-1 text-[10px] font-semibold text-white"
                 aria-hidden="true"
               >
                 {unread > 99 ? "99+" : unread}
@@ -175,7 +175,7 @@ function AlertsBell({ trader }: { trader: TraderKey }) {
             Alerts{unread ? `, ${unread} unread` : ""}
           </span>
           {unread > 0 && (
-            <span className="tabular absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-clay px-1 text-[10px] font-semibold text-white">
+            <span className="tabular absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-clay-ink px-1 text-[10px] font-semibold text-white">
               {unread}
             </span>
           )}

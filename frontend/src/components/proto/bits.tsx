@@ -17,7 +17,10 @@ export function Wordmark({
         NatureX
       </span>
       {app && (
-        <span className="text-sm font-medium text-muted-foreground">{app}</span>
+        // Below `sm` the header has no room for the app name; it stays in the link's name.
+        <span className="text-sm font-medium text-muted-foreground max-sm:sr-only">
+          {app}
+        </span>
       )}
     </span>
   );
@@ -253,6 +256,7 @@ export function ValueRange({
   );
 }
 
+/** One term of a `<dl>`: always render it inside one. */
 export function Stat({
   label,
   value,
@@ -266,11 +270,11 @@ export function Stat({
 }) {
   return (
     <div className={cn("min-w-0", className)}>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="tabular mt-1 truncate text-2xl font-light tracking-tight">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="tabular mt-1 truncate text-2xl font-light tracking-tight">
         {value}
-      </div>
-      {sub && <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>}
+      </dd>
+      {sub && <dd className="mt-0.5 text-xs text-muted-foreground">{sub}</dd>}
     </div>
   );
 }

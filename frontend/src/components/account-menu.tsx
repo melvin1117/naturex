@@ -94,12 +94,12 @@ function AccountMenuContent() {
           className="max-w-48 gap-2 pl-1"
           aria-label={`Account: ${me.name}`}
         >
+          {/* Initials as generated content, so the button's visible text matches its name. */}
           <span
             aria-hidden="true"
-            className="grid size-7 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground"
-          >
-            {initials(me.name)}
-          </span>
+            data-initials={initials(me.name)}
+            className="grid size-7 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground before:content-[attr(data-initials)]"
+          />
           <span className="hidden min-w-0 truncate sm:inline">{me.name}</span>
         </Button>
       </DropdownMenuTrigger>
