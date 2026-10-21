@@ -14,6 +14,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { AiSuggestionPanel } from "@/components/verification/ai-suggestion-panel";
 import { DecisionForm } from "@/components/verification/decision-form";
 import { DocumentPreviews } from "@/components/verification/document-previews";
+import { reviewViewHref } from "@/components/verification/review-queue-screen";
 import { Checklist, VerificationBadge } from "@/components/verification/parts";
 import {
   RunDecision,
@@ -42,8 +43,6 @@ import {
   type Decision,
 } from "@/lib/verification-hooks";
 
-export const QUEUE_HREF = "/admin/verifications";
-
 const DONE: Record<Decision, string> = {
   approve:
     "Approved. The listing is verified and a verification entry is in the Nature Ledger.",
@@ -61,6 +60,13 @@ export function ListingReviewScreen({ assetId }: { assetId: string }) {
   const validId = isApiAssetId(assetId);
   const asset = useAsset(validId ? assetId : undefined);
   const runs = useVerificationRuns(validId ? assetId : undefined);
+  // Back to the view this listing is in now (#211): the queue, or its decision's list.
+  const level = currentRun(runs.data)?.level;
+  const backHref = reviewViewHref(
+    level === "verified" || level === "rejected" || level === "revoked"
+      ? level
+      : "waiting",
+  );
 
   let body: React.ReactNode;
   if (!validId || asset.error?.status === 404 || runs.error?.status === 404) {
@@ -101,9 +107,9 @@ export function ListingReviewScreen({ assetId }: { assetId: string }) {
   return (
     <div className="mx-auto max-w-7xl px-4 pt-8 pb-16 sm:px-6">
       <Button asChild variant="ghost" size="sm" className="mb-4 -ml-3">
-        <Link href={QUEUE_HREF}>
+        <Link href={backHref}>
           <ArrowLeft aria-hidden="true" />
-          Verification queue
+          Verifications
         </Link>
       </Button>
       {body}

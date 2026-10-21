@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AI_POLL_MS } from "./ai-suggestion";
 import { unwrap } from "./api/errors";
 import type {
+  DecidedListingItem,
   DocumentType,
   ListingDocument,
   ReviewQueueItem,
@@ -200,6 +201,32 @@ export function useReviewQueue(
       unwrap(
         api.GET("/admin/verifications", {
           params: { query: { limit, offset } },
+          signal,
+        }),
+      ),
+    { enabled: meId !== null },
+  );
+}
+
+export type DecidedLevel = "verified" | "rejected" | "revoked";
+
+/**
+ * One page of listings whose current run was decided, latest decision first (admins, #211):
+ * one level, or all three when `level` is null.
+ */
+export function useDecidedVerifications(
+  level: DecidedLevel | null,
+  offset: number,
+  limit: number,
+): QueryResult<DecidedListingItem[]> {
+  const { world } = useWorld();
+  const meId = world?.me?.id ?? null;
+  return useApiQuery(
+    queryKeys.decidedVerifications(meId, level ?? "all", offset),
+    (api, signal) =>
+      unwrap(
+        api.GET("/admin/verifications/decided", {
+          params: { query: { limit, offset, ...(level ? { level } : {}) } },
           signal,
         }),
       ),
