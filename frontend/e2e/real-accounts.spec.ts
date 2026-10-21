@@ -345,7 +345,10 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
     const panel = tradePanel(investor);
     const status = panel.getByRole("status");
     await panel.getByRole("textbox", { name: "Units" }).fill("100");
-    await panel.getByRole("button", { name: "Buy 100 units" }).click();
+    const buy = panel.getByRole("button", { name: "Buy 100 units" });
+    // The order button stays focusable but inert (aria-disabled) until its quote is in.
+    await expect(buy).not.toHaveAttribute("aria-disabled", "true");
+    await buy.click();
     await expect(status).toContainText("Bought 100 units");
     await expect(status).toContainText(/You paid \$[\d,]+\.\d{2}/);
     paid = /You paid (\$[\d,]+\.\d{2})/.exec(
@@ -354,7 +357,10 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
 
     await panel.getByRole("tab", { name: "Sell units" }).click();
     await panel.getByRole("textbox", { name: "Units" }).fill("40");
-    await panel.getByRole("button", { name: "Sell 40 units" }).click();
+    const sell = panel.getByRole("button", { name: "Sell 40 units" });
+    // The order button stays focusable but inert (aria-disabled) until its quote is in.
+    await expect(sell).not.toHaveAttribute("aria-disabled", "true");
+    await sell.click();
     await expect(status).toContainText("Sold 40 units");
     await expect(status).toContainText("60 units held");
     // The receipt points to where the stake lives (#216 WP2), on every fill.
