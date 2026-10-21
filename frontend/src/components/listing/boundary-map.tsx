@@ -17,6 +17,7 @@ import type { MapFocus } from "@/components/proto/draw-map";
 import { IMAGERY_ATTRIBUTION, IMAGERY_URL } from "@/components/proto/site-map";
 import {
   midpoint,
+  MIN_DRAW_ZOOM,
   roundPoint,
   type BoundaryIssues,
   type DrawMode,
@@ -93,6 +94,7 @@ export function BoundaryMap({
   basemap = "satellite",
   labels = true,
   label,
+  onZoomedIn,
   className,
 }: {
   points: LatLng[];
@@ -108,6 +110,8 @@ export function BoundaryMap({
   basemap?: Basemap;
   labels?: boolean;
   label: string;
+  /** Whether the map is zoomed in far enough to draw (`MIN_DRAW_ZOOM`), on every change. */
+  onZoomedIn?: (zoomedIn: boolean) => void;
   className?: string;
 }) {
   const helpId = useId();
@@ -124,8 +128,8 @@ export function BoundaryMap({
   const [ready, setReady] = useState(false);
 
   // Event handlers bound once read the latest props through this ref.
-  const latest = useRef({ points, mode, dispatch });
-  latest.current = { points, mode, dispatch };
+  const latest = useRef({ points, mode, dispatch, onZoomedIn });
+  latest.current = { points, mode, dispatch, onZoomedIn };
 
   useEffect(() => {
     let cancelled = false;
@@ -151,6 +155,14 @@ export function BoundaryMap({
       }).addTo(map);
       map.on("click", (e) => {
         if (latest.current.mode !== "drawing") return;
+        if (!latest.current.points.length && map.getZoom() < MIN_DRAW_ZOOM) {
+          // From far out, a first click means "closer, there", not a corner.
+          const closer = Math.min(map.getZoom() + 4, MIN_DRAW_ZOOM);
+          if (reducedMotion())
+            map.setView(e.latlng, closer, { animate: false });
+          else map.flyTo(e.latlng, closer, { duration: 0.8 });
+          return;
+        }
         latest.current.dispatch({
           type: "add",
           point: roundPoint([e.latlng.lat, e.latlng.lng]),
@@ -165,6 +177,10 @@ export function BoundaryMap({
         );
       });
       map.on("mouseout", () => bandRef.current?.setLatLngs([]));
+      const reportZoom = () =>
+        latest.current.onZoomedIn?.(map.getZoom() >= MIN_DRAW_ZOOM);
+      map.on("zoomend", reportZoom);
+      reportZoom();
       setReady(true);
     });
     return () => {

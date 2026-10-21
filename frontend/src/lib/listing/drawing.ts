@@ -129,15 +129,20 @@ export function midpoint(points: LatLng[], index: number): LatLng {
   return roundPoint([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
 }
 
+/** Below this zoom the first click zooms in instead: a corner placed from space is a guess. */
+export const MIN_DRAW_ZOOM = 10;
+
 /** One sentence on what to do next, for the hint on the map. */
 export function drawingHint(
   state: Pick<EditorState, "points" | "mode">,
+  { zoomedIn = true }: { zoomedIn?: boolean } = {},
 ): string {
   const n = state.points.length;
   if (state.mode === "editing")
     return "Drag a corner to adjust it. Drag a small dot between corners to add one.";
-  if (n === 0)
-    return "Search for your land, then click the map to place the first corner.";
+  if (n === 0 && !zoomedIn)
+    return "Search for your land, or click the map to zoom in.";
+  if (n === 0) return "Click the map to place the first corner of your land.";
   if (n < MIN_CORNERS) return "Keep clicking around the edge of your land.";
   return "Click the first corner or Finish to close the shape.";
 }

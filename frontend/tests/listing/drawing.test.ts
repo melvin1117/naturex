@@ -137,6 +137,9 @@ describe("the boundary editor", () => {
 
   it("says what to do next", () => {
     expect(drawingHint(initialEditor([]))).toMatch(/first corner/);
+    expect(drawingHint(initialEditor([]), { zoomedIn: false })).toMatch(
+      /zoom in/,
+    );
     expect(
       drawingHint({ points: SQUARE.slice(0, 2), mode: "drawing" }),
     ).toMatch(/Keep clicking/);

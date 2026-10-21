@@ -140,6 +140,7 @@ export function BoundaryStep({
   const [labels, setLabels] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const [tipsDone, setTipsDone] = useState(true);
+  const [zoomedIn, setZoomedIn] = useState(points.length > 0);
   const stage = useRef<HTMLDivElement>(null);
   useEffect(() => setTipsDone(readTipsDone()), []);
 
@@ -288,7 +289,7 @@ export function BoundaryStep({
     current.length >= 3 && hint
       ? `${ha(hint.areaHa)} · ${km} km`
       : current.length
-        ? `${current.length} of 3 corners`
+        ? `${current.length} ${current.length === 1 ? "corner" : "corners"} · ${3 - current.length} more to close`
         : null;
   const status =
     hint && current.length >= 3
@@ -323,6 +324,7 @@ export function BoundaryStep({
               valid={hint?.ok ?? true}
               basemap={basemap}
               labels={labels}
+              onZoomedIn={setZoomedIn}
               label="Boundary map. Click to add corners. You can also type coordinates or paste a GeoJSON boundary."
             />
             <TooltipProvider delayDuration={300}>
@@ -347,7 +349,7 @@ export function BoundaryStep({
                   dispatch={dispatch}
                   readout={readout}
                   status={status}
-                  hint={tipsDone ? null : drawingHint(editor)}
+                  hint={tipsDone ? null : drawingHint(editor, { zoomedIn })}
                   onDismissHint={hideTips}
                   disabled={pending}
                 />

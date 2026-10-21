@@ -135,7 +135,9 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
       .check();
     await owner.getByRole("button", { name: "Continue to boundary" }).click();
 
-    // Find the land by its coordinates, then click four corners on the real Leaflet map.
+    // Find the land by its coordinates, then click four corners on the real Leaflet map. Reduced
+    // motion makes "Go there" jump instead of flying, so no click lands mid-flight.
+    await owner.emulateMedia({ reducedMotion: "reduce" });
     const map = owner.getByRole("application", { name: /^Boundary map/ });
     await expect(map.getByRole("button", { name: "Zoom in" })).toBeVisible();
     await owner.getByRole("textbox", { name: "Coordinates" }).fill(CENTER);
@@ -152,6 +154,11 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
       await map.click({ position: { x: x + dx, y: y + dy } });
     }
     await expect(owner.getByText("4 corners")).toBeVisible();
+    // The first corner closes the shape (#215); the polygon is then ready to adjust.
+    await owner.getByRole("button", { name: "Finish", exact: true }).click();
+    await expect(
+      map.getByRole("button", { name: "Corner 1 of 4", exact: true }),
+    ).toBeVisible();
     await expect(
       owner.getByText("Shape, size and overlap look right."),
     ).toBeVisible();

@@ -540,6 +540,7 @@ create index on live_rating_requests (run_id);
 | `GET /assets` | Marketplace list (latest price, grade, trend, `trading`): `listed` and `suspended` assets only (T58); a listed asset awaiting its IPO shows `trading: false` and no price (T59) |
 | `GET /assets/{id}` | Asset detail + latest report + recent events (other statuses: the listing's community and admins only, 404 otherwise; T58); a listing under review also carries `latest_run_id` (T33) |
 | `GET /assets/outlines` | `{outlines: [{id, name, rings}], truncated}`: the world's public sites' boundaries simplified on the server (≤ 200 corners each, ≤ 300 sites) for the listing map's outlines and overlap hint; T36 decides on save (T33) |
+| `GET /places/search?q=` | `{results: [{label, lat, lon, bbox}], attribution}`: up to 5 places by name (2–120 chars) for the listing map's search (#215), from OpenStreetMap Nominatim with `NOMINATIM_USER_AGENT`, on submit only (no search-as-you-type), sharing the process's 1 request/s slot with News Scout and cached for a day; signed-in only (`use_own_account`); 429 `place_search_busy` (`Retry-After: 1`) when the slot is more than 2 s away, 503 `place_search_unavailable` when Nominatim fails |
 | `POST /assets/{id}/evidence` | Upload one geotagged photo; the body is the file (`Content-Type` JPEG or PNG, ≤ 10 MB, ≤ 5 per listing), inspected in a worker; EXIF GPS and date checked against the listing in code, then only a re-encoded JPEG without metadata is stored → 201 with its checks; the image model labels it in the background (steward/owner `MANAGE_LISTING`: investors 403, other worlds 404; 409 `photo_limit_reached`, `photo_duplicate`, `listing_closed`; 429 per account; T40, §7.6). Audio post-hackathon |
 | `GET /assets/{id}/evidence` · `…/evidence/{photo_id}` · `…/evidence/{photo_id}/image` · `DELETE …/evidence/{photo_id}` | The listing's photos with each one's checks and the deterministic confidence effect (current → projected, and `listing_min`, the gate's 70.0); one photo (the upload's `Location`); the re-encoded JPEG (no EXIF); delete the photo with its evidence event (the next rating stops counting it). Community members and same-world admins read (404 otherwise); stewards delete (T40) |
 | `GET /assets/{id}/evidence/summary` | Public aggregate: photo and validated counts, `latest_taken_month` (`YYYY-MM`, never the day), land-cover and disturbance labels of validated photos, whether the latest report counts them. Never a photo, position or uploader (T40) |
@@ -664,7 +665,7 @@ Every route is scoped to the caller's world, which comes from the session: anony
   | `GET /reports/{id}`, `…/diff/{prev}` · `GET /runs/{id}` · `GET /admin/trace?asset_id=` | `browse` (the report's / run's / traced asset; the world without `asset_id`) |
   | `GET /communities/{id}` | `browse` (community), T68 |
   | `POST /orders` | `trade` (the ordered asset), re-checked after the locks |
-  | `GET /portfolio`, `POST /copilot`, `GET /me`, `GET /me/communities`, `GET /alerts`, `POST /alerts/{id}/read`, `POST /alerts/read-all` | `use_own_account` (world; Copilot's `asset_id` must be in the world; alerts read only the caller's own deliveries, T75) |
+  | `GET /portfolio`, `POST /copilot`, `GET /me`, `GET /me/communities`, `GET /places/search`, `GET /alerts`, `POST /alerts/{id}/read`, `POST /alerts/read-all` | `use_own_account` (world; Copilot's `asset_id` must be in the world; alerts read only the caller's own deliveries, T75) |
   | `POST /assets` | `manage_listing` (the listing about to exist in the body's community: `new_listing_ref`, 404 outside the world) |
   | `PATCH /assets/{id}`, `POST /assets/{id}/submit`, `…/revise`, `…/withdraw` | `manage_listing` (asset), T58 |
   | `GET /communities/{id}/assets` | `view_community_data` (community), T58 |
@@ -1493,7 +1494,7 @@ All options: frontend on **Vercel Hobby**; **AI only via Token Factory** (never 
 - Sentinel-2, Dynamic World, JRC Surface Water, Hansen Forest Change and ESA biomass data.
 - Google Earth Engine (non-commercial registration); Microsoft Planetary Computer only as a fallback for other datasets.
 - ESVD (registration and citation).
-- OpenStreetMap Nominatim reverse geocoding (usage policy: ≤ 1 request/s, cache results) and Natural Earth coastline data (public domain).
+- OpenStreetMap Nominatim reverse geocoding and the listing map's place search (usage policy: ≤ 1 request/s, cache results, no search-as-you-type), OpenStreetMap and Esri reference-label tiles on the listing map, and Natural Earth coastline data (public domain).
 - All frameworks and libraries (Next.js, React, Tailwind, shadcn/ui, Leaflet, Recharts, FastAPI, SQLModel, Pydantic, openai SDK, tavily-python), plus NeMo Agent Toolkit and OpenTimestamps.
 - GitHub (public repo), GitHub Actions and YouTube.
 

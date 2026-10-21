@@ -26,6 +26,8 @@ const leaflet = vi.hoisted(() => {
   const groups: Group[] = [];
   const state = {
     map: null as null | ReturnType<typeof emitter>,
+    zoom: 14,
+    flewTo: null as unknown,
     get markers() {
       return groups.flatMap((g) => g.markers);
     },
@@ -35,6 +37,8 @@ const leaflet = vi.hoisted(() => {
     reset() {
       groups.length = 0;
       state.map = null;
+      state.zoom = 14;
+      state.flewTo = null;
     },
   };
   function marker(latlng: LatLng, options: { icon: { className: string } }) {
@@ -103,7 +107,10 @@ const leaflet = vi.hoisted(() => {
           getContainer: () => container,
           remove() {},
           invalidateSize() {},
-          flyTo() {},
+          getZoom: () => state.zoom,
+          flyTo(...args: unknown[]) {
+            state.flewTo = args;
+          },
           flyToBounds() {},
           fitBounds() {},
           // 1 px = 0.001° in this fake projection.
@@ -207,6 +214,26 @@ describe("BoundaryMap", () => {
     );
     leaflet.state.map!.fire("click", { latlng: { lat: 1, lng: 1 } });
     expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("zooms in instead of placing a first corner from far out", async () => {
+    leaflet.state.zoom = 3;
+    const zoomed = vi.fn();
+    const { dispatch } = draw([], "drawing", { onZoomedIn: zoomed });
+    await waitFor(() => expect(leaflet.state.map).not.toBeNull());
+    expect(zoomed).toHaveBeenLastCalledWith(false);
+    leaflet.state.map!.fire("click", { latlng: { lat: 19, lng: -99 } });
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(leaflet.state.flewTo).toEqual([
+      { lat: 19, lng: -99 },
+      7,
+      { duration: 0.8 },
+    ]);
+    leaflet.state.zoom = 12;
+    leaflet.state.map!.fire("zoomend");
+    expect(zoomed).toHaveBeenLastCalledWith(true);
+    leaflet.state.map!.fire("click", { latlng: { lat: 19, lng: -99 } });
+    expect(dispatch).toHaveBeenCalledWith({ type: "add", point: [19, -99] });
   });
 
   it("closes the shape from its first corner, once it has three", async () => {

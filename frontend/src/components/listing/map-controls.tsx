@@ -442,68 +442,70 @@ export function DrawingDock({
           </button>
         </p>
       )}
-      <div
-        className={cn(
-          "flex max-w-full flex-wrap items-center gap-1 rounded-[1.75rem] p-1",
-          FLOAT,
-        )}
-      >
-        {readout && (
-          <div className="flex items-center gap-2 px-3 py-1.5 text-sm">
-            {status &&
-              (status.ok ? (
-                <Check className="size-4 text-lime-ink" aria-hidden="true" />
-              ) : (
-                <TriangleAlert
-                  className="size-4 text-clay-ink"
-                  aria-hidden="true"
-                />
-              ))}
-            <span className="tabular font-medium">{readout}</span>
-            {status && !status.ok && (
-              <span className="text-clay-ink">{status.text}</span>
-            )}
-          </div>
-        )}
-        <div className="flex items-center gap-0.5">
-          {mode === "drawing" && corners >= 3 && (
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => dispatch({ type: "finish" })}
-              disabled={disabled}
-              aria-keyshortcuts="Enter"
-              className="nx-rise mr-1"
-            >
-              <Check aria-hidden="true" />
-              Finish
-            </Button>
+      {(corners > 0 || canUndo || canRedo) && (
+        <div
+          className={cn(
+            "flex max-w-full flex-wrap items-center gap-1 rounded-[1.75rem] p-1",
+            FLOAT,
           )}
-          <IconButton
-            label="Undo"
-            shortcut="Control+Z"
-            onClick={() => dispatch({ type: "undo" })}
-            disabled={!canUndo || disabled}
-          >
-            <Undo2 aria-hidden="true" />
-          </IconButton>
-          <IconButton
-            label="Redo"
-            shortcut="Control+Shift+Z"
-            onClick={() => dispatch({ type: "redo" })}
-            disabled={!canRedo || disabled}
-          >
-            <Redo2 aria-hidden="true" />
-          </IconButton>
-          <IconButton
-            label="Clear"
-            onClick={() => dispatch({ type: "clear" })}
-            disabled={!corners || disabled}
-          >
-            <Eraser aria-hidden="true" />
-          </IconButton>
+        >
+          {readout && (
+            <div className="flex items-center gap-2 px-3 py-1.5 text-sm">
+              {status &&
+                (status.ok ? (
+                  <Check className="size-4 text-lime-ink" aria-hidden="true" />
+                ) : (
+                  <TriangleAlert
+                    className="size-4 text-clay-ink"
+                    aria-hidden="true"
+                  />
+                ))}
+              <span className="tabular font-medium">{readout}</span>
+              {status && !status.ok && (
+                <span className="text-clay-ink">{status.text}</span>
+              )}
+            </div>
+          )}
+          <div className="flex items-center gap-0.5">
+            {mode === "drawing" && corners >= 3 && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => dispatch({ type: "finish" })}
+                disabled={disabled}
+                aria-keyshortcuts="Enter"
+                className="nx-rise mr-1"
+              >
+                <Check aria-hidden="true" />
+                Finish
+              </Button>
+            )}
+            <IconButton
+              label="Undo"
+              shortcut="Control+Z"
+              onClick={() => dispatch({ type: "undo" })}
+              disabled={!canUndo || disabled}
+            >
+              <Undo2 aria-hidden="true" />
+            </IconButton>
+            <IconButton
+              label="Redo"
+              shortcut="Control+Shift+Z"
+              onClick={() => dispatch({ type: "redo" })}
+              disabled={!canRedo || disabled}
+            >
+              <Redo2 aria-hidden="true" />
+            </IconButton>
+            <IconButton
+              label="Clear"
+              onClick={() => dispatch({ type: "clear" })}
+              disabled={!corners || disabled}
+            >
+              <Eraser aria-hidden="true" />
+            </IconButton>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

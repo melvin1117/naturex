@@ -1013,7 +1013,7 @@ describe("the boundary step (review fixes)", () => {
     expect(screen.getByTestId("map-mode")).toHaveTextContent("drawing");
     fireEvent.keyDown(add, { key: "z", ctrlKey: true });
     expect(screen.getByText("2 corners")).toBeVisible();
-    expect(screen.getByText("2 of 3 corners")).toBeVisible();
+    expect(screen.getByText("2 corners · 1 more to close")).toBeVisible();
     fireEvent.keyDown(add, { key: "z", ctrlKey: true, shiftKey: true });
     fireEvent.click(screen.getByRole("button", { name: "Redo" }));
     expect(screen.getByText("3 corners")).toBeVisible();
