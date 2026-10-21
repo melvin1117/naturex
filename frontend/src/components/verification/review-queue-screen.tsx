@@ -110,9 +110,9 @@ function QueueRow({ item }: { item: ReviewQueueItem }) {
   return (
     <li className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-card p-5 shadow-soft">
       <div className="min-w-0 space-y-2">
-        <p className="font-serif text-2xl leading-tight break-words">
+        <h2 className="font-serif text-2xl leading-tight break-words">
           {item.asset_name}
-        </p>
+        </h2>
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>Submitted {date(run.created_at)}</span>
           <Badge variant="secondary">

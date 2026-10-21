@@ -1,7 +1,7 @@
 "use client";
 
 import { Ban, Check, ShieldX, X } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +21,9 @@ import { checkCounts } from "@/lib/verification";
 import type { Decision } from "@/lib/verification-hooks";
 
 export const REASON_MAX = 500;
+
+// While a decision is sent the buttons stay focusable (aria-disabled), so focus isn't lost.
+const BUSY_CLASS = "aria-disabled:cursor-not-allowed aria-disabled:opacity-50";
 
 /**
  * The reviewer's decision on a listing's current run (ADR-0006 §3). `review` approves (an
@@ -45,14 +48,18 @@ export function DecisionForm({
   const [reason, setReason] = useState("");
   const [missing, setMissing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const reasonRef = useRef<HTMLTextAreaElement>(null);
+  const revokeRef = useRef<HTMLButtonElement>(null);
   const failed = checkCounts(run.checklist).fail;
   const stale = !run.fingerprint_matches;
   const busy = pending !== null;
   const trimmed = reason.trim();
 
   const decide = (decision: Decision) => {
+    if (busy) return;
     if (decision !== "approve" && !trimmed) {
       setMissing(true);
+      reasonRef.current?.focus();
       return;
     }
     setMissing(false);
@@ -74,6 +81,7 @@ export function DecisionForm({
             : "Reason or note for the steward"}
         </Label>
         <Textarea
+          ref={reasonRef}
           id={`${id}-reason`}
           name="reason"
           autoComplete="off"
@@ -84,7 +92,7 @@ export function DecisionForm({
             setReason(e.target.value);
             if (missing && e.target.value.trim()) setMissing(false);
           }}
-          disabled={busy}
+          readOnly={busy}
           aria-invalid={missing}
           aria-describedby={`${hintId}${missing ? ` ${errorId}` : ""}`}
         />
@@ -114,7 +122,9 @@ export function DecisionForm({
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => decide("approve")}
-              disabled={busy || failed > 0 || stale}
+              disabled={failed > 0 || stale}
+              aria-disabled={busy || undefined}
+              className={BUSY_CLASS}
             >
               {pending === "approve" ? (
                 <Spinner aria-hidden="true" role="presentation" />
@@ -126,7 +136,8 @@ export function DecisionForm({
             <Button
               variant="outline"
               onClick={() => decide("reject")}
-              disabled={busy}
+              aria-disabled={busy || undefined}
+              className={BUSY_CLASS}
             >
               {pending === "reject" ? (
                 <Spinner aria-hidden="true" role="presentation" />
@@ -139,9 +150,11 @@ export function DecisionForm({
         </>
       ) : (
         <Button
+          ref={revokeRef}
           variant="destructive"
           onClick={() => decide("revoke")}
-          disabled={busy}
+          aria-disabled={busy || undefined}
+          className={BUSY_CLASS}
         >
           {pending === "revoke" ? (
             <Spinner aria-hidden="true" role="presentation" />
@@ -153,7 +166,13 @@ export function DecisionForm({
       )}
 
       <Dialog open={confirming} onOpenChange={setConfirming}>
-        <DialogContent>
+        <DialogContent
+          // No trigger to return to: focus goes back to the revoke button.
+          onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            revokeRef.current?.focus();
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Revoke the verification of {listingName}?</DialogTitle>
             <DialogDescription>
