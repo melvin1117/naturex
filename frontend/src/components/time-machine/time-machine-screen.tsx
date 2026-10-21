@@ -1,11 +1,13 @@
 "use client";
 
-import { LockKeyhole } from "lucide-react";
+import { ArrowRight, LockKeyhole } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
 import { ControlRoom } from "@/components/proto/control-room";
 import { LoadError } from "@/components/proto/load-error";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useAssets, useWorld } from "@/lib/hooks";
 import {
@@ -81,8 +83,8 @@ export function TimeMachinePanel() {
       </h1>
       <p className="mt-3 max-w-2xl text-muted-foreground">
         Move this sandbox forward a quarter or inject an event, and watch
-        ratings, prices and alerts respond. Every change is a real re-rate,
-        stored and labelled simulated.
+        ratings, stake prices and alerts respond. Every change is a real
+        re-rate, stored and labelled simulated.
       </p>
 
       {notAdmin ? (
@@ -102,6 +104,13 @@ export function TimeMachinePanel() {
           <AlertTitle>{SANDBOX_ONLY.title}</AlertTitle>
           <AlertDescription>
             <p>{unavailable}</p>
+            {/* Not a dead end: in the live world, the admin's work is the review queue. */}
+            <Button asChild variant="outline" size="sm" className="mt-2">
+              <Link href="/admin/verifications">
+                Go to the verification queue
+                <ArrowRight aria-hidden="true" />
+              </Link>
+            </Button>
           </AlertDescription>
         </Alert>
       ) : state.data ? (
