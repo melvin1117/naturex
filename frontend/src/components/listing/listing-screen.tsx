@@ -8,11 +8,11 @@ import { cn } from "cn";
 
 import { ListingFlow as PrototypeListingFlow } from "@/components/proto/listing-flow";
 import { useStewardCommunity } from "@/components/shell/steward-community";
-import { focusIfLost } from "@/components/steward/focus";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { isApiAssetId } from "@/lib/asset-detail";
 import type { AssetDetail, MyCommunity } from "@/lib/api/types";
+import { focusIfLost } from "@/lib/focus";
 import { useAsset, useWorld } from "@/lib/hooks";
 import {
   boundaryPoints,

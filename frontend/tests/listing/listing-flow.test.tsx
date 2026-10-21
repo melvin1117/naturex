@@ -16,6 +16,7 @@ import { listingAction } from "@/lib/community";
 import { createDataLayer } from "@/lib/data-layer";
 import { PrototypeProvider } from "@/lib/prototype/store";
 
+import { dropFocus } from "../focus";
 import {
   BASE,
   community,
@@ -427,6 +428,34 @@ describe("rating progress", () => {
     expect(screen.getByText("Laguna Verde is listed")).toBeVisible();
     expect(screen.getByText("Mock data")).toBeVisible();
     expect(screen.getByText(/placeholder metrics/)).toBeVisible();
+    // The run's card gave way to the listed step: focus follows (T48).
+    await waitFor(() =>
+      expect(
+        screen.getByRole("region", { name: "Step 4 of 4: Opening offer" }),
+      ).toHaveFocus(),
+    );
+  });
+
+  it('returns focus to "Rate this site" when the submit fails (T48)', async () => {
+    nav.search = `community=${SELVA.id}&asset=${ASSET_ID}`;
+    setup({
+      [ASSET]: () => json(asset()),
+      [`POST /assets/${ASSET_ID}/submit`]: () => {
+        // A browser drops focus from the button while it's disabled for the request.
+        dropFocus();
+        return json({ detail: "internal_error" }, { status: 500 });
+      },
+    });
+    const rate = await screen.findByRole("button", { name: /Rate this site/ });
+    rate.focus();
+    fireEvent.click(rate);
+    expect(await screen.findByRole("alert")).toBeVisible();
+    expect(screen.getByText("Ready to rate")).toBeVisible();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /Rate this site/ }),
+      ).toHaveFocus(),
+    );
   });
 
   it("resumes a listing waiting for satellite data, and says why a retry is refused", async () => {

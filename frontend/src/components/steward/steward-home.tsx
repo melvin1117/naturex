@@ -9,14 +9,12 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef } from "react";
 
 import { AlertsList } from "@/components/alerts-list";
 import { Delta, SiteBackdrop } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
 import { LoadError } from "@/components/proto/load-error";
-import { focusIfLost, takeCommunityCreated } from "@/components/steward/focus";
 import { StewardPanel } from "@/components/steward/panel";
 import { StewardHome as PrototypeStewardHome } from "@/components/proto/steward-home";
 import { useStewardCommunity } from "@/components/shell/steward-community";
@@ -84,11 +82,6 @@ function Home({ summary }: { summary: CommunitySummary }) {
   const featured =
     listings.find((l) => l.asset.status === "listed") ?? listings[0];
   const trading = listings.filter((l) => l.asset.trading).length;
-  const headingRef = useRef<HTMLHeadingElement>(null);
-  // A community just created replaces its form with this page: its name takes focus.
-  useEffect(() => {
-    if (takeCommunityCreated()) focusIfLost(headingRef.current);
-  }, []);
 
   return (
     <div className="mx-auto max-w-7xl px-4 pt-10 pb-16 sm:px-6">
@@ -97,11 +90,7 @@ function Home({ summary }: { summary: CommunitySummary }) {
           <p className="text-sm text-muted-foreground">
             {world?.me?.name} · {role ? COMMUNITY_ROLE_LABEL[role] : "Admin"}
           </p>
-          <h1
-            ref={headingRef}
-            tabIndex={-1}
-            className="mt-1 font-serif text-5xl leading-none tracking-tight text-balance break-words outline-none sm:text-6xl"
-          >
+          <h1 className="mt-1 font-serif text-5xl leading-none tracking-tight text-balance break-words sm:text-6xl">
             {community.name}
           </h1>
         </div>
