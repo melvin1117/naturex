@@ -84,9 +84,16 @@ export function IpoLaunched({
 }) {
   const kept = decimal(ipo.retained_pct);
   const offered = kept === null ? null : 100 - kept;
+  // The outcome replaces the form the owner scrolled down: bring its top (the ring) into view,
+  // after the heading took focus. Focus stays on the heading.
+  const top = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    top.current?.scrollIntoView?.({ block: "nearest" });
+  }, []);
   return (
     <IpoShell homeHref={homeHref}>
       <IpoCard className="text-center">
+        <div ref={top} className="scroll-mt-24" />
         {kept !== null && offered !== null ? (
           <DotRing
             size={176}
