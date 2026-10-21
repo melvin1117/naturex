@@ -65,6 +65,8 @@ type Layout = {
   variant?: "card" | "sheet";
   /** Called when a source link is followed (the sheet closes). */
   onNavigate?: () => void;
+  /** Told when an answer starts and ends (the sheet locks its scope meanwhile). */
+  onPendingChange?: (pending: boolean) => void;
 };
 
 /**
@@ -85,6 +87,7 @@ export function CopilotChat(
     : { kind: "world" };
   const variant = props.variant ?? "card";
   const onNavigate = props.onNavigate;
+  const onPendingChange = props.onPendingChange;
   const inputId = useId();
   const { api } = useDataLayer();
   const { world } = useWorld();
@@ -101,6 +104,10 @@ export function CopilotChat(
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => () => abort.current?.abort(), []);
+
+  useEffect(() => {
+    onPendingChange?.(pending);
+  }, [pending, onPendingChange]);
 
   // Follow the conversation: a streamed answer and its source links end at the bottom.
   useEffect(() => {

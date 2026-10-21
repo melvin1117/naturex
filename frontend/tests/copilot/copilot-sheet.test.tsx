@@ -1,8 +1,17 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import type { ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CopilotSheet } from "@/components/proto/copilot-sheet";
 import { PrototypeHeaderTools } from "@/components/proto/header-tools";
+import { TOUR_STEPS, useTour } from "@/components/proto/tour";
+import type { CopilotStreamEvent } from "@/lib/api/types";
 
 import { renderExchange, stubBrowserApis } from "../exchange/render";
 import { FakeEventSource, json, SIGNED_IN_WORLD } from "../lib/helpers";
@@ -14,12 +23,33 @@ import {
   sseResponse,
 } from "./fixtures";
 
-const nav = vi.hoisted(() => ({ pathname: "/" }));
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
-  usePathname: () => nav.pathname,
-  useSearchParams: () => new URLSearchParams(),
-}));
+// The pathname is a tiny store, so a test can navigate (browser Back) while the sheet is open.
+const nav = vi.hoisted(() => {
+  const listeners = new Set<() => void>();
+  return {
+    pathname: "/",
+    listeners,
+    go(pathname: string) {
+      this.pathname = pathname;
+      listeners.forEach((listener) => listener());
+    },
+  };
+});
+vi.mock("next/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
+  return {
+    useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+    usePathname: () =>
+      useSyncExternalStore(
+        (listener) => {
+          nav.listeners.add(listener);
+          return () => nav.listeners.delete(listener);
+        },
+        () => nav.pathname,
+      ),
+    useSearchParams: () => new URLSearchParams(),
+  };
+});
 
 beforeAll(stubBrowserApis);
 beforeEach(() => {
@@ -50,13 +80,45 @@ const signedIn = {
 
 type Routes = Parameters<typeof renderExchange>[1];
 
-function renderHeader(routes: Routes = {}) {
+function renderHeader(routes: Routes = {}, extra: ReactNode = null) {
   return renderExchange(
     <>
+      {extra}
       <PrototypeHeaderTools app="exchange" />
       <CopilotSheet />
     </>,
     routes,
+  );
+}
+
+/** An answer that has found its sources and then waits, until the request is cancelled. */
+function hangingAnswer(signals: AbortSignal[]) {
+  return (request: Request) => {
+    signals.push(request.signal);
+    const first: CopilotStreamEvent = { type: "sources", sources: [] };
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(`data: ${JSON.stringify(first)}\n\n`),
+        );
+        request.signal.addEventListener("abort", () =>
+          controller.error(request.signal.reason),
+        );
+      },
+    });
+    return new Response(body, {
+      headers: { "Content-Type": "text/event-stream" },
+    });
+  };
+}
+
+function TourAtCopilot() {
+  const tour = useTour();
+  const step = TOUR_STEPS.findIndex((s) => s.target === "copilot-button");
+  return (
+    <button type="button" onClick={() => tour.go(step)}>
+      Tour step: Copilot
+    </button>
   );
 }
 
@@ -143,7 +205,9 @@ describe("Header Copilot, signed in", () => {
       name: `Source ${REPORT_SOURCE.ref}: Report v2`,
     });
 
-    fireEvent.click(within(scope).getByRole("radio", { name: "All sites" }));
+    const all = within(scope).getByRole("radio", { name: "All sites" });
+    await waitFor(() => expect(all).toBeEnabled());
+    fireEvent.click(all);
     expect(
       within(scope).getByRole("radio", { name: "All sites" }),
     ).toHaveAttribute("aria-checked", "true");
@@ -228,6 +292,113 @@ describe("Header Copilot, signed in", () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(opener).toHaveFocus();
+  });
+});
+
+describe("Header Copilot, while an answer streams", () => {
+  it("locks the scope until the answer ends", async () => {
+    nav.pathname = `/asset/${ASSET_ID}`;
+    const signals: AbortSignal[] = [];
+    renderHeader({ ...signedIn, "POST /copilot": hangingAnswer(signals) });
+    await screen.findByRole("button", { name: /Alerts/ });
+    const { sheet } = await openCopilot();
+    const scope = within(sheet).getByRole("radiogroup", { name: "Ask about" });
+    const other = await within(sheet).findByRole("button", {
+      name: "Ask about another site",
+    });
+
+    fireEvent.click(
+      within(sheet).getByRole("button", { name: "Why did the price change?" }),
+    );
+
+    await within(sheet).findByText(/Reading 0 sources/);
+    for (const radio of within(scope).getAllByRole("radio"))
+      expect(radio).toBeDisabled();
+    expect(other).toBeDisabled();
+  });
+
+  it("cancels the answer when the sheet closes", async () => {
+    const signals: AbortSignal[] = [];
+    renderHeader({ ...signedIn, "POST /copilot": hangingAnswer(signals) });
+    await screen.findByRole("button", { name: /Alerts/ });
+    const { sheet } = await openCopilot();
+    fireEvent.click(
+      within(sheet).getByRole("button", {
+        name: "Which sites were downgraded?",
+      }),
+    );
+    await within(sheet).findByText(/Reading 0 sources/);
+    expect(signals[0]?.aborted).toBe(false);
+
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(signals[0]?.aborted).toBe(true);
+  });
+});
+
+describe("Header Copilot, when the page changes under it", () => {
+  it("follows the page's site (browser Back) and keeps earlier answers", async () => {
+    nav.pathname = `/asset/${ASSET_ID}`;
+    const { backend } = renderHeader(signedIn);
+    await screen.findByRole("button", { name: /Alerts/ });
+    const { sheet } = await openCopilot();
+    fireEvent.click(
+      within(sheet).getByRole("button", { name: "Why did the price change?" }),
+    );
+    await within(sheet).findByRole("link", { name: "Source R2: Report v2" });
+
+    act(() => nav.go(`/asset/${OSA_ID}`));
+
+    expect(
+      await within(sheet).findByRole("radio", { name: "Osa forest" }),
+    ).toHaveAttribute("aria-checked", "true");
+    expect(
+      within(within(sheet).getByTestId("copilot-turns")).getByText(
+        "Why did the price change?",
+      ),
+    ).toBeVisible();
+
+    act(() => nav.go("/"));
+
+    await waitFor(() =>
+      expect(
+        within(sheet).queryByRole("radiogroup", { name: "Ask about" }),
+      ).not.toBeInTheDocument(),
+    );
+    fireEvent.change(
+      within(sheet).getByLabelText("Ask the Copilot about every site"),
+      { target: { value: "Which site fell most?" } },
+    );
+    fireEvent.click(
+      within(sheet).getByRole("button", { name: "Send question" }),
+    );
+    await waitFor(() => expect(backend.calls("POST /copilot")).toBe(2));
+    expect((await requests(backend))[1]).toEqual({
+      question: "Which site fell most?",
+    });
+  });
+});
+
+describe("Header Copilot, signed in during the guided tour", () => {
+  it("keeps the tour's scripted sheet and never calls the Copilot API", async () => {
+    const { backend } = renderHeader(signedIn, <TourAtCopilot />);
+    await screen.findByRole("button", { name: /Alerts/ });
+
+    fireEvent.click(screen.getByRole("button", { name: "Tour step: Copilot" }));
+    const { sheet } = await openCopilot();
+
+    expect(within(sheet).getByText(/scripted answers/)).toBeVisible();
+    expect(
+      within(sheet).queryByRole("radiogroup", { name: "Ask about" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      within(sheet).getByRole("button", { name: "Why did the price change?" }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(backend.calls("POST /copilot")).toBe(0);
   });
 });
 

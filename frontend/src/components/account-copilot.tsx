@@ -27,7 +27,9 @@ type Scope = "world" | "site";
  * The header Copilot for a signed-in account (#213): the real Copilot (`POST /copilot`,
  * streamed and cited) in the sheet. It asks across every site by default; opened on a site's
  * page it starts on that site, one tap from "All sites". Narrowing to another site is optional.
- * Mounted only while the sheet is open, so each opening starts from the current page.
+ * Mounted only while the sheet is open, so each opening starts from the current page; if the
+ * page's site changes while it's open (browser Back), the scope follows it. The scope is locked
+ * while an answer streams.
  */
 export function AccountCopilot({
   pageAssetId,
@@ -38,6 +40,13 @@ export function AccountCopilot({
 }) {
   const [siteId, setSiteId] = useState<string | null>(pageAssetId);
   const [scope, setScope] = useState<Scope>(pageAssetId ? "site" : "world");
+  const [page, setPage] = useState(pageAssetId);
+  const [pending, setPending] = useState(false);
+  if (page !== pageAssetId) {
+    setPage(pageAssetId);
+    setSiteId(pageAssetId);
+    setScope(pageAssetId ? "site" : "world");
+  }
   const site = useAsset(siteId ?? undefined);
   const assets = useAssets();
   const rated = (assets.data ?? []).filter((a) => a.grade);
@@ -66,6 +75,7 @@ export function AccountCopilot({
             }
             className="w-full max-w-full rounded-full bg-secondary p-1"
             aria-label="Ask about"
+            disabled={pending}
           >
             <ToggleGroupItem
               value="site"
@@ -87,6 +97,7 @@ export function AccountCopilot({
               <Button
                 variant="ghost"
                 size="sm"
+                disabled={pending}
                 className="-ml-3 w-fit text-muted-foreground"
               >
                 {siteId ? "Ask about another site" : "Narrow to one site"}
@@ -121,9 +132,14 @@ export function AccountCopilot({
           assetId={siteId}
           assetName={siteName ?? "this site"}
           onNavigate={onNavigate}
+          onPendingChange={setPending}
         />
       ) : (
-        <CopilotChat variant="sheet" onNavigate={onNavigate} />
+        <CopilotChat
+          variant="sheet"
+          onNavigate={onNavigate}
+          onPendingChange={setPending}
+        />
       )}
     </>
   );
