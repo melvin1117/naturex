@@ -2,13 +2,15 @@
  * NatureX's motion vocabulary (DESIGN.md; interaction principles in #216). Motion is purely
  * presentational: it may delay or replay what the API returned, never invent a value or a step.
  *
- * - `DURATION` and `EASE_OUT` mirror the CSS tokens in `app/globals.css` (`--nx-ease-out`…).
+ * - `DURATION` mirrors the CSS tokens in `app/globals.css` (`--nx-duration-*`; the ease-out curve
+ *   is `--nx-ease-out`).
  * - `usePrefersReducedMotion()`: true when the visitor asked for less motion (and on the
  *   server, so the first paint is always the final state).
  * - `useCountUp(value)`: a newly computed number counting up once, landing exactly on `value`.
  * - `usePacedCount(target, stepMs)`: a count that catches up with `target` one step at a time,
  *   so a burst of real events reads as a sequence.
- * - `stagger(index)`: the inline style that delays a CSS keyframe for item `index` of a list.
+ * - `stagger(index)`: the inline style that delays a CSS keyframe (`nx-rise`, `nx-fade`…) for
+ *   item `index` of a list that appears as a list, e.g. new portfolio rows.
  *
  * Under reduced motion every helper returns its final state at once: same information, no motion.
  */
@@ -32,17 +34,14 @@ export const DURATION = {
   reveal: 900,
 } as const;
 
-/** Exponential ease-out: arrivals decelerate, nothing bounces or overshoots. */
-export const EASE_OUT = "cubic-bezier(0.16, 1, 0.3, 1)";
-
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 
-/** `EASE_OUT`'s shape for values driven frame by frame (a quartic ease-out). */
-export function easeOut(t: number): number {
+/** The ease-out curve (`--nx-ease-out`) for values driven frame by frame: a quartic ease-out. */
+function easeOut(t: number): number {
   return 1 - (1 - clamp01(t)) ** 4;
 }
 
-/** When `easeOut` reaches `progress`: delays that keep a staggered row in step with a count-up. */
+/** When the ease-out reaches `progress`: delays that keep a staggered row in step with a count-up. */
 export function easeOutInverse(progress: number): number {
   return 1 - (1 - clamp01(progress)) ** (1 / 4);
 }
@@ -70,20 +69,11 @@ export function usePrefersReducedMotion(): boolean {
   return useSyncExternalStore(subscribe, reducedNow, () => true);
 }
 
-export interface CountUpOptions {
-  /** Where the count starts. */
-  from?: number;
-  duration?: number;
-  /** Wait this long before counting (to follow an earlier beat of a reveal). */
-  delay?: number;
-  /** False shows `value` at once (an old value, not a newly computed one). */
-  enabled?: boolean;
-}
-
 /**
  * A newly computed number counting up from `from` to `value`, once, on mount. Ends on exactly
- * `value` (never a rounding of it); later changes of `value` show at once. Render it with
- * `tabular-nums` so the width doesn't jitter, and give assistive tech the final value.
+ * `value` (never a rounding of it); later changes of `value` show at once, and so does turning
+ * on reduced motion mid-count. Render it with `tabular-nums` so the width doesn't jitter, and
+ * give assistive tech the final value.
  */
 export function useCountUp(
   value: number,
@@ -92,12 +82,21 @@ export function useCountUp(
     duration = DURATION.reveal,
     delay = 0,
     enabled = true,
-  }: CountUpOptions = {},
+  }: {
+    /** Where the count starts. */
+    from?: number;
+    duration?: number;
+    /** Wait this long before counting (to follow an earlier beat of a reveal). */
+    delay?: number;
+    /** False shows `value` at once (an old value, not a newly computed one). */
+    enabled?: boolean;
+  } = {},
 ): number {
   const reduced = usePrefersReducedMotion();
   const animate = enabled && !reduced && duration > 0 && from !== value;
   // Progress through the count, or null once it has landed (or never ran).
   const [progress, setProgress] = useState<number | null>(animate ? 0 : null);
+  if (!animate && progress !== null) setProgress(null);
   const counting = animate && progress !== null;
   useEffect(() => {
     if (!counting) return;
@@ -123,32 +122,43 @@ export function useCountUp(
 /**
  * A count that follows `target` but moves at most one step every `stepMs`, so a burst of real
  * events (several steps finishing at once) lights one by one. It only ever lags `target`; it
- * never runs ahead of it. With `paced` false, or under reduced motion, it equals `target`.
+ * never runs ahead of it. A new `resetKey` (a new run) starts it again from 0. With `paced`
+ * false, or under reduced motion, it equals `target`.
  */
 export function usePacedCount(
   target: number,
   stepMs: number,
-  paced = true,
+  { paced = true, resetKey }: { paced?: boolean; resetKey?: unknown } = {},
 ): number {
   const reduced = usePrefersReducedMotion();
   const live = paced && !reduced;
-  const [shown, setShown] = useState(live ? 0 : target);
+  const [state, setState] = useState({
+    key: resetKey,
+    shown: live ? 0 : target,
+  });
   const lastStep = useRef(0);
-  // Not pacing, or the target fell back (a new run): follow it at once.
-  if ((!live && shown !== target) || shown > target) setShown(target);
+  let { shown } = state;
+  // A new run starts over; not pacing, or a target that fell back, is followed at once.
+  if (state.key !== resetKey) shown = live ? 0 : target;
+  else if ((!live && shown !== target) || shown > target) shown = target;
+  if (state.key !== resetKey || shown !== state.shown)
+    setState({ key: resetKey, shown });
   useEffect(() => {
     if (!live || shown >= target) return;
     const wait = Math.max(0, lastStep.current + stepMs - Date.now());
     const timer = setTimeout(() => {
       lastStep.current = Date.now();
-      setShown((s) => s + 1);
+      setState((s) => ({ ...s, shown: s.shown + 1 }));
     }, wait);
     return () => clearTimeout(timer);
   }, [live, shown, target, stepMs]);
   return live ? Math.min(shown, target) : target;
 }
 
-/** The inline style that delays item `index`'s CSS animation by `index × step` after `base`. */
+/**
+ * The inline style that delays item `index`'s CSS animation by `index × step` ms after `base`.
+ * Kept for WP2's new rows and receipts; cap the total delay so a long list doesn't wait.
+ */
 export function stagger(index: number, step = 60, base = 0): CSSProperties {
   return { animationDelay: `${Math.round(base + index * step)}ms` };
 }

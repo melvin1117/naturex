@@ -20,8 +20,7 @@ import {
   type PipelineView,
   type StageState,
 } from "@/lib/listing";
-import { isActive, stepPosition } from "@/lib/listing/pacing";
-import { usePrototype } from "@/lib/prototype/store";
+import { failedStage, isActive, stepPosition } from "@/lib/listing/pacing";
 
 const STATE_TEXT: Record<StageState, string> = {
   waiting: "waiting",
@@ -39,6 +38,20 @@ const PHASE_TEXT: Record<PipelineView["phase"], string> = {
   failed: "The rating stopped.",
 };
 
+/** The pipeline's status line: the phase, and the step running or the one the run stopped at. */
+function statusText(view: PipelineView | null): string {
+  if (!view) return "Steps light up as each agent and tool runs.";
+  if (view.phase === "failed") {
+    const failed = failedStage(view);
+    return failed
+      ? `The rating stopped at ${failed.label}.`
+      : PHASE_TEXT.failed;
+  }
+  return view.current
+    ? `${PHASE_TEXT[view.phase]} ${view.current}.`
+    : PHASE_TEXT[view.phase];
+}
+
 /**
  * A real rating run (T27) as the prototype's lit pipeline on the machine layer: each step
  * lights up as its `rating_progress` event arrives (paced by the caller, #216). Latencies and
@@ -46,14 +59,18 @@ const PHASE_TEXT: Record<PipelineView["phase"], string> = {
  */
 export function RatingProgress({
   view,
+  runId,
+  onOpenTrace,
   ref,
   className,
 }: {
   view: PipelineView | null;
+  runId: string | null;
+  /** Opens the Agent Trace on this run. */
+  onOpenTrace: (runId: string) => void;
   ref?: Ref<HTMLElement>;
   className?: string;
 }) {
-  const { openTrace } = usePrototype();
   const position = view ? stepPosition(view) : null;
   return (
     <section
@@ -69,11 +86,7 @@ export function RatingProgress({
           Rating pipeline
         </h2>
         <p className="text-sm text-machine-muted" role="status">
-          {view
-            ? view.current
-              ? `${PHASE_TEXT[view.phase]} ${view.current}.`
-              : PHASE_TEXT[view.phase]
-            : "Steps light up as each agent and tool runs."}
+          {statusText(view)}
         </p>
         {position && position.step > 0 && (
           <div className="mt-3 flex items-center gap-3">
@@ -116,12 +129,12 @@ export function RatingProgress({
             Stopped with <code className="font-mono">{view.error}</code>.
           </p>
         )}
-      {view && !isActive(view) && (
+      {view && runId && !isActive(view) && (
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          onClick={() => openTrace()}
+          onClick={() => onOpenTrace(runId)}
           className="nx-fade mx-1 mt-3 text-machine-ink hover:bg-machine-raised hover:text-machine-ink"
         >
           <Bot aria-hidden="true" />

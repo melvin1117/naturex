@@ -33,18 +33,11 @@ import {
   listingOutcome,
   pipelineView,
   type ListingFailure,
-  type PipelineView,
 } from "@/lib/listing";
 import { evidenceHref } from "@/lib/field-evidence";
 import { focusIfLost, useRestoreFocusAfterPending } from "@/lib/focus";
-import {
-  finishedSteps,
-  isActive,
-  pacedView,
-  PIPELINE_SETTLE_MS,
-  PIPELINE_STEP_MS,
-} from "@/lib/listing/pacing";
-import { usePacedCount, usePrefersReducedMotion } from "@/lib/motion";
+import { usePacedRun } from "@/lib/listing/use-paced-run";
+import { usePrefersReducedMotion } from "@/lib/motion";
 import { ha } from "@/lib/prototype/format";
 import { num, reportFacts } from "@/lib/report-facts";
 
@@ -111,58 +104,20 @@ function useListingRun(
 /** Below Tailwind's `lg`, where the pipeline stacks with the step card. */
 const STACKED = "(max-width: 1023.98px)";
 
-/**
- * The run as the screen shows it (#216). A run this tab watched (submitted here, or found still
- * going) replays its finished steps one at a time; a run that had already ended shows as it is.
- * `holding` lasts from the first sight of a watched run until its last step has shown and
- * settled, so the listed step doesn't cut it short. Reduced motion: no pacing, no hold.
- */
-function usePacedRun(
-  runId: string | null,
-  view: PipelineView | null,
-  loaded: boolean,
-  submitted: boolean,
-) {
-  const reduced = usePrefersReducedMotion();
-  const [watched, setWatched] = useState<{
-    runId: string;
-    live: boolean;
-  } | null>(null);
-  // Decided on the run's first read; used in this very render, so a run that is already
-  // finished when first read (a fast mock run) still replays from its first step.
-  let decided = watched?.runId === runId ? watched : null;
-  if (runId && view && loaded && !decided) {
-    decided = { runId, live: submitted || isActive(view) };
-    setWatched(decided);
-  }
-  const live = decided?.live ?? false;
-  const target = view ? finishedSteps(view) : 0;
-  const shown = usePacedCount(target, PIPELINE_STEP_MS, live);
-  const ended = view !== null && !isActive(view) && shown >= target;
-  const [released, setReleased] = useState<string | null>(null);
-  useEffect(() => {
-    if (!live || !ended || !runId || reduced) return;
-    const timer = setTimeout(() => setReleased(runId), PIPELINE_SETTLE_MS);
-    return () => clearTimeout(timer);
-  }, [live, ended, runId, reduced]);
-  return {
-    view: view && live ? pacedView(view, shown) : view,
-    live,
-    holding: live && !reduced && released !== runId,
-  };
-}
-
 export function RatingStep({
   community,
   asset,
   onEdit,
   onRevised,
   onWatch,
+  onOpenTrace,
 }: {
   community: MyCommunity;
   asset: AssetDetail;
   onEdit: (step: 0 | 1) => void;
   onRevised: (asset: AssetDetail) => void;
+  /** Opens the Agent Trace on a run. */
+  onOpenTrace: (runId: string) => void;
   /**
    * Called while this step follows a run live: `holding` asks the screen to keep this step up
    * until the paced pipeline has caught up (false again on unmount). Must be stable.
@@ -177,12 +132,13 @@ export function RatingStep({
   const run = useListingRun(asset, submittedRunId, () =>
     setSubmittedRunId(null),
   );
-  const { view, live, holding } = usePacedRun(
-    run.runId,
-    run.view,
-    run.loaded,
-    submittedRunId !== null,
-  );
+  const { view, live, holding } = usePacedRun({
+    runId: run.runId,
+    view: run.view,
+    loaded: run.loaded,
+    submitted: submittedRunId !== null,
+    assetStatus: asset.status,
+  });
   useEffect(() => {
     if (!live) return;
     onWatch?.(holding);
@@ -197,7 +153,9 @@ export function RatingStep({
   const outcome = listingOutcome(shownAsset);
   const draft = asset.status === "draft";
   const pipelineRef = useRef<HTMLElement>(null);
-  const pipelineFirst = view !== null && (holding || isActive(view));
+  // Once a run exists, the pipeline leads the step in the DOM (so stacked layouts read it first
+  // and keep it there when the run ends); from `lg` it's placed in the right-hand column.
+  const pipelineFirst = !draft;
   // "Rate this site" disables while it submits. If the listing leaves draft, the run replaces
   // the button: focus its card's title. If the submit fails, focus returns to the button.
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -238,9 +196,22 @@ export function RatingStep({
     }
   }
 
+  const pipeline = (
+    <RatingProgress
+      ref={pipelineRef}
+      view={view}
+      runId={run.runId}
+      onOpenTrace={onOpenTrace}
+      className={cn(pipelineFirst && "lg:col-start-2 lg:row-start-1")}
+    />
+  );
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
-      <StepCard aria-labelledby="listing-state-title">
+      {pipelineFirst && pipeline}
+      <StepCard
+        aria-labelledby="listing-state-title"
+        className={cn(pipelineFirst && "lg:col-start-1 lg:row-start-1")}
+      >
         <div className="flex flex-wrap items-center gap-2">
           <h2
             ref={titleRef}
@@ -311,11 +282,7 @@ export function RatingStep({
           />
         )}
       </StepCard>
-      <RatingProgress
-        ref={pipelineRef}
-        view={view}
-        className={cn(pipelineFirst && "order-first lg:order-none")}
-      />
+      {!pipelineFirst && pipeline}
     </div>
   );
 }

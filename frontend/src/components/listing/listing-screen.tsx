@@ -26,6 +26,7 @@ import {
   type ListingDetailsForm,
 } from "@/lib/listing";
 import type { LatLng } from "@/lib/prototype/data";
+import { usePrototype } from "@/lib/prototype/store";
 
 import { BoundaryStep } from "./boundary-step";
 import { DetailsStep } from "./details-step";
@@ -218,6 +219,7 @@ function ListingWizard({
   onCreated: (asset: AssetDetail) => void;
 }) {
   const storageKey = unsavedListingKey(meId, community.id);
+  const { openTrace } = usePrototype();
   // A new listing picks up what was entered in this tab before (a sign-in, a reload).
   const [restored] = useState(() =>
     asset ? null : readUnsavedListing(storageKey),
@@ -394,6 +396,7 @@ function ListingWizard({
               setDraftStep(1);
             }}
             onWatch={watchRating}
+            onOpenTrace={openTrace}
           />
         )}
         {step === 3 && asset && (
@@ -401,6 +404,7 @@ function ListingWizard({
             community={community}
             asset={asset}
             reveal={revealListed}
+            onOpenTrace={openTrace}
           />
         )}
       </section>

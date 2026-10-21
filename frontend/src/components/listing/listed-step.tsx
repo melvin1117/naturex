@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Bot } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -23,8 +23,8 @@ import { MockBadge, StepCard } from "./shared";
  */
 export const REVEAL_AT = {
   dial: 0,
-  stamp: DURATION.reveal - 200,
-  range: DURATION.reveal + 100,
+  stamp: DURATION.reveal - 300,
+  range: DURATION.reveal - 200,
 } as const;
 
 /** What a screen reader hears once when a new rating lands: every number the reveal shows. */
@@ -47,11 +47,15 @@ export function ListedStep({
   community,
   asset,
   reveal = false,
+  onOpenTrace,
 }: {
   community: MyCommunity;
   asset: AssetDetail;
   reveal?: boolean;
+  /** Opens the Agent Trace on a run: here, the one that produced this rating. */
+  onOpenTrace: (runId: string) => void;
 }) {
+  const runId = asset.latest_run_id ?? null;
   const facts = asset.latest_report ? reportFacts(asset.latest_report) : null;
   const outcome = listingOutcome(asset);
   const staged = reveal && facts !== null && outcome.kind === "listed";
@@ -146,6 +150,12 @@ export function ListedStep({
         <Button asChild variant="ghost">
           <Link href={stewardHomeHref(community.id)}>Community home</Link>
         </Button>
+        {runId && (
+          <Button variant="ghost" onClick={() => onOpenTrace(runId)}>
+            <Bot aria-hidden="true" />
+            See every step in the Agent Trace
+          </Button>
+        )}
       </div>
       <p className="mt-6 text-xs text-muted-foreground">
         Sandbox: play money, not a real security. Supporters get a stake in the

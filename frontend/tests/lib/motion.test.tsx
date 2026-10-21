@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DotRing, HealthRing } from "@/components/proto/health-ring";
 import {
   DURATION,
-  easeOut,
   easeOutInverse,
   stagger,
   useCountUp,
@@ -97,6 +96,17 @@ describe("useCountUp", () => {
     expect(result.current).toBe(42.1);
   });
 
+  it("cancels its frame when it unmounts mid-count", async () => {
+    motion = stubMotion();
+    const cancel = vi.spyOn(globalThis, "cancelAnimationFrame");
+    const { unmount } = renderHook(() => useCountUp(90, { duration: 900 }));
+    await advance(100);
+    unmount();
+    expect(cancel).toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    cancel.mockRestore();
+  });
+
   it("jumps to the end when reduced motion is turned on mid-count", async () => {
     motion = stubMotion();
     const { result } = renderHook(() => useCountUp(90, { duration: 900 }));
@@ -140,21 +150,46 @@ describe("usePacedCount", () => {
     expect(result.current).toBe(1);
   });
 
+  it("starts again from 0 for a new reset key (a new run)", async () => {
+    motion = stubMotion();
+    const { result, rerender } = renderHook(
+      ({ target, run }) => usePacedCount(target, 400, { resetKey: run }),
+      { initialProps: { target: 3, run: "a" } },
+    );
+    await advance(1200);
+    expect(result.current).toBe(3);
+    rerender({ target: 7, run: "b" });
+    expect(result.current).toBe(0);
+    await advance(0);
+    expect(result.current).toBe(1);
+  });
+
+  it("clears its timer when it unmounts mid-replay", async () => {
+    motion = stubMotion();
+    const { result, unmount } = renderHook(() => usePacedCount(5, 400));
+    await advance(0);
+    expect(result.current).toBe(1);
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("isn't paced under reduced motion, or when asked not to be", () => {
     motion = stubMotion({ reduce: true });
     const reduced = renderHook(() => usePacedCount(5, 400));
     expect(reduced.result.current).toBe(5);
     motion.set(false);
-    const unpaced = renderHook(() => usePacedCount(5, 400, false));
+    const unpaced = renderHook(() => usePacedCount(5, 400, { paced: false }));
     expect(unpaced.result.current).toBe(5);
   });
 });
 
 describe("helpers", () => {
-  it("easeOutInverse undoes easeOut", () => {
-    for (const p of [0, 0.1, 0.5, 0.9, 1])
-      expect(easeOut(easeOutInverse(p))).toBeCloseTo(p, 10);
-    expect(easeOut(1)).toBe(1);
+  it("easeOutInverse says when the quartic ease-out reaches a point", () => {
+    expect(easeOutInverse(0)).toBe(0);
+    expect(easeOutInverse(1)).toBe(1);
+    // 1 − (1 − 0.5)⁴ = 15/16.
+    expect(easeOutInverse(15 / 16)).toBeCloseTo(0.5, 10);
   });
 
   it("stagger delays item i by i steps after the base", () => {
@@ -164,15 +199,15 @@ describe("helpers", () => {
 });
 
 describe("the dotted rings", () => {
-  const litDots = (container: HTMLElement) =>
-    container.querySelectorAll("circle.nx-dot-on").length;
+  const litColumns = (container: HTMLElement) =>
+    container.querySelectorAll("g.nx-dot-on").length;
 
   it("a new health score lights its dots and counts up to the exact score", async () => {
     motion = stubMotion();
     const { container } = render(<HealthRing value={85.1} animateFrom={0} />);
     const ring = screen.getByRole("img", { name: "Health 85.1 out of 100" });
     expect(ring).toHaveTextContent("0.0");
-    expect(litDots(container)).toBeGreaterThan(0);
+    expect(litColumns(container)).toBeGreaterThan(0);
     await advance(DURATION.reveal + 50);
     expect(ring).toHaveTextContent("85.1");
   });
@@ -183,14 +218,14 @@ describe("the dotted rings", () => {
     expect(
       screen.getByRole("img", { name: "Health 85.1 out of 100" }),
     ).toHaveTextContent("85.1");
-    expect(litDots(container)).toBe(0);
+    expect(litColumns(container)).toBe(0);
   });
 
   it("a ring without a reveal is static", () => {
     motion = stubMotion();
     const { container } = render(<HealthRing value={60} />);
     expect(screen.getByRole("img")).toHaveTextContent("60.0");
-    expect(litDots(container)).toBe(0);
+    expect(litColumns(container)).toBe(0);
   });
 
   it("lights its segments in order, each in its own fill", () => {
@@ -207,7 +242,7 @@ describe("the dotted rings", () => {
       />,
     );
     const delays = (fill: string) =>
-      [...container.querySelectorAll(`circle.${fill}`)].map((c) =>
+      [...container.querySelectorAll(`g.${fill}`)].map((c) =>
         parseInt((c as SVGElement).style.animationDelay, 10),
       );
     const kept = delays("fill-primary");

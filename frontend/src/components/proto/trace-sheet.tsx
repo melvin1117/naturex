@@ -5,7 +5,11 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "cn";
 
-import { AssetRunsTrace, WorldModelCalls } from "@/components/agent-trace";
+import {
+  AssetRunsTrace,
+  RunTraceView,
+  WorldModelCalls,
+} from "@/components/agent-trace";
 import { SampleTag } from "@/components/proto/bits";
 import {
   Select,
@@ -29,6 +33,7 @@ import { useTour } from "@/components/proto/tour";
 import { useWorld } from "@/lib/hooks";
 import { usePrototype } from "@/lib/prototype/store";
 import { runTotals, type TraceStep } from "@/lib/prototype/trace";
+import { isApiAssetId } from "@/lib/asset-detail";
 import { traceMode } from "@/lib/run-trace";
 
 const TRIGGER: Record<string, string> = {
@@ -53,6 +58,12 @@ export function TraceSheet() {
     signedIn: Boolean(apiWorld?.me),
     tourActive: tour.active,
   });
+  // A real run asked for by id (a UUID, unlike the prototype's run ids), e.g. the listing flow's
+  // just-finished rating: shown on any page, not only on its site's.
+  const realRunId =
+    mode.kind === "world" && ui.traceRunId && isApiAssetId(ui.traceRunId)
+      ? ui.traceRunId
+      : null;
   const runs = [...world.runs].reverse();
   const [picked, setPicked] = useState<string | null>(null);
   const runId = picked ?? ui.traceRunId ?? runs[0]?.id;
@@ -98,7 +109,7 @@ export function TraceSheet() {
                 value="trace"
                 className="text-machine-muted data-[state=active]:bg-machine-line data-[state=active]:text-machine-ink"
               >
-                {mode.kind === "world" ? "Model calls" : "Runs"}
+                {mode.kind === "world" && !realRunId ? "Model calls" : "Runs"}
               </TabsTrigger>
               <TabsTrigger
                 value="routing"
@@ -125,6 +136,8 @@ export function TraceSheet() {
                 assetId={mode.assetId}
                 initialRunId={ui.traceRunId}
               />
+            ) : realRunId ? (
+              <RunTraceView key={realRunId} runId={realRunId} />
             ) : mode.kind === "world" ? (
               <WorldModelCalls />
             ) : !run ? (

@@ -232,10 +232,11 @@ describe("the rating reveal (#216)", () => {
       { timeout: 8 * PIPELINE_STEP_MS },
     );
     observer.disconnect();
-    // One step at a time, a beat apart (give or take render jitter), up to the run's seven:
-    // none invented, none skipped. Unpaced, the burst would land all at once.
+    // One step that ran at a time, a beat apart (give or take render jitter): none invented,
+    // none skipped; "Field evidence" (not run) shows with "Local news" before it. Unpaced, the
+    // burst would land all at once.
     const counts = seen.map((s) => s.count).filter((c) => c > 0);
-    expect(counts).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(counts).toEqual([1, 2, 3, 5, 6, 7]);
     for (let i = 1; i < seen.length; i++)
       if (seen[i - 1].count > 0)
         expect(seen[i].at - seen[i - 1].at).toBeGreaterThanOrEqual(
@@ -260,7 +261,7 @@ describe("the rating reveal (#216)", () => {
       ),
     ).toBeVisible();
     const dial = screen.getByRole("img", { name: "Health 85.1 out of 100" });
-    expect(dial.querySelectorAll("circle.nx-dot-on").length).toBeGreaterThan(0);
+    expect(dial.querySelectorAll("g.nx-dot-on").length).toBeGreaterThan(0);
     expect(screen.getByRole("img", { name: /^Grade AA/ })).toHaveClass(
       "nx-stamp",
     );
@@ -310,7 +311,14 @@ describe("the rating reveal (#216)", () => {
   it("on a phone the run leads the step and scrolls into view", async () => {
     motion = stubMotion({ stacked: true });
     await rateInABurst();
-    await waitFor(() => expect(pipeline()).toHaveClass("order-first"));
+    // In the DOM too, not only on screen: the pipeline comes before the step card.
+    const title = await screen.findByRole("heading", {
+      name: "Rating in progress",
+    });
+    expect(
+      pipeline().compareDocumentPosition(title) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({
       block: "start",
       behavior: "smooth",
@@ -323,14 +331,22 @@ describe("the rating reveal (#216)", () => {
 });
 
 describe("ListedStep", () => {
-  const listed = asset({ status: "listed", latest_report: REPORT });
+  const listed = asset({
+    status: "listed",
+    latest_report: REPORT,
+    latest_run_id: RUN_ID,
+  });
 
-  function renderListed(reveal: boolean) {
-    return render(
-      <PrototypeProvider>
-        <ListedStep community={SELVA} asset={listed} reveal={reveal} />
-      </PrototypeProvider>,
+  function renderListed(reveal: boolean, onOpenTrace = vi.fn()) {
+    const view = render(
+      <ListedStep
+        community={SELVA}
+        asset={listed}
+        reveal={reveal}
+        onOpenTrace={onOpenTrace}
+      />,
     );
+    return { ...view, onOpenTrace };
   }
 
   it("announces a new rating once, even when the listing is re-read", async () => {
@@ -338,13 +354,12 @@ describe("ListedStep", () => {
     const { rerender } = renderListed(true);
     expect(await screen.findByText(ANNOUNCED)).toBeInTheDocument();
     rerender(
-      <PrototypeProvider>
-        <ListedStep
-          community={SELVA}
-          asset={{ ...listed, community_wallet: "10.00" }}
-          reveal
-        />
-      </PrototypeProvider>,
+      <ListedStep
+        community={SELVA}
+        asset={{ ...listed, community_wallet: "10.00" }}
+        reveal
+        onOpenTrace={vi.fn()}
+      />,
     );
     expect(screen.getAllByText(ANNOUNCED)).toHaveLength(1);
   });
@@ -360,5 +375,19 @@ describe("ListedStep", () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(screen.queryByText(ANNOUNCED)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["with motion", false],
+    ["under reduced motion", true],
+  ])("keeps the way to the rating's Agent Trace (%s)", (_label, reduce) => {
+    motion = stubMotion({ reduce });
+    const { onOpenTrace } = renderListed(true);
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "See every step in the Agent Trace",
+      }),
+    );
+    expect(onOpenTrace).toHaveBeenCalledWith(RUN_ID);
   });
 });

@@ -280,6 +280,22 @@ describe("TraceSheet away from a real site", () => {
     ).toBeInTheDocument();
   });
 
+  it("opens a real run asked for by id, e.g. from the listing flow (#216)", async () => {
+    nav.pathname = "/steward/list";
+    const { backend } = renderSheet({
+      "GET /world": () => json(SIGNED_IN_WORLD),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Open latest run" }));
+
+    const steps = await within(await sheet()).findByRole("list", {
+      name: "Run steps",
+    });
+    expect(within(steps).getAllByRole("listitem")).toHaveLength(6);
+    expect(screen.getByRole("tab", { name: "Runs" })).toBeInTheDocument();
+    expect(backend.calls(`GET /runs/${RUN_ID}/trace`)).toBe(1);
+    expect(backend.calls("GET /admin/trace")).toBe(0);
+  });
+
   it("says when no model call has been logged yet", async () => {
     nav.pathname = "/portfolio";
     renderSheet({
