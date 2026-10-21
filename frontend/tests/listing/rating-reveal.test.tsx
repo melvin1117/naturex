@@ -393,6 +393,7 @@ describe("ListedStep", () => {
 
   const NEEDS_VERIFYING = summaryOf("verify", {
     level: "unverified",
+    in_review: false,
     required: true,
   });
 
@@ -454,6 +455,7 @@ describe("ListedStep", () => {
       json(
         summaryOf("launch_ipo", {
           level: "verified",
+          in_review: false,
           required: false,
           decided_at: "2026-10-20T15:00:00Z",
         }),

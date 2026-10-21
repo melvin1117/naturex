@@ -9,10 +9,12 @@ import {
   listingAction,
   listingStatusLine,
   memberFailure,
+  noticeAlerts,
   openingChecklist,
   sharePct,
   unseenNotices,
   validateCommunity,
+  verificationChip,
 } from "@/lib/community";
 
 const COMMUNITY = "66666666-6666-4666-8666-666666666666";
@@ -126,7 +128,7 @@ describe("listingAction", () => {
     ],
     [
       "verification_in_review",
-      "Documents in review",
+      "See your submission",
       `/steward/assets/${ASSET}/verify?community=${COMMUNITY}`,
     ],
     [
@@ -135,6 +137,7 @@ describe("listingAction", () => {
       `/steward/assets/${ASSET}/ipo?community=${COMMUNITY}`,
     ],
     ["awaiting_ipo", "Waiting for the owner to open it to supporters", null],
+    ["awaiting_verification", "Waiting for verification", null],
     ["view_on_exchange", "View on Exchange", `/asset/${ASSET}`],
     ["none", "Closed", null],
   ] as const)("%s → %s", (action, label, href) => {
@@ -169,21 +172,41 @@ describe("listingAction never points at a locked door (#216)", () => {
   it("names the step after a rejection or a revocation", () => {
     expect(
       listingAction("verify", ASSET, COMMUNITY, "listed", {
-        verification: "rejected",
+        verification: { level: "rejected", decision: "rejected" },
       }).label,
     ).toBe("Submit new documents");
     const revoked = listingAction("verify", ASSET, COMMUNITY, "suspended", {
-      verification: "revoked",
+      verification: { level: "revoked", decision: "revoked" },
     });
     expect(revoked).toMatchObject({ label: "Verify again", href: verify });
     // A suspended listing has no offer to preview.
     expect(revoked.secondary).toBeUndefined();
+    // Revoked, then a newer submission rejected: the rejection is what to answer.
+    expect(
+      listingAction("verify", ASSET, COMMUNITY, "suspended", {
+        verification: { level: "revoked", decision: "rejected" },
+      }).label,
+    ).toBe("Submit new documents");
   });
 
   it("shows a submission in review as a status, not a call to action", () => {
     expect(
       listingAction("verification_in_review", ASSET, COMMUNITY, "listed"),
-    ).toMatchObject({ primary: false, href: verify });
+    ).toMatchObject({
+      label: "See your submission",
+      primary: false,
+      href: verify,
+    });
+  });
+
+  it("offers a non-member nothing to do", () => {
+    expect(
+      listingAction("awaiting_verification", ASSET, COMMUNITY, "listed"),
+    ).toEqual({
+      label: "Waiting for verification",
+      href: null,
+      primary: false,
+    });
   });
 
   it("says no IPO, dividends or treasury on steward surfaces", () => {
@@ -191,6 +214,7 @@ describe("listingAction never points at a locked door (#216)", () => {
       [
         "verify",
         "verification_in_review",
+        "awaiting_verification",
         "launch_ipo",
         "awaiting_ipo",
       ] as const
@@ -198,6 +222,21 @@ describe("listingAction never points at a locked door (#216)", () => {
     expect(labels.join(" ")).not.toMatch(/IPO|dividend|treasury/i);
   });
 });
+
+function verificationOf(
+  overrides: Partial<ListingVerification> = {},
+): ListingVerification {
+  return {
+    level: "unverified",
+    in_review: false,
+    required: true,
+    decision: null,
+    decided_at: null,
+    reason: null,
+    run_id: null,
+    ...overrides,
+  };
+}
 
 function summaryListing(
   overrides: Partial<ListingSummary> = {},
@@ -229,64 +268,98 @@ function summaryListing(
     recommendations: [],
     report_version: 1,
     ...overrides,
-    verification: {
-      level: "unverified",
-      required: true,
-      decided_at: null,
-      reason: null,
-      run_id: null,
-      ...verification,
-    },
+    verification: verificationOf(verification),
   };
 }
+
+describe("verificationChip", () => {
+  it.each([
+    [{ level: "unverified", in_review: false }, "Not verified"],
+    [{ level: "documents_submitted", in_review: true }, "In review"],
+    [{ level: "verified", in_review: false }, "Verified"],
+    [{ level: "rejected", in_review: false }, "Not approved"],
+    [{ level: "revoked", in_review: false }, "Verification revoked"],
+    [
+      { level: "revoked", in_review: true },
+      "Revoked · new documents in review",
+    ],
+  ] as const)("%o → %s", (verification, chip) => {
+    expect(verificationChip(verification)).toBe(chip);
+  });
+});
 
 describe("listingStatusLine", () => {
   it.each([
     [
       "verify",
-      "unverified",
+      {},
       "listed",
       "Rated and listed. Verify the land documents to open it to supporters.",
     ],
     [
       "verify",
-      "rejected",
+      { level: "rejected", decision: "rejected" },
       "listed",
       "Documents not approved. Submit new ones to open it to supporters.",
     ],
     [
       "verify",
-      "revoked",
+      { level: "revoked", decision: "revoked" },
+      "listed",
+      "Verification revoked. Verify it again to open it to supporters.",
+    ],
+    // Suspended: it's about trading, whatever the latest decision was.
+    [
+      "verify",
+      { level: "revoked", decision: "revoked" },
+      "suspended",
+      "Verification revoked. Trading is paused until new documents are approved.",
+    ],
+    [
+      "verify",
+      { level: "revoked", decision: "rejected" },
       "suspended",
       "Verification revoked. Trading is paused until new documents are approved.",
     ],
     [
       "verification_in_review",
-      "documents_submitted",
+      { level: "revoked", in_review: true },
+      "suspended",
+      "Verification revoked. Trading is paused until a NatureX reviewer approves new documents.",
+    ],
+    [
+      "verification_in_review",
+      { level: "documents_submitted", in_review: true },
       "listed",
       "A NatureX reviewer is checking your land documents.",
     ],
     [
+      "awaiting_verification",
+      {},
+      "listed",
+      "Rated and listed. It opens to supporters once its land documents are verified.",
+    ],
+    [
       "launch_ipo",
-      "verified",
+      { level: "verified", required: false },
       "listed",
       "Verified. Open it to supporters when you're ready.",
     ],
     [
       "launch_ipo",
-      "unverified",
+      { required: false },
       "listed",
       "Rated and listed. Open it to supporters when you're ready.",
     ],
     [
       "awaiting_ipo",
-      "verified",
+      { level: "verified", required: false },
       "listed",
       "Rated and listed. The owner opens it to supporters.",
     ],
-    ["continue_listing", "unverified", "draft", "Draft"],
-  ] as const)("%s (%s, %s)", (action, level, status, line) => {
-    const listing = summaryListing({ next_action: action }, { level });
+    ["continue_listing", {}, "draft", "Draft"],
+  ] as const)("%s (%o, %s)", (action, verification, status, line) => {
+    const listing = summaryListing({ next_action: action }, verification);
     expect(listingStatusLine(listing, status, false)).toBe(line);
   });
 
@@ -303,16 +376,19 @@ describe("listingStatusLine", () => {
 
 describe("decisionNotice", () => {
   const DECIDED = "2026-10-20T15:00:00Z";
+  const NOW = Date.parse("2026-10-21T09:00:00Z");
+  const opts = { now: NOW };
 
   it("is null until a reviewer decided", () => {
-    expect(decisionNotice(summaryListing(), COMMUNITY)).toBeNull();
+    expect(decisionNotice(summaryListing(), COMMUNITY, opts)).toBeNull();
     expect(
       decisionNotice(
         summaryListing(
           { next_action: "verification_in_review" },
-          { level: "documents_submitted", run_id: "r1" },
+          { level: "documents_submitted", in_review: true, run_id: "r1" },
         ),
         COMMUNITY,
+        opts,
       ),
     ).toBeNull();
   });
@@ -323,6 +399,7 @@ describe("decisionNotice", () => {
         { next_action: "launch_ipo" },
         {
           level: "verified",
+          decision: "verified",
           required: false,
           decided_at: DECIDED,
           reason: "Matches the map.",
@@ -330,6 +407,7 @@ describe("decisionNotice", () => {
         },
       ),
       COMMUNITY,
+      opts,
     );
     expect(notice).toMatchObject({
       level: "verified",
@@ -348,10 +426,15 @@ describe("decisionNotice", () => {
     const notice = decisionNotice(
       summaryListing(
         { next_action: "awaiting_ipo" },
-        { level: "verified", required: false, decided_at: DECIDED },
+        {
+          level: "verified",
+          decision: "verified",
+          required: false,
+          decided_at: DECIDED,
+        },
       ),
       COMMUNITY,
-      { owner: false },
+      { owner: false, now: NOW },
     );
     expect(notice?.action).toBeNull();
     expect(notice?.body).not.toMatch(/open it to supporters/);
@@ -364,11 +447,13 @@ describe("decisionNotice", () => {
           {},
           {
             level: "rejected",
+            decision: "rejected",
             decided_at: DECIDED,
             reason: "The minutes aren't signed.",
           },
         ),
         COMMUNITY,
+        opts,
       ),
     ).toMatchObject({
       title: "Laguna Viva: documents not approved",
@@ -382,40 +467,111 @@ describe("decisionNotice", () => {
 
   it("says a revocation pauses trading", () => {
     const listing = summaryListing(
+      { asset: { ...summaryListing().asset, status: "suspended" } },
       {
-        asset: {
-          ...summaryListing().asset,
-          status: "suspended",
-        },
+        level: "revoked",
+        decision: "revoked",
+        decided_at: DECIDED,
+        reason: "Disputed title.",
       },
-      { level: "revoked", decided_at: DECIDED, reason: "Disputed title." },
     );
-    expect(decisionNotice(listing, COMMUNITY)).toMatchObject({
+    expect(decisionNotice(listing, COMMUNITY, opts)).toMatchObject({
       title: "Laguna Viva: verification revoked",
       body: expect.stringMatching(/Trading is paused/),
       action: { label: "Verify again" },
     });
   });
 
+  it("stays while it asks something, else only for two weeks", () => {
+    const later = NOW + 30 * 24 * 60 * 60 * 1000;
+    const verified = {
+      level: "verified",
+      decision: "verified",
+      required: false,
+      decided_at: DECIDED,
+    } as const;
+    // Still to do: verify again, or open it to supporters.
+    expect(
+      decisionNotice(
+        summaryListing(
+          {},
+          { level: "rejected", decision: "rejected", decided_at: DECIDED },
+        ),
+        COMMUNITY,
+        { now: later },
+      ),
+    ).not.toBeNull();
+    expect(
+      decisionNotice(
+        summaryListing({ next_action: "launch_ipo" }, verified),
+        COMMUNITY,
+        {
+          now: later,
+        },
+      ),
+    ).not.toBeNull();
+    // Nothing left to do for this member: recent decisions only.
+    const waiting = summaryListing({ next_action: "awaiting_ipo" }, verified);
+    expect(decisionNotice(waiting, COMMUNITY, opts)).not.toBeNull();
+    expect(decisionNotice(waiting, COMMUNITY, { now: later })).toBeNull();
+    const open = summaryListing({ next_action: "view_on_exchange" }, verified);
+    expect(decisionNotice(open, COMMUNITY, { now: later })).toBeNull();
+  });
+
   it("comes back for the next decision once dismissed", () => {
     const first = decisionNotice(
       summaryListing(
         {},
-        { level: "rejected", decided_at: DECIDED, run_id: "a" },
+        {
+          level: "rejected",
+          decision: "rejected",
+          decided_at: DECIDED,
+          run_id: "a",
+        },
       ),
       COMMUNITY,
+      opts,
     );
     const next = decisionNotice(
       summaryListing(
         { next_action: "launch_ipo" },
-        { level: "verified", decided_at: DECIDED, run_id: "b" },
+        {
+          level: "verified",
+          decision: "verified",
+          decided_at: DECIDED,
+          run_id: "b",
+        },
       ),
       COMMUNITY,
+      opts,
     );
     expect(unseenNotices([first], { [ASSET]: first!.key })).toEqual([]);
     expect(unseenNotices([next, null], { [ASSET]: first!.key })).toEqual([
       next,
     ]);
+  });
+
+  it("finds the unread alerts about the same decision", () => {
+    const alert = (id: string, fields: Record<string, unknown> = {}) => ({
+      id,
+      asset_id: ASSET,
+      kind: "verification",
+      created_at: "2026-10-20T15:00:01Z",
+      read_at: null,
+      ...fields,
+    });
+    expect(
+      noticeAlerts(
+        [
+          alert("this"),
+          alert("read", { read_at: "2026-10-20T16:00:00Z" }),
+          alert("older", { created_at: "2026-10-01T00:00:00Z" }),
+          alert("other-site", { asset_id: "x" }),
+          alert("news", { kind: "news" }),
+        ],
+        { assetId: ASSET, decidedAt: DECIDED },
+      ),
+    ).toEqual(["this"]);
   });
 });
 
@@ -428,11 +584,14 @@ describe("openingChecklist", () => {
   const verify = `/steward/assets/${ASSET}/verify?community=${COMMUNITY}`;
   const states = (steps: ReturnType<typeof openingChecklist>) =>
     steps.map((s) => `${s.id}:${s.state}:${s.status}`);
+  const SANDBOX = /sandbox/i;
+  const text = (steps: ReturnType<typeof openingChecklist>) =>
+    steps.map((s) => `${s.status} ${s.detail}`).join(" ");
 
   it("puts verification first while the live offer waits for it", () => {
     const steps = openingChecklist({
       ...base,
-      verification: summaryListing().verification,
+      verification: verificationOf(),
       launchable: false,
       blockedReason: "not_verified",
     });
@@ -446,13 +605,57 @@ describe("openingChecklist", () => {
       label: "Verify this listing",
       href: verify,
     });
+    expect(text(steps)).not.toMatch(SANDBOX);
+  });
+
+  it("is neutral until the preview answers: never says sandbox", () => {
+    const steps = openingChecklist({ ...base, verification: undefined });
+    expect(states(steps)).toEqual([
+      "rated:done:Done",
+      "verified:pending:Checking…",
+      "open:pending:Checking…",
+    ]);
+    expect(text(steps)).not.toMatch(SANDBOX);
+  });
+
+  it("never says sandbox when the preview failed", () => {
+    const steps = openingChecklist({ ...base, verification: null });
+    expect(states(steps)[1]).toBe("verified:upcoming:Not checked");
+    expect(text(steps)).not.toMatch(SANDBOX);
+  });
+
+  it("trusts the gate's blocked reason over a verification that says otherwise", () => {
+    const steps = openingChecklist({
+      ...base,
+      verification: verificationOf({ required: false }),
+      launchable: false,
+      blockedReason: "not_verified",
+    });
+    expect(states(steps).slice(1)).toEqual([
+      "verified:current:Needed",
+      "open:upcoming:After verification",
+    ]);
+    expect(text(steps)).not.toMatch(SANDBOX);
+  });
+
+  it("never shows Ready while verification is required", () => {
+    const steps = openingChecklist({
+      ...base,
+      verification: verificationOf({ level: "verified", required: true }),
+      launchable: true,
+    });
+    expect(states(steps)[2]).toBe("open:upcoming:After verification");
   });
 
   it("waits while a reviewer checks the documents", () => {
     const steps = openingChecklist({
       ...base,
-      verification: summaryListing({}, { level: "documents_submitted" })
-        .verification,
+      verification: verificationOf({
+        level: "documents_submitted",
+        in_review: true,
+      }),
+      launchable: false,
+      blockedReason: "not_verified",
     });
     expect(states(steps)[1]).toBe("verified:waiting:In review");
     expect(steps[1]!.action?.label).toBe("See your submission");
@@ -461,10 +664,11 @@ describe("openingChecklist", () => {
   it("quotes a rejection's or a revocation's reason", () => {
     const rejected = openingChecklist({
       ...base,
-      verification: summaryListing(
-        {},
-        { level: "rejected", reason: "Unsigned minutes." },
-      ).verification,
+      verification: verificationOf({
+        level: "rejected",
+        decision: "rejected",
+        reason: "Unsigned minutes.",
+      }),
     });
     expect(rejected[1]).toMatchObject({
       state: "current",
@@ -474,10 +678,11 @@ describe("openingChecklist", () => {
     });
     const revoked = openingChecklist({
       ...base,
-      verification: summaryListing(
-        {},
-        { level: "revoked", reason: "Disputed title." },
-      ).verification,
+      verification: verificationOf({
+        level: "revoked",
+        decision: "revoked",
+        reason: "Disputed title.",
+      }),
     });
     expect(revoked[1]).toMatchObject({
       status: "Revoked",
@@ -488,14 +693,12 @@ describe("openingChecklist", () => {
   it("marks a verified listing done and the launch ready", () => {
     const steps = openingChecklist({
       ...base,
-      verification: summaryListing(
-        { next_action: "launch_ipo" },
-        {
-          level: "verified",
-          required: false,
-          decided_at: "2026-10-20T15:00:00Z",
-        },
-      ).verification,
+      verification: verificationOf({
+        level: "verified",
+        decision: "verified",
+        required: false,
+        decided_at: "2026-10-20T15:00:00Z",
+      }),
       launchable: true,
     });
     expect(states(steps)).toEqual([
@@ -506,35 +709,38 @@ describe("openingChecklist", () => {
     expect(steps[1]!.detail).toMatch(/on 20 Oct 2026/);
   });
 
-  it("calls verification optional where the world doesn't need it", () => {
+  it("calls verification optional only when the gate says it isn't required", () => {
     const steps = openingChecklist({
       ...base,
-      verification: summaryListing({}, { required: false }).verification,
+      verification: verificationOf({ required: false }),
       launchable: true,
     });
     expect(steps[1]).toMatchObject({
       state: "optional",
+      detail: expect.stringMatching(SANDBOX),
       action: { label: "Verify anyway", href: verify },
     });
+    const inReview = openingChecklist({
+      ...base,
+      verification: verificationOf({
+        level: "documents_submitted",
+        in_review: true,
+        required: false,
+      }),
+      launchable: true,
+    });
+    expect(states(inReview).slice(1)).toEqual([
+      "verified:optional:In review",
+      "open:current:Ready",
+    ]);
   });
 
-  it("reads the preview's blocked reason without the summary", () => {
+  it("names another blocker without blaming verification", () => {
     expect(
       states(
         openingChecklist({
           ...base,
-          communityId: null,
-          verification: null,
-          launchable: false,
-          blockedReason: "not_verified",
-        }),
-      )[1],
-    ).toBe("verified:current:Needed");
-    expect(
-      states(
-        openingChecklist({
-          ...base,
-          verification: null,
+          verification: verificationOf({ required: false }),
           launchable: false,
           blockedReason: "run_in_progress",
         }),

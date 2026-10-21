@@ -34,17 +34,19 @@ import { VerificationBadge } from "@/components/verification/parts";
 import type { CommunitySummary, ListingSummary } from "@/lib/api/types";
 import {
   decisionNotice,
+  noticeAlerts,
+  type DecisionNotice,
   listingAction,
   listingStatusLine,
   sharePct,
   STATUS_LABEL,
   units,
   unseenNotices,
-  VERIFICATION_CHIP,
+  verificationChip,
 } from "@/lib/community";
 import { useCommunitySummary } from "@/lib/community-hooks";
 import { payoutsEmptyText, recommendationsEmptyText } from "@/lib/empty-states";
-import { useWorld } from "@/lib/hooks";
+import { useAlerts, useMarkAlertRead, useWorld } from "@/lib/hooks";
 import { marketCard } from "@/lib/market-cards";
 import { evidenceHref } from "@/lib/field-evidence";
 import { verifyHref } from "@/lib/listing/links";
@@ -92,15 +94,26 @@ function Home({ summary }: { summary: CommunitySummary }) {
   const featured =
     listings.find((l) => l.asset.status === "listed") ?? listings[0];
   const trading = listings.filter((l) => l.asset.trading).length;
-  const { seen, dismiss } = useSeenNotices(world?.me?.id);
-  const notices = seen
-    ? unseenNotices(
-        listings.map((l) =>
-          decisionNotice(l, community.id, { owner: isOwner }),
-        ),
-        seen,
-      )
-    : [];
+  const { seen, readAt, dismiss } = useSeenNotices(world?.me?.id);
+  // A reviewer's decision is for the community's members; an admin reading the home isn't one.
+  const notices =
+    seen && readAt !== null && role
+      ? unseenNotices(
+          listings.map((l) =>
+            decisionNotice(l, community.id, { owner: isOwner, now: readAt }),
+          ),
+          seen,
+        )
+      : [];
+  // Dismissing a notice also reads the bell's alert about the same decision.
+  const alerts = useAlerts({ communityId: community.id });
+  const markRead = useMarkAlertRead();
+  const dismissNotice = (notice: DecisionNotice) => {
+    dismiss(notice);
+    for (const id of noticeAlerts(alerts.data?.alerts ?? [], notice)) {
+      void markRead.mutate(id);
+    }
+  };
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   return (
@@ -138,7 +151,7 @@ function Home({ summary }: { summary: CommunitySummary }) {
 
       <VerificationNotices
         notices={notices}
-        onDismiss={dismiss}
+        onDismiss={dismissNotice}
         focusWhenEmpty={headingRef}
         className="mt-8"
       />
@@ -278,7 +291,7 @@ function ActionButton({
     listing.asset.id,
     communityId,
     listing.asset.status,
-    { owner, verification: listing.verification.level },
+    { owner, verification: listing.verification },
   );
   const secondary = action.secondary && (
     <ListingLink
@@ -439,7 +452,7 @@ function VerificationChip({
   const level = listing.verification.level;
   return (
     <VerificationBadge level={level} tone={tone}>
-      {VERIFICATION_CHIP[level]}
+      {verificationChip(listing.verification)}
     </VerificationBadge>
   );
 }

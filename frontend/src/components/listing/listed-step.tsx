@@ -13,7 +13,7 @@ import { VerificationBadge } from "@/components/verification/parts";
 import type { AssetDetail, MyCommunity } from "@/lib/api/types";
 import {
   listingAction,
-  VERIFICATION_CHIP,
+  verificationChip,
   type ListingAction,
 } from "@/lib/community";
 import { useCommunitySummary } from "@/lib/community-hooks";
@@ -79,7 +79,7 @@ export function ListedStep({
   const next = listing
     ? listingAction(listing.next_action, asset.id, community.id, asset.status, {
         owner: community.role === "owner",
-        verification: listing.verification.level,
+        verification: listing.verification,
       })
     : null;
   // Announced once, after the live region is in the page; later refetches don't repeat it.
@@ -120,7 +120,7 @@ export function ListedStep({
               level={listing.verification.level}
               className="mt-3"
             >
-              {VERIFICATION_CHIP[listing.verification.level]}
+              {verificationChip(listing.verification)}
             </VerificationBadge>
           )}
         </div>

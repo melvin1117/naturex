@@ -9,8 +9,10 @@ import {
   SLOW_NOTE,
 } from "@/components/loading-region";
 import {
+  IpoSkeleton,
   MachineRowsSkeleton,
   RouteSkeleton,
+  ScreenSkeleton,
 } from "@/components/page-skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HANDOFF_MS, resetLoadingChains } from "@/lib/loading-chain";
@@ -180,6 +182,7 @@ describe("route loading states", () => {
       "/portfolio",
       "/steward",
       "/steward/assets/x",
+      "/steward/assets/x/ipo",
       "/steward/community",
       "/steward/list",
     ]);
@@ -188,8 +191,9 @@ describe("route loading states", () => {
   it.each(LOADERS.map((l) => [l.route, l.Loading] as const))(
     "%s: the gates' shape for the route, one status, no spinner",
     (route, Loading) => {
-      // A screen folder's pages (`/steward/assets/x/ipo`) share its loading state.
-      const page = route === "/steward/assets/x" ? `${route}/ipo` : route;
+      // A screen folder's pages (`/steward/assets/x/verify`) share its loading state; the
+      // opening offer has its own, with the checklist band (#216).
+      const page = route === "/steward/assets/x" ? `${route}/verify` : route;
       render(<Loading />);
       expect(region()).toHaveAttribute("data-skeleton", skeletonKind(page));
       expect(screen.getAllByRole("status")).toHaveLength(1);
@@ -225,7 +229,9 @@ describe("RouteSkeleton", () => {
     ["/portfolio", "portfolio"],
     ["/steward", "steward-home"],
     ["/steward/community", "community-settings"],
-    ["/steward/assets/abc/ipo", "screen"],
+    ["/steward/assets/abc/verify", "screen"],
+    ["/steward/assets/abc/evidence", "screen"],
+    ["/steward/assets/abc/ipo", "ipo"],
     ["/admin", "time-machine"],
     ["/admin/verifications", "queue"],
     ["/admin/verifications/abc", "review"],
@@ -237,6 +243,34 @@ describe("RouteSkeleton", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "Checking your session…",
     );
+  });
+});
+
+describe("IpoSkeleton", () => {
+  /** The cards of a skeleton, in order: their radius, and their columns' parent. */
+  function cards() {
+    return [
+      ...region().querySelectorAll<HTMLElement>(".bg-card.shadow-soft"),
+    ].map((card) => ({
+      radius: [...card.classList].find((c) => c.startsWith("rounded-")),
+      inColumns: card.parentElement!.className.includes("lg:grid-cols-2"),
+    }));
+  }
+
+  it("draws the opening offer's checklist band between the header and the columns", () => {
+    render(<IpoSkeleton />);
+    expect(region()).toHaveAttribute("data-skeleton", "ipo");
+    expect(cards()).toEqual([
+      { radius: "rounded-[1.75rem]", inColumns: false },
+      { radius: "rounded-[1.75rem]", inColumns: true },
+      { radius: "rounded-[1.75rem]", inColumns: true },
+    ]);
+  });
+
+  it("keeps the other focused screens without it", () => {
+    render(<ScreenSkeleton />);
+    expect(region()).toHaveAttribute("data-skeleton", "screen");
+    expect(cards().every((c) => c.inColumns)).toBe(true);
   });
 });
 

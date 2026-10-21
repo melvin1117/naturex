@@ -100,9 +100,38 @@ function preview(overrides: Partial<IpoPreview> = {}): IpoPreview {
     retained_shares: 510_000,
     launchable: true,
     blocked_reason: null,
+    // A sandbox listing: verification doesn't hold the offer back.
+    verification: {
+      level: "unverified",
+      in_review: false,
+      required: false,
+      decision: null,
+      decided_at: null,
+      reason: null,
+      run_id: null,
+    },
     ...overrides,
   };
 }
+
+const LIVE_VERIFIED: IpoPreview["verification"] = {
+  level: "verified",
+  in_review: false,
+  required: false,
+  decision: "verified",
+  decided_at: "2026-10-20T15:00:00Z",
+  reason: "Signed.",
+  run_id: "77777777-7777-4777-8777-777777777777",
+};
+const LIVE_NEEDED: IpoPreview["verification"] = {
+  level: "unverified",
+  in_review: false,
+  required: true,
+  decision: null,
+  decided_at: null,
+  reason: null,
+  run_id: null,
+};
 
 /** Echo the offering asked for, like the backend does, with a price per input. */
 function previewFor(request: Request, overrides: Partial<IpoPreview> = {}) {
@@ -369,9 +398,7 @@ describe("IpoLaunchScreen", () => {
 
   it("loads in the screen's shape, then the offer, without a spinner (#219)", async () => {
     renderLaunch();
-    expect(
-      window.document.querySelector("[data-skeleton=screen]"),
-    ).not.toBeNull();
+    expect(window.document.querySelector("[data-skeleton=ipo]")).not.toBeNull();
     expect(window.document.querySelector(".animate-spin")).toBeNull();
     await steps();
     expect(window.document.querySelector("[data-skeleton]")).toBeNull();
@@ -432,6 +459,65 @@ describe("IpoLaunchScreen", () => {
     ).toBeVisible();
     expect(screen.getByLabelText("Units to issue")).toBeEnabled();
     expect(launchButton()).toBeDisabled();
+  });
+
+  it("never calls a live listing a sandbox: verified, it's done and ready", async () => {
+    renderLaunch({
+      [PREVIEW]: (request) =>
+        previewFor(request, { verification: LIVE_VERIFIED }),
+    });
+    await steps();
+    const checklist = screen.getByRole("region", {
+      name: "Before you open to supporters",
+    });
+    expect(checklist).not.toHaveTextContent(/sandbox/i);
+    const items = within(checklist).getAllByRole("listitem");
+    expect(items.map((li) => li.dataset.state)).toEqual([
+      "done",
+      "done",
+      "current",
+    ]);
+    expect(items[1]).toHaveTextContent(
+      /approved the land documents on 20 Oct 2026/,
+    );
+    await waitFor(() => expect(launchButton()).toBeEnabled());
+  });
+
+  it("follows the newer preview after an approval: Ready with Launch, never After verification", async () => {
+    renderLaunch({
+      [PREVIEW]: sequence(
+        (request) =>
+          previewFor(request, {
+            launchable: false,
+            blocked_reason: "not_verified",
+            verification: LIVE_NEEDED,
+          }),
+        (request) => previewFor(request, { verification: LIVE_VERIFIED }),
+      ),
+    });
+    await steps();
+    expect(
+      screen.getByRole("region", { name: "Before you open to supporters" }),
+    ).toHaveTextContent("Open to supporters · After verification");
+    expect(launchButton()).toBeDisabled();
+
+    // The reviewer approves: the listing's status event refetches the preview.
+    act(() => {
+      const source = FakeEventSource.latest();
+      source.open();
+      source.emit("listing_status", 1, {
+        asset_id: ASSET_ID,
+        transition: "verification",
+        level: "verified",
+      });
+    });
+    await waitFor(() => expect(launchButton()).toBeEnabled());
+    const checklist = screen.getByRole("region", {
+      name: "Before you open to supporters",
+    });
+    expect(checklist).toHaveTextContent("Open to supporters · Ready");
+    expect(checklist).not.toHaveTextContent("After verification");
+    expect(checklist).not.toHaveTextContent(/sandbox/i);
   });
 
   it("shows a launchable sandbox offer as ready, with verification optional", async () => {

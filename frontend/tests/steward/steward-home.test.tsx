@@ -133,7 +133,7 @@ function listing(overrides: Partial<ListingSummary> = {}): ListingSummary {
     shares: null,
     recommendations: [],
     report_version: 1,
-    verification: { level: "verified", required: false },
+    verification: { level: "verified", in_review: false, required: false },
     ...overrides,
   };
 }
@@ -1135,7 +1135,7 @@ describe("the next step and what changed (#216)", () => {
       asset: card({ trading: false, price: null }),
       next_action: "verify",
       ipo_at: null,
-      verification: { level: "unverified", required: true },
+      verification: { level: "unverified", in_review: false, required: true },
     });
 
   beforeEach(() => window.localStorage.clear());
@@ -1181,16 +1181,40 @@ describe("the next step and what changed (#216)", () => {
       ipo_at: null,
       verification: {
         level: "rejected",
+        in_review: false,
         required: true,
+        decision: "rejected",
         decided_at: "2026-10-20T15:00:00Z",
         reason: "The assembly minutes aren't signed.",
         run_id: "run-1",
       },
     });
+    const ALERT_ID = "abababab-abab-4bab-8bab-abababababab";
     const backend = setup(<StewardPage />, {
       routes: {
         [`GET /communities/${SELVA.id}/summary`]: () =>
           json(summary({ listings: [decided] })),
+        "GET /alerts": () =>
+          json({
+            alerts: [
+              {
+                id: ALERT_ID,
+                asset_id: decided.asset.id,
+                asset_name: decided.asset.name,
+                kind: "verification",
+                title: "Xochimilco Wetland: documents not approved",
+                message:
+                  "A NatureX reviewer didn't approve the land documents.",
+                severity: 3,
+                created_at: "2026-10-20T15:00:01Z",
+                read_at: null,
+              },
+            ],
+            unread_count: 1,
+            next_before: null,
+          }),
+        [`POST /alerts/${ALERT_ID}/read`]: () =>
+          json({ read_at: "2026-10-21T00:00:00Z" }),
       },
     });
     const updates = await screen.findByRole("region", {
@@ -1224,6 +1248,10 @@ describe("the next step and what changed (#216)", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: SELVA.name }),
     ).toHaveFocus();
+    // The bell's alert about the same decision is read too.
+    await waitFor(() =>
+      expect(backend.calls(`POST /alerts/${ALERT_ID}/read`)).toBe(1),
+    );
     expect(
       JSON.parse(
         window.localStorage.getItem(
@@ -1238,7 +1266,9 @@ describe("the next step and what changed (#216)", () => {
       next_action: "launch_ipo",
       verification: {
         level: "verified",
+        in_review: false,
         required: false,
+        decision: "verified",
         decided_at: "2026-10-21T09:00:00Z",
         reason: null,
         run_id: "run-2",
@@ -1257,5 +1287,93 @@ describe("the next step and what changed (#216)", () => {
       `/steward/assets/${decided.asset.id}/ipo?community=${SELVA.id}`,
     );
     expect(screen.getAllByText("Verified").length).toBeGreaterThan(0);
+  });
+
+  it("moves focus to the next notice, then to the heading after the last", async () => {
+    const rejected = (id: string, name: string) =>
+      listing({
+        asset: card({ id, name, trading: false, price: null }),
+        next_action: "verify",
+        ipo_at: null,
+        verification: {
+          level: "rejected",
+          in_review: false,
+          required: true,
+          decision: "rejected",
+          decided_at: "2026-10-20T15:00:00Z",
+          reason: "Unsigned.",
+          run_id: `run-${id}`,
+        },
+      });
+    setup(<StewardPage />, {
+      routes: {
+        [`GET /communities/${SELVA.id}/summary`]: () =>
+          json(
+            summary({
+              listings: [
+                rejected("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "Bosque Alto"),
+                rejected("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "Río Bajo"),
+              ],
+            }),
+          ),
+      },
+    });
+    const first = await screen.findByRole("button", {
+      name: "Dismiss: Bosque Alto: documents not approved",
+    });
+    fireEvent.click(first);
+    const second = await screen.findByRole("button", {
+      name: "Dismiss: Río Bajo: documents not approved",
+    });
+    await waitFor(() => expect(second).toHaveFocus());
+    fireEvent.click(second);
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { level: 1, name: SELVA.name }),
+      ).toHaveFocus(),
+    );
+  });
+
+  it("tells a same-world admin what a listing waits for, without a member's notices", async () => {
+    setup(<StewardPage />, {
+      world: {
+        ...SIGNED_IN_WORLD,
+        me: { ...SIGNED_IN_WORLD.me!, is_admin: true },
+      },
+      routes: {
+        [`GET /communities/${SELVA.id}/summary`]: () =>
+          json(
+            summary({
+              role: null,
+              listings: [
+                listing({
+                  asset: card({ trading: false, price: null }),
+                  next_action: "awaiting_verification",
+                  ipo_at: null,
+                  verification: {
+                    level: "rejected",
+                    in_review: false,
+                    required: true,
+                    decision: "rejected",
+                    decided_at: "2026-10-20T15:00:00Z",
+                    reason: "Unsigned.",
+                    run_id: "run-1",
+                  },
+                }),
+              ],
+            }),
+          ),
+      },
+    });
+    const hero = await screen.findByRole("region", {
+      name: "Xochimilco Wetland",
+    });
+    expect(within(hero).getByText("Waiting for verification")).toBeVisible();
+    expect(
+      within(hero).queryByRole("link", { name: /Verify|Submit/ }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: "Verification updates" }),
+    ).toBeNull();
   });
 });

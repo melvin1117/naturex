@@ -229,6 +229,8 @@ export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
     ({ payload }) => {
       queue(queryKeys.asset(payload.asset_id));
       queue(queryKeys.ledger(payload.asset_id));
+      // A verification decision (#216) can open or close the opening offer.
+      queue(queryKeys.ipoPreviews(payload.asset_id));
       // A newly listed site joins the public outlines.
       if (payload.to === "listed") queue(queryKeys.outlines());
     },

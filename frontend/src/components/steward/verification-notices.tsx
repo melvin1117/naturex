@@ -38,8 +38,11 @@ function readSeen(userId: string): Record<string, string> {
  */
 export function useSeenNotices(userId: string | undefined) {
   const [seen, setSeen] = useState<Record<string, string> | null>(null);
+  // When the notices were read: how recent a decision is counts from the visit, not each render.
+  const [readAt, setReadAt] = useState<number | null>(null);
   useEffect(() => {
     setSeen(userId ? readSeen(userId) : {});
+    setReadAt(Date.now());
   }, [userId]);
   const dismiss = useCallback(
     (notice: DecisionNotice) => {
@@ -57,7 +60,7 @@ export function useSeenNotices(userId: string | undefined) {
     },
     [userId],
   );
-  return { seen, dismiss };
+  return { seen, readAt, dismiss };
 }
 
 const ICON = {

@@ -14,6 +14,7 @@ import type {
   NextAction,
   VerificationLevel,
 } from "./api/types";
+import { needsVerification } from "./ipo";
 import { ipoHref, verifyHref } from "./listing/links";
 import { date } from "./prototype/format";
 import { assetHref } from "./trade";
@@ -164,11 +165,13 @@ export interface ListingAction {
   secondary?: ListingLink;
 }
 
+type VerificationWords = Pick<ListingVerification, "level" | "decision">;
+
 export interface ListingActionOptions {
   /** The caller owns the community: only the owner opens a listing to supporters. */
   owner?: boolean;
-  /** The listing's verification level, for the words of the verify step. */
-  verification?: VerificationLevel;
+  /** Where the listing's verification stands, for the words of the verify step. */
+  verification?: VerificationWords;
 }
 
 /**
@@ -206,9 +209,9 @@ export function listingAction(
     case "verify":
       return {
         label:
-          verification === "rejected"
+          verification?.decision === "rejected"
             ? "Submit new documents"
-            : verification === "revoked"
+            : verification?.level === "revoked"
               ? "Verify again"
               : "Verify this listing",
         href: verify,
@@ -217,11 +220,13 @@ export function listingAction(
       };
     case "verification_in_review":
       return {
-        label: "Documents in review",
+        label: "See your submission",
         href: verify,
         primary: false,
         secondary: preview,
       };
+    case "awaiting_verification":
+      return { label: "Waiting for verification", href: null, primary: false };
     case "launch_ipo":
       return {
         label: "Open to supporters",
@@ -249,14 +254,22 @@ export function listingAction(
   }
 }
 
-/** The verification chip on a listing: plain words, with the level's icon beside them. */
-export const VERIFICATION_CHIP: Record<VerificationLevel, string> = {
+const CHIP: Record<VerificationLevel, string> = {
   unverified: "Not verified",
   documents_submitted: "In review",
   verified: "Verified",
   rejected: "Not approved",
   revoked: "Verification revoked",
 };
+
+/** The verification chip on a listing: plain words, beside the level's icon. */
+export function verificationChip(
+  verification: Pick<ListingVerification, "level" | "in_review">,
+): string {
+  if (verification.level === "revoked" && verification.in_review)
+    return "Revoked · new documents in review";
+  return verification.in_review ? "In review" : CHIP[verification.level];
+}
 
 /** The line under a listing's name on the Steward home: where it stands and what comes next. */
 export function listingStatusLine(
@@ -265,18 +278,29 @@ export function listingStatusLine(
   trading: boolean,
 ): string {
   if (trading) return "Open to supporters";
-  const level = listing.verification.level;
-  switch (listing.next_action) {
+  const { level, decision } = listing.verification;
+  const action = listing.next_action;
+  const verifying =
+    action === "verify" ||
+    action === "verification_in_review" ||
+    action === "awaiting_verification";
+  // A suspended listing has opened (or was revoked before it could): it's about trading.
+  if (status === "suspended" && verifying) {
+    return action === "verify"
+      ? "Verification revoked. Trading is paused until new documents are approved."
+      : "Verification revoked. Trading is paused until a NatureX reviewer approves new documents.";
+  }
+  switch (action) {
     case "verify":
-      if (level === "revoked")
-        return status === "suspended"
-          ? "Verification revoked. Trading is paused until new documents are approved."
-          : "Verification revoked. Verify it again to open it to supporters.";
-      if (level === "rejected")
+      if (decision === "rejected")
         return "Documents not approved. Submit new ones to open it to supporters.";
+      if (level === "revoked")
+        return "Verification revoked. Verify it again to open it to supporters.";
       return "Rated and listed. Verify the land documents to open it to supporters.";
     case "verification_in_review":
       return "A NatureX reviewer is checking your land documents.";
+    case "awaiting_verification":
+      return "Rated and listed. It opens to supporters once its land documents are verified.";
     case "launch_ipo":
       return level === "verified"
         ? "Verified. Open it to supporters when you're ready."
@@ -287,17 +311,16 @@ export function listingStatusLine(
   return STATUS_LABEL[status] ?? status;
 }
 
-const DECIDED: ReadonlySet<VerificationLevel> = new Set([
-  "verified",
-  "rejected",
-  "revoked",
-]);
+/** How long a decision with nothing left to do stays on the Steward home. */
+export const NOTICE_DAYS = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface DecisionNotice {
   /** Changes with every decision, so a dismissed notice comes back for the next one. */
   key: string;
   assetId: string;
   level: "verified" | "rejected" | "revoked";
+  decidedAt: string;
   title: string;
   body: string;
   /** The reviewer's words, quoted as they wrote them. */
@@ -306,18 +329,26 @@ export interface DecisionNotice {
 }
 
 /**
- * What a reviewer last decided about a listing, as the Steward home tells it (#216): verified
- * (and the way to open it), not approved or revoked (and the way to verify again), with the
- * reviewer's reason. Null while nothing was decided.
+ * What a reviewer last decided about a listing, as the Steward home tells its members (#216):
+ * verified (and the way to open it), not approved or revoked (and the way to verify again),
+ * with the reviewer's reason. Only while it still asks something of them (verify, or open it)
+ * or for `NOTICE_DAYS` after the decision; null otherwise, or while nothing was decided.
  */
 export function decisionNotice(
   listing: Pick<ListingSummary, "asset" | "next_action" | "verification">,
   communityId: string,
-  { owner = true }: { owner?: boolean } = {},
+  { owner = true, now = Date.now() }: { owner?: boolean; now?: number } = {},
 ): DecisionNotice | null {
   const { verification, asset } = listing;
-  if (!DECIDED.has(verification.level) || !verification.decided_at) return null;
-  const level = verification.level as DecisionNotice["level"];
+  const level = verification.decision;
+  if (!level || level === "unverified" || level === "documents_submitted")
+    return null;
+  if (!verification.decided_at) return null;
+  const pending =
+    listing.next_action === "verify" || listing.next_action === "launch_ipo";
+  const recent =
+    now - Date.parse(verification.decided_at) < NOTICE_DAYS * DAY_MS;
+  if (!pending && !recent) return null;
   const on = date(verification.decided_at);
   const key = `${verification.run_id ?? "none"}:${level}:${verification.decided_at}`;
   const action = listingAction(
@@ -325,7 +356,7 @@ export function decisionNotice(
     asset.id,
     communityId,
     asset.status,
-    { owner, verification: level },
+    { owner, verification },
   );
   const link =
     action.primary && action.href
@@ -335,6 +366,7 @@ export function decisionNotice(
     key,
     assetId: asset.id,
     level,
+    decidedAt: verification.decided_at,
     reason: verification.reason ?? null,
   };
   switch (level) {
@@ -378,13 +410,36 @@ export function unseenNotices(
   );
 }
 
+/** The unread verification alerts a dismissed notice already told the member about. */
+export function noticeAlerts(
+  alerts: readonly {
+    id: string;
+    asset_id: string;
+    kind: string;
+    created_at: string;
+    read_at?: string | null;
+  }[],
+  notice: Pick<DecisionNotice, "assetId" | "decidedAt">,
+): string[] {
+  const decided = Date.parse(notice.decidedAt);
+  return alerts
+    .filter(
+      (a) =>
+        a.kind === "verification" &&
+        a.asset_id === notice.assetId &&
+        !a.read_at &&
+        Date.parse(a.created_at) >= decided - 60_000,
+    )
+    .map((a) => a.id);
+}
+
 export type ChecklistState =
-  "done" | "current" | "waiting" | "upcoming" | "optional";
+  "done" | "current" | "waiting" | "upcoming" | "optional" | "pending";
 
 export interface ChecklistStep {
   id: "rated" | "verified" | "open";
   label: string;
-  /** The state in words, read after the label ("Rated: done"). */
+  /** The state in words, read after the label ("Rated · Done"). */
   status: string;
   state: ChecklistState;
   detail: string;
@@ -396,17 +451,20 @@ export interface OpeningChecklistInput {
   communityId: string | null;
   /** "Grade AA · 85.1 · Very strong health", from the latest report. */
   rating: string | null;
-  /** From the Steward home's summary; null when it isn't available here. */
-  verification: ListingVerification | null;
-  /** The preview's answer, when it has one. */
+  /**
+   * The preview's answer (the gate's current reading); undefined until it answers, null when
+   * it failed. It wins over any cached summary.
+   */
+  verification: ListingVerification | null | undefined;
   launchable?: boolean;
   blockedReason?: string | null;
 }
 
 /**
  * The steps before a listing opens to supporters (#216), shown above the offer so the blocker
- * comes first: rated, documents verified (when this world needs it), then open. The summary
- * says where verification stands; without it, the preview's `not_verified` does.
+ * comes first: rated, documents verified, then open. Everything comes from one preview answer,
+ * so the steps never disagree with the Launch button; "this sandbox can open without it" only
+ * when that answer says verification isn't required.
  */
 export function openingChecklist({
   assetId,
@@ -417,13 +475,6 @@ export function openingChecklist({
   blockedReason,
 }: OpeningChecklistInput): ChecklistStep[] {
   const verify = verifyHref(assetId, communityId);
-  const blockedByVerification =
-    verification?.required ??
-    (blockedReason === "not_verified" ||
-      blockedReason === "verification_required");
-  const level =
-    verification?.level ?? (blockedByVerification ? "unverified" : null);
-
   const rated: ChecklistStep = {
     id: "rated",
     label: "Rated",
@@ -431,32 +482,67 @@ export function openingChecklist({
     state: "done",
     detail: rating ?? "The AI rating is sealed and the site is listed.",
   };
+  const required =
+    verification?.required === true || needsVerification(blockedReason);
 
-  let verified: ChecklistStep;
+  if (verification === undefined && !required) {
+    const checking = {
+      status: "Checking…",
+      state: "pending" as const,
+      detail: "",
+    };
+    return [
+      rated,
+      { id: "verified", label: "Documents verified", ...checking },
+      { id: "open", label: "Open to supporters", ...checking },
+    ];
+  }
+
   const reason = verification?.reason
     ? ` Reason: “${verification.reason}”`
     : "";
-  if (level === "verified" && !blockedByVerification) {
+  let verified: ChecklistStep;
+  if (!required && verification?.level === "verified") {
     verified = {
       id: "verified",
       label: "Documents verified",
       status: "Done",
       state: "done",
-      detail: verification?.decided_at
+      detail: verification.decided_at
         ? `A NatureX reviewer approved the land documents on ${date(verification.decided_at)}.`
         : "A NatureX reviewer approved the land documents.",
     };
-  } else if (!blockedByVerification) {
+  } else if (!required && verification) {
+    verified = verification.in_review
+      ? {
+          id: "verified",
+          label: "Documents verified",
+          status: "In review",
+          state: "optional",
+          detail:
+            "A NatureX reviewer is checking your documents. This sandbox can open without waiting.",
+          action: { label: "See your submission", href: verify },
+        }
+      : {
+          id: "verified",
+          label: "Documents verified",
+          status: "Optional here",
+          state: "optional",
+          detail:
+            "This sandbox can open without it. Verifying tells supporters a reviewer checked the land documents.",
+          action: { label: "Verify anyway", href: verify },
+        };
+  } else if (!required) {
+    // The preview failed: say nothing about this world's rules.
     verified = {
       id: "verified",
       label: "Documents verified",
-      status: "Optional here",
-      state: "optional",
-      detail:
-        "This sandbox can open without it. Verifying tells supporters a reviewer checked the land documents.",
-      action: { label: "Verify anyway", href: verify },
+      status: "Not checked",
+      state: "upcoming",
+      detail: "We couldn't check where verification stands right now.",
+      action: { label: "Open verification", href: verify },
     };
-  } else if (level === "documents_submitted") {
+  } else if (verification?.in_review) {
     verified = {
       id: "verified",
       label: "Documents verified",
@@ -466,7 +552,7 @@ export function openingChecklist({
         "A NatureX reviewer is checking your documents. You can open the offer once they're approved.",
       action: { label: "See your submission", href: verify },
     };
-  } else if (level === "rejected") {
+  } else if (verification?.decision === "rejected") {
     verified = {
       id: "verified",
       label: "Documents verified",
@@ -475,7 +561,7 @@ export function openingChecklist({
       detail: `The reviewer didn't approve the documents.${reason} Upload corrected ones and submit again.`,
       action: { label: "Submit new documents", href: verify },
     };
-  } else if (level === "revoked") {
+  } else if (verification?.level === "revoked") {
     verified = {
       id: "verified",
       label: "Documents verified",
@@ -496,34 +582,35 @@ export function openingChecklist({
     };
   }
 
-  const open: ChecklistStep =
-    launchable === true
-      ? {
-          id: "open",
-          label: "Open to supporters",
-          status: "Ready",
-          state: "current",
-          detail: "Choose your offer below, then open it to supporters.",
-        }
-      : blockedByVerification
-        ? {
-            id: "open",
-            label: "Open to supporters",
-            status: "After verification",
-            state: "upcoming",
-            detail: "Until then, the offer below is a preview you can adjust.",
-          }
-        : {
-            id: "open",
-            label: "Open to supporters",
-            status: launchable === false ? "Not yet" : "Next",
-            state: "upcoming",
-            detail:
-              launchable === false
-                ? "Something else blocks it for now; the offer below says what."
-                : "Choose your offer below, then open it to supporters.",
-          };
-
+  let open: ChecklistStep;
+  if (required) {
+    open = {
+      id: "open",
+      label: "Open to supporters",
+      status: "After verification",
+      state: "upcoming",
+      detail: "Until then, the offer below is a preview you can adjust.",
+    };
+  } else if (launchable === true) {
+    open = {
+      id: "open",
+      label: "Open to supporters",
+      status: "Ready",
+      state: "current",
+      detail: "Choose your offer below, then open it to supporters.",
+    };
+  } else {
+    open = {
+      id: "open",
+      label: "Open to supporters",
+      status: launchable === false ? "Not yet" : "Next",
+      state: "upcoming",
+      detail:
+        launchable === false
+          ? "Something else blocks it for now; the offer below says what."
+          : "Choose your offer below, then open it to supporters.",
+    };
+  }
   return [rated, verified, open];
 }
 

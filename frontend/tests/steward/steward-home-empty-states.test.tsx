@@ -97,7 +97,7 @@ function listing(overrides: Partial<ListingSummary> = {}): ListingSummary {
     shares: null,
     recommendations: [],
     report_version: 1,
-    verification: { level: "verified", required: false },
+    verification: { level: "verified", in_review: false, required: false },
     ...overrides,
   };
 }

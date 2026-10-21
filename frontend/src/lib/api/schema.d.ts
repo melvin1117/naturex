@@ -477,7 +477,8 @@ export interface paths {
          * Preview Ipo
          * @description The price the owner would launch at now: every term of `ipo_price =
          *     fair_value_per_share`, computed by the market engine from the latest report, and whether
-         *     the launch would go ahead (`launchable`, else `blocked_reason`). Writes nothing; a later
+         *     the launch would go ahead (`launchable`, else `blocked_reason`), with where the listing's
+         *     verification stands (#216). Writes nothing; a later
          *     report can change it, so the launch confirms it with `expected_price`.
          */
         get: operations["preview_ipo_assets__asset_id__ipo_preview_get"];
@@ -2765,6 +2766,8 @@ export interface components {
              * @description Why not, as the code the launch would return: ipo_price_too_high (a share costs more than a new account's starting cash: issue more shares), run_in_progress, or not_verified (the live world needs the listing's current verification run verified and still matching; a revoked one blocks everywhere; T69).
              */
             blocked_reason?: string | null;
+            /** @description Where the listing's verification stands, from the same reading as `blocked_reason` (#216). */
+            verification: components["schemas"]["ListingVerificationOut"];
         };
         /** LedgerEntryOut */
         LedgerEntryOut: {
@@ -2881,7 +2884,7 @@ export interface components {
         /** ListingSummaryOut */
         ListingSummaryOut: {
             asset: components["schemas"]["AssetCard"];
-            /** @description continue_listing (draft), rating_in_progress, add_evidence (needs_evidence), verify (verification blocks the opening offer or trading: upload and submit documents), verification_in_review (the same, with a submission waiting for a reviewer), launch_ipo (listed, not launched; owner), awaiting_ipo (the same for stewards and admins), view_on_exchange (trading or suspended), none (ineligible, withdrawn). */
+            /** @description continue_listing (draft), rating_in_progress, add_evidence (needs_evidence), verify (members: verification blocks the opening offer or trading; upload and submit documents), verification_in_review (the same, with a submission waiting for a reviewer), awaiting_verification (the same for same-world admins, who aren't members), launch_ipo (listed, not launched; owner), awaiting_ipo (the same for stewards and admins), view_on_exchange (trading or suspended), none (ineligible, withdrawn). */
             next_action: components["schemas"]["NextAction"];
             verification: components["schemas"]["ListingVerificationOut"];
             /** Ipo At */
@@ -2900,31 +2903,38 @@ export interface components {
         };
         /**
          * ListingVerificationOut
-         * @description The listing's verification as its community sees it (#216): what stands, whether it's
-         *     what blocks the listing now, and the latest decision with the reviewer's reason (members
-         *     and same-world admins only, this endpoint's audience).
+         * @description A listing's verification for its community (#216): what stands, whether it blocks the
+         *     listing now, and the latest decision with the reviewer's reason. Members and same-world
+         *     admins only (the Steward home), and the owner (the IPO preview).
          */
         ListingVerificationOut: {
-            /** @description documents_submitted while a submission waits for a reviewer (even after a revocation); revoked while a revocation stands with nothing newer submitted; else the current run's level, or unverified (no run, or the listing changed since it). */
+            /** @description What stands, as the public panel says it: revoked while a revocation stands (even with a newer submission), else the current run's level, or unverified (no run, or the listing changed since it). */
             level: components["schemas"]["VerificationLevel"];
+            /**
+             * In Review
+             * @description A submission waits for a reviewer.
+             */
+            in_review: boolean;
             /**
              * Required
              * @description Verification blocks the listing now, as the IPO gate decides: the live world's opening offer needs a verified run, and a revocation blocks the offer and trading in every world until a new run is approved.
              */
             required: boolean;
+            /** @description The latest decision (verified, rejected or revoked); null while none. */
+            decision?: components["schemas"]["VerificationLevel"] | null;
             /**
              * Decided At
-             * @description When the decision shown was made: the revocation, else the approval or rejection; null while nothing was decided.
+             * @description When `decision` was made.
              */
             decided_at?: string | null;
             /**
              * Reason
-             * @description The reviewer's reason or note for the decision shown, if any.
+             * @description The reviewer's reason or note for `decision`, if any.
              */
             reason?: string | null;
             /**
              * Run Id
-             * @description The run the decision belongs to.
+             * @description The current run, while it still describes the listing.
              */
             run_id?: string | null;
         };
@@ -3049,7 +3059,7 @@ export interface components {
          * @description What the Steward home offers to do next with a listing.
          * @enum {string}
          */
-        NextAction: "continue_listing" | "rating_in_progress" | "add_evidence" | "verify" | "verification_in_review" | "launch_ipo" | "awaiting_ipo" | "view_on_exchange" | "none";
+        NextAction: "continue_listing" | "rating_in_progress" | "add_evidence" | "verify" | "verification_in_review" | "awaiting_verification" | "launch_ipo" | "awaiting_ipo" | "view_on_exchange" | "none";
         /** OrderCreate */
         OrderCreate: {
             /**

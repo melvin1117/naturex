@@ -93,6 +93,7 @@ const STEP_ICON: Record<ChecklistState, typeof Circle> = {
   waiting: Clock,
   upcoming: Circle,
   optional: CircleDashed,
+  pending: CircleDashed,
 };
 
 const STEP_TONE: Record<ChecklistState, string> = {
@@ -101,6 +102,7 @@ const STEP_TONE: Record<ChecklistState, string> = {
   waiting: "text-clay-ink",
   upcoming: "text-muted-foreground",
   optional: "text-muted-foreground",
+  pending: "text-muted-foreground/60",
 };
 
 /**
@@ -154,9 +156,17 @@ export function OpeningChecklist({
                     {step.status}
                   </span>
                 </p>
-                <p className="mt-1 text-sm text-pretty break-words text-muted-foreground">
-                  {step.detail}
-                </p>
+                {step.state === "pending" ? (
+                  // Neutral while the preview answers: no claim about this world's rules.
+                  <div aria-hidden="true" className="mt-2 space-y-2">
+                    <Skeleton className="h-3.5 w-full max-w-56" />
+                    <Skeleton className="h-3.5 w-2/3 max-w-40" />
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm text-pretty break-words text-muted-foreground">
+                    {step.detail}
+                  </p>
+                )}
                 {step.action && (
                   <Button
                     asChild

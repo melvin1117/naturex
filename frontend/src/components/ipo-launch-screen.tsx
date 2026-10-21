@@ -17,7 +17,7 @@ import {
 import { IpoOfferInputs } from "@/components/ipo-offer-inputs";
 import { IpoLaunched, IpoOutcome } from "@/components/ipo-outcome";
 import { IpoPriceSteps } from "@/components/ipo-preview";
-import { ScreenSkeleton } from "@/components/page-skeletons";
+import { IpoSkeleton } from "@/components/page-skeletons";
 import { useOptionalStewardCommunity } from "@/components/shell/steward-community";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,6 @@ import { toApiError, type ApiError } from "@/lib/api/errors";
 import type { IpoPreview } from "@/lib/api/types";
 import { isApiAssetId } from "@/lib/asset-detail";
 import { openingChecklist } from "@/lib/community";
-import { useCommunitySummary } from "@/lib/community-hooks";
 import { useAsset, useLaunchIpo } from "@/lib/hooks";
 import {
   blockedExplanation,
@@ -55,7 +54,8 @@ function pageRefusal(error: ApiError | null): PageRefusal | null {
  * and the % the community keeps, reads the backend's price formula step by step, and launches
  * at the previewed price. Every number comes from the API; the backend authorizes the launch.
  * The steps before it come first (#216): while verification blocks the launch, the checklist
- * at the top says so and links to it, and the offer is a preview.
+ * at the top says so and links to it, and the offer is a preview. Where verification stands
+ * comes with the preview, so the page needs no other request.
  */
 export function IpoLaunchScreen({ assetId }: { assetId: string }) {
   const validId = isApiAssetId(assetId);
@@ -64,10 +64,6 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
   const steward = useOptionalStewardCommunity();
   const communityId = steward?.active?.id ?? null;
   const homeHref = steward ? steward.href("/steward") : "/steward";
-  // Where verification stands, from the Steward home's summary (cached when coming from it).
-  const summary = useCommunitySummary(communityId ?? undefined);
-  const listing =
-    summary.data?.listings.find((l) => l.asset.id === assetId) ?? null;
   const verifyLink = verifyHref(assetId, steward?.active?.id ?? null);
   const verifyAction = (code: string | null | undefined) =>
     needsVerification(code) ? (
@@ -158,7 +154,7 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
   const firstPreview =
     !shown && (preview.status === "idle" || preview.status === "loading");
   if (!asset.data || firstPreview) {
-    return <ScreenSkeleton label="Checking this site…" />;
+    return <IpoSkeleton label="Checking this site…" />;
   }
 
   const previewRefusal = preview.error ? ipoRefusal(preview.error) : null;
@@ -179,19 +175,27 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
   const facts = asset.data.latest_report
     ? reportFacts(asset.data.latest_report)
     : null;
+  // The checklist reads the preview, the gate's current answer: the same response that enables
+  // Launch, so they never disagree. Undefined until it answers; null when it failed.
+  const answer = current ?? shown;
+  const verification = answer
+    ? answer.verification
+    : preview.error
+      ? null
+      : undefined;
   const blockedReason =
-    current?.blocked_reason ??
+    answer?.blocked_reason ??
     (previewRefusal?.kind === "blocked" ? previewRefusal.code : null);
   // Verification is the blocker: the checklist above says so, and the offer is a preview.
   const awaitingVerification =
-    listing?.verification.required ?? needsVerification(blockedReason);
+    verification?.required === true || needsVerification(blockedReason);
   const steps = openingChecklist({
     assetId,
     communityId,
     rating: facts
       ? `Grade ${facts.grade} · ${facts.health.toFixed(1)} · ${GRADE_LABEL[facts.grade]}`
       : null,
-    verification: listing?.verification ?? null,
+    verification,
     launchable: current?.launchable,
     blockedReason,
   });
