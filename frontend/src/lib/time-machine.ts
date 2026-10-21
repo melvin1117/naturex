@@ -1,10 +1,12 @@
 /**
  * The admin Time Machine (T43) on T38's API: what a refusal means, labels for each asset's
- * outcome and the live progress of a quarter. Pure, so the panel stays presentational.
+ * outcome and the progress of a quarter, which runs in the background as a job (#201). Pure,
+ * so the panel stays presentational.
  */
 import { formatWait, type ApiError } from "./api/errors";
 import type {
   AssetRating,
+  QuarterJob,
   SentAlert,
   SimulatedAsset,
   SimulateEvent,
@@ -95,6 +97,13 @@ export function quarterFailure(error: ApiError): TimeMachineFailure {
       return {
         title: "End of the scripted timeline",
         message: "Reset the demo to start the timeline again.",
+        refresh: true,
+      };
+    case "quarter_job_running":
+      return {
+        title: "A quarter is already running",
+        message:
+          "This sandbox is already running a quarter, so another can't start. Its progress is shown here.",
         refresh: true,
       };
     case "local_jobs_disabled":
@@ -329,6 +338,63 @@ export function quarterOutcomeText(result: SimulateQuarter): string {
   }
   const replay = result.replayed ? " (replayed)" : "";
   return `${quarterLabel(result.period)}${replay}: ${parts.join(", ")}.`;
+}
+
+/** How often a running quarter job is read again (while the tab is visible). */
+export const QUARTER_POLL_MS = 2_000;
+
+/** A job that hasn't finished: `queued` or `running`. */
+export function isJobActive(
+  job: Pick<QuarterJob, "status"> | null | undefined,
+): boolean {
+  return job?.status === "queued" || job?.status === "running";
+}
+
+/**
+ * A running quarter job's progress: live `rating_progress` runs when there are any (finer),
+ * else the sites the job has settled so far.
+ */
+export function quarterJobProgressText(
+  job: QuarterJob | undefined,
+  runs: ReadonlyMap<string, QuarterRun>,
+  names: ReadonlyMap<string, string>,
+): string {
+  if (runs.size > 0) return quarterProgressText(runs, names);
+  if (job?.status === "queued")
+    return "Queued: the quarter starts as soon as a rating worker is free…";
+  if (!job || job.assets.length === 0 || job.asset_count == null)
+    return "Starting the re-rates…";
+  return `Re-rating sites: ${job.assets.length} of ${job.asset_count} done.`;
+}
+
+const UNFINISHED = new Set<SimulatedAsset["status"]>([
+  "failed",
+  "in_progress",
+  "stopped",
+]);
+
+/**
+ * A finished job that left work behind (it failed, stopped early or a site failed): running
+ * the same quarter again finishes it, re-rating and paying only what's missing.
+ */
+export function needsReplay(job: QuarterJob | undefined): boolean {
+  if (!job || isJobActive(job)) return false;
+  return (
+    job.status !== "done" || job.assets.some((a) => UNFINISHED.has(a.status))
+  );
+}
+
+/** Why a job ended `failed`, in words (the job itself broke, not a site). */
+export function jobFailure(
+  job: QuarterJob | undefined,
+): TimeMachineFailure | null {
+  if (job?.status !== "failed") return null;
+  return {
+    title: "The quarter stopped before it finished",
+    message:
+      "Something went wrong while it ran. The sites it finished are listed below; run the quarter again to finish the rest. Nothing is re-rated or paid twice.",
+    refresh: true,
+  };
 }
 
 /** `GET /admin/alerts` takes at most this many ids per request. */

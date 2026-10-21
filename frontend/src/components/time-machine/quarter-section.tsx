@@ -1,6 +1,6 @@
 "use client";
 
-import { FastForward, TriangleAlertIcon } from "lucide-react";
+import { FastForward, RotateCw, TriangleAlertIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "cn";
 
@@ -22,13 +22,16 @@ import type { TimeMachine, TimeMachineQuarter } from "@/lib/api/types";
 import { useLiveEvent } from "@/lib/hooks";
 import { quarterLabel } from "@/lib/prototype/format";
 import {
+  isJobActive,
+  jobFailure,
+  needsReplay,
   quarterFailure,
+  quarterJobProgressText,
   quarterOutcomeText,
-  quarterProgressText,
   trackQuarterRun,
   type QuarterRun,
 } from "@/lib/time-machine";
-import { useSimulateQuarter } from "@/lib/time-machine-hooks";
+import { useQuarterJob, useSimulateQuarter } from "@/lib/time-machine-hooks";
 
 import { QuarterResult } from "./quarter-result";
 import { SentAlerts } from "./sent-alerts";
@@ -84,7 +87,11 @@ function Timeline({ state }: { state: TimeMachine }) {
   );
 }
 
-/** The timeline, "Next quarter" with its confirmation, live progress and the result. */
+/**
+ * The timeline, "Next quarter" with its confirmation, then the quarter's job (#201): its
+ * progress (polled, plus the live `rating_progress` runs) and its per-site results as they
+ * settle.
+ */
 export function QuarterSection({
   state,
   listed,
@@ -100,33 +107,48 @@ export function QuarterSection({
   onPendingChange?: (pending: boolean) => void;
 }) {
   const quarter = useSimulateQuarter();
+  const [started, setStarted] = useState<string | null>(null);
+  // A job running in this sandbox wins (a reload, another tab, or a refused second start);
+  // otherwise the job this panel started.
+  const latest = state.quarter_job;
+  const jobId = latest && isJobActive(latest) ? latest.id : started;
+  const job = useQuarterJob(jobId);
+  const result = jobId && job.data?.id === jobId ? job.data : undefined;
   const [confirming, setConfirming] = useState<TimeMachineQuarter | null>(null);
   const [runs, setRuns] = useState<ReadonlyMap<string, QuarterRun>>(new Map());
+
+  const running =
+    quarter.isPending ||
+    (jobId !== null && (result ? isJobActive(result) : !job.error));
 
   useLiveEvent(
     "rating_progress",
     ({ payload }) =>
       setRuns((current) => trackQuarterRun(current, payload) ?? current),
-    { enabled: quarter.isPending },
+    { enabled: running },
   );
 
   useEffect(() => {
-    onPendingChange?.(quarter.isPending);
+    onPendingChange?.(running);
     return () => onPendingChange?.(false);
-  }, [quarter.isPending, onPendingChange]);
+  }, [running, onPendingChange]);
 
-  const run = async (next: TimeMachineQuarter) => {
+  const run = async (period: string) => {
     setRuns(new Map());
     try {
-      await quarter.mutateAsync(next.period);
+      const created = await quarter.mutateAsync(period);
+      setStarted(created.id);
     } catch (error) {
       if (quarterFailure(toApiError(error)).refresh) onRefresh();
     }
   };
 
-  const failure = quarter.error ? quarterFailure(quarter.error) : null;
+  const failure =
+    (quarter.error ? quarterFailure(quarter.error) : null) ??
+    jobFailure(result);
   const next = state.next;
   const canRun = Boolean(next) && state.local_jobs;
+  const replay = !running && state.local_jobs && needsReplay(result);
 
   return (
     <>
@@ -145,7 +167,7 @@ export function QuarterSection({
           <Dialog
             open={confirming !== null}
             onOpenChange={(open) =>
-              setConfirming(open && !quarter.isPending ? next : null)
+              setConfirming(open && !running ? next : null)
             }
           >
             <DialogTrigger asChild>
@@ -154,16 +176,16 @@ export function QuarterSection({
               <Button
                 size="lg"
                 className="bg-lime text-machine hover:bg-lime/90 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-lime aria-disabled:active:translate-y-0"
-                disabled={!canRun}
-                aria-disabled={quarter.isPending || undefined}
+                disabled={!canRun && !running}
+                aria-disabled={running || undefined}
                 data-tour="next-quarter"
               >
-                {quarter.isPending ? (
+                {running ? (
                   <Spinner aria-hidden="true" role="presentation" />
                 ) : (
                   <FastForward aria-hidden="true" />
                 )}
-                {quarter.isPending
+                {running
                   ? "Running the quarter…"
                   : next
                     ? `Next quarter: ${quarterLabel(next.period)}`
@@ -177,7 +199,7 @@ export function QuarterSection({
                   onSubmit={(e) => {
                     e.preventDefault();
                     setConfirming(null);
-                    void run(confirming);
+                    void run(confirming.period);
                   }}
                 >
                   <DialogHeader>
@@ -206,18 +228,31 @@ export function QuarterSection({
               </DialogContent>
             )}
           </Dialog>
+          {replay && result && (
+            <Button
+              variant="outline"
+              size="lg"
+              className="border-machine-line bg-transparent text-machine-ink hover:bg-machine-line/40 hover:text-machine-ink"
+              onClick={() => void run(result.period)}
+            >
+              <RotateCw aria-hidden="true" />
+              Finish {quarterLabel(result.period)}
+            </Button>
+          )}
           <span className="text-sm text-machine-muted">
             {!state.local_jobs
               ? "Quarters run in-process only with LOCAL_JOBS=true, which is off on this server. Event presets still work."
-              : next
-                ? "Re-rates every listed site, re-anchors stake prices, alerts holders and pays the quarter."
-                : "Reset the demo to start the timeline again."}
+              : running
+                ? "The quarter runs on the server: you can leave this page and come back."
+                : next
+                  ? "Re-rates every listed site, re-anchors stake prices, alerts holders and pays the quarter."
+                  : "Reset the demo to start the timeline again."}
           </span>
         </div>
         <p role="status" aria-live="polite" className="mt-4 text-sm">
-          {quarter.isPending
-            ? quarterProgressText(runs, names)
-            : quarter.data && quarterOutcomeText(quarter.data)}
+          {running
+            ? quarterJobProgressText(result, runs, names)
+            : result && quarterOutcomeText(result)}
         </p>
       </section>
 
@@ -231,15 +266,32 @@ export function QuarterSection({
         </Alert>
       )}
 
-      {quarter.data && (
+      {job.error && (
+        <Alert variant="destructive" className="mt-6">
+          <TriangleAlertIcon aria-hidden="true" />
+          <AlertTitle>We couldn&apos;t check the quarter</AlertTitle>
+          <AlertDescription>
+            <p>{job.error.message}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => void job.refetch()}
+            >
+              Try again
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {result && (result.assets.length > 0 || !isJobActive(result)) && (
         <section
           aria-label="Quarter result"
+          aria-busy={isJobActive(result) || undefined}
           className="mt-6 grid gap-8 rounded-3xl bg-card p-6 shadow-soft lg:grid-cols-[minmax(0,1fr)_20rem]"
         >
-          <QuarterResult result={quarter.data} />
-          <SentAlerts
-            ids={quarter.data.assets.flatMap((a) => a.alert_ids ?? [])}
-          />
+          <QuarterResult result={result} />
+          <SentAlerts ids={result.assets.flatMap((a) => a.alert_ids ?? [])} />
         </section>
       )}
     </>

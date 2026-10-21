@@ -101,6 +101,18 @@ export type SentAlert = Schemas["SentAlertOut"];
 export type SimulatedAsset = Schemas["SimulatedAssetOut"];
 export type SimulateEvent = Schemas["SimulateEventResponse"];
 export type SimulateEventRequest = Schemas["SimulateEventRequest"];
-export type SimulateQuarter = Schemas["SimulateQuarterResponse"];
+/** A "Next quarter" running in the background (#201): its status and what it did so far. */
+export type QuarterJob = Schemas["QuarterJobOut"];
+/** What a quarter did, per site and in total (T38): a `QuarterJob` without its job fields. */
+export type SimulateQuarter = Omit<
+  QuarterJob,
+  | "id"
+  | "status"
+  | "error"
+  | "asset_count"
+  | "created_at"
+  | "updated_at"
+  | "finished_at"
+>;
 export type TimeMachine = Schemas["TimeMachineOut"];
 export type TimeMachineQuarter = Schemas["TimeMachineQuarter"];
