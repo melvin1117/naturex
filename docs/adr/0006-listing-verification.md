@@ -35,6 +35,7 @@ Proposed (2026-10-07). Builds on [ADR-0005](./0005-accounts-roles-and-two-apps.m
 
 - **Verification runs are write-once records.** The checklist, fingerprint, document links, method version, `mode` and `evidence_kind` never change; the decision fields (level, reviewer role and reason) are written once. A decision is written once (`documents_submitted` → `verified` or `rejected`; `verified` → `revoked`), and `is_current` only flips when a newer run supersedes it. A database trigger enforces this, and the ledger keeps every decision append-only. Each run stores an **input fingerprint**: a hash of the community, the listing name, the geometry, the area, the document commitments, the method version, the `mode` and the `evidence_kind`.
 - **One run is current per asset**, enforced with a partial unique index.
+- *Clarification (#210):* a run's document links are rows of their own (`verification_run_documents`), so one document may be in several runs of its listing. While the current run still waits for a decision, a new submission **adds to it**: the new run covers the waiting run's documents (the steward may leave some out) plus the new ones, within the 3-document limit, and supersedes it, so the reviewer always sees everything submitted. The superseded run keeps its own links and fingerprint unchanged. After a decision (verified, rejected or revoked) a submission starts afresh with new uploads; the decided run's documents stay in its record.
 - **Changes reset verification:** if the polygon, area, name, community or documents change afterwards, the fingerprint no longer matches and the listing counts as `unverified` until a new run is approved.
 - **The IPO is gated:** in the live world, the IPO transaction locks the asset and needs the current run to be `verified` with a matching fingerprint.
 - **Revoking** atomically marks the run `revoked` and suspends the asset. Orders are rejected, the public panel says "Verification revoked", and both changes go into the ledger. Trading resumes only after a new run is approved. *Clarification (T69):* the revocation is recorded on the asset (`assets.verification_revoked_at`, as in §6) in every mode, and only an admin's approval of a new run clears it; submitting a new run doesn't.
@@ -77,6 +78,7 @@ Each run produces a **checklist**, stored with the result and shown to the revie
   - the AI's reasons;
   - the map with the polygon.
 - They approve or reject, and must write a reason when rejecting.
+- *Clarification (#211):* decided listings stay findable: the admin area lists waiting listings and, separately, those whose current run is verified, rejected or revoked (latest decision first, in the reviewer's world, never the reviewer's own community's), each opening the review page with the full run history.
 - **The Nature Ledger gets a `verification` entry for each decision**, containing:
   - the level;
   - the reviewer's role (`platform_admin` / `partner_reviewer`), never a name;
