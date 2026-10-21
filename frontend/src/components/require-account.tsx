@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
+import { RouteSkeleton } from "@/components/page-skeletons";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { loginHref, protectedAccess } from "@/lib/auth";
 import { useWorld } from "@/lib/hooks";
 import { usePrototype } from "@/lib/prototype/store";
@@ -108,15 +108,12 @@ export function RequireAccount({
   }
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"
-    >
-      <Spinner aria-hidden="true" role="presentation" />
-      {access === "sign-in"
-        ? "Taking you to sign in…"
-        : "Checking your session…"}
-    </div>
+    <RouteSkeleton
+      label={
+        access === "sign-in"
+          ? "Taking you to sign in…"
+          : "Checking your session…"
+      }
+    />
   );
 }

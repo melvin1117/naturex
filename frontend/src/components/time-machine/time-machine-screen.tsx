@@ -4,11 +4,14 @@ import { ArrowRight, LockKeyhole } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
+import {
+  PanelSkeleton,
+  TimeMachineBodySkeleton,
+} from "@/components/page-skeletons";
 import { ControlRoom } from "@/components/proto/control-room";
 import { LoadError } from "@/components/proto/load-error";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { useAssets, useWorld } from "@/lib/hooks";
 import {
   ADMIN_ONLY,
@@ -29,18 +32,6 @@ import { ResetSection } from "./reset-section";
 export function AdminScreen() {
   const { world } = useWorld();
   return world?.me ? <TimeMachinePanel /> : <ControlRoom />;
-}
-
-function Loading({ label }: { label: string }) {
-  return (
-    <p
-      role="status"
-      className="mt-8 flex items-center gap-2 py-10 text-sm text-muted-foreground"
-    >
-      <Spinner aria-hidden="true" role="presentation" />
-      {label}
-    </p>
-  );
 }
 
 export function TimeMachinePanel() {
@@ -138,7 +129,7 @@ export function TimeMachinePanel() {
                   retry={assets.refetch}
                 />
               ) : (
-                <Loading label="Loading sites…" />
+                <PanelSkeleton label="Loading sites…" />
               )}
             </div>
           </div>
@@ -157,7 +148,7 @@ export function TimeMachinePanel() {
           />
         </div>
       ) : (
-        <Loading label="Loading the Time Machine…" />
+        <TimeMachineBodySkeleton />
       )}
     </div>
   );

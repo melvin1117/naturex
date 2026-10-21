@@ -6,6 +6,7 @@ import { Suspense } from "react";
 
 import { AlertsList } from "@/components/alerts-list";
 import { CopilotChat } from "@/components/copilot-chat";
+import { PortfolioBodySkeleton } from "@/components/page-skeletons";
 import { Delta, SiteThumb, Stat } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
 import { Portfolio as PrototypePortfolio } from "@/components/proto/portfolio";
@@ -76,14 +77,7 @@ export function PortfolioView({ name }: { name: string }) {
           </AlertDescription>
         </Alert>
       ) : (
-        <div
-          role="status"
-          aria-label="Loading your stakes"
-          className="mt-8 space-y-6"
-        >
-          <div className="h-28 animate-pulse rounded-3xl bg-muted" />
-          <div className="h-64 animate-pulse rounded-3xl bg-muted" />
-        </div>
+        <PortfolioBodySkeleton />
       )}
     </div>
   );

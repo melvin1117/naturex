@@ -46,9 +46,16 @@ function WorldBootstrap() {
 
 /**
  * Renders `children` only once the visitor's world exists; until then an accessible loading
- * state, or an error with a retry if the world can't be opened (e.g. the backend is down).
+ * state (`fallback`, e.g. the page's skeleton, else a status line), or an error with a retry
+ * if the world can't be opened (e.g. the backend is down).
  */
-export function WorldGate({ children }: { children: ReactNode }) {
+export function WorldGate({
+  children,
+  fallback,
+}: {
+  children: ReactNode;
+  fallback?: ReactNode;
+}) {
   const { status, error, retry } = useWorld();
 
   if (status === "ready") return children;
@@ -74,6 +81,7 @@ export function WorldGate({ children }: { children: ReactNode }) {
     );
   }
 
+  if (fallback) return fallback;
   return (
     <div
       role="status"
