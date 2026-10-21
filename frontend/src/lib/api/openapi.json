@@ -1666,7 +1666,7 @@
           "verification"
         ],
         "summary": "Submit Verification",
-        "description": "Submit 1\u20133 uploaded documents for review: a new current run with its deterministic\nchecklist (accepted format, not reused, boundary free, consent document attached) and the\nfingerprint of what it vouches for. Any earlier run stops being current. Once committed,\nthe AI document check (T71) runs in the background where it's on; its untrusted suggestion\nis for the reviewer only and never changes the checklist or the level.",
+        "description": "Submit 1\u20133 uploaded documents for review: a new current run with its deterministic\nchecklist (accepted format, not reused, boundary free, consent document attached) and the\nfingerprint of what it vouches for. Any earlier run stops being current. **Adding to a\nsubmission:** while the current run still waits for a decision, its documents are kept in\nthe new run (except `remove_document_ids`), so the reviewer sees everything; at most 3 in\nall. After a decision, a submission starts afresh. Once committed,\nthe AI document check (T71) runs in the background where it's on; its untrusted suggestion\nis for the reviewer only and never changes the checklist or the level.",
         "operationId": "submit_verification_assets__asset_id__verification_runs_post",
         "parameters": [
           {
@@ -1711,7 +1711,7 @@
             "description": "`not_found`, or `document_not_found` (a document that isn't one of this listing's)"
           },
           "409": {
-            "description": "`listing_closed` or `document_already_submitted`"
+            "description": "`listing_closed`, `document_already_submitted` (a new document was in a run before), `document_not_in_submission` (a removed document isn't in the waiting run) or `submission_full` (the waiting run's documents and the new ones are more than 3: remove some)"
           },
           "422": {
             "description": "Validation Error",
@@ -1901,6 +1901,97 @@
           },
           "404": {
             "description": "`not_found`: `asset_id` isn't a listing in the caller's world"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/verifications/decided": {
+      "get": {
+        "tags": [
+          "verification",
+          "admin"
+        ],
+        "summary": "Decided Verifications",
+        "description": "Listings in the caller's world whose current run was decided (verified, rejected or\nrevoked), the latest decision first, one page at a time (`limit`, `offset`), so a reviewer\ncan find a listing again after deciding it. Each item's run carries its decision; the\nreview page (`GET /assets/{id}/verification/runs`) has the full history. A listing with a\nnewer submission waiting is in the queue instead. Listings of the admin's own communities\nare left out (conflict of interest).",
+        "operationId": "decided_verifications_admin_verifications_decided_get",
+        "parameters": [
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "verified",
+                    "rejected",
+                    "revoked"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only listings whose current run is at this level; all three if absent.",
+              "title": "Level"
+            },
+            "description": "Only listings whose current run is at this level; all three if absent."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DecidedListingItem"
+                  },
+                  "title": "Response Decided Verifications Admin Verifications Decided Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "admin_only"
           },
           "422": {
             "description": "Validation Error",
@@ -5889,6 +5980,54 @@
         ],
         "title": "DateWindow"
       },
+      "DecidedListingItem": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "asset_name": {
+            "type": "string",
+            "title": "Asset Name"
+          },
+          "asset_status": {
+            "$ref": "#/components/schemas/AssetStatusOut"
+          },
+          "community_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Community Id"
+          },
+          "run": {
+            "$ref": "#/components/schemas/VerificationRunOut"
+          },
+          "last_decision_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Decision At",
+            "description": "When the run was revoked, else when it was decided: the list's order."
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "asset_name",
+          "asset_status",
+          "community_id",
+          "run",
+          "last_decision_at"
+        ],
+        "title": "DecidedListingItem",
+        "description": "A listing whose current run was decided (#211): the run, with its decision and documents."
+      },
       "DiffReason": {
         "properties": {
           "source": {
@@ -7135,18 +7274,10 @@
             "format": "uuid",
             "title": "Asset Id"
           },
-          "run_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Run Id",
-            "description": "The run it was submitted with; null until then."
+          "submitted": {
+            "type": "boolean",
+            "title": "Submitted",
+            "description": "It's in a run (a submission). A waiting run's documents carry into the next submission (#210), so one document may be in several runs; each run lists its own."
           },
           "doc_type": {
             "$ref": "#/components/schemas/DocumentType"
@@ -7214,7 +7345,7 @@
         "required": [
           "id",
           "asset_id",
-          "run_id",
+          "submitted",
           "doc_type",
           "media_type",
           "size_bytes",
@@ -10684,7 +10815,18 @@
             "type": "array",
             "maxItems": 3,
             "minItems": 1,
-            "title": "Document Ids"
+            "title": "Document Ids",
+            "description": "New documents: never submitted before."
+          },
+          "remove_document_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Remove Document Ids",
+            "description": "Documents of the waiting run to leave out of the new one."
           }
         },
         "additionalProperties": false,
@@ -10693,7 +10835,7 @@
           "document_ids"
         ],
         "title": "VerificationSubmit",
-        "description": "Submit 1\u20133 of the listing's uploaded, not yet submitted documents for review."
+        "description": "Submit 1\u20133 of the listing's uploaded, not yet submitted documents for review. While the\ncurrent run still waits for a decision, its documents are kept in the new run too (at most 3\nin all), except those listed in `remove_document_ids`."
       },
       "VisParams": {
         "properties": {
