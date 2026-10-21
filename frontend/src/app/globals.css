@@ -270,7 +270,7 @@
 }
 .nx-grow-x {
   transform-origin: center;
-  animation: nx-grow-x 640ms var(--nx-ease-out) both;
+  animation: nx-grow-x 480ms var(--nx-ease-out) both;
 }
 .nx-fade {
   animation: nx-fade var(--nx-duration-content) var(--nx-ease-out) both;

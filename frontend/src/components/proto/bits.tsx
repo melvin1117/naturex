@@ -261,12 +261,12 @@ export function ValueRange({
             tone === "light" ? "bg-primary" : "bg-white",
             revealDelay !== undefined && "nx-fade",
           )}
-          style={{ left: `calc(${at(mid)}% - 2px)`, ...reveal(320) }}
+          style={{ left: `calc(${at(mid)}% - 2px)`, ...reveal(160) }}
         />
       </div>
       <p
         className={cn("text-xs", muted, revealDelay !== undefined && "nx-fade")}
-        style={reveal(480)}
+        style={reveal(220)}
       >
         {confidence.toFixed(0)}% confidence · screening estimate, not an
         appraisal

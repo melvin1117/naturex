@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { cn } from "cn";
 
 import {
@@ -63,13 +63,11 @@ export function DotRing({
   const from = Math.min(Math.round(reveal?.from ?? 0), lit);
   const delay = reveal?.delay ?? 0;
   const duration = reveal?.duration ?? DURATION.reveal;
-  const dots: {
-    x: number;
-    y: number;
-    r: number;
+  // One group per column: it carries the fill and, in a reveal, the column's light-up delay.
+  const columns: {
     fill: string | null;
     at: number | null;
-    key: string;
+    dots: { x: number; y: number; r: number; key: string }[];
   }[] = [];
   for (let c = 0; c < COLUMNS; c++) {
     const angle = (c / COLUMNS) * Math.PI * 2 - Math.PI / 2;
@@ -81,6 +79,7 @@ export function DotRing({
             delay + duration * easeOutInverse((c + 1 - from) / (lit - from)),
           )
         : null;
+    const dots = [];
     for (let r = 0; r < RINGS; r++) {
       const radius = inner + ((outer - inner) * r) / (RINGS - 1);
       // Thin the dots slightly on outer rings so the edge reads as a soft boundary.
@@ -91,11 +90,10 @@ export function DotRing({
         x: Math.round((cx + Math.cos(angle) * radius) * 100) / 100,
         y: Math.round((cx + Math.sin(angle) * radius) * 100) / 100,
         r: Math.round((size / 210 + (r === 2 ? 0.25 : 0)) * 100) / 100,
-        fill,
-        at,
         key: `${c}-${r}`,
       });
     }
+    columns.push({ fill, at, dots });
   }
   return (
     <div
@@ -110,19 +108,24 @@ export function DotRing({
         height={size}
         aria-hidden="true"
       >
-        {dots.map((d) => (
-          <circle
-            key={d.key}
-            cx={d.x}
-            cy={d.y}
-            r={d.r}
+        {columns.map((column, c) => (
+          <g
+            key={c}
             className={cn(
-              d.fill ??
+              column.fill ??
                 (tone === "dark" ? "fill-machine-line" : "fill-foreground/12"),
-              d.at !== null && "nx-dot-on",
+              column.at !== null && "nx-dot-on",
             )}
-            style={d.at !== null ? { animationDelay: `${d.at}ms` } : undefined}
-          />
+            style={
+              column.at !== null
+                ? { animationDelay: `${column.at}ms` }
+                : undefined
+            }
+          >
+            {column.dots.map((d) => (
+              <circle key={d.key} cx={d.x} cy={d.y} r={d.r} />
+            ))}
+          </g>
         ))}
       </svg>
       <div className="absolute inset-0 grid place-items-center text-center">
@@ -157,12 +160,6 @@ export function HealthRing({
   className?: string;
 }) {
   const reveal = animateFrom !== undefined;
-  const shown = useCountUp(value, {
-    from: animateFrom ?? value,
-    delay,
-    duration: DURATION.reveal,
-    enabled: reveal,
-  });
   return (
     <DotRing
       segments={[
@@ -178,15 +175,16 @@ export function HealthRing({
       className={className}
     >
       <div>
-        <div
+        <CountUpNumeral
+          value={value}
+          from={animateFrom}
+          delay={delay}
           className={cn(
             "tabular font-light tracking-tight",
             tone === "dark" ? "text-machine-ink" : "text-foreground",
           )}
           style={{ fontSize: size * 0.24, lineHeight: 1 }}
-        >
-          {shown.toFixed(1)}
-        </div>
+        />
         <div
           className={cn(
             "mt-1 text-xs",
@@ -197,5 +195,35 @@ export function HealthRing({
         </div>
       </div>
     </DotRing>
+  );
+}
+
+/**
+ * The ring's numeral, on its own so a count-up re-renders only this, not the ring's dots.
+ * `from` undefined: the value as it is.
+ */
+function CountUpNumeral({
+  value,
+  from,
+  delay,
+  className,
+  style,
+}: {
+  value: number;
+  from: number | undefined;
+  delay: number;
+  className: string;
+  style: CSSProperties;
+}) {
+  const shown = useCountUp(value, {
+    from: from ?? value,
+    delay,
+    duration: DURATION.reveal,
+    enabled: from !== undefined,
+  });
+  return (
+    <div className={className} style={style}>
+      {shown.toFixed(1)}
+    </div>
   );
 }
