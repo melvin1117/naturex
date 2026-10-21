@@ -94,6 +94,21 @@ describe("PriceTick", () => {
   });
 });
 
+describe("PriceTick before the value is fresh", () => {
+  it("doesn't take a cached value's refresh for a move", () => {
+    const fmt = (n: number) => `$${n.toFixed(2)}`;
+    const { rerender, container } = render(
+      <PriceTick value={20} format={fmt} armed={false} />,
+    );
+    // The first read since the page opened lands, and arms it in the same render.
+    rerender(<PriceTick value={21} format={fmt} armed />);
+    expect(container.querySelector(".nx-flash")).toBeNull();
+    expect(container.querySelector("[data-tick]")).toBeNull();
+    rerender(<PriceTick value={22} format={fmt} armed />);
+    expect(container.querySelector(".nx-flash")).toHaveTextContent("$22.00");
+  });
+});
+
 describe("CountTo", () => {
   it("shows the exact new value at once under reduced motion", () => {
     motion = stubMotion({ reduce: true });
@@ -120,6 +135,27 @@ describe("CountTo", () => {
     expect(shown).toBeGreaterThan(9599.6);
     await advance(400);
     expect(container.textContent).toBe("9599.60");
+  });
+
+  it("restarts a count from the number on screen, not from the old target", async () => {
+    motion = stubMotion({ reduce: false });
+    const fmt = (n: number) => n.toFixed(2);
+    const { rerender, container } = render(<CountTo value={0} format={fmt} />);
+    rerender(<CountTo value={100} format={fmt} />);
+    await advance(150);
+    const onScreen = Number(
+      container.querySelector("[aria-hidden]")!.textContent,
+    );
+    expect(onScreen).toBeGreaterThan(0);
+    expect(onScreen).toBeLessThan(100);
+
+    rerender(<CountTo value={200} format={fmt} />);
+    const restart = Number(
+      container.querySelector("[aria-hidden]")!.textContent,
+    );
+    expect(restart).toBeCloseTo(onScreen, 2);
+    await advance(700);
+    expect(container.textContent).toBe("200.00");
   });
 
   it("counts a fresh stake's units from before the fill", async () => {

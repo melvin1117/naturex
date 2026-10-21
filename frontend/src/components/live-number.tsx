@@ -1,10 +1,15 @@
 "use client";
 
 import { ArrowDown, ArrowUp } from "lucide-react";
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { cn } from "cn";
 
-import { DURATION, useCountUp, useValueTick } from "@/lib/motion";
+import {
+  DURATION,
+  easeOut,
+  usePrefersReducedMotion,
+  useValueTick,
+} from "@/lib/motion";
 
 /**
  * Numbers that show they changed (#216 WP2): a count to a newly computed value, and a live
@@ -13,8 +18,9 @@ import { DURATION, useCountUp, useValueTick } from "@/lib/motion";
  */
 
 /**
- * `value`, counting to it from the previous value whenever it changes (or from `from` on
- * mount, e.g. a stake's units before a fill). Assistive tech gets only the final value.
+ * `value`, counting to it whenever it changes: from what's on screen (mid-count included), or
+ * from `from` on mount, e.g. a stake's units before a fill. Lands on exactly `value`; under
+ * reduced motion it shows at once. Assistive tech gets only the final value.
  */
 export function CountTo({
   value,
@@ -28,35 +34,7 @@ export function CountTo({
   from?: number;
   duration?: number;
 }) {
-  const [state, setState] = useState({ value, from: from ?? value });
-  let current = state;
-  if (state.value !== value) {
-    current = { value, from: state.value };
-    setState(current);
-  }
-  return (
-    <Counting
-      key={current.value}
-      from={current.from}
-      value={value}
-      format={format}
-      duration={duration}
-    />
-  );
-}
-
-function Counting({
-  from,
-  value,
-  format,
-  duration,
-}: {
-  from: number;
-  value: number;
-  format: (value: number) => string;
-  duration: number;
-}) {
-  const shown = useCountUp(value, { from, duration });
+  const shown = useTween(value, from, duration);
   if (shown === value) return <>{format(value)}</>;
   return (
     <>
@@ -64,6 +42,42 @@ function Counting({
       <span className="sr-only">{format(value)}</span>
     </>
   );
+}
+
+type Segment = { from: number; to: number; progress: number };
+
+const at = ({ from, to, progress }: Segment) =>
+  progress >= 1 ? to : from + (to - from) * easeOut(progress);
+
+/** A number easing to `value` over `duration`; a new value starts from the one on screen. */
+function useTween(value: number, from: number | undefined, duration: number) {
+  const reduced = usePrefersReducedMotion();
+  const [segment, setSegment] = useState<Segment>(() => ({
+    from: from ?? value,
+    to: value,
+    progress: from === undefined || from === value ? 1 : 0,
+  }));
+  let current = segment;
+  if (value !== segment.to) {
+    current = { from: at(segment), to: value, progress: reduced ? 1 : 0 };
+    setSegment(current);
+  }
+  const counting = !reduced && duration > 0 && current.progress < 1;
+  useEffect(() => {
+    if (!counting) return;
+    let frame = 0;
+    let start: number | null = null;
+    const tick = (now: number) => {
+      start ??= now;
+      const progress = Math.min(1, (now - start) / duration);
+      setSegment((s) => ({ ...s, progress }));
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+    // A new segment (from, to) restarts the clock; progress updates don't.
+  }, [counting, current.from, current.to, duration]);
+  return counting ? at(current) : value;
 }
 
 const FLASH: Record<"land" | "image", Record<"up" | "down", string>> = {
@@ -80,15 +94,18 @@ export function PriceTick({
   value,
   format,
   tone = "land",
+  armed = true,
   className,
 }: {
   value: number | null;
   format: (value: number) => string;
+  /** False until the value is fresh from the API (not a cached one being refreshed). */
+  armed?: boolean;
   /** "image" on the photographic hero and feature card (white text). */
   tone?: "land" | "image";
   className?: string;
 }) {
-  const { direction, moves } = useValueTick(value);
+  const { direction, moves } = useValueTick(value, { armed });
   const Arrow = direction === "down" ? ArrowDown : ArrowUp;
   return (
     <span

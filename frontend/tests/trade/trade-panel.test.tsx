@@ -658,4 +658,129 @@ describe("TradePanel", () => {
     );
     expect(backend.calls(QUOTE)).toBeGreaterThan(before);
   });
+
+  describe("refusals and their fix (#216 WP2)", () => {
+    const qtyOf = (r: Request) => new URL(r.url).searchParams.get("qty");
+    const oneUnitQuotes = (backend: ReturnType<typeof fakeBackend>) =>
+      backend.requests.filter(
+        (r) => r.url.includes("/quote") && qtyOf(r) === "1",
+      ).length;
+    const tick = (id: number) =>
+      act(() => {
+        const source = FakeEventSource.latest();
+        source.open();
+        source.emit("price_tick", id, {
+          asset_id: ASSET_ID,
+          price: "20.5000",
+          reason: "tick",
+        });
+      });
+
+    it("washes the balance after a fill on a layer, without remounting its numbers", async () => {
+      renderPanel();
+      await quoted();
+      const balance = await screen.findByTestId("trade-balance");
+      expect(screen.queryByTestId("trade-balance-wash")).toBeNull();
+
+      fireEvent.click(buyButton());
+      await screen.findByText(/Stake added/);
+      expect(screen.getByTestId("trade-balance")).toBe(balance);
+      expect(screen.getByTestId("trade-balance-wash")).toHaveClass("nx-wash");
+      expect(screen.getByTestId("trade-balance-wash")).toHaveAttribute(
+        "aria-hidden",
+        "true",
+      );
+    });
+
+    it("never asks for a 1-unit quote when the order's own quote is fine", async () => {
+      const { backend } = renderPanel();
+      await quoted();
+      await waitFor(() => expect(FakeEventSource.instances.length).toBe(1));
+      tick(1);
+      await waitFor(() =>
+        expect(
+          backend.requests.filter((r) => r.url.includes("/quote")).length,
+        ).toBeGreaterThan(1),
+      );
+      expect(oneUnitQuotes(backend)).toBe(0);
+    });
+
+    it("stops refreshing the 1-unit quote on ticks once the size is fixed", async () => {
+      const { backend } = renderPanel({
+        [QUOTE]: (request) =>
+          qtyOf(request) === "1" || Number(qtyOf(request)) <= 279
+            ? quoteFor(request, { max_qty: 279 })
+            : json({ detail: "order_too_large" }, { status: 400 }),
+      });
+      fireEvent.change(await screen.findByLabelText("Units"), {
+        target: { value: "999999999" },
+      });
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Change to 279 units" }),
+      );
+      await quoted();
+      const asked = oneUnitQuotes(backend);
+      expect(asked).toBe(1);
+
+      await waitFor(() => expect(FakeEventSource.instances.length).toBe(1));
+      const quotesBefore = backend.calls(QUOTE);
+      tick(1);
+      await waitFor(() =>
+        expect(backend.calls(QUOTE)).toBeGreaterThan(quotesBefore),
+      );
+      await new Promise((r) => setTimeout(r, 100));
+      expect(oneUnitQuotes(backend)).toBe(asked);
+    });
+
+    it("moves focus to the units field when the focused fix goes away on a refresh", async () => {
+      let cash = "150.00";
+      let max = 7;
+      renderPanel({
+        "GET /portfolio": () => json(portfolio({ cash_balance: cash })),
+        [QUOTE]: (request) => quoteFor(request, { max_qty: max }),
+      });
+      await quoted();
+      const fix = await screen.findByRole("button", {
+        name: "Change to 7 units",
+      });
+      fix.focus();
+      expect(fix).toHaveFocus();
+
+      // A deposit of play money elsewhere: the next read has enough, so the fix goes.
+      cash = "1000.00";
+      max = 49;
+      await waitFor(() => expect(FakeEventSource.instances.length).toBe(1));
+      tick(1);
+      await waitFor(() => expect(fix).not.toBeInTheDocument());
+      expect(units()).toHaveFocus();
+    });
+
+    it("announces a refused order once: the alert, not the field as well", async () => {
+      let cash = "10000.00";
+      renderPanel({
+        "GET /portfolio": () => json(portfolio({ cash_balance: cash })),
+        [ORDER]: () => {
+          cash = "150.00";
+          return json({ detail: "insufficient_cash" }, { status: 409 });
+        },
+      });
+      await quoted();
+      fireEvent.click(buyButton());
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "You don't have enough play money for this order now. Nothing was traded.",
+      );
+      const field = await screen.findByText(
+        "You have $150.00 of play money. This needs $200.20.",
+      );
+      expect(field).toHaveAttribute("aria-live", "off");
+      // Still on screen and describing the field.
+      expect(units()).toHaveAccessibleDescription(
+        /You have \$150\.00 of play money/,
+      );
+      // Typing again ends the refusal: the field speaks for itself again.
+      fireEvent.change(units(), { target: { value: "5" } });
+      expect(field).toHaveAttribute("aria-live", "polite");
+    });
+  });
 });

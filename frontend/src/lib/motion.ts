@@ -41,7 +41,7 @@ export const DURATION = {
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 
 /** The ease-out curve (`--nx-ease-out`) for values driven frame by frame: a quartic ease-out. */
-function easeOut(t: number): number {
+export function easeOut(t: number): number {
   return 1 - (1 - clamp01(t)) ** 4;
 }
 
@@ -176,21 +176,29 @@ export type ValueTick = {
 
 /**
  * Follows a live value (a stake price) and reports its last move. The first value, and a value
- * that comes or goes (null), is not a move: only a change between two known values is.
+ * that comes or goes (null), is not a move: only a change between two known values is. While
+ * `armed` is false (e.g. the first refresh of a cached value after the page opened), changes
+ * are taken as they are, not as moves; a change counts only if the hook was already armed.
  * Motion-free (it only reports); the flash it drives is CSS, off under reduced motion, and the
  * direction stays so the change never relies on colour or motion alone.
  */
-export function useValueTick(value: number | null): ValueTick {
-  const [state, setState] = useState<ValueTick & { last: number | null }>({
-    last: value,
-    direction: null,
-    moves: 0,
-  });
+export function useValueTick(
+  value: number | null,
+  { armed = true }: { armed?: boolean } = {},
+): ValueTick {
+  const [state, setState] = useState<
+    ValueTick & { last: number | null; armed: boolean }
+  >({ last: value, direction: null, moves: 0, armed });
   let next = state;
-  if (value !== state.last) {
-    const moved = value !== null && state.last !== null;
+  if (value !== state.last || armed !== state.armed) {
+    const moved =
+      state.armed &&
+      value !== state.last &&
+      value !== null &&
+      state.last !== null;
     next = {
       last: value,
+      armed,
       direction: moved
         ? value > state.last!
           ? "up"

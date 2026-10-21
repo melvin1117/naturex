@@ -14,6 +14,7 @@ import { GradeBadge } from "@/components/proto/grade";
 import { Portfolio as PrototypePortfolio } from "@/components/proto/portfolio";
 import { Panel } from "@/components/proto/report-panels";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -93,7 +94,8 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
   const cards = new Map((assets.data ?? []).map((card) => [card.id, card]));
   const pnlPct = decimal(data.unrealized_pnl_pct);
   // A trade made a moment ago on an asset page: show its stake changing here (#216 WP2).
-  const [fresh] = useState(() => freshFills());
+  const account = useWorld().world?.me?.id;
+  const [fresh] = useState(() => freshFills(account));
   useEffect(() => forgetFills(fresh.values()), [fresh]);
   return (
     <>
@@ -199,6 +201,24 @@ function fillFor(
   return fill?.unitsAfter === h.shares ? fill : undefined;
 }
 
+/**
+ * The fresh fill as text: the wash and the count are motion (gone under reduced motion), and
+ * this says the same thing without it.
+ */
+function FreshBadge({ fill }: { fill: FreshFill }) {
+  const delta = fill.unitsAfter - fill.unitsBefore;
+  const n = Math.abs(delta);
+  return (
+    <Badge
+      variant="secondary"
+      className="tabular bg-lime/30 font-medium text-lime-ink"
+    >
+      {delta >= 0 ? "+" : "−"}
+      {int(n)} {n === 1 ? "unit" : "units"} just now
+    </Badge>
+  );
+}
+
 /** A stake's units, counting from before a fresh fill to what it holds now. */
 function Units({
   holding: h,
@@ -230,12 +250,15 @@ function HoldingCard({
     >
       <SiteIcon card={card} />
       <div className="min-w-0 flex-1">
-        <Link
-          href={assetHref(h.asset_id)}
-          className="font-medium hover:underline"
-        >
-          {h.asset_name}
-        </Link>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <Link
+            href={assetHref(h.asset_id)}
+            className="font-medium hover:underline"
+          >
+            {h.asset_name}
+          </Link>
+          {fill && <FreshBadge fill={fill} />}
+        </div>
         <p className="tabular text-xs text-muted-foreground">
           <Units holding={h} fill={fill} /> {h.shares === 1 ? "unit" : "units"}{" "}
           · {unitPriceText(h.mark_price)}
@@ -303,13 +326,16 @@ function HoldingsTable({
               data-fresh={fill ? "" : undefined}
             >
               <TableCell>
-                <Link
-                  href={assetHref(h.asset_id)}
-                  className="flex items-center gap-3 font-medium hover:underline"
-                >
-                  <SiteIcon card={card} />
-                  {h.asset_name}
-                </Link>
+                <div className="flex items-center gap-3">
+                  <Link
+                    href={assetHref(h.asset_id)}
+                    className="flex items-center gap-3 font-medium hover:underline"
+                  >
+                    <SiteIcon card={card} />
+                    {h.asset_name}
+                  </Link>
+                  {fill && <FreshBadge fill={fill} />}
+                </div>
               </TableCell>
               <TableCell>
                 {grade ? (

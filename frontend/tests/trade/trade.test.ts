@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
 import type { OrderOut, QuoteOut } from "@/lib/api/types";
 import {
   assetHref,
+  clearFills,
   decimal,
   forgetFills,
   FRESH_FILL_MS,
@@ -121,9 +122,17 @@ describe("orderProblem", () => {
     });
   });
 
-  it("caps sells at the holding, before any quote, and offers the holding", () => {
+  it("caps sells at the holding, before any quote, and offers the holding once quoted", () => {
     expect(
       orderProblem({ ...base, side: "sell", held: 1, quote: undefined }),
+    ).toEqual({ message: "You hold 1 unit of this site.", fix: null });
+    expect(
+      orderProblem({
+        ...base,
+        side: "sell",
+        held: 1,
+        quote: quote({ side: "sell", max_qty: 1 }),
+      }),
     ).toEqual({ message: "You hold 1 unit of this site.", fix: 1 });
     expect(
       orderProblem({ ...base, side: "sell", held: 0, quote: undefined }),
@@ -132,6 +141,14 @@ describe("orderProblem", () => {
   });
 
   it("never offers a sell above the size cap", () => {
+    // The 1-unit sell quote says how much this account can sell now.
+    const oneUnit = quote({
+      side: "sell",
+      qty: 1,
+      total: "19.98",
+      max_qty: 10_000,
+      max_order_qty: 10_000,
+    });
     expect(
       orderProblem({
         ...base,
@@ -139,78 +156,89 @@ describe("orderProblem", () => {
         units: 50_000,
         held: 20_000,
         quote: undefined,
-        limits: { max_qty: 10_000, max_order_qty: 10_000, price: "20.0000" },
-      })?.fix,
-    ).toBe(10_000);
+        oneUnit,
+      }),
+    ).toEqual({ message: "You hold 20,000 units of this site.", fix: 10_000 });
   });
 
-  it("applies the size cap and the available supply from the quote", () => {
+  it("offers no sell fix before the API has said how large an order may be", () => {
+    // No quote yet, and a holding above any cap the panel could know: offering it all could
+    // be refused, so only the message shows until a quote arrives.
     expect(
-      orderProblem({ ...base, quote: quote({ max_order_qty: 5, max_qty: 5 }) }),
-    ).toEqual({ message: "One order can be at most 5 units.", fix: 5 });
-    expect(orderProblem({ ...base, quote: quote({ max_qty: 3 }) })).toEqual({
-      message: "Only 3 units are available to buy right now.",
-      fix: 3,
-    });
-    expect(orderProblem({ ...base, quote: quote({ max_qty: 0 }) })).toEqual({
-      message: "No units are available to buy right now.",
-      fix: null,
-    });
+      orderProblem({
+        ...base,
+        side: "sell",
+        units: 50_000,
+        held: 20_000,
+        quote: undefined,
+      }),
+    ).toEqual({ message: "You hold 20,000 units of this site.", fix: null });
   });
 
-  it("uses a 1-unit quote's limits when the order's own quote was refused", () => {
-    const limits = { max_qty: 279, max_order_qty: 10_000, price: "35.7849" };
-    expect(
-      orderProblem({
-        ...base,
-        units: 999_999_999,
-        quote: undefined,
-        limits,
-        formatMoney: money,
-      }),
-    ).toEqual({
-      message:
-        "One order can be at most 10,000 units. You can buy up to 279 units now.",
-      fix: 279,
+  describe("when the quote for these units was refused (its size)", () => {
+    const oneUnit = quote({
+      qty: 1,
+      total: "35.79",
+      max_qty: 279,
+      max_order_qty: 10_000,
     });
-    // Within the cap but more than the cash covers (the price is only compared).
-    expect(
-      orderProblem({
-        ...base,
-        units: 500,
-        quote: undefined,
-        limits,
-        formatMoney: money,
-      }),
-    ).toEqual({
-      message:
-        "You have $10,000.00 of play money: enough for up to 279 units now.",
-      fix: 279,
+
+    it("names the size cap and what would go through", () => {
+      expect(
+        orderProblem({
+          ...base,
+          units: 999_999_999,
+          quote: undefined,
+          oneUnit,
+          formatMoney: money,
+        }),
+      ).toEqual({
+        message:
+          "One order can be at most 10,000 units. You can buy up to 279 units now.",
+        fix: 279,
+      });
     });
-    // Cash would cover it: the supply is what's short.
-    expect(
-      orderProblem({
-        ...base,
-        units: 200,
-        quote: undefined,
-        limits: { ...limits, max_qty: 150 },
-      }),
-    ).toEqual({
-      message: "Only 150 units are available to buy right now.",
-      fix: 150,
+
+    it("says only what the API said, never which limit binds", () => {
+      expect(
+        orderProblem({ ...base, units: 500, quote: undefined, oneUnit }),
+      ).toEqual({ message: "You can buy up to 279 units now.", fix: 279 });
+      expect(
+        orderProblem({
+          ...base,
+          side: "sell",
+          units: 50,
+          held: 80,
+          quote: undefined,
+          oneUnit: { ...oneUnit, side: "sell", max_qty: 40 },
+        }),
+      ).toEqual({ message: "You can sell up to 40 units now.", fix: 40 });
     });
-    expect(
-      orderProblem({
-        ...base,
-        units: 2,
-        cash: 10,
-        quote: undefined,
-        limits: { ...limits, max_qty: 0 },
-        formatMoney: money,
-      }),
-    ).toEqual({
-      message: "You have $10.00 of play money: not enough for one unit.",
-      fix: null,
+
+    it("compares the cash with what one unit costs, from the 1-unit quote", () => {
+      expect(
+        orderProblem({
+          ...base,
+          units: 2,
+          cash: 10,
+          quote: undefined,
+          oneUnit: { ...oneUnit, max_qty: 0 },
+          formatMoney: money,
+        }),
+      ).toEqual({
+        message: "You have $10.00 of play money: not enough for one unit.",
+        fix: null,
+      });
+      // Enough for one unit, yet none would go through: no claim about why.
+      expect(
+        orderProblem({
+          ...base,
+          units: 2,
+          cash: 100,
+          quote: undefined,
+          oneUnit: { ...oneUnit, max_qty: 0 },
+        }),
+      ).toEqual({ message: "You can't buy any units right now.", fix: null });
     });
   });
 });
@@ -232,29 +260,50 @@ describe("fresh fills", () => {
     ...overrides,
   });
 
+  afterEach(() => clearFills());
+
   it("remembers the units before and after a fill, for the next page", () => {
-    noteFill(order(), 1_000);
+    noteFill(order(), "me", 1_000);
     noteFill(
       order({ id: "o2", asset_id: "b", side: "sell", qty: 4, shares_held: 6 }),
+      "me",
       1_000,
     );
-    const fresh = freshFills(2_000);
+    const fresh = freshFills("me", 2_000);
     expect(fresh.get("a")).toMatchObject({ unitsBefore: 5, unitsAfter: 15 });
     expect(fresh.get("b")).toMatchObject({ unitsBefore: 10, unitsAfter: 6 });
     // A pure read: asking again gives the same answer until the page forgets them.
-    expect(freshFills(2_000).size).toBe(2);
+    expect(freshFills("me", 2_000).size).toBe(2);
     forgetFills(fresh.values());
-    expect(freshFills(2_000).size).toBe(0);
+    expect(freshFills("me", 2_000).size).toBe(0);
   });
 
   it("lets an old fill go and keeps a newer one", () => {
-    noteFill(order(), 0);
-    expect(freshFills(FRESH_FILL_MS + 1).size).toBe(0);
-    const seen = freshFills(0);
-    noteFill(order({ id: "o3" }), 10);
+    noteFill(order(), "me", 0);
+    expect(freshFills("me", FRESH_FILL_MS + 1).size).toBe(0);
+    const seen = freshFills("me", 0);
+    noteFill(order({ id: "o3" }), "me", 10);
     forgetFills(seen.values());
-    expect(freshFills(10).get("a")?.orderId).toBe("o3");
-    forgetFills(freshFills(10).values());
+    expect(freshFills("me", 10).get("a")?.orderId).toBe("o3");
+  });
+
+  it("prunes expired fills when noting a new one", () => {
+    noteFill(order(), "me", 0);
+    noteFill(order({ id: "o4", asset_id: "b" }), "me", FRESH_FILL_MS + 5);
+    forgetFills([{ orderId: "o4", unitsBefore: 0, unitsAfter: 0, at: 0 }]);
+    // Only the expired one was left, and noting o4 already dropped it.
+    expect(freshFills("me", 0).size).toBe(0);
+  });
+
+  it("never shows one account's fills to another, or after the session ends", () => {
+    noteFill(order(), "me", 0);
+    expect(freshFills("someone-else", 0).size).toBe(0);
+    expect(freshFills(null, 0).size).toBe(0);
+    noteFill(order({ id: "o5", asset_id: "b" }), "someone-else", 0);
+    expect(freshFills("me", 0).size).toBe(0);
+    expect(freshFills("someone-else", 0).size).toBe(1);
+    clearFills();
+    expect(freshFills("someone-else", 0).size).toBe(0);
   });
 });
 

@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { toApiError } from "@/lib/api/errors";
 import { WELCOME_TOAST_MS } from "@/lib/feedback";
+import { clearFills } from "@/lib/trade";
 import {
   authFailure,
   LOGIN_PATH,
@@ -125,6 +126,8 @@ export function AuthForm({
           });
       tour.stop();
       exitDemo();
+      // A new session: the previous account's recent fills aren't news for this one.
+      clearFills();
       toast(
         isRegister
           ? `Welcome to NatureX, ${me.name}`

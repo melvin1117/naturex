@@ -2,8 +2,7 @@
 
 import { Info } from "lucide-react";
 import Link from "next/link";
-import { useId, useRef, useState } from "react";
-import { cn } from "cn";
+import { useCallback, useId, useRef, useState } from "react";
 
 import { CountTo } from "@/components/live-number";
 import { announce, QuoteTable, Receipt } from "@/components/trade-summary";
@@ -14,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ApiError } from "@/lib/api/errors";
 import type { AssetDetail, OrderCreate, OrderOut } from "@/lib/api/types";
 import { queryKeys, useDataLayer } from "@/lib/data-layer";
-import { usePlaceOrder, usePortfolio, useQuote } from "@/lib/hooks";
+import { usePlaceOrder, usePortfolio, useQuote, useWorld } from "@/lib/hooks";
 import { int } from "@/lib/prototype/format";
 import {
   decimal,
@@ -45,6 +44,7 @@ export function TradeForm({
   const ids = useId();
   const { cache } = useDataLayer();
   const portfolio = usePortfolio();
+  const account = useWorld().world?.me?.id ?? null;
   const placeOrder = usePlaceOrder();
   const [chosenSide, setSide] = useState<Side>("buy");
   const [unitsText, setUnitsText] = useState("10");
@@ -75,25 +75,30 @@ export function TradeForm({
     !current && quote.error && quotedUnits === units
       ? orderFailure(quote.error, { order: false })
       : null;
-  // A quote refused for its size (too large, not enough supply) has no `max_qty`: a 1-unit
-  // quote for the same side does, so the message can say how many units would go through.
-  const needLimits = Boolean(quoteFailure?.units) || Boolean(failure?.units);
-  const probe = useQuote(asset.id, side, 1, { enabled: needLimits });
-  const limits =
-    current ?? (probe.data?.side === side ? probe.data : undefined);
+  // A quote is refused only for its size, and then has no `max_qty`: a 1-unit quote for the
+  // same side does, so the message can say how many units would go through. Asked for only
+  // then (qty 0 never fetches, so it isn't refreshed on every price tick otherwise).
+  const needLimits = Boolean(quoteFailure?.units);
+  const probe = useQuote(asset.id, side, needLimits ? 1 : 0, {
+    enabled: needLimits,
+  });
+  const oneUnit =
+    needLimits && !current && probe.data?.side === side && probe.data.qty === 1
+      ? probe.data
+      : undefined;
   const problem = orderProblem({
     side,
     units,
     held,
     cash,
     quote: current,
-    limits,
+    oneUnit,
     formatMoney: money,
   });
   // The backend's own TRADE decision (insider, admin, treasury): explain it, never offer it.
   const blocked = (current ?? quote.data)?.trade_blocked_reason ?? null;
   // While the 1-unit quote is on its way, wait for it rather than announce twice.
-  const awaitingLimits = needLimits && !limits && probe.isLoading;
+  const awaitingLimits = needLimits && !oneUnit && !probe.error;
   const fieldMessage = blocked
     ? tradeBlockedMessage(blocked)
     : (problem?.message ??
@@ -113,6 +118,15 @@ export function TradeForm({
     unitsRef.current?.focus();
   }
 
+  // However the fix button goes (applied, or the problem resolved on a refresh), focus that
+  // was on it moves to the units field instead of falling to the page.
+  const fixRef = useCallback((node: HTMLButtonElement | null) => {
+    if (!node) return;
+    return () => {
+      if (document.activeElement === node) unitsRef.current?.focus();
+    };
+  }, []);
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (inFlight.current || !ready || units === null || !current) return;
@@ -125,7 +139,7 @@ export function TradeForm({
         : { asset_id: asset.id, side, qty: units, min_total: current.total };
     try {
       const filled = await placeOrder.mutateAsync(order);
-      noteFill(filled);
+      if (account) noteFill(filled, account);
       setReceipt(filled);
     } catch (error) {
       setFailure(orderFailure(error as ApiError));
@@ -142,7 +156,7 @@ export function TradeForm({
   const messageId = `${ids}-units-message`;
   const failureId = `${ids}-order-failure`;
   const maxQty =
-    current?.max_qty ?? quote.data?.max_qty ?? limits?.max_qty ?? null;
+    current?.max_qty ?? quote.data?.max_qty ?? oneUnit?.max_qty ?? null;
   // Radix points every trigger at its panel, but only the active side's panel is rendered.
   const noPanel = { "aria-controls": undefined };
 
@@ -165,15 +179,20 @@ export function TradeForm({
           <div className="space-y-2">
             <div className="flex items-baseline justify-between gap-2">
               <Label htmlFor={unitsId}>Units</Label>
-              {/* After a fill, the balance counts to its new value under a brief wash. */}
+              {/* After a fill, the balance counts to its new value under a brief wash (a
+                  layer restarted per order, so the numbers themselves never remount). */}
               <span
-                key={receipt?.id}
-                className={cn(
-                  "tabular -mx-1.5 rounded-full px-1.5 text-xs text-muted-foreground",
-                  receipt && "nx-wash",
-                )}
+                className="tabular relative isolate -mx-1.5 px-1.5 text-xs text-muted-foreground"
                 data-testid="trade-balance"
               >
+                {receipt && (
+                  <span
+                    key={receipt.id}
+                    aria-hidden="true"
+                    className="nx-wash pointer-events-none absolute inset-0 -z-10 rounded-full"
+                    data-testid="trade-balance-wash"
+                  />
+                )}
                 {portfolio.data ? (
                   <>
                     {cash === null ? (
@@ -213,15 +232,18 @@ export function TradeForm({
               className="tabular text-lg"
             />
             {/* Always rendered so a quote error arriving later is announced. */}
+            {/* A refused order is announced once, by its alert below; the numbers here stay
+                on screen and describe the field. */}
             <p
               id={messageId}
-              aria-live="polite"
+              aria-live={failure ? "off" : "polite"}
               className="text-sm text-destructive"
             >
               {fieldMessage}
             </p>
             {fix !== null && (
               <Button
+                ref={fixRef}
                 type="button"
                 variant="outline"
                 size="xs"

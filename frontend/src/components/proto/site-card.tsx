@@ -11,7 +11,6 @@ import {
   SiteThumb,
   ValueRange,
 } from "@/components/proto/bits";
-import { PriceTick } from "@/components/live-number";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
 import { Button } from "@/components/ui/button";
@@ -157,7 +156,7 @@ export function SiteCard({ card }: { card: MarketCard }) {
           <div>
             <div className="text-xs text-muted-foreground">Stake price</div>
             <div className="tabular mt-0.5 text-xl font-light">
-              <PriceTick value={card.price} format={price} />
+              {card.price === null ? "—" : price(card.price)}
             </div>
             {card.changePct !== null && (
               <Delta
@@ -261,7 +260,7 @@ export function FeatureSiteCard({ card }: { card: MarketCard }) {
               Stake price · play money
             </div>
             <div className="tabular text-3xl font-light">
-              <PriceTick value={card.price} format={price} tone="image" />
+              {card.price === null ? "—" : price(card.price)}
             </div>
             {card.changePct !== null && (
               <Delta
