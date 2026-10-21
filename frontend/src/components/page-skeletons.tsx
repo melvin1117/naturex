@@ -34,6 +34,23 @@ function Line({ box, className }: { box: string; className: string }) {
   );
 }
 
+/** A `Stat` in a card's stat strip: label, value and the line under it, at their heights. */
+function StatBones() {
+  return (
+    <div>
+      <div className="flex h-4 items-center">
+        <Skeleton className="h-3 w-28" />
+      </div>
+      <div className="mt-1 flex h-8 items-center">
+        <Skeleton className="h-6 w-32" />
+      </div>
+      <div className="mt-0.5 flex h-4 items-center">
+        <Skeleton className="h-3 w-40 max-w-full" />
+      </div>
+    </div>
+  );
+}
+
 /** A panel: a still card (only its lines pulse), as `StewardPanel` and `IpoCard` draw it. */
 function Panel({
   className,
@@ -155,10 +172,7 @@ export function PortfolioBodySkeleton({
     <LoadingRegion name="portfolio" label={label} className="mt-8">
       <div className="grid gap-4 rounded-3xl bg-card p-6 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i}>
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="mt-2 h-9 w-36" />
-          </div>
+          <StatBones key={i} />
         ))}
       </div>
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
@@ -206,11 +220,7 @@ export function StewardHomeSkeleton({
       </div>
       <div className="mt-8 grid gap-4 rounded-3xl bg-card p-6 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i}>
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="mt-2 h-9 w-24" />
-            <Skeleton className="mt-2 h-3 w-36" />
-          </div>
+          <StatBones key={i} />
         ))}
       </div>
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
