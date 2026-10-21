@@ -239,9 +239,13 @@ describe("creating a community", () => {
       ),
     );
     expect(backend.calls("GET /me/communities")).toBeGreaterThanOrEqual(2);
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Río Verde" }),
-    ).toBeVisible();
+    const heading = await screen.findByRole("heading", {
+      level: 1,
+      name: "Río Verde",
+    });
+    expect(heading).toBeVisible();
+    // The form that held focus is gone: the new home's name takes it (T48).
+    await waitFor(() => expect(heading).toHaveFocus());
     expect(
       screen.getAllByRole("link", { name: /List your land/ })[0],
     ).toHaveAttribute("href", `/steward/list?community=${created.id}`);

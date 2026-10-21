@@ -1009,6 +1009,36 @@ describe("the details step (review fixes)", () => {
   });
 });
 
+describe("focus between steps (T48)", () => {
+  it("moves to each new step instead of dropping to the page", async () => {
+    setup({
+      "POST /assets": () => json(asset(), { status: 201 }),
+      [ASSET]: () => json(asset()),
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Site details" }),
+    ).toBeVisible();
+    await fillDetails();
+    expect(
+      await screen.findByRole("region", { name: "Step 2 of 4: Boundary" }),
+    ).toHaveFocus();
+
+    await drawSquare();
+    fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));
+    expect(await screen.findByText("Ready to rate")).toBeVisible();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("region", { name: "Step 3 of 4: Rating" }),
+      ).toHaveFocus(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit boundary" }));
+    expect(
+      screen.getByRole("region", { name: "Step 2 of 4: Boundary" }),
+    ).toHaveFocus();
+  });
+});
+
 describe("links from the Steward home (T63)", () => {
   it.each([
     ["continue_listing", asset(), "Ready to rate"],
