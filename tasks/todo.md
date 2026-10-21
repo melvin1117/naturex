@@ -520,11 +520,11 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make test`; manual: register → buy a seeded live asset → portfolio shows it; anonymous `POST /orders` → 401 · **Deps:** T54, T56 · **Files:** `backend/app/deps.py`, `backend/app/routers/world.py`, `backend/app/routers/market.py`, `backend/app/sandbox.py`, `backend/tests/test_world_from_session.py`
 
 ### T74 · Real-account E2E test (both apps) (#167) — D2 · M · Must · A0–A9 C1–C4 K1–K4
-- [ ] Playwright on the real stack (`USE_MOCKS=true` for LLM and Earth Engine): owner registers → creates a community → lists a polygon → rating completes → uploads documents → an admin approves → launches the IPO → a second account registers, buys and sells → portfolio and the community home reflect it → sign out
-- [ ] An investor gets a clear 403 on Steward actions; anonymous visitors browse but can't trade
-- [ ] `make e2e` locally; a CI workflow on PRs touching `frontend/` or `backend/`, concurrency-cancelled to save Actions minutes
+- [x] Playwright on the real stack (`USE_MOCKS=true` for LLM and Earth Engine): owner registers → creates a community → draws a polygon on the real map (clicks on Leaflet) and lists it → rating completes → uploads documents → an admin approves in the review queue → launches the IPO → a second account registers, buys and sells → portfolio and the community home reflect it → sign out. The admin comes from the operator CLI (`create-admin --password-stdin`, new for scripts), never a sign-up
+- [x] An investor gets a clear 403 on Steward actions (the API's `owner_only` / `members_only` through the browser session, the control room's 403 message, and no Steward controls on another community's pages); anonymous visitors browse but can't trade ("Sign in to trade", `POST /orders` 401)
+- [x] `make e2e` locally (Playwright starts and stops the API and a production build on ports 8100/3100 with a freshly recreated `naturex_e2e` database; unique accounts per run); `.github/workflows/e2e.yml` on PRs touching `frontend/` or `backend/`, concurrency-cancelled, report and traces uploaded on failure
 
-**Verify:** `make e2e` green locally and in CI · **Deps:** T18, T22, T23, T33, T63, T64, T70 · **Files:** `frontend/e2e/real-accounts.spec.ts`, `frontend/playwright.config.ts`, `Makefile`, `.github/workflows/e2e.yml`, `backend/app/cli.py`
+**Verify:** `make e2e` green locally and in CI · **Deps:** T18, T22, T23, T33, T63, T64, T70 · **Files:** `frontend/e2e/real-accounts.spec.ts`, `frontend/e2e/{env,png}.ts`, `frontend/playwright.config.ts`, `scripts/e2e-backend.sh`, `Makefile`, `.github/workflows/e2e.yml`, `backend/app/cli.py`
 
 ### T75 · Monitoring loop: scheduled re-rate, news sweep and alerts (#168) — D1 · M · Should · D1 D3 D4 C3
 - [x] `rerate_all` and `news_sweep` (`backend/app/jobs/`, logic in `services/monitoring.py`; idempotent via `monitor_runs` claims, budget-capped; the sweep runs daily via GitHub Actions) re-rate live listed assets through the rating service

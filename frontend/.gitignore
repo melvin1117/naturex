@@ -43,3 +43,8 @@ next-env.d.ts
 
 # test reports
 junit.xml
+
+# Playwright E2E (T74)
+/.next-e2e/
+/playwright-report/
+/test-results/

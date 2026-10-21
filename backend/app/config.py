@@ -1,9 +1,14 @@
 """Application settings loaded from environment / .env."""
 
+import os
 from functools import lru_cache
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
+
+# NATUREX_ENV_FILE=none makes Settings ignore every .env file and read only the process
+# environment (and defaults), so a developer's .env can't leak into an isolated run (T74's E2E).
+ENV_FILE_SWITCH = "NATUREX_ENV_FILE"
 
 
 class Settings(BaseSettings):
@@ -97,6 +102,19 @@ class Settings(BaseSettings):
     # sandboxes never compute), rolling 24 hours.
     live_ratings_per_user_per_day: int = Field(default=2, ge=0)
     live_ratings_global_per_day: int = Field(default=50, ge=0)
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        if os.environ.get(ENV_FILE_SWITCH, "").strip().lower() == "none":
+            return init_settings, env_settings, file_secret_settings
+        return init_settings, env_settings, dotenv_settings, file_secret_settings
 
 
 INSECURE_COOKIE_ENVIRONMENTS = frozenset({"development", "test"})
