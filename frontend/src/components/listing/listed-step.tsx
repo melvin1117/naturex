@@ -8,7 +8,15 @@ import { ValueRange } from "@/components/proto/bits";
 import { GradeStamp } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { VerificationBadge } from "@/components/verification/parts";
 import type { AssetDetail, MyCommunity } from "@/lib/api/types";
+import {
+  listingAction,
+  VERIFICATION_CHIP,
+  type ListingAction,
+} from "@/lib/community";
+import { useCommunitySummary } from "@/lib/community-hooks";
 import { ipoHref, listingOutcome, stewardHomeHref } from "@/lib/listing";
 import { DURATION, usePrefersReducedMotion } from "@/lib/motion";
 import { GRADE_LABEL, money } from "@/lib/prototype/format";
@@ -62,6 +70,18 @@ export function ListedStep({
   const staged = reveal && facts !== null && outcome.kind === "listed";
   const reduced = usePrefersReducedMotion();
   const animate = staged && !reduced;
+  // The next step as the Steward home computes it (#216): verify first when the opening offer
+  // waits for it, never a locked door. Only once the summary has caught up with this status.
+  const summary = useCommunitySummary(community.id);
+  const listing = summary.data?.listings.find(
+    (l) => l.asset.id === asset.id && l.asset.status === asset.status,
+  );
+  const next = listing
+    ? listingAction(listing.next_action, asset.id, community.id, asset.status, {
+        owner: community.role === "owner",
+        verification: listing.verification.level,
+      })
+    : null;
   // Announced once, after the live region is in the page; later refetches don't repeat it.
   const [announcement, setAnnouncement] = useState("");
   const [toAnnounce] = useState(() =>
@@ -94,6 +114,14 @@ export function ListedStep({
             <p className="mt-1 text-sm text-muted-foreground">
               {GRADE_LABEL[facts.grade]}
             </p>
+          )}
+          {listing && outcome.kind === "listed" && (
+            <VerificationBadge
+              level={listing.verification.level}
+              className="mt-3"
+            >
+              {VERIFICATION_CHIP[listing.verification.level]}
+            </VerificationBadge>
           )}
         </div>
         {facts && (
@@ -138,12 +166,15 @@ export function ListedStep({
       )}
       <div className="mt-6 flex flex-wrap gap-2">
         {outcome.kind === "listed" && !asset.trading && (
-          <Button asChild size="lg">
-            <Link href={ipoHref(asset.id, community.id)}>
-              Set up the opening offer
-              <ArrowRight aria-hidden="true" />
-            </Link>
-          </Button>
+          <NextStep
+            next={next}
+            pending={
+              !listing &&
+              !summary.error &&
+              (!summary.data || summary.isFetching)
+            }
+            fallbackHref={ipoHref(asset.id, community.id)}
+          />
         )}
         <Button asChild variant="outline">
           <Link href={assetHref(asset.id)}>See the public page</Link>
@@ -163,5 +194,59 @@ export function ListedStep({
         rating&apos;s sandbox market, never the land.
       </p>
     </StepCard>
+  );
+}
+
+/**
+ * The listing's next step: the Steward home's (verify first while the opening offer waits for
+ * it), a placeholder while that loads, else the way to the opening offer, which explains
+ * whatever still blocks it.
+ */
+function NextStep({
+  next,
+  pending,
+  fallbackHref,
+}: {
+  next: ListingAction | null;
+  pending: boolean;
+  fallbackHref: string;
+}) {
+  if (!next && pending) {
+    return <Skeleton aria-hidden="true" className="h-12 w-56 rounded-full" />;
+  }
+  if (!next) {
+    return (
+      <Button asChild size="lg">
+        <Link href={fallbackHref}>
+          Set up the opening offer
+          <ArrowRight aria-hidden="true" />
+        </Link>
+      </Button>
+    );
+  }
+  return (
+    <>
+      {next.href ? (
+        <Button
+          asChild
+          size="lg"
+          variant={next.primary ? "default" : "outline"}
+        >
+          <Link href={next.href}>
+            {next.label}
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </Button>
+      ) : (
+        <p className="self-center text-sm text-muted-foreground">
+          {next.label}
+        </p>
+      )}
+      {next.secondary && (
+        <Button asChild size="lg" variant="outline">
+          <Link href={next.secondary.href}>{next.secondary.label}</Link>
+        </Button>
+      )}
+    </>
   );
 }

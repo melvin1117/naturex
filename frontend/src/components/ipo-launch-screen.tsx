@@ -12,16 +12,21 @@ import {
   IpoCard,
   IpoLoading,
   IpoShell,
+  OpeningChecklist,
 } from "@/components/ipo-layout";
 import { IpoOfferInputs } from "@/components/ipo-offer-inputs";
 import { IpoLaunched, IpoOutcome } from "@/components/ipo-outcome";
 import { IpoPriceSteps } from "@/components/ipo-preview";
+import { ScreenSkeleton } from "@/components/page-skeletons";
 import { useOptionalStewardCommunity } from "@/components/shell/steward-community";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { toApiError, type ApiError } from "@/lib/api/errors";
 import type { IpoPreview } from "@/lib/api/types";
 import { isApiAssetId } from "@/lib/asset-detail";
+import { openingChecklist } from "@/lib/community";
+import { useCommunitySummary } from "@/lib/community-hooks";
 import { useAsset, useLaunchIpo } from "@/lib/hooks";
 import {
   blockedExplanation,
@@ -34,7 +39,8 @@ import {
 } from "@/lib/ipo";
 import { evidenceHref } from "@/lib/field-evidence";
 import { verifyHref } from "@/lib/listing/links";
-import { int } from "@/lib/prototype/format";
+import { GRADE_LABEL, int } from "@/lib/prototype/format";
+import { reportFacts } from "@/lib/report-facts";
 import { unitPriceText } from "@/lib/trade";
 import { useIpoOffer } from "@/lib/use-ipo-offer";
 
@@ -48,13 +54,20 @@ function pageRefusal(error: ApiError | null): PageRefusal | null {
  * The opening offer (IPO) launch screen (T64, story A7): the owner picks the units to issue
  * and the % the community keeps, reads the backend's price formula step by step, and launches
  * at the previewed price. Every number comes from the API; the backend authorizes the launch.
+ * The steps before it come first (#216): while verification blocks the launch, the checklist
+ * at the top says so and links to it, and the offer is a preview.
  */
 export function IpoLaunchScreen({ assetId }: { assetId: string }) {
   const validId = isApiAssetId(assetId);
   const asset = useAsset(validId ? assetId : undefined);
   const launch = useLaunchIpo(assetId);
   const steward = useOptionalStewardCommunity();
+  const communityId = steward?.active?.id ?? null;
   const homeHref = steward ? steward.href("/steward") : "/steward";
+  // Where verification stands, from the Steward home's summary (cached when coming from it).
+  const summary = useCommunitySummary(communityId ?? undefined);
+  const listing =
+    summary.data?.listings.find((l) => l.asset.id === assetId) ?? null;
   const verifyLink = verifyHref(assetId, steward?.active?.id ?? null);
   const verifyAction = (code: string | null | undefined) =>
     needsVerification(code) ? (
@@ -145,11 +158,7 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
   const firstPreview =
     !shown && (preview.status === "idle" || preview.status === "loading");
   if (!asset.data || firstPreview) {
-    return (
-      <IpoShell homeHref={homeHref}>
-        <IpoLoading>Checking this site…</IpoLoading>
-      </IpoShell>
-    );
+    return <ScreenSkeleton label="Checking this site…" />;
   }
 
   const previewRefusal = preview.error ? ipoRefusal(preview.error) : null;
@@ -166,6 +175,26 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
     launchRefusal?.kind === "error" && !supersededRefusal
       ? launchRefusal
       : null;
+
+  const facts = asset.data.latest_report
+    ? reportFacts(asset.data.latest_report)
+    : null;
+  const blockedReason =
+    current?.blocked_reason ??
+    (previewRefusal?.kind === "blocked" ? previewRefusal.code : null);
+  // Verification is the blocker: the checklist above says so, and the offer is a preview.
+  const awaitingVerification =
+    listing?.verification.required ?? needsVerification(blockedReason);
+  const steps = openingChecklist({
+    assetId,
+    communityId,
+    rating: facts
+      ? `Grade ${facts.grade} · ${facts.health.toFixed(1)} · ${GRADE_LABEL[facts.grade]}`
+      : null,
+    verification: listing?.verification ?? null,
+    launchable: current?.launchable,
+    blockedReason,
+  });
 
   const confirm = async (snapshot: IpoPreview) => {
     if (inFlight.current) return;
@@ -191,7 +220,7 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
   return (
     <IpoShell homeHref={homeHref}>
       <header>
-        <p className="text-sm text-muted-foreground">Opening offer (IPO)</p>
+        <p className="text-sm text-muted-foreground">Opening offer</p>
         <h1 className="mt-1 font-serif text-4xl leading-tight tracking-tight sm:text-5xl">
           {asset.data.name}
         </h1>
@@ -211,7 +240,8 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
           </Link>
         </p>
       </header>
-      <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <OpeningChecklist steps={steps} className="mt-8" />
+      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <IpoCard aria-labelledby="offer-heading">
           <h2 id="offer-heading" className="text-lg font-semibold">
             Your offer
@@ -219,8 +249,16 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
           <IpoOfferInputs offer={offer} disabled={launch.isPending} />
         </IpoCard>
         <IpoCard aria-labelledby="price-heading">
-          <h2 id="price-heading" className="text-lg font-semibold">
-            Opening price
+          <h2
+            id="price-heading"
+            className="flex flex-wrap items-center gap-2 text-lg font-semibold"
+          >
+            Opening price{" "}
+            {awaitingVerification && (
+              <Badge variant="secondary" className="font-medium">
+                Preview
+              </Badge>
+            )}
           </h2>
           <p role="status" className="sr-only">
             {current
@@ -261,14 +299,17 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
               <IpoLoading>Pricing your offer…</IpoLoading>
             )}
           </div>
-          {current && !current.launchable && current.blocked_reason && (
-            <BlockedAlert
-              className="mt-4"
-              explanation={blockedExplanation(current.blocked_reason)}
-              action={verifyAction(current.blocked_reason)}
-              onRetry={() => void preview.refetch()}
-            />
-          )}
+          {current &&
+            !current.launchable &&
+            current.blocked_reason &&
+            !needsVerification(current.blocked_reason) && (
+              <BlockedAlert
+                className="mt-4"
+                explanation={blockedExplanation(current.blocked_reason)}
+                action={verifyAction(current.blocked_reason)}
+                onRetry={() => void preview.refetch()}
+              />
+            )}
           {launchRefusal?.kind === "price_changed" && (
             <BlockedAlert
               ref={refusalRef}
@@ -300,6 +341,12 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
             pending={launch.isPending}
             onConfirm={(snapshot) => void confirm(snapshot)}
           />
+          {awaitingVerification && !launchBlocked && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              You can open it once the land documents are verified (step 2
+              above).
+            </p>
+          )}
           <p className="mt-3 text-xs text-muted-foreground">{SANDBOX_NOTE}</p>
         </IpoCard>
       </div>

@@ -350,9 +350,9 @@ describe("IpoLaunchScreen", () => {
     ["ipo_price_too_high", /Issue more units/],
     [
       "verification_required",
-      /until this listing's land documents are verified/,
+      /A NatureX reviewer approves them before the offer opens/,
     ],
-    ["not_verified", /until this listing's land documents are verified/],
+    ["not_verified", /A NatureX reviewer approves them before the offer opens/],
     ["something_new", /can't launch right now/],
   ])("explains blocked_reason %s and won't launch", async (code, message) => {
     const { backend } = renderLaunch({
@@ -365,6 +365,16 @@ describe("IpoLaunchScreen", () => {
     expect(screen.queryByText(code)).not.toBeInTheDocument();
     expect(launchButton()).toBeDisabled();
     expect(backend.calls(LAUNCH)).toBe(0);
+  });
+
+  it("loads in the screen's shape, then the offer, without a spinner (#219)", async () => {
+    renderLaunch();
+    expect(
+      window.document.querySelector("[data-skeleton=screen]"),
+    ).not.toBeNull();
+    expect(window.document.querySelector(".animate-spin")).toBeNull();
+    await steps();
+    expect(window.document.querySelector("[data-skeleton]")).toBeNull();
   });
 
   it("links to the field evidence screen, which can raise the confidence (#214)", async () => {
@@ -389,12 +399,64 @@ describe("IpoLaunchScreen", () => {
     });
     await steps();
 
+    // The blocker comes first (#216): the checklist above the offer, not an alert under it.
+    const checklist = await screen.findByRole("region", {
+      name: "Before you open to supporters",
+    });
+    const items = within(checklist).getAllByRole("listitem");
+    expect(items.map((li) => li.dataset.state)).toEqual([
+      "done",
+      "current",
+      "upcoming",
+    ]);
+    expect(items[1]).toHaveAttribute("aria-current", "step");
+    expect(items[1]).toHaveTextContent("Documents verified · Needed");
     expect(
-      await screen.findByRole("link", { name: "Verify this listing" }),
+      within(items[1]!).getByRole("link", { name: "Verify this listing" }),
     ).toHaveAttribute("href", `/steward/assets/${ASSET_ID}/verify`);
+    expect(items[2]).toHaveTextContent(
+      "Open to supporters · After verification",
+    );
     expect(
-      screen.getByText(/A revoked verification keeps it closed/),
-    ).toBeInTheDocument();
+      checklist.compareDocumentPosition(
+        screen.getByRole("region", { name: /Opening price/ }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // The offer stays editable as a preview; the old alert under the price is gone.
+    expect(
+      screen.getByRole("heading", { name: "Opening price Preview" }),
+    ).toBeVisible();
+    expect(screen.queryByText("Verification comes first")).toBeNull();
+    expect(
+      screen.getByText(/You can open it once the land documents are verified/),
+    ).toBeVisible();
+    expect(screen.getByLabelText("Units to issue")).toBeEnabled();
+    expect(launchButton()).toBeDisabled();
+  });
+
+  it("shows a launchable sandbox offer as ready, with verification optional", async () => {
+    renderLaunch();
+    await steps();
+
+    const checklist = screen.getByRole("region", {
+      name: "Before you open to supporters",
+    });
+    const items = within(checklist).getAllByRole("listitem");
+    expect(items.map((li) => li.dataset.state)).toEqual([
+      "done",
+      "optional",
+      "current",
+    ]);
+    expect(items[0]).toHaveTextContent(/Rated · Done/);
+    expect(
+      within(items[1]!).getByRole("link", { name: "Verify anyway" }),
+    ).toHaveAttribute("href", `/steward/assets/${ASSET_ID}/verify`);
+    expect(items[2]).toHaveTextContent("Open to supporters · Ready");
+    expect(
+      screen.getByRole("heading", { name: "Opening price" }),
+    ).toBeVisible();
+    expect(screen.getByText("Opening offer")).toBeVisible();
+    expect(screen.queryByText(/\(IPO\)/)).toBeNull();
   });
 
   it("explains a price that rounds to zero and keeps the form", async () => {

@@ -64,6 +64,10 @@ The API and database keep their names (`shares`, `ipo`, `orders`, `community_wal
 | portfolio | **Your stakes** (page title), route stays `/portfolio` | |
 | holdings | stakes | |
 | community wallet | **Community fund** | |
+| IPO proceeds | **from supporters** ("What supporters paid for units in the opening offer") | |
+| launch the IPO | **Open to supporters** (the steward's next step); the screen's button stays **Launch opening offer** | |
+| retained stake / retained shares | **the units your community keeps** | units kept |
+| retained-stake dividends (treasury) | **payouts on the units you kept** ("Payouts on kept units" where space is short) | |
 | investor | **supporter** (Arjun's persona label stays "investor") | |
 | fair value per share | fair stake price | fair price per unit |
 | P&L | change in value (play money) | P&L (play money) |

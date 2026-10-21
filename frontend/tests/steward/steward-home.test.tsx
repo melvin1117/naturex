@@ -23,7 +23,7 @@ import type {
   WorldOut,
 } from "@/lib/api/types";
 import { SUMMARY_TICK_REFRESH_MS } from "@/lib/community-hooks";
-import { createDataLayer } from "@/lib/data-layer";
+import { createDataLayer, queryKeys } from "@/lib/data-layer";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { PrototypeProvider } from "@/lib/prototype/store";
 import { stewardAssetId } from "@/components/shell/steward-community";
@@ -133,6 +133,7 @@ function listing(overrides: Partial<ListingSummary> = {}): ListingSummary {
     shares: null,
     recommendations: [],
     report_version: 1,
+    verification: { level: "verified", required: false },
     ...overrides,
   };
 }
@@ -459,7 +460,7 @@ describe("the community home", () => {
       screen.getByRole("link", { name: /Edit community/ }),
     ).toHaveAttribute("href", `/steward/community?community=${SELVA.id}`);
     // No wallet until there's a listing.
-    expect(screen.queryByText("Retained-stake dividends")).toBeNull();
+    expect(screen.queryByText("Payouts on kept units")).toBeNull();
   });
 
   it("shows each listing's next action, the wallet, payouts and supporters", async () => {
@@ -542,7 +543,7 @@ describe("the community home", () => {
       within(sites).getByRole("link", { name: /View on Exchange/ }),
     ).toHaveAttribute("href", `/asset/${trading.asset.id}`);
     expect(
-      within(sites).getByRole("link", { name: /Launch IPO/ }),
+      within(sites).getByRole("link", { name: /Open to supporters/ }),
     ).toHaveAttribute(
       "href",
       `/steward/assets/${awaiting.asset.id}/ipo?community=${SELVA.id}`,
@@ -571,16 +572,16 @@ describe("the community home", () => {
       within(wallet).getByText(/Community fund balance · play money/),
     ).toBeVisible();
     expect(
-      within(wallet).getByText("IPO proceeds").closest("div"),
+      within(wallet).getByText("From supporters").closest("div"),
     ).toHaveTextContent("$1,500.00");
     expect(
-      within(wallet).getByText("Community-fund payouts").closest("div"),
+      within(wallet).getByText("Quarterly payouts").closest("div"),
     ).toHaveTextContent("$50.25");
     expect(
-      within(wallet)
-        .getByText("Treasury cash: retained-stake dividends")
-        .closest("div"),
+      within(wallet).getByText("Payouts on the units you kept").closest("div"),
     ).toHaveTextContent("$25.12");
+    // Steward surfaces use the softened words (ux-writing §5), never the market's.
+    expect(document.body).not.toHaveTextContent(/IPO|dividend|treasury cash/i);
     expect(
       within(wallet).getByText("Total received").closest("div"),
     ).toHaveTextContent("$1,575.37");
@@ -773,7 +774,7 @@ describe("the community home", () => {
     }
   });
 
-  it("tells a steward the owner launches the IPO", async () => {
+  it("tells a steward the owner opens the listing to supporters", async () => {
     setup(<StewardPage />, {
       communities: [community({ role: "steward" })],
       routes: {
@@ -793,9 +794,11 @@ describe("the community home", () => {
       },
     });
     expect(
-      await screen.findByText("Waiting for the owner to launch the IPO"),
+      await screen.findByText("Waiting for the owner to open it to supporters"),
     ).toBeVisible();
-    expect(screen.queryByRole("link", { name: /Launch IPO/ })).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: /Open to supporters/ }),
+    ).toBeNull();
   });
 
   it("refetches live: once per burst of trades, at once on a status change", async () => {
@@ -1123,5 +1126,136 @@ describe("a site's Steward pages (T74)", () => {
 
     await screen.findByRole("heading", { level: 1, name: "Start a community" });
     expect(backend.calls(`GET /assets/${ASSET_ID}`)).toBe(0);
+  });
+});
+
+describe("the next step and what changed (#216)", () => {
+  const unverified = () =>
+    listing({
+      asset: card({ trading: false, price: null }),
+      next_action: "verify",
+      ipo_at: null,
+      verification: { level: "unverified", required: true },
+    });
+
+  beforeEach(() => window.localStorage.clear());
+
+  it("makes verifying the main action while the offer waits for it", async () => {
+    const pending = unverified();
+    setup(<StewardPage />, {
+      routes: {
+        [`GET /communities/${SELVA.id}/summary`]: () =>
+          json(summary({ listings: [pending] })),
+      },
+    });
+    const hero = await screen.findByRole("region", {
+      name: "Xochimilco Wetland",
+    });
+    expect(
+      within(hero).getByRole("link", { name: /^Verify this listing/ }),
+    ).toHaveAttribute(
+      "href",
+      `/steward/assets/${pending.asset.id}/verify?community=${SELVA.id}`,
+    );
+    expect(
+      within(hero).getByRole("link", {
+        name: "Preview the opening offer: Xochimilco Wetland",
+      }),
+    ).toHaveAttribute(
+      "href",
+      `/steward/assets/${pending.asset.id}/ipo?community=${SELVA.id}`,
+    );
+    expect(within(hero).getByText("Not verified")).toBeVisible();
+    expect(hero).toHaveTextContent(
+      "Verify the land documents to open it to supporters.",
+    );
+    expect(
+      within(hero).queryByRole("link", { name: /Open to supporters/ }),
+    ).toBeNull();
+  });
+
+  it("tells the steward what a reviewer decided, until dismissed", async () => {
+    let decided = listing({
+      asset: card({ trading: false, price: null }),
+      next_action: "verify",
+      ipo_at: null,
+      verification: {
+        level: "rejected",
+        required: true,
+        decided_at: "2026-10-20T15:00:00Z",
+        reason: "The assembly minutes aren't signed.",
+        run_id: "run-1",
+      },
+    });
+    const backend = setup(<StewardPage />, {
+      routes: {
+        [`GET /communities/${SELVA.id}/summary`]: () =>
+          json(summary({ listings: [decided] })),
+      },
+    });
+    const updates = await screen.findByRole("region", {
+      name: "Verification updates",
+    });
+    const notice = within(updates).getByRole("listitem", {
+      name: "Xochimilco Wetland: documents not approved",
+    });
+    expect(notice).toHaveTextContent(
+      "Reviewer's reason: “The assembly minutes aren't signed.”",
+    );
+    expect(
+      within(notice).getByRole("link", { name: /Submit new documents/ }),
+    ).toHaveAttribute(
+      "href",
+      `/steward/assets/${decided.asset.id}/verify?community=${SELVA.id}`,
+    );
+    expect(screen.getByText("Not approved")).toBeVisible();
+
+    fireEvent.click(
+      within(notice).getByRole("button", {
+        name: "Dismiss: Xochimilco Wetland: documents not approved",
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("region", { name: "Verification updates" }),
+      ).toBeNull(),
+    );
+    // Focus doesn't drop to the page: it goes to the community's heading.
+    expect(
+      screen.getByRole("heading", { level: 1, name: SELVA.name }),
+    ).toHaveFocus();
+    expect(
+      JSON.parse(
+        window.localStorage.getItem(
+          `naturex:verification-notices:${SIGNED_IN_WORLD.me!.id}`,
+        )!,
+      ),
+    ).toEqual({ [decided.asset.id]: `run-1:rejected:2026-10-20T15:00:00Z` });
+
+    // The next decision brings a new notice: approved, with the way to open the offer.
+    decided = {
+      ...decided,
+      next_action: "launch_ipo",
+      verification: {
+        level: "verified",
+        required: false,
+        decided_at: "2026-10-21T09:00:00Z",
+        reason: null,
+        run_id: "run-2",
+      },
+    };
+    await act(async () => {
+      backend.layer.cache.invalidate(queryKeys.communitySummary(SELVA.id));
+    });
+    const approved = await screen.findByRole("listitem", {
+      name: "Xochimilco Wetland is verified",
+    });
+    expect(
+      within(approved).getByRole("link", { name: /Open to supporters/ }),
+    ).toHaveAttribute(
+      "href",
+      `/steward/assets/${decided.asset.id}/ipo?community=${SELVA.id}`,
+    );
+    expect(screen.getAllByText("Verified").length).toBeGreaterThan(0);
   });
 });

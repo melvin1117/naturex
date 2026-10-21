@@ -20,7 +20,13 @@ import { ListedStep } from "@/components/listing/listed-step";
 import { ListingScreen } from "@/components/listing/listing-screen";
 import { StewardCommunityProvider } from "@/components/shell/steward-community";
 import { WorldProvider } from "@/components/world-provider";
-import type { AssetDetail, RatingRun, ReportOut } from "@/lib/api/types";
+import type {
+  AssetDetail,
+  CommunitySummary,
+  ListingSummary,
+  RatingRun,
+  ReportOut,
+} from "@/lib/api/types";
 import { createDataLayer } from "@/lib/data-layer";
 import { PIPELINE_SETTLE_MS, PIPELINE_STEP_MS } from "@/lib/listing/pacing";
 import { DURATION } from "@/lib/motion";
@@ -337,7 +343,73 @@ describe("ListedStep", () => {
     latest_report: { ...REPORT, run_id: RUN_ID },
   });
 
-  function renderListed(reveal: boolean, onOpenTrace = vi.fn()) {
+  /** The Steward home's summary of this listing, as the API sends it. */
+  function summaryOf(
+    next_action: ListingSummary["next_action"],
+    verification: ListingSummary["verification"],
+  ): CommunitySummary {
+    return {
+      community: { ...SELVA, created_at: "2026-10-18T00:00:00Z" },
+      role: "owner",
+      listings: [
+        {
+          asset: {
+            id: ASSET_ID,
+            name: listed.name,
+            status: "listed",
+            trading: false,
+            area_ha: "225.00",
+            sparkline: [],
+            mock: true,
+          } as ListingSummary["asset"],
+          next_action,
+          verification,
+          ipo_at: null,
+          wallet: {
+            balance: "0.00",
+            ipo_proceeds: "0.00",
+            community_fund_payouts: "0.00",
+            retained_dividends: "0.00",
+            total_received: "0.00",
+          },
+          holders: { count: 0, shares_held: 0, top: [] },
+          shares: null,
+          recommendations: [],
+          report_version: 1,
+        },
+      ],
+      wallet: {
+        balance: "0.00",
+        ipo_proceeds: "0.00",
+        community_fund_payouts: "0.00",
+        retained_dividends: "0.00",
+        total_received: "0.00",
+      },
+      holder_count: 0,
+      payouts: [],
+      payouts_count: 0,
+    } as CommunitySummary;
+  }
+
+  const NEEDS_VERIFYING = summaryOf("verify", {
+    level: "unverified",
+    required: true,
+  });
+
+  function renderListed(
+    reveal: boolean,
+    onOpenTrace = vi.fn(),
+    summary: () => Response | Promise<Response> = () => json(NEEDS_VERIFYING),
+  ) {
+    const backend = fakeBackend({
+      "GET /world": () => json(SIGNED_IN_WORLD),
+      [`GET /communities/${SELVA.id}/summary`]: summary,
+    });
+    const layer = createDataLayer({
+      baseUrl: BASE,
+      fetch: backend.fetch,
+      createEventSource: createFakeEventSource,
+    });
     const view = render(
       <ListedStep
         community={SELVA}
@@ -345,9 +417,69 @@ describe("ListedStep", () => {
         reveal={reveal}
         onOpenTrace={onOpenTrace}
       />,
+      {
+        wrapper: ({ children }) => (
+          <WorldProvider dataLayer={layer}>{children}</WorldProvider>
+        ),
+      },
     );
     return { ...view, onOpenTrace };
   }
+
+  it("sends a listing the live offer waits on to verification first (#216)", async () => {
+    motion = stubMotion();
+    renderListed(false);
+    const verify = await screen.findByRole("link", {
+      name: "Verify this listing",
+    });
+    expect(verify).toHaveAttribute(
+      "href",
+      `/steward/assets/${ASSET_ID}/verify?community=${SELVA.id}`,
+    );
+    expect(
+      screen.getByRole("link", { name: "Preview the opening offer" }),
+    ).toHaveAttribute(
+      "href",
+      `/steward/assets/${ASSET_ID}/ipo?community=${SELVA.id}`,
+    );
+    expect(screen.getByText("Not verified")).toBeVisible();
+    expect(
+      screen.queryByRole("link", { name: /Set up the opening offer/ }),
+    ).toBeNull();
+  });
+
+  it("goes straight to the offer once verified", async () => {
+    motion = stubMotion();
+    renderListed(false, vi.fn(), () =>
+      json(
+        summaryOf("launch_ipo", {
+          level: "verified",
+          required: false,
+          decided_at: "2026-10-20T15:00:00Z",
+        }),
+      ),
+    );
+    expect(
+      await screen.findByRole("link", { name: /Open to supporters/ }),
+    ).toHaveAttribute(
+      "href",
+      `/steward/assets/${ASSET_ID}/ipo?community=${SELVA.id}`,
+    );
+    expect(screen.getByText("Verified")).toBeVisible();
+  });
+
+  it("falls back to the offer, which explains any blocker, without the summary", async () => {
+    motion = stubMotion();
+    renderListed(false, vi.fn(), () =>
+      json({ detail: "boom" }, { status: 500 }),
+    );
+    expect(
+      await screen.findByRole("link", { name: /Set up the opening offer/ }),
+    ).toHaveAttribute(
+      "href",
+      `/steward/assets/${ASSET_ID}/ipo?community=${SELVA.id}`,
+    );
+  });
 
   it("announces a new rating once, even when the listing is re-read", async () => {
     motion = stubMotion();

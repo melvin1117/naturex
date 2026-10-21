@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
+import type { ListingSummary, ListingVerification } from "@/lib/api/types";
 import {
   communityBody,
   communityFailure,
+  decisionNotice,
   listingAction,
+  listingStatusLine,
   memberFailure,
+  openingChecklist,
   sharePct,
+  unseenNotices,
   validateCommunity,
 } from "@/lib/community";
 
@@ -115,11 +120,21 @@ describe("listingAction", () => {
     ],
     ["rating_in_progress", "Rating in progress", null],
     [
+      "verify",
+      "Verify this listing",
+      `/steward/assets/${ASSET}/verify?community=${COMMUNITY}`,
+    ],
+    [
+      "verification_in_review",
+      "Documents in review",
+      `/steward/assets/${ASSET}/verify?community=${COMMUNITY}`,
+    ],
+    [
       "launch_ipo",
-      "Launch IPO",
+      "Open to supporters",
       `/steward/assets/${ASSET}/ipo?community=${COMMUNITY}`,
     ],
-    ["awaiting_ipo", "Waiting for the owner to launch the IPO", null],
+    ["awaiting_ipo", "Waiting for the owner to open it to supporters", null],
     ["view_on_exchange", "View on Exchange", `/asset/${ASSET}`],
     ["none", "Closed", null],
   ] as const)("%s → %s", (action, label, href) => {
@@ -127,6 +142,408 @@ describe("listingAction", () => {
       label,
       href,
     });
+  });
+});
+
+describe("listingAction never points at a locked door (#216)", () => {
+  const ipo = `/steward/assets/${ASSET}/ipo?community=${COMMUNITY}`;
+  const verify = `/steward/assets/${ASSET}/verify?community=${COMMUNITY}`;
+
+  it("makes verifying the main action, with the offer as a preview beside it", () => {
+    expect(listingAction("verify", ASSET, COMMUNITY, "listed")).toEqual({
+      label: "Verify this listing",
+      href: verify,
+      primary: true,
+      secondary: { label: "Preview the opening offer", href: ipo },
+    });
+  });
+
+  it("keeps the preview for the owner: a steward can't open the offer", () => {
+    const action = listingAction("verify", ASSET, COMMUNITY, "listed", {
+      owner: false,
+    });
+    expect(action.primary).toBe(true);
+    expect(action.secondary).toBeUndefined();
+  });
+
+  it("names the step after a rejection or a revocation", () => {
+    expect(
+      listingAction("verify", ASSET, COMMUNITY, "listed", {
+        verification: "rejected",
+      }).label,
+    ).toBe("Submit new documents");
+    const revoked = listingAction("verify", ASSET, COMMUNITY, "suspended", {
+      verification: "revoked",
+    });
+    expect(revoked).toMatchObject({ label: "Verify again", href: verify });
+    // A suspended listing has no offer to preview.
+    expect(revoked.secondary).toBeUndefined();
+  });
+
+  it("shows a submission in review as a status, not a call to action", () => {
+    expect(
+      listingAction("verification_in_review", ASSET, COMMUNITY, "listed"),
+    ).toMatchObject({ primary: false, href: verify });
+  });
+
+  it("says no IPO, dividends or treasury on steward surfaces", () => {
+    const labels = (
+      [
+        "verify",
+        "verification_in_review",
+        "launch_ipo",
+        "awaiting_ipo",
+      ] as const
+    ).map((a) => listingAction(a, ASSET, COMMUNITY, "listed").label);
+    expect(labels.join(" ")).not.toMatch(/IPO|dividend|treasury/i);
+  });
+});
+
+function summaryListing(
+  overrides: Partial<ListingSummary> = {},
+  verification: Partial<ListingVerification> = {},
+): ListingSummary {
+  return {
+    asset: {
+      id: ASSET,
+      name: "Laguna Viva",
+      status: "listed",
+      trading: false,
+      area_ha: "225.00",
+      grade: "AA",
+      health_score: "85.10",
+      sparkline: [],
+      mock: true,
+    } as ListingSummary["asset"],
+    next_action: "verify",
+    ipo_at: null,
+    wallet: {
+      balance: "0.00",
+      ipo_proceeds: "0.00",
+      community_fund_payouts: "0.00",
+      retained_dividends: "0.00",
+      total_received: "0.00",
+    },
+    holders: { count: 0, shares_held: 0, top: [] },
+    shares: null,
+    recommendations: [],
+    report_version: 1,
+    ...overrides,
+    verification: {
+      level: "unverified",
+      required: true,
+      decided_at: null,
+      reason: null,
+      run_id: null,
+      ...verification,
+    },
+  };
+}
+
+describe("listingStatusLine", () => {
+  it.each([
+    [
+      "verify",
+      "unverified",
+      "listed",
+      "Rated and listed. Verify the land documents to open it to supporters.",
+    ],
+    [
+      "verify",
+      "rejected",
+      "listed",
+      "Documents not approved. Submit new ones to open it to supporters.",
+    ],
+    [
+      "verify",
+      "revoked",
+      "suspended",
+      "Verification revoked. Trading is paused until new documents are approved.",
+    ],
+    [
+      "verification_in_review",
+      "documents_submitted",
+      "listed",
+      "A NatureX reviewer is checking your land documents.",
+    ],
+    [
+      "launch_ipo",
+      "verified",
+      "listed",
+      "Verified. Open it to supporters when you're ready.",
+    ],
+    [
+      "launch_ipo",
+      "unverified",
+      "listed",
+      "Rated and listed. Open it to supporters when you're ready.",
+    ],
+    [
+      "awaiting_ipo",
+      "verified",
+      "listed",
+      "Rated and listed. The owner opens it to supporters.",
+    ],
+    ["continue_listing", "unverified", "draft", "Draft"],
+  ] as const)("%s (%s, %s)", (action, level, status, line) => {
+    const listing = summaryListing({ next_action: action }, { level });
+    expect(listingStatusLine(listing, status, false)).toBe(line);
+  });
+
+  it("says a trading listing is open to supporters", () => {
+    expect(
+      listingStatusLine(
+        summaryListing({ next_action: "view_on_exchange" }),
+        "listed",
+        true,
+      ),
+    ).toBe("Open to supporters");
+  });
+});
+
+describe("decisionNotice", () => {
+  const DECIDED = "2026-10-20T15:00:00Z";
+
+  it("is null until a reviewer decided", () => {
+    expect(decisionNotice(summaryListing(), COMMUNITY)).toBeNull();
+    expect(
+      decisionNotice(
+        summaryListing(
+          { next_action: "verification_in_review" },
+          { level: "documents_submitted", run_id: "r1" },
+        ),
+        COMMUNITY,
+      ),
+    ).toBeNull();
+  });
+
+  it("celebrates an approval and leads the owner to open the offer", () => {
+    const notice = decisionNotice(
+      summaryListing(
+        { next_action: "launch_ipo" },
+        {
+          level: "verified",
+          required: false,
+          decided_at: DECIDED,
+          reason: "Matches the map.",
+          run_id: "r1",
+        },
+      ),
+      COMMUNITY,
+    );
+    expect(notice).toMatchObject({
+      level: "verified",
+      title: "Laguna Viva is verified",
+      body: "A NatureX reviewer approved your land documents on 20 Oct 2026. You can open it to supporters now.",
+      reason: "Matches the map.",
+      action: {
+        label: "Open to supporters",
+        href: `/steward/assets/${ASSET}/ipo?community=${COMMUNITY}`,
+      },
+    });
+    expect(notice!.key).toBe(`r1:verified:${DECIDED}`);
+  });
+
+  it("has no action for a steward waiting for the owner", () => {
+    const notice = decisionNotice(
+      summaryListing(
+        { next_action: "awaiting_ipo" },
+        { level: "verified", required: false, decided_at: DECIDED },
+      ),
+      COMMUNITY,
+      { owner: false },
+    );
+    expect(notice?.action).toBeNull();
+    expect(notice?.body).not.toMatch(/open it to supporters/);
+  });
+
+  it("gives a rejection's reason and the way to submit again", () => {
+    expect(
+      decisionNotice(
+        summaryListing(
+          {},
+          {
+            level: "rejected",
+            decided_at: DECIDED,
+            reason: "The minutes aren't signed.",
+          },
+        ),
+        COMMUNITY,
+      ),
+    ).toMatchObject({
+      title: "Laguna Viva: documents not approved",
+      reason: "The minutes aren't signed.",
+      action: {
+        label: "Submit new documents",
+        href: `/steward/assets/${ASSET}/verify?community=${COMMUNITY}`,
+      },
+    });
+  });
+
+  it("says a revocation pauses trading", () => {
+    const listing = summaryListing(
+      {
+        asset: {
+          ...summaryListing().asset,
+          status: "suspended",
+        },
+      },
+      { level: "revoked", decided_at: DECIDED, reason: "Disputed title." },
+    );
+    expect(decisionNotice(listing, COMMUNITY)).toMatchObject({
+      title: "Laguna Viva: verification revoked",
+      body: expect.stringMatching(/Trading is paused/),
+      action: { label: "Verify again" },
+    });
+  });
+
+  it("comes back for the next decision once dismissed", () => {
+    const first = decisionNotice(
+      summaryListing(
+        {},
+        { level: "rejected", decided_at: DECIDED, run_id: "a" },
+      ),
+      COMMUNITY,
+    );
+    const next = decisionNotice(
+      summaryListing(
+        { next_action: "launch_ipo" },
+        { level: "verified", decided_at: DECIDED, run_id: "b" },
+      ),
+      COMMUNITY,
+    );
+    expect(unseenNotices([first], { [ASSET]: first!.key })).toEqual([]);
+    expect(unseenNotices([next, null], { [ASSET]: first!.key })).toEqual([
+      next,
+    ]);
+  });
+});
+
+describe("openingChecklist", () => {
+  const base = {
+    assetId: ASSET,
+    communityId: COMMUNITY,
+    rating: "Grade AA · 85.1 · Very strong health",
+  };
+  const verify = `/steward/assets/${ASSET}/verify?community=${COMMUNITY}`;
+  const states = (steps: ReturnType<typeof openingChecklist>) =>
+    steps.map((s) => `${s.id}:${s.state}:${s.status}`);
+
+  it("puts verification first while the live offer waits for it", () => {
+    const steps = openingChecklist({
+      ...base,
+      verification: summaryListing().verification,
+      launchable: false,
+      blockedReason: "not_verified",
+    });
+    expect(states(steps)).toEqual([
+      "rated:done:Done",
+      "verified:current:Needed",
+      "open:upcoming:After verification",
+    ]);
+    expect(steps[0]!.detail).toBe("Grade AA · 85.1 · Very strong health");
+    expect(steps[1]!.action).toEqual({
+      label: "Verify this listing",
+      href: verify,
+    });
+  });
+
+  it("waits while a reviewer checks the documents", () => {
+    const steps = openingChecklist({
+      ...base,
+      verification: summaryListing({}, { level: "documents_submitted" })
+        .verification,
+    });
+    expect(states(steps)[1]).toBe("verified:waiting:In review");
+    expect(steps[1]!.action?.label).toBe("See your submission");
+  });
+
+  it("quotes a rejection's or a revocation's reason", () => {
+    const rejected = openingChecklist({
+      ...base,
+      verification: summaryListing(
+        {},
+        { level: "rejected", reason: "Unsigned minutes." },
+      ).verification,
+    });
+    expect(rejected[1]).toMatchObject({
+      state: "current",
+      status: "Not approved",
+      detail: expect.stringContaining("Reason: “Unsigned minutes.”"),
+      action: { label: "Submit new documents" },
+    });
+    const revoked = openingChecklist({
+      ...base,
+      verification: summaryListing(
+        {},
+        { level: "revoked", reason: "Disputed title." },
+      ).verification,
+    });
+    expect(revoked[1]).toMatchObject({
+      status: "Revoked",
+      action: { label: "Verify again" },
+    });
+  });
+
+  it("marks a verified listing done and the launch ready", () => {
+    const steps = openingChecklist({
+      ...base,
+      verification: summaryListing(
+        { next_action: "launch_ipo" },
+        {
+          level: "verified",
+          required: false,
+          decided_at: "2026-10-20T15:00:00Z",
+        },
+      ).verification,
+      launchable: true,
+    });
+    expect(states(steps)).toEqual([
+      "rated:done:Done",
+      "verified:done:Done",
+      "open:current:Ready",
+    ]);
+    expect(steps[1]!.detail).toMatch(/on 20 Oct 2026/);
+  });
+
+  it("calls verification optional where the world doesn't need it", () => {
+    const steps = openingChecklist({
+      ...base,
+      verification: summaryListing({}, { required: false }).verification,
+      launchable: true,
+    });
+    expect(steps[1]).toMatchObject({
+      state: "optional",
+      action: { label: "Verify anyway", href: verify },
+    });
+  });
+
+  it("reads the preview's blocked reason without the summary", () => {
+    expect(
+      states(
+        openingChecklist({
+          ...base,
+          communityId: null,
+          verification: null,
+          launchable: false,
+          blockedReason: "not_verified",
+        }),
+      )[1],
+    ).toBe("verified:current:Needed");
+    expect(
+      states(
+        openingChecklist({
+          ...base,
+          verification: null,
+          launchable: false,
+          blockedReason: "run_in_progress",
+        }),
+      ),
+    ).toEqual([
+      "rated:done:Done",
+      "verified:optional:Optional here",
+      "open:upcoming:Not yet",
+    ]);
   });
 });
 
