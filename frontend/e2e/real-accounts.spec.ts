@@ -360,7 +360,10 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
   });
 
   await test.step("the portfolio shows the stake", async () => {
-    await investor.getByRole("link", { name: "Your stakes" }).click();
+    // The header's link (the receipt also links: "View your stakes").
+    await investor
+      .getByRole("link", { name: "Your stakes", exact: true })
+      .click();
     await expect(
       investor.getByRole("heading", { name: "Your stakes", level: 1 }),
     ).toBeVisible();
