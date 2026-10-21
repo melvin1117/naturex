@@ -3,7 +3,14 @@
 import { ArrowUp, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { cn } from "cn";
 
 import { Button } from "@/components/ui/button";
@@ -13,8 +20,9 @@ import { isAbortError, toApiError } from "@/lib/api/errors";
 import type { CopilotSource } from "@/lib/api/types";
 import { loginHref } from "@/lib/auth";
 import {
-  answerParts,
+  answerNodes,
   askCopilot,
+  type AnswerNode,
   sourceHref,
   sourceLabel,
 } from "@/lib/copilot";
@@ -194,7 +202,7 @@ export function CopilotChat(
         ref={listRef}
         data-testid="copilot-turns"
         className={cn(
-          "space-y-4 overflow-y-auto",
+          "space-y-4 overflow-y-auto overscroll-contain",
           sheet ? "min-h-0 flex-1 px-6 py-5" : "mt-4 max-h-[28rem]",
         )}
         aria-live="polite"
@@ -378,7 +386,10 @@ function TurnView({
   );
 }
 
-/** The answer with each `[ref]` as a link to its source once the citations are known. */
+/**
+ * The answer with each `[ref]` as a link to its source once the citations are known, and its
+ * inline bold, italic and code as React elements (never HTML).
+ */
 function AnswerText({
   text,
   sources,
@@ -390,30 +401,45 @@ function AnswerText({
   label: (source: CopilotSource) => string;
   onNavigate: (() => void) | undefined;
 }) {
-  return (
-    <>
-      {answerParts(text, sources).map((part, i) =>
-        part.kind === "text" ? (
-          <span key={i}>{part.text}</span>
-        ) : part.source ? (
-          <Link
-            key={i}
-            href={sourceHref(part.source)}
-            onClick={onNavigate}
-            aria-label={`Source ${part.ref}: ${label(part.source)}`}
-            className="mx-0.5 rounded bg-card px-1 font-mono text-xs font-medium whitespace-nowrap underline-offset-2 hover:underline"
-          >
-            {part.ref}
-          </Link>
-        ) : (
-          <span
-            key={i}
-            className="mx-0.5 font-mono text-xs whitespace-nowrap text-muted-foreground"
-          >
-            {part.ref}
-          </span>
-        ),
-      )}
-    </>
-  );
+  const render = (nodes: AnswerNode[]): ReactNode[] =>
+    nodes.map((node, i) => {
+      switch (node.kind) {
+        case "text":
+          return <Fragment key={i}>{node.text}</Fragment>;
+        case "strong":
+          return (
+            <strong key={i} className="font-semibold">
+              {render(node.children)}
+            </strong>
+          );
+        case "em":
+          return <em key={i}>{render(node.children)}</em>;
+        case "code":
+          return (
+            <code key={i} className="rounded bg-card px-1 font-mono text-xs">
+              {render(node.children)}
+            </code>
+          );
+        case "citation":
+          return node.source ? (
+            <Link
+              key={i}
+              href={sourceHref(node.source)}
+              onClick={onNavigate}
+              aria-label={`Source ${node.ref}: ${label(node.source)}`}
+              className="mx-0.5 rounded bg-card px-1 font-mono text-xs font-medium whitespace-nowrap underline-offset-2 hover:underline"
+            >
+              {node.ref}
+            </Link>
+          ) : (
+            <span
+              key={i}
+              className="mx-0.5 font-mono text-xs whitespace-nowrap text-muted-foreground"
+            >
+              {node.ref}
+            </span>
+          );
+      }
+    });
+  return <>{render(answerNodes(text, sources))}</>;
 }
