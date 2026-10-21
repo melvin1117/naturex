@@ -7,6 +7,7 @@ import { Suspense, useMemo } from "react";
 
 import { CopilotChat } from "@/components/copilot-chat";
 import { FieldEvidencePanel } from "@/components/evidence/field-evidence-panel";
+import { AssetBodySkeleton } from "@/components/page-skeletons";
 import { Delta, SiteBackdrop, ValueRange } from "@/components/proto/bits";
 import { PriceChart } from "@/components/proto/charts";
 import { GradeBadge } from "@/components/proto/grade";
@@ -76,7 +77,9 @@ export function AssetView({ id }: { id: string }) {
         Marketplace
       </Link>
       <div className="mt-4">
-        <WorldGate>
+        <WorldGate
+          fallback={<AssetBodySkeleton label="Opening your demo world…" />}
+        >
           <AssetBody id={id} />
         </WorldGate>
       </div>
@@ -97,17 +100,7 @@ function AssetBody({ id }: { id: string }) {
         retry={asset.refetch}
       />
     );
-  if (!asset.data)
-    return (
-      <div
-        role="status"
-        aria-live="polite"
-        className="flex items-center justify-center gap-2 rounded-[2rem] bg-card py-24 text-sm text-muted-foreground shadow-soft"
-      >
-        <Spinner aria-hidden="true" role="presentation" />
-        Loading the site…
-      </div>
-    );
+  if (!asset.data) return <AssetBodySkeleton />;
   return <AssetLoaded asset={asset.data} />;
 }
 

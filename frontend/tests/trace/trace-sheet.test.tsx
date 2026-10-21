@@ -11,6 +11,7 @@ import { TraceSheet } from "@/components/proto/trace-sheet";
 import { usePrototype } from "@/lib/prototype/store";
 
 import { renderExchange, stubBrowserApis } from "../exchange/render";
+import { cards } from "../trade/fixtures";
 import {
   FakeEventSource,
   json,
@@ -287,11 +288,34 @@ describe("TraceSheet away from a real site", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Open trace" }));
 
+    const panel = await sheet();
     expect(
-      await within(await sheet()).findByText(
-        "No model calls have been logged in this world yet.",
-      ),
+      await within(panel).findByText("No model calls logged in this world yet"),
     ).toBeInTheDocument();
+    // It teaches: what appears, why it may be empty and where to look instead.
+    expect(panel).toHaveTextContent("Live ratings log their model calls here");
+    expect(panel).toHaveTextContent("Mock ratings don't call a model");
+    expect(panel).toHaveTextContent("Open a site and choose How it was rated");
+    expect(
+      within(panel).queryByRole("list", { name: "Latest model calls" }),
+    ).toBeNull();
+    // No curated site in this world: no link to one.
+    expect(within(panel).queryByRole("link", { name: /was rated/ })).toBeNull();
+  });
+
+  it("links an empty trace to a curated site's rating runs", async () => {
+    nav.pathname = "/portfolio";
+    renderSheet({
+      "GET /world": () => json(SIGNED_IN_WORLD),
+      "GET /admin/trace": () => json({ asset_id: null, steps: [] }),
+      "GET /assets": () => json(cards),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Open trace" }));
+
+    const link = await within(await sheet()).findByRole("link", {
+      name: `See how ${cards[0]!.name} was rated`,
+    });
+    expect(link).toHaveAttribute("href", `/asset/${cards[0]!.id}`);
   });
 
   it("shows an error with a retry for the world's model calls", async () => {
@@ -310,9 +334,7 @@ describe("TraceSheet away from a real site", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(
-      await screen.findByText(
-        "No model calls have been logged in this world yet.",
-      ),
+      await screen.findByText("No model calls logged in this world yet"),
     ).toBeInTheDocument();
     expect(backend.calls("GET /admin/trace")).toBe(2);
   });

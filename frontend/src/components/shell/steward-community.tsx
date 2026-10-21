@@ -21,6 +21,7 @@ import {
 import { cn } from "cn";
 
 import { AccountIdCopy } from "@/components/account-id";
+import { RouteSkeleton } from "@/components/page-skeletons";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,7 +33,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Spinner } from "@/components/ui/spinner";
 import { CreateCommunityForm } from "@/components/steward/community-form";
 import { FocusFirstHeading } from "@/components/steward/focus-first-heading";
 import { NotACommunityMember } from "@/components/steward/not-a-member";
@@ -307,17 +307,8 @@ export function StewardGate({ children }: { children: ReactNode }) {
   return children;
 }
 
-function GateLoading({ children }: { children: ReactNode }) {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"
-    >
-      <Spinner aria-hidden="true" role="presentation" />
-      {children}
-    </div>
-  );
+function GateLoading({ children }: { children: string }) {
+  return <RouteSkeleton label={children} />;
 }
 
 /**

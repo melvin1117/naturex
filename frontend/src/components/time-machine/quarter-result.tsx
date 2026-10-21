@@ -1,6 +1,8 @@
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -10,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { SimulateQuarter } from "@/lib/api/types";
+import { QUARTER_NO_SITES } from "@/lib/empty-states";
 import { quarterLabel } from "@/lib/prototype/format";
 import {
   ASSET_STATUS_LABEL,
@@ -56,9 +59,7 @@ export function QuarterResult({ result }: { result: SimulateQuarter }) {
         </p>
       )}
       {result.assets.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No listed sites to re-rate in this world.
-        </p>
+        <p className="text-sm text-muted-foreground">{QUARTER_NO_SITES}</p>
       ) : (
         <Table scrollLabel="Results by site">
           <caption className="sr-only">
@@ -121,6 +122,12 @@ export function QuarterResult({ result }: { result: SimulateQuarter }) {
           </TableBody>
         </Table>
       )}
+      <Button asChild variant="outline" size="sm">
+        <Link href="/">
+          See the Marketplace
+          <ArrowRight aria-hidden="true" />
+        </Link>
+      </Button>
     </div>
   );
 }

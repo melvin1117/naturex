@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowRight,
   ChevronDown,
   CircleDot,
   Cpu,
@@ -8,9 +9,11 @@ import {
   RefreshCwIcon,
   Wrench,
 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { cn } from "cn";
 
+import { MachineRowsSkeleton } from "@/components/page-skeletons";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -19,12 +22,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
 import type { ApiError } from "@/lib/api/errors";
 import type { RunTrace } from "@/lib/api/types";
+import { curatedSite, MODEL_CALLS_EMPTY } from "@/lib/empty-states";
 import {
   useAsset,
   useAssetReports,
+  useAssets,
   useRunTrace,
   useWorldTrace,
 } from "@/lib/hooks";
@@ -83,7 +87,7 @@ export function AssetRunsTrace({
     picked ?? initialRunId ?? (settled ? options[0]?.runId : null) ?? null;
 
   if (!runId) {
-    if (!settled) return <Loading label="Loading rating runs…" />;
+    if (!settled) return <MachineRowsSkeleton label="Loading rating runs…" />;
     if (reports.error && !reports.data)
       return (
         <TraceError
@@ -140,7 +144,8 @@ export function RunTraceView({ runId }: { runId: string }) {
         retry={trace.error.status === 404 ? undefined : trace.refetch}
       />
     );
-  if (!trace.data) return <Loading label="Loading the trace…" />;
+  if (!trace.data)
+    return <MachineRowsSkeleton label="Loading the trace…" className="mt-4" />;
   return <RunTraceBody trace={trace.data} />;
 }
 
@@ -303,6 +308,7 @@ function RealStepRow({ row }: { row: TraceRow }) {
  */
 export function WorldModelCalls() {
   const trace = useWorldTrace();
+  const assets = useAssets();
   if (!trace.data && trace.error)
     return (
       <TraceError
@@ -311,68 +317,78 @@ export function WorldModelCalls() {
         retry={trace.refetch}
       />
     );
-  if (!trace.data) return <Loading label="Loading model calls…" />;
+  if (!trace.data)
+    return <MachineRowsSkeleton label="Loading model calls…" intro />;
   const calls = trace.data.steps;
+  const howItWasRated = (
+    <>
+      Open a site and choose{" "}
+      <span className="text-machine-ink">How it was rated</span> to see every
+      step of its rating runs.
+    </>
+  );
+  if (calls.length === 0) {
+    const site = curatedSite(assets.data);
+    return (
+      <div className="rounded-2xl bg-machine-raised px-4 py-4 text-sm">
+        <p className="font-medium text-machine-ink">
+          {MODEL_CALLS_EMPTY.title}
+        </p>
+        <p className="mt-1 text-machine-muted">{MODEL_CALLS_EMPTY.body}</p>
+        <p className="mt-3 text-machine-muted">{howItWasRated}</p>
+        {site && (
+          // On a site's page, this drawer shows that site's rating runs.
+          <Link
+            href={`/asset/${site.id}`}
+            className="mt-3 inline-flex items-center gap-1.5 font-medium text-lime underline-offset-4 hover:underline"
+          >
+            See how {site.name} was rated
+            <ArrowRight className="size-4" aria-hidden="true" />
+          </Link>
+        )}
+      </div>
+    );
+  }
   return (
     <>
       <p className="text-sm text-machine-muted">
-        The latest model calls in your world. Open a site and choose{" "}
-        <span className="text-machine-ink">How it was rated</span> to see every
-        step of its rating runs.
+        The latest model calls in your world. {howItWasRated}
       </p>
-      {calls.length === 0 ? (
-        <p className="mt-4 rounded-2xl bg-machine-raised px-4 py-3 text-sm text-machine-muted">
-          No model calls have been logged in this world yet.
-        </p>
-      ) : (
-        <ol className="mt-4 space-y-2" aria-label="Latest model calls">
-          {calls.map((c, i) => (
-            <li
-              key={`${c.created_at}-${i}`}
-              className="rounded-2xl bg-machine-raised px-4 py-3"
-            >
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-sm font-medium">
-                  {c.agent ?? "Model call"}
+      <ol className="mt-4 space-y-2" aria-label="Latest model calls">
+        {calls.map((c, i) => (
+          <li
+            key={`${c.created_at}-${i}`}
+            className="rounded-2xl bg-machine-raised px-4 py-3"
+          >
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-sm font-medium">
+                {c.agent ?? "Model call"}
+              </span>
+              <span className="text-[11px] text-machine-muted">
+                {date(c.created_at)}
+              </span>
+            </div>
+            <div className="mt-0.5 text-xs text-machine-muted">
+              {modelName(c.model) ?? "—"}
+            </div>
+            <div className="tabular mt-1 flex flex-wrap gap-x-3 text-[11px] text-machine-muted">
+              <span
+                className={cn(c.status !== "ok" && "font-medium text-clay")}
+              >
+                {c.status === "ok" ? "Done" : c.status}
+              </span>
+              {c.latency_ms != null && <span>{seconds(c.latency_ms)}</span>}
+              {c.prompt_tokens != null && (
+                <span>
+                  {tokens(c.prompt_tokens)} in ·{" "}
+                  {tokens(c.completion_tokens ?? 0)} out
                 </span>
-                <span className="text-[11px] text-machine-muted">
-                  {date(c.created_at)}
-                </span>
-              </div>
-              <div className="mt-0.5 text-xs text-machine-muted">
-                {modelName(c.model) ?? "—"}
-              </div>
-              <div className="tabular mt-1 flex flex-wrap gap-x-3 text-[11px] text-machine-muted">
-                <span
-                  className={cn(c.status !== "ok" && "font-medium text-clay")}
-                >
-                  {c.status === "ok" ? "Done" : c.status}
-                </span>
-                {c.latency_ms != null && <span>{seconds(c.latency_ms)}</span>}
-                {c.prompt_tokens != null && (
-                  <span>
-                    {tokens(c.prompt_tokens)} in ·{" "}
-                    {tokens(c.completion_tokens ?? 0)} out
-                  </span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
     </>
-  );
-}
-
-function Loading({ label }: { label: string }) {
-  return (
-    <p
-      role="status"
-      className="mt-4 flex items-center gap-2 text-sm text-machine-muted"
-    >
-      <Spinner aria-hidden="true" role="presentation" />
-      {label}
-    </p>
   );
 }
 

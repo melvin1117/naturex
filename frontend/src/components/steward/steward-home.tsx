@@ -15,6 +15,7 @@ import { Delta, SiteBackdrop, Stat } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
 import { LoadError } from "@/components/proto/load-error";
+import { StewardHomeSkeleton } from "@/components/page-skeletons";
 import { StewardPanel } from "@/components/steward/panel";
 import { StewardHome as PrototypeStewardHome } from "@/components/proto/steward-home";
 import { useStewardCommunity } from "@/components/shell/steward-community";
@@ -22,10 +23,10 @@ import { MembersPanel } from "@/components/steward/members-panel";
 import { WalletCard } from "@/components/steward/wallet-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import type { CommunitySummary, ListingSummary } from "@/lib/api/types";
 import { listingAction, sharePct, STATUS_LABEL, units } from "@/lib/community";
 import { useCommunitySummary } from "@/lib/community-hooks";
+import { payoutsEmptyText, recommendationsEmptyText } from "@/lib/empty-states";
 import { useWorld } from "@/lib/hooks";
 import { marketCard, type MarketCard } from "@/lib/market-cards";
 import { verifyHref } from "@/lib/listing/links";
@@ -59,16 +60,7 @@ export function StewardHome() {
     );
   }
   if (!summary.data || summary.data.community.id !== active.id) {
-    return (
-      <div
-        role="status"
-        aria-live="polite"
-        className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"
-      >
-        <Spinner aria-hidden="true" role="presentation" />
-        Loading {active.name}…
-      </div>
-    );
+    return <StewardHomeSkeleton label={`Loading ${active.name}…`} />;
   }
   return <Home summary={summary.data} />;
 }
@@ -442,8 +434,7 @@ function Recommendations({ listings }: { listings: ListingSummary[] }) {
     <StewardPanel title="Stewardship actions">
       {rated.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No recommendations yet. They come from the Auditor once a site has
-          been rated.
+          {recommendationsEmptyText(listings)}
         </p>
       ) : (
         <div className="space-y-5">
@@ -485,9 +476,7 @@ function Payouts({ summary }: { summary: CommunitySummary }) {
     <StewardPanel title="Quarterly payouts">
       {summary.payouts.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No payouts yet. Each quarter after the opening offer, half of the
-          simulated revenue goes to the community fund and half to the
-          units&apos; holders, the treasury included.
+          {payoutsEmptyText(summary.listings)}
         </p>
       ) : (
         <>

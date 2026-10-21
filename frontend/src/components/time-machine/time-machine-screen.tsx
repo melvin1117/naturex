@@ -4,11 +4,14 @@ import { ArrowRight, LockKeyhole } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
+import {
+  PanelSkeleton,
+  TimeMachineBodySkeleton,
+} from "@/components/page-skeletons";
 import { ControlRoom } from "@/components/proto/control-room";
 import { LoadError } from "@/components/proto/load-error";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { useAssets, useWorld } from "@/lib/hooks";
 import {
   ADMIN_ONLY,
@@ -20,6 +23,7 @@ import { useTimeMachine } from "@/lib/time-machine-hooks";
 import { EventSection } from "./event-section";
 import { QuarterSection } from "./quarter-section";
 import { ResetSection } from "./reset-section";
+import { TimeMachineHeading } from "./time-machine-heading";
 
 /**
  * `/admin`: the real Time Machine for a signed-in admin (the layout lets only admins in, and a
@@ -29,18 +33,6 @@ import { ResetSection } from "./reset-section";
 export function AdminScreen() {
   const { world } = useWorld();
   return world?.me ? <TimeMachinePanel /> : <ControlRoom />;
-}
-
-function Loading({ label }: { label: string }) {
-  return (
-    <p
-      role="status"
-      className="mt-8 flex items-center gap-2 py-10 text-sm text-muted-foreground"
-    >
-      <Spinner aria-hidden="true" role="presentation" />
-      {label}
-    </p>
-  );
 }
 
 export function TimeMachinePanel() {
@@ -75,17 +67,7 @@ export function TimeMachinePanel() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 pt-10 pb-16 sm:px-6">
-      <p className="text-sm text-muted-foreground">
-        Control room · play money only
-      </p>
-      <h1 className="mt-1 font-serif text-5xl leading-none tracking-tight sm:text-6xl">
-        Time Machine
-      </h1>
-      <p className="mt-3 max-w-2xl text-muted-foreground">
-        Move this sandbox forward a quarter or inject an event, and watch
-        ratings, stake prices and alerts respond. Every change is a real
-        re-rate, stored and labelled simulated.
-      </p>
+      <TimeMachineHeading />
 
       {notAdmin ? (
         <Alert className="mt-8 max-w-2xl">
@@ -138,7 +120,7 @@ export function TimeMachinePanel() {
                   retry={assets.refetch}
                 />
               ) : (
-                <Loading label="Loading sites…" />
+                <PanelSkeleton label="Loading sites…" />
               )}
             </div>
           </div>
@@ -157,7 +139,7 @@ export function TimeMachinePanel() {
           />
         </div>
       ) : (
-        <Loading label="Loading the Time Machine…" />
+        <TimeMachineBodySkeleton />
       )}
     </div>
   );
