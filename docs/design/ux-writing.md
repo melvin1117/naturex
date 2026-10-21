@@ -96,8 +96,9 @@ Pick the lowest rung that's enough (#216; `frontend/src/lib/feedback.ts`). One a
 | 3. Toast | A consequence on another page, or from the background | Signed in or out, a new alert. Sonner, ≤ 4 s (the welcome 2.5 s, alerts 7 s), at most one action. Never an error the user has to fix |
 | 4. Milestone | Listed, opened to supporters, a first stake | A staged reveal, once per journey step |
 
-- **Trades:** the receipt is the confirmation, not a toast. After a fill the trade panel's balance and units count to their new values, and the stake's row on *Your stakes* washes once when the user next opens it.
-- **Live prices:** a moved price flashes its colour for 600 ms, then settles back to ink and keeps a ▲/▼ arrow (with text for screen readers). Ticks aren't announced.
+- **Trades:** the receipt is the confirmation, not a toast. After a fill the trade panel's balance and units count to their new values, and the stake's row on *Your stakes* washes once when the user next opens it, with a text badge ("+60 units just now").
+- **Refused orders** are announced once, by their alert; the numbers under the field stay on screen without being read out again.
+- **Live prices:** on the asset page's hero, a moved price flashes its colour for 600 ms, then settles back to ink and keeps a ▲/▼ arrow (with text for screen readers). Refreshing a cached price on arrival isn't a move. Ticks aren't announced, and Marketplace cards don't flash.
 - **Toasts sit at the bottom:** bottom-left on wide screens, full width at the bottom on phones, so they never cover the header, the account menu or the trade panel.
 - **Reduced motion:** washes, flashes and counts show their final state at once; the arrow and the text stay.
 

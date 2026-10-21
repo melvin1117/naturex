@@ -357,12 +357,17 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
     await panel.getByRole("button", { name: "Sell 40 units" }).click();
     await expect(status).toContainText("Sold 40 units");
     await expect(status).toContainText("60 units held");
+    // The receipt points to where the stake lives (#216 WP2), on every fill.
+    await expect(
+      panel.getByRole("link", { name: "View your stakes" }),
+    ).toHaveAttribute("href", "/portfolio");
   });
 
   await test.step("the portfolio shows the stake", async () => {
     // The header's link (the receipt also links: "View your stakes").
     await investor
-      .getByRole("link", { name: "Your stakes", exact: true })
+      .getByRole("banner")
+      .getByRole("link", { name: "Your stakes" })
       .click();
     await expect(
       investor.getByRole("heading", { name: "Your stakes", level: 1 }),
