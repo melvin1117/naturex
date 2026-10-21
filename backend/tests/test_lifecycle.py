@@ -1617,6 +1617,4 @@ def test_a_card_carries_its_boundary_outline(world: World_) -> None:
     world.executor.run_all()
     cards_ = client_as(world, world.outsider).get("/assets").json()
     assert next(c for c in cards_ if c["id"] == asset["id"])["outline"] == outline
-    assert all(
-        sum(len(ring_) for ring_ in c["outline"]) <= CARD_OUTLINE_MAX_POINTS for c in cards_
-    )
+    assert all(sum(len(ring_) for ring_ in c["outline"]) <= CARD_OUTLINE_MAX_POINTS for c in cards_)
