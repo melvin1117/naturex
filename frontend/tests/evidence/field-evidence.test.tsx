@@ -34,6 +34,7 @@ import {
   json,
   sequence,
   SIGNED_IN_WORLD,
+  WORLD,
 } from "../lib/helpers";
 import { asset as assetFixture } from "../trade/fixtures";
 
@@ -518,9 +519,33 @@ describe("FieldEvidenceScreen", () => {
 });
 
 describe("FieldEvidencePanel", () => {
-  function renderPanel(summary: FieldEvidencePublic) {
+  const COMMUNITY_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const EMPTY: FieldEvidencePublic = {
+    photos: 0,
+    validated: 0,
+    latest_taken_month: null,
+    land_cover: [],
+    disturbance: [],
+    counted_in_latest_report: false,
+  };
+
+  function renderPanel(
+    summary: FieldEvidencePublic,
+    { communities = [] as { id: string }[], world = SIGNED_IN_WORLD } = {},
+  ) {
     const backend = fakeBackend({
-      "GET /world": () => json(SIGNED_IN_WORLD),
+      "GET /world": () => json(world),
+      "GET /me/communities": () =>
+        json(
+          communities.map((c) => ({
+            name: "Selva Viva",
+            country: null,
+            description: null,
+            created_at: "2026-09-01T00:00:00Z",
+            role: "steward",
+            ...c,
+          })),
+        ),
       [`GET /assets/${ASSET_ID}/evidence/summary`]: () => json(summary),
     });
     const layer = createDataLayer({
@@ -530,10 +555,24 @@ describe("FieldEvidencePanel", () => {
     });
     render(
       <WorldProvider dataLayer={layer}>
-        <FieldEvidencePanel assetId={ASSET_ID} />
+        <FieldEvidencePanel assetId={ASSET_ID} communityId={COMMUNITY_ID} />
       </WorldProvider>,
     );
+    return backend;
   }
+
+  it("says in one line what field evidence is", async () => {
+    renderPanel(EMPTY);
+    const panel = await screen.findByRole("region", { name: "Field evidence" });
+    expect(
+      within(panel).getByText(
+        /Geotagged photos the site's community takes on the land, checked against its boundary, that can raise the rating's confidence/,
+      ),
+    ).toBeVisible();
+    expect(
+      within(panel).getByText(/never a photo or a location/),
+    ).toBeVisible();
+  });
 
   it("shows counts and labels only", async () => {
     renderPanel({
@@ -556,17 +595,48 @@ describe("FieldEvidencePanel", () => {
     ).toBeInTheDocument();
   });
 
-  it("has an empty state", async () => {
-    renderPanel({
-      photos: 0,
-      validated: 0,
-      latest_taken_month: null,
-      land_cover: [],
-      disturbance: [],
-      counted_in_latest_report: false,
-    });
+  it("has an empty state that says how photos are added", async () => {
+    renderPanel(EMPTY);
     expect(
-      await screen.findByText("The community hasn't added field photos yet."),
+      await screen.findByText(
+        /No field photos yet\. Members of the site's community add them from the Steward app/,
+      ),
     ).toBeInTheDocument();
+    // Not a member: no way in.
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("link", { name: "Add field photos" }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it("links the site's community members to add photos", async () => {
+    renderPanel(EMPTY, { communities: [{ id: COMMUNITY_ID }] });
+    expect(
+      await screen.findByRole("link", { name: "Add field photos" }),
+    ).toHaveAttribute(
+      "href",
+      `/steward/assets/${ASSET_ID}/evidence?community=${COMMUNITY_ID}`,
+    );
+  });
+
+  it("offers no link to anonymous visitors", async () => {
+    const backend = renderPanel(EMPTY, { world: WORLD });
+    await screen.findByText(/No field photos yet/);
+    expect(backend.calls("GET /me/communities")).toBe(0);
+    expect(
+      screen.queryByRole("link", { name: "Add field photos" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers no link to members of another community", async () => {
+    const backend = renderPanel(EMPTY, {
+      communities: [{ id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" }],
+    });
+    await screen.findByText(/No field photos yet/);
+    await waitFor(() => expect(backend.calls("GET /me/communities")).toBe(1));
+    expect(
+      screen.queryByRole("link", { name: "Add field photos" }),
+    ).not.toBeInTheDocument();
   });
 });

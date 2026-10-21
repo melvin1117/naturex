@@ -362,6 +362,18 @@ describe("IpoLaunchScreen", () => {
     expect(backend.calls(LAUNCH)).toBe(0);
   });
 
+  it("links to the field evidence screen, which can raise the confidence (#214)", async () => {
+    renderLaunch();
+    await steps();
+
+    expect(
+      screen.getByRole("link", { name: "Add field photos" }),
+    ).toHaveAttribute("href", `/steward/assets/${ASSET_ID}/evidence`);
+    expect(
+      screen.getByText(/field photos of the land can raise the next rating/i),
+    ).toBeVisible();
+  });
+
   it("links a listing that needs verification to its verification screen", async () => {
     renderLaunch({
       [PREVIEW]: (request) =>

@@ -2,6 +2,7 @@
 
 import {
   ArrowRight,
+  Camera,
   Check,
   ExternalLink,
   Settings,
@@ -9,6 +10,7 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { AlertsList } from "@/components/alerts-list";
 import { Delta, SiteBackdrop, Stat } from "@/components/proto/bits";
@@ -29,6 +31,7 @@ import { useCommunitySummary } from "@/lib/community-hooks";
 import { payoutsEmptyText, recommendationsEmptyText } from "@/lib/empty-states";
 import { useWorld } from "@/lib/hooks";
 import { marketCard, type MarketCard } from "@/lib/market-cards";
+import { evidenceHref } from "@/lib/field-evidence";
 import { verifyHref } from "@/lib/listing/links";
 import { COMMUNITY_ROLE_LABEL, withCommunity } from "@/lib/navigation";
 import { date, ha, quarterLabel } from "@/lib/prototype/format";
@@ -268,18 +271,24 @@ function ActionButton({
   );
 }
 
-/** The listing's verification screen (T70); not for a withdrawn or ineligible listing. */
-function VerifyLink({
-  listing,
-  communityId,
-  tone,
-}: {
-  listing: ListingSummary;
-  communityId: string;
-  tone: "image" | "plain";
-}) {
+/** A withdrawn or ineligible listing has no verification or field evidence to open. */
+function closed(listing: ListingSummary): boolean {
   const status = listing.asset.status;
-  if (status === "withdrawn" || status === "ineligible") return null;
+  return status === "withdrawn" || status === "ineligible";
+}
+
+/** A listing's secondary screen (verification, field photos) beside its next action. */
+function ListingLink({
+  href,
+  label,
+  tone,
+  children,
+}: {
+  href: string;
+  label: string;
+  tone: "image" | "plain";
+  children: ReactNode;
+}) {
   return (
     <Button
       asChild
@@ -291,14 +300,56 @@ function VerifyLink({
           : ""
       }
     >
-      <Link
-        href={verifyHref(listing.asset.id, communityId)}
-        aria-label={`Verification of ${listing.asset.name}`}
-      >
-        <ShieldCheck aria-hidden="true" />
-        Verification
+      <Link href={href} aria-label={label}>
+        {children}
       </Link>
     </Button>
+  );
+}
+
+/** The listing's verification screen (T70). */
+function VerifyLink({
+  listing,
+  communityId,
+  tone,
+}: {
+  listing: ListingSummary;
+  communityId: string;
+  tone: "image" | "plain";
+}) {
+  if (closed(listing)) return null;
+  return (
+    <ListingLink
+      href={verifyHref(listing.asset.id, communityId)}
+      label={`Verification of ${listing.asset.name}`}
+      tone={tone}
+    >
+      <ShieldCheck aria-hidden="true" />
+      Verification
+    </ListingLink>
+  );
+}
+
+/** The listing's field evidence screen (T40, #214): photos that can raise its confidence. */
+function EvidenceLink({
+  listing,
+  communityId,
+  tone,
+}: {
+  listing: ListingSummary;
+  communityId: string;
+  tone: "image" | "plain";
+}) {
+  if (closed(listing)) return null;
+  return (
+    <ListingLink
+      href={evidenceHref(listing.asset.id, communityId)}
+      label={`Field photos of ${listing.asset.name}`}
+      tone={tone}
+    >
+      <Camera aria-hidden="true" />
+      Field photos
+    </ListingLink>
   );
 }
 
@@ -384,6 +435,11 @@ function FeaturedListing({
               communityId={communityId}
               tone="image"
             />
+            <EvidenceLink
+              listing={listing}
+              communityId={communityId}
+              tone="image"
+            />
           </div>
         </div>
       </div>
@@ -418,6 +474,11 @@ function ListingRow({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <VerifyLink listing={listing} communityId={communityId} tone="plain" />
+        <EvidenceLink
+          listing={listing}
+          communityId={communityId}
+          tone="plain"
+        />
         <ActionButton
           listing={listing}
           communityId={communityId}
