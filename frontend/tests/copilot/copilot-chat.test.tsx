@@ -69,6 +69,27 @@ describe("CopilotChat", () => {
     });
   });
 
+  it("renders bold and italic around a citation link, never raw markers", async () => {
+    const answer =
+      "Health **fell to 72.30 [R2]** after an *encroachment* [E55555555].";
+    renderExchange(chat(), {
+      ...signedIn,
+      "POST /copilot": () => sseResponse(answerEvents(answer)),
+    });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Why did the price change?" }),
+    );
+
+    const link = await screen.findByRole("link", {
+      name: "Source R2: Report v2",
+    });
+    const strong = link.closest("strong");
+    expect(strong).toHaveTextContent("fell to 72.30 R2");
+    expect(screen.getByText("encroachment").tagName).toBe("EM");
+    expect(screen.getByTestId("copilot-turns")).not.toHaveTextContent("*");
+  });
+
   it("shows a refusal without sources", async () => {
     const refusal = "That isn't in the record I can see.";
     renderExchange(chat(), {

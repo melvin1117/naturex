@@ -144,6 +144,125 @@ export function answerParts(
   return parts;
 }
 
+/** An answer's inline structure: text, citations and the emphasis around them. */
+export type AnswerNode =
+  | Extract<AnswerPart, { kind: "text" } | { kind: "citation" }>
+  | { kind: "strong" | "em" | "code"; children: AnswerNode[] };
+
+type Marker = "**" | "__" | "*" | "_" | "`";
+type Token =
+  | AnswerNode
+  | { kind: "marker"; marker: Marker; open: boolean; close: boolean };
+
+/** Stands for a citation while markers are matched: not whitespace, not a letter. */
+const CITE = "\uE000";
+const TOKEN = /\uE000|\*\*|__|\*|_|`/g;
+const SPACE = /\s/;
+const WORD = /[\p{L}\p{N}]/u;
+
+/**
+ * The answer as nodes to render, with inline Markdown the model or a quoted report may still
+ * use: `**bold**`/`__bold__`, `*italic*`/`_italic_` and `` `code` ``, which may wrap citations
+ * (`**fell [R1]**`). Everything else stays text, so nothing is ever rendered as HTML. Markers
+ * follow CommonMark's flanking rules (`5 * 3` and `snake_case` stay as written); an unmatched
+ * `**` or `__` (a quote cut mid-bold) is dropped, a leading `#` heading mark too.
+ */
+export function answerNodes(
+  answer: string,
+  sources: readonly CopilotSource[],
+): AnswerNode[] {
+  const text = answer.replace(/^#{1,6}[ \t]+/gm, "");
+  const parts = answerParts(text, sources);
+  const citations = parts.filter((p) => p.kind === "citation");
+  const flat = parts
+    .map((p) => (p.kind === "text" ? p.text.replaceAll(CITE, "") : CITE))
+    .join("");
+  const tokens: Token[] = [];
+  let cited = 0;
+  let last = 0;
+  for (const match of flat.matchAll(TOKEN)) {
+    const at = match.index ?? 0;
+    if (at > last) tokens.push({ kind: "text", text: flat.slice(last, at) });
+    last = at + match[0].length;
+    if (match[0] === CITE) {
+      tokens.push(citations[cited++]!);
+      continue;
+    }
+    const marker = match[0] as Marker;
+    const before = flat[at - 1] ?? "";
+    const after = flat[last] ?? "";
+    const left = after !== "" && !SPACE.test(after);
+    const right = before !== "" && !SPACE.test(before);
+    const underscore = marker[0] === "_";
+    tokens.push({
+      kind: "marker",
+      marker,
+      open: marker === "`" || (left && !(underscore && WORD.test(before))),
+      close: marker === "`" || (right && !(underscore && WORD.test(after))),
+    });
+  }
+  if (last < flat.length) tokens.push({ kind: "text", text: flat.slice(last) });
+  return merge(nest(tokens));
+}
+
+const EMPHASIS: Record<Marker, "strong" | "em" | "code"> = {
+  "**": "strong",
+  __: "strong",
+  "*": "em",
+  _: "em",
+  "`": "code",
+};
+
+function nest(tokens: Token[]): AnswerNode[] {
+  const nodes: AnswerNode[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]!;
+    if (token.kind !== "marker") {
+      nodes.push(token);
+      continue;
+    }
+    const end = token.open
+      ? tokens.findIndex(
+          (t, j) =>
+            j > i + 1 &&
+            t.kind === "marker" &&
+            t.marker === token.marker &&
+            t.close,
+        )
+      : -1;
+    if (end !== -1) {
+      const inner = tokens.slice(i + 1, end);
+      nodes.push({
+        kind: EMPHASIS[token.marker],
+        // Code is literal: markers inside it are text (citations still link).
+        children: merge(
+          token.marker === "`" ? inner.map(literal) : nest(inner),
+        ),
+      });
+      i = end;
+    } else if (token.marker !== "**" && token.marker !== "__") {
+      nodes.push(literal(token));
+    }
+  }
+  return nodes;
+}
+
+function literal(token: Token): AnswerNode {
+  return token.kind === "marker" ? { kind: "text", text: token.marker } : token;
+}
+
+/** Adjacent text runs joined, so the rendered text reads as one. */
+function merge(nodes: AnswerNode[]): AnswerNode[] {
+  const out: AnswerNode[] = [];
+  for (const node of nodes) {
+    const prev = out.at(-1);
+    if (node.kind === "text" && prev?.kind === "text")
+      out[out.length - 1] = { kind: "text", text: prev.text + node.text };
+    else out.push(node);
+  }
+  return out;
+}
+
 /** Where a citation leads: the asset page's report or news tab. */
 export function sourceHref(source: CopilotSource): string {
   const tab = source.kind === "report" ? "report" : "news";

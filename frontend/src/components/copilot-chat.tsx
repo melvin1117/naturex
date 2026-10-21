@@ -3,7 +3,15 @@
 import { ArrowUp, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { cn } from "cn";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +20,9 @@ import { isAbortError, toApiError } from "@/lib/api/errors";
 import type { CopilotSource } from "@/lib/api/types";
 import { loginHref } from "@/lib/auth";
 import {
-  answerParts,
+  answerNodes,
   askCopilot,
+  type AnswerNode,
   sourceHref,
   sourceLabel,
 } from "@/lib/copilot";
@@ -46,21 +55,40 @@ interface Turn {
   citations: CopilotSource[];
   mode: "model" | "extractive" | "refusal" | null;
   error: string | null;
+  /** Asked world-wide: its citation chips name their site. */
+  worldWide: boolean;
 }
+
+/** Where the chat sits: a card on a page, or the body of the header's Copilot sheet. */
+type Layout = {
+  /** A card with its own heading and description (asset and portfolio pages). */
+  variant?: "card" | "sheet";
+  /** Called when a source link is followed (the sheet closes). */
+  onNavigate?: () => void;
+  /** Told when an answer starts and ends (the sheet locks its scope meanwhile). */
+  onPendingChange?: (pending: boolean) => void;
+};
 
 /**
  * The Investor Copilot (T39, T44): streamed answers grounded in reports and news, with every
  * `[ref]` linking to its source. With `assetId` it answers about that site; without it (the
  * portfolio page) it searches every site visible in the world, and each citation names its
- * site. Signed-out visitors are asked to sign in.
+ * site. Signed-out visitors are asked to sign in. `variant="sheet"` drops the card and its
+ * heading for the header's Copilot sheet (#213), whose scope can change between questions:
+ * earlier answers stay.
  */
 export function CopilotChat(
-  props: { assetId: string; assetName: string } | { assetId?: undefined },
+  props: Layout &
+    ({ assetId: string; assetName: string } | { assetId?: undefined }),
 ) {
   const assetId = props.assetId;
   const scope: Scope = props.assetId
     ? { kind: "asset", assetName: props.assetName }
     : { kind: "world" };
+  const variant = props.variant ?? "card";
+  const onNavigate = props.onNavigate;
+  const onPendingChange = props.onPendingChange;
+  const inputId = useId();
   const { api } = useDataLayer();
   const { world } = useWorld();
   const pathname = usePathname();
@@ -77,6 +105,10 @@ export function CopilotChat(
 
   useEffect(() => () => abort.current?.abort(), []);
 
+  useEffect(() => {
+    onPendingChange?.(pending);
+  }, [pending, onPendingChange]);
+
   // Follow the conversation: a streamed answer and its source links end at the bottom.
   useEffect(() => {
     const list = listRef.current;
@@ -85,7 +117,7 @@ export function CopilotChat(
 
   if (!world?.me) {
     return (
-      <Shell scope={scope}>
+      <Shell scope={scope} variant={variant}>
         <Button asChild variant="outline" size="sm" className="mt-4">
           <Link href={loginHref(search ? `${pathname}?${search}` : pathname)}>
             Sign in to ask the Copilot
@@ -117,6 +149,7 @@ export function CopilotChat(
         citations: [],
         mode: null,
         error: null,
+        worldWide: !assetId,
       },
     ]);
     const controller = new AbortController();
@@ -169,13 +202,16 @@ export function CopilotChat(
 
   const suggestions =
     scope.kind === "asset" ? COPILOT_SUGGESTIONS : WORLD_COPILOT_SUGGESTIONS;
-  const inputId = `copilot-${assetId ?? "world"}`;
+  const sheet = variant === "sheet";
   return (
-    <Shell scope={scope}>
+    <Shell scope={scope} variant={variant}>
       <div
         ref={listRef}
         data-testid="copilot-turns"
-        className="mt-4 max-h-[28rem] space-y-4 overflow-y-auto"
+        className={cn(
+          "space-y-4 overflow-y-auto overscroll-contain",
+          sheet ? "min-h-0 flex-1 px-6 py-5" : "mt-4 max-h-[28rem]",
+        )}
         aria-live="polite"
         aria-busy={pending}
       >
@@ -191,70 +227,79 @@ export function CopilotChat(
           </p>
         )}
         {turns.map((turn) => (
-          <TurnView
-            key={turn.id}
-            turn={turn}
-            withAsset={scope.kind === "world"}
-          />
+          <TurnView key={turn.id} turn={turn} onNavigate={onNavigate} />
         ))}
       </div>
-      <div className="mt-4 flex flex-wrap gap-1.5">
-        {suggestions.map((q) => (
-          <Button
-            key={q}
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-auto rounded-full px-3 py-1.5 text-xs"
-            disabled={pending}
-            onClick={() => void ask(q)}
-          >
-            {q}
-          </Button>
-        ))}
-      </div>
-      <form
-        className="mt-3 flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void ask(draft);
-        }}
-      >
-        <label htmlFor={inputId} className="sr-only">
-          {scope.kind === "asset"
-            ? `Ask the Copilot about ${scope.assetName}`
-            : "Ask the Copilot about every site"}
-        </label>
-        <Input
-          id={inputId}
-          value={draft}
-          maxLength={MAX_QUESTION}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={
-            scope.kind === "asset"
-              ? "Why did it drop?"
-              : "Which site fell most?"
-          }
-          className="rounded-full"
-          autoComplete="off"
-        />
-        <Button
-          type="submit"
-          size="icon"
-          aria-label="Send question"
-          disabled={!draft.trim() || pending}
+      <div className={cn(sheet && "border-t px-6 pt-3 pb-6")}>
+        <div className={cn("flex flex-wrap gap-1.5", sheet ? "mb-3" : "mt-4")}>
+          {suggestions.map((q) => (
+            <Button
+              key={q}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-auto rounded-full px-3 py-1.5 text-xs"
+              disabled={pending}
+              onClick={() => void ask(q)}
+            >
+              {q}
+            </Button>
+          ))}
+        </div>
+        <form
+          className={cn("flex gap-2", !sheet && "mt-3")}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void ask(draft);
+          }}
         >
-          <ArrowUp aria-hidden="true" />
-        </Button>
-      </form>
+          <label htmlFor={inputId} className="sr-only">
+            {scope.kind === "asset"
+              ? `Ask the Copilot about ${scope.assetName}`
+              : "Ask the Copilot about every site"}
+          </label>
+          <Input
+            id={inputId}
+            value={draft}
+            maxLength={MAX_QUESTION}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={
+              scope.kind === "asset"
+                ? "Why did it drop?"
+                : "Which site fell most?"
+            }
+            className="rounded-full"
+            autoComplete="off"
+          />
+          <Button
+            type="submit"
+            size="icon"
+            aria-label="Send question"
+            disabled={!draft.trim() || pending}
+          >
+            <ArrowUp aria-hidden="true" />
+          </Button>
+        </form>
+      </div>
     </Shell>
   );
 }
 
 type Scope = { kind: "asset"; assetName: string } | { kind: "world" };
 
-function Shell({ scope, children }: { scope: Scope; children: ReactNode }) {
+function Shell({
+  scope,
+  variant,
+  children,
+}: {
+  scope: Scope;
+  variant: "card" | "sheet";
+  children: ReactNode;
+}) {
   const titleId = useId();
+  // The sheet has its own title and description.
+  if (variant === "sheet")
+    return <div className="flex min-h-0 flex-1 flex-col">{children}</div>;
   return (
     <section
       aria-labelledby={titleId}
@@ -274,8 +319,15 @@ function Shell({ scope, children }: { scope: Scope; children: ReactNode }) {
   );
 }
 
-function TurnView({ turn, withAsset }: { turn: Turn; withAsset: boolean }) {
-  const label = (s: CopilotSource) => sourceLabel(s, { withAsset });
+function TurnView({
+  turn,
+  onNavigate,
+}: {
+  turn: Turn;
+  onNavigate: (() => void) | undefined;
+}) {
+  const label = (s: CopilotSource) =>
+    sourceLabel(s, { withAsset: turn.worldWide });
   return (
     <div className="space-y-2">
       <p className="ml-auto w-fit max-w-[90%] rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-sm text-primary-foreground">
@@ -301,6 +353,7 @@ function TurnView({ turn, withAsset }: { turn: Turn; withAsset: boolean }) {
               text={turn.answer}
               sources={turn.citations}
               label={label}
+              onNavigate={onNavigate}
             />
           </p>
         )}
@@ -322,9 +375,10 @@ function TurnView({ turn, withAsset }: { turn: Turn; withAsset: boolean }) {
                   <Link
                     href={sourceHref(s)}
                     title={label(s)}
+                    onClick={onNavigate}
                     className="inline-flex max-w-full items-center gap-1 rounded-full bg-card px-2.5 py-1 text-xs font-medium hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   >
-                    <span className="font-mono text-muted-foreground">
+                    <span className="shrink-0 font-mono whitespace-nowrap text-muted-foreground">
                       {s.ref}
                     </span>
                     <span className="truncate">{label(s)}</span>
@@ -339,39 +393,60 @@ function TurnView({ turn, withAsset }: { turn: Turn; withAsset: boolean }) {
   );
 }
 
-/** The answer with each `[ref]` as a link to its source once the citations are known. */
+/**
+ * The answer with each `[ref]` as a link to its source once the citations are known, and its
+ * inline bold, italic and code as React elements (never HTML).
+ */
 function AnswerText({
   text,
   sources,
   label,
+  onNavigate,
 }: {
   text: string;
   sources: CopilotSource[];
   label: (source: CopilotSource) => string;
+  onNavigate: (() => void) | undefined;
 }) {
-  return (
-    <>
-      {answerParts(text, sources).map((part, i) =>
-        part.kind === "text" ? (
-          <span key={i}>{part.text}</span>
-        ) : part.source ? (
-          <Link
-            key={i}
-            href={sourceHref(part.source)}
-            aria-label={`Source ${part.ref}: ${label(part.source)}`}
-            className="mx-0.5 rounded bg-card px-1 font-mono text-xs font-medium underline-offset-2 hover:underline"
-          >
-            {part.ref}
-          </Link>
-        ) : (
-          <span
-            key={i}
-            className="mx-0.5 font-mono text-xs text-muted-foreground"
-          >
-            {part.ref}
-          </span>
-        ),
-      )}
-    </>
-  );
+  const render = (nodes: AnswerNode[]): ReactNode[] =>
+    nodes.map((node, i) => {
+      switch (node.kind) {
+        case "text":
+          return <Fragment key={i}>{node.text}</Fragment>;
+        case "strong":
+          return (
+            <strong key={i} className="font-semibold">
+              {render(node.children)}
+            </strong>
+          );
+        case "em":
+          return <em key={i}>{render(node.children)}</em>;
+        case "code":
+          return (
+            <code key={i} className="rounded bg-card px-1 font-mono text-xs">
+              {render(node.children)}
+            </code>
+          );
+        case "citation":
+          return node.source ? (
+            <Link
+              key={i}
+              href={sourceHref(node.source)}
+              onClick={onNavigate}
+              aria-label={`Source ${node.ref}: ${label(node.source)}`}
+              className="mx-0.5 rounded bg-card px-1 font-mono text-xs font-medium whitespace-nowrap underline-offset-2 hover:underline"
+            >
+              {node.ref}
+            </Link>
+          ) : (
+            <span
+              key={i}
+              className="mx-0.5 font-mono text-xs whitespace-nowrap text-muted-foreground"
+            >
+              {node.ref}
+            </span>
+          );
+      }
+    });
+  return <>{render(answerNodes(text, sources))}</>;
 }

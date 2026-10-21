@@ -558,6 +558,12 @@ describe("the community home", () => {
       "href",
       `/steward/assets/${awaiting.asset.id}/verify?community=${SELVA.id}`,
     );
+    expect(
+      within(sites).getByRole("link", { name: "Field photos of Bosque Alto" }),
+    ).toHaveAttribute(
+      "href",
+      `/steward/assets/${awaiting.asset.id}/evidence?community=${SELVA.id}`,
+    );
 
     const wallet = screen.getByRole("region", { name: "Community fund" });
     expect(
@@ -673,6 +679,55 @@ describe("the community home", () => {
     expect(
       within(panel).getByRole("button", { name: "Mark all read" }),
     ).toBeVisible();
+  });
+
+  it("links field photos on the featured listing, not on closed ones (#214)", async () => {
+    const closed = (status: "withdrawn" | "ineligible", id: string) =>
+      listing({
+        asset: card({
+          id,
+          name: `Closed ${status}`,
+          status,
+          trading: false,
+          price: null,
+        }),
+        next_action: "none",
+        ipo_at: null,
+      });
+    const featured = listing();
+    setup(<StewardPage />, {
+      routes: {
+        [`GET /communities/${SELVA.id}/summary`]: () =>
+          json(
+            summary({
+              listings: [
+                featured,
+                closed("withdrawn", "cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+                closed("ineligible", "dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
+              ],
+            }),
+          ),
+      },
+    });
+
+    const hero = await screen.findByRole("region", {
+      name: "Xochimilco Wetland",
+    });
+    expect(
+      within(hero).getByRole("link", {
+        name: "Field photos of Xochimilco Wetland",
+      }),
+    ).toHaveAttribute(
+      "href",
+      `/steward/assets/${featured.asset.id}/evidence?community=${SELVA.id}`,
+    );
+    const sites = screen.getByRole("region", { name: "Your sites" });
+    expect(within(sites).getByText("Closed withdrawn")).toBeVisible();
+    for (const name of ["Closed withdrawn", "Closed ineligible"]) {
+      expect(
+        within(sites).queryByRole("link", { name: `Field photos of ${name}` }),
+      ).not.toBeInTheDocument();
+    }
   });
 
   it("tells a steward the owner launches the IPO", async () => {

@@ -378,7 +378,10 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
         <VerificationPanel assetId={asset.id} />
       </div>
       <div className="mt-8">
-        <FieldEvidencePanel assetId={asset.id} />
+        <FieldEvidencePanel
+          assetId={asset.id}
+          communityId={asset.community_id ?? null}
+        />
       </div>
       <DataAttribution facts={latest} images={images.data} />
     </>

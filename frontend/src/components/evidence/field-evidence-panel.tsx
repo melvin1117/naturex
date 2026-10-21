@@ -1,26 +1,44 @@
 "use client";
 
 import { Camera } from "lucide-react";
+import Link from "next/link";
 
 import { LoadError } from "@/components/proto/load-error";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import type { FieldEvidencePublic } from "@/lib/api/types";
 import {
   DISTURBANCE_LABEL,
+  evidenceHref,
   LAND_COVER_LABEL,
   monthYear,
 } from "@/lib/field-evidence";
 import { useFieldEvidenceSummary } from "@/lib/field-evidence-hooks";
+import { useMyCommunities } from "@/lib/hooks";
 
 export const FIELD_EVIDENCE_PANEL_ID = "field-evidence";
 
 /**
  * Field evidence on the public asset page (T40): counts and labels of the community's
- * validated photos only. Never a photo, a position or who took it.
+ * validated photos only. Never a photo, a position or who took it. It says what field evidence
+ * is and how it's added; members of the site's community get a link to add photos (#214).
  */
-export function FieldEvidencePanel({ assetId }: { assetId: string }) {
+export function FieldEvidencePanel({
+  assetId,
+  communityId,
+}: {
+  assetId: string;
+  /** The listing's community, so its members get the "Add field photos" link. */
+  communityId: string | null;
+}) {
   const summary = useFieldEvidenceSummary(assetId);
+  const communities = useMyCommunities();
+  const addHref =
+    communityId !== null &&
+    (communities.data ?? []).some((c) => c.id === communityId)
+      ? evidenceHref(assetId, communityId)
+      : null;
   return (
     <section
       id={FIELD_EVIDENCE_PANEL_ID}
@@ -34,6 +52,10 @@ export function FieldEvidencePanel({ assetId }: { assetId: string }) {
         <Camera className="size-6 text-muted-foreground" aria-hidden="true" />
         Field evidence
       </h2>
+      <p className="mt-2 max-w-2xl text-sm text-pretty text-muted-foreground">
+        Geotagged photos from the site&apos;s community, checked against its
+        boundary, can raise the rating&apos;s confidence.
+      </p>
       {summary.data ? (
         <Summary summary={summary.data} />
       ) : summary.error ? (
@@ -53,6 +75,14 @@ export function FieldEvidencePanel({ assetId }: { assetId: string }) {
           Loading the field evidence…
         </p>
       )}
+      {addHref && (
+        <Button asChild variant="outline" size="sm" className="mt-5">
+          <Link href={addHref}>
+            <Camera aria-hidden="true" />
+            Add field photos
+          </Link>
+        </Button>
+      )}
     </section>
   );
 }
@@ -60,15 +90,15 @@ export function FieldEvidencePanel({ assetId }: { assetId: string }) {
 function Summary({ summary }: { summary: FieldEvidencePublic }) {
   if (summary.validated === 0)
     return (
-      <p className="mt-3 text-sm text-muted-foreground">
+      <p className="mt-4 text-sm">
         {summary.photos === 0
-          ? "The community hasn't added field photos yet."
+          ? "No field photos yet. Members of the site's community add them from the Steward app: photos taken on the land in the last year, with the phone's location on."
           : "None of the community's field photos has passed the checks yet."}
       </p>
     );
   return (
-    <div className="mt-3 space-y-4">
-      <p className="text-sm text-muted-foreground">
+    <div className="mt-4 space-y-4">
+      <p className="text-sm">
         {summary.validated === 1
           ? "1 geotagged photo"
           : `${summary.validated} geotagged photos`}{" "}

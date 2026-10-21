@@ -33,6 +33,7 @@ export function stubBrowserApis() {
     dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
   Element.prototype.scrollIntoView ??= vi.fn();
+  Element.prototype.scrollTo ??= vi.fn();
   Element.prototype.hasPointerCapture ??= () => false;
 }
 

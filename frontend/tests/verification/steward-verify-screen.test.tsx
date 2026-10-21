@@ -134,6 +134,13 @@ describe("StewardVerifyScreen", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("links to the listing's field photos (#214)", async () => {
+    renderScreen();
+    expect(
+      await screen.findByRole("link", { name: "Add field photos" }),
+    ).toHaveAttribute("href", `/steward/assets/${ASSET_ID}/evidence`);
+  });
+
   it("explains a listing it can't see", async () => {
     renderScreen({
       [RUNS]: () => json({ detail: "not_found" }, { status: 404 }),
@@ -410,5 +417,8 @@ describe("StewardVerifyScreen", () => {
     expect(
       screen.getByRole("button", { name: "Upload document" }),
     ).toBeDisabled();
+    expect(
+      screen.queryByRole("link", { name: "Add field photos" }),
+    ).not.toBeInTheDocument();
   });
 });

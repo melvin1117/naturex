@@ -32,6 +32,7 @@ import {
   SANDBOX_NOTE,
   type PageRefusal,
 } from "@/lib/ipo";
+import { evidenceHref } from "@/lib/field-evidence";
 import { verifyHref } from "@/lib/listing/links";
 import { int } from "@/lib/prototype/format";
 import { unitPriceText } from "@/lib/trade";
@@ -198,6 +199,16 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
           Choose how many units to issue and how much of the stake your
           community keeps. The rest opens to supporters at the fair price from
           the latest rating; what they pay goes to your community fund.
+        </p>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+          Geotagged field photos of the land can raise the next rating&apos;s
+          confidence, which sets part of this price.{" "}
+          <Link
+            href={evidenceHref(assetId, steward?.active?.id ?? null)}
+            className="font-medium text-foreground underline underline-offset-4 hover:no-underline"
+          >
+            Add field photos
+          </Link>
         </p>
       </header>
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">

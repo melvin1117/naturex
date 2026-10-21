@@ -4,6 +4,7 @@ import { createApi } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import type { CopilotStreamEvent } from "@/lib/api/types";
 import {
+  answerNodes,
   answerParts,
   askCopilot,
   SseParser,
@@ -134,5 +135,90 @@ describe("answerParts", () => {
       `${EVENT_SOURCE.asset_name} · ${EVENT_SOURCE.title}`,
     );
     expect(sourceLabel(REPORT_SOURCE, { withAsset: false })).toBe("Report v2");
+  });
+});
+
+describe("answerNodes", () => {
+  const sources = [REPORT_SOURCE, EVENT_SOURCE];
+  const r2 = { kind: "citation", ref: "R2", source: REPORT_SOURCE } as const;
+
+  it("keeps plain text and citations as they are", () => {
+    expect(answerNodes("Health fell [R2].", sources)).toEqual([
+      { kind: "text", text: "Health fell " },
+      r2,
+      { kind: "text", text: "." },
+    ]);
+  });
+
+  it("renders bold, italic and code, with a citation inside bold still a citation", () => {
+    expect(
+      answerNodes(
+        "Health **fell [R2]** after *heavy* rain and `NDVI` data.",
+        sources,
+      ),
+    ).toEqual([
+      { kind: "text", text: "Health " },
+      { kind: "strong", children: [{ kind: "text", text: "fell " }, r2] },
+      { kind: "text", text: " after " },
+      { kind: "em", children: [{ kind: "text", text: "heavy" }] },
+      { kind: "text", text: " rain and " },
+      { kind: "code", children: [{ kind: "text", text: "NDVI" }] },
+      { kind: "text", text: " data." },
+    ]);
+  });
+
+  it("nests italic in bold and accepts underscores", () => {
+    expect(answerNodes("__very *much* so__", [])).toEqual([
+      {
+        kind: "strong",
+        children: [
+          { kind: "text", text: "very " },
+          { kind: "em", children: [{ kind: "text", text: "much" }] },
+          { kind: "text", text: " so" },
+        ],
+      },
+    ]);
+  });
+
+  it("leaves arithmetic, snake_case and lone markers as text", () => {
+    expect(
+      answerNodes("5 * 3 = 15 for land_cover_v2 and a * star", []),
+    ).toEqual([
+      { kind: "text", text: "5 * 3 = 15 for land_cover_v2 and a * star" },
+    ]);
+  });
+
+  it("drops a quote's unmatched bold markers and heading marks", () => {
+    expect(
+      answerNodes(
+        "## Value\nEstimated services: **$2.4M to $33.8M a year [R2]",
+        sources,
+      ),
+    ).toEqual([
+      {
+        kind: "text",
+        text: "Value\nEstimated services: $2.4M to $33.8M a year ",
+      },
+      r2,
+    ]);
+  });
+
+  it("renders a quoted report's bold value range cleanly", () => {
+    const nodes = answerNodes(
+      "Estimated ecosystem services: **$2,466,117 to $33,801,307 a year** (mid $33,801,307). [R2]",
+      sources,
+    );
+    expect(nodes[1]).toEqual({
+      kind: "strong",
+      children: [{ kind: "text", text: "$2,466,117 to $33,801,307 a year" }],
+    });
+    expect(JSON.stringify(nodes)).not.toContain("**");
+  });
+
+  it("never turns text into markup", () => {
+    expect(answerNodes("<img src=x onerror=alert(1)> [R2]", sources)).toEqual([
+      { kind: "text", text: "<img src=x onerror=alert(1)> " },
+      r2,
+    ]);
   });
 });

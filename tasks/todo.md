@@ -308,6 +308,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 - [x] Up to 5 geotagged photos → EXIF GPS/date check → MiniCPM-V description → evidence event → Auditor weighs it → confidence updated (ADR-0003)
 - [x] Exposed as the `field_evidence` tool so the Orchestrator (T27) calls it when evidence exists
   - As built: the worker reads EXIF GPS and date, stores only a re-encoded JPEG without metadata; code checks the position (inside, or ≤ 100 m of the edge) and the date (≤ 1 year); MiniCPM-V answers labels only (no numbers, no free text) and can only fail a photo; a validated photo writes an `events` row (`source='evidence'`) whose fields come from fixed label tables. It sets the confidence evidence term (+14.0 points, never threat pressure). Steward screen `/steward/assets/{id}/evidence`, public aggregate on the asset page (month of the visit only). Real-model analysis in every world behind `FIELD_EVIDENCE_AI_LIVE` (off: photos are stored and checked but not validated). Lost analyses end `failed`; a deleted photo takes its event with it. See dev-spec §7.6 "As built (T40)".
+  - Follow-up #214: the public panel explains field evidence in one line and how photos are added; community members get "Add field photos", and the Steward home and IPO screen link to the evidence screen.
 
 **Verify:** `make test`; manual upload raises confidence · **Deps:** T09, T15 · **Files:** `backend/app/agents/field_evidence.py`, `backend/app/routers/assets.py`
 
@@ -444,6 +445,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 ### T44 · Copilot and impact UI (#56) — PD · M · Must · E1 E3
 - [x] Chat on asset and portfolio pages (streaming, citations link to sources); impact summary on the portfolio
   - As built: `components/copilot-chat.tsx` takes an optional `assetId`. The asset page asks about its site (T39); "Your stakes" (`/portfolio`) asks world-wide (`POST /copilot` without `asset_id`), with world-wide suggestions and each citation chip named after its site ("Osa Forest · Report v2") and linking to that site's report or news tab. `GET /portfolio` now fills `impact` from each site's latest report through T41's `impact_for_holding` (it was hard-coded to zero), so the impact card shows the account's hectares, tCO₂ and services per year. The header's Copilot button still opens the prototype's scripted sheet.
+  - Follow-up #213: the header's Copilot button opens the real Copilot for a signed-in account (world-wide, or scoped to the open site's page with an "All sites" toggle and an optional site menu); anonymous visitors and the tour keep the scripted sheet.
 
 **Verify:** `make fe-check` · **Deps:** T39, T41 · **Files:** `frontend/src/components/CopilotChat.tsx`, `ImpactSummary.tsx`
 
