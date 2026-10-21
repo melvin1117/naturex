@@ -12,8 +12,6 @@ import {
   expect,
   test,
   type APIResponse,
-  type Browser,
-  type BrowserContext,
   type Locator,
   type Page,
 } from "@playwright/test";
@@ -22,6 +20,7 @@ import { randomUUID } from "node:crypto";
 
 import { ADMIN_EMAIL, ADMIN_PASSWORD, WEB_ORIGIN } from "./env";
 import { uniquePng } from "./png";
+import { closeSessions, newSession, register } from "./session";
 
 // Unique per run, so the suite never collides with an earlier run's accounts or names.
 const RUN = `${Date.now().toString(36)}${randomUUID().slice(0, 4)}`;
@@ -44,33 +43,7 @@ const CENTER = "0.7000, 37.5000";
 /** Rating runs are async (queued, then a worker); with mocks they take seconds. */
 const RATING_TIMEOUT = 120_000;
 
-/** Every session the test opened; closed after it, pass or fail. */
-const sessions: BrowserContext[] = [];
-
-test.afterEach(async () => {
-  await Promise.all(sessions.splice(0).map((context) => context.close()));
-});
-
-/** A fresh browser session that never leaves the machine (map tiles etc. are refused). */
-async function newSession(browser: Browser): Promise<BrowserContext> {
-  const context = await browser.newContext({ baseURL: WEB_ORIGIN });
-  sessions.push(context);
-  await context.route(
-    /^https?:\/\/(?!localhost[:/]|127\.0\.0\.1[:/])/,
-    (route) => route.abort(),
-  );
-  return context;
-}
-
-async function register(
-  page: Page,
-  person: { name: string; email: string; password: string },
-): Promise<void> {
-  await page.getByLabel("Display name").fill(person.name);
-  await page.getByLabel("Email").fill(person.email);
-  await page.getByLabel("Password", { exact: true }).fill(person.password);
-  await page.getByRole("button", { name: "Create account" }).click();
-}
+test.afterEach(closeSessions);
 
 async function signOut(page: Page, name: string): Promise<void> {
   await page.getByRole("button", { name: `Account: ${name}` }).click();

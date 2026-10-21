@@ -17,10 +17,13 @@ export function Wordmark({
         NatureX
       </span>
       {app && (
-        // Below `sm` the header has no room for the app name; it stays in the link's name.
-        <span className="text-sm font-medium text-muted-foreground max-sm:sr-only">
-          {app}
-        </span>
+        <>
+          {/* The space keeps the accessible name "NatureX Exchange" (flex doesn't draw it).
+              Below `sm` the app name is only visually hidden, so it stays in that name. */}{" "}
+          <span className="text-sm font-medium text-muted-foreground max-sm:sr-only">
+            {app}
+          </span>
+        </>
       )}
     </span>
   );

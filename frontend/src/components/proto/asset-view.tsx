@@ -288,7 +288,7 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
             className="min-w-0 gap-6"
           >
             <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-              <TabsList className="w-full bg-card shadow-soft sm:w-fit">
+              <TabsList className="w-max min-w-full bg-card shadow-soft sm:w-fit sm:min-w-0">
                 {TABS.map((t) => (
                   <TabsTrigger
                     key={t}

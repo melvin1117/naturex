@@ -125,7 +125,7 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
 
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
         <div className="min-w-0 space-y-8">
-          <Panel title="Stakes">
+          <Panel title="Stakes" headingLevel="h2">
             {data.holdings.length === 0 ? (
               <div className="py-8 text-center">
                 <Sprout
@@ -149,7 +149,7 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
           </Suspense>
         </div>
         <div className="min-w-0 space-y-8">
-          <Panel title="Alerts">
+          <Panel title="Alerts" headingLevel="h2">
             <AlertsList empty="No alerts yet. When a site you back is re-rated or in the news, you'll hear about it here." />
           </Panel>
           <ImpactCard data={data} />
