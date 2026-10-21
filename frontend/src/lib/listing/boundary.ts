@@ -5,7 +5,12 @@
 import type { AssetDetail, AssetOutlines } from "../api/types";
 import { boundaryLatLngs } from "../asset-detail";
 import type { LatLng } from "../prototype/data";
-import { areaHa, checkPolygon } from "../prototype/geo";
+import {
+  areaHa,
+  checkPolygon,
+  crossingEdges,
+  overlaps,
+} from "../prototype/geo";
 
 /** T36 refuses polygons with more points than this. */
 export const MAX_BOUNDARY_POINTS = 10_000;
@@ -84,6 +89,39 @@ export function boundaryHint(
   return check.ok
     ? { ...check, checked: complete ? "all" : "no-overlap" }
     : check;
+}
+
+/** Where a boundary goes wrong, to draw on the map: edges that cross, and listed sites it overlaps. */
+export type BoundaryIssues = {
+  /** Edge i joins corner i to the next (the last edge closes the shape). */
+  crossing: number[];
+  /** Indexes into the `others` passed in. */
+  overlapping: number[];
+};
+
+const NO_ISSUES: BoundaryIssues = { crossing: [], overlapping: [] };
+
+/**
+ * The map's view of `boundaryHint`: which edges and sites to highlight. Like the hint, it
+ * leaves boundaries over `HINT_MAX_POINTS` corners to the server.
+ */
+export function boundaryIssues(
+  points: LatLng[],
+  others: Outline[] = [],
+): BoundaryIssues {
+  if (points.length < 3 || points.length > HINT_MAX_POINTS) return NO_ISSUES;
+  const crossing = points.length >= 4 ? crossingEdges(points) : [];
+  const box = bbox(points);
+  const overlapping = others.flatMap((o, i) =>
+    o.polygon.length >= 3 &&
+    boxesTouch(box, bbox(o.polygon)) &&
+    overlaps(points, o.polygon)
+      ? [i]
+      : [],
+  );
+  return crossing.length || overlapping.length
+    ? { crossing, overlapping }
+    : NO_ISSUES;
 }
 
 /** Outlines from `GET /assets/outlines` as polygons for the map ([lat, lon]), one per part. */

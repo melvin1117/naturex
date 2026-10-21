@@ -37,16 +37,48 @@ function ring(points: LatLng[]) {
 }
 
 export function selfIntersects(input: LatLng[]) {
+  return crossingEdges(input, 1).length > 0;
+}
+
+/**
+ * Edges (edge i joins corner i to the next, the last closing back to the first) that cross
+ * another edge, in order, stopping once `limit` crossing pairs are found.
+ */
+export function crossingEdges(input: LatLng[], limit = Infinity): number[] {
   const pts = ring(input);
   const n = pts.length;
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
+  const edges = new Set<number>();
+  let pairs = 0;
+  for (let i = 0; i < n && pairs < limit; i++) {
+    for (let j = i + 1; j < n && pairs < limit; j++) {
       if (Math.abs(i - j) <= 1 || (i === 0 && j === n - 1)) continue;
-      if (segmentsCross(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n]))
-        return true;
+      if (segmentsCross(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n])) {
+        edges.add(i);
+        edges.add(j);
+        pairs += 1;
+      }
     }
   }
-  return false;
+  return [...edges].sort((a, b) => a - b);
+}
+
+/** Great-circle length of the closed outline, in kilometres. */
+export function perimeterKm(points: LatLng[]) {
+  const pts = ring(points);
+  if (pts.length < 2) return 0;
+  const edges = pts.length === 2 ? 1 : pts.length;
+  let total = 0;
+  for (let i = 0; i < edges; i++) {
+    const [lat1, lon1] = pts[i];
+    const [lat2, lon2] = pts[(i + 1) % pts.length];
+    const a =
+      Math.sin(rad(lat2 - lat1) / 2) ** 2 +
+      Math.cos(rad(lat1)) *
+        Math.cos(rad(lat2)) *
+        Math.sin(rad(lon2 - lon1) / 2) ** 2;
+    total += 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+  }
+  return total / 1000;
 }
 
 function contains(poly: LatLng[], p: LatLng) {
