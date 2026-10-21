@@ -469,6 +469,30 @@ describe("TimeMachinePanel", () => {
     expect(backend.calls("POST /world/reset")).toBe(1);
   });
 
+  it("keeps Reset focusable while it resets but won't reopen its dialog", async () => {
+    const run = pending();
+    const backend = renderPanel({ "POST /world/reset": run.route });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Reset the demo" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Reset this sandbox?",
+    });
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Reset the demo" }),
+    );
+    const resetting = await screen.findByRole("button", { name: "Resetting…" });
+    expect(resetting).toHaveAttribute("aria-disabled", "true");
+    expect(resetting).toBeEnabled();
+    fireEvent.click(resetting);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(backend.calls("POST /world/reset")).toBe(1);
+    await act(async () => run.finish(json(DEMO_ADMIN_WORLD)));
+    expect(
+      await screen.findByText("The sandbox is back at the start."),
+    ).toBeInTheDocument();
+  });
+
   it("never asks for the Time Machine without an admin", async () => {
     const backend = renderPanel(
       {},

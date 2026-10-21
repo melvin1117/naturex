@@ -201,7 +201,7 @@ export function EventSection({
                     here, and a disabled button would drop it to the page. */}
                 <Button
                   aria-disabled={inject.isPending || undefined}
-                  className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                  className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-primary aria-disabled:active:translate-y-0"
                   data-tour="inject-encroachment"
                 >
                   {inject.isPending ? (
@@ -228,8 +228,8 @@ export function EventSection({
                       Inject {preset.label.toLowerCase()} at {asset.name}?
                     </DialogTitle>
                     <DialogDescription>
-                      {preset.description} The site is re-rated now, its price
-                      re-anchors and the event is stored as simulated.
+                      {preset.description} The site is re-rated now, its stake
+                      price re-anchors and the event is stored as simulated.
                       {preset.alerts &&
                         " Its holders and community get a news alert."}
                     </DialogDescription>
@@ -269,8 +269,8 @@ export function EventSection({
               <EventResult result={inject.data} name={resultName} />
             ) : (
               <p className="text-sm text-muted-foreground">
-                The result shows here: health, grade and price before and after,
-                as stored.
+                The result shows here: health, grade and stake price before and
+                after, as stored.
               </p>
             )}
           </div>

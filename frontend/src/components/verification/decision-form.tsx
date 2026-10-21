@@ -22,8 +22,15 @@ import type { Decision } from "@/lib/verification-hooks";
 
 export const REASON_MAX = 500;
 
-// While a decision is sent the buttons stay focusable (aria-disabled), so focus isn't lost.
-const BUSY_CLASS = "aria-disabled:cursor-not-allowed aria-disabled:opacity-50";
+// While a decision is sent the buttons stay focusable (aria-disabled), so focus isn't lost;
+// dimmed, with no hover or press feedback (each variant keeps its resting colour).
+const BUSY =
+  "aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:active:translate-y-0";
+const BUSY_CLASS = {
+  default: `${BUSY} aria-disabled:hover:bg-primary`,
+  outline: `${BUSY} aria-disabled:hover:bg-card aria-disabled:hover:text-inherit`,
+  destructive: `${BUSY} aria-disabled:hover:bg-destructive`,
+};
 
 /**
  * The reviewer's decision on a listing's current run (ADR-0006 §3). `review` approves (an
@@ -93,6 +100,8 @@ export function DecisionForm({
             if (missing && e.target.value.trim()) setMissing(false);
           }}
           readOnly={busy}
+          // Read-only while the decision is sent: muted, so it doesn't look editable.
+          className="read-only:cursor-not-allowed read-only:bg-muted read-only:text-muted-foreground"
           aria-invalid={missing}
           aria-describedby={`${hintId}${missing ? ` ${errorId}` : ""}`}
         />
@@ -124,7 +133,7 @@ export function DecisionForm({
               onClick={() => decide("approve")}
               disabled={failed > 0 || stale}
               aria-disabled={busy || undefined}
-              className={BUSY_CLASS}
+              className={BUSY_CLASS.default}
             >
               {pending === "approve" ? (
                 <Spinner aria-hidden="true" role="presentation" />
@@ -137,7 +146,7 @@ export function DecisionForm({
               variant="outline"
               onClick={() => decide("reject")}
               aria-disabled={busy || undefined}
-              className={BUSY_CLASS}
+              className={BUSY_CLASS.outline}
             >
               {pending === "reject" ? (
                 <Spinner aria-hidden="true" role="presentation" />
@@ -154,7 +163,7 @@ export function DecisionForm({
           variant="destructive"
           onClick={() => decide("revoke")}
           aria-disabled={busy || undefined}
-          className={BUSY_CLASS}
+          className={BUSY_CLASS.destructive}
         >
           {pending === "revoke" ? (
             <Spinner aria-hidden="true" role="presentation" />
