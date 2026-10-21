@@ -287,11 +287,19 @@ describe("TraceSheet away from a real site", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Open trace" }));
 
+    const panel = await sheet();
     expect(
-      await within(await sheet()).findByText(
-        "No model calls have been logged in this world yet.",
-      ),
+      await within(panel).findByText("No model calls logged in this world yet"),
     ).toBeInTheDocument();
+    // It teaches: what appears, why it's empty (mock mode) and where to look instead.
+    expect(panel).toHaveTextContent(
+      "Each live rating logs its Nemotron calls here",
+    );
+    expect(panel).toHaveTextContent("mock mode don't call a model");
+    expect(panel).toHaveTextContent("Open a site and choose How it was rated");
+    expect(
+      within(panel).queryByRole("list", { name: "Latest model calls" }),
+    ).toBeNull();
   });
 
   it("shows an error with a retry for the world's model calls", async () => {
@@ -310,9 +318,7 @@ describe("TraceSheet away from a real site", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(
-      await screen.findByText(
-        "No model calls have been logged in this world yet.",
-      ),
+      await screen.findByText("No model calls logged in this world yet"),
     ).toBeInTheDocument();
     expect(backend.calls("GET /admin/trace")).toBe(2);
   });

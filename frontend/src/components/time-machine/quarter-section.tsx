@@ -40,6 +40,9 @@ function stepNote(q: TimeMachineQuarter) {
 }
 
 function Timeline({ state }: { state: TimeMachine }) {
+  // Segments reached after the timeline was first drawn (a quarter run while the panel is
+  // open) fill left to right, so the passing quarter is seen to pass.
+  const [firstStep] = useState(state.step);
   return (
     <ol
       className="mt-8 grid gap-4 sm:grid-cols-3 sm:gap-2"
@@ -50,12 +53,18 @@ function Timeline({ state }: { state: TimeMachine }) {
         const now = q.step === state.step;
         return (
           <li key={q.step} aria-current={now ? "step" : undefined}>
-            <div
-              className={cn(
-                "h-1.5 rounded-full",
-                q.step <= state.step ? "bg-lime" : "bg-machine-line",
+            <div className="h-1.5 overflow-hidden rounded-full bg-machine-line">
+              {q.step <= state.step && (
+                <div
+                  data-filled={q.step > firstStep ? "new" : "drawn"}
+                  className={cn(
+                    "h-full bg-lime",
+                    q.step > firstStep &&
+                      "animate-in duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] slide-in-from-left motion-reduce:animate-none",
+                  )}
+                />
               )}
-            />
+            </div>
             <div className="mt-3">
               <div
                 className={cn(
