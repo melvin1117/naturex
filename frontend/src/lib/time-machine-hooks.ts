@@ -50,18 +50,28 @@ export function useSimulateQuarter(): MutationResult<string, QuarterJob> {
     (api, period: string) =>
       unwrap(api.POST("/admin/simulate/quarter", { body: { period } })),
     {
-      onSuccess: (_d, _v, { cache }) => cache.invalidate(["time-machine"]),
+      onSuccess: (job, _v, { cache }) => {
+        // Seed the job as queued, so `useQuarterJob` sees it run and settle.
+        cache.setData(queryKeys.quarterJob(job.id), () => job, { seed: true });
+        cache.invalidate(["time-machine"]);
+      },
     },
   );
 }
 
 const SETTLED_KEYS = new Set(["quarter-job", "sent-alerts"]);
 
+/** A 4xx answer: the job is gone (404, e.g. a reset) or no longer the caller's to read. */
+export function isRefused(error: { status: number } | null): boolean {
+  return error !== null && error.status >= 400 && error.status < 500;
+}
+
 /**
  * A quarter job (`GET /admin/simulate/quarter/{id}`), read again every `QUARTER_POLL_MS`
- * while it's queued or running and the tab is visible. A read also resumes a job whose server
- * process died. Once it settles, every other cached query refetches: any asset may have a new
- * report, price, alert and payout.
+ * while its latest read is queued or running and the tab is visible; never after a 4xx. A
+ * read also resumes a job whose server process died. Once a job this hook saw running
+ * settles, every other cached query refetches (any asset may have a new report, price, alert
+ * and payout); opening on a finished job refetches nothing.
  */
 export function useQuarterJob(jobId: string | null): QueryResult<QuarterJob> {
   const { cache } = useDataLayer();
@@ -76,10 +86,10 @@ export function useQuarterJob(jobId: string | null): QueryResult<QuarterJob> {
       ),
     { enabled: Boolean(jobId) },
   );
-  const active = isJobActive(query.data);
+  const polling = isJobActive(query.data) && !isRefused(query.error);
   const { refetch } = query;
   useEffect(() => {
-    if (!active) return;
+    if (!polling) return;
     let timer: ReturnType<typeof setInterval> | undefined;
     const start = () => {
       timer ??= setInterval(() => void refetch(), QUARTER_POLL_MS);
@@ -99,16 +109,21 @@ export function useQuarterJob(jobId: string | null): QueryResult<QuarterJob> {
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [active, refetch]);
+  }, [polling, refetch]);
 
-  const settled = query.data && !active ? query.data.id : null;
-  const refreshed = useRef<string | null>(null);
+  const data = query.data;
+  const seenRunning = useRef<string | null>(null);
   useEffect(() => {
-    if (!settled || refreshed.current === settled) return;
-    refreshed.current = settled;
+    if (!data) return;
+    if (isJobActive(data)) {
+      seenRunning.current = data.id;
+      return;
+    }
+    if (seenRunning.current !== data.id) return;
+    seenRunning.current = null;
     // Not the jobs themselves nor the alerts they sent: those don't change any more.
     cache.invalidate((key) => !SETTLED_KEYS.has(String(key[0])));
-  }, [settled, cache]);
+  }, [data, cache]);
   return query;
 }
 

@@ -116,12 +116,21 @@ export function QuarterSection({
     latest && isJobActive(latest) ? latest.id : (started ?? latest?.id ?? null);
   const job = useQuarterJob(jobId);
   const result = jobId && job.data?.id === jobId ? job.data : undefined;
+  const gone = job.error?.status === 404;
   const [confirming, setConfirming] = useState<TimeMachineQuarter | null>(null);
   const [runs, setRuns] = useState<ReadonlyMap<string, QuarterRun>>(new Map());
 
+  // Running only while the latest successful read says so and the last read didn't fail:
+  // a job still loading, gone or unreadable never holds the panel (or Reset) busy.
   const running =
-    quarter.isPending ||
-    (jobId !== null && (result ? isJobActive(result) : !job.error));
+    quarter.isPending || (isJobActive(result) && job.error === null);
+
+  // The job is gone (a reset elsewhere): forget it and reread where the sandbox stands.
+  useEffect(() => {
+    if (!gone) return;
+    setStarted(null);
+    onRefresh();
+  }, [gone, onRefresh]);
 
   useLiveEvent(
     "rating_progress",
@@ -268,7 +277,7 @@ export function QuarterSection({
         </Alert>
       )}
 
-      {job.error && (
+      {job.error && !gone && (
         <Alert variant="destructive" className="mt-6">
           <TriangleAlertIcon aria-hidden="true" />
           <AlertTitle>We couldn&apos;t check the quarter</AlertTitle>
