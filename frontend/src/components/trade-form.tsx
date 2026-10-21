@@ -2,7 +2,7 @@
 
 import { Info } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { announce, QuoteTable, Receipt } from "@/components/trade-summary";
 import { Button } from "@/components/ui/button";
@@ -48,8 +48,6 @@ export function TradeForm({
   const [failure, setFailure] = useState<OrderFailure | null>(null);
   const [receipt, setReceipt] = useState<OrderOut | null>(null);
   const inFlight = useRef(false);
-  const unitsField = useRef<HTMLInputElement>(null);
-  const receiptBox = useRef<HTMLDivElement>(null);
 
   const holding = portfolio.data?.holdings.find((h) => h.asset_id === asset.id);
   const held = holding?.shares ?? 0;
@@ -89,15 +87,6 @@ export function TradeForm({
   const ready = settled && !blocked && !problem && portfolio.data !== undefined;
   const pending = placeOrder.isPending;
 
-  // The submit button is disabled while the order runs, which drops keyboard focus: put it
-  // on the receipt after a fill, or back on the units after a refusal.
-  useEffect(() => {
-    if (receipt) receiptBox.current?.focus();
-  }, [receipt]);
-  useEffect(() => {
-    if (failure) unitsField.current?.focus();
-  }, [failure]);
-
   function change(next: string) {
     setUnitsText(unitsInput(next));
     setFailure(null);
@@ -128,6 +117,7 @@ export function TradeForm({
 
   const unitsId = `${ids}-units`;
   const messageId = `${ids}-units-message`;
+  const failureId = `${ids}-order-failure`;
   const maxQty = current?.max_qty ?? quote.data?.max_qty ?? null;
   // Radix points every trigger at its panel, but only the active side's panel is rendered.
   const noPanel = { "aria-controls": undefined };
@@ -162,7 +152,6 @@ export function TradeForm({
               </span>
             </div>
             <Input
-              ref={unitsField}
               id={unitsId}
               name="units"
               inputMode="numeric"
@@ -170,7 +159,11 @@ export function TradeForm({
               value={unitsText}
               onChange={(event) => change(event.target.value)}
               aria-invalid={fieldMessage && !blocked ? true : undefined}
-              aria-describedby={fieldMessage ? messageId : undefined}
+              aria-describedby={
+                [fieldMessage && messageId, failure?.units && failureId]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
               className="tabular text-lg"
             />
             {/* Always rendered so a quote error arriving later is announced. */}
@@ -217,7 +210,7 @@ export function TradeForm({
           <div role="alert">
             {failure && (
               <div className="rounded-2xl bg-destructive/10 p-3 text-sm text-destructive">
-                <p>{failure.message}</p>
+                <p id={failureId}>{failure.message}</p>
                 {failure.signIn && (
                   <Link
                     href={signInHref}
@@ -237,11 +230,13 @@ export function TradeForm({
               </div>
             )}
           </div>
+          {/* aria-disabled, not disabled: the button keeps keyboard focus through the order
+              and its outcome; `submit` ignores it until a settled quote is ready. */}
           <Button
             type="submit"
-            className="w-full"
+            className="w-full aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
             size="lg"
-            disabled={!ready || pending}
+            aria-disabled={!ready || pending || undefined}
             data-tour="trade-submit"
           >
             {pending
@@ -261,9 +256,7 @@ export function TradeForm({
       <p className="sr-only" role="status">
         {receipt ? announce(receipt) : ""}
       </p>
-      {receipt && (
-        <Receipt ref={receiptBox} order={receipt} community={asset.name} />
-      )}
+      {receipt && <Receipt order={receipt} community={asset.name} />}
     </Tabs>
   );
 }

@@ -119,6 +119,8 @@ export type OrderFailure = {
   signIn?: boolean;
   /** The order may have filled (no answer, or a server error): check before retrying. */
   uncertain?: boolean;
+  /** Fewer units would do: the message describes the units field. */
+  units?: boolean;
 };
 
 type TradeBlockedReason = NonNullable<QuoteOut["trade_blocked_reason"]>;
@@ -161,16 +163,24 @@ export function orderFailure(
       return {
         message:
           "You don't have enough play money for this order now. Try fewer units.",
+        units: true,
       };
     case "insufficient_shares":
-      return { message: "You can't sell more units than you hold." };
+      return {
+        message: "You can't sell more units than you hold.",
+        units: true,
+      };
     case "insufficient_supply":
       return {
         message:
           "Not enough units are available to buy right now. Try fewer units.",
+        units: true,
       };
     case "order_too_large":
-      return { message: "That order is too large. Try fewer units." };
+      return {
+        message: "That order is too large. Try fewer units.",
+        units: true,
+      };
     case "price_moved":
       return {
         message:
@@ -209,7 +219,7 @@ export function orderFailure(
           "This site isn't open for trading right now. Refresh to see its status.",
       };
     case 422:
-      return { message: UNITS_HINT };
+      return { message: UNITS_HINT, units: true };
     case 429:
       return {
         message: `Too many requests. Try again in ${
