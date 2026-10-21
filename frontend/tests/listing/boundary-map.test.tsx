@@ -28,6 +28,7 @@ const leaflet = vi.hoisted(() => {
     map: null as null | ReturnType<typeof emitter>,
     zoom: 14,
     flewTo: null as unknown,
+    tiles: [] as { url: string; options: Record<string, unknown> }[],
     get markers() {
       return groups.flatMap((g) => g.markers);
     },
@@ -39,11 +40,19 @@ const leaflet = vi.hoisted(() => {
       state.map = null;
       state.zoom = 14;
       state.flewTo = null;
+      state.tiles = [];
+      document.querySelectorAll(".nx-handle").forEach((el) => el.remove());
     },
   };
-  function marker(latlng: LatLng, options: { icon: { className: string } }) {
+  function marker(
+    latlng: LatLng,
+    options: { icon: { className: string }; keyboard?: boolean },
+  ) {
     const element = document.createElement("div");
     element.className = options.icon.className;
+    // Like Leaflet, keyboard markers can take focus.
+    if (options.keyboard) element.tabIndex = 0;
+    document.body.append(element);
     let at = { lat: latlng[0], lng: latlng[1] };
     const m = {
       ...emitter(),
@@ -130,7 +139,10 @@ const leaflet = vi.hoisted(() => {
         return map;
       },
       control: { zoom: () => ({ addTo() {} }) },
-      tileLayer: shape,
+      tileLayer: (url: string, options: Record<string, unknown>) => {
+        state.tiles.push({ url, options });
+        return shape();
+      },
       layerGroup: group,
       latLngBounds: (points: unknown) => points,
       polygon: shape,
@@ -362,6 +374,160 @@ describe("BoundaryMap", () => {
     expect(tooltip).toBeInstanceOf(HTMLElement);
     expect(tooltip.textContent).toBe(
       `${name} (listed): your boundary overlaps it`,
+    );
+  });
+  it("keeps the satellite imagery (scaled up) past its last native zoom", async () => {
+    const { rerender } = draw([], "drawing");
+    await waitFor(() => expect(leaflet.state.tiles.length).toBeGreaterThan(0));
+    const [imagery, labels] = leaflet.state.tiles;
+    expect(imagery.options).toMatchObject({ maxZoom: 19, maxNativeZoom: 18 });
+    expect(labels.options).toMatchObject({ maxZoom: 19, maxNativeZoom: 18 });
+
+    rerender(
+      <BoundaryMap
+        points={[]}
+        mode="drawing"
+        dispatch={vi.fn()}
+        center={[0, 0]}
+        zoom={14}
+        focus={null}
+        others={[]}
+        issues={NO_ISSUES}
+        valid
+        basemap="map"
+        label="Boundary map"
+      />,
+    );
+    await waitFor(() =>
+      expect(leaflet.state.tiles.at(-1)!.url).toContain("openstreetmap"),
+    );
+    expect(leaflet.state.tiles.at(-1)!.options.attribution).toContain(
+      'href="https://www.openstreetmap.org/copyright"',
+    );
+  });
+
+  it("doesn't rebuild the handles when equal issues arrive (a refetch mid-drag)", async () => {
+    const issues = { crossing: [0, 2], overlapping: [0] };
+    const props = {
+      points: SQUARE,
+      mode: "editing" as const,
+      dispatch: vi.fn(),
+      center: [0, 0] as LatLng,
+      zoom: 14,
+      focus: null,
+      others: [{ name: "Selva", polygon: SQUARE }],
+      valid: false,
+      label: "Boundary map",
+    };
+    const { rerender } = render(<BoundaryMap {...props} issues={issues} />);
+    await waitFor(() => expect(vertices()).toHaveLength(4));
+    const dragged = vertices()[1];
+    const tooltip = leaflet.state.tooltips[0];
+    rerender(
+      <BoundaryMap
+        {...props}
+        others={[{ name: "Selva", polygon: SQUARE }]}
+        issues={{ crossing: [0, 2], overlapping: [0] }}
+      />,
+    );
+    expect(vertices()[1]).toBe(dragged);
+    rerender(
+      <BoundaryMap
+        {...props}
+        others={[{ name: "Selva", polygon: SQUARE }]}
+        issues={{ crossing: [0, 2], overlapping: [] }}
+      />,
+    );
+    expect(vertices()[1]).toBe(dragged);
+    expect(leaflet.state.tooltips[0]).not.toBe(tooltip);
+    rerender(
+      <BoundaryMap {...props} issues={{ crossing: [1, 3], overlapping: [] }} />,
+    );
+    expect(vertices()[1]).not.toBe(dragged);
+  });
+
+  it("refocuses a corner after a keyboard edit only if the edit changed the shape", async () => {
+    const dispatch = vi.fn<(action: EditorAction) => boolean>(() => false);
+    const props = {
+      mode: "editing" as const,
+      dispatch,
+      center: [0, 0] as LatLng,
+      zoom: 14,
+      focus: null,
+      others: [],
+      issues: NO_ISSUES,
+      valid: true,
+      label: "Boundary map",
+    };
+    const { rerender } = render(<BoundaryMap {...props} points={SQUARE} />);
+    await waitFor(() => expect(vertices()).toHaveLength(4));
+    act(() => {
+      vertices()[2].element.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Delete", bubbles: true }),
+      );
+    });
+    expect(dispatch).toHaveBeenCalledWith({ type: "remove", index: 2 });
+    // Refused (a save was pending): a later, unrelated redraw leaves focus alone.
+    (document.activeElement as HTMLElement | null)?.blur();
+    rerender(<BoundaryMap {...props} points={SQUARE.slice(0, 3)} />);
+    expect(document.activeElement).toBe(document.body);
+
+    dispatch.mockReturnValue(true);
+    rerender(<BoundaryMap {...props} points={SQUARE} />);
+    act(() => {
+      vertices()[2].element.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Delete", bubbles: true }),
+      );
+    });
+    rerender(<BoundaryMap {...props} points={SQUARE.slice(0, 3)} />);
+    expect(document.activeElement).toBe(vertices()[1].element);
+  });
+
+  it("selects a corner on tap, drag, focus or long press, and marks it", async () => {
+    const onSelect = vi.fn();
+    const { dispatch, rerender } = draw(SQUARE, "editing", { onSelect });
+    await waitFor(() => expect(vertices()).toHaveLength(4));
+    vertices()[2].fire("click");
+    expect(onSelect).toHaveBeenLastCalledWith(2);
+    vertices()[3].fire("dragstart");
+    expect(onSelect).toHaveBeenLastCalledWith(3);
+    vertices()[1].element.focus();
+    expect(onSelect).toHaveBeenLastCalledWith(1);
+
+    // A long press on a touch screen selects; it never deletes.
+    const preventDefault = vi.fn();
+    vertices()[0].fire("contextmenu", {
+      originalEvent: { preventDefault, pointerType: "touch" },
+    });
+    expect(onSelect).toHaveBeenLastCalledWith(0);
+    vertices()[0].fire("contextmenu", {
+      originalEvent: { preventDefault, _simulated: true },
+    });
+    expect(preventDefault).toHaveBeenCalledTimes(2);
+    // Nor does a right-click that lands mid-drag.
+    vertices()[3].fire("dragstart");
+    vertices()[3].fire("contextmenu", { originalEvent: { preventDefault } });
+    expect(dispatch).not.toHaveBeenCalledWith({ type: "remove", index: 3 });
+
+    rerender(
+      <BoundaryMap
+        points={SQUARE}
+        mode="editing"
+        dispatch={dispatch}
+        center={[0, 0]}
+        zoom={14}
+        focus={null}
+        others={[]}
+        issues={NO_ISSUES}
+        valid
+        selected={2}
+        onSelect={onSelect}
+        label="Boundary map"
+      />,
+    );
+    expect(vertices()[2].element.className).toContain("nx-handle--selected");
+    expect(vertices()[1].element.className).not.toContain(
+      "nx-handle--selected",
     );
   });
 });

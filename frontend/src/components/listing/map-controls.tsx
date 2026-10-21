@@ -10,6 +10,7 @@ import {
   Minimize2,
   Redo2,
   Search,
+  Trash2,
   TriangleAlert,
   Undo2,
   X,
@@ -44,7 +45,8 @@ import type { Basemap } from "./boundary-map";
 export const FLOAT = "bg-card/95 shadow-lift backdrop-blur-sm";
 
 /** Nominatim's policy: at most one search a second from this tab. */
-const MIN_SEARCH_GAP_MS = 1000;
+export const MIN_SEARCH_GAP_MS = 1000;
+const OSM_COPYRIGHT = "https://www.openstreetmap.org/copyright";
 
 function placeFocus(place: PlaceOut): MapFocus {
   if (place.bbox) {
@@ -65,9 +67,12 @@ function placeFocus(place: PlaceOut): MapFocus {
  */
 export function PlaceSearch({
   onPick,
+  onResultsOpen,
   className,
 }: {
   onPick: (focus: MapFocus) => void;
+  /** Whether the results list is showing, on every change. */
+  onResultsOpen?: (open: boolean) => void;
   className?: string;
 }) {
   const search = usePlaceSearch();
@@ -81,6 +86,17 @@ export function PlaceSearch({
   const [active, setActive] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** What the screen reader hears after a search or a pick. */
+  const [announcement, setAnnouncement] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  /** Focus returned to the input on Escape: don't reopen the list it just closed. */
+  const closing = useRef(false);
+  const showing = open && (found?.results.length ?? 0) > 0;
+  const reportOpen = useRef(onResultsOpen);
+  reportOpen.current = onResultsOpen;
+  useEffect(() => {
+    reportOpen.current?.(showing);
+  }, [showing]);
 
   // Close the results on a click or tap anywhere else (the map included).
   useEffect(() => {
@@ -97,16 +113,22 @@ export function PlaceSearch({
     onPick(placeFocus(place));
   }
 
+  function fail(text: string) {
+    setMessage(text);
+    setAnnouncement(text);
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const text = query.trim().replace(/\s+/g, " ");
     if (text.length < 2) {
-      setMessage("Type a place name, such as a town or a lake.");
+      fail("Type a place name, such as a town or a lake.");
       return;
     }
     const key = text.toLowerCase();
     let result = cache.current.get(key);
     setMessage(null);
+    setAnnouncement("");
     if (!result) {
       setBusy(true);
       try {
@@ -117,7 +139,7 @@ export function PlaceSearch({
         cache.current.set(key, result);
       } catch (error) {
         setFound(null);
-        setMessage((error as ApiError).message);
+        fail((error as ApiError).message);
         return;
       } finally {
         setBusy(false);
@@ -125,14 +147,34 @@ export function PlaceSearch({
     }
     setFound(result);
     setOpen(true);
-    if (result.results.length) pick(result.results[0]);
-    else
-      setMessage(`No places found for “${text}”. Try a nearby town or region.`);
+    const [first] = result.results;
+    if (!first)
+      return fail(
+        `No places found for “${text}”. Try a nearby town or region.`,
+      );
+    pick(first);
+    const n = result.results.length;
+    setAnnouncement(
+      `${n} ${n === 1 ? "place" : "places"} found; showing ${first.label}.`,
+    );
   }
 
   const results = found?.results ?? [];
   return (
-    <div ref={root} className={cn("w-full max-w-sm", className)}>
+    <div
+      ref={root}
+      className={cn("w-full max-w-sm", className)}
+      onKeyDown={(e) => {
+        // From the input or a result: close the list (and stay in full screen).
+        if (e.key === "Escape" && showing) {
+          e.stopPropagation();
+          setOpen(false);
+          closing.current = true;
+          inputRef.current?.focus();
+          closing.current = false;
+        }
+      }}
+    >
       <form
         role="search"
         onSubmit={(e) => void submit(e)}
@@ -146,17 +188,12 @@ export function PlaceSearch({
           Search for a place
         </Label>
         <Input
+          ref={inputRef}
           id={inputId}
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => found && setOpen(true)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape" && open) {
-              e.stopPropagation();
-              setOpen(false);
-            }
-          }}
+          onFocus={() => found && !closing.current && setOpen(true)}
           placeholder="Search for a place"
           autoComplete="off"
           enterKeyHint="search"
@@ -171,16 +208,18 @@ export function PlaceSearch({
           {busy ? "Searching…" : "Search"}
         </Button>
       </form>
+      <p role="status" className="sr-only">
+        {announcement}
+      </p>
       {message && (
         <p
           id={`${inputId}-message`}
-          role="status"
           className={cn("mt-2 rounded-2xl px-3.5 py-2 text-sm", FLOAT)}
         >
           {message}
         </p>
       )}
-      {open && results.length > 0 && (
+      {showing && (
         <div className={cn("nx-rise mt-2 overflow-hidden rounded-2xl", FLOAT)}>
           <ul
             aria-label="Places found"
@@ -194,6 +233,7 @@ export function PlaceSearch({
                   onClick={() => {
                     pick(place);
                     setOpen(false);
+                    setAnnouncement(`Showing ${place.label}.`);
                   }}
                   className="flex w-full items-start gap-2 rounded-xl px-3 py-2 text-left text-sm transition-colors outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring aria-[current]:bg-secondary aria-[current]:font-medium"
                 >
@@ -203,7 +243,14 @@ export function PlaceSearch({
             ))}
           </ul>
           <p className="border-t border-border px-4 py-1.5 text-[11px] text-muted-foreground">
-            {found?.attribution}
+            <a
+              href={OSM_COPYRIGHT}
+              target="_blank"
+              rel="noreferrer"
+              className="underline-offset-2 hover:underline focus-visible:underline"
+            >
+              {found?.attribution}
+            </a>
           </p>
         </div>
       )}
@@ -256,6 +303,7 @@ export function MapActions({
   onLabels,
   expanded,
   onExpanded,
+  onStyleOpen,
   onLocate,
 }: {
   basemap: Basemap;
@@ -264,6 +312,8 @@ export function MapActions({
   onLabels: (value: boolean) => void;
   expanded: boolean;
   onExpanded: (value: boolean) => void;
+  /** Whether the map style popover is open, on every change. */
+  onStyleOpen?: (open: boolean) => void;
   onLocate: (focus: MapFocus) => void;
 }) {
   const labelsId = useId();
@@ -293,7 +343,7 @@ export function MapActions({
   return (
     <div className="flex flex-col items-end gap-2">
       <div className={cn("flex flex-col rounded-full p-1", FLOAT)}>
-        <Popover modal>
+        <Popover modal onOpenChange={onStyleOpen}>
           <Tooltip>
             <TooltipTrigger asChild>
               <PopoverTrigger asChild>
@@ -370,7 +420,6 @@ export function MapActions({
           label={expanded ? "Exit full screen" : "Full screen"}
           shortcut={expanded ? "Escape" : undefined}
           onClick={() => onExpanded(!expanded)}
-          aria-pressed={expanded}
         >
           {expanded ? (
             <Minimize2 aria-hidden="true" />
@@ -400,6 +449,7 @@ export function DrawingDock({
   corners,
   canUndo,
   canRedo,
+  selected,
   dispatch,
   readout,
   status,
@@ -411,6 +461,8 @@ export function DrawingDock({
   corners: number;
   canUndo: boolean;
   canRedo: boolean;
+  /** The selected corner: the dock offers to delete it (phones have no right-click). */
+  selected: number | null;
   dispatch: (action: EditorAction) => void;
   readout: string | null;
   status: { ok: boolean; text: string } | null;
@@ -475,6 +527,20 @@ export function DrawingDock({
               >
                 <Check aria-hidden="true" />
                 Finish
+              </Button>
+            )}
+            {selected !== null && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => dispatch({ type: "remove", index: selected })}
+                disabled={disabled}
+                aria-label={`Delete corner ${selected + 1}`}
+                className="nx-rise rounded-full"
+              >
+                <Trash2 aria-hidden="true" />
+                Delete corner
               </Button>
             )}
             <IconButton

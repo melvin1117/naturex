@@ -11,7 +11,7 @@ import {
   type EditorState,
 } from "@/lib/listing";
 import type { LatLng } from "@/lib/prototype/data";
-import { crossingEdges, perimeterKm } from "@/lib/prototype/geo";
+import { checkPolygon, crossingEdges, perimeterKm } from "@/lib/prototype/geo";
 
 const SQUARE: LatLng[] = [
   [0, 0],
@@ -163,6 +163,45 @@ describe("boundary measurements and issues on the map", () => {
     expect(crossingEdges(bowtie)).toEqual([0, 2]);
     expect(crossingEdges(SQUARE)).toEqual([]);
     expect(boundaryIssues(bowtie).crossing).toEqual([0, 2]);
+  });
+
+  it("also finds edges that only touch, like the server's check", () => {
+    // A corner on another edge (D sits halfway along A–B).
+    const touching: LatLng[] = [
+      [0, 0],
+      [0, 0.04],
+      [0.02, 0.04],
+      [0, 0.02],
+      [0.02, 0],
+    ];
+    expect(crossingEdges(touching)).toEqual([0, 2, 3]);
+    // Two triangles meeting at one corner, placed twice.
+    const pinched: LatLng[] = [
+      [0, 0],
+      [0, 0.02],
+      [0.01, 0.01],
+      [0.02, 0.02],
+      [0.02, 0],
+      [0.01, 0.01],
+    ];
+    expect(crossingEdges(pinched)).toEqual([1, 2, 4, 5]);
+    // A spike: out to S and straight back over the same line.
+    const spike: LatLng[] = [
+      [0, 0],
+      [0, 0.02],
+      [0.02, 0.02],
+      [0.02, 0],
+      [0.03, 0],
+    ];
+    expect(crossingEdges(spike)).toEqual([2, 3, 4]);
+    expect(checkPolygon(touching, [])).toMatchObject({
+      ok: false,
+      code: "self_intersection",
+    });
+    // A corner placed twice in a row is just a repeat, not a clash.
+    expect(
+      crossingEdges([SQUARE[0], SQUARE[1], SQUARE[1], SQUARE[2], SQUARE[3]]),
+    ).toEqual([]);
   });
 
   it("finds the listed sites a boundary overlaps", () => {

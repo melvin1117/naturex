@@ -141,7 +141,10 @@ export function BoundaryStep({
   const [expanded, setExpanded] = useState(false);
   const [tipsDone, setTipsDone] = useState(true);
   const [zoomedIn, setZoomedIn] = useState(points.length > 0);
+  const [selected, setSelected] = useState<number | null>(null);
   const stage = useRef<HTMLDivElement>(null);
+  // Open map layers that Escape closes first, before it leaves full screen.
+  const layersOpen = useRef({ style: false, results: false });
   useEffect(() => setTipsDone(readTipsDone()), []);
 
   const current = editor.points;
@@ -163,15 +166,21 @@ export function BoundaryStep({
   const changed = !saved || !sameBoundary(saved, current);
   const pending = create.isPending || update.isPending;
 
-  function dispatch(action: EditorAction) {
-    if (pending) return;
+  /** False when the action was refused (a save is pending) or changed nothing. */
+  function dispatch(action: EditorAction): boolean {
+    if (pending) return false;
     const next = editorReducer(editorRef.current, action);
-    if (next === editorRef.current) return;
+    if (next === editorRef.current) return false;
     editorRef.current = next;
     setEditor(next);
     if (next.points !== points) setPoints(next.points);
     setFailure(null);
+    // A moved corner stays selected and an inserted one becomes it; anything else starts over.
+    setSelected(
+      action.type === "move" || action.type === "insert" ? action.index : null,
+    );
     if (action.type === "finish") hideTips();
+    return true;
   }
 
   function hideTips() {
@@ -184,14 +193,16 @@ export function BoundaryStep({
     if (!expanded) return;
     const { overflow } = document.body.style;
     document.body.style.overflow = "hidden";
+    // Capture phase, before Radix closes a layer: a tooltip doesn't hold Escape back, but the
+    // map style popover and the search results close first.
     const onKey = (event: KeyboardEvent) => {
-      // Radix layers (popovers, tooltips) mark the Escape they used with preventDefault.
-      if (event.key === "Escape" && !event.defaultPrevented) setExpanded(false);
+      const { style, results } = layersOpen.current;
+      if (event.key === "Escape" && !style && !results) setExpanded(false);
     };
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
     return () => {
       document.body.style.overflow = overflow;
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKey, true);
     };
   }, [expanded]);
 
@@ -284,6 +295,8 @@ export function BoundaryStep({
     }
   }
 
+  const selectedCorner =
+    selected !== null && selected < current.length ? selected : null;
   const km = perimeter < 10 ? perimeter.toFixed(2) : perimeter.toFixed(1);
   const readout =
     current.length >= 3 && hint
@@ -322,6 +335,8 @@ export function BoundaryStep({
               others={others}
               issues={issues}
               valid={hint?.ok ?? true}
+              selected={selectedCorner}
+              onSelect={setSelected}
               basemap={basemap}
               labels={labels}
               onZoomedIn={setZoomedIn}
@@ -329,7 +344,13 @@ export function BoundaryStep({
             />
             <TooltipProvider delayDuration={300}>
               <div className="pointer-events-none absolute inset-x-3 top-3 z-[1000] flex items-start justify-between gap-2 [&>*]:pointer-events-auto">
-                <PlaceSearch onPick={setFocus} className="min-w-0 flex-1" />
+                <PlaceSearch
+                  onPick={setFocus}
+                  onResultsOpen={(open) => {
+                    layersOpen.current.results = open;
+                  }}
+                  className="min-w-0 flex-1"
+                />
                 <MapActions
                   basemap={basemap}
                   onBasemap={setBasemap}
@@ -337,6 +358,9 @@ export function BoundaryStep({
                   onLabels={setLabels}
                   expanded={expanded}
                   onExpanded={setExpanded}
+                  onStyleOpen={(open) => {
+                    layersOpen.current.style = open;
+                  }}
                   onLocate={setFocus}
                 />
               </div>
@@ -346,6 +370,7 @@ export function BoundaryStep({
                   corners={current.length}
                   canUndo={editor.past.length > 0}
                   canRedo={editor.future.length > 0}
+                  selected={selectedCorner}
                   dispatch={dispatch}
                   readout={readout}
                   status={status}
@@ -467,8 +492,8 @@ export function BoundaryStep({
                 Drag or click the small dot between two corners to add one.
               </li>
               <li>
-                Right-click a corner, or focus it and press Delete, to remove
-                it.
+                To remove a corner, tap or focus it and choose Delete corner (or
+                press Delete). With a mouse, you can also right-click it.
               </li>
               <li>Focus a corner with Tab and move it with the arrow keys.</li>
               <li>Undo with Ctrl+Z (⌘Z on a Mac); redo with Ctrl+Shift+Z.</li>

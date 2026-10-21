@@ -28,6 +28,33 @@ function segmentsCross(a: LatLng, b: LatLng, c: LatLng, d: LatLng) {
   return o1 * o2 < 0 && o3 * o4 < 0;
 }
 
+/** `p` lies on segment a–b (given the three are collinear). */
+function within(a: LatLng, b: LatLng, p: LatLng) {
+  return (
+    Math.min(a[0], b[0]) <= p[0] &&
+    p[0] <= Math.max(a[0], b[0]) &&
+    Math.min(a[1], b[1]) <= p[1] &&
+    p[1] <= Math.max(a[1], b[1])
+  );
+}
+
+/** Segments that cross or merely touch: a corner on the other edge, or a shared point. */
+function segmentsMeet(a: LatLng, b: LatLng, c: LatLng, d: LatLng) {
+  if (segmentsCross(a, b, c, d)) return true;
+  return (
+    (orient(a, b, c) === 0 && within(a, b, c)) ||
+    (orient(a, b, d) === 0 && within(a, b, d)) ||
+    (orient(c, d, a) === 0 && within(c, d, a)) ||
+    (orient(c, d, b) === 0 && within(c, d, b))
+  );
+}
+
+/** Edges a–b then b–c fold back over each other (a spike): c heads back towards a. */
+function foldsBack(a: LatLng, b: LatLng, c: LatLng) {
+  const dot = (a[0] - b[0]) * (c[0] - b[0]) + (a[1] - b[1]) * (c[1] - b[1]);
+  return orient(a, b, c) === 0 && dot > 0;
+}
+
 function ring(points: LatLng[]) {
   const closed =
     points.length > 1 &&
@@ -41,22 +68,41 @@ export function selfIntersects(input: LatLng[]) {
 }
 
 /**
- * Edges (edge i joins corner i to the next, the last closing back to the first) that cross
- * another edge, in order, stopping once `limit` crossing pairs are found.
+ * Edges (edge i joins corner i to the next, the last closing back to the first) that cross or
+ * touch another edge, in order, stopping once `limit` such pairs are found. Like the server's
+ * check (Shapely's validity), a corner on another edge, two corners in the same place and a
+ * spike (an edge doubling back over the previous one) all count; repeated corners in a row
+ * don't.
  */
 export function crossingEdges(input: LatLng[], limit = Infinity): number[] {
-  const pts = ring(input);
+  const all = ring(input);
+  // Repeated corners in a row make zero-length edges: drop them, remembering each kept
+  // corner's original index (the last of a run, whose edge leads on to the next corner).
+  const pts: LatLng[] = [];
+  const index: number[] = [];
+  all.forEach((p, i) => {
+    const next = all[(i + 1) % all.length];
+    if (all.length > 1 && p[0] === next[0] && p[1] === next[1]) return;
+    pts.push(p);
+    index.push(i);
+  });
   const n = pts.length;
   const edges = new Set<number>();
   let pairs = 0;
+  const flag = (i: number, j: number) => {
+    edges.add(index[i]);
+    edges.add(index[j]);
+    pairs += 1;
+  };
+  if (n < 3) return [];
   for (let i = 0; i < n && pairs < limit; i++) {
-    for (let j = i + 1; j < n && pairs < limit; j++) {
-      if (Math.abs(i - j) <= 1 || (i === 0 && j === n - 1)) continue;
-      if (segmentsCross(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n])) {
-        edges.add(i);
-        edges.add(j);
-        pairs += 1;
-      }
+    // Neighbouring edges share a corner; they only clash if the second folds back.
+    if (foldsBack(pts[i], pts[(i + 1) % n], pts[(i + 2) % n]))
+      flag(i, (i + 1) % n);
+    for (let j = i + 2; j < n && pairs < limit; j++) {
+      if (i === 0 && j === n - 1) continue;
+      if (segmentsMeet(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n]))
+        flag(i, j);
     }
   }
   return [...edges].sort((a, b) => a - b);
@@ -140,7 +186,7 @@ export function checkPolygon(
       areaHa: area,
       code: "self_intersection",
       message:
-        "The boundary crosses itself. Move a corner so the edges don't cross.",
+        "The boundary crosses itself. Move a corner so the edges don't cross or touch.",
     };
   if (area < 10)
     return {

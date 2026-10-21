@@ -320,8 +320,6 @@
   background: oklch(0.988 0.005 118 / 0.85) !important;
 }
 
-/* Boundary editor handles (#215): a dot inside a larger hit area, so hover can scale the dot
-   without fighting Leaflet's positioning transform on the marker itself. */
 /* Phones pinch to zoom: the zoom buttons give their corner to the drawing dock. */
 @media (max-width: 639px) {
   .nx-map-stage .leaflet-control-zoom {
@@ -329,7 +327,9 @@
   }
 }
 
-/* Doubled class: leaflet.css (loaded after this file) sets markers to display: block. */
+/* Boundary editor handles (#215): a dot inside a larger hit area, so hover can scale the dot
+   without fighting Leaflet's positioning transform on the marker itself.
+   Doubled class: leaflet.css (loaded after this file) sets markers to display: block. */
 .nx-handle.nx-handle {
   display: grid;
   place-items: center;
@@ -366,6 +366,14 @@
 }
 .nx-handle--invalid .nx-handle__dot {
   border-color: var(--clay-ink);
+}
+/* The corner the dock's "Delete corner" acts on (tapped or focused). */
+.nx-handle--selected .nx-handle__dot {
+  transform: scale(1.3);
+  background: var(--lime);
+  box-shadow:
+    0 0 0 3px var(--card),
+    0 0 0 5.5px var(--forest);
 }
 .leaflet-dragging .nx-handle--vertex,
 .nx-handle.leaflet-drag-target {

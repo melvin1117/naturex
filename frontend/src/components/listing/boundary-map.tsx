@@ -34,19 +34,23 @@ export type Basemap = "satellite" | "map";
 /** Free tiles only (AGENTS.md): Esri World Imagery and its place labels, and OpenStreetMap. */
 const BASEMAPS: Record<
   Basemap,
-  { url: string; attribution: string; maxZoom: number }
+  { url: string; attribution: string; maxNativeZoom: number }
 > = {
+  // Esri imagery stops at 18; past that Leaflet scales its tiles up instead of going blank.
   satellite: {
     url: IMAGERY_URL,
     attribution: IMAGERY_ATTRIBUTION,
-    maxZoom: 18,
+    maxNativeZoom: 18,
   },
   map: {
     url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attribution: "© OpenStreetMap contributors",
-    maxZoom: 19,
+    attribution:
+      '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors',
+    maxNativeZoom: 19,
   },
 };
+/** The map's own limit; every layer is drawn (scaled up if need be) up to here. */
+const MAX_ZOOM = 19;
 const LABELS_URL =
   "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
 const LABELS_ATTRIBUTION = "Labels © Esri";
@@ -74,12 +78,29 @@ function coarsePointer(): boolean {
   );
 }
 
+/** A long press on a touch screen (native, or Leaflet's tap-hold stand-in) rather than a right-click. */
+function longPress(event: Event): boolean {
+  const pointerType = (event as Partial<PointerEvent>).pointerType;
+  return (
+    pointerType === "touch" ||
+    pointerType === "pen" ||
+    (event as { _simulated?: boolean })._simulated === true ||
+    coarsePointer()
+  );
+}
+
+/** Edge or site indexes as a dependency that changes only when the indexes do. */
+const indexKey = (indexes: number[]) => indexes.join(",");
+const fromKey = (key: string) => (key ? key.split(",").map(Number) : []);
+
 /**
  * The listing's boundary editor on satellite imagery (#215). The parent owns the corners (a
  * pure reducer in `lib/listing/drawing.ts`); this map turns gestures into its actions:
  * drawing mode adds a corner per click and closes on the first corner; editing mode drags
  * corners, adds one by dragging (or clicking) an edge's midpoint, and deletes one with a
- * right-click or Delete. Focused corners move with the arrow keys.
+ * right-click or Delete. Tapping, dragging or focusing a corner selects it (`onSelect`), for
+ * the dock's "Delete corner" on phones, where a long press selects rather than deletes.
+ * Focused corners move with the arrow keys.
  */
 export function BoundaryMap({
   points,
@@ -91,6 +112,8 @@ export function BoundaryMap({
   others,
   issues,
   valid,
+  selected = null,
+  onSelect,
   basemap = "satellite",
   labels = true,
   label,
@@ -99,7 +122,8 @@ export function BoundaryMap({
 }: {
   points: LatLng[];
   mode: DrawMode;
-  dispatch: (action: EditorAction) => void;
+  /** Returns false when the action changed nothing (or was refused). */
+  dispatch: (action: EditorAction) => boolean | void;
   center: LatLng;
   zoom: number;
   /** Fly the map whenever this object changes (by reference). */
@@ -107,6 +131,9 @@ export function BoundaryMap({
   others: Outline[];
   issues: BoundaryIssues;
   valid: boolean;
+  /** The selected corner's index, highlighted on the map. */
+  selected?: number | null;
+  onSelect?: (index: number) => void;
   basemap?: Basemap;
   labels?: boolean;
   label: string;
@@ -123,13 +150,19 @@ export function BoundaryMap({
   const othersRef = useRef<LayerGroup | null>(null);
   const shapeRef = useRef<LayerGroup | null>(null);
   const bandRef = useRef<Polyline | null>(null);
+  const handlesRef = useRef<Marker[]>([]);
   /** The corner to focus once the handles are redrawn (after a keyboard move or delete). */
   const refocus = useRef<number | null>(null);
   const [ready, setReady] = useState(false);
 
   // Event handlers bound once read the latest props through this ref.
-  const latest = useRef({ points, mode, dispatch, onZoomedIn });
-  latest.current = { points, mode, dispatch, onZoomedIn };
+  const latest = useRef({ points, mode, dispatch, onZoomedIn, onSelect });
+  latest.current = { points, mode, dispatch, onZoomedIn, onSelect };
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  // Compared by value: a refetch of the listed sites must not rebuild the handles mid-drag.
+  const crossingKey = indexKey(issues.crossing);
+  const overlappingKey = indexKey(issues.overlapping);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,7 +174,7 @@ export function BoundaryMap({
         doubleClickZoom: false,
         zoomSnap: 0.5,
         wheelPxPerZoomLevel: 90,
-        maxZoom: 19,
+        maxZoom: MAX_ZOOM,
       }).setView(center, zoom);
       mapRef.current = map;
       L.control.zoom({ position: "bottomright" }).addTo(map);
@@ -210,8 +243,8 @@ export function BoundaryMap({
     baseRef.current?.remove();
     const base = BASEMAPS[basemap];
     baseRef.current = L.tileLayer(base.url, {
-      maxZoom: base.maxZoom,
-      maxNativeZoom: base.maxZoom,
+      maxZoom: MAX_ZOOM,
+      maxNativeZoom: base.maxNativeZoom,
       attribution: base.attribution,
     }).addTo(map);
     baseRef.current.bringToBack();
@@ -219,7 +252,7 @@ export function BoundaryMap({
     labelsRef.current = null;
     if (labels && basemap === "satellite")
       labelsRef.current = L.tileLayer(LABELS_URL, {
-        maxZoom: 19,
+        maxZoom: MAX_ZOOM,
         maxNativeZoom: 18,
         attribution: LABELS_ATTRIBUTION,
       }).addTo(map);
@@ -230,8 +263,9 @@ export function BoundaryMap({
     const layer = othersRef.current;
     if (!L || !layer) return;
     layer.clearLayers();
+    const overlapping = fromKey(overlappingKey);
     others.forEach((o, i) => {
-      const clash = issues.overlapping.includes(i);
+      const clash = overlapping.includes(i);
       // Text only: Leaflet would parse a string tooltip as HTML.
       const tooltip = document.createElement("span");
       tooltip.textContent = clash
@@ -247,7 +281,7 @@ export function BoundaryMap({
         .bindTooltip(tooltip)
         .addTo(layer);
     });
-  }, [others, issues.overlapping, ready]);
+  }, [others, overlappingKey, ready]);
 
   useEffect(() => {
     const L = leafletRef.current;
@@ -298,7 +332,7 @@ export function BoundaryMap({
         }).addTo(layer);
     }
     // Crossing edges: a light halo under a bright stroke, readable on any imagery.
-    for (const edge of issues.crossing) {
+    for (const edge of fromKey(crossingKey)) {
       const segment = [points[edge], points[(edge + 1) % n]];
       if (!segment[0] || !segment[1]) continue;
       L.polyline(segment, { color: "#ffffff", weight: 7, opacity: 0.85 }).addTo(
@@ -306,6 +340,7 @@ export function BoundaryMap({
       );
       L.polyline(segment, { color: CROSSING, weight: 3.5 }).addTo(layer);
     }
+    handlesRef.current = [];
     if (n > MAX_HANDLES) return;
 
     const size = coarsePointer() ? 40 : 28;
@@ -326,27 +361,38 @@ export function BoundaryMap({
             "nx-handle nx-handle--vertex",
             closer && "nx-handle--closer",
             !valid && "nx-handle--invalid",
+            selectedRef.current === i && "nx-handle--selected",
           ),
           html: '<span class="nx-handle__dot"></span>',
           iconSize: [size, size],
         }),
       }).addTo(layer);
-      marker.on("dragstart", () => el.classList.add("nx-map--dragging"));
+      let dragging = false;
+      marker.on("dragstart", () => {
+        dragging = true;
+        el.classList.add("nx-map--dragging");
+        latest.current.onSelect?.(i);
+      });
       marker.on("drag", () => {
         const { lat, lng } = marker.getLatLng();
         reshape(points.map((p, j) => (j === i ? [lat, lng] : p)));
       });
       marker.on("dragend", () => {
+        dragging = false;
         el.classList.remove("nx-map--dragging");
         const { lat, lng } = marker.getLatLng();
         latest.current.dispatch({ type: "move", index: i, point: [lat, lng] });
       });
       marker.on("click", () => {
         if (closer) latest.current.dispatch({ type: "finish" });
+        else latest.current.onSelect?.(i);
       });
       marker.on("contextmenu", (e) => {
         e.originalEvent.preventDefault();
-        latest.current.dispatch({ type: "remove", index: i });
+        if (dragging) return;
+        // A long press can start as a drag or a tap: select, and leave deleting to the dock.
+        if (longPress(e.originalEvent)) latest.current.onSelect?.(i);
+        else latest.current.dispatch({ type: "remove", index: i });
       });
       const icon = marker.getElement();
       if (icon) {
@@ -360,9 +406,11 @@ export function BoundaryMap({
         icon.addEventListener("keydown", (event) =>
           onCornerKey(event, i, marker),
         );
+        icon.addEventListener("focus", () => latest.current.onSelect?.(i));
       }
       handles.push(marker);
     });
+    handlesRef.current = handles;
 
     if (mode === "editing" && n >= 3)
       points.forEach((_, i) => {
@@ -419,32 +467,45 @@ export function BoundaryMap({
         ArrowLeft: [-step, 0],
         ArrowRight: [step, 0],
       };
-      const { dispatch: send } = latest.current;
+      // Refocus after the redraw only if the action changed the shape (a refused or no-op
+      // action redraws nothing, and a later redraw mustn't steal focus).
+      const send = (action: EditorAction, focusAt: number) => {
+        refocus.current = focusAt;
+        if (latest.current.dispatch(action) === false) refocus.current = null;
+      };
       if (event.key in moves) {
         const [dx, dy] = moves[event.key];
         const at = map.latLngToContainerPoint(marker.getLatLng()).add([dx, dy]);
         const { lat, lng } = map.containerPointToLatLng(at);
-        refocus.current = i;
-        send({ type: "move", index: i, point: [lat, lng] });
+        send({ type: "move", index: i, point: [lat, lng] }, i);
       } else if (event.key === "Delete" || event.key === "Backspace") {
-        refocus.current = Math.max(0, i - 1);
-        send({ type: "remove", index: i });
+        send({ type: "remove", index: i }, Math.max(0, i - 1));
       } else if (
         (event.key === "Insert" || event.key === "+") &&
         latest.current.points.length >= 2
       ) {
-        refocus.current = i + 1;
-        send({
-          type: "insert",
-          index: i + 1,
-          point: midpoint(latest.current.points, i),
-        });
+        send(
+          {
+            type: "insert",
+            index: i + 1,
+            point: midpoint(latest.current.points, i),
+          },
+          i + 1,
+        );
       } else return;
       // Keep Leaflet's keyboard panning (and the page) from also acting on the key.
       event.preventDefault();
       event.stopPropagation();
     }
-  }, [points, mode, valid, issues.crossing, helpId, ready]);
+  }, [points, mode, valid, crossingKey, helpId, ready]);
+
+  useEffect(() => {
+    handlesRef.current.forEach((handle, i) =>
+      handle
+        .getElement()
+        ?.classList.toggle("nx-handle--selected", i === selected),
+    );
+  }, [selected]);
 
   return (
     <>

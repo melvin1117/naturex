@@ -24,6 +24,7 @@ import {
   fakeBackend,
   FakeEventSource,
   json,
+  sequence,
   SIGNED_IN_WORLD,
 } from "../lib/helpers";
 
@@ -57,11 +58,13 @@ vi.mock("@/components/listing/boundary-map", () => ({
     mode,
     focus,
     dispatch,
+    onSelect,
   }: {
     points: [number, number][];
     mode: string;
     focus: unknown;
     dispatch: (action: { type: "add"; point: [number, number] }) => void;
+    onSelect?: (index: number) => void;
   }) => (
     <>
       <button
@@ -71,6 +74,9 @@ vi.mock("@/components/listing/boundary-map", () => ({
         }
       >
         Add test corner
+      </button>
+      <button type="button" onClick={() => onSelect?.(1)}>
+        Tap test corner 2
       </button>
       <output data-testid="map-mode">{mode}</output>
       <output data-testid="map-focus">{JSON.stringify(focus)}</output>
@@ -188,6 +194,12 @@ const step = (name: string, status: string, extra: object = {}) => ({
 });
 
 const OUTLINES = { outlines: [], truncated: false };
+const XOCHIMILCO = {
+  label: "Xochimilco, Mexico City, Mexico",
+  lat: 19.26,
+  lon: -99.1,
+  bbox: [19.1, -99.2, 19.3, -99.0],
+};
 
 type Routes = Parameters<typeof fakeBackend>[0];
 
@@ -1096,8 +1108,136 @@ describe("the boundary step (review fixes)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
     expect(
-      await screen.findByText(/Place search isn't available right now/),
+      await screen.findByText(/Place search isn't available right now/, {
+        selector: "p:not([role=status])",
+      }),
     ).toBeVisible();
+  });
+
+  it("repeats a search from this tab's cache, and spaces new ones a second apart (#215)", async () => {
+    const at: number[] = [];
+    const backend = setup({
+      "GET /places/search": (request) => {
+        at.push(Date.now());
+        const q = new URL(request.url).searchParams.get("q");
+        return json({
+          results: q === "Atlantis" ? [] : [XOCHIMILCO],
+          attribution: "Place search © OpenStreetMap contributors (Nominatim)",
+        });
+      },
+    });
+    await fillDetails();
+    const box = await screen.findByRole("searchbox", {
+      name: "Search for a place",
+    });
+    const searchFor = (q: string) => {
+      fireEvent.change(box, { target: { value: q } });
+      fireEvent.click(screen.getByRole("button", { name: /^Search/ }));
+    };
+    searchFor("Xochimilco");
+    expect(
+      await screen.findByText(
+        "1 place found; showing Xochimilco, Mexico City, Mexico.",
+      ),
+    ).toHaveAttribute("role", "status");
+    expect(
+      screen.getByRole("link", { name: /OpenStreetMap contributors/ }),
+    ).toHaveAttribute("href", "https://www.openstreetmap.org/copyright");
+
+    searchFor("  xochimilco ");
+    await screen.findByRole("list", { name: "Places found" });
+    expect(backend.calls("GET /places/search")).toBe(1);
+
+    searchFor("Atlantis");
+    expect(
+      await screen.findByText(
+        /No places found for “Atlantis”/,
+        {
+          selector: "p:not([role=status])",
+        },
+        { timeout: 3000 },
+      ),
+    ).toBeVisible();
+    expect(backend.calls("GET /places/search")).toBe(2);
+    expect(at[1] - at[0]).toBeGreaterThanOrEqual(900);
+    expect(screen.queryByRole("list", { name: "Places found" })).toBeNull();
+  });
+
+  it("explains a busy or rate-limited place search (429) (#215)", async () => {
+    setup({
+      "GET /places/search": sequence(
+        () =>
+          json(
+            { detail: "place_search_busy" },
+            { status: 429, headers: { "Retry-After": "1" } },
+          ),
+        () =>
+          json(
+            { detail: "place_search_rate_limited" },
+            { status: 429, headers: { "Retry-After": "60" } },
+          ),
+      ),
+    });
+    await fillDetails();
+    const box = await screen.findByRole("searchbox", {
+      name: "Search for a place",
+    });
+    fireEvent.change(box, { target: { value: "Xochimilco" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    expect(
+      await screen.findByText(/Lots of people are searching right now/, {
+        selector: "p:not([role=status])",
+      }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    expect(
+      await screen.findByText(
+        /You've searched a lot in the last minute/,
+        {
+          selector: "p:not([role=status])",
+        },
+        { timeout: 3000 },
+      ),
+    ).toBeVisible();
+  });
+
+  it("deletes the tapped corner from the dock (phones have no right-click) (#215)", async () => {
+    setup();
+    await fillDetails();
+    await drawSquare();
+    expect(screen.queryByRole("button", { name: /Delete corner/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Tap test corner 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete corner 2" }));
+    expect(screen.getByText("3 corners")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Delete corner/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(screen.getByText("4 corners")).toBeVisible();
+  });
+
+  it("ignores edits while the boundary is saving (#215)", async () => {
+    let release = () => {};
+    setup({
+      "POST /assets": () =>
+        new Promise<Response>((resolve) => {
+          release = () => resolve(json(asset(), { status: 201 }));
+        }),
+      [ASSET]: () => json(asset()),
+    });
+    await fillDetails();
+    await drawSquare();
+    fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));
+    expect(
+      await screen.findByRole("button", { name: /Saving/ }),
+    ).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Add test corner" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Add test corner" }), {
+      key: "z",
+      ctrlKey: true,
+    });
+    expect(screen.getByText("4 corners")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+    act(() => release());
+    expect(await screen.findByText("Ready to rate")).toBeVisible();
   });
 
   it("a 401 while saving offers sign-in and keeps the listing in this tab", async () => {
@@ -1225,4 +1365,82 @@ describe("links from the Steward home (T63)", () => {
       ).toBeVisible();
     },
   );
+});
+
+describe("the full-screen map (#215)", () => {
+  async function fullScreen() {
+    document.body.style.overflow = "auto";
+    await fillDetails();
+    fireEvent.click(await screen.findByRole("button", { name: "Full screen" }));
+    return screen.getByRole("button", { name: "Exit full screen" });
+  }
+
+  it("leaves with one Escape, even with a tooltip open, and restores the page scroll", async () => {
+    setup();
+    const exit = await fullScreen();
+    expect(exit).not.toHaveAttribute("aria-pressed");
+    expect(document.body.style.overflow).toBe("hidden");
+    act(() => exit.focus());
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      /Exit full screen/,
+    );
+    fireEvent.keyDown(exit, { key: "Escape" });
+    expect(
+      await screen.findByRole("button", { name: "Full screen" }),
+    ).toBeVisible();
+    expect(document.body.style.overflow).toBe("auto");
+  });
+
+  it("closes the map style popover or the search results first", async () => {
+    setup({
+      "GET /places/search": () =>
+        json({
+          results: [XOCHIMILCO],
+          attribution: "Place search © OpenStreetMap contributors (Nominatim)",
+        }),
+    });
+    await fullScreen();
+    fireEvent.click(screen.getByRole("button", { name: "Map style" }));
+    const style = await screen.findByRole("dialog");
+    fireEvent.keyDown(style, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(
+      screen.getByRole("button", { name: "Exit full screen" }),
+    ).toBeVisible();
+
+    const box = screen.getByRole("searchbox", { name: "Search for a place" });
+    fireEvent.change(box, { target: { value: "Xochimilco" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    const result = await screen.findByRole("button", {
+      name: "Xochimilco, Mexico City, Mexico",
+    });
+    fireEvent.keyDown(result, { key: "Escape" });
+    expect(screen.queryByRole("list", { name: "Places found" })).toBeNull();
+    expect(box).toHaveFocus();
+    expect(
+      screen.getByRole("button", { name: "Exit full screen" }),
+    ).toBeVisible();
+    fireEvent.keyDown(box, { key: "Escape" });
+    expect(
+      await screen.findByRole("button", { name: "Full screen" }),
+    ).toBeVisible();
+  });
+
+  it("keeps Tab within the map's controls", async () => {
+    setup();
+    await fullScreen();
+    const box = screen.getByRole("searchbox", { name: "Search for a place" });
+    const exit = screen.getByRole("button", { name: "Exit full screen" });
+    const stage = box.closest(".nx-map-stage") as HTMLElement;
+    const focusable = stage.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), [tabindex="0"]',
+    );
+    const last = focusable[focusable.length - 1];
+    act(() => last.focus());
+    fireEvent.keyDown(last, { key: "Tab" });
+    expect(focusable[0]).toHaveFocus();
+    fireEvent.keyDown(focusable[0], { key: "Tab", shiftKey: true });
+    expect(last).toHaveFocus();
+    expect(exit).toBeVisible();
+  });
 });
