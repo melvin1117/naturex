@@ -331,10 +331,10 @@ describe("the rating reveal (#216)", () => {
 });
 
 describe("ListedStep", () => {
+  // As the API sends a listed site: its run is on its report, not in `latest_run_id`.
   const listed = asset({
     status: "listed",
-    latest_report: REPORT,
-    latest_run_id: RUN_ID,
+    latest_report: { ...REPORT, run_id: RUN_ID },
   });
 
   function renderListed(reveal: boolean, onOpenTrace = vi.fn()) {

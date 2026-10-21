@@ -55,7 +55,8 @@ export function ListedStep({
   /** Opens the Agent Trace on a run: here, the one that produced this rating. */
   onOpenTrace: (runId: string) => void;
 }) {
-  const runId = asset.latest_run_id ?? null;
+  // A listed site's run is its report's (`latest_run_id` is only set while under review).
+  const runId = asset.latest_report?.run_id ?? asset.latest_run_id ?? null;
   const facts = asset.latest_report ? reportFacts(asset.latest_report) : null;
   const outcome = listingOutcome(asset);
   const staged = reveal && facts !== null && outcome.kind === "listed";
