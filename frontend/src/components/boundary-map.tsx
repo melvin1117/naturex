@@ -185,7 +185,7 @@ function BoundaryLayers({
         aria-hidden={creditHidden || undefined}
         className={cn(
           // Clear of a corner badge (e.g. the card's grade); long credits wrap.
-          "absolute bottom-1.5 left-2 z-10 max-w-[calc(100%-5.5rem)] rounded-sm bg-black/45 px-1 text-[10px] leading-4 text-balance text-white",
+          "absolute bottom-1.5 left-2 z-10 max-w-[calc(100%-5.5rem)] rounded-sm bg-black/45 px-1 py-px text-[9px] leading-[11px] text-white",
           creditClassName,
         )}
       >
