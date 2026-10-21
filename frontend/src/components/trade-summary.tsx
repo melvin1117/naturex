@@ -1,4 +1,6 @@
 /** The trade panel's quote table and receipt: the API's numbers, formatted, never computed. */
+import type { Ref } from "react";
+
 import type { OrderOut, QuoteOut } from "@/lib/api/types";
 import { int } from "@/lib/prototype/format";
 import {
@@ -82,13 +84,18 @@ export function announce(order: OrderOut): string {
 export function Receipt({
   order,
   community,
+  ref,
 }: {
   order: OrderOut;
   community: string;
+  /** The form moves focus here after an order, since its submit button is disabled. */
+  ref?: Ref<HTMLDivElement>;
 }) {
   const bought = order.side === "buy";
   return (
     <div
+      ref={ref}
+      tabIndex={-1}
       className="nx-rise mt-5 rounded-2xl border border-lime/60 bg-lime/10 p-4"
       data-tour="trade-receipt"
     >

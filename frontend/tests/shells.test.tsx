@@ -637,7 +637,11 @@ describe("when the account changes", () => {
     ).toBeVisible();
 
     await act(() => layer.session.reload());
-    await screen.findByRole("button", { name: "Account: Ines" });
+    const account = await screen.findByRole("button", {
+      name: "Account: Ines",
+    });
+    // The initials are generated content: the visible text is the name (label in name).
+    expect(account).toHaveTextContent(/^Ines$/);
     // Ines's answer hasn't come back: nothing from Rosa, nothing guessed.
     await waitFor(() => expect(backend.calls("GET /me/communities")).toBe(2));
     expect(

@@ -22,6 +22,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useReturnFocus } from "@/lib/use-return-focus";
 import { SUGGESTED_QUESTIONS } from "@/lib/prototype/copilot";
 import { useTour } from "@/components/proto/tour";
 import { usePrototype } from "@/lib/prototype/store";
@@ -68,6 +69,8 @@ export function CopilotSheet() {
     setDraft("");
   }
 
+  const returnFocus = useReturnFocus(ui.copilotOpen);
+
   return (
     <Sheet
       modal={!tour.active}
@@ -78,6 +81,7 @@ export function CopilotSheet() {
         side="right"
         className="w-full gap-0 p-0 sm:max-w-md"
         data-tour="copilot-sheet"
+        onCloseAutoFocus={returnFocus}
         onInteractOutside={(e) => {
           if ((e.target as HTMLElement | null)?.closest("[data-tour-card]"))
             e.preventDefault();

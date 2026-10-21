@@ -88,7 +88,7 @@ export function LiveBadge({
         <span className="relative inline-flex size-1.5 rounded-full bg-lime-ink" />
       </span>
       {label}
-      <span className="font-medium normal-case opacity-80">· replay</span>
+      <span className="font-medium normal-case">· replay</span>
     </span>
   );
 }

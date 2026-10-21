@@ -2,7 +2,7 @@
 
 import { Info } from "lucide-react";
 import Link from "next/link";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { announce, QuoteTable, Receipt } from "@/components/trade-summary";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,8 @@ export function TradeForm({
   const [failure, setFailure] = useState<OrderFailure | null>(null);
   const [receipt, setReceipt] = useState<OrderOut | null>(null);
   const inFlight = useRef(false);
+  const unitsField = useRef<HTMLInputElement>(null);
+  const receiptBox = useRef<HTMLDivElement>(null);
 
   const holding = portfolio.data?.holdings.find((h) => h.asset_id === asset.id);
   const held = holding?.shares ?? 0;
@@ -86,6 +88,15 @@ export function TradeForm({
     : (problem ?? quoteFailure?.message ?? null);
   const ready = settled && !blocked && !problem && portfolio.data !== undefined;
   const pending = placeOrder.isPending;
+
+  // The submit button is disabled while the order runs, which drops keyboard focus: put it
+  // on the receipt after a fill, or back on the units after a refusal.
+  useEffect(() => {
+    if (receipt) receiptBox.current?.focus();
+  }, [receipt]);
+  useEffect(() => {
+    if (failure) unitsField.current?.focus();
+  }, [failure]);
 
   function change(next: string) {
     setUnitsText(unitsInput(next));
@@ -151,6 +162,7 @@ export function TradeForm({
               </span>
             </div>
             <Input
+              ref={unitsField}
               id={unitsId}
               name="units"
               inputMode="numeric"
@@ -249,7 +261,7 @@ export function TradeForm({
       <p className="sr-only" role="status">
         {receipt ? announce(receipt) : ""}
       </p>
-      {receipt && <Receipt order={receipt} community={asset.name} />}
+      {receipt && <Receipt ref={receiptBox} order={receipt} community={asset.name} />}
     </Tabs>
   );
 }

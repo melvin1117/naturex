@@ -315,6 +315,8 @@ describe("TradePanel", () => {
     fireEvent.click(buyButton());
 
     const receipt = (await screen.findByText(/Stake added/)).parentElement!;
+    // The submit button was disabled while the order ran: focus lands on the receipt.
+    await waitFor(() => expect(receipt).toHaveFocus());
     expect(
       within(receipt).getByText("Play money now").nextSibling,
     ).toHaveTextContent("$9,799.80");
@@ -405,6 +407,8 @@ describe("TradePanel", () => {
       expect(backend.calls("GET /portfolio")).toBeGreaterThan(portfolioReads),
     );
     expect(screen.queryByText(/Stake added/)).not.toBeInTheDocument();
+    // Focus goes back to the units, to try fewer.
+    expect(units()).toHaveFocus();
   });
 
   it("points only the active tab at a panel", async () => {
