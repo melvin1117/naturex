@@ -4,6 +4,7 @@ import {
   boundaryView,
   geojsonRings,
   type LonLatRing,
+  outlineRings,
 } from "@/lib/boundary-map";
 
 // A ~1.2 km square near the Xochimilco demo wetland, [lon, lat].
@@ -100,6 +101,42 @@ describe("boundaryView", () => {
     expect(columns).toContain(0);
   });
 
+  it("keeps a boundary across the antimeridian in one piece, each tile keyed once", () => {
+    const view = boundaryView(
+      [
+        [
+          [179.995, -16.5],
+          [-179.995, -16.5],
+          [-179.995, -16.49],
+          [179.995, -16.49],
+        ],
+      ],
+      SIZE,
+    )!;
+    expect(view.zoom).toBeGreaterThanOrEqual(12);
+    const box = pathBox(view.paths[0]);
+    expect(box.right - box.left).toBeLessThan(SIZE.width);
+    const n = 2 ** view.zoom;
+    const columns = view.tiles.map((t) => Number(t.url.split("/").at(-1)));
+    expect(columns).toContain(0);
+    expect(columns).toContain(n - 1);
+    expect(new Set(view.tiles.map((t) => t.key)).size).toBe(view.tiles.length);
+  });
+
+  it("keys tiles uniquely even when a column repeats around the world", () => {
+    const world: LonLatRing = [
+      [-170, -60],
+      [170, -60],
+      [170, 60],
+      [-170, 60],
+    ];
+    const view = boundaryView([world], { width: 1024, height: 256 })!;
+    expect(view.zoom).toBe(0);
+    const urls = view.tiles.map((t) => t.url);
+    expect(new Set(urls).size).toBeLessThan(urls.length);
+    expect(new Set(view.tiles.map((t) => t.key)).size).toBe(view.tiles.length);
+  });
+
   it("has nothing to draw without a usable ring", () => {
     expect(boundaryView([], SIZE)).toBeNull();
     expect(
@@ -128,6 +165,13 @@ describe("boundaryView", () => {
   });
 });
 
+describe("outlineRings", () => {
+  it("reads the API's outline, dropping empty rings", () => {
+    expect(outlineRings([SQUARE, []])).toEqual([SQUARE]);
+    expect(outlineRings(undefined)).toEqual([]);
+  });
+});
+
 describe("geojsonRings", () => {
   const ring = SQUARE.map(([lon, lat]) => [lon, lat]);
 
@@ -149,6 +193,12 @@ describe("geojsonRings", () => {
     expect(
       geojsonRings({ type: "MultiPolygon", coordinates: [[ring], [ring]] }),
     ).toHaveLength(2);
+  });
+
+  it("skips positions that aren't pairs of numbers", () => {
+    expect(
+      geojsonRings({ type: "Polygon", coordinates: [[...ring, ["x", 1], 3]] }),
+    ).toEqual([SQUARE]);
   });
 
   it("is empty for anything else", () => {

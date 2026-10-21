@@ -36,7 +36,7 @@ import { WorldGate } from "@/components/world-provider";
 import type { ApiError } from "@/lib/api/errors";
 import type { AssetDetail, SiteImages } from "@/lib/api/types";
 import { boundaryLatLngs, chartPrices, newsItems } from "@/lib/asset-detail";
-import { geojsonRings } from "@/lib/boundary-map";
+import { outlineRings } from "@/lib/boundary-map";
 import { demoSiteMediaUrl } from "@/lib/demo-site-images";
 import {
   useAsset,
@@ -159,7 +159,7 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
     [asset.recent_events],
   );
   const imageUrl = siteImageUrl(asset.site_key);
-  const outline = useMemo(() => geojsonRings(asset.geojson), [asset.geojson]);
+  const outline = useMemo(() => outlineRings(asset.outline), [asset.outline]);
   const place = [
     countryName(asset.country ?? null),
     ha(num(asset.area_ha) ?? 0),

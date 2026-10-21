@@ -123,6 +123,7 @@ export function SiteCard({ card }: { card: MarketCard }) {
         <SiteThumb
           src={card.imageUrl}
           outline={card.outline}
+          creditHidden
           alt={
             card.imageUrl
               ? `Satellite view of ${card.name}`

@@ -191,6 +191,7 @@ export function SiteThumb({
   src,
   outline,
   alt,
+  creditHidden,
   className,
 }: {
   siteKey?: string | null;
@@ -199,12 +200,16 @@ export function SiteThumb({
   /** The boundary, drawn when there's no image. */
   outline?: readonly LonLatRing[];
   alt: string;
+  /** Inside a link: keep the map's credit out of the link's name (it stays visible). */
+  creditHidden?: boolean;
   className?: string;
 }) {
   const url = thumbnailUrl(siteKey, src);
   return (
     <div className={cn("relative overflow-hidden bg-lichen", className)}>
-      {!url && outline && <BoundaryMap rings={outline} label={alt} />}
+      {!url && outline && (
+        <BoundaryMap rings={outline} label={alt} creditHidden={creditHidden} />
+      )}
       {url && (
         <Image
           src={url}
