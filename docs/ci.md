@@ -19,14 +19,14 @@ Until the app dirs exist, each component workflow runs a `*/ detect` job and **s
 | `database` | detect · migrate (upgrade / downgrade / upgrade + seed) | every PR, push to `main`, manual |
 | `security` | gitleaks (always); dependency-review + CodeQL **public repos only** | every PR, push to `main`, manual |
 | `e2e` | real accounts (T74): Playwright drives both apps on the real stack, `USE_MOCKS=true`; uploads the report and traces on failure | PRs (not drafts) and pushes to `main` touching `frontend/`, `backend/` or the E2E harness, manual |
-| `task-map` | regenerate `tasks/task-map.{html,json}` from issues; commits to `main` only if changed (`[skip ci]`) | issue opened/closed/assigned/edited, push to `main` touching `tasks/todo.md`, daily, manual |
+| `task-map` | **publish:** regenerate `task-map.{html,json}` from issues and force-push them, only if changed, as a single commit to the orphan branch `task-map` (never `main`; [ADR-0007](./adr/0007-publish-task-map-outside-main.md)). **check:** on PRs, `scripts/task_map.py --check` validates `tasks/todo.md` | publish: issue opened/closed/assigned/edited, push to `main` touching `tasks/todo.md`, the script or the workflow, daily, manual. check: PRs touching those files |
 | AI / evals | **not yet** — deferred until T09 (LLM client) | — |
 
 No path filters on triggers (every PR runs every workflow), except `e2e`: it only runs on PRs (once ready for review) and pushes to `main` that touch `frontend/`, `backend/`, `scripts/e2e-backend.sh` or its workflow, to save Actions minutes; the push to `main` catches a break that two separately green PRs make together. Heavy jobs are gated on whether the component is present in the commit. Superseded runs are cancelled via `concurrency`.
 
 ## Team rule: every change goes through a PR
 
-While the repo is private, GitHub **doesn't enforce** the `protect-main` ruleset (that needs a paid GitHub Team plan; it becomes enforced automatically if the repo goes public). So the team follows it by agreement:
+The repo is public, so GitHub **enforces** the `protect-main` ruleset on `main`: no direct pushes (not even from workflows), PRs only, the required checks below must pass, linear history. (If the repo goes private again on the free plan, the ruleset stops being enforced and the steps below are kept by agreement.) The team follows these steps:
 
 1. **Never push to `main`.** Work on a branch (`feat/…`, `fix/…`, `docs/…`).
 2. **Run `make ci` locally** and get it green before opening the PR (start Postgres first: `docker compose up -d`).
@@ -74,6 +74,16 @@ One Playwright journey through both apps on the real stack (`frontend/e2e/real-a
 - **The admin.** There's no admin sign-up: the script runs the operator CLI, `python -m app.cli create-admin --password-stdin` (piped input only; it refuses a terminal), with a test-only password, in the throwaway database. That password is typed into the login form, so it appears in Playwright traces and reports: never reuse it, or a real one, anywhere else.
 - **Auth rate limits.** Every browser reaches the API through the Next.js `/api` proxy on `127.0.0.1` (and `TRUSTED_PROXY_HOPS=0`), so all the journey's accounts share one per-IP bucket: 5 registrations an hour and 10 sign-ins per 15 minutes (`backend/app/auth.py`). The database is recreated every run, which resets them; a spec that adds more registrations or sign-ins than that in one run gets `429`.
 - **Debugging.** The HTML report is in `frontend/playwright-report` (`pnpm exec playwright show-report`); a failure keeps a trace and screenshots in `frontend/test-results`. In CI both are uploaded as the `e2e-playwright-report` artifact, and the Chromium headless shell is cached per Playwright version.
+
+## Task map (`task-map` branch)
+
+The `task-map` workflow can't push to `main` (the ruleset requires a PR), so it publishes the map to the orphan branch **`task-map`**, which holds only generated files: `task-map.html`, `task-map.json`, an `index.html` redirect and `.nojekyll`. Every publish force-pushes one fresh commit (with a lease on the commit it read), so the branch never grows a history. Decision and rejected alternatives: [ADR-0007](./adr/0007-publish-task-map-outside-main.md).
+
+- **Security.** Only the `publish` job can write, and only to `contents`; the token reaches git as an HTTP header in the job's environment (checkout runs with `persist-credentials: false`), never in `.git/config`. It runs code from `main` only and never reads issue text. `concurrency` serialises publishes.
+- **Read it:** `make task-map-latest` (fetches `origin/task-map` and writes the git-ignored `tasks/task-map.{html,json}`), `git fetch origin task-map && git show origin/task-map:task-map.json`, or `https://raw.githubusercontent.com/melvin1117/naturex/task-map/task-map.json` (no auth while the repo is public).
+- **Regenerate locally:** `make task-map` (needs `gh auth login`); output is git-ignored. `make ci` runs `scripts/task_map.py --check`, which validates `tasks/todo.md` offline.
+- **Force a republish:** Actions → task-map → Run workflow.
+- **Optional web page:** Settings → Pages → *Deploy from a branch* → `task-map` / `(root)`. Then the map is at `https://melvin1117.github.io/naturex/` and each publish redeploys it. Nothing in the workflow needs to change.
 
 ## Runtime pins
 

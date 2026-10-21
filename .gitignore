@@ -30,3 +30,8 @@ CLAUDE.local.md
 
 # promptfoo eval output (evals/README.md)
 evals/output/
+
+# Task map: published to the `task-map` branch by the task-map workflow (ADR-0007);
+# `make task-map` / `make task-map-latest` write local copies here
+tasks/task-map.html
+tasks/task-map.json

@@ -1,7 +1,7 @@
 # NatureX task list
 
 > **Tracked in GitHub Issues** ([melvin1117/naturex](https://github.com/melvin1117/naturex/issues)): epics #1–#6, tasks #7–#65 (issue number shown after each title). **The issues are the source of truth for status**; update this file only when scope changes.
-> **What can I pick?** Open [task-map.html](./task-map.html) (auto-synced from the issues): 🟢 ready tasks have every dependency closed. Keep the heading format and `**Deps:**` lines below intact; `scripts/task_map.py` parses them.
+> **What can I pick?** Run `make task-map-latest` and open `tasks/task-map.html` (auto-synced from the issues and published to the [`task-map` branch](https://github.com/melvin1117/naturex/tree/task-map)): 🟢 ready tasks have every dependency closed. Keep the heading format and `**Deps:**` lines below intact; `scripts/task_map.py` parses them.
 > Plan and team roles: [plan.md](./plan.md). Owners: **PD** (product designer + frontend), **D1** (platform & market), **D2** (geo & rating data), **D3** (AI agents).
 > Each task shows **owner · size · priority · stories covered**. Sizes: XS/S (1–2 files), M (3–5 files); nothing larger. Priorities: Must / Should / Could (from `pm-spec.md` §5).
 > Standard checks, created in T04/T05: `make lint`, `make test` (backend), `make fe-check` (frontend lint, types, build), `make eval`, `make e2e`. Every task also meets the Definition of Done in [AGENTS.md](../AGENTS.md).

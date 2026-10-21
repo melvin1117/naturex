@@ -1,8 +1,10 @@
-# Keeps tasks/task-map.html and tasks/task-map.json in sync with GitHub issues,
-# so `git pull` always shows which tasks are done, picked, ready or blocked.
-# Status comes from issues (closed = done, assignee = picked); see scripts/task_map.py.
-# The commit is pushed straight to main by the workflow token. That works while
-# the repo is private (rulesets aren't enforced); add a bypass if that changes.
+# Publishes the task map (task-map.html for people, task-map.json for agents) generated from
+# GitHub issues; see scripts/task_map.py (closed = done, assignee = picked) and ADR-0007.
+#
+# The map lives on the orphan branch `task-map`, never on main: the `protect-main` ruleset only
+# accepts PRs that pass the required checks, so the workflow can't push there, and we don't want a
+# bypass. Each publish force-pushes one commit with only the generated files. Read it with
+# `make task-map-latest` or `git show origin/task-map:task-map.json`.
 name: task-map
 
 on:
@@ -13,43 +15,108 @@ on:
     paths:
       - tasks/todo.md
       - scripts/task_map.py
+      - .github/workflows/task-map.yml
+  pull_request:
+    paths:
+      - tasks/todo.md
+      - scripts/task_map.py
+      - .github/workflows/task-map.yml
   schedule:
     - cron: "17 6 * * *"
   workflow_dispatch:
 
-concurrency:
-  group: task-map
-  cancel-in-progress: false
-
-permissions:
-  contents: write
-  issues: read
+permissions: {}
 
 jobs:
-  sync:
-    name: task-map / sync
+  # A PR that breaks the todo.md format fails here, before it can stop the map from publishing.
+  check:
+    name: task-map / check
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate tasks/todo.md
+        run: python3 scripts/task_map.py --check
+
+  publish:
+    name: task-map / publish
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: task-map-publish
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      issues: read
     steps:
       - name: Check out main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
+          persist-credentials: false
 
+      # The token is passed as an HTTP header through git's environment config, so it is never
+      # written to .git/config or a command line.
+      - name: Configure git auth for this job
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
+          echo "::add-mask::$header"
+          {
+            echo "GIT_CONFIG_COUNT=1"
+            echo "GIT_CONFIG_KEY_0=http.https://github.com/.extraheader"
+            echo "GIT_CONFIG_VALUE_0=$header"
+          } >> "$GITHUB_ENV"
+
+      - name: Fetch the published map
+        id: previous
+        run: |
+          OUT="$RUNNER_TEMP/task-map"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+          mkdir -p "$OUT"
+          if git fetch --quiet --depth=1 origin +refs/heads/task-map:refs/remotes/origin/task-map; then
+            git archive refs/remotes/origin/task-map task-map.json task-map.html | tar -x -C "$OUT"
+            echo "sha=$(git rev-parse refs/remotes/origin/task-map)" >> "$GITHUB_OUTPUT"
+            echo "files=$(cat "$OUT/task-map.json" "$OUT/task-map.html" | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          else
+            echo "No task-map branch yet; the first run creates it."
+          fi
+
+      # A push to main or a manual run may change the HTML template, which the data hash doesn't
+      # cover, so those always republish.
       - name: Regenerate the task map
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/task_map.py
+          FORCE: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && '--force' || '' }}
+        run: python3 scripts/task_map.py --out-dir "$OUT" $FORCE
 
-      - name: Commit if changed
+      - name: Publish to the task-map branch
+        env:
+          PREVIOUS_SHA: ${{ steps.previous.outputs.sha }}
+          PREVIOUS_FILES: ${{ steps.previous.outputs.files }}
         run: |
-          if [ -z "$(git status --porcelain -- tasks/task-map.html tasks/task-map.json)" ]; then
+          if [ -n "$PREVIOUS_SHA" ] && [ "$(cat "$OUT/task-map.json" "$OUT/task-map.html" | sha256sum | cut -d' ' -f1)" = "$PREVIOUS_FILES" ]; then
             echo "No change."
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898900+github-actions[bot]@users.noreply.github.com"
-          git add tasks/task-map.html tasks/task-map.json
-          git commit -m "chore(tasks): sync task map [skip ci]"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          cd "$OUT"
+          printf '<!doctype html><meta charset="utf-8"><title>NatureX task map</title><meta http-equiv="refresh" content="0; url=task-map.html"><a href="task-map.html">NatureX task map</a>\n' > index.html
+          touch .nojekyll
+          git init --quiet --initial-branch=task-map
+          git add task-map.html task-map.json index.html .nojekyll
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898900+github-actions[bot]@users.noreply.github.com" \
+              commit --quiet -m "chore(tasks): publish task map from ${GITHUB_SHA::7}"
+          # The lease makes the push fail, not overwrite, if the branch moved since the fetch.
+          git push --quiet --force-with-lease="refs/heads/task-map:${PREVIOUS_SHA}" \
+            "https://github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/task-map
+          echo "Published $(git rev-parse --short HEAD) to the task-map branch."

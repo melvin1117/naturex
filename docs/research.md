@@ -59,7 +59,7 @@
 | Issue forms, PR template, **CODEOWNERS**, `main` **ruleset** (PR + 1 approval + green CI, squash-only, no force-push) | Free for public repos | **ADOPT** |
 | Conventional Commits via **PR-title check** (`amannn/action-semantic-pull-request`) | Less friction than commitlint + husky | ADOPT |
 | **MADR 4** ADR templates (MIT/CC0) | adr-tools (GPL, stale), log4brains (stale) | ADOPT MADR |
-| GitHub **Issues** for status (assignee = picked, closed = done) + generated **task map** (`tasks/task-map.html` / `.json`, `scripts/task_map.py`) | GitHub Projects board mirrors status (`make board`) | **ADOPT** issues + task map + board |
+| GitHub **Issues** for status (assignee = picked, closed = done) + generated **task map** (`task-map.html` / `.json` on the `task-map` branch, `scripts/task_map.py`) | GitHub Projects board mirrors status (`make board`) | **ADOPT** issues + task map + board |
 
 **Version pins to act on (Sept 2026):**
 - **Next.js 16.3** is latest; 15.5.x still gets patches. Our spec says 15, so decide 15.5 vs 16.
