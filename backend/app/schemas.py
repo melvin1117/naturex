@@ -887,19 +887,132 @@ class RunTraceOut(BaseModel):
     )
 
 
+PresetNameOut = Literal["fire", "encroachment", "drought", "restoration", "protection"]
+
+
+class TimeMachineQuarter(BaseModel):
+    """One entry of the Time Machine timeline (`data/demo_sites/scenarios.json`)."""
+
+    step: int = Field(description="0 is the observed baseline.")
+    period: str = Field(description="The quarter it is shown as, e.g. `2026Q4`.")
+    scenario: str
+    data_version: str | None = Field(
+        description="`sim-N` for a simulated quarter; null for the observed baseline."
+    )
+
+
+class EventPresetOut(BaseModel):
+    preset: PresetNameOut
+    label: str
+    impact_type: str
+    direction: int = Field(description="-1 harms the site, 1 helps it.")
+    severity: int
+    alerts: bool = Field(
+        description="Severity ≥ 4: the event itself alerts the holders and community (besides "
+        "any alert the re-rate raises)."
+    )
+    description: str = Field(
+        description="The generic effect; curated sites use their own scripted encroachment and "
+        "restoration."
+    )
+
+
+class TimeMachineOut(BaseModel):
+    """Where the caller's world stands on the Time Machine timeline (T38)."""
+
+    available: bool = Field(
+        description="False outside a sandbox (the live world): hide the Time Machine; both "
+        "actions answer 409 `time_machine_sandbox_only`."
+    )
+    unavailable_reason: Literal["time_machine_sandbox_only"] | None = Field(
+        default=None, description="Why `available` is false."
+    )
+    step: int
+    current: TimeMachineQuarter
+    next: TimeMachineQuarter | None = Field(
+        description="The quarter `POST /admin/simulate/quarter` advances to; null at the end of "
+        "the timeline (reset the demo to start again)."
+    )
+    timeline: list[TimeMachineQuarter]
+    presets: list[EventPresetOut]
+    local_jobs: bool = Field(description="False: `Next quarter` is off (`LOCAL_JOBS=false`).")
+
+
+class SimulateQuarterRequest(BaseModel):
+    period: str = Field(
+        pattern=r"^\d{4}Q[1-4]$",
+        description="The quarter to run: the world's next quarter (advances it) or its current "
+        "one (replays it: only what failed is redone, nothing is paid twice).",
+    )
+
+
+class AssetRatingOut(BaseModel):
+    """An asset's latest report and price at one moment, as stored."""
+
+    report_id: UUID
+    version: int
+    health_score: Decimal | None = None
+    grade: str | None = None
+    data_version: str | None = None
+    simulated: bool
+    fair_value_per_share: Decimal | None = None
+    price: Decimal | None = Field(default=None, description="Null before the IPO.")
+
+
+class SimulatedAssetOut(BaseModel):
+    asset_id: UUID
+    name: str
+    status: Literal["rerated", "already_done", "skipped", "failed", "in_progress", "stopped"]
+    detail: str | None = Field(
+        default=None,
+        description="Why it was skipped, failed or stopped (`no_time_machine_version`, "
+        "`no_current_metrics`, `rating_rate_limited`, `llm_budget_exhausted`, a run error…).",
+    )
+    run_id: UUID | None = None
+    before: AssetRatingOut | None = None
+    after: AssetRatingOut | None = None
+    alert_ids: list[UUID] = Field(default_factory=list)
+    payout: Literal["paid", "already_paid", "skipped", "failed"] | None = None
+    payout_detail: str | None = None
+
+
 class SimulateQuarterResponse(BaseModel):
+    """What a Time Machine quarter actually did, per listed asset."""
+
+    step: int
+    period: str
+    scenario: str
     data_version: str
+    payout_label: str = Field(description="The payouts' `quarter_label`, e.g. `2026Q4-sim-1`.")
+    replayed: bool = Field(description="True when the world was already at this quarter.")
     assets_rerated: int
-    message: str
+    assets_failed: int
+    assets_skipped: int
+    payouts: int
+    alerts: int
+    stopped: str | None = Field(
+        default=None,
+        description="`llm_budget_exhausted`, `job_budget_exhausted` or a rate limit: later "
+        "assets weren't re-rated; replay the quarter to finish them.",
+    )
+    assets: list[SimulatedAssetOut]
 
 
 class SimulateEventRequest(BaseModel):
     asset_id: UUID
-    preset: Literal["fire", "encroachment", "drought", "restoration", "protection"]
+    preset: PresetNameOut
 
 
 class SimulateEventResponse(BaseModel):
     event: EventOut
+    preset: PresetNameOut
+    period: str
+    data_version: str
+    description: str = Field(description="The deterministic change applied to the metrics.")
+    run_id: UUID | None = None
+    before: AssetRatingOut | None = None
+    after: AssetRatingOut | None = None
+    alert_ids: list[UUID] = Field(default_factory=list)
     alert_created: bool
 
 

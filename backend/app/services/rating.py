@@ -13,7 +13,8 @@ Storage without new columns (T19):
 - `reports.auditor_json["rating"]`: the deterministic snapshot (`SiteRating.snapshot`).
   The Auditor's own output goes under `auditor_json["auditor"]` (T26).
 - `metrics.data_version`: `sim-N` marks a simulated version (dev-spec §5); its full scenario
-  labels live in the report's `simulated` flag and snapshot.
+  labels live in the report's `simulated` flag and snapshot, and since T38 the whole document
+  is in `metrics.provenance` (the Time Machine's starting point for an event preset).
 
 Audited reports (T27): `rate_asset(..., events=, audit=, run=)` scores the same metrics with the
 run's events, then applies the Auditor's bounded adjustment and agreement through
@@ -439,6 +440,7 @@ def _metrics_row(world_id: UUID, asset_id: UUID, metrics: EarthObsMetrics) -> Me
         forest_loss_ha=dec(metrics.forest_loss_ha, "0.01"),
         biomass_t_ha=dec(metrics.biomass_t_ha, "0.01"),
         cloud_free_obs=metrics.cloud_free_obs,
+        provenance=metrics.model_dump(mode="json", by_alias=True),
     )
 
 

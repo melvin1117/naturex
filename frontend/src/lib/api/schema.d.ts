@@ -960,6 +960,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/time-machine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Time Machine
+         * @description The world's Time Machine quarter, the next one and the event presets (T38). `available`
+         *     is false outside a sandbox (the live world): hide the controls, both actions answer 409
+         *     `time_machine_sandbox_only`.
+         */
+        get: operations["get_time_machine_admin_time_machine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/simulate/quarter": {
         parameters: {
             query?: never;
@@ -969,7 +991,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Simulate Quarter */
+        /**
+         * Simulate Quarter
+         * @description Advance the world to the next Time Machine quarter (or replay the current one): re-rate
+         *     every listed asset with that quarter's scenario, re-anchor prices, alert and pay the
+         *     quarter's revenue (T38). Runs inline, so the answer is what actually happened; progress also
+         *     streams as `rating_progress` events (trigger `time_machine`).
+         */
         post: operations["simulate_quarter_admin_simulate_quarter_post"];
         delete?: never;
         options?: never;
@@ -988,7 +1016,10 @@ export interface paths {
         put?: never;
         /**
          * Simulate Event
-         * @description Stub event for an asset in the caller's world (T38 persists it and re-rates).
+         * @description Inject an event preset into one asset of the caller's world: its deterministic effect on
+         *     the metrics, a re-rate (alert and price re-anchor as for any re-rate), then the stored event
+         *     and, for severity ≥ 4, its own alert (T38). The world's quarter doesn't move. Allowed with
+         *     `LOCAL_JOBS=false` (one asset, one run).
          */
         post: operations["simulate_event_admin_simulate_event_post"];
         delete?: never;
@@ -1704,6 +1735,34 @@ export interface components {
             truncated: boolean;
         };
         /**
+         * AssetRatingOut
+         * @description An asset's latest report and price at one moment, as stored.
+         */
+        AssetRatingOut: {
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /** Version */
+            version: number;
+            /** Health Score */
+            health_score?: string | null;
+            /** Grade */
+            grade?: string | null;
+            /** Data Version */
+            data_version?: string | null;
+            /** Simulated */
+            simulated: boolean;
+            /** Fair Value Per Share */
+            fair_value_per_share?: string | null;
+            /**
+             * Price
+             * @description Null before the IPO.
+             */
+            price?: string | null;
+        };
+        /**
          * AssetStatus
          * @enum {string}
          */
@@ -2079,6 +2138,35 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** EventPresetOut */
+        EventPresetOut: {
+            /**
+             * Preset
+             * @enum {string}
+             */
+            preset: "fire" | "encroachment" | "drought" | "restoration" | "protection";
+            /** Label */
+            label: string;
+            /** Impact Type */
+            impact_type: string;
+            /**
+             * Direction
+             * @description -1 harms the site, 1 helps it.
+             */
+            direction: number;
+            /** Severity */
+            severity: number;
+            /**
+             * Alerts
+             * @description Severity ≥ 4: the event itself alerts the holders and community (besides any alert the re-rate raises).
+             */
+            alerts: boolean;
+            /**
+             * Description
+             * @description The generic effect; curated sites use their own scripted encroachment and restoration.
+             */
+            description: string;
         };
         /**
          * EvidenceKind
@@ -3275,17 +3363,107 @@ export interface components {
         /** SimulateEventResponse */
         SimulateEventResponse: {
             event: components["schemas"]["EventOut"];
+            /**
+             * Preset
+             * @enum {string}
+             */
+            preset: "fire" | "encroachment" | "drought" | "restoration" | "protection";
+            /** Period */
+            period: string;
+            /** Data Version */
+            data_version: string;
+            /**
+             * Description
+             * @description The deterministic change applied to the metrics.
+             */
+            description: string;
+            /** Run Id */
+            run_id?: string | null;
+            before?: components["schemas"]["AssetRatingOut"] | null;
+            after?: components["schemas"]["AssetRatingOut"] | null;
+            /** Alert Ids */
+            alert_ids?: string[];
             /** Alert Created */
             alert_created: boolean;
         };
-        /** SimulateQuarterResponse */
+        /** SimulateQuarterRequest */
+        SimulateQuarterRequest: {
+            /**
+             * Period
+             * @description The quarter to run: the world's next quarter (advances it) or its current one (replays it: only what failed is redone, nothing is paid twice).
+             */
+            period: string;
+        };
+        /**
+         * SimulateQuarterResponse
+         * @description What a Time Machine quarter actually did, per listed asset.
+         */
         SimulateQuarterResponse: {
+            /** Step */
+            step: number;
+            /** Period */
+            period: string;
+            /** Scenario */
+            scenario: string;
             /** Data Version */
             data_version: string;
+            /**
+             * Payout Label
+             * @description The payouts' `quarter_label`, e.g. `2026Q4-sim-1`.
+             */
+            payout_label: string;
+            /**
+             * Replayed
+             * @description True when the world was already at this quarter.
+             */
+            replayed: boolean;
             /** Assets Rerated */
             assets_rerated: number;
-            /** Message */
-            message: string;
+            /** Assets Failed */
+            assets_failed: number;
+            /** Assets Skipped */
+            assets_skipped: number;
+            /** Payouts */
+            payouts: number;
+            /** Alerts */
+            alerts: number;
+            /**
+             * Stopped
+             * @description `llm_budget_exhausted`, `job_budget_exhausted` or a rate limit: later assets weren't re-rated; replay the quarter to finish them.
+             */
+            stopped?: string | null;
+            /** Assets */
+            assets: components["schemas"]["SimulatedAssetOut"][];
+        };
+        /** SimulatedAssetOut */
+        SimulatedAssetOut: {
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "rerated" | "already_done" | "skipped" | "failed" | "in_progress" | "stopped";
+            /**
+             * Detail
+             * @description Why it was skipped, failed or stopped (`no_time_machine_version`, `no_current_metrics`, `rating_rate_limited`, `llm_budget_exhausted`, a run error…).
+             */
+            detail?: string | null;
+            /** Run Id */
+            run_id?: string | null;
+            before?: components["schemas"]["AssetRatingOut"] | null;
+            after?: components["schemas"]["AssetRatingOut"] | null;
+            /** Alert Ids */
+            alert_ids?: string[];
+            /** Payout */
+            payout?: ("paid" | "already_paid" | "skipped" | "failed") | null;
+            /** Payout Detail */
+            payout_detail?: string | null;
         };
         /**
          * SiteImages
@@ -3404,6 +3582,59 @@ export interface components {
             outline_color: string;
             /** Attributions */
             attributions: string[];
+        };
+        /**
+         * TimeMachineOut
+         * @description Where the caller's world stands on the Time Machine timeline (T38).
+         */
+        TimeMachineOut: {
+            /**
+             * Available
+             * @description False outside a sandbox (the live world): hide the Time Machine; both actions answer 409 `time_machine_sandbox_only`.
+             */
+            available: boolean;
+            /**
+             * Unavailable Reason
+             * @description Why `available` is false.
+             */
+            unavailable_reason?: "time_machine_sandbox_only" | null;
+            /** Step */
+            step: number;
+            current: components["schemas"]["TimeMachineQuarter"];
+            /** @description The quarter `POST /admin/simulate/quarter` advances to; null at the end of the timeline (reset the demo to start again). */
+            next: components["schemas"]["TimeMachineQuarter"] | null;
+            /** Timeline */
+            timeline: components["schemas"]["TimeMachineQuarter"][];
+            /** Presets */
+            presets: components["schemas"]["EventPresetOut"][];
+            /**
+             * Local Jobs
+             * @description False: `Next quarter` is off (`LOCAL_JOBS=false`).
+             */
+            local_jobs: boolean;
+        };
+        /**
+         * TimeMachineQuarter
+         * @description One entry of the Time Machine timeline (`data/demo_sites/scenarios.json`).
+         */
+        TimeMachineQuarter: {
+            /**
+             * Step
+             * @description 0 is the observed baseline.
+             */
+            step: number;
+            /**
+             * Period
+             * @description The quarter it is shown as, e.g. `2026Q4`.
+             */
+            period: string;
+            /** Scenario */
+            scenario: string;
+            /**
+             * Data Version
+             * @description `sim-N` for a simulated quarter; null for the observed baseline.
+             */
+            data_version: string | null;
         };
         /**
          * TopHolderOut
@@ -6160,7 +6391,7 @@ export interface operations {
             };
         };
     };
-    simulate_quarter_admin_simulate_quarter_post: {
+    get_time_machine_admin_time_machine_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -6168,6 +6399,37 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeMachineOut"];
+                };
+            };
+            /** @description Not allowed: `admin_only` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    simulate_quarter_admin_simulate_quarter_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimulateQuarterRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -6184,6 +6446,22 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description `quarter_mismatch` (not the world's next or current quarter; see `GET /admin/time-machine`), `timeline_end` (reset the demo to start again), `time_machine_sandbox_only` (not a sandbox: the live world) or `local_jobs_disabled` (`LOCAL_JOBS=false`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -6216,6 +6494,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description `asset_not_listed`, `no_current_metrics` (no stored rating to start from), `time_machine_sandbox_only` (not a sandbox: the live world), `run_in_progress` (Location: the active run) or `stale_metrics` (the asset was re-rated meanwhile; Location: the run; nothing was stored, try again) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -6224,6 +6509,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description `rating_rate_limited` or `rating_global_limit`; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `rating_busy`, `llm_budget_exhausted`, `rerate_failed` (Location: the run; nothing was stored) or `event_not_recorded` (Location: the run; the re-rate is sealed but its event isn't stored) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

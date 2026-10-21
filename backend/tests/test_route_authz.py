@@ -52,6 +52,7 @@ from app.models import (
     World,
 )
 from app.routers import market
+from app.routers.admin import get_time_machine_env
 from app.routers.runs import get_rating_runner
 from app.sandbox import create_world, ensure_live_world
 from app.seed import LIVE_WORLD_ID, seed
@@ -59,7 +60,7 @@ from app.seed import WORLD_ID as TEMPLATE_WORLD_ID
 from app.services import alerts
 from tests.conftest import alembic_cfg, requires_db
 from tests.test_geometry import square as geometry_square
-from tests.worlds import drop_worlds, start_demo
+from tests.worlds import drop_worlds, mock_time_machine_env, start_demo
 
 # Routes anyone may call without an authorization dependency, with the reason.
 PUBLIC: dict[tuple[str, str], str] = {
@@ -167,6 +168,7 @@ def test_the_inventory_catches_a_route_without_authorization() -> None:
 
 def test_admin_routes_are_operator_only() -> None:
     actions = route_actions(app)
+    assert actions[("GET", "/admin/time-machine")] == {Action.OPERATE}
     assert actions[("POST", "/admin/simulate/quarter")] == {Action.OPERATE}
     assert actions[("POST", "/admin/simulate/event")] == {Action.OPERATE}
     assert actions[("POST", "/admin/tamper-demo")] == {Action.TAMPER_DEMO}
@@ -245,6 +247,7 @@ def runner() -> RecordingRunner:
 def client(session: Session, runner: RecordingRunner) -> Iterator[TestClient]:
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_rating_runner] = lambda: runner
+    app.dependency_overrides[get_time_machine_env] = lambda: mock_time_machine_env(session)
     yield TestClient(app)
     app.dependency_overrides.clear()
 

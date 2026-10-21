@@ -150,7 +150,7 @@ def claim(session: Session, job: Job, period: str, world_id: UUID, asset_id: UUI
         .values(job=job, period=period, asset_id=asset_id, world_id=world_id, status="running")
         .on_conflict_do_update(
             index_elements=["job", "period", "asset_id"],
-            set_={"status": "running", "detail": None, "updated_at": func.now()},
+            set_={"status": "running", "detail": None, "run_id": None, "updated_at": func.now()},
             where=or_(
                 table.c.status == "failed",
                 (table.c.status == "running") & (table.c.updated_at < stale),
@@ -170,7 +170,9 @@ def finish(
     asset_id: UUID,
     status: Literal["done", "failed", "skipped"],
     detail: str | None = None,
+    run_id: UUID | None = None,
 ) -> None:
+    """Settle a claim; `run_id` is the rating run that settled a re-rate claim, if any."""
     session.execute(
         update(MonitorRun)
         .where(
@@ -181,6 +183,7 @@ def finish(
         .values(
             status=status,
             detail=detail[:DETAIL_MAX] if detail else None,
+            run_id=run_id,
             updated_at=func.now(),
         )
     )
@@ -286,9 +289,11 @@ def _rerate_claimed(
         if not claim(session, RERATE, report.period, report.world_id, asset_id):
             report.skipped.append((asset_id, "claimed"))
             return
-    status, detail = _rerate_one(session_factory, runner, report.world_id, asset_id, asset_count)
+    status, detail, run_id = _rerate_one(
+        session_factory, runner, report.world_id, asset_id, asset_count
+    )
     with session_factory() as session:
-        finish(session, RERATE, report.period, asset_id, status, detail)
+        finish(session, RERATE, report.period, asset_id, status, detail, run_id)
     if status == "done":
         report.done.append(asset_id)
     elif status == "skipped":
@@ -316,7 +321,7 @@ def _settle_payout(session_factory: SessionFactory, report: JobReport, asset_id:
             return
     status: Literal["done", "failed", "skipped"]
     try:
-        status, detail = _pay(session_factory, report.world_id, asset_id, report.period)
+        status, detail = pay_period(session_factory, report.world_id, asset_id, report.period)
     except Exception as exc:  # anything unexpected: retried by the next run
         log.exception("payout failed for %s %s", asset_id, report.period)
         status, detail = "failed", f"payout_failed:{type(exc).__name__}"
@@ -334,31 +339,44 @@ def _rerate_one(
     world_id: UUID,
     asset_id: UUID,
     asset_count: int,
-) -> tuple[Literal["done", "failed", "skipped"], str | None]:
-    try:
-        run_id = runner.start(
+) -> tuple[Literal["done", "failed", "skipped"], str | None, UUID | None]:
+    return run_to_end(
+        session_factory,
+        lambda: runner.start(
             world_id, asset_id, trigger="scheduled", max_runs_per_hour=asset_count + 1
-        )
+        ),
+        world_id,
+    )
+
+
+def run_to_end(
+    session_factory: SessionFactory, start: Callable[[], UUID], world_id: UUID
+) -> tuple[Literal["done", "failed", "skipped"], str | None, UUID | None]:
+    """Start one inline rating run and read how it ended: `done` (a report was sealed),
+    `skipped` (the asset can't be rated) or `failed` (retried by the next run), with a detail
+    and the run's ID. Shared by `rerate_all` and T38's Time Machine."""
+    try:
+        run_id = start()
     except AssetNotRateable as exc:
-        return "skipped", exc.code
+        return "skipped", exc.code, None
     except LookupError:
-        return "skipped", "asset_not_found"
+        return "skipped", "asset_not_found", None
     except RunRateLimited as exc:
-        return "failed", exc.code
+        return "failed", exc.code, None
     except RunInProgress:
-        return "failed", "run_in_progress"
+        return "failed", "run_in_progress", None
     except RunnerBusy:
-        return "failed", "rating_busy"
+        return "failed", "rating_busy", None
     with session_factory() as session:
         run = get_run(session, world_id, run_id)
     if run is None:
-        return "failed", "run_not_found"
+        return "failed", "run_not_found", run_id
     if run.status in (RatingRunStatus.SUCCEEDED, RatingRunStatus.DEGRADED):
-        return "done", f"run={run_id} status={run.status.value}"
-    return "failed", run.error or run.status.value
+        return "done", f"run={run_id} status={run.status.value}", run_id
+    return "failed", run.error or run.status.value, run_id
 
 
-def _pay(
+def pay_period(
     session_factory: SessionFactory, world_id: UUID, asset_id: UUID, period: str
 ) -> tuple[Literal["done", "skipped"], str]:
     """Pay the quarter's revenue from the latest report's value (T41), once per asset and

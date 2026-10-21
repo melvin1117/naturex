@@ -40,12 +40,13 @@ from app.models import (
     UserSession,
     World,
 )
+from app.routers.admin import get_time_machine_env
 from app.routers.runs import get_rating_runner
 from app.sandbox import _delete_world_rows, create_world, ensure_live_world, prune_stale_worlds
 from app.seed import LIVE_WORLD_ID, seed
 from app.seed import WORLD_ID as TEMPLATE_WORLD_ID
 from tests.conftest import alembic_cfg, requires_db
-from tests.worlds import sign_in, start_demo
+from tests.worlds import mock_time_machine_env, sign_in, start_demo
 
 PASSWORD = "correct horse battery"
 # Unsafe routes that stay open to anonymous callers: signing in, and signing out (a no-op).
@@ -71,6 +72,7 @@ def session() -> Iterator[Session]:
 @pytest.fixture
 def client(session: Session) -> Iterator[TestClient]:
     app.dependency_overrides[get_session] = lambda: session
+    app.dependency_overrides[get_time_machine_env] = lambda: mock_time_machine_env(session)
     yield TestClient(app)
     app.dependency_overrides.clear()
 

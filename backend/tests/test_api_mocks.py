@@ -46,8 +46,10 @@ def test_create_asset_needs_a_signed_in_member() -> None:
 
 
 @pytest.mark.usefixtures("signed_in")
-def test_admin_simulate_quarter() -> None:
-    assert client.post("/admin/simulate/quarter").status_code == 200
+def test_admin_simulate_quarter_names_a_quarter() -> None:
+    """T38: the quarter is named, so a replayed request can't advance the world twice."""
+    for body in ({}, {"period": "2026-Q4"}, {"period": "Q4"}):
+        assert client.post("/admin/simulate/quarter", json=body).status_code == 422, body
 
 
 def test_stub_writes_need_a_session() -> None:

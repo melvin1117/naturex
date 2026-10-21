@@ -22,6 +22,7 @@ from app.llm import LLMClient
 from app.main import app
 from app.models import Asset, Report
 from app.routers import reports as reports_router
+from app.routers.admin import get_time_machine_env
 from app.sandbox import create_world, ensure_live_world
 from app.schemas import ReportSummarySource
 from app.seed import DEMO_SITES, LIVE_WORLD_ID, WORLD_ID, seed
@@ -31,7 +32,7 @@ from app.tools.earth_obs import load_site_metrics
 from tests.conftest import alembic_cfg, requires_db
 from tests.test_summary import FakeTransport, MemoryCallLog, reply
 from tests.test_summary import settings as summary_settings
-from tests.worlds import start_demo
+from tests.worlds import mock_time_machine_env, start_demo
 
 HERO = "wetland_mx"
 D = Decimal
@@ -57,6 +58,7 @@ def client(session: Session) -> Iterator[TestClient]:
     app.dependency_overrides[get_session] = lambda: session
     # USE_MOCKS=true (the default): no live LLM call, but every number comes from the DB.
     app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None, use_mocks=True)
+    app.dependency_overrides[get_time_machine_env] = lambda: mock_time_machine_env(session)
     clear_summary_cache()
     with TestClient(app) as test_client:
         start_demo(test_client, session)

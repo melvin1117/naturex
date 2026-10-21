@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import logging
 from collections.abc import Callable, Sequence
-from concurrent.futures import Executor, Future
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
@@ -18,20 +17,8 @@ from app.config import Settings, get_settings, validate_mock_settings
 from app.db import engine
 from app.llm import DbCallLog, get_llm_client
 from app.services.monitoring import JobReport, NewsFn, SessionFactory, parse_job_cap
-from app.services.rating_runs import RatingRunner, build_runner, news_runner
+from app.services.rating_runs import InlineExecutor, RatingRunner, build_runner, news_runner
 from app.worlds import LIVE_WORLD_ID
-
-
-class InlineExecutor(Executor):
-    """Runs each rating run in the calling thread, so a job waits for every run it starts."""
-
-    def submit(self, fn: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Future[Any]:
-        future: Future[Any] = Future()
-        try:
-            future.set_result(fn(*args, **kwargs))
-        except BaseException as exc:
-            future.set_exception(exc)
-        return future
 
 
 def session_factory() -> Session:

@@ -14,7 +14,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import median
-from typing import Any, get_args
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -45,8 +45,9 @@ class ScenarioVersion(BaseModel):
 
     scenario: ScenarioName
     period: str = Field(pattern=r"^\d{4}Q[1-4]$")
-    data_version: str | None = Field(default=None, pattern=r"^sim-\d+$")
-    """``None`` for the observed baseline, which keeps its own ``data_version``."""
+    data_version: str | None = Field(default=None, pattern=r"^sim-\d+(-[a-z]+)?$")
+    """``None`` for the observed baseline, which keeps its own ``data_version``; ``sim-N`` for a
+    timeline quarter, ``sim-N-<preset>`` for an event preset injected at step N (T38)."""
     based_on: ScenarioName | None = None
 
 
@@ -334,3 +335,188 @@ def build_site_scenarios(
 def scenario_document(metrics: EarthObsMetrics) -> dict[str, Any]:
     """Committed JSON form of a simulated version (sorted keys, 4 dp)."""
     return dict(round_floats(metrics.model_dump(mode="json", by_alias=True)))
+
+
+# --- Time Machine: quarters and event presets (T38) ---
+
+PresetName = Literal["fire", "encroachment", "drought", "restoration", "protection"]
+PRESET_NAMES: tuple[PresetName, ...] = get_args(PresetName)
+
+
+@dataclass(frozen=True, slots=True)
+class EventPreset:
+    """An event the admin can inject: what the event says and its deterministic effect."""
+
+    name: PresetName
+    label: str
+    impact_type: str
+    """News Scout's impact type (`events.impact_type`)."""
+    direction: Literal[-1, 1]
+    severity: int
+    """1-5; 4 or more alerts the asset's holders and community like a news item (T75)."""
+    deltas: ScenarioDeltas
+    """The effect on any site; curated sites use their own scripted encroachment and
+    restoration (`scenarios.json`) instead."""
+
+
+def _transfer(sources: tuple[str, ...], to: str, pp: float) -> dict[str, Any]:
+    return {"from": sources, "to": to, "pp": pp}
+
+
+EVENT_PRESETS: dict[PresetName, EventPreset] = {
+    "fire": EventPreset(
+        name="fire",
+        label="Fire",
+        impact_type="fire",
+        direction=-1,
+        severity=4,
+        deltas=ScenarioDeltas.model_validate(
+            {
+                "description": "A wildfire burns part of the site: 6 pp of trees, scrub and "
+                "grass become bare ground, the last 12 months brown and biomass drops 12%.",
+                "landcover_transfers": [
+                    _transfer(("trees", "shrub_and_scrub", "grass"), "bare", 6)
+                ],
+                "ndvi_step_last_12m": -0.10,
+                "biomass_pct_change": -12,
+            }
+        ),
+    ),
+    "encroachment": EventPreset(
+        name="encroachment",
+        label="Encroachment",
+        impact_type="encroachment",
+        direction=-1,
+        severity=4,
+        deltas=ScenarioDeltas.model_validate(
+            {
+                "description": "Encroachment clears part of the site: 5 pp of trees, scrub, "
+                "grass and flooded vegetation become built land and 3 pp crops, the last 12 "
+                "months brown and biomass drops 6%.",
+                "landcover_transfers": [
+                    _transfer(
+                        ("trees", "shrub_and_scrub", "grass", "flooded_vegetation"), "built", 5
+                    ),
+                    _transfer(
+                        ("trees", "shrub_and_scrub", "grass", "flooded_vegetation"), "crops", 3
+                    ),
+                ],
+                "ndvi_step_last_12m": -0.06,
+                "biomass_pct_change": -6,
+            }
+        ),
+    ),
+    "drought": EventPreset(
+        name="drought",
+        label="Drought",
+        impact_type="drought",
+        direction=-1,
+        severity=4,
+        deltas=ScenarioDeltas.model_validate(
+            {
+                "description": "A severe drought: 4 pp of open water and flooded vegetation "
+                "dry out to bare ground, the last 12 months brown, surface water falls and "
+                "biomass drops 3%.",
+                "landcover_transfers": [_transfer(("water", "flooded_vegetation"), "bare", 4)],
+                "ndvi_step_last_12m": -0.06,
+                "water_change_delta": -20,
+                "biomass_pct_change": -3,
+            }
+        ),
+    ),
+    "restoration": EventPreset(
+        name="restoration",
+        label="Restoration",
+        impact_type="restoration",
+        direction=1,
+        severity=2,
+        deltas=ScenarioDeltas.model_validate(
+            {
+                "description": "A restoration project succeeds: 4 pp of bare, built and "
+                "cropped land is replanted with trees, the last 12 months are greener and "
+                "biomass grows 3%.",
+                "landcover_transfers": [_transfer(("bare", "built", "crops"), "trees", 4)],
+                "ndvi_step_last_12m": 0.03,
+                "biomass_pct_change": 3,
+            }
+        ),
+    ),
+    "protection": EventPreset(
+        name="protection",
+        label="Protection",
+        impact_type="protection",
+        direction=1,
+        severity=2,
+        deltas=ScenarioDeltas.model_validate(
+            {
+                "description": "A new protection law halts clearing: 1 pp of bare, built and "
+                "cropped land starts to regrow as scrub, the last 12 months are slightly "
+                "greener and biomass grows 1%.",
+                "landcover_transfers": [
+                    _transfer(("bare", "built", "crops"), "shrub_and_scrub", 1)
+                ],
+                "ndvi_step_last_12m": 0.01,
+                "biomass_pct_change": 1,
+            }
+        ),
+    ),
+}
+
+
+def fit_deltas(deltas: ScenarioDeltas, landcover: Mapping[str, float]) -> ScenarioDeltas:
+    """``deltas`` with each land-cover transfer capped at what its source classes hold then
+    (4 dp, rounded down); a transfer with nothing left to move is dropped.
+
+    Returns ``deltas`` itself when every transfer fits, so a quarter applied to a committed
+    version gives exactly the committed next version. A site already damaged by a preset
+    can't then make `apply_landcover_transfers` refuse the quarter.
+    """
+    shares = {name: float(landcover.get(name, 0.0)) for name in LANDCOVER_CLASSES}
+    fitted: list[Any] = []
+    changed = False
+    for transfer in deltas.landcover_transfers:
+        sources = [name for name in transfer.from_classes if name != transfer.to]
+        available = sum(shares[name] for name in sources)
+        pp = min(transfer.pp, math.floor(available * 100 * _UNIT) / _UNIT)
+        if pp < transfer.pp:
+            changed = True
+        if pp <= 0:
+            continue
+        fitted.append(transfer if pp == transfer.pp else transfer.model_copy(update={"pp": pp}))
+        amount = pp / 100
+        for name in sources:
+            shares[name] = max(shares[name] - amount * shares[name] / available, 0.0)
+        shares[transfer.to] += amount
+    if not changed:
+        return deltas
+    return deltas.model_copy(update={"landcover_transfers": tuple(fitted)})
+
+
+def preset_deltas(preset: PresetName, site_key: str | None, spec: ScenarioSpec) -> ScenarioDeltas:
+    """A curated site's own scripted encroachment or restoration (T13 notes), else the
+    preset's generic effect."""
+    site = spec.sites.get(site_key or "")
+    if site is not None and preset in site:
+        return site[preset]
+    return EVENT_PRESETS[preset].deltas
+
+
+def timeline_version(spec: ScenarioSpec, step: int) -> ScenarioVersion:
+    """The timeline entry a world at `step` stands at (0 = the observed baseline)."""
+    if not 0 <= step < len(spec.timeline):
+        raise ValueError(f"step {step} is outside the {len(spec.timeline)}-entry timeline")
+    return spec.timeline[step]
+
+
+def preset_version(preset: PresetName, step: int, period: str) -> ScenarioVersion:
+    """The labels of a preset injected while the world stands at `step` (shown as `period`)."""
+    return ScenarioVersion(scenario=preset, period=period, data_version=f"sim-{step}-{preset}")
+
+
+def advance(
+    current: EarthObsMetrics, deltas: ScenarioDeltas, version: ScenarioVersion
+) -> EarthObsMetrics:
+    """The asset's next simulated version: `deltas` (fitted to its land cover) applied to its
+    current metrics, labelled `version`. Pure and deterministic; raises ValueError only for a
+    version that can't be simulated (the baseline)."""
+    return apply_scenario(current, fit_deltas(deltas, current.landcover), version)

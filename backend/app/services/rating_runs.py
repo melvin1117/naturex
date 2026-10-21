@@ -36,7 +36,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
-from concurrent.futures import Executor, ThreadPoolExecutor
+from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -71,6 +71,7 @@ from app.agents.orchestrator import (
 from app.config import Settings
 from app.events import lock_world_publisher, publish
 from app.llm import CallLog, CallRecord, LLMClient, LLMError, LLMResult
+from app.market.anchoring import reanchor_on_rerate
 from app.models import Asset, AssetStatus, Report, StreamEventType, World, WorldEvent
 from app.schemas import (
     NewsScoutOutput,
@@ -120,6 +121,8 @@ REQUIRED_TOOLS = frozenset({Tool.EARTH_OBS, Tool.VALUATION, Tool.AUDITOR})
 NO_CACHED_METRICS = "no_cached_metrics"
 NOT_COMPUTED = frozenset({"stale", f"earth_obs_failed:{EARTH_ENGINE_BUSY}"})
 """Run failures that never reached Earth Engine, so their live rating is refunded (T60)."""
+STALE_METRICS = "stale_metrics"
+"""The asset was re-rated after the caller computed its metrics (T38): the run stores nothing."""
 LIVE_METRICS_PENDING = "live_metrics_pending"
 """Live Earth Engine is on but this polygon isn't computed yet, and the run may not compute it
 (only a listing submit, which counts against the live-rating quota, may)."""
@@ -186,6 +189,12 @@ class RunSpec:
     audience: UUID | None = None
     """Live-event audience: None for a public asset; the listing's community while it's under
     review (T58), so its progress never reaches the public stream."""
+    metrics: EarthObsMetrics | None = None
+    """Metrics computed by the caller (T38's Time Machine: a quarter or an event preset applied
+    to the asset's current state) instead of the loader's; they must describe the asset."""
+    based_on_report: int | None = None
+    """The report version `metrics` was computed from (T38): if the asset's latest report is
+    another one when the run stores, the run fails with `stale_metrics` and writes nothing."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,6 +314,14 @@ def _describes_polygon(asset: AssetInfo, metrics: EarthObsMetrics) -> bool:
         metrics_lat=metrics.centroid.lat,
         metrics_lon=metrics.centroid.lon,
     )
+
+
+def given_metrics_fit(asset: AssetInfo, metrics: EarthObsMetrics) -> bool:
+    """Caller-computed metrics (T38) describe the run's asset: a curated site's own key, or for a
+    new polygon its area and centroid (never a curated site's data)."""
+    if asset.site_key is not None:
+        return metrics.site_key == asset.site_key
+    return _describes_polygon(asset, metrics)
 
 
 def asset_info(asset: Asset) -> AssetInfo:
@@ -671,6 +688,11 @@ class RunToolbox:
                 raise AssertionError(tool)
 
     def _load_metrics(self) -> EarthObsMetrics:
+        given = self._spec.metrics
+        if given is not None:
+            if not given_metrics_fit(self._asset, given):
+                raise ToolFailed("foreign_metrics", retryable=False)
+            return given
         return resolve_metrics(
             self._deps.metrics_loader,
             self._asset,
@@ -870,6 +892,9 @@ class RatingRunner:
         trigger: Trigger = "api",
         max_runs_per_hour: int | None = None,
         on_queue: QueueHook | None = None,
+        metrics: EarthObsMetrics | None = None,
+        based_on_report: int | None = None,
+        inline: bool = False,
     ) -> UUID:
         """Record a queued run and hand it to a worker; returns its `run_id`.
 
@@ -880,7 +905,11 @@ class RatingRunner:
         publisher lock) and writes once every check passed, just before `queued` is published,
         so its writes commit with the queued run or not at all. Without it, listings under
         review are refused (`asset_is_draft`, `asset_not_listed`): they are rated through
-        submit only.
+        submit only. ``metrics`` (T38's Time Machine) replaces the loader's metrics for this run;
+        its scenario is the run's, and ``based_on_report`` is the report version they were
+        computed from (see `RunSpec`). ``inline`` executes the run in the calling thread before
+        returning (T38), still holding one of this runner's slots, so inline and pooled runs
+        share the same concurrency limit.
         """
         if not self._slots.acquire(blocking=False):
             raise RunnerBusy()
@@ -889,15 +918,20 @@ class RatingRunner:
                 run_id=uuid4(),
                 world_id=world_id,
                 asset_id=asset_id,
-                scenario=scenario or "baseline",
+                scenario=metrics.scenario if metrics is not None else scenario or "baseline",
                 trigger=trigger,
+                metrics=metrics,
+                based_on_report=based_on_report,
             )
             cap = max_runs_per_hour or self.settings.rating_runs_per_world_per_hour
             spec = self._enqueue(spec, cap, on_queue)
-            self.executor.submit(self._execute_and_release, spec)
+            if not inline:
+                self.executor.submit(self._execute_and_release, spec)
         except BaseException:
             self._slots.release()
             raise
+        if inline:
+            self._execute_and_release(spec)  # `execute` never raises; releases the slot
         return spec.run_id
 
     def _enqueue(self, spec: RunSpec, cap: int, on_queue: QueueHook | None = None) -> RunSpec:
@@ -1184,6 +1218,10 @@ class RatingRunner:
             except LookupError as exc:
                 raise RunAborted("asset_not_found") from exc
             previous = latest_report(session, spec.world_id, spec.asset_id)
+            if spec.based_on_report is not None and (
+                previous is None or previous.version != spec.based_on_report
+            ):
+                raise RunAborted(STALE_METRICS)  # re-rated since: the metrics are out of date
             # `rate_asset` prices per share with the locked row's `total_shares`, re-read here,
             # never the `AssetInfo` captured when the run started: an IPO (T59) may have set
             # the share count since (launches are refused while a run is active; this is
@@ -1230,6 +1268,9 @@ class RatingRunner:
             # T75: health Δ ≥ 5 or a grade change alerts the holders and the community, with
             # the report (same transaction, so no alert without its report).
             alert_on_rerate(session, spec.world_id, asset, previous, report)
+            # T38: a re-rate of a trading asset that changed its data or health pulls its price
+            # toward the new fair value.
+            reanchor_on_rerate(session, asset, previous, report)
             events = _run_events(session, spec.world_id, spec.run_id)
             if events is None:
                 raise RuntimeError("completed rating run has no progress events")
@@ -1562,6 +1603,19 @@ def get_run_trace(session: Session, world_id: UUID, run_id: UUID) -> RunTraceOut
 
 
 # ----- the process-wide runner ------------------------------------------------------------------
+
+
+class InlineExecutor(Executor):
+    """Runs each rating run in the calling thread, so the caller waits for every run it starts
+    (T75's jobs, T38's Time Machine)."""
+
+    def submit(self, fn: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Future[Any]:
+        future: Future[Any] = Future()
+        try:
+            future.set_result(fn(*args, **kwargs))
+        except BaseException as exc:
+            future.set_exception(exc)
+        return future
 
 
 _default_runner: RatingRunner | None = None
