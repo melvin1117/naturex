@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
 import { GradeBadge } from "@/components/proto/grade";
+import { focusIfLost } from "@/components/steward/focus";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -114,6 +115,16 @@ export function RatingStep({
   );
   const outcome = listingOutcome(asset);
   const draft = asset.status === "draft";
+  // "Rate this site" disables, then gives way to the run: keep focus on this card's title.
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const busy = submit.isPending || submittedRunId !== null;
+  const shown = useRef({ draft, busy });
+  useEffect(() => {
+    const was = shown.current;
+    if (was.draft === draft && was.busy === busy) return;
+    shown.current = { draft, busy };
+    focusIfLost(titleRef.current);
+  }, [draft, busy]);
 
   async function rate() {
     setFailure(null);
@@ -135,7 +146,12 @@ export function RatingStep({
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
       <StepCard aria-labelledby="listing-state-title">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 id="listing-state-title" className="text-lg font-semibold">
+          <h2
+            ref={titleRef}
+            id="listing-state-title"
+            tabIndex={-1}
+            className="text-lg font-semibold outline-none"
+          >
             {draft ? "Ready to rate" : outcome.title}
           </h2>
           {asset.mock && <MockBadge />}
