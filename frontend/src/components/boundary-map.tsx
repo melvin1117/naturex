@@ -1,13 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import {
-  type RefObject,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import { cn } from "cn";
 
 import {
@@ -25,7 +19,7 @@ export const CARD_FRAME: BoundaryFrame = { width: 384, height: 216 };
 /** A backdrop's frame before it's measured, or where layout isn't available. */
 export const BACKDROP_FRAME: BoundaryFrame = { width: 960, height: 540 };
 /** A measured frame larger than this is drawn smaller and scaled up, to bound the tiles. */
-const MAX_FRAME_PIXELS = 1600 * 900;
+const MAX_FRAME_PIXELS = BACKDROP_FRAME.width * BACKDROP_FRAME.height;
 
 const pct = (part: number, whole: number) => `${(part / whole) * 100}%`;
 
@@ -43,11 +37,10 @@ function measuredFrame(element: HTMLElement): BoundaryFrame | null {
 /** The frame to draw: the given one, or for "container" the element's measured size. */
 function useFrame(
   frame: BoundaryFrame | "container",
-  ref: RefObject<HTMLDivElement | null>,
+  element: HTMLDivElement | null,
 ): BoundaryFrame | null {
   const [measured, setMeasured] = useState<BoundaryFrame | null>(null);
   useLayoutEffect(() => {
-    const element = ref.current;
     if (frame !== "container" || !element) return;
     const update = () => {
       const next = measuredFrame(element) ?? BACKDROP_FRAME;
@@ -60,7 +53,7 @@ function useFrame(
     const observer = new ResizeObserver(update);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [frame, ref]);
+  }, [frame, element]);
   return frame === "container" ? measured : frame;
 }
 
@@ -75,6 +68,7 @@ export function BoundaryMap({
   label,
   className,
   creditClassName,
+  creditHidden = false,
 }: {
   rings: readonly LonLatRing[];
   /** A fixed frame (cards: a bounded tile count), or "container" to fit the parent's shape. */
@@ -83,19 +77,26 @@ export function BoundaryMap({
   label?: string;
   className?: string;
   creditClassName?: string;
+  /** Keep the credit visible but out of a link's accessible name. */
+  creditHidden?: boolean;
 }) {
-  const root = useRef<HTMLDivElement>(null);
-  const size = useFrame(frame, root);
+  // A callback ref, so a remounted box is measured again.
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
+  const size = useFrame(frame, element);
   const view = useMemo(
     () => (size ? boundaryView(rings, size) : null),
     [rings, size],
   );
-  const [failed, setFailed] = useState(false);
+  const viewKey = view
+    ? `${view.zoom}|${view.tiles.map((t) => t.key).join(",")}`
+    : null;
+  // The view whose tile failed; a new outline or frame tries again.
+  const [failedView, setFailedView] = useState<string | null>(null);
   // Nothing, so the placeholder shows; until measured, an empty box to measure.
-  if (failed || (size && !view)) return null;
+  if ((viewKey && failedView === viewKey) || (size && !view)) return null;
   return (
     <div
-      ref={root}
+      ref={setElement}
       className={cn("absolute inset-0", className)}
       data-boundary-map={view ? "" : undefined}
     >
@@ -104,7 +105,8 @@ export function BoundaryMap({
           view={view}
           label={label}
           creditClassName={creditClassName}
-          onError={() => setFailed(true)}
+          creditHidden={creditHidden}
+          onError={() => setFailedView(viewKey)}
         />
       )}
     </div>
@@ -115,11 +117,13 @@ function BoundaryLayers({
   view,
   label,
   creditClassName,
+  creditHidden,
   onError,
 }: {
   view: BoundaryView;
   label?: string;
   creditClassName?: string;
+  creditHidden: boolean;
   onError: () => void;
 }) {
   const { width, height } = view;
@@ -138,7 +142,7 @@ function BoundaryLayers({
         >
           {view.tiles.map((tile) => (
             <Image
-              key={tile.url}
+              key={tile.key}
               src={tile.url}
               alt=""
               width={TILE_SIZE}
@@ -162,9 +166,9 @@ function BoundaryLayers({
             className="absolute inset-0 size-full"
             aria-hidden="true"
           >
-            {view.paths.map((d) => (
+            {view.paths.map((d, i) => (
               <path
-                key={d}
+                key={i}
                 d={d}
                 fill="#d6f28a"
                 fillOpacity={0.14}
@@ -178,8 +182,10 @@ function BoundaryLayers({
         </div>
       </div>
       <p
+        aria-hidden={creditHidden || undefined}
         className={cn(
-          "absolute bottom-1.5 left-2 z-10 rounded-sm bg-black/45 px-1 text-[10px] leading-4 text-white",
+          // Clear of a corner badge (e.g. the card's grade); long credits wrap.
+          "absolute bottom-1.5 left-2 z-10 max-w-[calc(100%-5.5rem)] rounded-sm bg-black/45 px-1 text-[10px] leading-4 text-balance text-white",
           creditClassName,
         )}
       >

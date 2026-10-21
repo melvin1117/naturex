@@ -9,6 +9,8 @@ export type LonLat = [number, number];
 export type LonLatRing = LonLat[];
 
 export type BoundaryTile = {
+  /** Unique within a view (`row:col` before wrapping), unlike the URL across the antimeridian. */
+  key: string;
   url: string;
   /** Top-left corner in frame pixels; every tile is 256 × 256. */
   left: number;
@@ -47,9 +49,21 @@ function usable(ring: LonLatRing): boolean {
       ([lon, lat]) =>
         Number.isFinite(lon) &&
         Number.isFinite(lat) &&
-        Math.abs(lon) <= 180 &&
+        Math.abs(lon) <= 360 &&
         Math.abs(lat) <= 90,
     )
+  );
+}
+
+/**
+ * Rings spanning more than half the world are taken to cross the antimeridian: their western
+ * longitudes move past 180° so the outline stays in one piece (tile columns wrap).
+ */
+function acrossTheAntimeridian(rings: LonLatRing[]): LonLatRing[] {
+  const lons = rings.flat().map(([lon]) => lon);
+  if (Math.max(...lons) - Math.min(...lons) <= 180) return rings;
+  return rings.map((ring) =>
+    ring.map(([lon, lat]): LonLat => [lon < 0 ? lon + 360 : lon, lat]),
   );
 }
 
@@ -65,7 +79,7 @@ export function boundaryView(
     margin = 0.12,
   }: { width: number; height: number; margin?: number },
 ): BoundaryView | null {
-  const parts = rings.filter(usable);
+  const parts = acrossTheAntimeridian(rings.filter(usable));
   if (parts.length === 0) return null;
   const points = parts.flat().map(([lon, lat]) => [worldX(lon), worldY(lat)]);
   const xs = points.map(([x]) => x);
@@ -93,6 +107,7 @@ export function boundaryView(
   for (let row = firstRow; row <= lastRow; row++) {
     for (let col = firstCol; col <= lastCol; col++) {
       tiles.push({
+        key: `${row}:${col}`,
         url: imageryTileUrl(zoom, ((col % n) + n) % n, row),
         left: col * TILE_SIZE - originX,
         top: row * TILE_SIZE - originY,
@@ -113,19 +128,16 @@ export function boundaryView(
   return { zoom, width, height, tiles, paths };
 }
 
-function lonLatRing(value: unknown): LonLatRing | null {
-  if (!Array.isArray(value)) return null;
-  const ring: LonLatRing = [];
-  for (const point of value) {
-    if (
-      !Array.isArray(point) ||
-      typeof point[0] !== "number" ||
-      typeof point[1] !== "number"
-    )
-      return null;
-    ring.push([point[0], point[1]]);
-  }
-  return ring;
+/** A ring's [lon, lat] positions, skipping anything that isn't a pair of numbers. */
+function lonLatRing(value: unknown): LonLatRing {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((point: unknown): LonLatRing =>
+    Array.isArray(point) &&
+    typeof point[0] === "number" &&
+    typeof point[1] === "number"
+      ? [[point[0], point[1]]]
+      : [],
+  );
 }
 
 /** Each part's exterior ring from a GeoJSON Polygon or MultiPolygon (or a Feature of one). */
@@ -145,7 +157,14 @@ export function geojsonRings(geojson: unknown): LonLatRing[] {
         ? object.coordinates
         : [];
   return polygons.flatMap((polygon: unknown) => {
-    const ring = Array.isArray(polygon) ? lonLatRing(polygon[0]) : null;
-    return ring ? [ring] : [];
+    const ring = Array.isArray(polygon) ? lonLatRing(polygon[0]) : [];
+    return ring.length > 0 ? [ring] : [];
   });
+}
+
+/** The API's `outline` (rings of [lon, lat]) as rings to draw. */
+export function outlineRings(
+  outline: readonly (readonly (readonly number[])[])[] | null | undefined,
+): LonLatRing[] {
+  return (outline ?? []).map(lonLatRing).filter((ring) => ring.length > 0);
 }

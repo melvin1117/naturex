@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { BoundaryMap } from "@/components/boundary-map";
+import { SiteBackdrop } from "@/components/proto/bits";
 import { FeatureSiteCard, SiteCard } from "@/components/proto/site-card";
 import type { AssetCard } from "@/lib/api/types";
 import type { LonLatRing } from "@/lib/boundary-map";
@@ -60,6 +61,16 @@ describe("a card without a precomputed thumbnail", () => {
     expect(container.querySelector("[data-boundary-map] path")).not.toBeNull();
   });
 
+  it("keeps the credit visible but out of the link's name", () => {
+    render(<SiteCard card={card()} />);
+    const link = screen.getByRole("link", { name: /Bosque Vivo/ });
+    expect(link).not.toHaveAccessibleName(/Esri/);
+    expect(within(link).getByText(IMAGERY_ATTRIBUTION)).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+  });
+
   it("falls back to the placeholder if a tile fails", () => {
     const { container } = render(<SiteCard card={card()} />);
     fireEvent.error(tiles(container)[0]);
@@ -99,22 +110,52 @@ describe("the featured card", () => {
   });
 });
 
-describe("BoundaryMap", () => {
-  it("fits a backdrop to its container's measured shape", () => {
-    const rect = vi
-      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
-      .mockReturnValue({ width: 1600, height: 400 } as DOMRect);
-    try {
-      const { container } = render(
-        <BoundaryMap rings={[RING]} frame="container" />,
-      );
-      expect(
-        container.querySelector("[data-boundary-map] svg"),
-      ).toHaveAttribute("viewBox", "0 0 1600 400");
-    } finally {
-      rect.mockRestore();
-    }
+describe("SiteBackdrop", () => {
+  it("falls back to the plain ground if a tile fails, and tries a new outline", () => {
+    const { container, rerender } = render(
+      <div className="relative">
+        <SiteBackdrop outline={[RING]} />
+      </div>,
+    );
+    expect(screen.getByText(IMAGERY_ATTRIBUTION)).toBeInTheDocument();
+    fireEvent.error(tiles(container)[0]);
+    expect(container.querySelector("[data-boundary-map]")).toBeNull();
+    expect(screen.queryByText(IMAGERY_ATTRIBUTION)).not.toBeInTheDocument();
+    expect(container.querySelector(".bg-primary")).not.toBeNull();
+
+    const moved = RING.map(([lon, lat]): [number, number] => [lon + 1, lat]);
+    rerender(
+      <div className="relative">
+        <SiteBackdrop outline={[moved]} />
+      </div>,
+    );
+    expect(tiles(container).length).toBeGreaterThan(0);
   });
+});
+
+describe("BoundaryMap", () => {
+  it.each([
+    [{ width: 800, height: 300 }, "0 0 800 300"],
+    // Above 960 × 540 px the frame shrinks (same shape) and is scaled up: fewer tiles.
+    [{ width: 1600, height: 400 }, "0 0 1440 360"],
+  ])(
+    "fits a backdrop to its container's measured shape (%o)",
+    (box, viewBox) => {
+      const rect = vi
+        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+        .mockReturnValue(box as DOMRect);
+      try {
+        const { container } = render(
+          <BoundaryMap rings={[RING]} frame="container" />,
+        );
+        expect(
+          container.querySelector("[data-boundary-map] svg"),
+        ).toHaveAttribute("viewBox", viewBox);
+      } finally {
+        rect.mockRestore();
+      }
+    },
+  );
 
   it("renders nothing for an unusable outline", () => {
     const { container } = render(

@@ -654,6 +654,24 @@ describe("the community home", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("keeps the featured listing's placeholder without an outline", async () => {
+    setup(<StewardPage />, {
+      routes: {
+        [`GET /communities/${SELVA.id}/summary`]: () =>
+          json(
+            summary({ listings: [listing({ asset: card({ outline: [] }) })] }),
+          ),
+      },
+    });
+    const featured = await screen.findByRole("region", {
+      name: "Xochimilco Wetland",
+    });
+    expect(featured.querySelector("[data-boundary-map]")).toBeNull();
+    expect(
+      within(featured).queryByText(IMAGERY_ATTRIBUTION),
+    ).not.toBeInTheDocument();
+  });
+
   it("lists the alerts about the community's own sites (T75)", async () => {
     const mine = {
       id: "11111111-1111-4111-8111-111111111111",

@@ -3,7 +3,7 @@
  * Every number is the API's; a missing one stays null and sorts last.
  */
 import type { AssetCard } from "./api/types";
-import type { LonLatRing } from "./boundary-map";
+import { type LonLatRing, outlineRings } from "./boundary-map";
 import { demoSiteMediaUrl } from "./demo-site-images";
 import type { Grade } from "./prototype/data";
 import { GRADE_ORDER } from "./prototype/format";
@@ -60,9 +60,7 @@ export function marketCard(card: AssetCard): MarketCard {
     valueMid: num(card.value_mid),
     valueHigh: num(card.value_high),
     imageUrl: siteImageUrl(card.site_key, card.cover_image_url),
-    outline: (card.outline ?? []).map((ring) =>
-      ring.map(([lon, lat]) => [lon, lat] as [number, number]),
-    ),
+    outline: outlineRings(card.outline),
     sparkline: (card.sparkline ?? []).flatMap((p) => {
       const n = num(p);
       return n === null ? [] : [n];
