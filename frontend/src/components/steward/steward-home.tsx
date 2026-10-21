@@ -11,7 +11,7 @@ import {
 import Link from "next/link";
 
 import { AlertsList } from "@/components/alerts-list";
-import { Delta, SiteBackdrop } from "@/components/proto/bits";
+import { Delta, SiteBackdrop, Stat } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
 import { LoadError } from "@/components/proto/load-error";
@@ -114,22 +114,22 @@ function Home({ summary }: { summary: CommunitySummary }) {
 
       {listings.length > 0 && (
         <dl className="mt-8 grid gap-4 rounded-3xl bg-card p-6 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
-          <HomeStat
+          <Stat
             label="Community fund"
             value={moneyText(summary.wallet.balance)}
             sub="IPO proceeds and payouts · play money"
           />
-          <HomeStat
+          <Stat
             label="Retained-stake dividends"
             value={moneyText(summary.wallet.retained_dividends)}
             sub="paid to the treasury"
           />
-          <HomeStat
+          <Stat
             label="Supporters"
             value={units(summary.holder_count)}
             sub="hold units of your sites"
           />
-          <HomeStat
+          <Stat
             label="Sites"
             value={units(listings.length)}
             sub={`${units(trading)} open to supporters`}
@@ -189,27 +189,6 @@ function Home({ summary }: { summary: CommunitySummary }) {
           />
         </aside>
       </div>
-    </div>
-  );
-}
-
-/** A `<dt>`/`<dd>` pair in a `<div>`: the only children a `<dl>` may have. */
-function HomeStat({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-}) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="tabular mt-1 truncate text-2xl font-light tracking-tight">
-        {value}
-      </dd>
-      <dd className="mt-0.5 text-xs text-muted-foreground">{sub}</dd>
     </div>
   );
 }

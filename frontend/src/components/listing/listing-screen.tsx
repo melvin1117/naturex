@@ -68,9 +68,7 @@ function ListingFromUrl() {
     return (
       <Page>
         <Alert>
-          <AlertTitle className="line-clamp-none">
-            Start a community first
-          </AlertTitle>
+          <AlertTitle>Start a community first</AlertTitle>
           <AlertDescription>
             <p>Land is listed by a community. Create one, then come back.</p>
             <Button asChild variant="outline" size="sm" className="mt-2">
@@ -123,9 +121,7 @@ function ListingLoader({
         <Page>
           <Alert variant="destructive">
             <TriangleAlert aria-hidden="true" />
-            <AlertTitle className="line-clamp-none">
-              We couldn&apos;t load this listing
-            </AlertTitle>
+            <AlertTitle>We couldn&apos;t load this listing</AlertTitle>
             <AlertDescription>
               <p>{query.error.message}</p>
               <Button
@@ -149,9 +145,7 @@ function ListingLoader({
     return (
       <Page>
         <Alert>
-          <AlertTitle className="line-clamp-none">
-            This listing belongs to another community
-          </AlertTitle>
+          <AlertTitle>This listing belongs to another community</AlertTitle>
           <AlertDescription>
             {owner ? (
               <Button asChild variant="outline" size="sm" className="mt-2">
@@ -183,9 +177,7 @@ function NotFound({ community }: { community: MyCommunity }) {
   return (
     <Page>
       <Alert>
-        <AlertTitle className="line-clamp-none">
-          We couldn&apos;t find that listing
-        </AlertTitle>
+        <AlertTitle>We couldn&apos;t find that listing</AlertTitle>
         <AlertDescription>
           <p>
             It may have been removed, or it belongs to a community you&apos;re

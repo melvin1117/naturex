@@ -60,75 +60,66 @@ export function QuarterResult({ result }: { result: SimulateQuarter }) {
           No listed sites to re-rate in this world.
         </p>
       ) : (
-        <div
-          // This wrapper scrolls, not the table's own container, so arrow keys scroll it.
-          className="-mx-6 overflow-x-auto rounded-xl px-6 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&_[data-slot=table-container]]:overflow-visible"
-          // Scrolls sideways on a phone: focusable so the keyboard can scroll it too.
-          tabIndex={0}
-          role="group"
-          aria-label="Results by site"
-        >
-          <Table>
-            <caption className="sr-only">
-              Each listed site before and after {quarterLabel(result.period)}
-            </caption>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Site</TableHead>
-                <TableHead>Outcome</TableHead>
-                <TableHead>Health</TableHead>
-                <TableHead>Grade</TableHead>
-                <TableHead>Stake price</TableHead>
-                <TableHead className="text-right">Alerts</TableHead>
-                <TableHead>Payout</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {result.assets.map((a) => {
-                const cells = changeCells(a.before, a.after);
-                const detail = detailText(a.detail);
-                return (
-                  <TableRow key={a.asset_id}>
-                    <TableCell className="font-medium">
-                      <Link
-                        href={`/asset/${a.asset_id}?tab=price`}
-                        className="hover:underline"
-                      >
-                        {a.name}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      {ASSET_STATUS_LABEL[a.status] ?? a.status}
-                      {detail && (
-                        <span className="block text-xs text-muted-foreground">
-                          {detail}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>{cells.health}</TableCell>
-                    <TableCell>{cells.grade}</TableCell>
-                    <TableCell>{cells.price}</TableCell>
-                    <TableCell className="tabular text-right">
-                      {a.alert_ids?.length ?? 0}
-                    </TableCell>
-                    <TableCell>
-                      {a.payout ? (
-                        PAYOUT_LABEL[a.payout]
-                      ) : (
-                        <span className="text-muted-foreground">No payout</span>
-                      )}
-                      {a.payout_detail && (
-                        <span className="block text-xs text-muted-foreground">
-                          {detailText(a.payout_detail)}
-                        </span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+        <Table scrollLabel="Results by site">
+          <caption className="sr-only">
+            Each listed site before and after {quarterLabel(result.period)}
+          </caption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Site</TableHead>
+              <TableHead>Outcome</TableHead>
+              <TableHead>Health</TableHead>
+              <TableHead>Grade</TableHead>
+              <TableHead>Stake price</TableHead>
+              <TableHead className="text-right">Alerts</TableHead>
+              <TableHead>Payout</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {result.assets.map((a) => {
+              const cells = changeCells(a.before, a.after);
+              const detail = detailText(a.detail);
+              return (
+                <TableRow key={a.asset_id}>
+                  <TableCell className="font-medium">
+                    <Link
+                      href={`/asset/${a.asset_id}?tab=price`}
+                      className="hover:underline"
+                    >
+                      {a.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    {ASSET_STATUS_LABEL[a.status] ?? a.status}
+                    {detail && (
+                      <span className="block text-xs text-muted-foreground">
+                        {detail}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>{cells.health}</TableCell>
+                  <TableCell>{cells.grade}</TableCell>
+                  <TableCell>{cells.price}</TableCell>
+                  <TableCell className="tabular text-right">
+                    {a.alert_ids?.length ?? 0}
+                  </TableCell>
+                  <TableCell>
+                    {a.payout ? (
+                      PAYOUT_LABEL[a.payout]
+                    ) : (
+                      <span className="text-muted-foreground">No payout</span>
+                    )}
+                    {a.payout_detail && (
+                      <span className="block text-xs text-muted-foreground">
+                        {detailText(a.payout_detail)}
+                      </span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
       )}
     </div>
   );

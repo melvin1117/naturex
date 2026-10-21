@@ -70,7 +70,7 @@ export function FailureAlert({
   return (
     <Alert variant="destructive" className={className}>
       <TriangleAlert aria-hidden="true" />
-      <AlertTitle className="line-clamp-none">{failure.title}</AlertTitle>
+      <AlertTitle>{failure.title}</AlertTitle>
       <AlertDescription>
         <p>{failure.message}</p>
         {failure.limitReached && (
@@ -104,9 +104,7 @@ export function PolygonProblems({ problems }: { problems: PolygonProblem[] }) {
   return (
     <Alert variant="destructive">
       <TriangleAlert aria-hidden="true" />
-      <AlertTitle className="line-clamp-none">
-        NatureX couldn&apos;t accept this boundary
-      </AlertTitle>
+      <AlertTitle>NatureX couldn&apos;t accept this boundary</AlertTitle>
       <AlertDescription>
         <ul className="mt-1 list-disc space-y-1 pl-4">
           {problems.map((problem, i) => (

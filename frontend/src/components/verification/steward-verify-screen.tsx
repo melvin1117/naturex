@@ -69,7 +69,7 @@ export function StewardVerifyScreen({ assetId }: { assetId: string }) {
       <IpoShell homeHref={homeHref}>
         <Alert className="max-w-2xl">
           <Info aria-hidden="true" />
-          <AlertTitle className="line-clamp-none">{NOT_FOUND.title}</AlertTitle>
+          <AlertTitle>{NOT_FOUND.title}</AlertTitle>
           <AlertDescription>
             <p>{NOT_FOUND.body}</p>
           </AlertDescription>
@@ -206,9 +206,7 @@ function Loaded({
           {closed && (
             <Alert>
               <Info aria-hidden="true" />
-              <AlertTitle className="line-clamp-none">
-                This listing can&apos;t be verified
-              </AlertTitle>
+              <AlertTitle>This listing can&apos;t be verified</AlertTitle>
               <AlertDescription>
                 <p>
                   It&apos;s withdrawn or not eligible, so it doesn&apos;t take

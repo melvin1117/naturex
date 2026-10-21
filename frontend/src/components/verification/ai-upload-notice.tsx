@@ -18,7 +18,7 @@ export function AiUploadNotice() {
   return (
     <Alert role="note" data-ai-check={mode}>
       <Sparkles aria-hidden="true" />
-      <AlertTitle className="line-clamp-none">{notice.title}</AlertTitle>
+      <AlertTitle>{notice.title}</AlertTitle>
       <AlertDescription>
         <p>{notice.body}</p>
       </AlertDescription>
