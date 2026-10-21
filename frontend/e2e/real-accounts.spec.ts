@@ -264,10 +264,14 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
     await expect(
       owner.getByRole("heading", { name: `${SITE} is open to supporters` }),
     ).toBeVisible();
-    const launched = owner.getByText(/units are on offer/);
-    await expect(launched).toContainText(/[\d,]+ units are on offer/);
-    unitsOffered = /([\d,]+) units are on offer/.exec(
-      (await launched.textContent()) ?? "",
+    const onOffer = owner
+      .locator("dl > div", {
+        has: owner.getByRole("term").filter({ hasText: "On offer" }),
+      })
+      .getByRole("definition");
+    await expect(onOffer).toContainText(/[\d,]+\s*units/);
+    unitsOffered = /([\d,]+)\s*units/.exec(
+      (await onOffer.textContent()) ?? "",
     )![1];
     expect(count(unitsOffered)).toBeGreaterThan(100);
   });

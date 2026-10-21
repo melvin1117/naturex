@@ -201,6 +201,7 @@ export function ValueRange({
   high,
   confidence,
   tone = "light",
+  revealDelay,
   className,
 }: {
   low: number;
@@ -208,8 +209,15 @@ export function ValueRange({
   high: number;
   confidence: number;
   tone?: "light" | "dark" | "image";
+  /** A newly computed range: after this many ms the bar opens from its centre, then the
+   * midpoint and the confidence settle in (#216). */
+  revealDelay?: number;
   className?: string;
 }) {
+  const reveal = (offset: number) =>
+    revealDelay === undefined
+      ? undefined
+      : { animationDelay: `${revealDelay + offset}ms` };
   const span = Math.max(high - low, 1);
   const scaleMax = high + span * 0.25;
   const scaleMin = Math.max(0, low - span * 0.25);
@@ -237,21 +245,29 @@ export function ValueRange({
         aria-label={`Estimated value between ${money(low)} and ${money(high)} a year, midpoint ${money(mid)}`}
       >
         <div
-          className="absolute inset-y-0 rounded-full bg-lime"
+          className={cn(
+            "absolute inset-y-0 rounded-full bg-lime",
+            revealDelay !== undefined && "nx-grow-x",
+          )}
           style={{
             left: `${at(low)}%`,
             width: `${Math.max(at(high) - at(low), 2)}%`,
+            ...reveal(0),
           }}
         />
         <div
           className={cn(
             "absolute -top-1 h-4 w-1 rounded-full",
             tone === "light" ? "bg-primary" : "bg-white",
+            revealDelay !== undefined && "nx-fade",
           )}
-          style={{ left: `calc(${at(mid)}% - 2px)` }}
+          style={{ left: `calc(${at(mid)}% - 2px)`, ...reveal(160) }}
         />
       </div>
-      <p className={cn("text-xs", muted)}>
+      <p
+        className={cn("text-xs", muted, revealDelay !== undefined && "nx-fade")}
+        style={reveal(220)}
+      >
         {confidence.toFixed(0)}% confidence · screening estimate, not an
         appraisal
       </p>

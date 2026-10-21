@@ -3,7 +3,7 @@
 import { ArrowLeft, Check, RefreshCwIcon, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
 import { ListingFlow as PrototypeListingFlow } from "@/components/proto/listing-flow";
@@ -26,6 +26,7 @@ import {
   type ListingDetailsForm,
 } from "@/lib/listing";
 import type { LatLng } from "@/lib/prototype/data";
+import { usePrototype } from "@/lib/prototype/store";
 
 import { BoundaryStep } from "./boundary-step";
 import { DetailsStep } from "./details-step";
@@ -218,6 +219,7 @@ function ListingWizard({
   onCreated: (asset: AssetDetail) => void;
 }) {
   const storageKey = unsavedListingKey(meId, community.id);
+  const { openTrace } = usePrototype();
   // A new listing picks up what was entered in this tab before (a sign-in, a reload).
   const [restored] = useState(() =>
     asset ? null : readUnsavedListing(storageKey),
@@ -262,10 +264,17 @@ function ListingWizard({
   // A resumed draft opens on its review; a new listing on its details.
   const [draftStep, setDraftStep] = useState(asset ? 2 : 0);
   const status = asset?.status ?? "draft";
+  // A run watched here: its pipeline finishes before the listed step, which then reveals (#216).
+  const [ratingHeld, setRatingHeld] = useState(false);
+  const [revealListed, setRevealListed] = useState(false);
+  const watchRating = useCallback((holding: boolean) => {
+    setRevealListed(true);
+    setRatingHeld(holding);
+  }, []);
   const step =
     status === "draft"
       ? draftStep
-      : status === "listed" || status === "suspended"
+      : (status === "listed" || status === "suspended") && !ratingHeld
         ? 3
         : 2;
 
@@ -386,10 +395,17 @@ function ListingWizard({
               setPoints(boundaryPoints(revised.geojson));
               setDraftStep(1);
             }}
+            onWatch={watchRating}
+            onOpenTrace={openTrace}
           />
         )}
         {step === 3 && asset && (
-          <ListedStep community={community} asset={asset} />
+          <ListedStep
+            community={community}
+            asset={asset}
+            reveal={revealListed}
+            onOpenTrace={openTrace}
+          />
         )}
       </section>
     </Page>

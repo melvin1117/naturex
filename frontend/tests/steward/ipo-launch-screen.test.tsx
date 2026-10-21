@@ -280,7 +280,12 @@ describe("IpoLaunchScreen", () => {
     });
     await waitFor(() => expect(heading).toHaveFocus());
     expect(
-      screen.getByText(/Opening price \$10\.5173 per unit/),
+      screen.getByText("Opening price · play money").parentElement,
+    ).toHaveTextContent("$10.5173 per unit");
+    expect(
+      screen.getByRole("img", {
+        name: "Your community keeps 51% of the stake; 49% is on offer to supporters.",
+      }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /See it on the Exchange/ }),

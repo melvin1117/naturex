@@ -512,7 +512,9 @@ describe("rating progress", () => {
         screen.getByText("Satellite data", { selector: "span" }).closest("li"),
       ).toHaveTextContent("failed"),
     );
-    expect(screen.getByText("The rating stopped.")).toBeVisible();
+    expect(
+      screen.getByText("The rating stopped at Satellite data."),
+    ).toBeVisible();
 
     fireEvent.click(
       screen.getByRole("button", { name: /Try the rating again/ }),

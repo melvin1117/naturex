@@ -6,6 +6,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { cn } from "cn";
 
 import { IpoCard, IpoShell } from "@/components/ipo-layout";
+import { DotRing } from "@/components/proto/health-ring";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { AssetDetail, IpoOut } from "@/lib/api/types";
@@ -18,8 +19,9 @@ import {
   type Explanation,
   type PageRefusal,
 } from "@/lib/ipo";
+import { DURATION } from "@/lib/motion";
 import { int } from "@/lib/prototype/format";
-import { assetHref, unitPriceText } from "@/lib/trade";
+import { assetHref, decimal, unitPriceText } from "@/lib/trade";
 
 /** A page heading that takes focus when it appears, if `focus` (after the owner acted). */
 function Heading({
@@ -59,7 +61,16 @@ function ExchangeLink({
   );
 }
 
-/** The launch went through: the opening offer is live on the Exchange. */
+/** "51%" or "50.5%": a percentage as the API set it, without trailing zeros. */
+function pct(value: number): string {
+  return `${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}%`;
+}
+
+/**
+ * The launch went through: the opening offer is live on the Exchange (#216's opening bell).
+ * The dotted ring lights the stake's split: the community's kept share in forest, then the
+ * share on offer in lime. Every number is the launch's own; under reduced motion it shows at once.
+ */
 export function IpoLaunched({
   assetId,
   name,
@@ -71,21 +82,77 @@ export function IpoLaunched({
   ipo: IpoOut;
   homeHref: string;
 }) {
+  // Both shares as the launch set them: the retained percentage, and the units on offer.
+  const kept = decimal(ipo.retained_pct);
+  const offered =
+    ipo.total_shares > 0 ? (ipo.shares_offered / ipo.total_shares) * 100 : null;
+  // The outcome replaces the form the owner scrolled down: bring its top (the ring) into view,
+  // after the heading took focus. Focus stays on the heading.
+  const top = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    top.current?.scrollIntoView?.({ block: "nearest" });
+  }, []);
   return (
     <IpoShell homeHref={homeHref}>
       <IpoCard className="text-center">
-        <span className="mx-auto grid size-14 place-items-center rounded-full bg-lime text-foreground">
-          <Check className="size-7" aria-hidden="true" />
-        </span>
-        <Heading focus className="mt-4 text-4xl">
+        <div ref={top} className="scroll-mt-24" />
+        {kept !== null && offered !== null ? (
+          <DotRing
+            size={176}
+            className="mx-auto"
+            segments={[
+              { columns: Math.round(kept), className: "fill-primary" },
+              { columns: Math.round(offered), className: "fill-lime" },
+            ]}
+            reveal={{ duration: DURATION.reveal }}
+            label={`Your community keeps ${pct(kept)} of the stake; ${pct(offered)} is on offer to supporters.`}
+          >
+            <div className="nx-fade" style={{ animationDelay: "240ms" }}>
+              <div className="tabular text-4xl leading-none font-light tracking-tight">
+                {pct(kept)}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                kept by your
+                <br />
+                community
+              </div>
+            </div>
+          </DotRing>
+        ) : (
+          <span className="mx-auto grid size-14 place-items-center rounded-full bg-lime text-foreground">
+            <Check className="size-7" aria-hidden="true" />
+          </span>
+        )}
+        <Heading focus className="nx-rise mt-6 text-4xl text-balance">
           {name} is open to supporters
         </Heading>
-        <p className="mx-auto mt-2 max-w-lg text-muted-foreground">
-          Opening price {unitPriceText(ipo.ipo_price)} per unit (play money).{" "}
-          {int(ipo.shares_offered)} units are on offer; your community keeps{" "}
-          {int(ipo.retained_shares)} units and all of the land.
+        <p className="mx-auto mt-3 max-w-lg text-muted-foreground">
+          Your opening offer is live on the Exchange. Supporters can take a
+          stake from now on; your community keeps all of the land.
         </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
+        <dl className="mx-auto mt-6 grid max-w-2xl gap-2 rounded-2xl bg-secondary p-2 text-left sm:grid-cols-3">
+          <OfferFact label="Opening price · play money">
+            {unitPriceText(ipo.ipo_price)}
+            <span className="text-sm text-muted-foreground"> per unit</span>
+          </OfferFact>
+          <OfferFact label="On offer" swatch="bg-lime">
+            {int(ipo.shares_offered)}
+            <span className="text-sm text-muted-foreground"> units</span>
+          </OfferFact>
+          <OfferFact label="Your community keeps" swatch="bg-primary">
+            {int(ipo.retained_shares)}
+            <span className="text-sm text-muted-foreground"> units</span>
+          </OfferFact>
+        </dl>
+        <p className="mx-auto mt-6 max-w-lg text-sm text-muted-foreground">
+          What&apos;s next: each unit a supporter takes from the offer pays into
+          your community fund, and the land&apos;s rating keeps updating as it
+          heals or comes under pressure.
+        </p>
+        <div
+          className="nx-rise mt-6 flex flex-wrap justify-center gap-2"
+          style={{ animationDelay: "480ms" }}
+        >
           <Button asChild>
             <ExchangeLink assetId={assetId} />
           </Button>
@@ -96,6 +163,34 @@ export function IpoLaunched({
         <p className="mt-6 text-xs text-muted-foreground">{SANDBOX_NOTE}</p>
       </IpoCard>
     </IpoShell>
+  );
+}
+
+/** One fact of the launched offer; `swatch` matches its share of the ring (the label says it too). */
+function OfferFact({
+  label,
+  swatch,
+  children,
+}: {
+  label: string;
+  swatch?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-xl bg-card px-4 py-3">
+      <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        {swatch && (
+          <span
+            className={cn("size-2 shrink-0 rounded-full", swatch)}
+            aria-hidden="true"
+          />
+        )}
+        {label}
+      </dt>
+      <dd className="tabular mt-1 text-xl font-light tracking-tight">
+        {children}
+      </dd>
+    </div>
   );
 }
 

@@ -36,6 +36,8 @@ import {
 } from "@/lib/listing";
 import { evidenceHref } from "@/lib/field-evidence";
 import { focusIfLost, useRestoreFocusAfterPending } from "@/lib/focus";
+import { usePacedRun } from "@/lib/listing/use-paced-run";
+import { usePrefersReducedMotion } from "@/lib/motion";
 import { ha } from "@/lib/prototype/format";
 import { num, reportFacts } from "@/lib/report-facts";
 
@@ -92,29 +94,68 @@ function useListingRun(
     return () => clearInterval(timer);
   }, [waiting, asset.id, refresh]);
 
-  return { runId, view: runId ? pipelineView(run.data) : null };
+  return {
+    runId,
+    view: runId ? pipelineView(run.data) : null,
+    loaded: run.data !== undefined,
+  };
 }
+
+/** Below Tailwind's `lg`, where the pipeline stacks with the step card. */
+const STACKED = "(max-width: 1023.98px)";
 
 export function RatingStep({
   community,
   asset,
   onEdit,
   onRevised,
+  onWatch,
+  onOpenTrace,
 }: {
   community: MyCommunity;
   asset: AssetDetail;
   onEdit: (step: 0 | 1) => void;
   onRevised: (asset: AssetDetail) => void;
+  /** Opens the Agent Trace on a run. */
+  onOpenTrace: (runId: string) => void;
+  /**
+   * Called while this step follows a run live: `holding` asks the screen to keep this step up
+   * until the paced pipeline has caught up (false again on unmount). Must be stable.
+   */
+  onWatch?: (holding: boolean) => void;
 }) {
   const submit = useSubmitListing();
   const refresh = useRefreshListing();
+  const reduced = usePrefersReducedMotion();
   const [submittedRunId, setSubmittedRunId] = useState<string | null>(null);
   const [failure, setFailure] = useState<ListingFailure | null>(null);
-  const { view } = useListingRun(asset, submittedRunId, () =>
+  const run = useListingRun(asset, submittedRunId, () =>
     setSubmittedRunId(null),
   );
-  const outcome = listingOutcome(asset);
+  const { view, live, holding } = usePacedRun({
+    runId: run.runId,
+    view: run.view,
+    loaded: run.loaded,
+    submitted: submittedRunId !== null,
+    assetStatus: asset.status,
+  });
+  useEffect(() => {
+    if (!live) return;
+    onWatch?.(holding);
+    return () => onWatch?.(false);
+  }, [live, holding, onWatch]);
+  // While the pipeline catches up, the card still reads as rating: the outcome lands after
+  // the last step, not before it.
+  const shownAsset: AssetDetail =
+    holding && asset.status !== "rating"
+      ? { ...asset, status: "rating", status_reason: null }
+      : asset;
+  const outcome = listingOutcome(shownAsset);
   const draft = asset.status === "draft";
+  const pipelineRef = useRef<HTMLElement>(null);
+  // Once a run exists, the pipeline leads the step in the DOM (so stacked layouts read it first
+  // and keep it there when the run ends); from `lg` it's placed in the right-hand column.
+  const pipelineFirst = !draft;
   // "Rate this site" disables while it submits. If the listing leaves draft, the run replaces
   // the button: focus its card's title. If the submit fails, focus returns to the button.
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -126,11 +167,23 @@ export function RatingStep({
     if (wasDraft.current && !draft) focusIfLost(titleRef.current);
     wasDraft.current = draft;
   }, [draft]);
+  // Stacked (phones, tablets), a run this person started leads the step: bring it into view.
+  const scrollToRun = useRef(false);
+  useEffect(() => {
+    if (!scrollToRun.current || draft || !pipelineFirst) return;
+    scrollToRun.current = false;
+    if (window.matchMedia?.(STACKED).matches)
+      pipelineRef.current?.scrollIntoView({
+        block: "start",
+        behavior: reduced ? "auto" : "smooth",
+      });
+  }, [draft, pipelineFirst, reduced]);
 
   async function rate() {
     setFailure(null);
     try {
       const accepted = await submit.mutateAsync(asset.id);
+      scrollToRun.current = true;
       setSubmittedRunId(accepted.run_id);
     } catch (error) {
       const apiError = error as ApiError;
@@ -143,9 +196,22 @@ export function RatingStep({
     }
   }
 
+  const pipeline = (
+    <RatingProgress
+      ref={pipelineRef}
+      view={view}
+      runId={run.runId}
+      onOpenTrace={onOpenTrace}
+      className={cn(pipelineFirst && "lg:col-start-2 lg:row-start-1")}
+    />
+  );
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
-      <StepCard aria-labelledby="listing-state-title">
+      {pipelineFirst && pipeline}
+      <StepCard
+        aria-labelledby="listing-state-title"
+        className={cn(pipelineFirst && "lg:col-start-1 lg:row-start-1")}
+      >
         <div className="flex flex-wrap items-center gap-2">
           <h2
             ref={titleRef}
@@ -207,7 +273,7 @@ export function RatingStep({
           </>
         ) : (
           <Outcome
-            asset={asset}
+            asset={shownAsset}
             community={community}
             onRetry={() => void rate()}
             retrying={submit.isPending}
@@ -216,7 +282,7 @@ export function RatingStep({
           />
         )}
       </StepCard>
-      <RatingProgress view={view} />
+      {!pipelineFirst && pipeline}
     </div>
   );
 }
