@@ -1,4 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ComponentType, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -197,6 +199,21 @@ describe("route loading states", () => {
       "/steward/assets/x/ipo",
       "/steward/community",
       "/steward/list",
+    ]);
+  });
+
+  it("draws the Marketplace's skeleton only for the Marketplace", () => {
+    // A loading.tsx is a Suspense boundary for every page below its folder: in
+    // `(exchange)/` it would flash the Marketplace on the way to a site or Your stakes.
+    const exchange = join(process.cwd(), "src/app/(exchange)");
+    expect(existsSync(join(exchange, "loading.tsx"))).toBe(false);
+    const market = join(exchange, "(market)");
+    expect(existsSync(join(market, "loading.tsx"))).toBe(true);
+    const below = readdirSync(market, { withFileTypes: true });
+    expect(below.filter((entry) => entry.isDirectory())).toEqual([]);
+    expect(below.map((entry) => entry.name).sort()).toEqual([
+      "loading.tsx",
+      "page.tsx",
     ]);
   });
 

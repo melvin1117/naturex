@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import AssetPage from "@/app/(exchange)/asset/[id]/page";
-import MarketplacePage from "@/app/(exchange)/page";
+import MarketplacePage from "@/app/(exchange)/(market)/page";
 import PortfolioPage from "@/app/(exchange)/portfolio/page";
 import AdminPage from "@/app/admin/page";
 import DevUiPage from "@/app/dev/ui/page";
