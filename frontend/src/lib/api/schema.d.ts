@@ -1730,6 +1730,11 @@ export interface components {
             /** Site Key */
             site_key?: string | null;
             /**
+             * Outline
+             * @description The boundary's exterior ring per part, [lon, lat], simplified to at most 64 corners in all (holes dropped): drawn on the card's map when the site has no precomputed thumbnail. Empty if the area can't be read.
+             */
+            outline?: number[][][];
+            /**
              * Sparkline
              * @description The latest prices (up to 30), oldest first, for the card's sparkline.
              */

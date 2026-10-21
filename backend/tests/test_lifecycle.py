@@ -52,6 +52,7 @@ from app.routers.runs import get_rating_runner
 from app.sandbox import _delete_world_rows, create_world, ensure_live_world, reset_world
 from app.seed import seed
 from app.services import listings
+from app.services.asset_cards import CARD_OUTLINE_MAX_POINTS
 from app.services.document_check import DocumentChecker, get_document_checker
 from app.services.ipo import NOT_TRADING
 from app.services.lifecycle import (
@@ -1602,3 +1603,20 @@ def test_outlines_show_public_sites_of_the_callers_world_only(
     monkeypatch.setattr("app.routers.assets.OUTLINES_MAX_SITES", 1)
     capped = client_as(world, world.steward).get("/assets/outlines").json()
     assert len(capped["outlines"]) == 1 and capped["truncated"] is True
+
+
+@requires_db
+def test_a_card_carries_its_boundary_outline(world: World_) -> None:
+    asset = draft(world)
+    mine = client_as(world, world.steward).get(f"/communities/{world.community_id}/assets")
+    ring = asset["geojson"]["coordinates"][0]
+    outline = mine.json()[0]["outline"]
+    assert outline == [[[round(lon, 5), round(lat, 5)] for lon, lat in ring]]
+
+    submit(world, asset["id"])
+    world.executor.run_all()
+    cards_ = client_as(world, world.outsider).get("/assets").json()
+    assert next(c for c in cards_ if c["id"] == asset["id"])["outline"] == outline
+    assert all(
+        sum(len(ring_) for ring_ in c["outline"]) <= CARD_OUTLINE_MAX_POINTS for c in cards_
+    )

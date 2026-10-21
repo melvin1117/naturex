@@ -4734,6 +4734,20 @@
             ],
             "title": "Site Key"
           },
+          "outline": {
+            "items": {
+              "items": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Outline",
+            "description": "The boundary's exterior ring per part, [lon, lat], simplified to at most 64 corners in all (holes dropped): drawn on the card's map when the site has no precomputed thumbnail. Empty if the area can't be read."
+          },
           "sparkline": {
             "items": {
               "type": "string",
