@@ -350,6 +350,12 @@ describe("rating progress", () => {
       await screen.findByRole("button", { name: /Rate this site/ }),
     );
     expect(await screen.findByText("Rating in progress")).toBeVisible();
+    // The button gave way to the run: its card's title holds focus (T48).
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Rating in progress" }),
+      ).toHaveFocus(),
+    );
     expect(backend.calls(`POST /assets/${ASSET_ID}/submit`)).toBe(1);
 
     const row = (label: string) =>

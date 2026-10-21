@@ -214,11 +214,19 @@ describe("StewardVerifyScreen", () => {
       target: { files: [file] },
     });
     fireEvent.click(screen.getByRole("checkbox", { name: /authorised/ }));
+    // A browser drops focus from the button while it's disabled for the upload.
+    (globalThis.document.activeElement as HTMLElement | null)?.blur();
     fireEvent.click(screen.getByRole("button", { name: "Upload document" }));
 
     expect(
       await screen.findByText("Uploaded: Assembly minutes (consent)."),
     ).toBeInTheDocument();
+    // ...and gets it back afterwards (T48).
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Upload document" }),
+      ).toHaveFocus(),
+    );
     const post = backend.requests.find((r) => r.method === "POST")!;
     const url = new URL(post.url);
     expect(url.searchParams.get("doc_type")).toBe("assembly_minutes");

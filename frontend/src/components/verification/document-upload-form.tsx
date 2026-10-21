@@ -1,8 +1,9 @@
 "use client";
 
 import { Upload } from "lucide-react";
-import { useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
+import { focusIfLost } from "@/components/steward/focus";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -76,6 +77,13 @@ export function DocumentUploadForm({
   };
 
   const pending = upload.isPending;
+  // The submit button disables while uploading, which drops focus: give it back after.
+  const submitRef = useRef<HTMLButtonElement>(null);
+  const wasPending = useRef(pending);
+  useEffect(() => {
+    if (wasPending.current && !pending) focusIfLost(submitRef.current);
+    wasPending.current = pending;
+  }, [pending]);
   const errorId = (field: Field) => `${id}-${field}-error`;
 
   return (
@@ -160,7 +168,7 @@ export function DocumentUploadForm({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={disabled || pending}>
+        <Button ref={submitRef} type="submit" disabled={disabled || pending}>
           {pending ? (
             <Spinner aria-hidden="true" role="presentation" />
           ) : (
