@@ -283,7 +283,7 @@ def test_a_thumbnail_outline_has_at_most_64_corners_over_every_part() -> None:
 
 def test_the_outline_migration_backfills_like_the_app() -> None:
     """0022 freezes its own copy of the simplification; today it matches the app's."""
-    path = Path(__file__).parents[1] / "migrations/versions/0022_asset_outline.py"
+    path = Path(__file__).parents[1] / "migrations/versions/0023_asset_outline.py"
     spec = importlib.util.spec_from_file_location("migration_0022", path)
     assert spec and spec.loader
     migration = importlib.util.module_from_spec(spec)

@@ -14,7 +14,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "cn";
 
 import type { MapFocus } from "@/components/proto/draw-map";
-import { IMAGERY_ATTRIBUTION, IMAGERY_URL } from "@/components/proto/site-map";
+import { IMAGERY_ATTRIBUTION, IMAGERY_URL } from "@/lib/imagery";
 import {
   midpoint,
   MIN_DRAW_ZOOM,

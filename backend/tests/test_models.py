@@ -361,7 +361,7 @@ def test_outline_migration_downgrades_and_upgrades() -> None:
 
     try:
         assert "outline" in columns()
-        command.downgrade(cfg, "0021")
+        command.downgrade(cfg, "0022")
         assert "outline" not in columns()
     finally:
         command.upgrade(cfg, "head")
