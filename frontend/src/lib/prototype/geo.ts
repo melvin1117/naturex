@@ -28,6 +28,33 @@ function segmentsCross(a: LatLng, b: LatLng, c: LatLng, d: LatLng) {
   return o1 * o2 < 0 && o3 * o4 < 0;
 }
 
+/** `p` lies on segment a–b (given the three are collinear). */
+function within(a: LatLng, b: LatLng, p: LatLng) {
+  return (
+    Math.min(a[0], b[0]) <= p[0] &&
+    p[0] <= Math.max(a[0], b[0]) &&
+    Math.min(a[1], b[1]) <= p[1] &&
+    p[1] <= Math.max(a[1], b[1])
+  );
+}
+
+/** Segments that cross or merely touch: a corner on the other edge, or a shared point. */
+function segmentsMeet(a: LatLng, b: LatLng, c: LatLng, d: LatLng) {
+  if (segmentsCross(a, b, c, d)) return true;
+  return (
+    (orient(a, b, c) === 0 && within(a, b, c)) ||
+    (orient(a, b, d) === 0 && within(a, b, d)) ||
+    (orient(c, d, a) === 0 && within(c, d, a)) ||
+    (orient(c, d, b) === 0 && within(c, d, b))
+  );
+}
+
+/** Edges a–b then b–c fold back over each other (a spike): c heads back towards a. */
+function foldsBack(a: LatLng, b: LatLng, c: LatLng) {
+  const dot = (a[0] - b[0]) * (c[0] - b[0]) + (a[1] - b[1]) * (c[1] - b[1]);
+  return orient(a, b, c) === 0 && dot > 0;
+}
+
 function ring(points: LatLng[]) {
   const closed =
     points.length > 1 &&
@@ -37,16 +64,67 @@ function ring(points: LatLng[]) {
 }
 
 export function selfIntersects(input: LatLng[]) {
-  const pts = ring(input);
+  return crossingEdges(input, 1).length > 0;
+}
+
+/**
+ * Edges (edge i joins corner i to the next, the last closing back to the first) that cross or
+ * touch another edge, in order, stopping once `limit` such pairs are found. Like the server's
+ * check (Shapely's validity), a corner on another edge, two corners in the same place and a
+ * spike (an edge doubling back over the previous one) all count; repeated corners in a row
+ * don't.
+ */
+export function crossingEdges(input: LatLng[], limit = Infinity): number[] {
+  const all = ring(input);
+  // Repeated corners in a row make zero-length edges: drop them, remembering each kept
+  // corner's original index (the last of a run, whose edge leads on to the next corner).
+  const pts: LatLng[] = [];
+  const index: number[] = [];
+  all.forEach((p, i) => {
+    const next = all[(i + 1) % all.length];
+    if (all.length > 1 && p[0] === next[0] && p[1] === next[1]) return;
+    pts.push(p);
+    index.push(i);
+  });
   const n = pts.length;
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      if (Math.abs(i - j) <= 1 || (i === 0 && j === n - 1)) continue;
-      if (segmentsCross(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n]))
-        return true;
+  const edges = new Set<number>();
+  let pairs = 0;
+  const flag = (i: number, j: number) => {
+    edges.add(index[i]);
+    edges.add(index[j]);
+    pairs += 1;
+  };
+  if (n < 3) return [];
+  for (let i = 0; i < n && pairs < limit; i++) {
+    // Neighbouring edges share a corner; they only clash if the second folds back.
+    if (foldsBack(pts[i], pts[(i + 1) % n], pts[(i + 2) % n]))
+      flag(i, (i + 1) % n);
+    for (let j = i + 2; j < n && pairs < limit; j++) {
+      if (i === 0 && j === n - 1) continue;
+      if (segmentsMeet(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n]))
+        flag(i, j);
     }
   }
-  return false;
+  return [...edges].sort((a, b) => a - b);
+}
+
+/** Great-circle length of the closed outline, in kilometres. */
+export function perimeterKm(points: LatLng[]) {
+  const pts = ring(points);
+  if (pts.length < 2) return 0;
+  const edges = pts.length === 2 ? 1 : pts.length;
+  let total = 0;
+  for (let i = 0; i < edges; i++) {
+    const [lat1, lon1] = pts[i];
+    const [lat2, lon2] = pts[(i + 1) % pts.length];
+    const a =
+      Math.sin(rad(lat2 - lat1) / 2) ** 2 +
+      Math.cos(rad(lat1)) *
+        Math.cos(rad(lat2)) *
+        Math.sin(rad(lon2 - lon1) / 2) ** 2;
+    total += 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+  }
+  return total / 1000;
 }
 
 function contains(poly: LatLng[], p: LatLng) {
@@ -77,8 +155,18 @@ export function overlaps(aIn: LatLng[], bIn: LatLng[]) {
   return false;
 }
 
+/** Mirrors the backend's problem codes (`app/tools/geometry.py`), plus too few corners. */
+export type PolygonProblemCode =
+  | "too_few"
+  | "too_complex"
+  | "self_intersection"
+  | "too_small"
+  | "too_large"
+  | "overlap";
+
 export type PolygonCheck =
-  { ok: true; areaHa: number } | { ok: false; areaHa: number; message: string };
+  | { ok: true; areaHa: number }
+  | { ok: false; areaHa: number; message: string; code: PolygonProblemCode };
 
 export function checkPolygon(
   points: LatLng[],
@@ -89,25 +177,29 @@ export function checkPolygon(
     return {
       ok: false,
       areaHa: area,
+      code: "too_few",
       message: "Add at least three corners to close the boundary.",
     };
   if (selfIntersects(points))
     return {
       ok: false,
       areaHa: area,
+      code: "self_intersection",
       message:
-        "The boundary crosses itself. Move a corner so the edges don't cross.",
+        "The boundary crosses itself. Move a corner so the edges don't cross or touch.",
     };
   if (area < 10)
     return {
       ok: false,
       areaHa: area,
+      code: "too_small",
       message: `This area is ${area.toFixed(1)} ha. Sites need at least 10 ha.`,
     };
   if (area > 50_000)
     return {
       ok: false,
       areaHa: area,
+      code: "too_large",
       message: `This area is ${Math.round(area).toLocaleString("en-US")} ha. Sites can be at most 50,000 ha.`,
     };
   const clash = others.find((o) => overlaps(points, o.polygon));
@@ -115,6 +207,7 @@ export function checkPolygon(
     return {
       ok: false,
       areaHa: area,
+      code: "overlap",
       message: `This boundary overlaps the ${clash.name} site. Adjust the edge to continue.`,
     };
   return { ok: true, areaHa: area };

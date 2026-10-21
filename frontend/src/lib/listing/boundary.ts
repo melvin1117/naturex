@@ -5,7 +5,13 @@
 import type { AssetDetail, AssetOutlines } from "../api/types";
 import { boundaryLatLngs } from "../asset-detail";
 import type { LatLng } from "../prototype/data";
-import { areaHa, checkPolygon } from "../prototype/geo";
+import {
+  areaHa,
+  checkPolygon,
+  crossingEdges,
+  overlaps,
+  type PolygonProblemCode,
+} from "../prototype/geo";
 
 /** T36 refuses polygons with more points than this. */
 export const MAX_BOUNDARY_POINTS = 10_000;
@@ -24,7 +30,7 @@ export type HintScope = "all" | "no-overlap" | "size";
 
 export type BoundaryHint =
   | { ok: true; areaHa: number; checked: HintScope }
-  | { ok: false; areaHa: number; message: string };
+  | { ok: false; areaHa: number; message: string; code: PolygonProblemCode };
 
 type Box = [number, number, number, number];
 
@@ -43,11 +49,19 @@ function boxesTouch(a: Box, b: Box): boolean {
   return a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
 }
 
-function sizeProblem(area: number): string | null {
+function sizeProblem(
+  area: number,
+): { code: PolygonProblemCode; message: string } | null {
   if (area < MIN_HA)
-    return `This area is ${area.toFixed(1)} ha. Sites need at least ${MIN_HA} ha.`;
+    return {
+      code: "too_small",
+      message: `This area is ${area.toFixed(1)} ha. Sites need at least ${MIN_HA} ha.`,
+    };
   if (area > MAX_HA)
-    return `This area is ${Math.round(area).toLocaleString("en-US")} ha. Sites can be at most ${MAX_HA.toLocaleString("en-US")} ha.`;
+    return {
+      code: "too_large",
+      message: `This area is ${Math.round(area).toLocaleString("en-US")} ha. Sites can be at most ${MAX_HA.toLocaleString("en-US")} ha.`,
+    };
   return null;
 }
 
@@ -67,13 +81,14 @@ export function boundaryHint(
     return {
       ok: false,
       areaHa: 0,
+      code: "too_complex",
       message: `This boundary has ${points.length.toLocaleString("en-US")} corners. Simplify it to at most ${MAX_BOUNDARY_POINTS.toLocaleString("en-US")}.`,
     };
   if (points.length > HINT_MAX_POINTS) {
     const area = areaHa(points);
     const problem = sizeProblem(area);
     return problem
-      ? { ok: false, areaHa: area, message: problem }
+      ? { ok: false, areaHa: area, ...problem }
       : { ok: true, areaHa: area, checked: "size" };
   }
   const box = bbox(points);
@@ -84,6 +99,39 @@ export function boundaryHint(
   return check.ok
     ? { ...check, checked: complete ? "all" : "no-overlap" }
     : check;
+}
+
+/** Where a boundary goes wrong, to draw on the map: edges that cross, and listed sites it overlaps. */
+export type BoundaryIssues = {
+  /** Edge i joins corner i to the next (the last edge closes the shape). */
+  crossing: number[];
+  /** Indexes into the `others` passed in. */
+  overlapping: number[];
+};
+
+const NO_ISSUES: BoundaryIssues = { crossing: [], overlapping: [] };
+
+/**
+ * The map's view of `boundaryHint`: which edges and sites to highlight. Like the hint, it
+ * leaves boundaries over `HINT_MAX_POINTS` corners to the server.
+ */
+export function boundaryIssues(
+  points: LatLng[],
+  others: Outline[] = [],
+): BoundaryIssues {
+  if (points.length < 3 || points.length > HINT_MAX_POINTS) return NO_ISSUES;
+  const crossing = points.length >= 4 ? crossingEdges(points) : [];
+  const box = bbox(points);
+  const overlapping = others.flatMap((o, i) =>
+    o.polygon.length >= 3 &&
+    boxesTouch(box, bbox(o.polygon)) &&
+    overlaps(points, o.polygon)
+      ? [i]
+      : [],
+  );
+  return crossing.length || overlapping.length
+    ? { crossing, overlapping }
+    : NO_ISSUES;
 }
 
 /** Outlines from `GET /assets/outlines` as polygons for the map ([lat, lon]), one per part. */

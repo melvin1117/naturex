@@ -28,6 +28,7 @@ from app.config import Settings
 from app.llm import LLMError, LLMResult, Tier
 from app.mocks import news_scout_fixture
 from app.schemas import NewsScoutItem, NewsScoutOutput
+from app.services.nominatim import DEFAULT_NOMINATIM_RATE_LIMITER, NominatimRateLimiter
 
 log = logging.getLogger(__name__)
 
@@ -35,7 +36,6 @@ NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 OPENSTREETMAP_ATTRIBUTION = "© OpenStreetMap contributors"
 EXTERNAL_TIMEOUT_S = 15.0
-NOMINATIM_MIN_INTERVAL_S = 1.0
 RESULT_CACHE_TTL_S = 24 * 60 * 60
 EMPTY_RESULT_CACHE_TTL_S = 60 * 60
 ARTICLE_CHAR_LIMIT = 2_500
@@ -297,32 +297,6 @@ class NewsScoutCache:
 _DEFAULT_RESULT_CACHE = NewsScoutCache()
 
 
-class NominatimRateLimiter:
-    """Per-process limiter for OSMF's public Nominatim 1 req/s policy."""
-
-    def __init__(
-        self,
-        *,
-        clock: Callable[[], float] = time.monotonic,
-        sleep: Callable[[float], None] = time.sleep,
-    ) -> None:
-        self._clock = clock
-        self._sleep = sleep
-        self._last_slot_at: float | None = None
-        self._lock = threading.Lock()
-
-    def wait(self) -> None:
-        with self._lock:
-            now = self._clock()
-            previous = self._last_slot_at
-            slot = now if previous is None else max(now, previous + NOMINATIM_MIN_INTERVAL_S)
-            self._last_slot_at = slot
-            delay = slot - now
-        if delay > 0:
-            self._sleep(delay)
-
-
-_DEFAULT_NOMINATIM_RATE_LIMITER = NominatimRateLimiter()
 _DEFAULT_NOMINATIM_CACHE: dict[tuple[float, float], GeocodedPlace] = {}
 
 
@@ -341,7 +315,7 @@ class NominatimGeocoder:
             raise ValueError("NOMINATIM_USER_AGENT must identify the NatureX app")
         self._user_agent = user_agent
         self._http_get = http_get or _http_get_json
-        self._rate_limiter = rate_limiter or _DEFAULT_NOMINATIM_RATE_LIMITER
+        self._rate_limiter = rate_limiter or DEFAULT_NOMINATIM_RATE_LIMITER
         self._cache = cache if cache is not None else _DEFAULT_NOMINATIM_CACHE
 
     def reverse(self, lat: float, lon: float) -> GeocodedPlace:

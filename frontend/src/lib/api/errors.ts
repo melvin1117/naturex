@@ -19,6 +19,13 @@ const CODE_MESSAGES: Record<string, string> = {
     "Live updates are busy right now; they will keep refreshing every few seconds.",
   copilot_rate_limited:
     "The Copilot has answered a lot of questions in this sandbox this hour. Try again later.",
+  place_search_busy:
+    "Lots of people are searching right now. Try again in a moment.",
+  place_search_rate_limited:
+    "You've searched a lot in the last minute. Wait a minute, or move the map yourself.",
+  place_query_too_short: "Type a place name, such as a town or a lake.",
+  place_search_unavailable:
+    "Place search isn't available right now. Move the map yourself or type coordinates.",
   copilot_unavailable:
     "The Copilot can't search the record right now. Try again in a little while.",
 };

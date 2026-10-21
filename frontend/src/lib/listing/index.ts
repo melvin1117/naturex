@@ -4,6 +4,7 @@
  */
 export * from "./boundary";
 export * from "./details";
+export * from "./drawing";
 export * from "./draft-storage";
 export * from "./errors";
 export * from "./links";
