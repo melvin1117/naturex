@@ -111,22 +111,22 @@ export function VerificationNotices({
               key={notice.key}
               aria-labelledby={`notice-${notice.assetId}`}
               data-level={notice.level}
-              className="nx-rise flex flex-col gap-4 rounded-3xl bg-card p-5 shadow-soft sm:flex-row sm:items-start sm:p-6"
+              className="nx-rise flex items-start gap-3 rounded-3xl bg-card p-5 shadow-soft sm:gap-4 sm:p-6"
             >
               <span
                 className={cn(
-                  "grid size-10 shrink-0 place-items-center rounded-full",
+                  "grid size-8 shrink-0 place-items-center rounded-full sm:size-10",
                   good
                     ? "bg-lime/40 text-lime-ink"
                     : "bg-clay/15 text-clay-ink",
                 )}
               >
-                <Icon className="size-5" aria-hidden="true" />
+                <Icon className="size-4 sm:size-5" aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
                 <h3
                   id={`notice-${notice.assetId}`}
-                  className="font-medium text-balance break-words"
+                  className="font-medium text-balance break-words sm:pt-2"
                 >
                   {notice.title}
                 </h3>
@@ -141,29 +141,30 @@ export function VerificationNotices({
                     “{notice.reason}”
                   </blockquote>
                 )}
-                {notice.action && (
-                  <Button asChild size="sm" className="mt-4">
-                    <Link href={notice.action.href}>
-                      {notice.action.label}
-                      <ArrowRight aria-hidden="true" />
-                    </Link>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  {notice.action && (
+                    <Button asChild size="sm">
+                      <Link href={notice.action.href}>
+                        {notice.action.label}
+                        <ArrowRight aria-hidden="true" />
+                      </Link>
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    data-dismiss=""
+                    aria-label={`Dismiss: ${notice.title}`}
+                    onClick={() => {
+                      refocus.current = index;
+                      onDismiss(notice);
+                    }}
+                  >
+                    <X aria-hidden="true" />
+                    Dismiss
                   </Button>
-                )}
+                </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="self-end sm:-mt-1 sm:-mr-2 sm:self-start"
-                data-dismiss=""
-                aria-label={`Dismiss: ${notice.title}`}
-                onClick={() => {
-                  refocus.current = index;
-                  onDismiss(notice);
-                }}
-              >
-                <X aria-hidden="true" />
-                Dismiss
-              </Button>
             </li>
           );
         })}

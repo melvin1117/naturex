@@ -377,7 +377,7 @@ function ListingLink({
   );
 }
 
-/** The listing's verification screen (T70). */
+/** The listing's verification screen (T70), unless the next step already leads there. */
 function VerifyLink({
   listing,
   communityId,
@@ -387,7 +387,10 @@ function VerifyLink({
   communityId: string;
   tone: "image" | "plain";
 }) {
-  if (closed(listing)) return null;
+  // The next step already leads to the verification screen: no second link to it.
+  const next = listing.next_action;
+  if (closed(listing) || next === "verify" || next === "verification_in_review")
+    return null;
   return (
     <ListingLink
       href={verifyHref(listing.asset.id, communityId)}
