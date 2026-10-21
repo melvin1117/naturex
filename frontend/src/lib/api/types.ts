@@ -73,6 +73,12 @@ export type VerificationLevel = Schemas["VerificationLevel"];
 export type VerificationPublic = Schemas["VerificationPublicOut"];
 export type VerificationRun = Schemas["VerificationRunOut"];
 
+// Field evidence (T40): geotagged photos, their checks and the public aggregate.
+export type FieldEvidence = Schemas["FieldEvidenceOut"];
+export type FieldEvidencePublic = Schemas["FieldEvidencePublicOut"];
+export type FieldPhoto = Schemas["FieldPhotoOut"];
+export type FieldPhotoObservation = Schemas["FieldPhotoObservationOut"];
+
 // Steward home and community management (T63).
 export type CommunityOut = Schemas["CommunityOut"];
 export type CommunityCreate = Schemas["CommunityCreate"];

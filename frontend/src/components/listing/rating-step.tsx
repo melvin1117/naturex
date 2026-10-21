@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCwIcon, Sparkles } from "lucide-react";
+import { Camera, RefreshCwIcon, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
@@ -34,6 +34,7 @@ import {
   pipelineView,
   type ListingFailure,
 } from "@/lib/listing";
+import { evidenceHref } from "@/lib/field-evidence";
 import { ha } from "@/lib/prototype/format";
 import { num, reportFacts } from "@/lib/report-facts";
 
@@ -268,6 +269,14 @@ function Outcome({
           <Button onClick={onRetry} disabled={retrying}>
             <RefreshCwIcon aria-hidden="true" />
             {retrying ? "Submitting…" : "Try the rating again"}
+          </Button>
+        )}
+        {outcome.kind === "needs_evidence" && (
+          <Button asChild>
+            <Link href={evidenceHref(asset.id, community.id)}>
+              <Camera aria-hidden="true" />
+              Add field photos
+            </Link>
           </Button>
         )}
         {outcome.canRevise && (

@@ -579,6 +579,13 @@ describe("outcomes", () => {
     ).toBeVisible();
     expect(screen.getByText(/at least 70% confident/)).toBeVisible();
     expect(screen.getByText("55% confidence")).toBeVisible();
+    // T40: field photos are the designed way to raise confidence.
+    expect(
+      screen.getByRole("link", { name: "Add field photos" }),
+    ).toHaveAttribute(
+      "href",
+      `/steward/assets/${ASSET_ID}/evidence?community=${SELVA.id}`,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /Revise the listing/ }));
     expect(

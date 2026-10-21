@@ -3,6 +3,7 @@
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -29,6 +30,7 @@ from app.routers import (
     communities,
     copilot,
     events,
+    evidence,
     ipo,
     ledger,
     listings,
@@ -41,6 +43,7 @@ from app.routers import (
 )
 from app.sandbox import ensure_live_world
 from app.services.document_check import shutdown_default_checker
+from app.services.field_evidence import fail_lost_analyses, shutdown_default_analyzer
 
 settings = get_settings()
 
@@ -92,6 +95,22 @@ def prepare_live_world(open_session: Callable[[], Session] = lambda: Session(eng
         return False
 
 
+def recover_field_evidence(
+    open_session: Callable[[], Session] = lambda: Session(engine),
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> int | None:
+    """Store `failed` on field photos whose analysis a restart lost (T40), so none stays
+    `pending`. Never fails startup; None when it couldn't run."""
+    try:
+        with open_session() as session:
+            lost = fail_lost_analyses(session, now())
+            session.commit()
+            return lost
+    except Exception:
+        logging.getLogger("app").exception("could not recover lost field photo analyses")
+        return None
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # At startup rather than import, so tools that only import the app (the OpenAPI export for
@@ -101,8 +120,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     if settings.live_world_on_startup:
         prepare_live_world()
     validate_mock_settings(settings)
+    recover_field_evidence()
     yield
     shutdown_default_checker()  # T71: queued AI document checks are dropped, not waited for
+    shutdown_default_analyzer()  # T40: queued photo analyses too (they read `failed` later)
 
 
 app = FastAPI(
@@ -122,6 +143,7 @@ app.include_router(assets.router)
 app.include_router(listings.router)
 app.include_router(ipo.router)
 app.include_router(verification.router)
+app.include_router(evidence.router)
 app.include_router(reports.router)
 app.include_router(market.router)
 app.include_router(copilot.router)

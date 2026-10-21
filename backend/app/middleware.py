@@ -6,9 +6,10 @@ checked first; only when it is absent does `Referer` count. A value
 that is `null`, malformed, duplicated or not exactly in `ALLOWED_ORIGINS` (scheme, host and port)
 is rejected, and so is a request with neither header. A request body must be JSON, or multipart
 for uploads, so a cross-site HTML form can't be used even where a header check is bypassed. The
-one exception is a verification document upload (`POST /assets/{id}/documents`, T69), whose body
-is the file itself: PDF, JPEG or PNG. None of those is a type an HTML form can send, so a
-cross-site page still can't send one without a CORS preflight.
+exceptions are a verification document upload (`POST /assets/{id}/documents`, T69) and a field
+photo upload (`POST /assets/{id}/evidence`, T40), whose body is the file itself: PDF, JPEG or
+PNG. None of those is a type an HTML form can send, so a cross-site page still can't send one
+without a CORS preflight.
 
 Pure ASGI, not `BaseHTTPMiddleware`, so streaming responses (SSE) are never buffered.
 """
@@ -25,7 +26,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
 DEFAULT_PORTS = {"http": 80, "https": 443}
-DOCUMENT_UPLOAD_PATH = re.compile(r"/assets/[^/]+/documents")
+DOCUMENT_UPLOAD_PATH = re.compile(r"/assets/[^/]+/(?:documents|evidence)")
 DOCUMENT_MEDIA_TYPES = frozenset({"application/pdf", "image/jpeg", "image/png"})
 CSRF_FAILED = "csrf_origin"
 UNSUPPORTED_MEDIA_TYPE = "unsupported_media_type"

@@ -51,6 +51,14 @@ from app.models import (
     VerificationMode,
 )
 from app.tools.earth_obs import NdviPoint
+from app.tools.field_evidence import (
+    AuthenticityConcern,
+    DateCheck,
+    Disturbance,
+    GpsCheck,
+    LandCover,
+    WaterClarity,
+)
 
 # ----- Agent outputs (contract-tested later) -----
 
@@ -494,9 +502,110 @@ class IpoOut(IpoTermsOut):
     launched_at: datetime
 
 
-class EvidenceResponse(BaseModel):
-    event: EventOut
-    message: str
+# ----- Field evidence (T40) -----
+
+AnalysisStatus = Literal["pending", "completed", "failed", "not_run"]
+AiAnalysisMode = Literal["model", "mock", "off"]
+
+
+class FieldPhotoObservationOut(BaseModel):
+    """The perception model's labels for a photo (untrusted; they can only fail a photo)."""
+
+    shows_landscape: bool
+    land_cover: list[LandCover]
+    disturbance: list[Disturbance]
+    water_clarity: WaterClarity
+    authenticity_concerns: list[AuthenticityConcern]
+    instruction_text: bool = Field(description="The image holds text aimed at an AI model.")
+
+
+class FieldPhotoOut(BaseModel):
+    """One field photo and its checks (the listing's community and same-world admins only).
+    The photo, re-encoded without any metadata, is at `GET …/evidence/{id}/image`."""
+
+    id: UUID
+    asset_id: UUID
+    created_at: datetime
+    width: int
+    height: int
+    size_bytes: int = Field(description="The stored, re-encoded JPEG.")
+    gps_check: GpsCheck = Field(
+        description="EXIF position: inside the listing, near (within gps_buffer_m of its "
+        "edge), outside, or missing. The position itself is never stored."
+    )
+    gps_distance_m: int | None = Field(
+        description="Metres outside the listing's edge for `near` (at most gps_buffer_m); 0 "
+        "inside; null when outside (only that it's over gps_buffer_m is kept) or missing."
+    )
+    gps_buffer_m: int
+    date_check: DateCheck = Field(
+        description="EXIF date taken: ok (at most max_age_days old, not in the future), "
+        "missing, future or too_old."
+    )
+    taken_on: date | None
+    max_age_days: int
+    analysis_status: AnalysisStatus = Field(
+        description="pending (the image model is reading it), completed, failed (no model "
+        "answer, the AI budget is spent, or the analysis was lost) or not_run (a geotag check "
+        "failed, or AI analysis is off: then the photo can't be validated)."
+    )
+    observation: FieldPhotoObservationOut | None
+    validated: bool = Field(
+        description="Validated field evidence: both geotag checks passed and the analysis "
+        "found an outdoor landscape with no authenticity concern (rules in code)."
+    )
+    reasons: list[str] = Field(
+        description="Why it isn't validated: gps_missing, gps_outside, taken_missing, "
+        "taken_future, taken_too_old, not_analysed, not_a_landscape, no_land_cover, "
+        "authenticity_concern, instruction_text."
+    )
+    event_id: UUID | None = Field(description="The evidence event of a validated photo.")
+
+
+class ConfidenceEffectOut(BaseModel):
+    current: Decimal | None = Field(description="The latest report's confidence.")
+    projected: Decimal | None = Field(
+        description="The next rating's confidence with the evidence counted (same inputs "
+        "otherwise); null before the first rating."
+    )
+    points: Decimal = Field(
+        description="Points validated evidence adds: 14.0 (0.2 × (1.0 − 0.3) × 100), or 0 "
+        "when nothing is validated yet or the latest report already counts it."
+    )
+    counted: bool = Field(description="The latest report already used validated evidence.")
+    listing_min: Decimal = Field(
+        description="The confidence a rating needs to list (the listing gate's minimum); a "
+        "`projected` below it would still leave the listing needing evidence."
+    )
+
+
+class FieldEvidenceOut(BaseModel):
+    """A listing's field photos and their combined effect (the steward's view)."""
+
+    photos: list[FieldPhotoOut]
+    max_photos: int
+    validated: int
+    ai_analysis: AiAnalysisMode = Field(
+        description="What reads the photos: model (MiniCPM-V on Nebius Token Factory, only "
+        "with FIELD_EVIDENCE_AI_LIVE), mock (USE_MOCKS: a fake model, nothing sent) or off "
+        "(no photo is sent to a model, so none is validated)."
+    )
+    confidence: ConfidenceEffectOut
+
+
+class FieldEvidencePublicOut(BaseModel):
+    """Aggregate field evidence for anyone who can see the asset: counts and labels only, never
+    a photo, a position or who took it."""
+
+    photos: int
+    validated: int
+    latest_taken_month: str | None = Field(
+        pattern=r"^\d{4}-\d{2}$",
+        description="`YYYY-MM` the latest validated photo was taken (never the day).",
+    )
+    land_cover: list[LandCover] = Field(description="Seen in validated photos.")
+    disturbance: list[Disturbance] = Field(description="Seen in validated photos.")
+    counted_in_latest_report: bool
 
 
 class PricePoint(BaseModel):

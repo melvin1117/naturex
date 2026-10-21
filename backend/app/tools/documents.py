@@ -26,6 +26,12 @@ Every upload is treated as hostile until this module accepts it:
   title), its declared size checked before it's decoded; PDFs aren't rasterised (no
   permissively licensed pure-Python rasteriser exists).
 
+**Field photos** (T40, `photo=True`): JPEG or PNG only, at most `MAX_PHOTO_BYTES`, with the same
+structure, signature and pixel checks. The worker also reads the EXIF GPS position and the
+original date and time (`exif_location`), the only metadata kept, and re-encodes the photo as a
+JPEG at most `PHOTO_MAX_SIDE` pixels with **no metadata at all** (`photo_jpeg`); the original
+bytes, with their EXIF, are never stored.
+
 `inspect_in_worker` runs `inspect_document` in a fresh worker process (see "the worker" below).
 The worker **contains denial of service**: a pathological file or a parser bug can't hang,
 exhaust or crash the API process. It is **not a code-execution sandbox**: a memory-corruption
@@ -40,6 +46,7 @@ import base64
 import contextlib
 import io
 import json
+import math
 import os
 import subprocess
 import sys
@@ -48,6 +55,7 @@ import warnings
 import zlib
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import IO, Any
 
@@ -57,6 +65,10 @@ MEDIA_PNG = "image/png"
 ACCEPTED_MEDIA_TYPES = (MEDIA_PDF, MEDIA_JPEG, MEDIA_PNG)
 
 MAX_DOCUMENT_BYTES = 5 * 1024 * 1024
+MAX_PHOTO_BYTES = 10 * 1024 * 1024
+"""A field photo straight from a phone camera, its EXIF intact (T40)."""
+PHOTO_MAX_SIDE = 1_280
+PHOTO_JPEG_QUALITY = 85
 MAX_IMAGE_PIXELS = 40_000_000
 """Decoded pixels per image (about 8000 × 5000): a 600-dpi scan of a legal page fits."""
 MAX_IMAGE_SIDE = 12_000
@@ -153,13 +165,20 @@ class InspectionBusy(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class Inspection:
-    """An accepted file: what it is, how big it decodes, and its sanitised preview."""
+    """An accepted file: what it is, how big it decodes, and its sanitised preview. A field
+    photo (`photo=True`) has no preview but `photo_jpeg`, and the EXIF position and date the
+    worker read (`None` when absent or unreadable)."""
 
     media_type: str
     page_count: int | None = None
     width: int | None = None
     height: int | None = None
     preview_png: bytes | None = None
+    photo_jpeg: bytes | None = None
+    gps_lat: float | None = None
+    gps_lon: float | None = None
+    taken_at: str | None = None
+    """EXIF `DateTimeOriginal` as an ISO local date-time without a zone (2026-10-01T09:30:00)."""
 
 
 def sniff(data: bytes) -> str | None:
@@ -173,15 +192,20 @@ def sniff(data: bytes) -> str | None:
     return None
 
 
-def inspect_document(data: bytes, declared: str) -> Inspection:
+def max_bytes(*, photo: bool) -> int:
+    return MAX_PHOTO_BYTES if photo else MAX_DOCUMENT_BYTES
+
+
+def inspect_document(data: bytes, declared: str, *, photo: bool = False) -> Inspection:
     """Accept or refuse `data` uploaded as `declared` (raises DocumentRejected). Pure and
-    in-process: call it through `inspect_in_worker` for untrusted input."""
+    in-process: call it through `inspect_in_worker` for untrusted input. `photo=True` accepts
+    only JPEG and PNG field photos (T40)."""
     if not data:
         raise DocumentRejected(EMPTY_FILE)
-    if len(data) > MAX_DOCUMENT_BYTES:
+    if len(data) > max_bytes(photo=photo):
         raise DocumentRejected(FILE_TOO_LARGE)
     media_type = sniff(data)
-    if media_type is None:
+    if media_type is None or (photo and media_type == MEDIA_PDF):
         raise DocumentRejected(UNSUPPORTED_FORMAT)
     if declared.split(";", 1)[0].strip().lower() != media_type:
         raise DocumentRejected(MEDIA_TYPE_MISMATCH)
@@ -193,8 +217,7 @@ def inspect_document(data: bytes, declared: str) -> Inspection:
         _jpeg_structure(data)
     if any(signature in data for signature in _EMBEDDED_SIGNATURES):
         raise DocumentRejected(EMBEDDED_SIGNATURE)
-    width, height, preview = _decode_image(data, media_type)
-    return Inspection(media_type, width=width, height=height, preview_png=preview)
+    return _decode_image(data, media_type, photo=photo)
 
 
 # ----- images -----------------------------------------------------------------------------------
@@ -258,8 +281,9 @@ def _pillow_limits() -> Iterator[None]:
         Image.MAX_IMAGE_PIXELS = saved
 
 
-def _decode_image(data: bytes, media_type: str) -> tuple[int, int, bytes]:
-    """Check the header, decode every pixel, and return the size and a sanitised preview."""
+def _decode_image(data: bytes, media_type: str, *, photo: bool = False) -> Inspection:
+    """Check the header, decode every pixel, and return the size and a sanitised preview (a
+    field photo: its metadata-free JPEG and the EXIF position and date)."""
     from PIL import Image, UnidentifiedImageError
 
     expected = "PNG" if media_type == MEDIA_PNG else "JPEG"
@@ -269,7 +293,20 @@ def _decode_image(data: bytes, media_type: str) -> tuple[int, int, bytes]:
                 width, height = image.size
                 _check_dimensions(width, height)  # before any pixel is decoded
                 image.load()
-                return width, height, _preview(image)
+                if not photo:
+                    return Inspection(
+                        media_type, width=width, height=height, preview_png=_preview(image)
+                    )
+                lat, lon, taken_at = exif_location(image)
+                return Inspection(
+                    media_type,
+                    width=width,
+                    height=height,
+                    photo_jpeg=_photo_jpeg(image),
+                    gps_lat=lat,
+                    gps_lon=lon,
+                    taken_at=taken_at,
+                )
         except DocumentRejected:
             raise
         except (Image.DecompressionBombError, Image.DecompressionBombWarning):
@@ -291,6 +328,87 @@ def _preview(image: Any) -> bytes:
     out = io.BytesIO()
     stripped.save(out, format="PNG", optimize=False)
     return out.getvalue()
+
+
+def _photo_jpeg(image: Any) -> bytes:
+    """A re-encoded JPEG: oriented, at most PHOTO_MAX_SIDE, RGB (transparency flattened onto
+    white), with no EXIF, XMP, ICC or comment: nothing but pixels."""
+    from PIL import Image, ImageOps
+
+    oriented = ImageOps.exif_transpose(image)
+    if "A" in oriented.getbands() or "transparency" in oriented.info:
+        rgba = oriented.convert("RGBA")
+        flat = Image.new("RGB", rgba.size, (255, 255, 255))
+        flat.paste(rgba, mask=rgba.getchannel("A"))
+        oriented = flat
+    clean = oriented.convert("RGB")
+    clean.thumbnail((PHOTO_MAX_SIDE, PHOTO_MAX_SIDE), Image.Resampling.LANCZOS)
+    stripped = Image.new("RGB", clean.size)
+    stripped.paste(clean)
+    out = io.BytesIO()
+    stripped.save(out, format="JPEG", quality=PHOTO_JPEG_QUALITY, optimize=True)
+    return out.getvalue()
+
+
+_GPS_IFD = 0x8825
+_EXIF_IFD = 0x8769
+_DATETIME_ORIGINAL = 0x9003
+_DATETIME = 0x0132
+
+
+def _degrees(value: Any, ref: Any, positive: str, negative: str, limit: float) -> float | None:
+    """EXIF degrees, minutes and seconds with their N/S or E/W reference, as signed degrees."""
+    if isinstance(ref, bytes):
+        ref = ref.decode("ascii", "replace")
+    if not isinstance(ref, str) or ref.strip("\x00 ").upper() not in (positive, negative):
+        return None
+    if not isinstance(value, tuple | list) or len(value) != 3:
+        return None
+    d, m, s = (float(part) for part in value)
+    if not all(math.isfinite(x) and x >= 0 for x in (d, m, s)) or m >= 60 or s >= 60:
+        return None
+    degrees = d + m / 60 + s / 3600
+    if degrees > limit:
+        return None
+    return -degrees if ref.strip("\x00 ").upper() == negative else degrees
+
+
+def _exif_datetime(raw: Any) -> str | None:
+    if isinstance(raw, bytes):
+        raw = raw.decode("ascii", "replace")
+    if not isinstance(raw, str):
+        return None
+    try:
+        parsed = datetime.strptime(raw.strip("\x00 ")[:19], "%Y:%m:%d %H:%M:%S")
+    except ValueError:
+        return None
+    return parsed.isoformat()
+
+
+def exif_location(image: Any) -> tuple[float | None, float | None, str | None]:
+    """The EXIF GPS latitude and longitude (both or neither) and the original date and time,
+    each None when absent or malformed. Read in the worker: EXIF is attacker-controlled."""
+    try:
+        exif = image.getexif()
+    except Exception:
+        return None, None, None
+    lat = lon = None
+    try:
+        gps = exif.get_ifd(_GPS_IFD)
+        lat = _degrees(gps.get(2), gps.get(1), "N", "S", 90)
+        lon = _degrees(gps.get(4), gps.get(3), "E", "W", 180)
+    except Exception:
+        lat = lon = None
+    if lat is None or lon is None:
+        lat = lon = None
+    taken = None
+    try:
+        taken = _exif_datetime(exif.get_ifd(_EXIF_IFD).get(_DATETIME_ORIGINAL))
+        if taken is None:
+            taken = _exif_datetime(exif.get(_DATETIME))
+    except Exception:
+        taken = None
+    return lat, lon, taken
 
 
 # ----- PDFs -------------------------------------------------------------------------------------
@@ -490,26 +608,34 @@ def _limit_resources(timeout_s: float) -> None:
             resource.setrlimit(limit, (value, value))
 
 
-def _verdict(data: bytes, declared: str) -> dict[str, Any]:
+_BLOB_FIELDS = ("preview_png", "photo_jpeg")
+_PHOTO_MODE = "photo"
+_MAX_TAKEN_AT_CHARS = 32
+
+
+def _verdict(data: bytes, declared: str, *, photo: bool = False) -> dict[str, Any]:
     try:
-        found = inspect_document(data, declared)
+        found = inspect_document(data, declared, photo=photo)
     except DocumentRejected as exc:
         return {"rejected": exc.code}
     except Exception:
         return {"rejected": INSPECTION_FAILED}
     fields = asdict(found)
-    preview = fields.pop("preview_png")
-    fields["preview_png"] = None if preview is None else base64.b64encode(preview).decode()
+    for name in _BLOB_FIELDS:
+        blob = fields.pop(name)
+        fields[name] = None if blob is None else base64.b64encode(blob).decode()
     return {"accepted": fields}
 
 
 def _worker_main(argv: list[str]) -> int:
-    """`argv`: the package root (already on the path), the declared type, the timeout."""
+    """`argv`: the package root (already on the path), the declared type, the timeout and the
+    mode (`photo` for a field photo, else a document)."""
     declared = argv[1] if len(argv) > 1 else ""
     timeout_s = float(argv[2]) if len(argv) > 2 else INSPECT_TIMEOUT_S
+    photo = len(argv) > 3 and argv[3] == _PHOTO_MODE
     _limit_resources(timeout_s)
-    data = sys.stdin.buffer.read(MAX_DOCUMENT_BYTES + 1)
-    sys.stdout.write(json.dumps(_verdict(data, declared)))
+    data = sys.stdin.buffer.read(max_bytes(photo=photo) + 1)
+    sys.stdout.write(json.dumps(_verdict(data, declared, photo=photo)))
     sys.stdout.flush()
     return 0
 
@@ -521,13 +647,17 @@ def _parse_verdict(raw: bytes) -> Inspection:
             code = verdict["rejected"]
             raise DocumentRejected(code if isinstance(code, str) else INSPECTION_FAILED)
         fields = dict(verdict["accepted"])
-        preview = fields.pop("preview_png")
+        blobs = {name: _optional_blob(fields.get(name)) for name in _BLOB_FIELDS}
         found = Inspection(
             media_type=str(fields["media_type"]),
             page_count=_optional_int(fields.get("page_count")),
             width=_optional_int(fields.get("width")),
             height=_optional_int(fields.get("height")),
-            preview_png=None if preview is None else base64.b64decode(preview, validate=True),
+            preview_png=blobs["preview_png"],
+            photo_jpeg=blobs["photo_jpeg"],
+            gps_lat=_optional_degrees(fields.get("gps_lat"), 90),
+            gps_lon=_optional_degrees(fields.get("gps_lon"), 180),
+            taken_at=_optional_taken_at(fields.get("taken_at")),
         )
     except DocumentRejected:
         raise
@@ -536,6 +666,30 @@ def _parse_verdict(raw: bytes) -> Inspection:
     if found.media_type not in ACCEPTED_MEDIA_TYPES:
         raise DocumentRejected(INSPECTION_FAILED)
     return found
+
+
+def _optional_blob(value: Any) -> bytes | None:
+    return None if value is None else base64.b64decode(value, validate=True)
+
+
+def _optional_degrees(value: Any, limit: float) -> float | None:
+    if value is None:
+        return None
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        raise TypeError(value)
+    degrees = float(value)
+    if not math.isfinite(degrees) or abs(degrees) > limit:
+        raise ValueError(value)
+    return degrees
+
+
+def _optional_taken_at(value: Any) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or len(value) > _MAX_TAKEN_AT_CHARS:
+        raise ValueError(value)
+    datetime.fromisoformat(value)  # the worker wrote an ISO date-time or nothing
+    return value
 
 
 def _optional_int(value: Any) -> int | None:
@@ -564,19 +718,24 @@ def _drain(process: subprocess.Popen[bytes], out: bytearray) -> None:
 
 
 def run_worker(
-    data: bytes | memoryview, declared: str, *, timeout_s: float = INSPECT_TIMEOUT_S
+    data: bytes | memoryview,
+    declared: str,
+    *,
+    timeout_s: float = INSPECT_TIMEOUT_S,
+    photo: bool = False,
 ) -> Inspection:
     """`inspect_document` in a fresh worker process, killed after `timeout_s`. The caller holds
     an `inspection_slot`. Raises DocumentRejected: the file's fault, or `inspection_timeout` /
     `inspection_failed` when the worker ran out of time or memory, crashed or said too much."""
     if len(data) == 0:
         raise DocumentRejected(EMPTY_FILE)
-    if len(data) > MAX_DOCUMENT_BYTES:  # don't ship an oversized body to a worker
+    if len(data) > max_bytes(photo=photo):  # don't ship an oversized body to a worker
         raise DocumentRejected(FILE_TOO_LARGE)
     command = [sys.executable, "-I", "-B", "-c", _WORKER_CODE, _PACKAGE_ROOT]
+    mode = _PHOTO_MODE if photo else "document"
     try:
         process = subprocess.Popen(  # noqa: S603 - a fixed command; the file goes in on stdin
-            [*command, declared, str(timeout_s)],
+            [*command, declared, str(timeout_s), mode],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
@@ -605,12 +764,19 @@ def run_worker(
         process.stdout.close()
     if process.returncode != 0 or len(out) > WORKER_MAX_OUTPUT_BYTES:
         raise DocumentRejected(INSPECTION_FAILED)
-    return _parse_verdict(bytes(out))
+    found = _parse_verdict(bytes(out))
+    if photo != (found.photo_jpeg is not None) or (photo and found.preview_png is not None):
+        raise DocumentRejected(INSPECTION_FAILED)
+    return found
 
 
 def inspect_in_worker(
-    data: bytes | memoryview, declared: str, *, timeout_s: float = INSPECT_TIMEOUT_S
+    data: bytes | memoryview,
+    declared: str,
+    *,
+    timeout_s: float = INSPECT_TIMEOUT_S,
+    photo: bool = False,
 ) -> Inspection:
     """`run_worker` in a slot of its own: raises InspectionBusy if none is free right now."""
     with inspection_slot():
-        return run_worker(data, declared, timeout_s=timeout_s)
+        return run_worker(data, declared, timeout_s=timeout_s, photo=photo)

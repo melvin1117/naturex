@@ -47,6 +47,7 @@ from app.tools.earth_obs import (
     is_mock_metrics,
     load_site_metrics,
 )
+from app.tools.field_evidence import split_field_evidence
 from app.tools.scoring import (
     GATE_CONFIDENCE_BELOW_70,
     GATE_FOREST_LOSS,
@@ -241,15 +242,18 @@ def rate_site(
 
     ``is_wetland`` is the asset's fixed wetland status (from its baseline, never from the
     version being scored). ``as_of`` is the rating date, which sets the recency term.
-    ``events`` (News Scout or field evidence) feed the threat-pressure term T.
+    ``events``: News Scout events feed the threat-pressure term T; validated field evidence
+    (T40) sets the confidence evidence term instead and never feeds T.
     """
     age = metrics_data_age_days(metrics, as_of=as_of)
     valuation = value_metrics(metrics)
+    threats, has_evidence = split_field_evidence(events)
     score = score_metrics(
         metrics,
         is_wetland=is_wetland,
         data_age_days=age,
-        events=events,
+        events=threats,
+        has_validated_field_evidence=has_evidence,
         forest_loss_last_12m_ha=metrics.forest_loss_last_12m_ha,
     )
     value_mid = Decimal(valuation.value_mid)
@@ -449,11 +453,13 @@ def audited_rating(
 ) -> SiteRating:
     """`rating` re-scored with the Auditor's bounded adjustment and agreement (T26 path)."""
     metrics = rating.metrics
+    threats, has_evidence = split_field_evidence(events)
     inputs = ScoreInputs.from_metrics(
         metrics,
         is_wetland=rating.is_wetland,
         data_age_days=rating.data_age_days,
-        events=events,
+        events=threats,
+        has_validated_field_evidence=has_evidence,
         forest_loss_last_12m_ha=metrics.forest_loss_last_12m_ha,
     )
     return rating.with_score(apply_audit(inputs, audit))

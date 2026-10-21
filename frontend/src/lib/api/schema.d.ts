@@ -293,23 +293,6 @@ export interface paths {
         patch: operations["edit_listing_assets__asset_id__patch"];
         trace?: never;
     };
-    "/assets/{asset_id}/evidence": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Upload Evidence */
-        post: operations["upload_evidence_assets__asset_id__evidence_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/assets/{asset_id}/reports": {
         parameters: {
             query?: never;
@@ -731,6 +714,103 @@ export interface paths {
          *     until a new run is approved. Both changes are in the ledger.
          */
         post: operations["revoke_verification_admin_assets__asset_id__verification__run_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{asset_id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Photos
+         * @description The listing's field photos, oldest first, with each one's checks, and the confidence
+         *     the next rating would have with the validated ones (from the latest report).
+         */
+        get: operations["list_photos_assets__asset_id__evidence_get"];
+        put?: never;
+        /**
+         * Upload Photo
+         * @description Upload one geotagged field photo for the listing (its community's owner or stewards).
+         *     The body is the file. Its EXIF position must be inside the listing (or within 100 m of its
+         *     edge) and its date at most a year old; only those checks' results are kept, never the
+         *     position. The photo is stored re-encoded, with no metadata, and read by an image model on
+         *     Nebius Token Factory when both checks pass and AI analysis is on (`analysis_status`: poll
+         *     the `Location`, `GET …/evidence/{photo_id}`).
+         */
+        post: operations["upload_photo_assets__asset_id__evidence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{asset_id}/evidence/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Evidence Summary
+         * @description Field evidence in aggregate, for anyone who can see the asset: how many photos, how many
+         *     validated, and the land cover and disturbance labels seen in validated ones.
+         */
+        get: operations["evidence_summary_assets__asset_id__evidence_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{asset_id}/evidence/{photo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Photo
+         * @description One field photo's checks (the upload's `Location`; poll it while `pending`).
+         */
+        get: operations["get_photo_assets__asset_id__evidence__photo_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Photo
+         * @description Remove a field photo with its image and evidence event. A rating already sealed keeps its
+         *     own copy of what it cited; the next one won't count the photo.
+         */
+        delete: operations["delete_photo_assets__asset_id__evidence__photo_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{asset_id}/evidence/{photo_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Photo Image
+         * @description The photo as stored: a JPEG re-encoded from the decoded pixels, at most 1280 px, with no
+         *     EXIF (so no location). Loaded by `(world_id, asset_id, id)`.
+         */
+        get: operations["photo_image_assets__asset_id__evidence__photo_id__image_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1965,6 +2045,34 @@ export interface components {
             /** Description */
             description?: string | null;
         };
+        /** ConfidenceEffectOut */
+        ConfidenceEffectOut: {
+            /**
+             * Current
+             * @description The latest report's confidence.
+             */
+            current: string | null;
+            /**
+             * Projected
+             * @description The next rating's confidence with the evidence counted (same inputs otherwise); null before the first rating.
+             */
+            projected: string | null;
+            /**
+             * Points
+             * @description Points validated evidence adds: 14.0 (0.2 × (1.0 − 0.3) × 100), or 0 when nothing is validated yet or the latest report already counts it.
+             */
+            points: string;
+            /**
+             * Counted
+             * @description The latest report already used validated evidence.
+             */
+            counted: boolean;
+            /**
+             * Listing Min
+             * @description The confidence a rating needs to list (the listing gate's minimum); a `projected` below it would still leave the listing needing evidence.
+             */
+            listing_min: string;
+        };
         /**
          * CopilotDeltaEvent
          * @description A piece of the checked answer; the pieces concatenate to `done.answer`.
@@ -2174,11 +2282,152 @@ export interface components {
          * @enum {string}
          */
         EvidenceKind: "real" | "sample";
-        /** EvidenceResponse */
-        EvidenceResponse: {
-            event: components["schemas"]["EventOut"];
-            /** Message */
-            message: string;
+        /**
+         * FieldEvidenceOut
+         * @description A listing's field photos and their combined effect (the steward's view).
+         */
+        FieldEvidenceOut: {
+            /** Photos */
+            photos: components["schemas"]["FieldPhotoOut"][];
+            /** Max Photos */
+            max_photos: number;
+            /** Validated */
+            validated: number;
+            /**
+             * Ai Analysis
+             * @description What reads the photos: model (MiniCPM-V on Nebius Token Factory, only with FIELD_EVIDENCE_AI_LIVE), mock (USE_MOCKS: a fake model, nothing sent) or off (no photo is sent to a model, so none is validated).
+             * @enum {string}
+             */
+            ai_analysis: "model" | "mock" | "off";
+            confidence: components["schemas"]["ConfidenceEffectOut"];
+        };
+        /**
+         * FieldEvidencePublicOut
+         * @description Aggregate field evidence for anyone who can see the asset: counts and labels only, never
+         *     a photo, a position or who took it.
+         */
+        FieldEvidencePublicOut: {
+            /** Photos */
+            photos: number;
+            /** Validated */
+            validated: number;
+            /**
+             * Latest Taken Month
+             * @description `YYYY-MM` the latest validated photo was taken (never the day).
+             */
+            latest_taken_month: string | null;
+            /**
+             * Land Cover
+             * @description Seen in validated photos.
+             */
+            land_cover: ("tree_cover" | "shrubland" | "grassland" | "wetland_vegetation" | "open_water" | "cropland" | "bare_ground" | "built_up")[];
+            /**
+             * Disturbance
+             * @description Seen in validated photos.
+             */
+            disturbance: ("fire_scar" | "clearing_or_logging" | "dumping_or_waste" | "construction" | "erosion" | "drought_stress")[];
+            /** Counted In Latest Report */
+            counted_in_latest_report: boolean;
+        };
+        /**
+         * FieldPhotoObservationOut
+         * @description The perception model's labels for a photo (untrusted; they can only fail a photo).
+         */
+        FieldPhotoObservationOut: {
+            /** Shows Landscape */
+            shows_landscape: boolean;
+            /** Land Cover */
+            land_cover: ("tree_cover" | "shrubland" | "grassland" | "wetland_vegetation" | "open_water" | "cropland" | "bare_ground" | "built_up")[];
+            /** Disturbance */
+            disturbance: ("fire_scar" | "clearing_or_logging" | "dumping_or_waste" | "construction" | "erosion" | "drought_stress")[];
+            /**
+             * Water Clarity
+             * @enum {string}
+             */
+            water_clarity: "clear" | "turbid" | "polluted" | "no_water" | "unclear";
+            /** Authenticity Concerns */
+            authenticity_concerns: ("screen_or_print_photo" | "edited_or_composited" | "watermark_or_stock" | "not_a_photo")[];
+            /**
+             * Instruction Text
+             * @description The image holds text aimed at an AI model.
+             */
+            instruction_text: boolean;
+        };
+        /**
+         * FieldPhotoOut
+         * @description One field photo and its checks (the listing's community and same-world admins only).
+         *     The photo, re-encoded without any metadata, is at `GET …/evidence/{id}/image`.
+         */
+        FieldPhotoOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            /**
+             * Size Bytes
+             * @description The stored, re-encoded JPEG.
+             */
+            size_bytes: number;
+            /**
+             * Gps Check
+             * @description EXIF position: inside the listing, near (within gps_buffer_m of its edge), outside, or missing. The position itself is never stored.
+             * @enum {string}
+             */
+            gps_check: "inside" | "near" | "outside" | "missing";
+            /**
+             * Gps Distance M
+             * @description Metres outside the listing's edge for `near` (at most gps_buffer_m); 0 inside; null when outside (only that it's over gps_buffer_m is kept) or missing.
+             */
+            gps_distance_m: number | null;
+            /** Gps Buffer M */
+            gps_buffer_m: number;
+            /**
+             * Date Check
+             * @description EXIF date taken: ok (at most max_age_days old, not in the future), missing, future or too_old.
+             * @enum {string}
+             */
+            date_check: "ok" | "missing" | "future" | "too_old";
+            /** Taken On */
+            taken_on: string | null;
+            /** Max Age Days */
+            max_age_days: number;
+            /**
+             * Analysis Status
+             * @description pending (the image model is reading it), completed, failed (no model answer, the AI budget is spent, or the analysis was lost) or not_run (a geotag check failed, or AI analysis is off: then the photo can't be validated).
+             * @enum {string}
+             */
+            analysis_status: "pending" | "completed" | "failed" | "not_run";
+            observation: components["schemas"]["FieldPhotoObservationOut"] | null;
+            /**
+             * Validated
+             * @description Validated field evidence: both geotag checks passed and the analysis found an outdoor landscape with no authenticity concern (rules in code).
+             */
+            validated: boolean;
+            /**
+             * Reasons
+             * @description Why it isn't validated: gps_missing, gps_outside, taken_missing, taken_future, taken_too_old, not_analysed, not_a_landscape, no_land_cover, authenticity_concern, instruction_text.
+             */
+            reasons: string[];
+            /**
+             * Event Id
+             * @description The evidence event of a validated photo.
+             */
+            event_id: string | null;
         };
         /** GradeChange */
         GradeChange: {
@@ -4705,44 +4954,6 @@ export interface operations {
             };
         };
     };
-    upload_evidence_assets__asset_id__evidence_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                asset_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EvidenceResponse"];
-                };
-            };
-            /** @description Not allowed: `members_only` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_reports_assets__asset_id__reports_get: {
         parameters: {
             query?: never;
@@ -5915,6 +6126,325 @@ export interface operations {
             };
             /** @description `run_superseded` or `not_verified` (the run isn't verified) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_photos_assets__asset_id__evidence_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldEvidenceOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_found`: outside the caller's world, or the caller isn't a member of the listing's community or a same-world admin */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_photo_assets__asset_id__evidence_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "content-type": string;
+            };
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description The photo itself (JPEG or PNG, at most 10 MB), with its EXIF. */
+        requestBody: {
+            content: {
+                "image/jpeg": string;
+                "image/png": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldPhotoOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description members_only, treasury_cannot_act */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the caller's world, or not visible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `listing_closed` (ineligible or withdrawn), `photo_limit_reached` (5 per listing) or `photo_duplicate` (this file is already uploaded) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description length_required */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `file_too_large`: over 10 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `unsupported_media_type`: not JPEG or PNG */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The file is refused: empty_file, unsupported_format, media_type_mismatch, image_too_large, image_malformed, trailing_data, embedded_signature, inspection_timeout or inspection_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `upload_rate_limited`: see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `inspection_busy`: see Retry-After */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    evidence_summary_assets__asset_id__evidence_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldEvidencePublicOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_photo_assets__asset_id__evidence__photo_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                photo_id: string;
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldPhotoOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_found` (see the list route) or `photo_not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_photo_assets__asset_id__evidence__photo_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                photo_id: string;
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description members_only, treasury_cannot_act */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_found` or `photo_not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    photo_image_assets__asset_id__evidence__photo_id__image_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                photo_id: string;
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The photo re-encoded as a JPEG with no metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_found` (see the list route) or `photo_not_found` */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
