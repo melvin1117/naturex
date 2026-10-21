@@ -3,7 +3,7 @@
 import { ArrowUp, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,13 @@ export const COPILOT_SUGGESTIONS = [
   "How is the value estimated?",
 ];
 
+/** For the world-wide Copilot (the portfolio page), across every site. */
+export const WORLD_COPILOT_SUGGESTIONS = [
+  "Which sites were downgraded?",
+  "What news is affecting these sites?",
+  "Which site has the healthiest nature?",
+];
+
 const MAX_QUESTION = 500;
 
 type Status = "searching" | "writing" | "done" | "error";
@@ -42,16 +49,18 @@ interface Turn {
 }
 
 /**
- * The Investor Copilot for one asset (T39): streamed answers grounded in the site's reports and
- * news, with every `[ref]` linking to its source. Signed-out visitors are asked to sign in.
+ * The Investor Copilot (T39, T44): streamed answers grounded in reports and news, with every
+ * `[ref]` linking to its source. With `assetId` it answers about that site; without it (the
+ * portfolio page) it searches every site visible in the world, and each citation names its
+ * site. Signed-out visitors are asked to sign in.
  */
-export function CopilotChat({
-  assetId,
-  assetName,
-}: {
-  assetId: string;
-  assetName: string;
-}) {
+export function CopilotChat(
+  props: { assetId: string; assetName: string } | { assetId?: undefined },
+) {
+  const assetId = props.assetId;
+  const scope: Scope = props.assetId
+    ? { kind: "asset", assetName: props.assetName }
+    : { kind: "world" };
   const { api } = useDataLayer();
   const { world } = useWorld();
   const pathname = usePathname();
@@ -76,7 +85,7 @@ export function CopilotChat({
 
   if (!world?.me) {
     return (
-      <Shell>
+      <Shell scope={scope}>
         <Button asChild variant="outline" size="sm" className="mt-4">
           <Link href={loginHref(search ? `${pathname}?${search}` : pathname)}>
             Sign in to ask the Copilot
@@ -115,7 +124,7 @@ export function CopilotChat({
     try {
       await askCopilot(
         api,
-        { question: q, asset_id: assetId },
+        assetId ? { question: q, asset_id: assetId } : { question: q },
         {
           signal: controller.signal,
           onEvent: (event) => {
@@ -158,8 +167,11 @@ export function CopilotChat({
     }
   }
 
+  const suggestions =
+    scope.kind === "asset" ? COPILOT_SUGGESTIONS : WORLD_COPILOT_SUGGESTIONS;
+  const inputId = `copilot-${assetId ?? "world"}`;
   return (
-    <Shell>
+    <Shell scope={scope}>
       <div
         ref={listRef}
         data-testid="copilot-turns"
@@ -173,16 +185,21 @@ export function CopilotChat({
               className="mt-0.5 size-4 shrink-0 text-lime-ink"
               aria-hidden="true"
             />
-            Ask about {assetName}: why its grade or price changed, how the value
-            is estimated, or what the news says.
+            {scope.kind === "asset"
+              ? `Ask about ${scope.assetName}: why its grade or price changed, how the value is estimated, or what the news says.`
+              : "Ask across every site: which were re-rated, what the news says, or how they compare. Answers link to each site's report or news."}
           </p>
         )}
         {turns.map((turn) => (
-          <TurnView key={turn.id} turn={turn} />
+          <TurnView
+            key={turn.id}
+            turn={turn}
+            withAsset={scope.kind === "world"}
+          />
         ))}
       </div>
       <div className="mt-4 flex flex-wrap gap-1.5">
-        {COPILOT_SUGGESTIONS.map((q) => (
+        {suggestions.map((q) => (
           <Button
             key={q}
             type="button"
@@ -203,15 +220,21 @@ export function CopilotChat({
           void ask(draft);
         }}
       >
-        <label htmlFor={`copilot-${assetId}`} className="sr-only">
-          Ask the Copilot about {assetName}
+        <label htmlFor={inputId} className="sr-only">
+          {scope.kind === "asset"
+            ? `Ask the Copilot about ${scope.assetName}`
+            : "Ask the Copilot about every site"}
         </label>
         <Input
-          id={`copilot-${assetId}`}
+          id={inputId}
           value={draft}
           maxLength={MAX_QUESTION}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Why did it drop?"
+          placeholder={
+            scope.kind === "asset"
+              ? "Why did it drop?"
+              : "Which site fell most?"
+          }
           className="rounded-full"
           autoComplete="off"
         />
@@ -228,25 +251,31 @@ export function CopilotChat({
   );
 }
 
-function Shell({ children }: { children: ReactNode }) {
+type Scope = { kind: "asset"; assetName: string } | { kind: "world" };
+
+function Shell({ scope, children }: { scope: Scope; children: ReactNode }) {
+  const titleId = useId();
   return (
     <section
-      aria-labelledby="copilot-title"
+      aria-labelledby={titleId}
       className="rounded-3xl bg-card p-6 shadow-soft"
     >
-      <h2 id="copilot-title" className="text-base font-semibold">
-        Ask about this site
+      <h2 id={titleId} className="text-base font-semibold">
+        {scope.kind === "asset" ? "Ask about this site" : "Ask the Copilot"}
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        The Copilot answers only from this site&apos;s reports and news, and
-        links every claim to its source. Play money only; not advice.
+        {scope.kind === "asset"
+          ? "The Copilot answers only from this site's reports and news, and links every claim to its source."
+          : "The Copilot answers only from the reports and news of the sites in your world, and links every claim to its source."}{" "}
+        Play money only; not advice.
       </p>
       {children}
     </section>
   );
 }
 
-function TurnView({ turn }: { turn: Turn }) {
+function TurnView({ turn, withAsset }: { turn: Turn; withAsset: boolean }) {
+  const label = (s: CopilotSource) => sourceLabel(s, { withAsset });
   return (
     <div className="space-y-2">
       <p className="ml-auto w-fit max-w-[90%] rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-sm text-primary-foreground">
@@ -268,7 +297,11 @@ function TurnView({ turn }: { turn: Turn }) {
         )}
         {turn.answer && (
           <p>
-            <AnswerText text={turn.answer} sources={turn.citations} />
+            <AnswerText
+              text={turn.answer}
+              sources={turn.citations}
+              label={label}
+            />
           </p>
         )}
         {turn.status === "error" && (
@@ -288,13 +321,13 @@ function TurnView({ turn }: { turn: Turn }) {
                 <li key={s.ref} className="max-w-full min-w-0">
                   <Link
                     href={sourceHref(s)}
-                    title={sourceLabel(s)}
+                    title={label(s)}
                     className="inline-flex max-w-full items-center gap-1 rounded-full bg-card px-2.5 py-1 text-xs font-medium hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   >
                     <span className="font-mono text-muted-foreground">
                       {s.ref}
                     </span>
-                    <span className="truncate">{sourceLabel(s)}</span>
+                    <span className="truncate">{label(s)}</span>
                   </Link>
                 </li>
               ))}
@@ -310,9 +343,11 @@ function TurnView({ turn }: { turn: Turn }) {
 function AnswerText({
   text,
   sources,
+  label,
 }: {
   text: string;
   sources: CopilotSource[];
+  label: (source: CopilotSource) => string;
 }) {
   return (
     <>
@@ -323,7 +358,7 @@ function AnswerText({
           <Link
             key={i}
             href={sourceHref(part.source)}
-            aria-label={`Source ${part.ref}: ${sourceLabel(part.source)}`}
+            aria-label={`Source ${part.ref}: ${label(part.source)}`}
             className="mx-0.5 rounded bg-card px-1 font-mono text-xs font-medium underline-offset-2 hover:underline"
           >
             {part.ref}

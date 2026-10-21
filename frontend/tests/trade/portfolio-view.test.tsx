@@ -20,6 +20,7 @@ import {
   sequence,
   SIGNED_IN_WORLD,
 } from "../lib/helpers";
+import { EVENT_SOURCE, REPORT_SOURCE, sseResponse } from "../copilot/fixtures";
 import { ASSET_ID, cards, holding, portfolio } from "./fixtures";
 
 vi.mock("next/navigation", () => ({
@@ -108,6 +109,76 @@ describe("PortfolioView", () => {
       within(alerts).getByText("Xochimilco Wetland: health fell 6.0 points"),
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "Mark all read" })).toBeVisible();
+  });
+
+  it("asks the Copilot across every site, citing each site's report or news (T44)", async () => {
+    const FOREST = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const forestReport = {
+      ...REPORT_SOURCE,
+      ref: "R2-2",
+      asset_id: FOREST,
+      asset_name: "Osa Forest",
+    };
+    const answer =
+      "The wetland faces encroachment [E55555555] and fell [R2]; the forest held steady [R2-2].";
+    const backend = renderPortfolio({
+      "POST /copilot": () =>
+        sseResponse([
+          {
+            type: "sources",
+            sources: [EVENT_SOURCE, REPORT_SOURCE, forestReport],
+          },
+          { type: "delta", text: answer },
+          {
+            type: "done",
+            answer,
+            citations: [EVENT_SOURCE, REPORT_SOURCE, forestReport],
+            mode: "model",
+            model: "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+          },
+        ]),
+    });
+
+    const chat = await screen.findByRole("region", { name: "Ask the Copilot" });
+    fireEvent.change(
+      within(chat).getByLabelText("Ask the Copilot about every site"),
+      { target: { value: "Which sites fell?" } },
+    );
+    fireEvent.click(
+      within(chat).getByRole("button", { name: "Send question" }),
+    );
+
+    expect(
+      await within(chat).findByRole("link", {
+        name: "Source R2-2: Osa Forest · Report v2",
+      }),
+    ).toHaveAttribute("href", `/asset/${FOREST}?tab=report`);
+    expect(
+      within(chat).getByRole("link", {
+        name: `Source E55555555: Xochimilco wetland · ${EVENT_SOURCE.title}`,
+      }),
+    ).toHaveAttribute("href", `/asset/${EVENT_SOURCE.asset_id}?tab=news`);
+    expect(
+      within(chat).getByRole("link", {
+        name: /^R2-2\s*Osa Forest · Report v2$/,
+      }),
+    ).toBeVisible();
+    const [request] = backend.requests.filter((r) => r.method === "POST");
+    // World-wide: no asset_id, so the backend searches every visible site.
+    expect(await request!.json()).toEqual({ question: "Which sites fell?" });
+  });
+
+  it("offers world-wide suggestions", async () => {
+    renderPortfolio();
+    const chat = await screen.findByRole("region", { name: "Ask the Copilot" });
+    expect(
+      within(chat).getByRole("button", {
+        name: "Which sites were downgraded?",
+      }),
+    ).toBeVisible();
+    expect(
+      within(chat).queryByRole("button", { name: "What drives this grade?" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows cash, totals and each holding exactly as the API sends them", async () => {

@@ -2,8 +2,10 @@
 
 import { Leaf, RefreshCwIcon, Sprout, Trees } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { AlertsList } from "@/components/alerts-list";
+import { CopilotChat } from "@/components/copilot-chat";
 import { Delta, SiteThumb, Stat } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
 import { Portfolio as PrototypePortfolio } from "@/components/proto/portfolio";
@@ -122,25 +124,30 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
-        <Panel title="Holdings">
-          {data.holdings.length === 0 ? (
-            <div className="py-8 text-center">
-              <Sprout
-                className="mx-auto size-8 text-lime-ink"
-                aria-hidden="true"
-              />
-              <p className="mt-3 text-muted-foreground">
-                No stakes yet. Every rated site in the Marketplace is open for
-                play-money stakes.
-              </p>
-              <Button asChild className="mt-4">
-                <Link href="/">Back your first site</Link>
-              </Button>
-            </div>
-          ) : (
-            <Holdings holdings={data.holdings} cards={cards} />
-          )}
-        </Panel>
+        <div className="min-w-0 space-y-8">
+          <Panel title="Holdings">
+            {data.holdings.length === 0 ? (
+              <div className="py-8 text-center">
+                <Sprout
+                  className="mx-auto size-8 text-lime-ink"
+                  aria-hidden="true"
+                />
+                <p className="mt-3 text-muted-foreground">
+                  No stakes yet. Every rated site in the Marketplace is open for
+                  play-money stakes.
+                </p>
+                <Button asChild className="mt-4">
+                  <Link href="/">Back your first site</Link>
+                </Button>
+              </div>
+            ) : (
+              <Holdings holdings={data.holdings} cards={cards} />
+            )}
+          </Panel>
+          <Suspense fallback={null}>
+            <CopilotChat />
+          </Suspense>
+        </div>
         <div className="min-w-0 space-y-8">
           <Panel title="Alerts">
             <AlertsList empty="No alerts yet. When a site you back is re-rated or in the news, you'll hear about it here." />

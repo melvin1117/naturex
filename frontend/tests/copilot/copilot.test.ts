@@ -125,4 +125,14 @@ describe("answerParts", () => {
     expect(sourceLabel(REPORT_SOURCE)).toBe("Report v2");
     expect(sourceLabel(EVENT_SOURCE)).toBe(EVENT_SOURCE.title);
   });
+
+  it("names the site in a world-wide answer's citation labels", () => {
+    expect(sourceLabel(REPORT_SOURCE, { withAsset: true })).toBe(
+      `${REPORT_SOURCE.asset_name} · Report v2`,
+    );
+    expect(sourceLabel(EVENT_SOURCE, { withAsset: true })).toBe(
+      `${EVENT_SOURCE.asset_name} · ${EVENT_SOURCE.title}`,
+    );
+    expect(sourceLabel(REPORT_SOURCE, { withAsset: false })).toBe("Report v2");
+  });
 });

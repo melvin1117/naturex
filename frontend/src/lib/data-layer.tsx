@@ -64,6 +64,10 @@ export const queryKeys = {
   communityMembers: (id: string) => ["community", id, "members"] as const,
   /** A rating run (`GET /runs/{id}`, T27). */
   run: (runId: string) => ["run", runId] as const,
+  /** A run's Agent Trace (T34); under `run`, so a run's progress refetches it too. */
+  runTrace: (runId: string) => ["run", runId, "trace"] as const,
+  /** The world's latest logged model calls (`GET /admin/trace`), per account. */
+  worldTrace: (meId: string | null) => ["world-trace", meId] as const,
   /** Public sites' simplified boundaries for the listing map (T33). */
   outlines: () => ["outlines"] as const,
   /** Every verification query of one listing (a prefix, for invalidation; T70). */

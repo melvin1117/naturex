@@ -37,6 +37,13 @@ def _price_per_asset(
     return {asset_id: price for asset_id, price in rows}
 
 
+def latest_prices(
+    session: Session, world_id: UUID, asset_ids: Collection[UUID]
+) -> dict[UUID, Decimal]:
+    """The latest price of each of these assets (one query); unpriced assets are left out."""
+    return _price_per_asset(session, world_id, asset_ids, latest=True) if asset_ids else {}
+
+
 def _sparklines(
     session: Session, world_id: UUID, asset_ids: Collection[UUID]
 ) -> dict[UUID, list[Decimal]]:

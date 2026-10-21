@@ -17,7 +17,7 @@ import pytest
 from alembic import command
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, delete, update
+from sqlalchemy import create_engine, delete, event, update
 from sqlmodel import Session, col, func, select
 
 from app.auth import Principal
@@ -37,6 +37,7 @@ from app.models import (
     Holding,
     Order,
     Price,
+    Report,
     SessionKind,
     StreamEventType,
     User,
@@ -48,6 +49,7 @@ from app.routers.market import get_quote, place_order
 from app.sandbox import _delete_world_rows, create_world, ensure_live_world, reset_world
 from app.schemas import OrderCreate
 from app.seed import WORLD_ID, demo_ipo_price, seed
+from app.services.rating import latest_report
 from app.tools.earth_obs import load_site_metrics
 from tests.conftest import alembic_cfg, requires_db
 from tests.worlds import start_demo
@@ -587,6 +589,108 @@ def test_a_holding_without_a_price_is_left_out_of_the_totals(
     assert D(body["holdings_value"]) == D(priced["market_value"])
     assert D(body["cost_basis"]) == D(priced["cost_basis"])
     assert D(body["total_value"]) == D(body["cash_balance"]) + D(priced["market_value"])
+
+
+@requires_db
+def test_portfolio_impact_is_each_holdings_share_of_its_sites_latest_report(
+    client: TestClient, session: Session
+) -> None:
+    world = _world(client)
+    wetland, forest = _asset_id(world), _asset_id(world, "restoration_forest")
+    _buy(client, wetland, 100)
+    _buy(client, forest, 40)
+
+    impact = client.get("/portfolio").json()["impact"]
+
+    area = carbon = services = D("0")
+    for asset_id, shares in ((wetland, 100), (forest, 40)):
+        asset = session.get(Asset, UUID(asset_id))
+        assert asset is not None
+        report = latest_report(session, asset.world_id, asset.id)
+        assert report is not None and report.value_mid is not None
+        stock = D(str(report.auditor_json["rating"]["valuation"]["carbon"]["total_stock_tco2"]))  # type: ignore[index]
+        fraction = D(shares) / D(asset.total_shares)
+        area += asset.area_ha * fraction
+        carbon += stock * fraction
+        services += report.value_mid * fraction
+    # Pro-rata with T41's `impact_for_holding`, summed then rounded once (`portfolio_impact`).
+    assert D(impact["ha_protected"]) == area.quantize(D("0.0001"), ROUND_HALF_UP)
+    assert D(impact["t_co2_stored"]) == carbon.quantize(D("0.0001"), ROUND_HALF_UP)
+    assert D(impact["services_usd_yr"]) == cents(services)
+    assert D(impact["ha_protected"]) > 0 and D(impact["t_co2_stored"]) > 0
+
+
+@requires_db
+def test_portfolio_impact_counts_what_the_latest_report_lacks_as_zero(
+    client: TestClient, session: Session
+) -> None:
+    world = _world(client)
+    wetland, forest = _asset_id(world), _asset_id(world, "restoration_forest")
+    _buy(client, wetland, 100)
+    _buy(client, forest, 40)
+    site = session.get_one(Asset, UUID(wetland))
+    # The wetland's newest report has no services value and an unreadable carbon stock; the
+    # forest has no report at all, so it adds nothing (not even its area).
+    previous = latest_report(session, site.world_id, site.id)
+    assert previous is not None
+    session.add(
+        Report(
+            world_id=site.world_id,
+            asset_id=site.id,
+            version=previous.version + 1,
+            value_mid=None,
+            auditor_json={"rating": {"valuation": {"carbon": {"total_stock_tco2": "n/a"}}}},
+        )
+    )
+    session.execute(delete(Report).where(col(Report.asset_id) == UUID(forest)))
+    session.commit()
+
+    body = client.get("/portfolio").json()
+
+    assert {h["asset_id"] for h in body["holdings"]} == {wetland, forest}
+    area = site.area_ha * D(100) / D(site.total_shares)
+    assert {k: D(v) for k, v in body["impact"].items()} == {
+        "ha_protected": area.quantize(D("0.0001"), ROUND_HALF_UP),
+        "t_co2_stored": D("0"),
+        "services_usd_yr": D("0"),
+    }
+
+
+@requires_db
+def test_portfolio_impact_reads_the_latest_reports_without_a_query_per_holding(
+    client: TestClient, session: Session
+) -> None:
+    world = _world(client)
+    ids = [_asset_id(world, key) for key in ("wetland_mx", "mangrove_mx", "restoration_forest")]
+    for asset_id in ids:
+        _buy(client, asset_id, 10)
+    statements: list[str] = []
+
+    def count(*args: Any) -> None:
+        statements.append(str(args[2]))
+
+    bind = session.connection()
+    event.listen(bind, "before_cursor_execute", count)
+    try:
+        body = client.get("/portfolio").json()
+    finally:
+        event.remove(bind, "before_cursor_execute", count)
+
+    assert len(body["holdings"]) == 3
+    assert sum("FROM reports" in sql for sql in statements) == 1
+    assert sum("FROM prices" in sql for sql in statements) == 1
+    assert not any("reports.summary_md" in sql for sql in statements)
+
+
+@requires_db
+def test_empty_portfolio_has_no_impact(client: TestClient) -> None:
+    impact = client.get("/portfolio").json()["impact"]
+
+    assert {k: D(v) for k, v in impact.items()} == {
+        "ha_protected": D("0"),
+        "t_co2_stored": D("0"),
+        "services_usd_yr": D("0"),
+    }
 
 
 @requires_db

@@ -150,9 +150,17 @@ export function sourceHref(source: CopilotSource): string {
   return `/asset/${source.asset_id}?tab=${tab}`;
 }
 
-/** "Report v2" or the event's title, for a citation chip. */
-export function sourceLabel(source: CopilotSource): string {
-  return source.kind === "report" && source.version != null
-    ? `Report v${source.version}`
-    : source.title;
+/**
+ * "Report v2" or the event's title, for a citation chip. `withAsset` (the world-wide Copilot)
+ * prefixes the site's name: "Xochimilco wetland · Report v2".
+ */
+export function sourceLabel(
+  source: CopilotSource,
+  { withAsset = false }: { withAsset?: boolean } = {},
+): string {
+  const label =
+    source.kind === "report" && source.version != null
+      ? `Report v${source.version}`
+      : source.title;
+  return withAsset ? `${source.asset_name} · ${label}` : label;
 }

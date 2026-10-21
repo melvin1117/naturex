@@ -62,6 +62,12 @@ from app.market.engine import (
     preview,
 )
 from app.market.portfolio import HoldingValue, portfolio_totals, value_holding
+from app.market.revenue import (
+    ImpactAllocation,
+    impact_for_holding,
+    portfolio_impact,
+    site_impact,
+)
 from app.models import (
     Asset,
     Holding,
@@ -81,8 +87,10 @@ from app.schemas import (
     QuoteOut,
     TradeBlockedReason,
 )
+from app.services.asset_cards import latest_prices
 from app.services.ipo import NOT_TRADING, is_trading
 from app.services.listings import visible_to
+from app.services.rating import latest_report_impacts
 
 router = APIRouter(tags=["market"])
 
@@ -407,15 +415,36 @@ def get_portfolio(
         )
     ).all()
 
+    held = [holding.asset_id for holding in holdings]
+    rows = session.exec(
+        select(Asset).where(Asset.world_id == world.id, col(Asset.id).in_(held))
+    ).all()
+    assets = {asset.id: asset for asset in rows}
+    prices = latest_prices(session, world.id, held)
+    reports = latest_report_impacts(session, world.id, held)
+
     out: list[HoldingOut] = []
     values: list[HoldingValue] = []
+    impacts: list[ImpactAllocation] = []
     for holding in holdings:
-        asset = session.exec(
-            select(Asset).where(Asset.world_id == world.id, Asset.id == holding.asset_id)
-        ).first()
+        asset = assets.get(holding.asset_id)
         if asset is None:
             continue
-        mark_price = _latest_price(session, asset)
+        report = reports.get(asset.id)
+        if report is not None and 0 < holding.shares <= asset.total_shares:
+            impacts.append(
+                impact_for_holding(
+                    str(asset.id),
+                    shares=holding.shares,
+                    total_shares=asset.total_shares,
+                    impact=site_impact(
+                        area_ha=asset.area_ha,
+                        carbon_stock_tco2=report.carbon_stock_tco2,
+                        services_usd_year=report.value_mid,
+                    ),
+                )
+            )
+        mark_price = prices.get(asset.id)
         value = value_holding(
             shares=holding.shares, avg_cost=holding.avg_cost, mark_price=mark_price
         )
@@ -435,7 +464,8 @@ def get_portfolio(
         )
     totals = portfolio_totals(actor.cash_balance, values, starting_cash=STARTING_CASH)
 
-    # Pro-rata impact comes from the stored report (T19 + T41 impact_for_holding); zero for now.
+    # Each holding's share of its site's area, carbon stock and annual services (T41, T44).
+    impact = portfolio_impact(tuple(impacts))
     return PortfolioOut(
         cash_balance=actor.cash_balance,
         holdings=out,
@@ -447,8 +477,8 @@ def get_portfolio(
         starting_cash=STARTING_CASH,
         since_start=totals.since_start,
         impact=ImpactSummary(
-            ha_protected=Decimal("0.00"),
-            t_co2_stored=Decimal("0.00"),
-            services_usd_yr=Decimal("0.00"),
+            ha_protected=impact.area_ha,
+            t_co2_stored=impact.carbon_stock_tco2,
+            services_usd_yr=impact.services_usd_year,
         ),
     )

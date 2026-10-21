@@ -25,7 +25,7 @@ model, degraded, `greenwashing_risk` with None = not assessed) and `run` (the ru
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -363,6 +363,56 @@ def report_fair_value_total(report: Report) -> Decimal | None:
         )
     except ValueError:
         return None
+
+
+_CARBON_PATH = ("rating", "valuation", "carbon")
+"""Where a report's carbon snapshot lives in `auditor_json` (T14 valuation via T19)."""
+
+
+def carbon_stock(carbon: object) -> Decimal | None:
+    """The carbon stock (tCO2) in a report's `rating.valuation.carbon` snapshot, if any."""
+    return _snapshot_decimal(carbon, "total_stock_tco2") if isinstance(carbon, Mapping) else None
+
+
+def report_carbon_stock(report: Report) -> Decimal | None:
+    """The report's stored carbon stock (`rating.valuation.carbon.total_stock_tco2`), or None
+    when it has none or it isn't a number. Negative or non-finite values are returned as stored;
+    callers that sum them (`revenue.site_impact`) count those as zero."""
+    node: object = report.auditor_json
+    for key in _CARBON_PATH:
+        node = node.get(key) if isinstance(node, Mapping) else None
+    return carbon_stock(node)
+
+
+@dataclass(frozen=True, slots=True)
+class ReportImpact:
+    """What a site's latest report says about its impact (T44): annual services and carbon."""
+
+    value_mid: Decimal | None
+    carbon_stock_tco2: Decimal | None
+
+
+def latest_report_impacts(
+    session: Session, world_id: UUID, asset_ids: Collection[UUID]
+) -> dict[UUID, ReportImpact]:
+    """Each asset's latest report's `value_mid` and carbon stock, in one query that reads only
+    those two values (never the whole report). Assets without a report are left out."""
+    if not asset_ids:
+        return {}
+    rows = session.exec(
+        select(
+            col(Report.asset_id),
+            col(Report.value_mid),
+            col(Report.auditor_json)[_CARBON_PATH],
+        )
+        .where(Report.world_id == world_id, col(Report.asset_id).in_(asset_ids))
+        .order_by(col(Report.asset_id), col(Report.version).desc())
+        .distinct(col(Report.asset_id))
+    ).all()
+    return {
+        asset_id: ReportImpact(value_mid=value_mid, carbon_stock_tco2=carbon_stock(carbon))
+        for asset_id, value_mid, carbon in rows
+    }
 
 
 def latest_report(session: Session, world_id: UUID, asset_id: UUID) -> Report | None:

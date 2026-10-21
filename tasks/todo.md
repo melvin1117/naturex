@@ -282,7 +282,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** `make fe-check`; a signed-in steward lists a new polygon end to end in the Steward app (`/steward/list`, lifecycle endpoints from T58) · **Deps:** T32, T36, T58, T62 · **Files:** `frontend/src/app/(steward)/steward/list/page.tsx`, `frontend/src/components/MapDraw.tsx`, `RatingProgress.tsx`
 
 ### T34 · Agent Trace drawer and ledger tab (#46) — PD · M · Must · G1 F2
-- [ ] Drawer lists each step (model, tokens, latency, output); ledger tab shows entries and the verify/tamper badge
+- [x] Drawer lists each step (model, tokens, latency, output); ledger tab shows entries and the verify/tamper badge
+  - As built: on a real site the drawer reads `GET /runs/{run_id}/trace` for the run picked from the site's reports (the asset page's "How it was rated" opens the latest one), with loading, error and empty (seeded-only) states; signed in elsewhere it lists the world's latest model calls (`GET /admin/trace`); anonymous visitors and the tour keep the scripted runs (dev-spec §3 "As built (T34)"). The real ledger tab's verify badge is the server's `GET /ledger/{id}/verify`; the tamper demo (`POST /admin/tamper-demo`) stays on the scripted world, since the API allows it only for admins in demo sandboxes with `DEMO_MODE`.
 
 **Verify:** `make fe-check`; matches P06 · **Deps:** T28, T30, T32 · **Files:** `frontend/src/components/AgentTrace.tsx`, `LedgerTab.tsx`
 
@@ -437,7 +438,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 > **Note from T13:** reports and charts built on a simulated version (`simulated: true`, `data_version` `sim-N`) must show a visible "Simulated" label and must not render `date_windows` as observation periods.
 
 ### T44 · Copilot and impact UI (#56) — PD · M · Must · E1 E3
-- [ ] Chat on asset and portfolio pages (streaming, citations link to sources); impact summary on the portfolio
+- [x] Chat on asset and portfolio pages (streaming, citations link to sources); impact summary on the portfolio
+  - As built: `components/copilot-chat.tsx` takes an optional `assetId`. The asset page asks about its site (T39); "Your stakes" (`/portfolio`) asks world-wide (`POST /copilot` without `asset_id`), with world-wide suggestions and each citation chip named after its site ("Osa Forest · Report v2") and linking to that site's report or news tab. `GET /portfolio` now fills `impact` from each site's latest report through T41's `impact_for_holding` (it was hard-coded to zero), so the impact card shows the account's hectares, tCO₂ and services per year. The header's Copilot button still opens the prototype's scripted sheet.
 
 **Verify:** `make fe-check` · **Deps:** T39, T41 · **Files:** `frontend/src/components/CopilotChat.tsx`, `ImpactSummary.tsx`
 
@@ -530,6 +532,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 - [x] `rerate_all` and `news_sweep` (`backend/app/jobs/`, logic in `services/monitoring.py`; idempotent via `monitor_runs` claims, budget-capped; the sweep runs daily via GitHub Actions) re-rate live listed assets through the rating service
 - [x] Alerts on health Δ ≥ 5, a grade change or news severity ≥ 4, to the asset's holders and its community's members only; each quarter pays out via T41
 - [x] An alerts list in both apps (read/unread) fed by real `alert` events
+  - Follow-up #199: the header bell shows a signed-in account's real alerts in every app (unread count from `GET /alerts` in the button's label, announced when new alerts arrive; the popover is `AlertsList` with mark read, mark all read and site links); anonymous visitors keep the prototype's scripted bell.
 
 **Verify:** `make test`; manual: a grade-changing re-rate alerts a holder and the owner · **Deps:** T27, T41, T57 · **Files:** `backend/app/jobs/*.py`, `backend/app/services/{alerts,monitoring}.py`, `backend/app/routers/alerts.py`, `backend/migrations/versions/0017_monitoring_alerts.py`, `.github/workflows/news-sweep.yml`, `frontend/src/components/alerts-list.tsx`, `frontend/src/components/proto/alert-toaster.tsx`
 

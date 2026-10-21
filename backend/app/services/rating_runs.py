@@ -79,6 +79,7 @@ from app.schemas import (
     RatingRunStep,
     RunTraceOut,
     RunTraceStep,
+    RunTraceTotals,
 )
 from app.services.alerts import alert_on_rerate
 from app.services.earth_obs_live import (
@@ -1521,6 +1522,7 @@ def get_run_trace(session: Session, world_id: UUID, run_id: UUID) -> RunTraceOut
         return None
     events = _run_events(session, world_id, run_id)
     spans: list[tuple[dict[str, Any], datetime | None]]
+    stored: dict[str, Any] = {}
     if events is not None:
         spans = [(payload, ts) for payload, ts in events.events]
     else:
@@ -1534,7 +1536,14 @@ def get_run_trace(session: Session, world_id: UUID, run_id: UUID) -> RunTraceOut
             if archived is not None
             else [(step, None) for step in stored.get("steps", [])]
         )
+    # The runner's own totals (every call, including the tail on the `done` span), stored on
+    # the `done` span and in the report's run record; none before the run seals a report.
+    totals = next(
+        (p["totals"] for p, _ in reversed(spans) if isinstance(p.get("totals"), dict)),
+        stored.get("totals"),
+    )
     return RunTraceOut(
+        totals=RunTraceTotals.model_validate(totals) if isinstance(totals, dict) else None,
         run_id=run_id,
         asset_id=run.asset_id,
         status=run.status,
