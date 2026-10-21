@@ -276,14 +276,14 @@ export function PrototypeAssetView({ id }: { id: string }) {
                         className="size-2.5 rounded-full bg-clay"
                         aria-hidden="true"
                       />{" "}
-                      Negative news
+                      Negative event
                     </span>
                     <span className="inline-flex items-center gap-1.5">
                       <span
                         className="size-2.5 rounded-full bg-lime-ink"
                         aria-hidden="true"
                       />{" "}
-                      Positive news
+                      Positive event
                     </span>
                   </span>
                 }

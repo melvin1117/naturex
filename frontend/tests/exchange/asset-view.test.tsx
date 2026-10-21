@@ -321,6 +321,52 @@ describe("AssetView", () => {
     expect(screen.queryByText(/35%/)).toBeNull();
   });
 
+  it("marks re-rates and stored events on the price chart, with a list", async () => {
+    nav.search = new URLSearchParams("tab=price");
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /assets/${ID}/prices`]: () =>
+          json([
+            ...PRICES,
+            { ts: "2026-10-19T03:00:00Z", price: "18.2000", reason: "rerate" },
+          ]),
+        [`GET /assets/${ID}`]: () =>
+          json({
+            ...ASSET,
+            recent_events: [
+              {
+                id: "e1",
+                asset_id: ID,
+                source: "admin",
+                title: "Encroachment at Xochimilco (simulated)",
+                direction: -1,
+                severity: 4,
+                impact_type: "encroachment",
+                // The simulated event's day; it was recorded after the re-rate's price.
+                published_at: "2026-10-19",
+                created_at: "2026-10-19T03:00:01Z",
+              },
+            ],
+          }),
+      }),
+    );
+    const chart = await screen.findByRole("img", {
+      name: /^Stake price, 3 recorded prices/,
+    });
+    const list = screen.getByRole("list", { name: "Marked on the chart" });
+    expect(chart).toHaveAttribute("aria-describedby", list.id);
+    expect(
+      within(list)
+        .getAllByRole("listitem")
+        .map((li) => li.textContent),
+    ).toEqual([
+      "11. Opening price · 19 Oct 00:04 UTC · $21.47",
+      "22. Re-rated: price moved toward the new fair price · 19 Oct 03:00 UTC · $18.20",
+      "33. Encroachment at Xochimilco (simulated) (negative) · 19 Oct 03:00 UTC · $18.20",
+    ]);
+  });
+
   it("lists recent events as plain text with a safe source link", async () => {
     nav.search = new URLSearchParams("tab=news");
     renderExchange(

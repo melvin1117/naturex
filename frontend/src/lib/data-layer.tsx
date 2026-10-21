@@ -105,6 +105,10 @@ export const queryKeys = {
     communityId: string | null,
     before: string | null,
   ) => ["alerts", meId, communityId, before] as const,
+  /** The admin's Time Machine state (T43). */
+  timeMachine: (meId: string | null) => ["time-machine", meId] as const,
+  /** Alerts a Time Machine quarter or event sent (T43). */
+  sentAlerts: (ids: readonly string[]) => ["sent-alerts", ...ids] as const,
 };
 
 export interface CreateDataLayerOptions {

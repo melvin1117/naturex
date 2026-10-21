@@ -3332,6 +3332,62 @@
         }
       }
     },
+    "/admin/alerts": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Sent Alerts",
+        "description": "The given alerts of the caller's world as their recipients got them, with how many\naccounts each reached, newest first (T43: what a Time Machine quarter or event sent; its\nresponse lists the `alert_ids`). IDs from another world, or unknown, are left out.",
+        "operationId": "get_sent_alerts_admin_alerts_get",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "minItems": 1,
+              "maxItems": 50,
+              "title": "Ids"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SentAlertOut"
+                  },
+                  "title": "Response Get Sent Alerts Admin Alerts Get"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: `admin_only`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/trace": {
       "get": {
         "tags": [
@@ -9038,6 +9094,96 @@
         ],
         "title": "RunTraceTotals",
         "description": "Every model call of a run, as the runner summed them when it sealed the report."
+      },
+      "SentAlertOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "asset_name": {
+            "type": "string",
+            "title": "Asset Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "grade_change",
+              "health_change",
+              "news"
+            ],
+            "title": "Kind",
+            "description": "grade_change / health_change: a re-rate moved the grade or the health score by \u2265 5 points; news: a News Scout event of severity \u2265 4"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "severity": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Severity"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "report_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "recipients": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Recipients",
+            "description": "Accounts it was delivered to (holders and community members)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "asset_id",
+          "asset_name",
+          "kind",
+          "title",
+          "message",
+          "severity",
+          "created_at",
+          "recipients"
+        ],
+        "title": "SentAlertOut",
+        "description": "An alert as its recipients got it, for the admin who raised it (T43)."
       },
       "SharesOut": {
         "properties": {

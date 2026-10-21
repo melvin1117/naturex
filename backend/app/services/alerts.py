@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any, Literal, cast
+from typing import Any, cast
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -42,7 +42,7 @@ from app.models import (
     User,
     UserKind,
 )
-from app.schemas import AlertOut, NewsScoutItem
+from app.schemas import AlertKindOut, AlertOut, NewsScoutItem
 from app.services.listings import audience as listing_audience
 from app.tools.scoring import Grade
 
@@ -305,8 +305,6 @@ def alert_on_rerate(
 
 
 # --- read/unread --------------------------------------------------------------------------------
-
-AlertKindOut = Literal["grade_change", "health_change", "news"]
 
 
 def _out(alert: Alert, recipient: AlertRecipient, asset_name: str) -> AlertOut:

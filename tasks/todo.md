@@ -434,7 +434,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** the demo script runs on the public URL · **Deps:** T20, T38, T76 · **Files:** deploy config, `.github/workflows/keepalive.yml`
 
 ### T43 · Time Machine and alerts UI (#55) — D1 (with PD designs) · M · Must · D2 D3 C3
-- [ ] Admin panel (next quarter, event presets, reset), phone-style alerts, price chart with event markers
+- [x] Admin panel (next quarter, event presets, reset), phone-style alerts, price chart with event markers
+- Built: `/admin` runs the real Time Machine for an admin in a demo sandbox (confirmations, live progress, per-site results, every refusal explained) and explains the sandbox-only rule in the live world; a phone frame shows the alerts each run sent (`GET /admin/alerts?ids=`); the asset page's price chart numbers re-rate and event markers with a text list. See dev-spec §9 "As built (T43)".
 
 **Verify:** `make fe-check`; encroachment flow in the browser, as an admin in `/admin` · **Deps:** T38, T32, T62 · **Files:** `frontend/src/app/admin/page.tsx`, `PriceChart.tsx`, `AlertsFeed.tsx`
 

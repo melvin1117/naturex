@@ -1108,6 +1108,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Sent Alerts
+         * @description The given alerts of the caller's world as their recipients got them, with how many
+         *     accounts each reached, newest first (T43: what a Time Machine quarter or event sent; its
+         *     response lists the `alert_ids`). IDs from another world, or unknown, are left out.
+         */
+        get: operations["get_sent_alerts_admin_alerts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/trace": {
         parameters: {
             query?: never;
@@ -3583,6 +3605,50 @@ export interface components {
             completion_tokens: number;
             /** Cost Usd */
             cost_usd: string;
+        };
+        /**
+         * SentAlertOut
+         * @description An alert as its recipients got it, for the admin who raised it (T43).
+         */
+        SentAlertOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /** Asset Name */
+            asset_name: string;
+            /**
+             * Kind
+             * @description grade_change / health_change: a re-rate moved the grade or the health score by ≥ 5 points; news: a News Scout event of severity ≥ 4
+             * @enum {string}
+             */
+            kind: "grade_change" | "health_change" | "news";
+            /** Title */
+            title: string;
+            /** Message */
+            message: string;
+            /** Severity */
+            severity: number;
+            /** Url */
+            url?: string | null;
+            /** Report Id */
+            report_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Recipients
+             * @description Accounts it was delivered to (holders and community members)
+             */
+            recipients: number;
         };
         /** SharesOut */
         SharesOut: {
@@ -7053,6 +7119,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_sent_alerts_admin_alerts_get: {
+        parameters: {
+            query: {
+                ids: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SentAlertOut"][];
+                };
+            };
+            /** @description Not allowed: `admin_only` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

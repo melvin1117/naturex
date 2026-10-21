@@ -49,12 +49,15 @@ export function Panel({
   action,
   children,
   className,
+  headingLevel: Heading = "h3",
   ...rest
 }: {
   title: string;
   action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  /** `h2` when the panel is a top-level section of its page. */
+  headingLevel?: "h2" | "h3";
 } & React.HTMLAttributes<HTMLElement>) {
   return (
     <section
@@ -62,7 +65,7 @@ export function Panel({
       {...rest}
     >
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-base font-semibold">{title}</h3>
+        <Heading className="text-base font-semibold">{title}</Heading>
         {action}
       </div>
       {children}

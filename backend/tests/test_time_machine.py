@@ -11,7 +11,7 @@ import logging
 from collections.abc import Callable, Iterator
 from concurrent.futures import Executor, Future
 from dataclasses import replace
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -1233,3 +1233,95 @@ def test_migration_0020_downgrades_and_upgrades() -> None:
         command.upgrade(cfg, "head")
         assert added <= columns()
         engine.dispose()
+
+
+@requires_db
+def test_admins_read_the_alerts_a_simulation_sent(client: TestClient, api_session: Session) -> None:
+    sandbox = start_demo(client, api_session, persona_key="admin")
+    asset = api_session.exec(
+        select(Asset).where(Asset.world_id == sandbox.id, Asset.site_key == "wetland_mx")
+    ).one()
+    event = client.post(
+        "/admin/simulate/event", json={"asset_id": str(asset.id), "preset": "encroachment"}
+    ).json()
+    other = create_world(api_session)
+    elsewhere = Alert(world_id=other.id, asset_id=asset.id, kind="news", title="x", message="y")
+    api_session.add(elsewhere)
+    api_session.flush()
+    ids = [*event["alert_ids"], str(elsewhere.id), str(UUID(int=7))]
+
+    res = client.get("/admin/alerts", params={"ids": ids})
+
+    assert res.status_code == 200, res.text
+    sent = res.json()
+    assert {a["id"] for a in sent} == set(event["alert_ids"]) and len(sent) == 2
+    stored = {a.id: a for a in api_session.exec(select(Alert)).all()}
+    for alert in sent:
+        row = stored[UUID(alert["id"])]
+        assert (alert["title"], alert["message"], alert["kind"]) == (
+            row.title,
+            row.message,
+            row.kind,
+        )
+        assert alert["asset_name"] == asset.name
+        assert (
+            alert["recipients"]
+            == api_session.exec(select(func.count()).where(AlertRecipient.alert_id == row.id)).one()
+        )
+        assert alert["recipients"] > 0
+    assert client.get("/admin/alerts", params={"ids": []}).status_code == 422
+    too_many = [str(UUID(int=i)) for i in range(51)]
+    assert client.get("/admin/alerts", params={"ids": too_many}).status_code == 422
+
+
+@requires_db
+def test_only_admins_read_sent_alerts(client: TestClient, api_session: Session) -> None:
+    start_demo(client, api_session)  # the demo investor
+
+    res = client.get("/admin/alerts", params={"ids": [str(UUID(int=1))]})
+
+    assert (res.status_code, res.json()["detail"]) == (403, "admin_only")
+
+
+@requires_db
+def test_sent_alerts_are_newest_first_once_each_even_without_recipients(
+    client: TestClient, api_session: Session
+) -> None:
+    sandbox = start_demo(client, api_session, persona_key="admin")
+    asset = api_session.exec(
+        select(Asset).where(Asset.world_id == sandbox.id, Asset.site_key == "wetland_mx")
+    ).one()
+    now = datetime.now(UTC)
+    older, newer = (
+        Alert(
+            world_id=sandbox.id,
+            asset_id=asset.id,
+            kind=kind,
+            title=title,
+            message="m",
+            severity=4,
+            created_at=now - age,
+        )
+        for kind, title, age in (
+            ("news", "Older", timedelta(hours=1)),
+            ("health_change", "Newer", timedelta(0)),
+        )
+    )
+    api_session.add_all([older, newer])
+    api_session.flush()
+
+    res = client.get("/admin/alerts", params={"ids": [str(older.id), str(newer.id), str(older.id)]})
+
+    assert res.status_code == 200, res.text
+    sent = res.json()
+    assert [(a["title"], a["kind"], a["recipients"]) for a in sent] == [
+        ("Newer", "health_change", 0),
+        ("Older", "news", 0),
+    ]
+
+
+@requires_db
+def test_sent_alerts_need_a_session() -> None:
+    res = TestClient(app).get("/admin/alerts", params={"ids": [str(UUID(int=1))]})
+
+    assert res.status_code == 401

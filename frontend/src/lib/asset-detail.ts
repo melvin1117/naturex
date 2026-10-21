@@ -65,6 +65,9 @@ export function newsItems(events: EventOut[] | undefined) {
       title: e.title?.trim() || "Untitled event",
       summary: e.summary ?? null,
       date: eventDate(e),
+      // When NatureX recorded it: where it sits on the price chart (a dated article or a
+      // simulated event's day would otherwise land before that day's prices).
+      at: e.created_at,
       direction: e.direction ?? null,
       severity: e.severity ?? null,
       kind: e.impact_type ?? null,

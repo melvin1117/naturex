@@ -128,6 +128,19 @@ Steward pages read the community they show with `useStewardCommunity()` (`compon
 
 `lib/community.ts` has the pure helpers: `validateCommunity` (the backend's name, country and description rules), `communityFailure` / `memberFailure` (409 `community_name_taken`, `community_limit_reached`, 422 field errors…), and `listingAction(next_action, assetId, communityId, status)`, the one place that knows the Steward links: the listing flow `/steward/list?community=<id>&asset=<id>` (T33, resumes that listing), the IPO screen `/steward/assets/<id>/ipo?community=<id>` (T64) and the public page `/asset/<id>`. Stewards are added by account ID: `<AccountIdCopy>` (`components/account-id.tsx`) shows the signed-in account's ID with Copy on the "Start a community" state and the settings page, and the account menu has "Copy account ID" everywhere.
 
+## Time Machine (T43)
+
+`lib/time-machine-hooks.ts`, for the admin panel (`/admin`, `components/time-machine/`):
+
+| Hook                   | Returns                                       | Notes                                                                                                                                                         |
+| ---------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useTimeMachine()`     | `TimeMachine`                                 | `GET /admin/time-machine`; fetched only for an admin (`queryKeys.timeMachine(me.id)`).                                                                        |
+| `useSimulateQuarter()` | mutation `period → SimulateQuarter`           | `POST /admin/simulate/quarter`; on success every cached query refetches (any asset may have a new report, price, alert and payout).                           |
+| `useSimulateEvent()`   | mutation `{asset_id, preset} → SimulateEvent` | `POST /admin/simulate/event`; same invalidation.                                                                                                              |
+| `useSentAlerts(ids)`   | `SentAlert[]`                                 | `GET /admin/alerts?ids=`: what a quarter or event sent, with each alert's recipient count; parallel batches of 50 IDs, merged newest first. Idle with no IDs. |
+
+`lib/time-machine.ts` is pure: `quarterFailure` / `eventFailure` turn each refusal code into a title, a message and whether to refetch the state (the panel refetches only when `refresh` is true); `trackQuarterRun` folds `rating_progress` events (trigger `time_machine`) into the quarter's live progress, `quarterProgressText` / `quarterOutcomeText` word it (runs started and done, then "x done, y skipped"); `alertBatches` / `mergeSentAlerts` split and merge `GET /admin/alerts`; `unavailableReason` reads the sandbox-only rule.
+
 ## Errors
 
 Every failure is an `ApiError` (`api/errors.ts`): `status` (0 = offline), `code` (e.g. `auth_required`, `owner_only`), `message` (safe to show; friendly text for 401, 403, 404, 409, 422 and 503), `detail` (raw, e.g. 422 field errors) and `retryAfterSeconds`.

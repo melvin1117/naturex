@@ -868,16 +868,20 @@ class StreamEvent(BaseModel):
     ts: datetime
 
 
+AlertKindOut = Literal["grade_change", "health_change", "news"]
+ALERT_KIND_DESCRIPTION = (
+    "grade_change / health_change: a re-rate moved the grade or the health score by ≥ 5 points; "
+    "news: a News Scout event of severity ≥ 4"
+)
+
+
 class AlertOut(BaseModel):
     """One alert delivered to the signed-in account (T75)."""
 
     id: UUID
     asset_id: UUID
     asset_name: str
-    kind: Literal["grade_change", "health_change", "news"] = Field(
-        description="grade_change / health_change: a re-rate moved the grade or the health "
-        "score by ≥ 5 points; news: a News Scout event of severity ≥ 4"
-    )
+    kind: AlertKindOut = Field(description=ALERT_KIND_DESCRIPTION)
     title: str
     message: str
     severity: int = Field(ge=1, le=5)
@@ -1123,6 +1127,24 @@ class SimulateEventResponse(BaseModel):
     after: AssetRatingOut | None = None
     alert_ids: list[UUID] = Field(default_factory=list)
     alert_created: bool
+
+
+class SentAlertOut(BaseModel):
+    """An alert as its recipients got it, for the admin who raised it (T43)."""
+
+    id: UUID
+    asset_id: UUID
+    asset_name: str
+    kind: AlertKindOut = Field(description=ALERT_KIND_DESCRIPTION)
+    title: str
+    message: str
+    severity: int = Field(ge=1, le=5)
+    url: str | None = None
+    report_id: UUID | None = None
+    created_at: datetime
+    recipients: int = Field(
+        ge=0, description="Accounts it was delivered to (holders and community members)"
+    )
 
 
 class TraceStep(BaseModel):
