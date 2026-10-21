@@ -33,9 +33,18 @@ import {
   listingOutcome,
   pipelineView,
   type ListingFailure,
+  type PipelineView,
 } from "@/lib/listing";
 import { evidenceHref } from "@/lib/field-evidence";
 import { focusIfLost, useRestoreFocusAfterPending } from "@/lib/focus";
+import {
+  finishedSteps,
+  isActive,
+  pacedView,
+  PIPELINE_SETTLE_MS,
+  PIPELINE_STEP_MS,
+} from "@/lib/listing/pacing";
+import { usePacedCount, usePrefersReducedMotion } from "@/lib/motion";
 import { ha } from "@/lib/prototype/format";
 import { num, reportFacts } from "@/lib/report-facts";
 
@@ -92,7 +101,50 @@ function useListingRun(
     return () => clearInterval(timer);
   }, [waiting, asset.id, refresh]);
 
-  return { runId, view: runId ? pipelineView(run.data) : null };
+  return {
+    runId,
+    view: runId ? pipelineView(run.data) : null,
+    loaded: run.data !== undefined,
+  };
+}
+
+/** Below Tailwind's `lg`, where the pipeline stacks with the step card. */
+const STACKED = "(max-width: 1023.98px)";
+
+/**
+ * The run as the screen shows it (#216). A run this tab watched (submitted here, or found still
+ * going) replays its finished steps one at a time; a run that had already ended shows as it is.
+ * `holding` lasts from the first sight of a watched run until its last step has shown and
+ * settled, so the listed step doesn't cut it short. Reduced motion: no pacing, no hold.
+ */
+function usePacedRun(
+  runId: string | null,
+  view: PipelineView | null,
+  loaded: boolean,
+  submitted: boolean,
+) {
+  const reduced = usePrefersReducedMotion();
+  const [watched, setWatched] = useState<{
+    runId: string;
+    live: boolean;
+  } | null>(null);
+  if (runId && view && loaded && watched?.runId !== runId)
+    setWatched({ runId, live: submitted || isActive(view) });
+  const live = Boolean(runId) && watched?.runId === runId && watched.live;
+  const target = view ? finishedSteps(view) : 0;
+  const shown = usePacedCount(target, PIPELINE_STEP_MS, live);
+  const ended = view !== null && !isActive(view) && shown >= target;
+  const [released, setReleased] = useState<string | null>(null);
+  useEffect(() => {
+    if (!live || !ended || !runId || reduced) return;
+    const timer = setTimeout(() => setReleased(runId), PIPELINE_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [live, ended, runId, reduced]);
+  return {
+    view: view && live ? pacedView(view, shown) : view,
+    live,
+    holding: live && !reduced && released !== runId,
+  };
 }
 
 export function RatingStep({
@@ -100,21 +152,47 @@ export function RatingStep({
   asset,
   onEdit,
   onRevised,
+  onWatch,
 }: {
   community: MyCommunity;
   asset: AssetDetail;
   onEdit: (step: 0 | 1) => void;
   onRevised: (asset: AssetDetail) => void;
+  /**
+   * Called while this step follows a run live: `holding` asks the screen to keep this step up
+   * until the paced pipeline has caught up (false again on unmount). Must be stable.
+   */
+  onWatch?: (holding: boolean) => void;
 }) {
   const submit = useSubmitListing();
   const refresh = useRefreshListing();
+  const reduced = usePrefersReducedMotion();
   const [submittedRunId, setSubmittedRunId] = useState<string | null>(null);
   const [failure, setFailure] = useState<ListingFailure | null>(null);
-  const { view } = useListingRun(asset, submittedRunId, () =>
+  const run = useListingRun(asset, submittedRunId, () =>
     setSubmittedRunId(null),
   );
-  const outcome = listingOutcome(asset);
+  const { view, live, holding } = usePacedRun(
+    run.runId,
+    run.view,
+    run.loaded,
+    submittedRunId !== null,
+  );
+  useEffect(() => {
+    if (!live) return;
+    onWatch?.(holding);
+    return () => onWatch?.(false);
+  }, [live, holding, onWatch]);
+  // While the pipeline catches up, the card still reads as rating: the outcome lands after
+  // the last step, not before it.
+  const shownAsset: AssetDetail =
+    holding && asset.status !== "rating"
+      ? { ...asset, status: "rating", status_reason: null }
+      : asset;
+  const outcome = listingOutcome(shownAsset);
   const draft = asset.status === "draft";
+  const pipelineRef = useRef<HTMLElement>(null);
+  const pipelineFirst = view !== null && (holding || isActive(view));
   // "Rate this site" disables while it submits. If the listing leaves draft, the run replaces
   // the button: focus its card's title. If the submit fails, focus returns to the button.
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -126,11 +204,23 @@ export function RatingStep({
     if (wasDraft.current && !draft) focusIfLost(titleRef.current);
     wasDraft.current = draft;
   }, [draft]);
+  // Stacked (phones, tablets), a run this person started leads the step: bring it into view.
+  const scrollToRun = useRef(false);
+  useEffect(() => {
+    if (!scrollToRun.current || draft || !pipelineFirst) return;
+    scrollToRun.current = false;
+    if (window.matchMedia?.(STACKED).matches)
+      pipelineRef.current?.scrollIntoView({
+        block: "start",
+        behavior: reduced ? "auto" : "smooth",
+      });
+  }, [draft, pipelineFirst, reduced]);
 
   async function rate() {
     setFailure(null);
     try {
       const accepted = await submit.mutateAsync(asset.id);
+      scrollToRun.current = true;
       setSubmittedRunId(accepted.run_id);
     } catch (error) {
       const apiError = error as ApiError;
@@ -207,7 +297,7 @@ export function RatingStep({
           </>
         ) : (
           <Outcome
-            asset={asset}
+            asset={shownAsset}
             community={community}
             onRetry={() => void rate()}
             retrying={submit.isPending}
@@ -216,7 +306,11 @@ export function RatingStep({
           />
         )}
       </StepCard>
-      <RatingProgress view={view} />
+      <RatingProgress
+        ref={pipelineRef}
+        view={view}
+        className={cn(pipelineFirst && "order-first lg:order-none")}
+      />
     </div>
   );
 }

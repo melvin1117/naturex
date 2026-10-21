@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bot,
   Check,
   CircleDashed,
   CircleSlash,
@@ -8,14 +9,19 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
+import type { Ref } from "react";
 import { cn } from "cn";
 
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import {
   PIPELINE_STAGES,
   type PipelineStage,
   type PipelineView,
   type StageState,
 } from "@/lib/listing";
+import { isActive, stepPosition } from "@/lib/listing/pacing";
+import { usePrototype } from "@/lib/prototype/store";
 
 const STATE_TEXT: Record<StageState, string> = {
   waiting: "waiting",
@@ -35,19 +41,25 @@ const PHASE_TEXT: Record<PipelineView["phase"], string> = {
 
 /**
  * A real rating run (T27) as the prototype's lit pipeline on the machine layer: each step
- * lights up as its `rating_progress` event arrives. Latencies and models come from the run.
+ * lights up as its `rating_progress` event arrives (paced by the caller, #216). Latencies and
+ * models come from the run. A finished run stays on screen, with the way to its full trace.
  */
 export function RatingProgress({
   view,
+  ref,
   className,
 }: {
   view: PipelineView | null;
+  ref?: Ref<HTMLElement>;
   className?: string;
 }) {
+  const { openTrace } = usePrototype();
+  const position = view ? stepPosition(view) : null;
   return (
     <section
+      ref={ref}
       className={cn(
-        "rounded-[1.75rem] bg-machine p-5 text-machine-ink shadow-soft",
+        "scroll-mt-20 rounded-[1.75rem] bg-machine p-5 text-machine-ink shadow-soft",
         className,
       )}
       aria-labelledby="rating-pipeline-title"
@@ -63,6 +75,20 @@ export function RatingProgress({
               : PHASE_TEXT[view.phase]
             : "Steps light up as each agent and tool runs."}
         </p>
+        {position && position.step > 0 && (
+          <div className="mt-3 flex items-center gap-3">
+            <Progress
+              value={(position.step / position.of) * 100}
+              aria-label="Rating progress"
+              getValueLabel={() => `Step ${position.step} of ${position.of}`}
+              className="h-1.5 flex-1 bg-machine-line *:data-[slot=progress-indicator]:bg-lime *:data-[slot=progress-indicator]:duration-300 *:data-[slot=progress-indicator]:ease-(--nx-ease-out)"
+            />
+            <span className="tabular shrink-0 text-xs text-machine-muted">
+              Step {position.step} of {position.of}
+              {position.label && ` · ${position.label}`}
+            </span>
+          </div>
+        )}
       </div>
       <ol className="relative space-y-1">
         {(view?.stages ?? IDLE_STAGES).map((stage) => (
@@ -90,6 +116,18 @@ export function RatingProgress({
             Stopped with <code className="font-mono">{view.error}</code>.
           </p>
         )}
+      {view && !isActive(view) && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => openTrace()}
+          className="nx-fade mx-1 mt-3 text-machine-ink hover:bg-machine-raised hover:text-machine-ink"
+        >
+          <Bot aria-hidden="true" />
+          See every step in the Agent Trace
+        </Button>
+      )}
     </section>
   );
 }

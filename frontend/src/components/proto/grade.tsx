@@ -75,14 +75,19 @@ export function GradeBadge({
   );
 }
 
-/** The rating stamp: the grade pressed onto the report card when a rating lands. */
+/**
+ * The rating stamp: the grade pressed onto the report card when a rating lands. `animate`
+ * presses it in (after `delay` ms, to follow an earlier beat of a reveal).
+ */
 export function GradeStamp({
   grade,
   animate = false,
+  delay = 0,
   className,
 }: {
   grade: Grade;
   animate?: boolean;
+  delay?: number;
   className?: string;
 }) {
   return (
@@ -94,6 +99,7 @@ export function GradeStamp({
         animate && "nx-stamp",
         className,
       )}
+      style={animate && delay ? { animationDelay: `${delay}ms` } : undefined}
       role="img"
       aria-label={`Grade ${grade}: ${GRADE_LABEL[grade]}`}
     >
