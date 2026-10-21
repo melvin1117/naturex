@@ -216,9 +216,70 @@ describe("TradePanel", () => {
     await quoted();
 
     expect(units()).toHaveAccessibleDescription(
-      "That costs $200.20; you have $150.00 available.",
+      "You have $150.00 of play money. This needs $200.20.",
     );
     expect(buyButton()).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("says how many units the cash covers, and fixes the order in one tap", async () => {
+    // The backend's own largest order for this account (cash, supply, size cap).
+    renderPanel({
+      "GET /portfolio": () => json(portfolio({ cash_balance: "150.00" })),
+      [QUOTE]: (request) =>
+        quoteFor(request, {
+          max_qty: 7,
+          ...(new URL(request.url).searchParams.get("qty") === "7" && {
+            total: "140.14",
+          }),
+        }),
+    });
+    await quoted();
+
+    expect(units()).toHaveAccessibleDescription(
+      "You have $150.00 of play money. This needs $200.20. You can buy up to 7 units now.",
+    );
+    const fix = screen.getByRole("button", { name: "Change to 7 units" });
+    fix.focus();
+    fireEvent.click(fix);
+
+    expect(units()).toHaveValue("7");
+    // The fix goes away with the problem; focus moves to the field it changed, not the page.
+    expect(units()).toHaveFocus();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Buy 7 units" }),
+      ).not.toHaveAttribute("aria-disabled"),
+    );
+    expect(
+      screen.queryByRole("button", { name: /^Change to/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("asks a 1-unit quote how much would go through when the size is refused", async () => {
+    const { backend } = renderPanel({
+      [QUOTE]: (request) =>
+        new URL(request.url).searchParams.get("qty") === "1"
+          ? quoteFor(request, { max_qty: 279, max_order_qty: 10_000 })
+          : json({ detail: "order_too_large" }, { status: 400 }),
+    });
+    fireEvent.change(await screen.findByLabelText("Units"), {
+      target: { value: "999999999" },
+    });
+
+    await waitFor(() =>
+      expect(units()).toHaveAccessibleDescription(
+        "One order can be at most 10,000 units. You can buy up to 279 units now.",
+      ),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Change to 279 units" }),
+    );
+    expect(units()).toHaveValue("279");
+    expect(
+      backend.requests.some(
+        (r) => new URL(r.url).searchParams.get("qty") === "1",
+      ),
+    ).toBe(true);
   });
 
   it("refuses a sell of more units than held", async () => {
@@ -407,7 +468,7 @@ describe("TradePanel", () => {
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
-        "You don't have enough play money for this order now. Try fewer units.",
+        "You don't have enough play money for this order now. Nothing was traded.",
       ),
     );
     // A units problem: focus stays on the button, and the units field is described by it.
@@ -469,7 +530,7 @@ describe("TradePanel", () => {
     [409, "insufficient_supply", /Not enough units are available/, null],
     [409, "price_moved", /price moved since your quote/, null],
     [409, "Asset is not listed for trading", /isn't open for trading/, null],
-    [400, "order_too_large", /too large/, null],
+    [400, "order_too_large", /more units than one order can take/, null],
     [
       422,
       [{ loc: ["body", "qty"], msg: "bad" }],
@@ -555,14 +616,18 @@ describe("TradePanel", () => {
       [QUOTE]: () => json({ detail: "order_too_large" }, { status: 400 }),
     });
 
+    // Even the 1-unit quote is refused here, so there's no number to offer: no fix either.
     await waitFor(() =>
       expect(units()).toHaveAccessibleDescription(
-        "That order is too large. Try fewer units.",
+        "That's more units than one order can take.",
       ),
     );
     expect(
-      screen.getByText("That order is too large. Try fewer units."),
+      screen.getByText("That's more units than one order can take."),
     ).toHaveAttribute("aria-live", "polite");
+    expect(
+      screen.queryByRole("button", { name: /^Change to/ }),
+    ).not.toBeInTheDocument();
     expect(buyButton()).toHaveAttribute("aria-disabled", "true");
   });
 

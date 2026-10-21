@@ -9,7 +9,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PortfolioView } from "@/components/portfolio-view";
 import { WorldProvider } from "@/components/world-provider";
+import type { OrderOut } from "@/lib/api/types";
 import { createDataLayer } from "@/lib/data-layer";
+import { freshFills, noteFill } from "@/lib/trade";
 
 import {
   BASE,
@@ -80,6 +82,42 @@ async function tableRow() {
 beforeEach(() => FakeEventSource.reset());
 
 describe("PortfolioView", () => {
+  it("washes the stake a trade just changed, once (#216 WP2)", async () => {
+    noteFill({
+      id: "o1",
+      asset_id: ASSET_ID,
+      side: "buy",
+      qty: 4,
+      shares_held: 10,
+    } as OrderOut);
+    renderPortfolio({ "GET /portfolio": () => json(HELD) });
+
+    const row = await tableRow();
+    expect(row).toHaveClass("nx-wash");
+    expect(row).toHaveAttribute("data-fresh");
+    // Its units land on the API's value (reduced motion in jsdom: at once).
+    expect(within(row).getByText("10")).toBeInTheDocument();
+    const card = screen
+      .getByRole("list", { name: "Stakes" })
+      .querySelector("li")!;
+    expect(card).toHaveClass("nx-wash");
+    // Shown once: coming back later doesn't replay it.
+    await waitFor(() => expect(freshFills().size).toBe(0));
+  });
+
+  it("doesn't wash a stake that changed again since the fill", async () => {
+    noteFill({
+      id: "o2",
+      asset_id: ASSET_ID,
+      side: "buy",
+      qty: 4,
+      shares_held: 7,
+    } as OrderOut);
+    renderPortfolio({ "GET /portfolio": () => json(HELD) });
+
+    expect(await tableRow()).not.toHaveClass("nx-wash");
+  });
+
   it("shows my alerts next to my stakes (T75)", async () => {
     renderPortfolio({
       "GET /alerts": () =>

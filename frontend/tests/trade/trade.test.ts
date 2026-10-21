@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
-import type { QuoteOut } from "@/lib/api/types";
+import type { OrderOut, QuoteOut } from "@/lib/api/types";
 import {
   assetHref,
   decimal,
+  forgetFills,
+  FRESH_FILL_MS,
+  freshFills,
   money,
+  noteFill,
   orderFailure,
   orderProblem,
   parseUnits,
@@ -71,38 +75,186 @@ describe("units input", () => {
 });
 
 describe("orderProblem", () => {
+  const message = (args: Parameters<typeof orderProblem>[0]) =>
+    orderProblem(args)?.message ?? null;
+
   it("accepts an affordable buy", () => {
     expect(orderProblem(base)).toBeNull();
   });
 
   it("needs a positive whole number", () => {
-    expect(orderProblem({ ...base, units: null })).toMatch(/whole number/);
+    expect(orderProblem({ ...base, units: null })).toEqual({
+      message: expect.stringMatching(/whole number/),
+      fix: null,
+    });
   });
 
-  it("compares the quote's total with the cash", () => {
-    expect(orderProblem({ ...base, cash: 200.19 })).toBe(
-      "That costs $200.20; you have $200.19 available.",
+  it("compares the quote's total with the cash, in play money", () => {
+    expect(message({ ...base, cash: 200.19 })).toBe(
+      "You have $200.19 of play money. This needs $200.20.",
     );
     expect(orderProblem({ ...base, cash: 200.2 })).toBeNull();
   });
 
-  it("caps sells at the holding, before any quote", () => {
+  it("says how many units the cash covers and offers them, from the API's max_qty", () => {
+    expect(
+      orderProblem({
+        ...base,
+        units: 300,
+        cash: 10_000,
+        quote: quote({ qty: 300, total: "10735.47", max_qty: 279 }),
+        formatMoney: money,
+      }),
+    ).toEqual({
+      message:
+        "You have $10,000.00 of play money. This needs $10,735.47. You can buy up to 279 units now.",
+      fix: 279,
+    });
+  });
+
+  it("offers no fix when no unit would go through", () => {
+    expect(
+      orderProblem({ ...base, cash: 5, quote: quote({ max_qty: 0 }) }),
+    ).toEqual({
+      message: "You have $5.00 of play money. This needs $200.20.",
+      fix: null,
+    });
+  });
+
+  it("caps sells at the holding, before any quote, and offers the holding", () => {
     expect(
       orderProblem({ ...base, side: "sell", held: 1, quote: undefined }),
-    ).toBe("You hold 1 unit of this site.");
+    ).toEqual({ message: "You hold 1 unit of this site.", fix: 1 });
+    expect(
+      orderProblem({ ...base, side: "sell", held: 0, quote: undefined }),
+    ).toEqual({ message: "You hold 0 units of this site.", fix: null });
     expect(orderProblem({ ...base, side: "sell", held: 10 })).toBeNull();
   });
 
+  it("never offers a sell above the size cap", () => {
+    expect(
+      orderProblem({
+        ...base,
+        side: "sell",
+        units: 50_000,
+        held: 20_000,
+        quote: undefined,
+        limits: { max_qty: 10_000, max_order_qty: 10_000, price: "20.0000" },
+      })?.fix,
+    ).toBe(10_000);
+  });
+
   it("applies the size cap and the available supply from the quote", () => {
-    expect(orderProblem({ ...base, quote: quote({ max_order_qty: 5 }) })).toBe(
-      "One order can be at most 5 units.",
+    expect(
+      orderProblem({ ...base, quote: quote({ max_order_qty: 5, max_qty: 5 }) }),
+    ).toEqual({ message: "One order can be at most 5 units.", fix: 5 });
+    expect(orderProblem({ ...base, quote: quote({ max_qty: 3 }) })).toEqual({
+      message: "Only 3 units are available to buy right now.",
+      fix: 3,
+    });
+    expect(orderProblem({ ...base, quote: quote({ max_qty: 0 }) })).toEqual({
+      message: "No units are available to buy right now.",
+      fix: null,
+    });
+  });
+
+  it("uses a 1-unit quote's limits when the order's own quote was refused", () => {
+    const limits = { max_qty: 279, max_order_qty: 10_000, price: "35.7849" };
+    expect(
+      orderProblem({
+        ...base,
+        units: 999_999_999,
+        quote: undefined,
+        limits,
+        formatMoney: money,
+      }),
+    ).toEqual({
+      message:
+        "One order can be at most 10,000 units. You can buy up to 279 units now.",
+      fix: 279,
+    });
+    // Within the cap but more than the cash covers (the price is only compared).
+    expect(
+      orderProblem({
+        ...base,
+        units: 500,
+        quote: undefined,
+        limits,
+        formatMoney: money,
+      }),
+    ).toEqual({
+      message:
+        "You have $10,000.00 of play money: enough for up to 279 units now.",
+      fix: 279,
+    });
+    // Cash would cover it: the supply is what's short.
+    expect(
+      orderProblem({
+        ...base,
+        units: 200,
+        quote: undefined,
+        limits: { ...limits, max_qty: 150 },
+      }),
+    ).toEqual({
+      message: "Only 150 units are available to buy right now.",
+      fix: 150,
+    });
+    expect(
+      orderProblem({
+        ...base,
+        units: 2,
+        cash: 10,
+        quote: undefined,
+        limits: { ...limits, max_qty: 0 },
+        formatMoney: money,
+      }),
+    ).toEqual({
+      message: "You have $10.00 of play money: not enough for one unit.",
+      fix: null,
+    });
+  });
+});
+
+describe("fresh fills", () => {
+  const order = (overrides: Partial<OrderOut> = {}): OrderOut => ({
+    id: "o1",
+    asset_id: "a",
+    side: "buy",
+    qty: 10,
+    fill_price: "20.0200",
+    total: "200.20",
+    primary_qty: 10,
+    community_amount: "200.20",
+    is_primary: true,
+    created_at: "2026-10-18T00:00:00Z",
+    cash_balance: "9799.80",
+    shares_held: 15,
+    ...overrides,
+  });
+
+  it("remembers the units before and after a fill, for the next page", () => {
+    noteFill(order(), 1_000);
+    noteFill(
+      order({ id: "o2", asset_id: "b", side: "sell", qty: 4, shares_held: 6 }),
+      1_000,
     );
-    expect(orderProblem({ ...base, quote: quote({ max_qty: 3 }) })).toBe(
-      "Only 3 units are available to buy right now.",
-    );
-    expect(orderProblem({ ...base, quote: quote({ max_qty: 0 }) })).toBe(
-      "No units are available to buy right now.",
-    );
+    const fresh = freshFills(2_000);
+    expect(fresh.get("a")).toMatchObject({ unitsBefore: 5, unitsAfter: 15 });
+    expect(fresh.get("b")).toMatchObject({ unitsBefore: 10, unitsAfter: 6 });
+    // A pure read: asking again gives the same answer until the page forgets them.
+    expect(freshFills(2_000).size).toBe(2);
+    forgetFills(fresh.values());
+    expect(freshFills(2_000).size).toBe(0);
+  });
+
+  it("lets an old fill go and keeps a newer one", () => {
+    noteFill(order(), 0);
+    expect(freshFills(FRESH_FILL_MS + 1).size).toBe(0);
+    const seen = freshFills(0);
+    noteFill(order({ id: "o3" }), 10);
+    forgetFills(seen.values());
+    expect(freshFills(10).get("a")?.orderId).toBe("o3");
+    forgetFills(freshFills(10).values());
   });
 });
 
@@ -113,6 +265,20 @@ describe("orderFailure", () => {
     expect(orderFailure(new ApiError(0, "offline"), { order: false })).toEqual({
       message: "offline",
     });
+  });
+
+  it("says a refused order changed nothing, never a refused quote", () => {
+    const tooBig = new ApiError(400, "x", "order_too_large");
+    expect(orderFailure(tooBig)).toEqual({
+      message: "That's more units than one order can take. Nothing was traded.",
+      units: true,
+    });
+    expect(orderFailure(tooBig, { order: false }).message).toBe(
+      "That's more units than one order can take.",
+    );
+    expect(
+      orderFailure(new ApiError(409, "x", "insufficient_cash")).message,
+    ).not.toMatch(/Try fewer units/);
   });
 
   it("offers sign-in for an ended session", () => {

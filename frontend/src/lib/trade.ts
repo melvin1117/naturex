@@ -4,7 +4,7 @@
  * order failures into messages. Nothing here prices an order.
  */
 import { formatWait, type ApiError } from "./api/errors";
-import type { QuoteOut } from "./api/types";
+import type { OrderOut, QuoteOut } from "./api/types";
 
 export type Side = "buy" | "sell";
 
@@ -73,9 +73,28 @@ export function parseUnits(text: string): number | null {
 
 export const UNITS_HINT = "Enter a whole number of units, 1 or more.";
 
+/** What a quote says about the largest order this account can place now, whatever its size. */
+export type OrderLimits = Pick<QuoteOut, "max_qty" | "max_order_qty" | "price">;
+
+/** Why an order can't be placed, and the units that would go through instead. */
+export type OrderProblem = {
+  message: string;
+  /**
+   * The one-tap fix: the largest order the API says would go through now (`max_qty`, or the
+   * units held for a sell). Null when no smaller order would (nothing to sell, no cash).
+   */
+  fix: number | null;
+};
+
+const unitCount = (n: number) =>
+  `${n.toLocaleString("en-US")} ${n === 1 ? "unit" : "units"}`;
+
 /**
- * Why this order can't be placed, or null. Uses the backend's quote (cost, size cap, the
- * largest order this account can place) and the portfolio (cash, units held).
+ * Why this order can't be placed, or null, with a fix when fewer units would do (#216 WP2).
+ * Uses the backend's quote for exactly these units (cost, size cap, the largest order this
+ * account can place) and the portfolio (cash, units held). When that quote was refused (too
+ * large, not enough supply), `limits` is any quote for this side (a 1-unit one): its `max_qty`
+ * doesn't depend on the size asked for. Every number shown is the API's; nothing is priced here.
  */
 export function orderProblem({
   side,
@@ -83,6 +102,7 @@ export function orderProblem({
   held,
   cash,
   quote,
+  limits = quote,
   formatMoney,
 }: {
   side: Side;
@@ -90,26 +110,59 @@ export function orderProblem({
   held: number;
   cash: number | null;
   quote: QuoteOut | undefined;
+  limits?: OrderLimits | undefined;
   formatMoney: (value: number) => string;
-}): string | null {
-  if (units === null) return UNITS_HINT;
-  if (side === "sell" && units > held)
-    return `You hold ${held.toLocaleString("en-US")} ${held === 1 ? "unit" : "units"} of this site.`;
-  if (!quote) return null;
-  if (units > quote.max_order_qty)
-    return `One order can be at most ${quote.max_order_qty.toLocaleString("en-US")} units.`;
-  const total = decimal(quote.total);
+}): OrderProblem | null {
+  if (units === null) return { message: UNITS_HINT, fix: null };
+  const max = limits?.max_qty ?? null;
+  // Fewer units that would go through now; never the same or more than what's typed.
+  const fixFor = (n: number | null) =>
+    n !== null && n > 0 && n < units ? n : null;
+  const upTo =
+    max !== null && max > 0 && max < units
+      ? ` You can ${side} up to ${unitCount(max)} now.`
+      : "";
+  if (side === "sell" && units > held) {
+    const cap = limits ? Math.min(held, limits.max_order_qty) : held;
+    return {
+      message: `You hold ${unitCount(held)} of this site.`,
+      fix: fixFor(cap),
+    };
+  }
+  if (limits && units > limits.max_order_qty)
+    return {
+      message: `One order can be at most ${unitCount(limits.max_order_qty)}.${
+        max !== null && max < limits.max_order_qty ? upTo : ""
+      }`,
+      fix: fixFor(max ?? limits.max_order_qty),
+    };
+  const total = decimal(quote?.total);
   if (side === "buy" && total !== null && cash !== null && total > cash)
-    return `That costs ${formatMoney(total)}; you have ${formatMoney(cash)} available.`;
-  if (
-    side === "buy" &&
-    quote.max_qty !== null &&
-    quote.max_qty !== undefined &&
-    units > quote.max_qty
-  )
-    return quote.max_qty === 0
-      ? "No units are available to buy right now."
-      : `Only ${quote.max_qty.toLocaleString("en-US")} units are available to buy right now.`;
+    return {
+      message: `You have ${formatMoney(cash)} of play money. This needs ${formatMoney(total)}.${upTo}`,
+      fix: fixFor(max),
+    };
+  if (side === "buy" && max !== null && units > max) {
+    // Without a quote for these units (it was refused), the latest price tells whether the
+    // cash or the supply is short. It's only compared, never shown as a cost.
+    const unit = decimal(limits?.price);
+    const cashShort = cash !== null && unit !== null && units * unit > cash;
+    if (max === 0)
+      return {
+        message:
+          cashShort && unit !== null && cash !== null && cash < unit
+            ? `You have ${formatMoney(cash)} of play money: not enough for one unit.`
+            : "No units are available to buy right now.",
+        fix: null,
+      };
+    return {
+      message:
+        cashShort && cash !== null
+          ? `You have ${formatMoney(cash)} of play money: enough for up to ${unitCount(max)} now.`
+          : `Only ${unitCount(max)} are available to buy right now.`,
+      fix: fixFor(max),
+    };
+  }
   return null;
 }
 
@@ -144,6 +197,8 @@ export function orderFailure(
   error: ApiError,
   { order = true } = {},
 ): OrderFailure {
+  // A refused order changed nothing; a refused quote never could.
+  const untraded = order ? " Nothing was traded." : "";
   switch (error.code) {
     case "auth_required":
       return {
@@ -162,23 +217,22 @@ export function orderFailure(
     case "insufficient_cash":
       return {
         message:
-          "You don't have enough play money for this order now. Try fewer units.",
+          "You don't have enough play money for this order now." + untraded,
         units: true,
       };
     case "insufficient_shares":
       return {
-        message: "You can't sell more units than you hold.",
+        message: "You can't sell more units than you hold." + untraded,
         units: true,
       };
     case "insufficient_supply":
       return {
-        message:
-          "Not enough units are available to buy right now. Try fewer units.",
+        message: "Not enough units are available to buy right now." + untraded,
         units: true,
       };
     case "order_too_large":
       return {
-        message: "That order is too large. Try fewer units.",
+        message: "That's more units than one order can take." + untraded,
         units: true,
       };
     case "price_moved":
@@ -231,4 +285,49 @@ export function orderFailure(
     default:
       return { message: error.message };
   }
+}
+
+/**
+ * Fills made in this tab, so the next page the user opens can show what changed (#216 WP2):
+ * the portfolio washes the stake's row and counts its units from before the fill. In memory
+ * only: a reload starts fresh, and a fill older than `FRESH_FILL_MS` is old news.
+ */
+export const FRESH_FILL_MS = 60_000;
+
+export type FreshFill = {
+  orderId: string;
+  /** Units held right before the fill (the order's `shares_held` minus or plus its `qty`). */
+  unitsBefore: number;
+  unitsAfter: number;
+  at: number;
+};
+
+const fills = new Map<string, FreshFill>();
+
+/** Note a fill (after `POST /orders` answered): its asset's latest one wins. */
+export function noteFill(order: OrderOut, now = Date.now()): void {
+  const delta = order.side === "buy" ? order.qty : -order.qty;
+  fills.set(order.asset_id, {
+    orderId: order.id,
+    unitsBefore: order.shares_held - delta,
+    unitsAfter: order.shares_held,
+    at: now,
+  });
+}
+
+/** The fresh fills by asset id (a pure read: call it while rendering). */
+export function freshFills(now = Date.now()): Map<string, FreshFill> {
+  return new Map(
+    [...fills].filter(([, fill]) => now - fill.at <= FRESH_FILL_MS),
+  );
+}
+
+/**
+ * Forget fills once a page has shown them (call it from an effect), so coming back later
+ * doesn't replay the highlight. A fill made since then, with a new order id, is kept.
+ */
+export function forgetFills(shown: Iterable<FreshFill>): void {
+  const ids = new Set([...shown].map((fill) => fill.orderId));
+  for (const [assetId, fill] of fills)
+    if (ids.has(fill.orderId)) fills.delete(assetId);
 }
