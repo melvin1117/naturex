@@ -27,41 +27,91 @@ describe("Stat", () => {
   });
 });
 
-function StateDrivenSheet() {
+function StateDrivenSheet({ modal = true }: { modal?: boolean }) {
   const [open, setOpen] = useState(false);
+  const [showOpener, setShowOpener] = useState(true);
   const returnFocus = useReturnFocus(open);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)}>
-        Agent Trace
+      {showOpener && (
+        <button type="button" onClick={() => setOpen(true)}>
+          Agent Trace
+        </button>
+      )}
+      {/* Like the tour's Next, outside the sheet: it closes the sheet from app state. */}
+      <button type="button" onClick={() => setOpen(false)}>
+        Next step
       </button>
-      <Sheet open={open} onOpenChange={setOpen}>
+      <Sheet modal={modal} open={open} onOpenChange={setOpen}>
         <SheetContent onCloseAutoFocus={returnFocus}>
           <SheetTitle>Trace</SheetTitle>
           <SheetDescription>Runs</SheetDescription>
+          <button type="button" onClick={() => setShowOpener(false)}>
+            Remove the opener
+          </button>
         </SheetContent>
       </Sheet>
     </>
   );
 }
 
+async function openSheet(): Promise<HTMLElement> {
+  const opener = screen.getByRole("button", { name: "Agent Trace" });
+  opener.focus();
+  fireEvent.click(opener);
+  const dialog = await screen.findByRole("dialog");
+  await waitFor(() =>
+    expect(dialog).toContainElement(document.activeElement as HTMLElement),
+  );
+  return opener;
+}
+
+async function closed(): Promise<void> {
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
+  // Radix restores focus on a timer after the content unmounts.
+  await new Promise((resolve) => setTimeout(resolve, 20));
+}
+
 describe("useReturnFocus", () => {
   it("puts focus back on what opened a sheet without a trigger", async () => {
     render(<StateDrivenSheet />);
-    const opener = screen.getByRole("button", { name: "Agent Trace" });
-    opener.focus();
-    fireEvent.click(opener);
-    const dialog = await screen.findByRole("dialog");
-    await waitFor(() =>
-      expect(dialog).toContainElement(document.activeElement as HTMLElement),
-    );
+    const opener = await openSheet();
 
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
 
-    await waitFor(() =>
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
-    );
+    await closed();
     expect(opener).toHaveFocus();
+  });
+
+  it("leaves focus on a control outside a non-modal sheet", async () => {
+    render(<StateDrivenSheet modal={false} />);
+    await openSheet();
+    const outside = screen.getByRole("button", { name: "Next step" });
+
+    // A click outside: the control takes focus and closes the sheet.
+    outside.focus();
+    fireEvent.click(outside);
+
+    await closed();
+    expect(outside).toHaveFocus();
+  });
+
+  it("does nothing when the opener has left the page", async () => {
+    render(<StateDrivenSheet />);
+    await openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "Remove the opener" }));
+    expect(
+      screen.queryByRole("button", { name: "Agent Trace" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+
+    await closed();
+    expect(
+      screen.queryByRole("button", { name: "Agent Trace" }),
+    ).not.toBeInTheDocument();
   });
 });
 
