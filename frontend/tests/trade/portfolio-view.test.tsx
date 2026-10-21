@@ -198,8 +198,7 @@ describe("PortfolioView", () => {
       "−$1.50 since you started with $10,000.00",
     );
     expect(
-      screen.getByText("Unrealised profit and loss", { selector: "div" })
-        .nextSibling,
+      screen.getByText("Change in value", { selector: "dt:not(.sr-only)" }).nextSibling,
     ).toHaveTextContent("−$1.50");
     const cells = within(row)
       .getAllByRole("cell")
@@ -233,8 +232,7 @@ describe("PortfolioView", () => {
     const row = await tableRow();
     expect(row).toHaveTextContent("\u2212$1,234.50");
     expect(
-      screen.getByText("Unrealised profit and loss", { selector: "div" })
-        .nextSibling,
+      screen.getByText("Change in value", { selector: "dt:not(.sr-only)" }).nextSibling,
     ).toHaveTextContent(/^\u2212\$1,234\.50$/);
   });
 
@@ -255,7 +253,7 @@ describe("PortfolioView", () => {
   it("lists a card per holding on phones with its value and P&L", async () => {
     renderPortfolio({ "GET /portfolio": () => json(HELD) });
 
-    const list = await screen.findByRole("list", { name: "Holdings" });
+    const list = await screen.findByRole("list", { name: "Stakes" });
     // CSS shows the list below `sm` and the table from `sm` up.
     expect(list).toHaveClass("sm:hidden");
     expect(screen.getByRole("table").parentElement?.parentElement).toHaveClass(
@@ -272,7 +270,7 @@ describe("PortfolioView", () => {
       "$100.00",
     );
     expect(
-      within(card).getByText("Unrealised profit and loss").nextSibling,
+      within(card).getByText("Change in value").nextSibling,
     ).toHaveTextContent("−$1.50");
   });
 

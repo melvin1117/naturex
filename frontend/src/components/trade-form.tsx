@@ -261,7 +261,9 @@ export function TradeForm({
       <p className="sr-only" role="status">
         {receipt ? announce(receipt) : ""}
       </p>
-      {receipt && <Receipt ref={receiptBox} order={receipt} community={asset.name} />}
+      {receipt && (
+        <Receipt ref={receiptBox} order={receipt} community={asset.name} />
+      )}
     </Tabs>
   );
 }
