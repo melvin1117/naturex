@@ -122,7 +122,13 @@ export function SiteCard({ card }: { card: MarketCard }) {
       <div className="relative">
         <SiteThumb
           src={card.imageUrl}
-          alt={`Satellite view of ${card.name}`}
+          outline={card.outline}
+          creditHidden
+          alt={
+            card.imageUrl
+              ? `Satellite view of ${card.name}`
+              : `Boundary of ${card.name} on satellite imagery`
+          }
           className="aspect-[16/9]"
         />
         {status && (
@@ -204,7 +210,7 @@ export function FeatureSiteCard({ card }: { card: MarketCard }) {
       className="relative isolate overflow-hidden rounded-[2rem] text-white shadow-lift"
       data-tour="feature-card"
     >
-      <SiteBackdrop src={card.imageUrl} />
+      <SiteBackdrop src={card.imageUrl} outline={card.outline} />
       <div className="relative grid gap-8 p-6 sm:p-8 lg:grid-cols-[auto_1fr_auto] lg:items-center lg:gap-10 lg:p-10">
         {card.health !== null && (
           <HealthRing

@@ -18,34 +18,55 @@ import {
   submitFailure,
 } from "@/lib/verification";
 
+const plural = (n: number) => `${n} document${n === 1 ? "" : "s"}`;
+
 /**
- * The listing's documents. Ones not yet submitted can be picked (1–3) and submitted for
- * review; submitted ones stay listed with their run.
+ * The listing's documents. Ones not yet submitted can be picked and submitted for review.
+ * While a submission waits for a reviewer (`waiting`: its documents), picking adds to it: the
+ * new run keeps those documents unless the steward unticks them (#210), and the list shows
+ * exactly what the reviewer will see. At most MAX_RUN_DOCUMENTS in all.
  */
 export function DocumentSubmitList({
   documents,
+  waiting = null,
   selected,
+  removed = [],
   onToggle,
+  onToggleKeep,
   onSubmit,
   pending,
   error,
   disabled = false,
 }: {
   documents: ListingDocument[];
+  /** The waiting run's documents, or null when no run waits for a decision. */
+  waiting?: readonly ListingDocument[] | null;
   selected: readonly string[];
+  /** Documents of the waiting run the steward chose to leave out. */
+  removed?: readonly string[];
   onToggle: (id: string, on: boolean) => void;
+  onToggleKeep?: (id: string, keep: boolean) => void;
   onSubmit: () => void;
   pending: boolean;
   error: ApiError | null;
   disabled?: boolean;
 }) {
   const hintId = useId();
-  const open = documents.filter((doc) => doc.run_id == null);
-  const submitted = documents.filter((doc) => doc.run_id != null);
-  const full = selected.length >= MAX_RUN_DOCUMENTS;
-  const hasConsent = open.some(
-    (doc) => selected.includes(doc.id) && doc.doc_type === "assembly_minutes",
+  const open = documents.filter((doc) => !doc.submitted);
+  const inWaiting = new Set(waiting?.map((doc) => doc.id));
+  const earlier = documents.filter(
+    (doc) => doc.submitted && !inWaiting.has(doc.id),
   );
+  const kept = (waiting ?? []).filter((doc) => !removed.includes(doc.id));
+  const picked = open.filter((doc) => selected.includes(doc.id));
+  const total = kept.length + picked.length;
+  const full = total >= MAX_RUN_DOCUMENTS;
+  const hasConsent = [...kept, ...picked].some(
+    (doc) => doc.doc_type === "assembly_minutes",
+  );
+  const adding = waiting !== null;
+  // Something to add is what makes a submission; unticking alone changes nothing.
+  const canEdit = open.length > 0;
 
   if (documents.length === 0) {
     return (
@@ -56,12 +77,95 @@ export function DocumentSubmitList({
     );
   }
 
+  const hint =
+    total > 0 && !hasConsent
+      ? "None of these documents is labelled as assembly minutes, so the consent check will fail."
+      : adding
+        ? "Adding runs the automated checks again over every document above; the reviewer then decides on all of them together."
+        : "Submitting runs the automated checks at once; a reviewer then decides.";
+
   return (
     <div className="space-y-5">
+      {adding && (
+        <section aria-labelledby={`${hintId}-submission`}>
+          <h3 id={`${hintId}-submission`} className="text-sm font-medium">
+            What the reviewer will see{" "}
+            <span className="tabular font-normal text-muted-foreground">
+              ({total} of {MAX_RUN_DOCUMENTS})
+            </span>
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {canEdit
+              ? "Your submission is waiting for a reviewer. Documents you add join it. Untick one to leave it out when you add a document."
+              : "Your submission is waiting for a reviewer. To add a document, upload it here first."}
+          </p>
+          <ul
+            className="mt-3 space-y-2"
+            aria-label="Documents in your submission"
+          >
+            {(waiting ?? []).map((doc) => {
+              const keep = !removed.includes(doc.id);
+              const inputId = `${hintId}-keep-${doc.id}`;
+              return (
+                <li
+                  key={doc.id}
+                  className="flex items-start gap-3 rounded-2xl bg-secondary/50 p-3"
+                >
+                  {canEdit ? (
+                    <Checkbox
+                      id={inputId}
+                      checked={keep}
+                      disabled={disabled || pending || (!keep && full)}
+                      onCheckedChange={(v) =>
+                        onToggleKeep?.(doc.id, v === true)
+                      }
+                      className="mt-0.5"
+                    />
+                  ) : (
+                    <FileText
+                      className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  )}
+                  <Label
+                    htmlFor={canEdit ? inputId : undefined}
+                    className="block font-normal"
+                  >
+                    <span className="block font-medium">
+                      {DOC_TYPE_LABEL[doc.doc_type]}
+                    </span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      {documentFacts(doc)} ·{" "}
+                      {keep ? "already submitted" : "will be left out"}
+                    </span>
+                  </Label>
+                </li>
+              );
+            })}
+            {picked.map((doc) => (
+              <li
+                key={doc.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-dashed border-border p-3 text-sm"
+              >
+                <span className="font-medium">
+                  {DOC_TYPE_LABEL[doc.doc_type]}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {documentFacts(doc)}
+                </span>
+                <Badge variant="outline">Adding</Badge>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {open.length > 0 && (
         <fieldset aria-describedby={hintId} disabled={disabled || pending}>
           <legend className="text-sm font-medium">
-            Choose up to {MAX_RUN_DOCUMENTS} to submit together
+            {adding
+              ? "Choose documents to add"
+              : `Choose up to ${MAX_RUN_DOCUMENTS} to submit together`}
           </legend>
           <ul className="mt-3 space-y-2">
             {open.map((doc) => {
@@ -91,25 +195,33 @@ export function DocumentSubmitList({
               );
             })}
           </ul>
+          {adding && full && picked.length === 0 && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Your submission already holds {MAX_RUN_DOCUMENTS} documents, the
+              most a reviewer takes at once. Untick one above to make room.
+            </p>
+          )}
           <p id={hintId} className="mt-3 text-xs text-muted-foreground">
-            {selected.length > 0 && !hasConsent
-              ? "None of the chosen documents is labelled as assembly minutes, so the consent check will fail."
-              : "Submitting runs the automated checks at once; a reviewer then decides."}
+            {hint}
           </p>
           <Button
             type="button"
             className="mt-4"
             onClick={onSubmit}
-            disabled={selected.length === 0 || pending || disabled}
+            disabled={picked.length === 0 || pending || disabled}
           >
             {pending ? (
               <Spinner aria-hidden="true" role="presentation" />
             ) : (
               <Send aria-hidden="true" />
             )}
-            {selected.length === 0
-              ? "Submit for review"
-              : `Submit ${selected.length} document${selected.length === 1 ? "" : "s"} for review`}
+            {adding
+              ? picked.length === 0
+                ? "Add to your submission"
+                : `Add ${plural(picked.length)} to your submission`
+              : picked.length === 0
+                ? "Submit for review"
+                : `Submit ${plural(picked.length)} for review`}
           </Button>
           {error && (
             <p role="alert" className="mt-3 text-sm text-destructive">
@@ -119,11 +231,13 @@ export function DocumentSubmitList({
         </fieldset>
       )}
 
-      {submitted.length > 0 && (
+      {earlier.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium">Already submitted</h3>
+          <h3 className="text-sm font-medium">
+            {adding ? "In earlier submissions" : "Already submitted"}
+          </h3>
           <ul className="mt-2 space-y-2">
-            {submitted.map((doc) => (
+            {earlier.map((doc) => (
               <li
                 key={doc.id}
                 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"

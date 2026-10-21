@@ -38,6 +38,7 @@ import {
   MAX_RUN_DOCUMENTS,
   stewardStatus,
   type Tone,
+  waitingRun,
 } from "@/lib/verification";
 import {
   useListingDocuments,
@@ -125,6 +126,7 @@ function Loaded({
   const panel = useVerificationPanel(asset.id);
   const submit = useSubmitVerification(asset.id);
   const [selected, setSelected] = useState<string[]>([]);
+  const [removed, setRemoved] = useState<string[]>([]);
   const statusRef = useRef<HTMLHeadingElement>(null);
   const [focusStatus, setFocusStatus] = useState(false);
   useEffect(() => {
@@ -135,6 +137,11 @@ function Loaded({
 
   const current = currentRun(runs);
   const earlier = runs.filter((run) => run !== current);
+  // While the current run waits, a submission adds to it (#210): its documents stay unless
+  // unticked, and they count towards the limit.
+  const waiting = waitingRun(runs);
+  const keptCount =
+    waiting?.documents.filter((doc) => !removed.includes(doc.id)).length ?? 0;
   const closed = CLOSED.has(asset.status);
   // Only an approval lifts a revocation (`assets.verification_revoked_at`), not a newer
   // submission; when the current run is the revoked one, its status already says so.
@@ -144,15 +151,31 @@ function Loaded({
   const toggle = (id: string, on: boolean) =>
     setSelected((prev) =>
       on
-        ? prev.includes(id) || prev.length >= MAX_RUN_DOCUMENTS
+        ? prev.includes(id) || prev.length + keptCount >= MAX_RUN_DOCUMENTS
           ? prev
           : [...prev, id]
         : prev.filter((x) => x !== id),
     );
+  const toggleKeep = (id: string, keep: boolean) =>
+    setRemoved((prev) =>
+      keep
+        ? selected.length + keptCount >= MAX_RUN_DOCUMENTS
+          ? prev
+          : prev.filter((x) => x !== id)
+        : prev.includes(id)
+          ? prev
+          : [...prev, id],
+    );
   const send = async () => {
-    const run = await submit.mutate(selected);
+    const run = await submit.mutate({
+      documentIds: selected,
+      removeDocumentIds: waiting
+        ? removed.filter((id) => waiting.documents.some((d) => d.id === id))
+        : [],
+    });
     if (!run) return;
     setSelected([]);
+    setRemoved([]);
     setFocusStatus(true);
   };
 
@@ -248,13 +271,16 @@ function Loaded({
           </IpoCard>
           <IpoCard aria-labelledby="documents-heading">
             <h2 id="documents-heading" className="mb-4 text-lg font-semibold">
-              Your documents
+              {waiting ? "Add to your submission" : "Your documents"}
             </h2>
             {documents.data ? (
               <DocumentSubmitList
                 documents={documents.data}
+                waiting={waiting?.documents ?? null}
                 selected={selected}
+                removed={removed}
                 onToggle={toggle}
+                onToggleKeep={toggleKeep}
                 onSubmit={() => void send()}
                 pending={submit.isPending}
                 error={submit.error}

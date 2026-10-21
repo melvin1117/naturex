@@ -47,6 +47,7 @@ beforeAll(() => {
 });
 beforeEach(() => FakeEventSource.reset());
 
+const DOC_EXTRA = "88888888-8888-4888-8888-888888888883";
 const ASSET = `GET /assets/${ASSET_ID}`;
 const RUNS = `GET /assets/${ASSET_ID}/verification/runs`;
 const DOCS = `GET /assets/${ASSET_ID}/documents`;
@@ -201,8 +202,8 @@ describe("StewardVerifyScreen", () => {
         () => json([document(), uploaded]),
         () =>
           json([
-            document({ run_id: run().id }),
-            { ...uploaded, run_id: run().id },
+            document({ submitted: true }),
+            { ...uploaded, submitted: true },
           ]),
       ),
       [UPLOAD]: () => {
@@ -407,6 +408,167 @@ describe("StewardVerifyScreen", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("File")).toHaveFocus();
     expect(backend.calls(UPLOAD)).toBe(0);
+  });
+
+  it("adds to a waiting submission, showing what the reviewer will see", async () => {
+    const extra = document({
+      id: DOC_EXTRA,
+      doc_type: "entity_registration",
+      created_at: "2026-10-18T12:00:00Z",
+    });
+    const added = run({
+      id: "77777777-7777-4777-8777-777777777777",
+      documents: [run().documents[1], { ...extra, submitted: true }],
+    });
+    const backend = renderScreen({
+      [RUNS]: sequence(
+        () => json([run()]),
+        () => json([added, { ...run(), is_current: false }]),
+      ),
+      [DOCS]: () => json([...run().documents, extra]),
+      [SUBMIT]: () => json(added, { status: 201 }),
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: "Add to your submission" }),
+    ).toBeInTheDocument();
+    const submission = screen.getByRole("list", {
+      name: "Documents in your submission",
+    });
+    expect(within(submission).getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByText("(2 of 3)")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Cooperative or ejido/ }),
+    );
+    expect(screen.getByText("(3 of 3)")).toBeInTheDocument();
+    expect(within(submission).getByText("Adding")).toBeInTheDocument();
+    fireEvent.click(
+      within(submission).getByRole("checkbox", { name: /Land title/ }),
+    );
+    expect(screen.getByText("(2 of 3)")).toBeInTheDocument();
+    expect(
+      within(submission).getByText(/will be left out/),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add 1 document to your submission" }),
+    );
+
+    await waitFor(() => expect(backend.calls(SUBMIT)).toBe(1));
+    const submit = backend.requests.find(
+      (r) => r.method === "POST" && r.url.endsWith("/verification/runs"),
+    )!;
+    expect(await submit.json()).toEqual({
+      document_ids: [DOC_EXTRA],
+      remove_document_ids: [DOC_TITLE],
+    });
+    expect(
+      await screen.findByText("Replaced by a later submission"),
+    ).toBeInTheDocument();
+  });
+
+  it("won't add past three documents, and explains a full submission", async () => {
+    const third = document({
+      id: DOC_EXTRA,
+      doc_type: "other",
+      submitted: true,
+    });
+    const full = run({ documents: [...run().documents, third] });
+    const fourth = document({
+      id: "88888888-8888-4888-8888-888888888884",
+      doc_type: "entity_registration",
+    });
+    const backend = renderScreen({
+      [RUNS]: () => json([full]),
+      [DOCS]: () => json([...full.documents, fourth]),
+      [SUBMIT]: () => json({ detail: "submission_full" }, { status: 409 }),
+    });
+
+    const pick = await screen.findByRole("checkbox", {
+      name: /Cooperative or ejido/,
+    });
+    expect(pick).toBeDisabled();
+    expect(screen.getByText(/already holds 3 documents/)).toBeInTheDocument();
+    const submission = screen.getByRole("list", {
+      name: "Documents in your submission",
+    });
+    fireEvent.click(
+      within(submission).getByRole("checkbox", { name: /Other document/ }),
+    );
+    fireEvent.click(pick);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add 1 document to your submission" }),
+    );
+
+    expect(
+      await screen.findByText(/A submission holds at most 3 documents/),
+    ).toBeInTheDocument();
+    expect(backend.calls(SUBMIT)).toBe(1);
+  });
+
+  it("can leave out every earlier document while adding a new one", async () => {
+    const extra = document({ id: DOC_EXTRA, doc_type: "assembly_minutes" });
+    const backend = renderScreen({
+      [RUNS]: () => json([run()]),
+      [DOCS]: () => json([...run().documents, extra]),
+      [SUBMIT]: () =>
+        json(run({ id: "77777777-7777-4777-8777-777777777777" }), {
+          status: 201,
+        }),
+    });
+    const submission = await screen.findByRole("list", {
+      name: "Documents in your submission",
+    });
+    fireEvent.click(
+      within(submission).getByRole("checkbox", { name: /Land title/ }),
+    );
+    fireEvent.click(
+      within(submission).getByRole("checkbox", { name: /Assembly minutes/ }),
+    );
+    expect(screen.getByText("(0 of 3)")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add to your submission" }),
+    ).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Assembly minutes.*uploaded/ }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add 1 document to your submission" }),
+    );
+
+    await waitFor(() => expect(backend.calls(SUBMIT)).toBe(1));
+    const submit = backend.requests.find(
+      (r) => r.method === "POST" && r.url.endsWith("/verification/runs"),
+    )!;
+    expect(await submit.json()).toEqual({
+      document_ids: [DOC_EXTRA],
+      remove_document_ids: [DOC_TITLE, DOC_MINUTES],
+    });
+  });
+
+  it("explains a submission that changed since the page loaded", async () => {
+    renderScreen({
+      [RUNS]: () => json([run()]),
+      [DOCS]: () =>
+        json([
+          ...run().documents,
+          document({ id: DOC_EXTRA, doc_type: "other" }),
+        ]),
+      [SUBMIT]: () =>
+        json({ detail: "document_not_in_submission" }, { status: 409 }),
+    });
+    fireEvent.click(
+      await screen.findByRole("checkbox", { name: /Other document/ }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add 1 document to your submission" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "Your submission changed since you opened this page. Reload and choose again.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("won't take documents for a withdrawn listing", async () => {

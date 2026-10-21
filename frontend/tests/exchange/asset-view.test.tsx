@@ -9,6 +9,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AssetView } from "@/components/proto/asset-view";
 import type { AssetDetail } from "@/lib/api/types";
+import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 
 import { FakeEventSource, json, sequence } from "../lib/helpers";
 import asset from "./fixtures/asset.json";
@@ -25,6 +26,13 @@ vi.mock("next/navigation", () => ({
 }));
 
 const ASSET = asset as unknown as AssetDetail;
+// The API's simplified outline (#212), not the full geometry, draws the hero's map.
+const OUTLINE = [
+  [-99.1048, 19.2811],
+  [-99.0892, 19.2891],
+  [-99.0957, 19.2945],
+  [-99.1048, 19.2811],
+];
 const ID = ASSET.id;
 const PRICES = [
   { ts: "2026-10-19T00:04:24Z", price: "21.4723", reason: "ipo" },
@@ -144,9 +152,7 @@ describe("AssetView", () => {
     expect(
       within(sources).getByText(/^Dynamic World: This dataset/),
     ).toBeInTheDocument();
-    expect(
-      within(sources).getByText("Imagery © Esri, Maxar, Earthstar Geographics"),
-    ).toBeInTheDocument();
+    expect(within(sources).getByText(IMAGERY_ATTRIBUTION)).toBeInTheDocument();
 
     // The real trade panel (T18): anonymous visitors are asked to sign in and come back here.
     expect(
@@ -159,6 +165,41 @@ describe("AssetView", () => {
     expect(
       screen.getByRole("button", { name: "How it was rated" }),
     ).toBeEnabled();
+  });
+
+  it("draws the boundary in the hero of a site without a thumbnail", async () => {
+    const { container } = renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /assets/${ID}`]: () =>
+          json({ ...ASSET, site_key: null, outline: [OUTLINE] }),
+      }),
+    );
+    const hero = await screen.findByRole("region", {
+      name: "Xochimilco Wetland",
+    });
+    expect(within(hero).getByText(IMAGERY_ATTRIBUTION)).toBeInTheDocument();
+    const map = container.querySelector("[data-boundary-map]")!;
+    expect(hero.contains(map)).toBe(true);
+    expect(map.querySelectorAll("img").length).toBeGreaterThan(0);
+  });
+
+  it("keeps the placeholder in the hero of a site without an outline", async () => {
+    const { container } = renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /assets/${ID}`]: () =>
+          json({ ...ASSET, site_key: null, outline: [] }),
+      }),
+    );
+    await screen.findByRole("region", { name: "Xochimilco Wetland" });
+    expect(container.querySelector("[data-boundary-map]")).toBeNull();
+  });
+
+  it("keeps the precomputed thumbnail in the hero of a curated site", async () => {
+    const { container } = renderExchange(<AssetView id={ID} />, routes());
+    await screen.findByRole("region", { name: "Xochimilco Wetland" });
+    expect(container.querySelector("[data-boundary-map]")).toBeNull();
   });
 
   it("says a value is not available instead of showing zero", async () => {

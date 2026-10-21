@@ -23,7 +23,7 @@ import {
   ServicesPanel,
   TrendPanel,
 } from "@/components/proto/report-panels";
-import { IMAGERY_ATTRIBUTION } from "@/components/proto/site-map";
+import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,6 +36,7 @@ import { WorldGate } from "@/components/world-provider";
 import type { ApiError } from "@/lib/api/errors";
 import type { AssetDetail, SiteImages } from "@/lib/api/types";
 import { boundaryLatLngs, chartPrices, newsItems } from "@/lib/asset-detail";
+import { outlineRings } from "@/lib/boundary-map";
 import { demoSiteMediaUrl } from "@/lib/demo-site-images";
 import {
   useAsset,
@@ -158,6 +159,7 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
     [asset.recent_events],
   );
   const imageUrl = siteImageUrl(asset.site_key);
+  const outline = useMemo(() => outlineRings(asset.outline), [asset.outline]);
   const place = [
     countryName(asset.country ?? null),
     ha(num(asset.area_ha) ?? 0),
@@ -172,7 +174,7 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
         className="relative isolate overflow-hidden rounded-[2rem] text-white shadow-lift"
         aria-labelledby="site-title"
       >
-        <SiteBackdrop src={imageUrl} />
+        <SiteBackdrop src={imageUrl} outline={outline} />
         <div className="relative grid gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:p-10">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-sm text-white/85">

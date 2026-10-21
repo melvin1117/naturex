@@ -1,5 +1,6 @@
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -11,7 +12,9 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ListingReviewScreen } from "@/components/verification/listing-review-screen";
 import { ReviewQueueScreen } from "@/components/verification/review-queue-screen";
 import { WorldProvider } from "@/components/world-provider";
+import type { DecidedListingItem } from "@/lib/api/types";
 import { createDataLayer } from "@/lib/data-layer";
+import { reviewView } from "@/lib/verification";
 
 import { stubBrowserApis } from "../exchange/render";
 import {
@@ -36,20 +39,41 @@ import {
   verifiedPanel,
 } from "./fixtures";
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
-  usePathname: () => "/admin/verifications",
-  useSearchParams: () => new URLSearchParams(),
-}));
+// Like Next.js, useSearchParams follows history.replaceState (see `beforeAll`).
+const nav = vi.hoisted(() => ({ listeners: new Set<() => void>() }));
+vi.mock("next/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
+  const subscribe = (listener: () => void) => {
+    nav.listeners.add(listener);
+    return () => void nav.listeners.delete(listener);
+  };
+  return {
+    useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+    usePathname: () => "/admin/verifications",
+    useSearchParams: () =>
+      new URLSearchParams(
+        useSyncExternalStore(subscribe, () => window.location.search),
+      ),
+  };
+});
 
 beforeAll(() => {
+  const replaceState = window.history.replaceState.bind(window.history);
+  window.history.replaceState = (...args) => {
+    replaceState(...args);
+    nav.listeners.forEach((listener) => listener());
+  };
   stubBrowserApis();
   URL.createObjectURL = vi.fn(() => "blob:preview");
   URL.revokeObjectURL = vi.fn();
 });
-beforeEach(() => FakeEventSource.reset());
+beforeEach(() => {
+  FakeEventSource.reset();
+  window.history.replaceState(null, "", "/admin/verifications");
+});
 
 const QUEUE = "GET /admin/verifications";
+const DECIDED = "GET /admin/verifications/decided";
 const ASSET = `GET /assets/${ASSET_ID}`;
 const RUNS = `GET /assets/${ASSET_ID}/verification/runs`;
 const PREVIEW = `GET /assets/${ASSET_ID}/documents/${DOC_MINUTES}/preview`;
@@ -183,6 +207,141 @@ describe("ReviewQueueScreen", () => {
     expect(
       await screen.findByText("Nothing is waiting for review."),
     ).toBeInTheDocument();
+  });
+});
+
+describe("ReviewQueueScreen decided views (#211)", () => {
+  const decided = (overrides: Partial<DecidedListingItem> = {}) =>
+    ({
+      asset_id: ASSET_ID,
+      asset_name: "Río Claro Forest",
+      asset_status: "listed",
+      community_id: "66666666-6666-4666-8666-666666666666",
+      run: verifiedRun({ reason: "Title matches the land" }),
+      last_decision_at: "2026-10-19T09:00:00Z",
+      ...overrides,
+    }) satisfies DecidedListingItem;
+
+  it("opens a decided view, newest first, and links each row to its review", async () => {
+    const replace = vi.spyOn(window.history, "replaceState");
+    const backend = renderAdmin(<ReviewQueueScreen />, {
+      [DECIDED]: () => json([decided()]),
+    });
+    await screen.findByRole("list", { name: "Listings waiting for review" });
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Verified" }));
+
+    const list = await screen.findByRole("list", {
+      name: "Listings verified, latest decision first",
+    });
+    expect(
+      within(list).getByRole("heading", { level: 2, name: "Río Claro Forest" }),
+    ).toBeInTheDocument();
+    expect(
+      within(list).getByText("Title matches the land"),
+    ).toBeInTheDocument();
+    expect(
+      within(list).getByText(/NatureX platform admin/),
+    ).toBeInTheDocument();
+    expect(
+      within(list).getByRole("link", { name: "Open Río Claro Forest" }),
+    ).toHaveAttribute("href", `/admin/verifications/${ASSET_ID}`);
+    const query = new URL(
+      backend.requests.find((r) => r.url.includes("/decided"))!.url,
+    ).searchParams;
+    expect(Object.fromEntries(query)).toEqual({
+      level: "verified",
+      limit: "20",
+      offset: "0",
+    });
+    expect(replace).toHaveBeenLastCalledWith(
+      null,
+      "",
+      "/admin/verifications?view=verified",
+    );
+    replace.mockRestore();
+  });
+
+  it("starts on the view in the address and shows a revocation's reason", async () => {
+    window.history.replaceState(null, "", "/admin/verifications?view=revoked");
+    renderAdmin(<ReviewQueueScreen />, {
+      [DECIDED]: () =>
+        json([
+          decided({
+            asset_status: "suspended",
+            run: verifiedRun({
+              level: "revoked",
+              effective_level: "revoked",
+              revoke_reason: "A boundary dispute.",
+              revoked_at: "2026-10-20T12:00:00Z",
+            }),
+            last_decision_at: "2026-10-20T12:00:00Z",
+          }),
+        ]),
+    });
+    const list = await screen.findByRole("list", {
+      name: "Listings revoked, latest decision first",
+    });
+    expect(within(list).getByText("A boundary dispute.")).toBeInTheDocument();
+    expect(within(list).getByText(/Reason for revoking/)).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Revoked" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("says when a decided view is empty, and pages", async () => {
+    const page = Array.from({ length: 20 }, (_, i) =>
+      decided({
+        asset_id: `44444444-0000-4000-8000-${String(i).padStart(12, "0")}`,
+        asset_name: `Site ${i + 1}`,
+      }),
+    );
+    window.history.replaceState(null, "", "/admin/verifications?view=rejected");
+    renderAdmin(<ReviewQueueScreen />, {
+      [DECIDED]: (request) =>
+        json(
+          new URL(request.url).searchParams.get("offset") === "0" ? page : [],
+        ),
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Site 20" }),
+    ).toBeInTheDocument();
+    const pages = screen.getByRole("navigation", { name: "Rejected pages" });
+    fireEvent.click(within(pages).getByRole("button", { name: "Next" }));
+    expect(
+      await screen.findByText("No more listings on this page."),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the view in the address, so a remount (Back, reload) restores it", async () => {
+    const routes = { [DECIDED]: () => json([decided()]) };
+    renderAdmin(<ReviewQueueScreen />, routes);
+    await screen.findByRole("list", { name: "Listings waiting for review" });
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Rejected" }));
+    await screen.findByRole("list", {
+      name: "Listings rejected, latest decision first",
+    });
+    expect(window.location.search).toBe("?view=rejected");
+    cleanup();
+    renderAdmin(<ReviewQueueScreen />, routes);
+
+    expect(
+      await screen.findByRole("list", {
+        name: "Listings rejected, latest decision first",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Rejected" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("knows only the four views", () => {
+    expect(reviewView("revoked")).toBe("revoked");
+    expect(reviewView("documents_submitted")).toBe("waiting");
+    expect(reviewView(null)).toBe("waiting");
   });
 });
 
@@ -437,6 +596,31 @@ describe("ListingReviewScreen", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /The steward needs to submit again/,
+    );
+  });
+
+  it("shows a decided listing's history, with every document of each run, and leads back to its view", async () => {
+    const replaced = run({
+      id: "77777777-7777-4777-8777-777777777777",
+      is_current: false,
+      documents: [run().documents[0]!],
+    });
+    renderAdmin(<ListingReviewScreen assetId={ASSET_ID} />, {
+      [RUNS]: () => json([verifiedRun(), replaced]),
+    });
+    expect(
+      await screen.findByRole("button", { name: "Revoke verification" }),
+    ).toBeInTheDocument();
+    const history = screen.getByRole("list", { name: "Earlier submissions" });
+    expect(
+      within(history).getByText("Replaced by a later submission"),
+    ).toBeInTheDocument();
+    expect(
+      within(history).getByText(/1 document: Land title/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Verifications" })).toHaveAttribute(
+      "href",
+      "/admin/verifications?view=verified",
     );
   });
 

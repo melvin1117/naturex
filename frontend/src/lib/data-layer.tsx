@@ -95,6 +95,9 @@ export const queryKeys = {
   /** One page of the reviewer queue, per account. */
   reviewQueue: (meId: string | null, offset: number) =>
     ["review-queue", meId, offset] as const,
+  /** One page of decided listings (#211), per account and level ("all" for every level). */
+  decidedVerifications: (meId: string | null, level: string, offset: number) =>
+    ["review-queue", meId, "decided", level, offset] as const,
   /** One listing's queue item, with its AI suggestion (T71). */
   reviewQueueItem: (meId: string | null, assetId: string) =>
     ["review-queue", meId, "asset", assetId] as const,

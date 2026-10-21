@@ -1,5 +1,6 @@
 /** Helpers for the asset page: the API's asset detail, prices and events as display values. */
 import type { AssetDetail, EventOut, PricePoint } from "./api/types";
+import { geojsonRings } from "./boundary-map";
 import type { LatLng } from "./prototype/data";
 import { num } from "./report-facts";
 
@@ -10,29 +11,10 @@ export function isApiAssetId(id: string): boolean {
   return UUID.test(id);
 }
 
-function ring(coords: unknown): LatLng[] {
-  if (!Array.isArray(coords)) return [];
-  return coords.flatMap((point) =>
-    Array.isArray(point) &&
-    typeof point[0] === "number" &&
-    typeof point[1] === "number"
-      ? [[point[1], point[0]] as LatLng]
-      : [],
-  );
-}
-
 /** The outer ring of a GeoJSON Feature or geometry (Polygon, or a MultiPolygon's first part), as [lat, lon]. */
 export function boundaryLatLngs(geojson: AssetDetail["geojson"]): LatLng[] {
-  const geometry = (geojson.type === "Feature" ? geojson.geometry : geojson) as
-    { type?: unknown; coordinates?: unknown } | null | undefined;
-  if (!geometry || !Array.isArray(geometry.coordinates)) return [];
-  if (geometry.type === "Polygon") return ring(geometry.coordinates[0]);
-  if (
-    geometry.type === "MultiPolygon" &&
-    Array.isArray(geometry.coordinates[0])
-  )
-    return ring((geometry.coordinates[0] as unknown[])[0]);
-  return [];
+  const [first = []] = geojsonRings(geojson);
+  return first.map(([lon, lat]): LatLng => [lat, lon]);
 }
 
 export type ChartPricePoint = {

@@ -2,80 +2,217 @@
 
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { LoadError } from "@/components/proto/load-error";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { CheckResultLabel } from "@/components/verification/parts";
-import type { CheckResult, ReviewQueueItem } from "@/lib/api/types";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  CheckResultLabel,
+  VerificationBadge,
+} from "@/components/verification/parts";
+import type {
+  CheckResult,
+  DecidedListingItem,
+  ReviewQueueItem,
+} from "@/lib/api/types";
+import type { ApiError } from "@/lib/api/errors";
 import { STATUS_LABEL } from "@/lib/community";
 import { date } from "@/lib/prototype/format";
 import {
   adminReviewHref,
   checkCounts,
   DOC_TYPE_LABEL,
+  LEVEL_LABEL,
+  reviewerLabel,
+  reviewView,
+  reviewViewHref,
+  REVIEW_VIEWS,
+  type ReviewView,
 } from "@/lib/verification";
-import { useReviewQueue } from "@/lib/verification-hooks";
+import {
+  useDecidedVerifications,
+  useReviewQueue,
+  type DecidedLevel,
+} from "@/lib/verification-hooks";
 
 export const QUEUE_PAGE = 20;
 
+const VIEW_LABEL: Record<ReviewView, string> = {
+  waiting: "Waiting",
+  verified: "Verified",
+  rejected: "Rejected",
+  revoked: "Revoked",
+};
+
 /**
- * The admin review queue (T70, ADR-0006 §3): listings whose current run waits for a decision,
- * oldest first, a page at a time. The backend leaves out the admin's own communities.
+ * The admin verification area (T70, #211; ADR-0006 §3): listings waiting for a decision, oldest
+ * first, and listings already decided (verified, rejected, revoked), latest decision first, a
+ * page at a time. The backend leaves out the admin's own communities.
  */
 export function ReviewQueueScreen() {
-  const [offset, setOffset] = useState(0);
-  const queue = useReviewQueue(offset, QUEUE_PAGE);
-  const items = queue.data;
+  // The address is the state: Back and Forward, a reload and a shared link all land on the
+  // view in it. Next.js keeps useSearchParams in step with history.replaceState.
+  const view = reviewView(useSearchParams().get("view"));
 
   return (
     <div className="mx-auto max-w-5xl px-4 pt-10 pb-16 sm:px-6">
       <h1 className="font-serif text-5xl leading-none tracking-tight sm:text-6xl">
-        Verification queue
+        Verifications
       </h1>
       <p className="mt-3 max-w-2xl text-muted-foreground">
-        Listings whose communities submitted land documents, oldest first. Read
-        the documents, the automated checks and the map, then approve or reject
-        with a reason. Your own communities&apos; listings never appear here.
+        Listings whose communities submitted land documents. Read the documents,
+        the automated checks and the map, then approve or reject with a reason;
+        decided listings stay here so you can find them again. Your own
+        communities&apos; listings never appear here.
       </p>
 
-      <div className="mt-8" aria-busy={queue.isFetching}>
+      <Tabs
+        value={view}
+        // The History API keeps the address shareable without a server round trip.
+        onValueChange={(v) =>
+          window.history.replaceState(null, "", reviewViewHref(reviewView(v)))
+        }
+        className="mt-8 gap-6"
+      >
+        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <TabsList
+            aria-label="Verification views"
+            className="w-max min-w-full bg-card shadow-soft sm:w-fit sm:min-w-0"
+          >
+            {REVIEW_VIEWS.map((v) => (
+              <TabsTrigger
+                key={v}
+                value={v}
+                className="px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:px-4"
+              >
+                {VIEW_LABEL[v]}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+        <TabsContent value="waiting">
+          {view === "waiting" && <WaitingList />}
+        </TabsContent>
+        {(["verified", "rejected", "revoked"] as const).map((level) => (
+          <TabsContent key={level} value={level}>
+            {view === level && <DecidedList level={level} />}
+          </TabsContent>
+        ))}
+      </Tabs>
+    </div>
+  );
+}
+
+function WaitingList() {
+  const [offset, setOffset] = useState(0);
+  const queue = useReviewQueue(offset, QUEUE_PAGE);
+  return (
+    <Paged
+      label="Listings waiting for review"
+      view="Waiting"
+      items={queue.data}
+      error={queue.error}
+      retry={queue.refetch}
+      fetching={queue.isFetching}
+      offset={offset}
+      setOffset={setOffset}
+      empty="Nothing is waiting for review."
+      loading="Loading the queue…"
+      errorTitle="We couldn't load the queue"
+      row={(item) => <QueueRow key={item.asset_id} item={item} />}
+    />
+  );
+}
+
+const DECIDED_EMPTY: Record<DecidedLevel, string> = {
+  verified: "No listing is verified yet.",
+  rejected: "No listing has been rejected.",
+  revoked: "No verification has been revoked.",
+};
+
+function DecidedList({ level }: { level: DecidedLevel }) {
+  const [offset, setOffset] = useState(0);
+  const decided = useDecidedVerifications(level, offset, QUEUE_PAGE);
+  const label = LEVEL_LABEL[level].toLowerCase();
+  return (
+    <Paged
+      label={`Listings ${label}, latest decision first`}
+      view={LEVEL_LABEL[level]}
+      items={decided.data}
+      error={decided.error}
+      retry={decided.refetch}
+      fetching={decided.isFetching}
+      offset={offset}
+      setOffset={setOffset}
+      empty={DECIDED_EMPTY[level]}
+      loading={`Loading ${label} listings…`}
+      errorTitle={`We couldn't load the ${label} listings`}
+      row={(item) => <DecidedRow key={item.asset_id} item={item} />}
+    />
+  );
+}
+
+function Paged<T>({
+  label,
+  view,
+  items,
+  error,
+  retry,
+  fetching,
+  offset,
+  setOffset,
+  empty,
+  loading,
+  errorTitle,
+  row,
+}: {
+  label: string;
+  /** The view's name, for its page navigation. */
+  view: string;
+  items: T[] | undefined;
+  error: ApiError | null;
+  retry: () => Promise<void>;
+  fetching: boolean;
+  offset: number;
+  setOffset: (offset: number) => void;
+  empty: string;
+  loading: string;
+  errorTitle: string;
+  row: (item: T) => React.ReactNode;
+}) {
+  return (
+    <>
+      <div aria-busy={fetching}>
         {items ? (
           items.length === 0 ? (
             <p className="rounded-3xl bg-card p-8 text-center text-muted-foreground shadow-soft">
-              {offset === 0
-                ? "Nothing is waiting for review."
-                : "No more listings on this page."}
+              {offset === 0 ? empty : "No more listings on this page."}
             </p>
           ) : (
-            <ul className="space-y-3" aria-label="Listings waiting for review">
-              {items.map((item) => (
-                <QueueRow key={item.asset_id} item={item} />
-              ))}
+            <ul className="space-y-3" aria-label={label}>
+              {items.map(row)}
             </ul>
           )
-        ) : queue.error ? (
-          <LoadError
-            title="We couldn't load the queue"
-            error={queue.error}
-            retry={queue.refetch}
-          />
+        ) : error ? (
+          <LoadError title={errorTitle} error={error} retry={retry} />
         ) : (
           <p
             role="status"
             className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"
           >
             <Spinner aria-hidden="true" role="presentation" />
-            Loading the queue…
+            {loading}
           </p>
         )}
       </div>
 
       {(offset > 0 || (items?.length ?? 0) === QUEUE_PAGE) && (
         <nav
-          aria-label="Queue pages"
+          aria-label={`${view} pages`}
           className="mt-6 flex items-center justify-between gap-3"
         >
           <Button
@@ -98,7 +235,7 @@ export function ReviewQueueScreen() {
           </Button>
         </nav>
       )}
-    </div>
+    </>
   );
 }
 
@@ -148,6 +285,57 @@ function QueueRow({ item }: { item: ReviewQueueItem }) {
           aria-label={`Review ${item.asset_name}`}
         >
           Review
+          <ArrowRight aria-hidden="true" />
+        </Link>
+      </Button>
+    </li>
+  );
+}
+
+function DecidedRow({ item }: { item: DecidedListingItem }) {
+  const { run } = item;
+  const reviewer = reviewerLabel(run.reviewer_role);
+  const reason = run.revoke_reason ?? run.reason;
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-card p-5 shadow-soft">
+      <div className="min-w-0 space-y-2">
+        <h2 className="font-serif text-2xl leading-tight break-words">
+          {item.asset_name}
+        </h2>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <VerificationBadge level={run.level}>
+            {LEVEL_LABEL[run.level]}
+          </VerificationBadge>
+          <span className="tabular">
+            {run.level === "revoked" ? "Revoked" : "Decided"}{" "}
+            {date(item.last_decision_at)}
+          </span>
+          {reviewer && <span>by {reviewer}</span>}
+          <Badge variant="secondary">
+            {STATUS_LABEL[item.asset_status] ?? item.asset_status}
+          </Badge>
+          {!run.fingerprint_matches && (
+            <Badge variant="outline">Listing changed since</Badge>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {run.documents.map((d) => DOC_TYPE_LABEL[d.doc_type]).join(", ")}
+        </p>
+        {reason && (
+          <p className="line-clamp-2 max-w-prose text-sm break-words">
+            <span className="text-muted-foreground">
+              {run.revoke_reason ? "Reason for revoking: " : "Reason: "}
+            </span>
+            {reason}
+          </p>
+        )}
+      </div>
+      <Button asChild variant="outline">
+        <Link
+          href={adminReviewHref(item.asset_id)}
+          aria-label={`Open ${item.asset_name}`}
+        >
+          Open
           <ArrowRight aria-hidden="true" />
         </Link>
       </Button>

@@ -93,10 +93,16 @@ from app.tools.earth_obs import (
     load_site_metrics,
     mock_listing_metrics,
 )
-from app.tools.geometry import MAX_VERTICES, geometry_bbox, geometry_sha256
+from app.tools.geometry import (
+    MAX_VERTICES,
+    THUMBNAIL_OUTLINE_MAX_POINTS,
+    geometry_bbox,
+    geometry_sha256,
+)
 from app.tools.scoring import GATE_CONFIDENCE_BELOW_70, GATE_FOREST_LOSS, GATE_GRADE_BELOW_C
 from app.worlds import LIVE_WORLD_ID
 from tests.conftest import alembic_cfg, requires_db
+from tests.test_geometry import circle as geometry_circle
 from tests.test_geometry import square as geometry_square
 
 S = AssetStatus
@@ -1602,3 +1608,59 @@ def test_outlines_show_public_sites_of_the_callers_world_only(
     monkeypatch.setattr("app.routers.assets.OUTLINES_MAX_SITES", 1)
     capped = client_as(world, world.steward).get("/assets/outlines").json()
     assert len(capped["outlines"]) == 1 and capped["truncated"] is True
+
+
+def _corners(outline: list[list[list[float]]]) -> int:
+    return sum(len(ring) for ring in outline)
+
+
+@requires_db
+def test_a_card_carries_its_stored_boundary_outline(
+    world: World_, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asset = draft(world)
+    ring = asset["geojson"]["coordinates"][0]
+    outline = [[[round(lon, 5), round(lat, 5)] for lon, lat in ring]]
+    assert asset["outline"] == outline
+
+    def no_simplifying(*_: object, **__: object) -> object:
+        raise AssertionError("an outline is simplified once, when its area is saved")
+
+    # Reads serve the stored outline: nothing is simplified per request.
+    monkeypatch.setattr("app.services.listings.thumbnail_outline", no_simplifying)
+    monkeypatch.setattr("app.tools.geometry.outline_rings", no_simplifying)
+    mine = client_as(world, world.steward).get(f"/communities/{world.community_id}/assets")
+    assert mine.json()[0]["outline"] == outline
+    submit(world, asset["id"])
+    world.executor.run_all()
+    client = client_as(world, world.outsider)
+    cards_ = client.get("/assets").json()
+    assert next(c for c in cards_ if c["id"] == asset["id"])["outline"] == outline
+    assert client.get(f"/assets/{asset['id']}").json()["outline"] == outline
+
+    curated = [c for c in cards_ if c["site_key"]]
+    assert curated and all(c["outline"] == [] for c in curated), "they have thumbnails"
+    assert client.get(f"/assets/{curated[0]['id']}").json()["outline"] == []
+
+
+@requires_db
+def test_a_detailed_or_multi_part_boundary_is_stored_simplified(world: World_) -> None:
+    circle = geometry_circle(2_000, radius_deg=0.01, lat=LAT, lon=LON)
+    detailed = draft(world, geojson={"type": "Feature", "properties": {}, "geometry": circle})
+    assert 4 <= _corners(detailed["outline"]) <= THUMBNAIL_OUTLINE_MAX_POINTS
+
+    east = square(1_200, lon=LON + 0.2)["coordinates"]
+    west = geometry_circle(500, radius_deg=0.005, lat=LAT + 0.2, lon=LON)["coordinates"]
+    parts = draft(
+        world,
+        name="Bosque Doble",
+        geojson={"type": "MultiPolygon", "coordinates": [east, west]},
+    )
+    assert len(parts["outline"]) == 2
+    assert _corners(parts["outline"]) <= THUMBNAIL_OUTLINE_MAX_POINTS
+
+    changed = client_as(world, world.steward).patch(
+        f"/assets/{detailed['id']}", json={"geojson": square(900, lat=LAT - 0.2)}
+    )
+    assert changed.status_code == 200, changed.text
+    assert _corners(changed.json()["outline"]) == 5, "an edit stores the new outline"

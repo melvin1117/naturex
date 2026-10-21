@@ -120,6 +120,8 @@ const FLAG_TEXT: Record<string, string> = {
     "The listing's place couldn't be looked up on the map, so its stored country was compared instead.",
   reason_withheld:
     "A model's reason was withheld because it cited a number it wasn't given or read like an instruction; that verdict counts as unclear.",
+  readings_reused:
+    "Documents carried over from an earlier submission weren't read again: what was read from them then was compared with the listing anew.",
   mock_model:
     "Made by the offline stand-in model (mock mode), not a real AI model: development and tests only.",
 };

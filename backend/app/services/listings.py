@@ -76,6 +76,7 @@ from app.tools.geometry import (
     geometry_bbox,
     geometry_sha256,
     overlapping,
+    thumbnail_outline,
 )
 from app.tools.verification import NOT_VERIFIED
 
@@ -275,6 +276,7 @@ def _set_area(asset: Asset, area: _Area) -> None:
     asset.geojson, asset.area_ha = area.geometry, area.area_ha
     asset.centroid_lat, asset.centroid_lon = area.centroid_lat, area.centroid_lon
     asset.bbox_west, asset.bbox_south, asset.bbox_east, asset.bbox_north = area.bbox
+    asset.outline = thumbnail_outline(area.geometry)
 
 
 # ----- recording a transition -------------------------------------------------------------------

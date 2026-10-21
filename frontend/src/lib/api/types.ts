@@ -64,6 +64,7 @@ export type AiSuggestion = Schemas["AiSuggestionOut"];
 export type AiSuggestionStatus =
   Schemas["ReviewQueueItem"]["ai_suggestion_status"];
 export type CheckResult = Schemas["VerificationCheckOut"]["result"];
+export type DecidedListingItem = Schemas["DecidedListingItem"];
 export type DocumentAiCheck = Schemas["WorldOut"]["document_ai_check"];
 export type DocumentType = Schemas["DocumentType"];
 export type ListingDocument = Schemas["ListingDocumentOut"];

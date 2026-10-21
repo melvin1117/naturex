@@ -3,6 +3,7 @@
  * Every number is the API's; a missing one stays null and sorts last.
  */
 import type { AssetCard } from "./api/types";
+import { type LonLatRing, outlineRings } from "./boundary-map";
 import { demoSiteMediaUrl } from "./demo-site-images";
 import type { Grade } from "./prototype/data";
 import { GRADE_ORDER } from "./prototype/format";
@@ -30,6 +31,8 @@ export type MarketCard = {
   valueMid: number | null;
   valueHigh: number | null;
   imageUrl: string | null;
+  /** The boundary, simplified, for a map when there's no image. */
+  outline: LonLatRing[];
   /** The latest prices, oldest first. */
   sparkline: number[];
 };
@@ -57,6 +60,7 @@ export function marketCard(card: AssetCard): MarketCard {
     valueMid: num(card.value_mid),
     valueHigh: num(card.value_high),
     imageUrl: siteImageUrl(card.site_key, card.cover_image_url),
+    outline: outlineRings(card.outline),
     sparkline: (card.sparkline ?? []).flatMap((p) => {
       const n = num(p);
       return n === null ? [] : [n];

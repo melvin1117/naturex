@@ -600,7 +600,10 @@ export interface paths {
          * Submit Verification
          * @description Submit 1–3 uploaded documents for review: a new current run with its deterministic
          *     checklist (accepted format, not reused, boundary free, consent document attached) and the
-         *     fingerprint of what it vouches for. Any earlier run stops being current. Once committed,
+         *     fingerprint of what it vouches for. Any earlier run stops being current. **Adding to a
+         *     submission:** while the current run still waits for a decision, its documents are kept in
+         *     the new run (except `remove_document_ids`), so the reviewer sees everything; at most 3 in
+         *     all. After a decision, a submission starts afresh. Once committed,
          *     the AI document check (T71) runs in the background where it's on; its untrusted suggestion
          *     is for the reviewer only and never changes the checklist or the level.
          */
@@ -649,6 +652,31 @@ export interface paths {
          *     from the documents by AI models, to be shown labelled as such next to its excerpts.
          */
         get: operations["review_queue_admin_verifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/verifications/decided": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Decided Verifications
+         * @description Listings in the caller's world whose current run was decided (verified, rejected or
+         *     revoked), the latest decision first, one page at a time (`limit`, `offset`), so a reviewer
+         *     can find a listing again after deciding it. Each item's run carries its decision; the
+         *     review page (`GET /assets/{id}/verification/runs`) has the full history. A listing with a
+         *     newer submission waiting is in the queue instead. Listings of the admin's own communities
+         *     are left out (conflict of interest).
+         */
+        get: operations["decided_verifications_admin_verifications_decided_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1702,6 +1730,11 @@ export interface components {
             /** Site Key */
             site_key?: string | null;
             /**
+             * Outline
+             * @description The boundary's exterior ring per part, [lon, lat], simplified to at most 64 corners in all (holes dropped) when the area was saved: drawn on the card and hero maps. Empty for a curated site (it has a precomputed thumbnail) or an area that can't be read.
+             */
+            outline?: number[][][];
+            /**
              * Sparkline
              * @description The latest prices (up to 30), oldest first, for the card's sparkline.
              */
@@ -1790,6 +1823,11 @@ export interface components {
             community_wallet: string;
             /** Site Key */
             site_key?: string | null;
+            /**
+             * Outline
+             * @description The boundary's exterior ring per part, [lon, lat], simplified to at most 64 corners in all (holes dropped) when the area was saved: drawn on the card and hero maps. Empty for a curated site (it has a precomputed thumbnail) or an area that can't be read.
+             */
+            outline?: number[][][];
             /**
              * Mock
              * @description True when the latest report was rated from USE_MOCKS placeholder metrics (T58), not observed satellite data: show it as mock data.
@@ -2220,6 +2258,29 @@ export interface components {
             start: string;
             /** End */
             end: string;
+        };
+        /**
+         * DecidedListingItem
+         * @description A listing whose current run was decided (#211): the run, with its decision and documents.
+         */
+        DecidedListingItem: {
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /** Asset Name */
+            asset_name: string;
+            asset_status: components["schemas"]["AssetStatusOut"];
+            /** Community Id */
+            community_id: string | null;
+            run: components["schemas"]["VerificationRunOut"];
+            /**
+             * Last Decision At
+             * Format: date-time
+             * @description When the run was revoked, else when it was decided: the list's order.
+             */
+            last_decision_at: string;
         };
         /**
          * DiffReason
@@ -2779,10 +2840,10 @@ export interface components {
              */
             asset_id: string;
             /**
-             * Run Id
-             * @description The run it was submitted with; null until then.
+             * Submitted
+             * @description It's in a run (a submission). A waiting run's documents carry into the next submission (#210), so one document may be in several runs; each run lists its own.
              */
-            run_id: string | null;
+            submitted: boolean;
             doc_type: components["schemas"]["DocumentType"];
             /** Media Type */
             media_type: string;
@@ -4233,11 +4294,21 @@ export interface components {
         };
         /**
          * VerificationSubmit
-         * @description Submit 1–3 of the listing's uploaded, not yet submitted documents for review.
+         * @description Submit 1–3 of the listing's uploaded, not yet submitted documents for review. While the
+         *     current run still waits for a decision, its documents are kept in the new run too (at most 3
+         *     in all), except those listed in `remove_document_ids`.
          */
         VerificationSubmit: {
-            /** Document Ids */
+            /**
+             * Document Ids
+             * @description New documents: never submitted before.
+             */
             document_ids: string[];
+            /**
+             * Remove Document Ids
+             * @description Documents of the waiting run to leave out of the new one.
+             */
+            remove_document_ids?: string[];
         };
         /** VisParams */
         VisParams: {
@@ -5954,7 +6025,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description `listing_closed` or `document_already_submitted` */
+            /** @description `listing_closed`, `document_already_submitted` (a new document was in a run before), `document_not_in_submission` (a removed document isn't in the waiting run) or `submission_full` (the waiting run's documents and the new ones are more than 3: remove some) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6049,6 +6120,54 @@ export interface operations {
             };
             /** @description `not_found`: `asset_id` isn't a listing in the caller's world */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decided_verifications_admin_verifications_decided_get: {
+        parameters: {
+            query?: {
+                /** @description Only listings whose current run is at this level; all three if absent. */
+                level?: ("verified" | "rejected" | "revoked") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecidedListingItem"][];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description admin_only */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

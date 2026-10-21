@@ -206,6 +206,7 @@ def test_admin_routes_are_operator_only() -> None:
         assert actions[("GET", path)] == {Action.VIEW_COMMUNITY_DATA}, path
     assert actions[("GET", "/assets/{asset_id}/evidence/summary")] == {Action.BROWSE}
     assert actions[("GET", "/admin/verifications")] == {Action.REVIEW_LISTING}
+    assert actions[("GET", "/admin/verifications/decided")] == {Action.REVIEW_LISTING}  # #211
     for step in ("approve", "reject", "revoke"):
         path = f"/admin/assets/{{asset_id}}/verification/{{run_id}}/{step}"
         assert actions[("POST", path)] == {Action.REVIEW_LISTING}

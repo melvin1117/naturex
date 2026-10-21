@@ -248,6 +248,13 @@ class SuspendRequest(BaseModel):
     reason: Literal["moderation", "data_dispute", "community_request"]
 
 
+_OUTLINE_DESCRIPTION = (
+    "The boundary's exterior ring per part, [lon, lat], simplified to at most 64 corners in "
+    "all (holes dropped) when the area was saved: drawn on the card and hero maps. Empty for "
+    "a curated site (it has a precomputed thumbnail) or an area that can't be read."
+)
+
+
 class AssetCard(BaseModel):
     id: UUID
     name: str
@@ -278,6 +285,10 @@ class AssetCard(BaseModel):
     value_high: Decimal | None = None
     cover_image_url: str | None = None
     site_key: str | None = None
+    outline: list[list[list[float]]] = Field(
+        default_factory=list,
+        description=_OUTLINE_DESCRIPTION,
+    )
     sparkline: list[Decimal] = Field(
         default_factory=list,
         description="The latest prices (up to 30), oldest first, for the card's sparkline.",
@@ -426,6 +437,7 @@ class AssetDetail(BaseModel):
     primary_shares_remaining: int
     community_wallet: Decimal
     site_key: str | None = None
+    outline: list[list[list[float]]] = Field(default_factory=list, description=_OUTLINE_DESCRIPTION)
     mock: bool = Field(default=False, description=_MOCK_DESCRIPTION)
     latest_report: ReportOut | None = None
     recent_events: list[EventOut] = Field(default_factory=list)
@@ -1544,7 +1556,10 @@ class ListingDocumentOut(BaseModel):
 
     id: UUID
     asset_id: UUID
-    run_id: UUID | None = Field(description="The run it was submitted with; null until then.")
+    submitted: bool = Field(
+        description="It's in a run (a submission). A waiting run's documents carry into the "
+        "next submission (#210), so one document may be in several runs; each run lists its own."
+    )
     doc_type: DocumentType
     media_type: str
     size_bytes: int
@@ -1616,13 +1631,22 @@ class VerificationPublicOut(BaseModel):
 
 
 class VerificationSubmit(BaseModel):
-    """Submit 1–3 of the listing's uploaded, not yet submitted documents for review."""
+    """Submit 1–3 of the listing's uploaded, not yet submitted documents for review. While the
+    current run still waits for a decision, its documents are kept in the new run too (at most 3
+    in all), except those listed in `remove_document_ids`."""
 
     model_config = ConfigDict(extra="forbid")
 
-    document_ids: list[UUID] = Field(min_length=1, max_length=3)
+    document_ids: list[UUID] = Field(
+        min_length=1, max_length=3, description="New documents: never submitted before."
+    )
+    remove_document_ids: list[UUID] = Field(
+        default_factory=list,
+        max_length=3,
+        description="Documents of the waiting run to leave out of the new one.",
+    )
 
-    @field_validator("document_ids")
+    @field_validator("document_ids", "remove_document_ids")
     @classmethod
     def _distinct(cls, value: list[UUID]) -> list[UUID]:
         if len(set(value)) != len(value):
@@ -1716,7 +1740,8 @@ class AiSuggestionResult(BaseModel):
     flags: list[str] = Field(
         description="instruction_like_text (a document), listing_instruction_like_text (the "
         "listing's community or place names), documents_not_sent, place_not_geocoded, "
-        "reason_withheld, mock_model"
+        "reason_withheld, mock_model, readings_reused (a document carried from an earlier "
+        "submission wasn't read again: its earlier reading was compared anew)"
     )
     models: list[str]
     method_version: str
@@ -1748,6 +1773,19 @@ class AiSuggestionOut(BaseModel):
     models: list[str]
     method_version: str
     created_at: datetime
+
+
+class DecidedListingItem(BaseModel):
+    """A listing whose current run was decided (#211): the run, with its decision and documents."""
+
+    asset_id: UUID
+    asset_name: str
+    asset_status: AssetStatusOut
+    community_id: UUID | None
+    run: VerificationRunOut
+    last_decision_at: datetime = Field(
+        description="When the run was revoked, else when it was decided: the list's order."
+    )
 
 
 class ReviewQueueItem(BaseModel):

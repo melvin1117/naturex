@@ -346,3 +346,24 @@ def test_payout_line_constraints(overrides: dict[str, object], constraint: str) 
     with engine.connect() as conn, conn.begin(), pytest.raises(DBAPIError, match=constraint):
         conn.execute(_LINE_INSERT, params)
     engine.dispose()
+
+
+@requires_db
+def test_outline_migration_downgrades_and_upgrades() -> None:
+    """#212 (0022): `assets.outline` comes and goes."""
+    cfg = alembic_cfg()
+    command.upgrade(cfg, "head")
+    engine = create_engine(get_settings().database_url)
+
+    def columns() -> set[str]:
+        with engine.connect() as conn:
+            return {column["name"] for column in inspect(conn).get_columns("assets")}
+
+    try:
+        assert "outline" in columns()
+        command.downgrade(cfg, "0022")
+        assert "outline" not in columns()
+    finally:
+        command.upgrade(cfg, "head")
+        assert "outline" in columns()
+        engine.dispose()

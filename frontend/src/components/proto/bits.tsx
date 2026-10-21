@@ -2,6 +2,8 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import Image from "next/image";
 import { cn } from "cn";
 
+import { BoundaryMap } from "@/components/boundary-map";
+import type { LonLatRing } from "@/lib/boundary-map";
 import { money, signedPct } from "@/lib/prototype/format";
 
 export function Wordmark({
@@ -121,24 +123,31 @@ function thumbnailUrl(siteKey?: string | null, src?: string | null) {
   return src ?? (siteKey ? `/demo-sites/${siteKey}.thumbnail.webp` : null);
 }
 
-/** The site's own Sentinel-2 thumbnail, blurred, as the ground of a card. */
+/**
+ * The site's own Sentinel-2 thumbnail, blurred, as the ground of a card; without one, its
+ * boundary on satellite imagery (unblurred, so the outline reads), else a plain green ground.
+ */
 export function SiteBackdrop({
   siteKey,
   src,
+  outline,
   blur = "strong",
   className,
 }: {
   siteKey?: string | null;
   /** Image URL, e.g. the backend's media route; defaults to the prototype's copy. */
   src?: string | null;
+  /** The boundary, drawn when there's no image. */
+  outline?: readonly LonLatRing[];
   blur?: "strong" | "soft" | "none";
   className?: string;
 }) {
   const url = thumbnailUrl(siteKey, src);
+  const map = !url && outline !== undefined && outline.length > 0;
   return (
     <div
       className={cn("absolute inset-0 overflow-hidden bg-primary", className)}
-      aria-hidden="true"
+      aria-hidden={map ? undefined : true}
     >
       {url && (
         <Image
@@ -154,33 +163,53 @@ export function SiteBackdrop({
           )}
         />
       )}
+      {map && (
+        <BoundaryMap
+          rings={outline}
+          frame="container"
+          creditClassName="right-3 left-auto bottom-2"
+        />
+      )}
       <div
+        aria-hidden="true"
         className={cn(
           "absolute inset-0",
-          blur === "none"
-            ? "bg-gradient-to-t from-black/55 via-black/10 to-transparent"
-            : "bg-[oklch(0.3_0.06_145/0.38)]",
+          map
+            ? "bg-[oklch(0.24_0.05_145/0.55)]"
+            : blur === "none"
+              ? "bg-gradient-to-t from-black/55 via-black/10 to-transparent"
+              : "bg-[oklch(0.3_0.06_145/0.38)]",
         )}
       />
     </div>
   );
 }
 
+/** The site's thumbnail; without one, its boundary on satellite imagery, else a plain ground. */
 export function SiteThumb({
   siteKey,
   src,
+  outline,
   alt,
+  creditHidden,
   className,
 }: {
   siteKey?: string | null;
   /** Image URL, e.g. the backend's media route; defaults to the prototype's copy. */
   src?: string | null;
+  /** The boundary, drawn when there's no image. */
+  outline?: readonly LonLatRing[];
   alt: string;
+  /** Inside a link: keep the map's credit out of the link's name (it stays visible). */
+  creditHidden?: boolean;
   className?: string;
 }) {
   const url = thumbnailUrl(siteKey, src);
   return (
     <div className={cn("relative overflow-hidden bg-lichen", className)}>
+      {!url && outline && (
+        <BoundaryMap rings={outline} label={alt} creditHidden={creditHidden} />
+      )}
       {url && (
         <Image
           src={url}

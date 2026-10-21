@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AI_POLL_MS } from "./ai-suggestion";
 import { unwrap } from "./api/errors";
 import type {
+  DecidedListingItem,
   DocumentType,
   ListingDocument,
   ReviewQueueItem,
@@ -152,16 +153,32 @@ export function useUploadDocument(
   );
 }
 
-/** Submit 1–3 uploaded documents for review: a new current run with its checklist. */
+export interface SubmitVerification {
+  /** New documents, never submitted before (1–3). */
+  documentIds: string[];
+  /** Documents of the waiting run to leave out; the rest stay in the new run (#210). */
+  removeDocumentIds?: string[];
+}
+
+/**
+ * Submit uploaded documents for review: a new current run with its checklist. While the
+ * current run waits for a decision, its documents stay in the new one unless removed.
+ */
 export function useSubmitVerification(
   assetId: string,
-): MutationResult<string[], VerificationRun> {
+): MutationResult<SubmitVerification, VerificationRun> {
   return useApiMutation(
-    (api, documentIds: string[]) =>
+    (api, { documentIds, removeDocumentIds = [] }: SubmitVerification) =>
       unwrap(
         api.POST("/assets/{asset_id}/verification/runs", {
           params: { path: { asset_id: assetId } },
-          body: { document_ids: documentIds },
+          body:
+            removeDocumentIds.length > 0
+              ? {
+                  document_ids: documentIds,
+                  remove_document_ids: removeDocumentIds,
+                }
+              : { document_ids: documentIds },
         }),
       ),
     {
@@ -184,6 +201,32 @@ export function useReviewQueue(
       unwrap(
         api.GET("/admin/verifications", {
           params: { query: { limit, offset } },
+          signal,
+        }),
+      ),
+    { enabled: meId !== null },
+  );
+}
+
+export type DecidedLevel = "verified" | "rejected" | "revoked";
+
+/**
+ * One page of listings whose current run was decided, latest decision first (admins, #211):
+ * one level, or all three when `level` is null.
+ */
+export function useDecidedVerifications(
+  level: DecidedLevel | null,
+  offset: number,
+  limit: number,
+): QueryResult<DecidedListingItem[]> {
+  const { world } = useWorld();
+  const meId = world?.me?.id ?? null;
+  return useApiQuery(
+    queryKeys.decidedVerifications(meId, level ?? "all", offset),
+    (api, signal) =>
+      unwrap(
+        api.GET("/admin/verifications/decided", {
+          params: { query: { limit, offset, ...(level ? { level } : {}) } },
           signal,
         }),
       ),

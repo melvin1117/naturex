@@ -41,7 +41,7 @@ from decimal import Decimal
 from typing import Any, Literal, Protocol
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.agents.guards import invented_numbers
 from app.llm import LLMResult, Tier
@@ -79,6 +79,7 @@ FLAG_PLACE_NOT_GEOCODED = "place_not_geocoded"
 FLAG_REASON_WITHHELD = "reason_withheld"
 FLAG_LISTING_INSTRUCTION_TEXT = "listing_instruction_like_text"
 FLAG_MOCK_MODEL = "mock_model"
+FLAG_READINGS_REUSED = "readings_reused"
 
 NotSent = Literal["no_preview", "not_sample"]
 PlaceSource = Literal["reverse_geocode", "stored_country", "none"]
@@ -189,6 +190,11 @@ class DocumentInput:
     is_sample: bool
     not_sent: NotSent | None = None
     """Why the preview isn't sent to a model (None: it is)."""
+    prior: AiDocumentReadingOut | None = None
+    """What a model already read from this document for an earlier run of the listing (#210):
+    reused, so a document carried into a new run isn't sent to a model again."""
+    prior_models: tuple[str, ...] = ()
+    """The models of the check that made `prior`."""
 
 
 PlaceResolver = Callable[[], tuple[tuple[str, ...], PlaceSource]]
@@ -280,6 +286,24 @@ def _read_out(index: int, document: DocumentInput, reading: DocumentReading | No
         instruction_like_text=_suspicious(reading),
     )
     return _Read(index, document, out, area if reading.readable else None)
+
+
+def _prior_read(index: int, document: DocumentInput, prior: AiDocumentReadingOut) -> _Read:
+    """A stored reading as if just read: the area's number and unit come back from the `144 ha`
+    text this module wrote, so the area is compared again in code against the listing now."""
+    area = None
+    if prior.readable:
+        number, _, unit = (prior.area.value or "").partition(" ")
+        try:
+            area = AreaReading.model_validate(
+                {"value": number or None, "unit": unit or None, "excerpt": prior.area.excerpt}
+            )
+        except ValidationError:
+            area = AreaReading(value=None, unit=None, excerpt=prior.area.excerpt)
+    out = prior.model_copy(
+        update={"document_id": document.document_id, "doc_type": document.doc_type, "area_ha": None}
+    )
+    return _Read(index, document, out, area)
 
 
 def _image_message(preview: bytes) -> dict[str, Any]:
@@ -509,13 +533,18 @@ def check_documents(
     reads: list[_Read] = []
     for index, document in enumerate(documents[:MAX_DOCUMENTS], start=1):
         reading = None
-        if document.not_sent is None and document.preview_png is not None:
-            result = read_document(llm, listing, document.preview_png)
-            state.models.append(result.model)
-            reading = result.value
+        if document.not_sent is None and document.prior is not None:
+            read = _prior_read(index, document, document.prior)
+            state.models.extend(document.prior_models)
+            state.flags.add(FLAG_READINGS_REUSED)
         else:
-            state.flags.add(FLAG_DOCUMENTS_NOT_SENT)
-        read = _read_out(index, document, reading)
+            if document.not_sent is None and document.preview_png is not None:
+                result = read_document(llm, listing, document.preview_png)
+                state.models.append(result.model)
+                reading = result.value
+            else:
+                state.flags.add(FLAG_DOCUMENTS_NOT_SENT)
+            read = _read_out(index, document, reading)
         reads.append(read)
         if read.out.instruction_like_text:
             state.flags.add(FLAG_INSTRUCTION_TEXT)

@@ -6,8 +6,11 @@ Rules and hashes live in `app.tools.verification` (pure) and file safety in
 - **Upload** (`store_document`): the file was inspected in a worker before any lock. Its
   private fingerprint is bound to the asset in `document_fingerprints` (insert or find the
   binding): a file already bound to another listing is refused `document_reused`.
-- **Submit** (`submit_run`): 1–3 of the listing's not-yet-submitted documents become a new
-  current run (the previous one is superseded), with its checklist and input fingerprint.
+- **Submit** (`submit_run`): a new current run (the previous one is superseded), with its
+  checklist and input fingerprint, over 1–3 of the listing's not-yet-submitted documents plus,
+  while the current run still waits for a decision, that run's documents (#210): the reviewer
+  sees everything the steward submitted. The steward may leave some of them out; past 3 in all
+  it's `submission_full`. After a decision a submission starts afresh.
 - **Decide** (`approve`, `reject`): an impartial admin decides the current, undecided run, once.
   Approval needs the run's fingerprint to still match the listing (`stale_run`), no failed check
   (`checks_failed`) and no overlap now (`overlap`); it resumes trading on an asset suspended by
@@ -32,10 +35,11 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal, get_args
 from uuid import UUID
 
-from sqlalchemy import func, text, update
+from sqlalchemy import ColumnElement, func, text, update
+from sqlalchemy.orm import Mapped
 from sqlmodel import Session, col, select
 
 from app.events import publish
@@ -54,6 +58,7 @@ from app.models import (
     VerificationLevel,
     VerificationMode,
     VerificationRun,
+    VerificationRunDocument,
 )
 from app.services.lifecycle import TERMINAL_STATUSES, ListingEvent, SuspensionReason, transition
 from app.services.listings import (
@@ -86,12 +91,19 @@ from app.worlds import LIVE_WORLD_ID
 
 MAX_DOCUMENTS_PER_ASSET = 20
 """Documents a listing may hold in total (every run's included), so uploads can't fill the DB."""
+MAX_RUN_DOCUMENTS = 3
+"""Documents one run covers (ADR-0006 §2), carried-over ones included."""
+DecidedLevel = Literal["verified", "rejected", "revoked"]
+"""A run's level once a reviewer decided it (#211): the decided listings' filter."""
+DECIDED_LEVELS = tuple(VerificationLevel(level) for level in get_args(DecidedLevel))
 
 # Refusal codes (HTTP 409 unless noted).
 LISTING_CLOSED = "listing_closed"
 DOCUMENT_LIMIT_REACHED = "document_limit_reached"
 DOCUMENT_REUSED = "document_reused"
 DOCUMENT_ALREADY_SUBMITTED = "document_already_submitted"
+DOCUMENT_NOT_IN_SUBMISSION = "document_not_in_submission"
+SUBMISSION_FULL = "submission_full"
 RUN_SUPERSEDED = "run_superseded"
 RUN_ALREADY_DECIDED = "run_already_decided"
 STALE_RUN = "stale_run"
@@ -136,15 +148,54 @@ def listing_facts(asset: Asset) -> ListingFacts:
     return ListingFacts(asset.community_id, asset.name, asset.geojson, asset.area_ha)
 
 
-def documents_of(
-    session: Session, world_id: UUID, asset_id: UUID, run_ids: Iterable[UUID] | None = None
-) -> list[ListingDocument]:
+_DOCUMENT_ORDER = (col(ListingDocument.created_at), col(ListingDocument.id))
+
+
+def documents_of(session: Session, world_id: UUID, asset_id: UUID) -> list[ListingDocument]:
+    """The listing's documents, submitted or not, oldest first."""
     query = select(ListingDocument).where(
         ListingDocument.world_id == world_id, ListingDocument.asset_id == asset_id
     )
-    if run_ids is not None:
-        query = query.where(col(ListingDocument.run_id).in_(list(run_ids)))
-    return list(session.exec(query.order_by(col(ListingDocument.created_at))).all())
+    return list(session.exec(query.order_by(*_DOCUMENT_ORDER)).all())
+
+
+def linked_documents(
+    session: Session, world_id: UUID, run_ids: Iterable[UUID]
+) -> dict[UUID, list[ListingDocument]]:
+    """Each run's documents, oldest first, in one query (runs without any are left out)."""
+    wanted = list(run_ids)
+    if not wanted:
+        return {}
+    rows = session.exec(
+        select(VerificationRunDocument.run_id, ListingDocument)
+        .join(
+            ListingDocument,
+            (col(ListingDocument.world_id) == col(VerificationRunDocument.world_id))
+            & (col(ListingDocument.asset_id) == col(VerificationRunDocument.asset_id))
+            & (col(ListingDocument.id) == col(VerificationRunDocument.document_id)),
+        )
+        .where(
+            VerificationRunDocument.world_id == world_id,
+            col(VerificationRunDocument.run_id).in_(wanted),
+        )
+        .order_by(*_DOCUMENT_ORDER)
+    ).all()
+    linked: dict[UUID, list[ListingDocument]] = {}
+    for run_id, document in rows:
+        linked.setdefault(run_id, []).append(document)
+    return linked
+
+
+def submitted_ids(session: Session, world_id: UUID, asset_id: UUID) -> set[UUID]:
+    """The listing's documents that are in a run."""
+    return set(
+        session.exec(
+            select(VerificationRunDocument.document_id).where(
+                VerificationRunDocument.world_id == world_id,
+                VerificationRunDocument.asset_id == asset_id,
+            )
+        ).all()
+    )
 
 
 def _fingerprint_now(
@@ -160,7 +211,7 @@ def _fingerprint_now(
 
 
 def view_of(session: Session, asset: Asset, run: VerificationRun) -> RunView:
-    documents = documents_of(session, asset.world_id, asset.id, [run.id])
+    documents = linked_documents(session, asset.world_id, [run.id]).get(run.id, [])
     matches = _fingerprint_now(asset, run, documents) == run.input_fingerprint
     return RunView(run, documents, matches)
 
@@ -187,11 +238,7 @@ def runs_of(session: Session, asset: Asset) -> list[RunView]:
         .where(VerificationRun.world_id == asset.world_id, VerificationRun.asset_id == asset.id)
         .order_by(col(VerificationRun.created_at).desc(), col(VerificationRun.id))
     ).all()
-    documents = documents_of(session, asset.world_id, asset.id, [run.id for run in runs])
-    by_run: dict[UUID, list[ListingDocument]] = {}
-    for document in documents:
-        if document.run_id is not None:
-            by_run.setdefault(document.run_id, []).append(document)
+    by_run = linked_documents(session, asset.world_id, [run.id for run in runs])
     views = []
     for run in runs:
         linked = by_run.get(run.id, [])
@@ -222,6 +269,57 @@ def gate_refusal(session: Session, asset: Asset) -> str | None:
     return None
 
 
+LAST_DECISION = func.coalesce(col(VerificationRun.revoked_at), col(VerificationRun.decided_at))
+"""A decided run's latest decision: its revocation, else its decision. The decided listings'
+order (index `ix_verification_runs_decided`)."""
+
+
+def _current_runs(
+    session: Session,
+    world_id: UUID,
+    levels: Sequence[VerificationLevel],
+    exclude_communities: Iterable[UUID],
+    *,
+    order_by: Sequence[ColumnElement[Any] | Mapped[Any]],
+    limit: int,
+    offset: int,
+    asset_id: UUID | None = None,
+) -> list[tuple[Asset, RunView]]:
+    """Listings whose current run is at one of `levels`, without the excluded communities'
+    listings, in `order_by` order: one page, in two queries (the runs with their assets, then
+    their documents). End `order_by` with a unique column so pages never overlap."""
+    query = (
+        select(VerificationRun, Asset)
+        .join(
+            Asset,
+            (col(Asset.world_id) == col(VerificationRun.world_id))
+            & (col(Asset.id) == col(VerificationRun.asset_id)),
+        )
+        .where(
+            VerificationRun.world_id == world_id,
+            col(VerificationRun.is_current),
+            col(VerificationRun.level).in_(list(levels)),
+        )
+    )
+    query = query.order_by(*order_by)
+    if asset_id is not None:
+        query = query.where(VerificationRun.asset_id == asset_id)
+    excluded = list(exclude_communities)
+    if excluded:
+        query = query.where(
+            col(Asset.community_id).is_(None) | col(Asset.community_id).not_in(excluded)
+        )
+    rows = session.exec(query.offset(offset).limit(limit)).all()
+    linked = linked_documents(session, world_id, [run.id for run, _ in rows])
+    out = []
+    for run, asset in rows:
+        docs = linked.get(run.id, [])
+        out.append(
+            (asset, RunView(run, docs, _fingerprint_now(asset, run, docs) == run.input_fingerprint))
+        )
+    return out
+
+
 def review_queue(
     session: Session,
     world_id: UUID,
@@ -234,48 +332,39 @@ def review_queue(
     """Current runs waiting for a decision, oldest first, without the excluded communities'
     listings (an admin never reviews its own community's): one page, in two queries. With
     `asset_id`, only that listing's (at most one: one run is current per asset)."""
-    query = (
-        select(VerificationRun, Asset)
-        .join(
-            Asset,
-            (col(Asset.world_id) == col(VerificationRun.world_id))
-            & (col(Asset.id) == col(VerificationRun.asset_id)),
-        )
-        .where(
-            VerificationRun.world_id == world_id,
-            col(VerificationRun.is_current),
-            VerificationRun.level == VerificationLevel.DOCUMENTS_SUBMITTED,
-        )
-        .order_by(col(VerificationRun.created_at), col(VerificationRun.id))
+    return _current_runs(
+        session,
+        world_id,
+        [VerificationLevel.DOCUMENTS_SUBMITTED],
+        exclude_communities,
+        order_by=(col(VerificationRun.created_at), col(VerificationRun.id)),
+        limit=limit,
+        offset=offset,
+        asset_id=asset_id,
     )
-    if asset_id is not None:
-        query = query.where(VerificationRun.asset_id == asset_id)
-    excluded = list(exclude_communities)
-    if excluded:
-        query = query.where(
-            col(Asset.community_id).is_(None) | col(Asset.community_id).not_in(excluded)
-        )
-    rows = session.exec(query.offset(offset).limit(limit)).all()
-    linked: dict[UUID, list[ListingDocument]] = {}
-    if rows:
-        documents = session.exec(
-            select(ListingDocument)
-            .where(
-                ListingDocument.world_id == world_id,
-                col(ListingDocument.run_id).in_([run.id for run, _ in rows]),
-            )
-            .order_by(col(ListingDocument.created_at))
-        ).all()
-        for document in documents:
-            if document.run_id is not None:
-                linked.setdefault(document.run_id, []).append(document)
-    out = []
-    for run, asset in rows:
-        docs = linked.get(run.id, [])
-        out.append(
-            (asset, RunView(run, docs, _fingerprint_now(asset, run, docs) == run.input_fingerprint))
-        )
-    return out
+
+
+def decided_listings(
+    session: Session,
+    world_id: UUID,
+    exclude_communities: Iterable[UUID] = (),
+    *,
+    level: DecidedLevel | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[tuple[Asset, RunView]]:
+    """Listings whose current run was decided (verified, rejected or revoked; one `level` if
+    given), the latest decision first, without the excluded communities' listings (#211): one
+    page, in two queries. A listing with a newer submission waiting is in the queue instead."""
+    return _current_runs(
+        session,
+        world_id,
+        [VerificationLevel(level)] if level is not None else DECIDED_LEVELS,
+        exclude_communities,
+        order_by=(LAST_DECISION.desc(), col(VerificationRun.id)),
+        limit=limit,
+        offset=offset,
+    )
 
 
 def document_bytes(
@@ -479,17 +568,30 @@ def submit_run(
     asset_id: UUID,
     submitted_by: UUID,
     document_ids: Sequence[UUID],
+    remove_document_ids: Sequence[UUID] = (),
 ) -> RunView:
-    """A new current run over `document_ids` (1–3 distinct, the listing's own, not submitted
-    before), superseding the current one. The caller authorized MANAGE_LISTING and commits.
-    Raises LookupError, DocumentNotFound, or VerificationRefused: `listing_closed`,
-    `document_already_submitted`."""
+    """A new current run, superseding the current one, over `document_ids` (1–3 distinct, the
+    listing's own, never submitted before) plus, while the current run still waits for a
+    decision, that run's documents except `remove_document_ids` (#210): adding a document
+    keeps what the reviewer already had. At most MAX_RUN_DOCUMENTS in all. A decided run's
+    documents don't carry over: after a decision a submission starts afresh. The caller
+    authorized MANAGE_LISTING and commits. Raises LookupError, DocumentNotFound, or
+    VerificationRefused: `listing_closed`, `document_already_submitted`,
+    `document_not_in_submission` (a removed ID that isn't in the waiting run),
+    `submission_full`."""
     wanted = list(dict.fromkeys(document_ids))
-    if not 1 <= len(wanted) <= 3 or len(wanted) != len(document_ids):
-        raise ValueError("a run takes 1 to 3 distinct documents")
+    if not 1 <= len(wanted) <= MAX_RUN_DOCUMENTS or len(wanted) != len(document_ids):
+        raise ValueError("a run takes 1 to 3 distinct new documents")
+    removed = set(remove_document_ids)
     lock_listings(session, world_id)
     asset = _open_listing(session, world_id, asset_id)
-    documents = list(
+    waiting = current_run(session, world_id, asset.id)
+    carried: list[ListingDocument] = []
+    if waiting is not None and waiting.level is VerificationLevel.DOCUMENTS_SUBMITTED:
+        carried = linked_documents(session, world_id, [waiting.id]).get(waiting.id, [])
+    if not removed <= {document.id for document in carried}:
+        raise VerificationRefused(DOCUMENT_NOT_IN_SUBMISSION)
+    added = list(
         session.exec(
             select(ListingDocument)
             .where(
@@ -497,14 +599,29 @@ def submit_run(
                 ListingDocument.asset_id == asset.id,
                 col(ListingDocument.id).in_(wanted),
             )
-            .order_by(col(ListingDocument.created_at), col(ListingDocument.id))
+            .order_by(*_DOCUMENT_ORDER)
             .with_for_update()
         ).all()
     )
-    if len(documents) != len(wanted):
-        raise DocumentNotFound(set(wanted) - {document.id for document in documents})
-    if any(document.run_id is not None for document in documents):
+    if len(added) != len(wanted):
+        raise DocumentNotFound(set(wanted) - {document.id for document in added})
+    already = session.exec(
+        select(VerificationRunDocument.document_id)
+        .where(
+            VerificationRunDocument.world_id == world_id,
+            VerificationRunDocument.asset_id == asset.id,
+            col(VerificationRunDocument.document_id).in_(wanted),
+        )
+        .limit(1)
+    ).first()
+    if already is not None:
         raise VerificationRefused(DOCUMENT_ALREADY_SUBMITTED)
+    documents = sorted(
+        [document for document in carried if document.id not in removed] + added,
+        key=lambda document: (document.created_at, document.id),
+    )
+    if len(documents) > MAX_RUN_DOCUMENTS:
+        raise VerificationRefused(SUBMISSION_FULL)
     bindings = dict(
         session.exec(
             select(DocumentFingerprint.private_fingerprint, DocumentFingerprint.asset_id).where(
@@ -557,9 +674,12 @@ def submit_run(
     )
     session.add(run)
     session.flush()
-    for document in documents:
-        document.run_id = run.id
-        session.add(document)
+    session.add_all(
+        VerificationRunDocument(
+            run_id=run.id, document_id=document.id, world_id=world_id, asset_id=asset.id
+        )
+        for document in documents
+    )
     session.flush()
     _publish(session, asset, run, private=True)
     return RunView(run, documents, True)

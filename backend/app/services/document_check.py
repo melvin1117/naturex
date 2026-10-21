@@ -11,6 +11,9 @@
   `USE_MOCKS=true` the fake model runs in-process and every previewed document is "read".
   When no document may be sent, nothing runs and nothing is stored (status `not_run`). The
   listing's place is reverse-geocoded only when a document shows a place to compare.
+- **Carried documents (#210):** a document carried from a superseded run into a new one isn't
+  sent to a model again: what was read from it then (a completed check of the same listing and
+  method version) is reused, and only the comparison with the listing runs again.
 - **What it can change:** nothing but its own row in `verification_ai_suggestions`. The run's
   checklist, fingerprint and level are never read for writing.
 - **Errors:** no model answer, a spent budget, a missing key or any other error store a
@@ -62,8 +65,9 @@ from app.models import (
     VerificationAiSuggestion,
     VerificationLevel,
     VerificationRun,
+    VerificationRunDocument,
 )
-from app.schemas import AiSuggestionOut, AiSuggestionResult
+from app.schemas import AiDocumentReadingOut, AiSuggestionOut, AiSuggestionResult
 from app.worlds import LIVE_WORLD_ID
 
 log = logging.getLogger(__name__)
@@ -150,18 +154,38 @@ def _prepare(
         ).one_or_none()
     documents = session.exec(
         select(ListingDocument)
+        .join(
+            VerificationRunDocument,
+            (col(VerificationRunDocument.world_id) == col(ListingDocument.world_id))
+            & (col(VerificationRunDocument.asset_id) == col(ListingDocument.asset_id))
+            & (col(VerificationRunDocument.document_id) == col(ListingDocument.id)),
+        )
         .where(
             ListingDocument.world_id == world_id,
             ListingDocument.asset_id == asset_id,
-            ListingDocument.run_id == run_id,
+            VerificationRunDocument.run_id == run_id,
         )
         .order_by(col(ListingDocument.created_at), col(ListingDocument.id))
     ).all()
+    priors = prior_readings(session, world_id, asset_id, run_id, [d.id for d in documents])
     inputs: list[DocumentInput] = []
     for document in documents:
         reason = not_sent_reason(
             settings, world_id, has_preview=document.has_preview, is_sample=document.is_sample
         )
+        prior = priors.get(document.id) if reason is None else None
+        if prior is not None:
+            inputs.append(
+                DocumentInput(
+                    document.id,
+                    document.doc_type,
+                    None,
+                    document.is_sample,
+                    prior=prior[0],
+                    prior_models=prior[1],
+                )
+            )
+            continue
         preview = None
         if reason is None:
             preview = session.exec(
@@ -179,6 +203,45 @@ def _prepare(
     if asset.centroid_lat is not None and asset.centroid_lon is not None:
         centroid = (asset.centroid_lat, asset.centroid_lon)
     return _Prepared(community_name, asset.area_ha, centroid, asset.country, inputs)
+
+
+Prior = tuple[AiDocumentReadingOut, tuple[str, ...]]
+
+
+def prior_readings(
+    session: Session, world_id: UUID, asset_id: UUID, run_id: UUID, document_ids: Iterable[UUID]
+) -> dict[UUID, Prior]:
+    """What a model already read from these documents for this listing's earlier runs (the
+    latest completed check of the same method version that sent each one), with that check's
+    models. Loaded by `(world_id, asset_id)`, so another listing's readings are never reused."""
+    wanted = set(document_ids)
+    rows = session.exec(
+        select(VerificationAiSuggestion)
+        .where(
+            VerificationAiSuggestion.world_id == world_id,
+            VerificationAiSuggestion.asset_id == asset_id,
+            VerificationAiSuggestion.run_id != run_id,
+            VerificationAiSuggestion.status == COMPLETED,
+            VerificationAiSuggestion.method_version == METHOD_VERSION,
+        )
+        .order_by(col(VerificationAiSuggestion.created_at).desc())
+    ).all()
+    found: dict[UUID, Prior] = {}
+    for row in rows:
+        result = row.result if isinstance(row.result, dict) else {}
+        models = tuple(str(model) for model in result.get("models", []))
+        for raw in result.get("documents", []):
+            try:
+                reading = AiDocumentReadingOut.model_validate(raw)
+            except ValidationError:
+                continue
+            if (
+                reading.document_id in wanted
+                and reading.sent_to_model
+                and reading.document_id not in found
+            ):
+                found[reading.document_id] = (reading, models)
+    return found
 
 
 def _place(prepared: _Prepared, geocoder: Geocoder | None) -> tuple[tuple[str, ...], PlaceSource]:

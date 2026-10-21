@@ -124,6 +124,12 @@ def is_mock_report(report: Report | None) -> bool:
     )
 
 
+def thumbnail_outline_of(asset: Asset) -> list[list[list[float]]]:
+    """The stored outline for the card and hero maps; none for a curated site, which has a
+    precomputed thumbnail (#212). Never recomputed per request."""
+    return [] if asset.site_key else (asset.outline or [])
+
+
 def shown_status_reason(asset: Asset, active: Collection[UUID]) -> str | None:
     """The stored reason, or `rating_stale` for a listing in `rating` whose run died (a
     worker crash leaves no failure to record)."""
@@ -174,6 +180,7 @@ def cards(
                 value_high=latest.value_high if latest else None,
                 cover_image_url=asset.cover_image_url,
                 site_key=asset.site_key,
+                outline=thumbnail_outline_of(asset),
                 sparkline=sparklines.get(asset.id, []),
                 trading=is_trading(asset),
             )
