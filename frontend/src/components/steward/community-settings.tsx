@@ -31,7 +31,9 @@ export function CommunitySettings() {
     return (
       <div className="mx-auto max-w-xl px-4 py-16 sm:px-6">
         <Alert>
-          <AlertTitle>Sign in to manage a community</AlertTitle>
+          <AlertTitle className="line-clamp-none">
+            Sign in to manage a community
+          </AlertTitle>
           <AlertDescription>
             <p>The scripted demo has no community settings.</p>
             <Button asChild variant="outline" size="sm" className="mt-2">

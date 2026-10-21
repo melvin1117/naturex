@@ -9,12 +9,14 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 
 import { AlertsList } from "@/components/alerts-list";
-import { Delta, SiteBackdrop, Stat } from "@/components/proto/bits";
+import { Delta, SiteBackdrop } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
 import { LoadError } from "@/components/proto/load-error";
+import { focusIfLost, takeCommunityCreated } from "@/components/steward/focus";
 import { StewardPanel } from "@/components/steward/panel";
 import { StewardHome as PrototypeStewardHome } from "@/components/proto/steward-home";
 import { useStewardCommunity } from "@/components/shell/steward-community";
@@ -82,6 +84,11 @@ function Home({ summary }: { summary: CommunitySummary }) {
   const featured =
     listings.find((l) => l.asset.status === "listed") ?? listings[0];
   const trading = listings.filter((l) => l.asset.trading).length;
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  // A community just created replaces its form with this page: its name takes focus.
+  useEffect(() => {
+    if (takeCommunityCreated()) focusIfLost(headingRef.current);
+  }, []);
 
   return (
     <div className="mx-auto max-w-7xl px-4 pt-10 pb-16 sm:px-6">
@@ -90,7 +97,11 @@ function Home({ summary }: { summary: CommunitySummary }) {
           <p className="text-sm text-muted-foreground">
             {world?.me?.name} · {role ? COMMUNITY_ROLE_LABEL[role] : "Admin"}
           </p>
-          <h1 className="mt-1 font-serif text-5xl leading-none tracking-tight text-balance break-words sm:text-6xl">
+          <h1
+            ref={headingRef}
+            tabIndex={-1}
+            className="mt-1 font-serif text-5xl leading-none tracking-tight text-balance break-words outline-none sm:text-6xl"
+          >
             {community.name}
           </h1>
         </div>
@@ -114,22 +125,22 @@ function Home({ summary }: { summary: CommunitySummary }) {
 
       {listings.length > 0 && (
         <dl className="mt-8 grid gap-4 rounded-3xl bg-card p-6 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
-          <Stat
+          <HomeStat
             label="Community fund"
             value={moneyText(summary.wallet.balance)}
             sub="IPO proceeds and payouts · play money"
           />
-          <Stat
+          <HomeStat
             label="Retained-stake dividends"
             value={moneyText(summary.wallet.retained_dividends)}
             sub="paid to the treasury"
           />
-          <Stat
+          <HomeStat
             label="Supporters"
             value={units(summary.holder_count)}
             sub="hold units of your sites"
           />
-          <Stat
+          <HomeStat
             label="Sites"
             value={units(listings.length)}
             sub={`${units(trading)} open to supporters`}
@@ -189,6 +200,27 @@ function Home({ summary }: { summary: CommunitySummary }) {
           />
         </aside>
       </div>
+    </div>
+  );
+}
+
+/** A `<dt>`/`<dd>` pair in a `<div>`: the only children a `<dl>` may have. */
+function HomeStat({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="tabular mt-1 truncate text-2xl font-light tracking-tight">
+        {value}
+      </dd>
+      <dd className="mt-0.5 text-xs text-muted-foreground">{sub}</dd>
     </div>
   );
 }

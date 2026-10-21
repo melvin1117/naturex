@@ -3,11 +3,12 @@
 import { ArrowLeft, Check, RefreshCwIcon, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
 import { ListingFlow as PrototypeListingFlow } from "@/components/proto/listing-flow";
 import { useStewardCommunity } from "@/components/shell/steward-community";
+import { focusIfLost } from "@/components/steward/focus";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { isApiAssetId } from "@/lib/asset-detail";
@@ -67,7 +68,9 @@ function ListingFromUrl() {
     return (
       <Page>
         <Alert>
-          <AlertTitle>Start a community first</AlertTitle>
+          <AlertTitle className="line-clamp-none">
+            Start a community first
+          </AlertTitle>
           <AlertDescription>
             <p>Land is listed by a community. Create one, then come back.</p>
             <Button asChild variant="outline" size="sm" className="mt-2">
@@ -87,6 +90,7 @@ function ListingFromUrl() {
       key={`${active.id}:${shown ?? "new"}`}
       community={active}
       assetId={shown}
+      focusOnMount={shown !== null && shown === created}
       onCreated={(asset) => {
         setCreated(asset.id);
         router.replace(listingHref(active.id, asset.id), { scroll: false });
@@ -98,10 +102,13 @@ function ListingFromUrl() {
 function ListingLoader({
   community,
   assetId,
+  focusOnMount,
   onCreated,
 }: {
   community: MyCommunity;
   assetId: string | null;
+  /** The draft just saved here remounts this loader: its next step takes focus. */
+  focusOnMount: boolean;
   onCreated: (asset: AssetDetail) => void;
 }) {
   const { communities } = useStewardCommunity();
@@ -116,7 +123,9 @@ function ListingLoader({
         <Page>
           <Alert variant="destructive">
             <TriangleAlert aria-hidden="true" />
-            <AlertTitle>We couldn&apos;t load this listing</AlertTitle>
+            <AlertTitle className="line-clamp-none">
+              We couldn&apos;t load this listing
+            </AlertTitle>
             <AlertDescription>
               <p>{query.error.message}</p>
               <Button
@@ -140,7 +149,9 @@ function ListingLoader({
     return (
       <Page>
         <Alert>
-          <AlertTitle>This listing belongs to another community</AlertTitle>
+          <AlertTitle className="line-clamp-none">
+            This listing belongs to another community
+          </AlertTitle>
           <AlertDescription>
             {owner ? (
               <Button asChild variant="outline" size="sm" className="mt-2">
@@ -162,6 +173,7 @@ function ListingLoader({
       community={community}
       meId={meId}
       asset={asset ?? null}
+      focusOnMount={focusOnMount}
       onCreated={onCreated}
     />
   );
@@ -171,7 +183,9 @@ function NotFound({ community }: { community: MyCommunity }) {
   return (
     <Page>
       <Alert>
-        <AlertTitle>We couldn&apos;t find that listing</AlertTitle>
+        <AlertTitle className="line-clamp-none">
+          We couldn&apos;t find that listing
+        </AlertTitle>
         <AlertDescription>
           <p>
             It may have been removed, or it belongs to a community you&apos;re
@@ -202,11 +216,13 @@ function ListingWizard({
   community,
   meId,
   asset,
+  focusOnMount,
   onCreated,
 }: {
   community: MyCommunity;
   meId: string;
   asset: AssetDetail | null;
+  focusOnMount: boolean;
   onCreated: (asset: AssetDetail) => void;
 }) {
   const storageKey = unsavedListingKey(meId, community.id);
@@ -260,6 +276,15 @@ function ListingWizard({
       : status === "listed" || status === "suspended"
         ? 3
         : 2;
+
+  // A new step replaces the one that held focus: move it to the step, not back to <body>.
+  const stepRef = useRef<HTMLElement>(null);
+  const shownStep = useRef<number | null>(focusOnMount ? null : step);
+  useEffect(() => {
+    if (shownStep.current === step) return;
+    shownStep.current = step;
+    focusIfLost(stepRef.current);
+  }, [step]);
 
   return (
     <Page>
@@ -321,7 +346,12 @@ function ListingWizard({
         ))}
       </ol>
 
-      <div className="mt-6">
+      <section
+        ref={stepRef}
+        tabIndex={-1}
+        aria-label={`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]}`}
+        className="mt-6 rounded-[1.75rem] outline-none"
+      >
         {step === 0 && (
           <DetailsStep
             community={community}
@@ -368,7 +398,7 @@ function ListingWizard({
         {step === 3 && asset && (
           <ListedStep community={community} asset={asset} />
         )}
-      </div>
+      </section>
     </Page>
   );
 }

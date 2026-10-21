@@ -152,7 +152,9 @@ export function IpoOutcome({
       </header>
       <Alert className="max-w-2xl">
         <Icon aria-hidden="true" />
-        <AlertTitle>{content.explanation.title}</AlertTitle>
+        <AlertTitle className="line-clamp-none">
+          {content.explanation.title}
+        </AlertTitle>
         <AlertDescription>
           <p>{content.explanation.body}</p>
           {content.action}

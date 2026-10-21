@@ -83,7 +83,7 @@ export function BlockedAlert({
   return (
     <Alert ref={ref} tabIndex={-1} className={cn("outline-none", className)}>
       <Info aria-hidden="true" />
-      <AlertTitle>{explanation.title}</AlertTitle>
+      <AlertTitle className="line-clamp-none">{explanation.title}</AlertTitle>
       <AlertDescription>
         <p>{explanation.body}</p>
         {(onRetry || action) && (
@@ -123,7 +123,7 @@ export function ErrorAlert({
       className={cn("outline-none", className)}
     >
       <TriangleAlertIcon aria-hidden="true" />
-      <AlertTitle>{title}</AlertTitle>
+      <AlertTitle className="line-clamp-none">{title}</AlertTitle>
       <AlertDescription>
         <p>{message}</p>
         {onRetry && (

@@ -74,7 +74,7 @@ export function FieldEvidenceScreen({ assetId }: { assetId: string }) {
       <IpoShell homeHref={homeHref}>
         <Alert className="max-w-2xl">
           <Info aria-hidden="true" />
-          <AlertTitle>{NOT_FOUND.title}</AlertTitle>
+          <AlertTitle className="line-clamp-none">{NOT_FOUND.title}</AlertTitle>
           <AlertDescription>
             <p>{NOT_FOUND.body}</p>
           </AlertDescription>
@@ -200,7 +200,9 @@ function Loaded({
           {closed && (
             <Alert>
               <Info aria-hidden="true" />
-              <AlertTitle>This listing doesn&apos;t take photos</AlertTitle>
+              <AlertTitle className="line-clamp-none">
+                This listing doesn&apos;t take photos
+              </AlertTitle>
               <AlertDescription>
                 <p>It&apos;s withdrawn or not eligible.</p>
               </AlertDescription>
@@ -216,7 +218,9 @@ function Loaded({
             <div className="mb-5 space-y-3">
               <Alert role="note">
                 <MapPinOff aria-hidden="true" />
-                <AlertTitle>Your location stays private</AlertTitle>
+                <AlertTitle className="line-clamp-none">
+                  Your location stays private
+                </AlertTitle>
                 <AlertDescription>
                   <p>
                     The photo&apos;s GPS position and date are read once to
@@ -230,7 +234,9 @@ function Loaded({
               </Alert>
               <Alert role="note" data-ai-analysis={evidence.ai_analysis}>
                 <Sparkles aria-hidden="true" />
-                <AlertTitle>{notice.title}</AlertTitle>
+                <AlertTitle className="line-clamp-none">
+                  {notice.title}
+                </AlertTitle>
                 <AlertDescription>
                   <p>{notice.body}</p>
                 </AlertDescription>
