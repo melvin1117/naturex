@@ -12,7 +12,7 @@
 - `field_evidence_photo_blobs`: the re-encoded JPEG (no metadata), deleted with its photo.
 
 Revision ID: 0021
-Revises: 0019
+Revises: 0020
 Create Date: 2026-10-20
 """
 
@@ -23,7 +23,7 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 revision: str = "0021"
-down_revision: str | Sequence[str] | None = "0019"
+down_revision: str | Sequence[str] | None = "0020"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
