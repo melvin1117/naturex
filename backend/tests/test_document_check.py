@@ -314,6 +314,45 @@ def test_a_consistent_document_reads_compares_and_suggests_with_excerpts() -> No
     assert (read["world_id"], read["asset_id"]) == (LISTING.world_id, LISTING.asset_id)
 
 
+def test_a_reading_from_an_earlier_run_is_compared_again_without_reading_again() -> None:
+    """#210: a carried document isn't sent to the perception model again; its earlier reading
+    is compared with the listing as it is now (the area in code, names by Nemotron)."""
+    first = check_documents(
+        LISTING,
+        [doc()],
+        Scripted(reading(), answer((1, "holder_name", "match", "Same community."))),
+    )
+    carried = DocumentInput(
+        first.documents[0].document_id,
+        DocumentType.TITLE,
+        None,
+        False,
+        prior=first.documents[0],
+        prior_models=tuple(first.models),
+    )
+    llm = Scripted(
+        reading(holder_name={"value": "Otra Comunidad", "excerpt": "Titular: Otra Comunidad"}),
+        answer(
+            (1, "holder_name", "match", "Same community."),
+            (2, "holder_name", "mismatch", "Another community."),
+        ),
+    )
+
+    result = check_documents(LISTING, [carried, doc()], llm)
+
+    assert [call["tier"] for call in llm.calls] == [Tier.PERCEPTION, Tier.FAST], "one new read"
+    assert result.documents[0] == first.documents[0]
+    area = next(c for c in result.comparisons if c.field == "area")
+    assert (area.document_id, area.verdict, area.compared_by) == (
+        carried.document_id,
+        "match",
+        "code",
+    )
+    assert "readings_reused" in result.flags
+    assert result.models == [MINICPM, NANO]
+    assert result.suggestion == "inconsistent"
+
+
 def test_prompts_hold_only_what_each_step_needs_and_no_ids() -> None:
     llm = Scripted(reading(), answer())
 
@@ -936,6 +975,66 @@ def test_a_superseded_or_decided_run_is_not_checked(world: World_) -> None:
 
     found = world.session.get(VerificationAiSuggestion, UUID(run["id"]))
     assert found is None, "nothing is spent on a run no reviewer will read"
+
+
+class Counting:
+    """The mock model, counting perception calls (each one sends a preview)."""
+
+    def __init__(self) -> None:
+        self.inner = MockDocumentLLM()
+        self.reads = 0
+
+    def structured(self, **kwargs: Any) -> LLMResult[Any]:
+        if kwargs["tier"] is Tier.PERCEPTION:
+            self.reads += 1
+        return self.inner.structured(**kwargs)
+
+
+@requires_db
+def test_documents_carried_into_a_new_run_arent_read_again(world: World_) -> None:
+    """#210: adding a document to a waiting submission sends only the new one to the model."""
+    llm = Counting()
+    checker = mock_checker(world, lambda: llm)
+    asset_id = tv.draft(world)["id"]
+    first = [
+        tv.uploaded(world, asset_id, png(700, 500)),
+        tv.uploaded(world, asset_id, png(710, 500), doc_type="assembly_minutes"),
+    ]
+    assert tv.submit_run(world, asset_id, first).status_code == 201
+    drain(checker)
+    assert llm.reads == 2
+
+    extra = tv.uploaded(world, asset_id, png(720, 500), doc_type="other")
+    added = tv.submit_run(world, asset_id, [extra])
+    assert added.status_code == 201, added.text
+    drain(checker)
+
+    assert llm.reads == 3, "only the new document was read"
+    suggestion = queue_item(world, asset_id)["ai_suggestion"]
+    assert suggestion["run_id"] == added.json()["id"]
+    assert {d["document_id"] for d in suggestion["documents"]} == {*first, extra}
+    assert all(d["sent_to_model"] for d in suggestion["documents"])
+    assert "readings_reused" in suggestion["flags"]
+    assert "mock_model" in suggestion["flags"]
+
+
+@requires_db
+def test_readings_are_reused_only_within_their_listing_and_world(world: World_) -> None:
+    checker = mock_checker(world, MockDocumentLLM)
+    asset_id = tv.draft(world)["id"]
+    other = tv.draft(world, geojson=square(700, lat=9.5))["id"]
+    document = UUID(tv.uploaded(world, asset_id, png(700, 500)))
+    assert tv.submit_run(world, asset_id, [str(document)]).status_code == 201
+    drain(checker)
+
+    def found(world_id: UUID, listing: str) -> set[UUID]:
+        return set(
+            service.prior_readings(world.session, world_id, UUID(listing), uuid4(), [document])
+        )
+
+    assert found(world.id, asset_id) == {document}
+    assert found(world.id, other) == set()
+    assert found(LIVE_WORLD_ID, asset_id) == set()
 
 
 # ----- errors, status and shutdown ---------------------------------------------------------------

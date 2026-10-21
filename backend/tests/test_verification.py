@@ -651,6 +651,22 @@ def test_a_submission_holds_at_most_three_documents(world: World_) -> None:
 
 
 @requires_db
+def test_a_steward_may_leave_out_every_carried_document(world: World_) -> None:
+    asset = draft(world)
+    first = evidence(world, asset["id"])
+    fresh = uploaded(world, asset["id"], png(91, 91), doc_type="assembly_minutes")
+
+    replaced = client_for(world, world.steward).post(
+        f"/assets/{asset['id']}/verification/runs",
+        json={"document_ids": [fresh], "remove_document_ids": sorted(doc_ids(first))},
+    )
+
+    assert replaced.status_code == 201, replaced.text
+    assert doc_ids(replaced.json()) == {fresh}
+    assert doc_ids(runs_of(world, asset["id"])[1]) == doc_ids(first), "history unchanged"
+
+
+@requires_db
 def test_after_a_decision_a_submission_starts_afresh(world: World_) -> None:
     """A decided run's documents were judged: they stay in its record and don't carry over."""
     asset = draft(world)

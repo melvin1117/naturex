@@ -506,6 +506,71 @@ describe("StewardVerifyScreen", () => {
     expect(backend.calls(SUBMIT)).toBe(1);
   });
 
+  it("can leave out every earlier document while adding a new one", async () => {
+    const extra = document({ id: DOC_EXTRA, doc_type: "assembly_minutes" });
+    const backend = renderScreen({
+      [RUNS]: () => json([run()]),
+      [DOCS]: () => json([...run().documents, extra]),
+      [SUBMIT]: () =>
+        json(run({ id: "77777777-7777-4777-8777-777777777777" }), {
+          status: 201,
+        }),
+    });
+    const submission = await screen.findByRole("list", {
+      name: "Documents in your submission",
+    });
+    fireEvent.click(
+      within(submission).getByRole("checkbox", { name: /Land title/ }),
+    );
+    fireEvent.click(
+      within(submission).getByRole("checkbox", { name: /Assembly minutes/ }),
+    );
+    expect(screen.getByText("(0 of 3)")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add to your submission" }),
+    ).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Assembly minutes.*uploaded/ }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add 1 document to your submission" }),
+    );
+
+    await waitFor(() => expect(backend.calls(SUBMIT)).toBe(1));
+    const submit = backend.requests.find(
+      (r) => r.method === "POST" && r.url.endsWith("/verification/runs"),
+    )!;
+    expect(await submit.json()).toEqual({
+      document_ids: [DOC_EXTRA],
+      remove_document_ids: [DOC_TITLE, DOC_MINUTES],
+    });
+  });
+
+  it("explains a submission that changed since the page loaded", async () => {
+    renderScreen({
+      [RUNS]: () => json([run()]),
+      [DOCS]: () =>
+        json([
+          ...run().documents,
+          document({ id: DOC_EXTRA, doc_type: "other" }),
+        ]),
+      [SUBMIT]: () =>
+        json({ detail: "document_not_in_submission" }, { status: 409 }),
+    });
+    fireEvent.click(
+      await screen.findByRole("checkbox", { name: /Other document/ }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add 1 document to your submission" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "Your submission changed since you opened this page. Reload and choose again.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("won't take documents for a withdrawn listing", async () => {
     renderScreen({ [ASSET]: () => json(unlaunched({ status: "withdrawn" })) });
     expect(

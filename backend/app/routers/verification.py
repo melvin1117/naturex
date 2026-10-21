@@ -196,20 +196,14 @@ def _refused(code: str) -> HTTPException:
 
 
 def _document_out(document: ListingDocument, *, submitted: bool) -> ListingDocumentOut:
-    return ListingDocumentOut(
-        id=document.id,
-        asset_id=document.asset_id,
-        submitted=submitted,
-        doc_type=document.doc_type,
-        media_type=document.media_type,
-        size_bytes=document.size_bytes,
-        page_count=document.page_count,
-        width=document.width,
-        height=document.height,
-        has_preview=document.has_preview,
-        commitment=document.commitment,
-        created_at=document.created_at,
-    )
+    # Attributes, not `model_dump()`: after a commit the instance is expired and its `__dict__`
+    # is empty until an attribute is read.
+    fields = {
+        name: getattr(document, name)
+        for name in ListingDocumentOut.model_fields
+        if name != "submitted"
+    }
+    return ListingDocumentOut.model_validate({**fields, "submitted": submitted})
 
 
 def run_out(view: RunView) -> VerificationRunOut:

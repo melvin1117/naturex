@@ -1728,7 +1728,8 @@ class AiSuggestionResult(BaseModel):
     flags: list[str] = Field(
         description="instruction_like_text (a document), listing_instruction_like_text (the "
         "listing's community or place names), documents_not_sent, place_not_geocoded, "
-        "reason_withheld, mock_model"
+        "reason_withheld, mock_model, readings_reused (a document carried from an earlier "
+        "submission wasn't read again: its earlier reading was compared anew)"
     )
     models: list[str]
     method_version: str

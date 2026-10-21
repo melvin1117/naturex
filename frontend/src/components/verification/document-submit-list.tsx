@@ -96,7 +96,7 @@ export function DocumentSubmitList({
           </h3>
           <p className="mt-1 text-xs text-muted-foreground">
             {canEdit
-              ? "Your submission is waiting for a reviewer. Documents you add join it; untick one to leave it out."
+              ? "Your submission is waiting for a reviewer. Documents you add join it. Untick one to leave it out when you add a document."
               : "Your submission is waiting for a reviewer. To add a document, upload it here first."}
           </p>
           <ul
