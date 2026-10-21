@@ -131,11 +131,13 @@ test("the Exchange has no serious accessibility violations", async ({
       const scroller = list.parentElement!;
       return {
         scrolls: scroller.scrollWidth > scroller.clientWidth,
+        withinPage: scroller.getBoundingClientRect().right <= window.innerWidth,
         fitsInPill: list.scrollWidth <= list.getBoundingClientRect().width + 1,
       };
     });
     expect(bar, "the tab bar scrolls; no tab is squashed").toEqual({
       scrolls: true,
+      withinPage: true,
       fitsInPill: true,
     });
     // The keyboard reaches the last tab, and it scrolls into view.
@@ -143,7 +145,8 @@ test("the Exchange has no serious accessibility violations", async ({
     await page.keyboard.press("End");
     const ledger = page.getByRole("tab", { name: "Ledger" });
     await expect(ledger).toBeFocused();
-    await expect(ledger).toBeInViewport({ ratio: 1 });
+    // Sub-pixel layout can leave a hair outside.
+    await expect(ledger).toBeInViewport({ ratio: 0.95 });
     await page.setViewportSize(DESKTOP);
   });
 

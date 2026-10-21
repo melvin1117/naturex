@@ -11,6 +11,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useReturnFocus } from "@/lib/use-return-focus";
 
 describe("Stat", () => {
@@ -176,5 +177,27 @@ describe("AlertTitle", () => {
     expect(
       screen.getByText("A long title that needs more than one line"),
     ).not.toHaveClass("line-clamp-1");
+  });
+});
+
+describe("TabsTrigger", () => {
+  it("scrolls a tab into view when it takes focus", () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    render(
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="ledger">Ledger</TabsTrigger>
+        </TabsList>
+      </Tabs>,
+    );
+    const ledger = screen.getByRole("tab", { name: "Ledger" });
+    ledger.focus();
+    expect(scroll).toHaveBeenCalledWith({
+      block: "nearest",
+      inline: "nearest",
+    });
+    expect(scroll.mock.contexts.at(-1)).toBe(ledger);
   });
 });

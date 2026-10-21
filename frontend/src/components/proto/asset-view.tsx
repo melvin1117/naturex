@@ -277,7 +277,7 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
           This site hasn&apos;t been rated yet.
         </p>
       ) : (
-        <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
           <Tabs
             value={tab}
             // The History API keeps useSearchParams in sync without a server round trip
