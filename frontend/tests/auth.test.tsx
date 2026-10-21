@@ -323,6 +323,13 @@ describe("AuthForm", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("Password")).toHaveFocus(),
     );
+    // The form's error stays attached to the fields, so it's heard on return too.
+    expect(screen.getByLabelText("Password")).toHaveAccessibleDescription(
+      "Email or password is incorrect.",
+    );
+    expect(screen.getByLabelText("Email")).toHaveAccessibleDescription(
+      "Email or password is incorrect.",
+    );
   });
 
   it("focuses the alert for other form-level errors", async () => {
@@ -408,8 +415,14 @@ describe("RequireAccount", () => {
       { "GET /world": () => json(SIGNED_IN_WORLD) },
     );
     expect(
-      await screen.findByText("The control room is for platform admins"),
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "The control room is for platform admins",
+      }),
     ).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Go to the Marketplace" }),
+    ).toHaveAttribute("href", "/");
     expect(screen.queryByText("Your stakes")).not.toBeInTheDocument();
     expect(router.replace).not.toHaveBeenCalled();
   });

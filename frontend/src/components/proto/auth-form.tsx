@@ -144,9 +144,15 @@ export function AuthForm({
     }
   }
 
+  // A form-level error (wrong credentials, network) describes every field, so it's heard again
+  // when the visitor moves back into the form, not only when the alert first appears.
+  const formErrorRef = formError ? FORM_ERROR_ID : undefined;
   const fieldProps = (field: AuthField) => ({
     "aria-invalid": fieldErrors[field] ? true : undefined,
-    "aria-describedby": fieldErrors[field] ? `${field}-error` : undefined,
+    "aria-describedby":
+      [fieldErrors[field] && `${field}-error`, formErrorRef]
+        .filter(Boolean)
+        .join(" ") || undefined,
     onChange: () => clearFieldError(field),
   });
 
@@ -210,6 +216,7 @@ export function AuthForm({
               autoComplete={isRegister ? "new-password" : "current-password"}
               hint={isRegister ? PASSWORD_RULE : undefined}
               error={fieldErrors.password}
+              describedBy={formErrorRef}
               onEdit={() => clearFieldError("password")}
             />
           </div>

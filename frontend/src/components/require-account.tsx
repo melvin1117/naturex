@@ -61,14 +61,17 @@ export function RequireAccount({
       <div className="mx-auto max-w-xl px-4 py-16 sm:px-6">
         <Alert>
           <LockKeyhole aria-hidden="true" />
-          <AlertTitle>The control room is for platform admins</AlertTitle>
+          {/* The page's only heading: the guarded screen (and its h1) isn't rendered. */}
+          <AlertTitle>
+            <h1>The control room is for platform admins</h1>
+          </AlertTitle>
           <AlertDescription>
             <p>
               You&apos;re signed in as {world?.me?.name}, which doesn&apos;t
               have admin access. Admin accounts are created by an operator.
             </p>
             <Button asChild variant="outline" size="sm" className="mt-2">
-              <Link href="/">Go to the Exchange</Link>
+              <Link href="/">Go to the Marketplace</Link>
             </Button>
           </AlertDescription>
         </Alert>
@@ -81,7 +84,9 @@ export function RequireAccount({
       <div className="mx-auto max-w-xl px-4 py-16 sm:px-6">
         <Alert variant="destructive">
           <TriangleAlertIcon aria-hidden="true" />
-          <AlertTitle>We couldn&apos;t check your session</AlertTitle>
+          <AlertTitle>
+            <h1>We couldn&apos;t check your session</h1>
+          </AlertTitle>
           <AlertDescription>
             <p>
               {error?.message ??
