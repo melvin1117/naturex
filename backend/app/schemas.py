@@ -278,6 +278,12 @@ class AssetCard(BaseModel):
     value_high: Decimal | None = None
     cover_image_url: str | None = None
     site_key: str | None = None
+    outline: list[list[list[float]]] = Field(
+        default_factory=list,
+        description="The boundary's exterior ring per part, [lon, lat], simplified to at most "
+        "64 corners in all (holes dropped): drawn on the card's map when the site has no "
+        "precomputed thumbnail. Empty if the area can't be read.",
+    )
     sparkline: list[Decimal] = Field(
         default_factory=list,
         description="The latest prices (up to 30), oldest first, for the card's sparkline.",

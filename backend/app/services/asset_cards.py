@@ -17,10 +17,13 @@ from app.services.ipo import is_trading
 from app.services.listings import RATING_STALE
 from app.services.rating_runs import assets_with_active_runs
 from app.tools.earth_obs import MOCK_FLAG
+from app.tools.geometry import outline_rings
 
 _HUNDRED = Decimal(100)
 # Marketplace sparkline length: the latest prices per card, oldest first.
 SPARKLINE_POINTS = 30
+CARD_OUTLINE_MAX_POINTS = 64
+"""Corners of a card's boundary outline (all parts together): enough to draw it on a thumbnail."""
 
 
 def _price_per_asset(
@@ -174,6 +177,7 @@ def cards(
                 value_high=latest.value_high if latest else None,
                 cover_image_url=asset.cover_image_url,
                 site_key=asset.site_key,
+                outline=outline_rings(asset.geojson, max_points=CARD_OUTLINE_MAX_POINTS),
                 sparkline=sparklines.get(asset.id, []),
                 trading=is_trading(asset),
             )
