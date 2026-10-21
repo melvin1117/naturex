@@ -145,8 +145,11 @@ afterEach(() => {
   motion = null;
 });
 
-/** Rate a draft; the run then finishes in one burst and the listing is listed. */
-async function rateInABurst() {
+/**
+ * Rate a draft; the run then finishes in one burst and the listing is listed. With
+ * `finishedOnFirstRead`, the run has already finished when the screen first reads it.
+ */
+async function rateInABurst({ finishedOnFirstRead = false } = {}) {
   let current = asset();
   let run: RatingRun = { ...FINISHED, status: "queued", steps: [] };
   const backend = fakeBackend({
@@ -157,6 +160,7 @@ async function rateInABurst() {
     [`GET /runs/${RUN_ID}`]: () => json(run),
     [`POST /assets/${ASSET_ID}/submit`]: () => {
       current = asset({ status: "rating", latest_run_id: RUN_ID });
+      if (finishedOnFirstRead) run = FINISHED;
       return json(
         { asset_id: ASSET_ID, run_id: RUN_ID, status: "rating" },
         { status: 202 },
@@ -267,6 +271,22 @@ describe("the rating reveal (#216)", () => {
       "role",
       "status",
     );
+  }, 15_000);
+
+  it("replays a run that had already finished when first read", async () => {
+    motion = stubMotion();
+    await rateInABurst({ finishedOnFirstRead: true });
+    expect(finishedRows()).toBeLessThan(7);
+    await waitFor(() => expect(finishedRows()).toBe(7), {
+      timeout: 8 * PIPELINE_STEP_MS,
+    });
+    expect(
+      await screen.findByRole(
+        "heading",
+        { name: "Laguna Verde is listed" },
+        { timeout: PIPELINE_SETTLE_MS + 1000 },
+      ),
+    ).toBeVisible();
   }, 15_000);
 
   it("under reduced motion lists at once, with the same numbers and announcement", async () => {

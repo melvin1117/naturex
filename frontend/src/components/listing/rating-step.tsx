@@ -128,9 +128,14 @@ function usePacedRun(
     runId: string;
     live: boolean;
   } | null>(null);
-  if (runId && view && loaded && watched?.runId !== runId)
-    setWatched({ runId, live: submitted || isActive(view) });
-  const live = Boolean(runId) && watched?.runId === runId && watched.live;
+  // Decided on the run's first read; used in this very render, so a run that is already
+  // finished when first read (a fast mock run) still replays from its first step.
+  let decided = watched?.runId === runId ? watched : null;
+  if (runId && view && loaded && !decided) {
+    decided = { runId, live: submitted || isActive(view) };
+    setWatched(decided);
+  }
+  const live = decided?.live ?? false;
   const target = view ? finishedSteps(view) : 0;
   const shown = usePacedCount(target, PIPELINE_STEP_MS, live);
   const ended = view !== null && !isActive(view) && shown >= target;
