@@ -33,7 +33,7 @@ If code and docs disagree, stop and ask; don't silently pick one.
 - **TypeScript (frontend):** Next.js App Router, `strict` mode, Tailwind, **shadcn/ui components only** (no ad-hoc styled clones), shared design tokens; follow `PRODUCT.md` once it exists (created by `impeccable`).
 - **API contract first:** FastAPI's OpenAPI schema is the source of truth; the frontend client is **generated**, never hand-edited.
 - **Tests with every change:** unit tests for formulas, market invariants and the ledger; contract tests for agent outputs.
-- **Never push to `main`.** Branch, run `make ci` (with `docker compose up -d`), get an independent agent review, open a PR, get 1 teammate approval, squash-merge only when CI is green. The `protect-main` ruleset enforces the PR and required checks; the reviews are on us (`docs/ci.md`).
+- **Never push to `main`.** Branch, run `make ci` (with `docker compose up -d`), get an independent agent review, open a PR, get 1 teammate approval, squash-merge only when CI is green. The `protect-main` ruleset enforces the PR, the required checks, 1 approval (stale ones dismissed) and resolved threads; only the independent agent review is on us (`docs/ci.md`).
 - **Small PRs** (~100–300 lines), one concern each, **Conventional Commit** titles (`feat:`, `fix:`, `docs:`…). Update the docs when behaviour changes.
 - **Local development uses no cloud:** Docker Compose for Postgres; cloud hosting is chosen later (T20).
 - **Mocks behind interfaces** (`USE_MOCKS=true`) so work can proceed in parallel and CI runs without keys.

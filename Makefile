@@ -57,11 +57,11 @@ e2e:
 	cd frontend && pnpm exec playwright test
 
 # Download the published task map (branch task-map, kept current by the task-map workflow)
-# into tasks/task-map.html and .json (git-ignored); see ADR-0007
+# into tasks/task-map.html and .json (git-ignored); see ADR-0007. TASK_MAP_REMOTE is a remote name.
 TASK_MAP_REMOTE ?= origin
 task-map-latest:
-	@git fetch --quiet $(TASK_MAP_REMOTE) +refs/heads/task-map:refs/remotes/origin/task-map || { echo "No task-map branch on $(TASK_MAP_REMOTE) yet: run the task-map workflow (Actions > task-map > Run workflow)." >&2; exit 1; }
-	git archive refs/remotes/origin/task-map task-map.html task-map.json | tar -x -C tasks
+	@git fetch --quiet $(TASK_MAP_REMOTE) +refs/heads/task-map:refs/remotes/$(TASK_MAP_REMOTE)/task-map || { echo "No task-map branch on $(TASK_MAP_REMOTE) yet: run the task-map workflow (Actions > task-map > Run workflow)." >&2; exit 1; }
+	bash -o pipefail -c 'git archive refs/remotes/$(TASK_MAP_REMOTE)/task-map task-map.html task-map.json | tar -x -C tasks'
 	@python3 -c "import json; d = json.load(open('tasks/task-map.json')); c = d['counts']; print(f\"Task map {d['generated_at']}: {c['done']} done, {c['in_progress']} in progress, {c['ready']} ready, {c['blocked']} blocked. Open tasks/task-map.html or read tasks/task-map.json.\")"
 
 # Regenerate the task map locally from GitHub issues into tasks/ (git-ignored; needs `gh auth login`)

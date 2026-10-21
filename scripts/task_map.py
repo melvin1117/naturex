@@ -14,8 +14,8 @@ Usage:
   python3 scripts/task_map.py --out-dir DIR         # write somewhere other than tasks/
   python3 scripts/task_map.py --check               # offline: validate todo.md, write nothing
 
-Files are only rewritten when task data changes, so scheduled syncs don't publish
-empty updates. Standard library only.
+Files are only rewritten when task data or this script changes (both are in
+"data_hash"), so scheduled syncs don't publish empty updates. Standard library only.
 """
 
 # ruff: noqa: E501, UP017  (long lines are the HTML/CSS template; timezone.utc keeps Python 3.9 working)
@@ -46,11 +46,13 @@ HEADING = re.compile(
     r"(?P<size>XS|S|M|L) · (?P<prio>Must|Should|Could)",
     re.M,
 )
+TASK_HEADING = re.compile(r"^### [TP]\d\d\b")
 
 
 def parse_todo(text: str) -> dict[str, dict[str, Any]]:
     """Extract id, title, issue, owner roles, priority, week and deps for every task."""
     tasks: dict[str, dict[str, Any]] = {}
+    errors: list[str] = []
     week = 0
     blocks = re.split(r"\n(?=## |### )", text)
     for block in blocks:
@@ -60,6 +62,11 @@ def parse_todo(text: str) -> dict[str, dict[str, Any]]:
             continue
         m = HEADING.match(block)
         if not m:
+            if TASK_HEADING.match(block):
+                errors.append(f"Heading doesn't match the expected format: {block.splitlines()[0]}")
+            continue
+        if m.group("id") in tasks:
+            errors.append(f"Duplicate task id {m.group('id')}: {block.splitlines()[0]}")
             continue
         deps_match = re.search(r"\*\*Deps:\*\* ([^·\n]+)", block)
         owner_text = m.group("owner")
@@ -75,8 +82,10 @@ def parse_todo(text: str) -> dict[str, dict[str, Any]]:
             "week": week,
             "deps": re.findall(r"[TP]\d\d", deps_match.group(1) if deps_match else ""),
         }
+    if errors:
+        sys.exit("Invalid todo.md:\n  " + "\n  ".join(errors))
     if not tasks:
-        sys.exit(f"No tasks found in {TODO}; has the heading format changed?")
+        sys.exit("No tasks found in todo.md; has the heading format changed?")
     unknown = {d for t in tasks.values() for d in t["deps"] if d not in tasks}
     if unknown:
         sys.exit(f"Unknown dependencies in todo.md: {sorted(unknown)}")
@@ -122,6 +131,12 @@ def fetch_issues(issues_json: Path | None) -> dict[int, dict[str, Any]]:
         }
         for i in raw
     }
+
+
+def generator_hash() -> str:
+    """Git blob hash of this script, so a template change always republishes the map."""
+    content = Path(__file__).read_bytes()
+    return hashlib.sha1(b"blob %d\0" % len(content) + content, usedforsecurity=False).hexdigest()
 
 
 def build(tasks: dict[str, dict[str, Any]], issues: dict[int, dict[str, Any]]) -> dict[str, Any]:
@@ -205,6 +220,7 @@ def build(tasks: dict[str, dict[str, Any]], issues: dict[int, dict[str, Any]]) -
         "critical_path": critical,
         "suggestions": suggestions,
         "counts": counts,
+        "generator": generator_hash(),
     }
     data["data_hash"] = hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:16]
     return data
@@ -371,6 +387,9 @@ def main() -> None:
         "--force", action="store_true", help="rewrite files even if task data is unchanged"
     )
     parser.add_argument(
+        "--todo", type=Path, default=TODO, help="task list to read (default: tasks/todo.md)"
+    )
+    parser.add_argument(
         "--out-dir", type=Path, default=OUT_DIR, help="where to write the map (default: tasks/)"
     )
     parser.add_argument(
@@ -380,7 +399,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    tasks = parse_todo(TODO.read_text())
+    tasks = parse_todo(args.todo.read_text())
     if args.check:
         data = build(tasks, {})
         render_html(data, "check")
