@@ -39,7 +39,8 @@ export function ResetSection({
     <Panel title="Reset the demo" headingLevel="h2" className={className}>
       <p className="text-sm text-muted-foreground">
         Puts this sandbox back to the start: the first quarter, the original
-        ratings, prices, holdings and alerts. The live world is never reset.
+        ratings, stake prices, holdings and alerts. The live world is never
+        reset.
       </p>
       <Dialog
         open={confirming}
@@ -49,7 +50,7 @@ export function ResetSection({
           {/* aria-disabled while resetting keeps focus here after the dialog closes. */}
           <Button
             variant="outline"
-            className="mt-4 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+            className="mt-4 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-card aria-disabled:hover:text-inherit aria-disabled:active:translate-y-0"
             disabled={busy}
             aria-disabled={isResetting || undefined}
             aria-describedby={busy ? busyId : undefined}

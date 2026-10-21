@@ -9,13 +9,17 @@ import { Button } from "@/components/ui/button";
 /**
  * What an `error.tsx` boundary shows when a screen crashes: what happened in plain words, a
  * retry and a way out. Focus moves to the heading so a screen reader hears it. The error's
- * own message isn't shown: it may hold internals (a digest is kept for the server logs).
+ * message isn't shown: it may hold internals. Next logs client errors to the browser console;
+ * a server error reaches the client without its message, only an opaque `digest` that matches
+ * the server log, shown here as a reference to quote.
  */
 export function RouteError({
   reset,
+  digest,
   home = { href: "/", label: "Back to the Marketplace" },
 }: {
   reset: () => void;
+  digest?: string;
   home?: { href: string; label: string };
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -34,6 +38,11 @@ export function RouteError({
         This screen hit an error and couldn&apos;t load. Try again; if it keeps
         happening, reload the page.
       </p>
+      {digest && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Reference: <code translate="no">{digest}</code>
+        </p>
+      )}
       <div className="mt-6 flex flex-wrap justify-center gap-3">
         <Button onClick={reset}>
           <RefreshCwIcon aria-hidden="true" />

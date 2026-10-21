@@ -355,6 +355,59 @@ describe("ListingReviewScreen", () => {
     expect(await screen.findByText("Decision recorded")).toBeInTheDocument();
   });
 
+  it.each([
+    {
+      decision: "reject",
+      runs: () => [run()],
+      label: "Reason or note for the steward",
+      button: "Reject",
+    },
+    {
+      decision: "revoke",
+      runs: () => [verifiedRun()],
+      label: "Reason for revoking (the steward sees it)",
+      button: "Revoke verification",
+    },
+  ])(
+    "sends $decision once and locks the reason while it's sent",
+    async ({ decision, runs, label, button }) => {
+      let finish: (r: Response) => void = () => {};
+      const backend = renderAdmin(<ListingReviewScreen assetId={ASSET_ID} />, {
+        [RUNS]: () => json(runs()),
+        [decisionRoute(decision)]: () =>
+          new Promise<Response>((resolve) => (finish = resolve)),
+      });
+      const reason = await screen.findByLabelText(label);
+      fireEvent.change(reason, { target: { value: "A boundary dispute." } });
+      const trigger = screen.getByRole("button", { name: button });
+      fireEvent.click(trigger);
+      if (decision === "revoke")
+        fireEvent.click(
+          within(await screen.findByRole("dialog")).getByRole("button", {
+            name: "Revoke and suspend trading",
+          }),
+        );
+      await waitFor(() =>
+        expect(trigger).toHaveAttribute("aria-disabled", "true"),
+      );
+      expect(reason).toHaveAttribute("readonly");
+      fireEvent.click(trigger);
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(backend.calls(decisionRoute(decision))).toBe(1);
+      await act(async () =>
+        finish(
+          json(
+            decision === "reject"
+              ? run({ level: "rejected", effective_level: "rejected" })
+              : verifiedRun({ level: "revoked", effective_level: "revoked" }),
+          ),
+        ),
+      );
+      expect(await screen.findByText("Decision recorded")).toBeInTheDocument();
+      expect(backend.calls(decisionRoute(decision))).toBe(1);
+    },
+  );
+
   it("can't approve a run with a failed check", async () => {
     renderAdmin(<ListingReviewScreen assetId={ASSET_ID} />, {
       [RUNS]: () =>
