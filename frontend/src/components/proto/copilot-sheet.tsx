@@ -59,7 +59,9 @@ export function CopilotSheet() {
   useEffect(() => {
     listRef.current?.scrollTo({
       top: listRef.current.scrollHeight,
-      behavior: "smooth",
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
+        ? "auto"
+        : "smooth",
     });
   }, [world.copilot.length, ui.copilotTyping]);
 
