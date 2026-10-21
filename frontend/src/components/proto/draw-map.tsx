@@ -6,7 +6,7 @@ import type { LayerGroup, Map as LeafletMap } from "leaflet";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
-import { IMAGERY_ATTRIBUTION, IMAGERY_URL } from "@/components/proto/site-map";
+import { IMAGERY_ATTRIBUTION, IMAGERY_URL } from "@/lib/imagery";
 import type { LatLng } from "@/lib/prototype/data";
 
 /** Corners are drawn as markers only up to this many; the outline is always drawn. */

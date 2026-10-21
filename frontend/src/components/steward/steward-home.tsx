@@ -375,7 +375,7 @@ function FeaturedListing({
       aria-labelledby="featured-title"
       className="relative isolate overflow-hidden rounded-[2rem] text-white shadow-lift"
     >
-      <SiteBackdrop src={card.imageUrl} />
+      <SiteBackdrop src={card.imageUrl} outline={card.outline} />
       <div className="relative grid gap-6 p-6 sm:p-8 md:grid-cols-[auto_1fr]">
         {card.health !== null && (
           <HealthRing value={card.health} tone="dark" size={160} />

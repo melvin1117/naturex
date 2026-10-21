@@ -9,6 +9,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AssetView } from "@/components/proto/asset-view";
 import type { AssetDetail } from "@/lib/api/types";
+import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 
 import { FakeEventSource, json, sequence } from "../lib/helpers";
 import asset from "./fixtures/asset.json";
@@ -159,6 +160,28 @@ describe("AssetView", () => {
     expect(
       screen.getByRole("button", { name: "How it was rated" }),
     ).toBeEnabled();
+  });
+
+  it("draws the boundary in the hero of a site without a thumbnail", async () => {
+    const { container } = renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /assets/${ID}`]: () => json({ ...ASSET, site_key: null }),
+      }),
+    );
+    const hero = await screen.findByRole("region", {
+      name: "Xochimilco Wetland",
+    });
+    expect(within(hero).getByText(IMAGERY_ATTRIBUTION)).toBeInTheDocument();
+    const map = container.querySelector("[data-boundary-map]")!;
+    expect(hero.contains(map)).toBe(true);
+    expect(map.querySelectorAll("img").length).toBeGreaterThan(0);
+  });
+
+  it("keeps the precomputed thumbnail in the hero of a curated site", async () => {
+    const { container } = renderExchange(<AssetView id={ID} />, routes());
+    await screen.findByRole("region", { name: "Xochimilco Wetland" });
+    expect(container.querySelector("[data-boundary-map]")).toBeNull();
   });
 
   it("says a value is not available instead of showing zero", async () => {
