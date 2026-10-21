@@ -481,7 +481,7 @@
           "communities"
         ],
         "summary": "Summary",
-        "description": "The Steward home (T63; the community's members and same-world admins): its listings with\ntheir status and next action, the community wallet (IPO proceeds and community-fund\npayouts), the treasury's retained-stake dividends, holders (counted and ranked, never\nnamed), recent quarterly payouts and the latest reports' stewardship recommendations.\nEvery number comes from stored rows (`app.services.community_summary`). Play money.",
+        "description": "The Steward home (T63; the community's members and same-world admins): its listings with\ntheir status, verification (#216) and next action, the community wallet (IPO proceeds and\ncommunity-fund payouts), the treasury's retained-stake dividends, holders (counted and\nranked, never named), recent quarterly payouts and the latest reports' stewardship\nrecommendations.\nEvery number comes from stored rows (`app.services.community_summary`). Play money.",
         "operationId": "summary_communities__community_id__summary_get",
         "parameters": [
           {
@@ -4463,10 +4463,11 @@
             "enum": [
               "grade_change",
               "health_change",
-              "news"
+              "news",
+              "verification"
             ],
             "title": "Kind",
-            "description": "grade_change / health_change: a re-rate moved the grade or the health score by \u2265 5 points; news: a News Scout event of severity \u2265 4"
+            "description": "grade_change / health_change: a re-rate moved the grade or the health score by \u2265 5 points; news: a News Scout event of severity \u2265 4; verification: a reviewer approved or rejected the listing's documents, or revoked its verification (never the reviewer's reason)"
           },
           "title": {
             "type": "string",
@@ -7391,7 +7392,10 @@
           },
           "next_action": {
             "$ref": "#/components/schemas/NextAction",
-            "description": "continue_listing (draft), rating_in_progress, add_evidence (needs_evidence), launch_ipo (listed, not launched; owner), awaiting_ipo (the same for stewards and admins), view_on_exchange (trading or suspended), none (ineligible, withdrawn)."
+            "description": "continue_listing (draft), rating_in_progress, add_evidence (needs_evidence), verify (verification blocks the opening offer or trading: upload and submit documents), verification_in_review (the same, with a submission waiting for a reviewer), launch_ipo (listed, not launched; owner), awaiting_ipo (the same for stewards and admins), view_on_exchange (trading or suspended), none (ineligible, withdrawn)."
+          },
+          "verification": {
+            "$ref": "#/components/schemas/ListingVerificationOut"
           },
           "ipo_at": {
             "anyOf": [
@@ -7446,6 +7450,7 @@
         "required": [
           "asset",
           "next_action",
+          "verification",
           "ipo_at",
           "wallet",
           "holders",
@@ -7454,6 +7459,64 @@
           "report_version"
         ],
         "title": "ListingSummaryOut"
+      },
+      "ListingVerificationOut": {
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/VerificationLevel",
+            "description": "documents_submitted while a submission waits for a reviewer (even after a revocation); revoked while a revocation stands with nothing newer submitted; else the current run's level, or unverified (no run, or the listing changed since it)."
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "description": "Verification blocks the listing now, as the IPO gate decides: the live world's opening offer needs a verified run, and a revocation blocks the offer and trading in every world until a new run is approved."
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At",
+            "description": "When the decision shown was made: the revocation, else the approval or rejection; null while nothing was decided."
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "The reviewer's reason or note for the decision shown, if any."
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id",
+            "description": "The run the decision belongs to."
+          }
+        },
+        "type": "object",
+        "required": [
+          "level",
+          "required"
+        ],
+        "title": "ListingVerificationOut",
+        "description": "The listing's verification as its community sees it (#216): what stands, whether it's\nwhat blocks the listing now, and the latest decision with the reviewer's reason (members\nand same-world admins only, this endpoint's audience)."
       },
       "LoginIn": {
         "properties": {
@@ -7715,6 +7778,8 @@
           "continue_listing",
           "rating_in_progress",
           "add_evidence",
+          "verify",
+          "verification_in_review",
           "launch_ipo",
           "awaiting_ipo",
           "view_on_exchange",
@@ -9398,10 +9463,11 @@
             "enum": [
               "grade_change",
               "health_change",
-              "news"
+              "news",
+              "verification"
             ],
             "title": "Kind",
-            "description": "grade_change / health_change: a re-rate moved the grade or the health score by \u2265 5 points; news: a News Scout event of severity \u2265 4"
+            "description": "grade_change / health_change: a re-rate moved the grade or the health score by \u2265 5 points; news: a News Scout event of severity \u2265 4; verification: a reviewer approved or rejected the listing's documents, or revoked its verification (never the reviewer's reason)"
           },
           "title": {
             "type": "string",

@@ -39,6 +39,7 @@ from app.services.alerts import (
     news_key,
     rating_alert,
     safe_url,
+    verification_alert,
 )
 from tests.conftest import alembic_cfg, requires_db
 from tests.worlds import start_demo
@@ -141,6 +142,24 @@ def test_news_keys_are_stable_per_asset_and_article() -> None:
     assert news_key(ASSET, item(4)) == news_key(ASSET, item(5))
     assert news_key(ASSET, item(4)) != news_key(uuid4(), item(4))
     assert news_key(ASSET, item(4)) != news_key(ASSET, item(4, id="evt-2"))
+
+
+def test_a_verification_decision_alerts_once_per_run_and_level_without_its_reason() -> None:
+    run = uuid4()
+    approved = verification_alert("Laguna Viva", run, "verified")
+    rejected = verification_alert("Laguna Viva", run, "rejected")
+    revoked = verification_alert("Laguna Viva", run, "revoked")
+    assert approved is not None and rejected is not None and revoked is not None
+    assert {d.kind for d in (approved, rejected, revoked)} == {AlertKind.VERIFICATION}
+    assert (approved.title, approved.severity) == ("Laguna Viva: land documents verified", 2)
+    assert (rejected.title, rejected.severity) == ("Laguna Viva: documents not approved", 3)
+    assert (revoked.title, revoked.severity) == ("Laguna Viva: verification revoked", 4)
+    assert "submit again" in rejected.message
+    assert "until new documents are approved" in revoked.message
+    keys = {d.dedupe_key for d in (approved, rejected, revoked)}
+    assert keys == {f"verification:{run}:{level}" for level in ("verified", "rejected", "revoked")}
+    assert verification_alert("Laguna Viva", run, "documents_submitted") is None
+    assert verification_alert("Laguna Viva", run, "unverified") is None
 
 
 @pytest.mark.parametrize(

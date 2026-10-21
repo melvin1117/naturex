@@ -34,20 +34,27 @@ from app.models import (
     User,
     UserKind,
     UserRole,
+    VerificationLevel,
+    VerificationMode,
+    VerificationRun,
 )
 from app.sandbox import create_world, ensure_live_world
 from app.schemas import NextAction
 from app.seed import LIVE_WORLD_ID, seed
 from app.services.community_summary import (
+    NOT_REQUIRED,
     RECENT_PAYOUTS,
+    VerificationFacts,
     Wallet,
     holder_summary,
     ipo_proceeds,
     next_action,
     share_split,
     total_wallet,
+    verification_facts,
     wallet_credit,
 )
+from app.services.verification import RunView
 from tests.conftest import alembic_cfg, requires_db
 from tests.test_geometry import square
 
@@ -73,6 +80,133 @@ def test_next_action_follows_the_status_the_launch_and_the_role(
     status: AssetStatus, launched: bool, owner: bool, expected: NextAction
 ) -> None:
     assert next_action(status, launched=launched, can_launch=owner) is expected
+
+
+NEEDED = VerificationFacts(VerificationLevel.UNVERIFIED, required=True, revoked=False)
+IN_REVIEW = VerificationFacts(VerificationLevel.DOCUMENTS_SUBMITTED, required=True, revoked=False)
+REVOKED = VerificationFacts(VerificationLevel.REVOKED, required=True, revoked=True)
+RESUBMITTED = VerificationFacts(VerificationLevel.DOCUMENTS_SUBMITTED, required=True, revoked=True)
+
+
+@pytest.mark.parametrize(
+    ("status", "launched", "owner", "verification", "expected"),
+    [
+        # The opening offer waits for verification: the next step is to verify, for everyone.
+        (AssetStatus.LISTED, False, True, NEEDED, NextAction.VERIFY),
+        (AssetStatus.LISTED, False, False, NEEDED, NextAction.VERIFY),
+        (AssetStatus.LISTED, False, True, IN_REVIEW, NextAction.VERIFICATION_IN_REVIEW),
+        (AssetStatus.LISTED, False, True, NOT_REQUIRED, NextAction.LAUNCH_IPO),
+        # A revocation pauses trading (and blocks the offer) until a new run is approved.
+        (AssetStatus.SUSPENDED, True, True, REVOKED, NextAction.VERIFY),
+        (AssetStatus.SUSPENDED, False, False, REVOKED, NextAction.VERIFY),
+        (AssetStatus.SUSPENDED, True, True, RESUBMITTED, NextAction.VERIFICATION_IN_REVIEW),
+        # Once launched, a stale run doesn't stop trading: the gate is the offer's.
+        (AssetStatus.LISTED, True, True, NEEDED, NextAction.VIEW_ON_EXCHANGE),
+        # Earlier steps come first, and closed listings have none.
+        (AssetStatus.DRAFT, False, True, NEEDED, NextAction.CONTINUE_LISTING),
+        (AssetStatus.WITHDRAWN, False, True, REVOKED, NextAction.NONE),
+    ],
+)
+def test_next_action_sends_the_steward_to_verify_before_the_locked_offer(
+    status: AssetStatus,
+    launched: bool,
+    owner: bool,
+    verification: VerificationFacts,
+    expected: NextAction,
+) -> None:
+    assert (
+        next_action(status, launched=launched, can_launch=owner, verification=verification)
+        is expected
+    )
+
+
+def _view(level: VerificationLevel, *, matches: bool = True, **fields: Any) -> RunView:
+    run = VerificationRun(
+        world_id=LIVE_WORLD_ID,
+        asset_id=UUID(int=1),
+        level=level,
+        input_fingerprint="f" * 64,
+        checklist=[],
+        method_version="v1",
+        mode=VerificationMode.REVIEW,
+        document_count=2,
+        **fields,
+    )
+    return RunView(run, [], matches)
+
+
+NOON = datetime(2026, 10, 12, 12, tzinfo=UTC)
+
+
+def test_verification_facts_follow_the_ipo_gate() -> None:
+    assert verification_facts(None, revoked_at=None, live=False) == NOT_REQUIRED
+    assert verification_facts(None, revoked_at=None, live=True) == NEEDED
+    verified = _view(VerificationLevel.VERIFIED, decided_at=NOON, reason="Matches the map.")
+    facts = verification_facts(verified, revoked_at=None, live=True)
+    assert (facts.level, facts.required, facts.decided_at, facts.reason) == (
+        VerificationLevel.VERIFIED,
+        False,
+        NOON,
+        "Matches the map.",
+    )
+    # A verified run the listing has since outgrown is unverified again, and blocks the offer.
+    stale = verification_facts(
+        _view(VerificationLevel.VERIFIED, matches=False, decided_at=NOON),
+        revoked_at=None,
+        live=True,
+    )
+    assert (stale.level, stale.required, stale.decided_at) == (
+        VerificationLevel.UNVERIFIED,
+        True,
+        None,
+    )
+    # Sandboxes need no verification, but a rejection still shows with its reason.
+    rejected = verification_facts(
+        _view(VerificationLevel.REJECTED, decided_at=NOON, reason="Unsigned minutes."),
+        revoked_at=None,
+        live=False,
+    )
+    assert (rejected.level, rejected.required, rejected.reason) == (
+        VerificationLevel.REJECTED,
+        False,
+        "Unsigned minutes.",
+    )
+
+
+def test_a_revocation_stands_until_an_approval_even_in_a_sandbox() -> None:
+    later = datetime(2026, 10, 14, tzinfo=UTC)
+    revoked = verification_facts(
+        _view(
+            VerificationLevel.REVOKED,
+            decided_at=NOON,
+            reason="Fine.",
+            revoked_at=later,
+            revoke_reason="Disputed title.",
+        ),
+        revoked_at=later,
+        live=False,
+    )
+    assert (revoked.level, revoked.required, revoked.revoked) == (
+        VerificationLevel.REVOKED,
+        True,
+        True,
+    )
+    assert (revoked.decided_at, revoked.reason) == (later, "Disputed title.")
+    # A new submission waits for a reviewer: in review, still blocking.
+    waiting = verification_facts(
+        _view(VerificationLevel.DOCUMENTS_SUBMITTED), revoked_at=later, live=False
+    )
+    assert (waiting.level, waiting.required, waiting.in_review, waiting.reason) == (
+        VerificationLevel.DOCUMENTS_SUBMITTED,
+        True,
+        True,
+        None,
+    )
+    # The listing changed since: the revocation is what stands.
+    changed = verification_facts(
+        _view(VerificationLevel.DOCUMENTS_SUBMITTED, matches=False), revoked_at=later, live=False
+    )
+    assert (changed.level, changed.decided_at) == (VerificationLevel.REVOKED, later)
 
 
 def test_ipo_proceeds_round_each_purchase_like_the_engine() -> None:
@@ -297,15 +431,23 @@ def test_listings_show_their_next_action_per_role(session: Session, client: Test
 
     body = summary_of(sign_in(client, session, owner), community.id).json()
     actions = {item["asset"]["status"]: item["next_action"] for item in body["listings"]}
+    # The live world's opening offer waits for verification: that's the next step (#216).
     assert actions == {
         "draft": "continue_listing",
         "rating": "rating_in_progress",
         "needs_evidence": "add_evidence",
-        "listed": "launch_ipo",
+        "listed": "verify",
         "ineligible": "none",
         "withdrawn": "none",
     }
     listed = next(item for item in body["listings"] if item["asset"]["status"] == "listed")
+    assert listed["verification"] == {
+        "level": "unverified",
+        "required": True,
+        "decided_at": None,
+        "reason": None,
+        "run_id": None,
+    }
     # No shares exist before the IPO.
     assert listed["shares"] is None
     assert listed["holders"] == {"count": 0, "shares_held": 0, "top": []}
@@ -315,13 +457,37 @@ def test_listings_show_their_next_action_per_role(session: Session, client: Test
     session.commit()
     body = summary_of(sign_in(client, session, steward), community.id).json()
     listed = next(item for item in body["listings"] if item["asset"]["status"] == "listed")
-    assert listed["next_action"] == "awaiting_ipo"
+    assert listed["next_action"] == "verify"
+
+
+@DB
+def test_a_sandbox_listing_offers_the_launch_to_its_owner_only(
+    session: Session, client: TestClient
+) -> None:
+    world = create_world(session)
+    session.commit()
+    owner = person(session, "Sandbox owner", world_id=world.id)
+    community = owned_community(client, session, owner)
+    draft(session, community, "Parcel", AssetStatus.LISTED)
+
+    body = summary_of(sign_in(client, session, owner), community.id).json()
+    (listed,) = body["listings"]
+    assert listed["next_action"] == "launch_ipo"
+    assert (listed["verification"]["level"], listed["verification"]["required"]) == (
+        "unverified",
+        False,
+    )
+
+    steward = person(session, "Sandbox steward", world_id=world.id)
+    add_member(session, community, steward.id, CommunityRole.STEWARD)
+    session.commit()
+    body = summary_of(sign_in(client, session, steward), community.id).json()
+    assert body["listings"][0]["next_action"] == "awaiting_ipo"
 
     # A same-world admin reads it too, and can't launch: the owner does.
-    admin = person(session, "Ops", is_admin=True)
+    admin = person(session, "Sandbox ops", world_id=world.id, is_admin=True)
     body = summary_of(sign_in(client, session, admin), community.id).json()
-    listed = next(item for item in body["listings"] if item["asset"]["status"] == "listed")
-    assert listed["next_action"] == "awaiting_ipo"
+    assert body["listings"][0]["next_action"] == "awaiting_ipo"
 
 
 @DB

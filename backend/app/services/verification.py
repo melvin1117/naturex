@@ -17,6 +17,8 @@ Rules and hashes live in `app.tools.verification` (pure) and file safety in
   a revocation. Each decision appends a `verification` ledger entry.
 - **Revoke** (`revoke`): the current verified run becomes `revoked` and a listed asset is
   suspended (`verification_revoked`) in the same transaction, with both ledger entries.
+- **Alert** (#216): each decision and revocation alerts the community's members and the
+  listing's holders (`app.services.alerts.verification_alert`), without the reviewer's reason.
 - **The gate** (`gate_refusal`): in the live world the IPO needs the current run `verified`, in
   review mode with real evidence and a matching fingerprint; in every world a revoked current
   run blocks it. Sandboxes are otherwise ungated until T76's demo mode verifies their listings.
@@ -60,6 +62,7 @@ from app.models import (
     VerificationRun,
     VerificationRunDocument,
 )
+from app.services.alerts import raise_alert, verification_alert
 from app.services.lifecycle import TERMINAL_STATUSES, ListingEvent, SuspensionReason, transition
 from app.services.listings import (
     OVERLAP,
@@ -229,6 +232,28 @@ def current_run(session: Session, world_id: UUID, asset_id: UUID) -> Verificatio
 def current_view(session: Session, asset: Asset) -> RunView | None:
     run = current_run(session, asset.world_id, asset.id)
     return None if run is None else view_of(session, asset, run)
+
+
+def current_views(session: Session, world_id: UUID, assets: Sequence[Asset]) -> dict[UUID, RunView]:
+    """Each listing's current run with its documents, by asset (listings without one are left
+    out), in two queries: the Steward home's verification status (#216)."""
+    by_id = {asset.id: asset for asset in assets}
+    if not by_id:
+        return {}
+    runs = session.exec(
+        select(VerificationRun).where(
+            VerificationRun.world_id == world_id,
+            col(VerificationRun.asset_id).in_(list(by_id)),
+            col(VerificationRun.is_current),
+        )
+    ).all()
+    linked = linked_documents(session, world_id, [run.id for run in runs])
+    views = {}
+    for run in runs:
+        documents = linked.get(run.id, [])
+        matches = _fingerprint_now(by_id[run.asset_id], run, documents) == run.input_fingerprint
+        views[run.asset_id] = RunView(run, documents, matches)
+    return views
 
 
 def runs_of(session: Session, asset: Asset) -> list[RunView]:
@@ -754,6 +779,13 @@ def _publish(session: Session, asset: Asset, run: VerificationRun, *, private: b
     )
 
 
+def _alert(session: Session, asset: Asset, run: VerificationRun) -> None:
+    """Tell the community (and any holders) about the decision, without its reason (#216)."""
+    draft = verification_alert(asset.name, run.id, run.level.value)
+    if draft is not None:
+        raise_alert(session, asset.world_id, asset, draft)
+
+
 def _record_decision(session: Session, asset: Asset, view: RunView) -> None:
     session.add(view.run)
     session.flush()
@@ -808,6 +840,7 @@ def approve(
     ):
         record(session, asset, transition(asset.status, ListingEvent.RESUME))
     _publish(session, asset, run, private=False)
+    _alert(session, asset, run)
     return view
 
 
@@ -836,6 +869,7 @@ def reject(
     view = view_of(session, asset, run)
     _record_decision(session, asset, view)
     _publish(session, asset, run, private=False)
+    _alert(session, asset, run)
     return view
 
 
@@ -873,4 +907,5 @@ def revoke(
         )
         record(session, asset, step)
     _publish(session, asset, run, private=False)
+    _alert(session, asset, run)
     return view

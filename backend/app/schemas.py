@@ -896,10 +896,11 @@ class StreamEvent(BaseModel):
     ts: datetime
 
 
-AlertKindOut = Literal["grade_change", "health_change", "news"]
+AlertKindOut = Literal["grade_change", "health_change", "news", "verification"]
 ALERT_KIND_DESCRIPTION = (
     "grade_change / health_change: a re-rate moved the grade or the health score by ≥ 5 points; "
-    "news: a News Scout event of severity ≥ 4"
+    "news: a News Scout event of severity ≥ 4; verification: a reviewer approved or rejected the "
+    "listing's documents, or revoked its verification (never the reviewer's reason)"
 )
 
 
@@ -1426,6 +1427,8 @@ class NextAction(StrEnum):
     CONTINUE_LISTING = "continue_listing"
     RATING_IN_PROGRESS = "rating_in_progress"
     ADD_EVIDENCE = "add_evidence"
+    VERIFY = "verify"
+    VERIFICATION_IN_REVIEW = "verification_in_review"
     LAUNCH_IPO = "launch_ipo"
     AWAITING_IPO = "awaiting_ipo"
     VIEW_ON_EXCHANGE = "view_on_exchange"
@@ -1468,14 +1471,44 @@ class SharesOut(BaseModel):
     retained_shares: int
 
 
+class ListingVerificationOut(BaseModel):
+    """The listing's verification as its community sees it (#216): what stands, whether it's
+    what blocks the listing now, and the latest decision with the reviewer's reason (members
+    and same-world admins only, this endpoint's audience)."""
+
+    level: VerificationLevel = Field(
+        description="documents_submitted while a submission waits for a reviewer (even after a "
+        "revocation); revoked while a revocation stands with nothing newer submitted; else the "
+        "current run's level, or unverified (no run, or the listing changed since it)."
+    )
+    required: bool = Field(
+        description="Verification blocks the listing now, as the IPO gate decides: the live "
+        "world's opening offer needs a verified run, and a revocation blocks the offer and "
+        "trading in every world until a new run is approved."
+    )
+    decided_at: datetime | None = Field(
+        default=None,
+        description="When the decision shown was made: the revocation, else the approval or "
+        "rejection; null while nothing was decided.",
+    )
+    reason: str | None = Field(
+        default=None,
+        description="The reviewer's reason or note for the decision shown, if any.",
+    )
+    run_id: UUID | None = Field(default=None, description="The run the decision belongs to.")
+
+
 class ListingSummaryOut(BaseModel):
     asset: AssetCard
     next_action: NextAction = Field(
         description="continue_listing (draft), rating_in_progress, add_evidence "
-        "(needs_evidence), launch_ipo (listed, not launched; owner), awaiting_ipo (the same "
+        "(needs_evidence), verify (verification blocks the opening offer or trading: upload "
+        "and submit documents), verification_in_review (the same, with a submission waiting "
+        "for a reviewer), launch_ipo (listed, not launched; owner), awaiting_ipo (the same "
         "for stewards and admins), view_on_exchange (trading or suspended), none (ineligible, "
         "withdrawn)."
     )
+    verification: ListingVerificationOut
     ipo_at: datetime | None
     wallet: WalletOut
     holders: HoldersOut

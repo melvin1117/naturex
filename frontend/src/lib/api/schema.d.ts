@@ -187,9 +187,10 @@ export interface paths {
         /**
          * Summary
          * @description The Steward home (T63; the community's members and same-world admins): its listings with
-         *     their status and next action, the community wallet (IPO proceeds and community-fund
-         *     payouts), the treasury's retained-stake dividends, holders (counted and ranked, never
-         *     named), recent quarterly payouts and the latest reports' stewardship recommendations.
+         *     their status, verification (#216) and next action, the community wallet (IPO proceeds and
+         *     community-fund payouts), the treasury's retained-stake dividends, holders (counted and
+         *     ranked, never named), recent quarterly payouts and the latest reports' stewardship
+         *     recommendations.
          *     Every number comes from stored rows (`app.services.community_summary`). Play money.
          */
         get: operations["summary_communities__community_id__summary_get"];
@@ -1631,10 +1632,10 @@ export interface components {
             asset_name: string;
             /**
              * Kind
-             * @description grade_change / health_change: a re-rate moved the grade or the health score by ≥ 5 points; news: a News Scout event of severity ≥ 4
+             * @description grade_change / health_change: a re-rate moved the grade or the health score by ≥ 5 points; news: a News Scout event of severity ≥ 4; verification: a reviewer approved or rejected the listing's documents, or revoked its verification (never the reviewer's reason)
              * @enum {string}
              */
-            kind: "grade_change" | "health_change" | "news";
+            kind: "grade_change" | "health_change" | "news" | "verification";
             /** Title */
             title: string;
             /** Message */
@@ -2880,8 +2881,9 @@ export interface components {
         /** ListingSummaryOut */
         ListingSummaryOut: {
             asset: components["schemas"]["AssetCard"];
-            /** @description continue_listing (draft), rating_in_progress, add_evidence (needs_evidence), launch_ipo (listed, not launched; owner), awaiting_ipo (the same for stewards and admins), view_on_exchange (trading or suspended), none (ineligible, withdrawn). */
+            /** @description continue_listing (draft), rating_in_progress, add_evidence (needs_evidence), verify (verification blocks the opening offer or trading: upload and submit documents), verification_in_review (the same, with a submission waiting for a reviewer), launch_ipo (listed, not launched; owner), awaiting_ipo (the same for stewards and admins), view_on_exchange (trading or suspended), none (ineligible, withdrawn). */
             next_action: components["schemas"]["NextAction"];
+            verification: components["schemas"]["ListingVerificationOut"];
             /** Ipo At */
             ipo_at: string | null;
             wallet: components["schemas"]["WalletOut"];
@@ -2895,6 +2897,36 @@ export interface components {
             recommendations: string[];
             /** Report Version */
             report_version: number | null;
+        };
+        /**
+         * ListingVerificationOut
+         * @description The listing's verification as its community sees it (#216): what stands, whether it's
+         *     what blocks the listing now, and the latest decision with the reviewer's reason (members
+         *     and same-world admins only, this endpoint's audience).
+         */
+        ListingVerificationOut: {
+            /** @description documents_submitted while a submission waits for a reviewer (even after a revocation); revoked while a revocation stands with nothing newer submitted; else the current run's level, or unverified (no run, or the listing changed since it). */
+            level: components["schemas"]["VerificationLevel"];
+            /**
+             * Required
+             * @description Verification blocks the listing now, as the IPO gate decides: the live world's opening offer needs a verified run, and a revocation blocks the offer and trading in every world until a new run is approved.
+             */
+            required: boolean;
+            /**
+             * Decided At
+             * @description When the decision shown was made: the revocation, else the approval or rejection; null while nothing was decided.
+             */
+            decided_at?: string | null;
+            /**
+             * Reason
+             * @description The reviewer's reason or note for the decision shown, if any.
+             */
+            reason?: string | null;
+            /**
+             * Run Id
+             * @description The run the decision belongs to.
+             */
+            run_id?: string | null;
         };
         /** LoginIn */
         LoginIn: {
@@ -3017,7 +3049,7 @@ export interface components {
          * @description What the Steward home offers to do next with a listing.
          * @enum {string}
          */
-        NextAction: "continue_listing" | "rating_in_progress" | "add_evidence" | "launch_ipo" | "awaiting_ipo" | "view_on_exchange" | "none";
+        NextAction: "continue_listing" | "rating_in_progress" | "add_evidence" | "verify" | "verification_in_review" | "launch_ipo" | "awaiting_ipo" | "view_on_exchange" | "none";
         /** OrderCreate */
         OrderCreate: {
             /**
@@ -3735,10 +3767,10 @@ export interface components {
             asset_name: string;
             /**
              * Kind
-             * @description grade_change / health_change: a re-rate moved the grade or the health score by ≥ 5 points; news: a News Scout event of severity ≥ 4
+             * @description grade_change / health_change: a re-rate moved the grade or the health score by ≥ 5 points; news: a News Scout event of severity ≥ 4; verification: a reviewer approved or rejected the listing's documents, or revoked its verification (never the reviewer's reason)
              * @enum {string}
              */
-            kind: "grade_change" | "health_change" | "news";
+            kind: "grade_change" | "health_change" | "news" | "verification";
             /** Title */
             title: string;
             /** Message */

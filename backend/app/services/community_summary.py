@@ -20,8 +20,14 @@ estimated. Money is in play-money dollars, cents exact.
   the retained stake). Supporters are counted and ranked by shares **without names or account
   IDs**: the home doesn't need to know who they are, and members could otherwise watch
   individual investors (T67's privacy rule, applied to this members-only view too).
-- **Next action** per listing, from its status, whether its IPO has launched and whether the
-  caller may launch it (the owner): `next_action`.
+- **Verification** per listing (#216): the level that stands, whether it blocks the listing now
+  (the IPO gate's rule, `app.services.verification.gate_refusal`) and the latest decision with
+  the reviewer's reason, which only members and same-world admins (this endpoint's audience)
+  may read: `verification_facts`.
+- **Next action** per listing, from its status, whether its IPO has launched, whether the
+  caller may launch it (the owner) and whether verification blocks it: `next_action`. The
+  home never offers a step the backend would refuse: while verification blocks the opening
+  offer (or a revocation pauses trading), the next step is to verify, not to launch.
 """
 
 from __future__ import annotations
@@ -47,8 +53,11 @@ from app.models import (
     OrderSide,
     PayoutLine,
     Report,
+    VerificationLevel,
 )
 from app.schemas import NextAction
+from app.services.verification import RunView, current_views, is_verified
+from app.worlds import LIVE_WORLD_ID
 
 TOP_HOLDERS = 5
 RECENT_PAYOUTS = 12
@@ -56,11 +65,63 @@ _ZERO = Decimal("0.00")
 _HUNDRED = Decimal("100")
 
 
-def next_action(status: AssetStatus, *, launched: bool, can_launch: bool) -> NextAction:
+@dataclass(frozen=True, slots=True)
+class VerificationFacts:
+    """A listing's verification as its community sees it (`ListingVerificationOut`)."""
+
+    level: VerificationLevel
+    required: bool
+    """Verification blocks the listing now: the IPO gate would refuse `not_verified`."""
+    revoked: bool
+    """A revocation stands (`assets.verification_revoked_at`): trading stays paused."""
+    decided_at: datetime | None = None
+    reason: str | None = None
+    run_id: UUID | None = None
+
+    @property
+    def in_review(self) -> bool:
+        return self.level is VerificationLevel.DOCUMENTS_SUBMITTED
+
+
+NOT_REQUIRED = VerificationFacts(VerificationLevel.UNVERIFIED, required=False, revoked=False)
+
+
+def verification_facts(
+    view: RunView | None, *, revoked_at: datetime | None, live: bool
+) -> VerificationFacts:
+    """What stands, by the IPO gate's rule (`gate_refusal`): a revocation not yet cleared by an
+    approval blocks in every world; the live world also needs a verified run. The level is the
+    current run's while it still describes the listing (a submission waiting after a revocation
+    shows as in review), else revoked or unverified."""
+    required = revoked_at is not None or (live and not is_verified(view))
+    revoked = revoked_at is not None
+    if view is None or not view.fingerprint_matches:
+        level = VerificationLevel.REVOKED if revoked else VerificationLevel.UNVERIFIED
+        return VerificationFacts(level, required, revoked, decided_at=revoked_at)
+    run = view.run
+    if run.level is VerificationLevel.REVOKED:
+        return VerificationFacts(
+            run.level, required, revoked, run.revoked_at, run.revoke_reason, run.id
+        )
+    if run.level is VerificationLevel.DOCUMENTS_SUBMITTED:
+        return VerificationFacts(run.level, required, revoked, run_id=run.id)
+    return VerificationFacts(run.level, required, revoked, run.decided_at, run.reason, run.id)
+
+
+def next_action(
+    status: AssetStatus,
+    *,
+    launched: bool,
+    can_launch: bool,
+    verification: VerificationFacts = NOT_REQUIRED,
+) -> NextAction:
     """draft → continue listing; rating → rating in progress; needs_evidence → add evidence;
-    listed before its IPO → launch it (the owner) or wait for the owner (stewards, admins);
-    listed and launched, or suspended after its IPO (public, trading paused) → view on the
-    Exchange; suspended before its IPO, ineligible and withdrawn → none (nothing to open)."""
+    listed before its IPO → verify it while verification blocks the offer (in review while a
+    submission waits), else launch it (the owner) or wait for the owner (stewards, admins);
+    listed or suspended with a revocation standing → verify again (trading is paused until an
+    approval); listed and launched, or suspended after its IPO (public, trading paused) → view
+    on the Exchange; suspended before its IPO, ineligible and withdrawn → none."""
+    verify = NextAction.VERIFICATION_IN_REVIEW if verification.in_review else NextAction.VERIFY
     match status:
         case AssetStatus.DRAFT:
             return NextAction.CONTINUE_LISTING
@@ -69,7 +130,11 @@ def next_action(status: AssetStatus, *, launched: bool, can_launch: bool) -> Nex
         case AssetStatus.NEEDS_EVIDENCE:
             return NextAction.ADD_EVIDENCE
         case AssetStatus.LISTED if not launched:
+            if verification.required:
+                return verify
             return NextAction.LAUNCH_IPO if can_launch else NextAction.AWAITING_IPO
+        case AssetStatus.LISTED | AssetStatus.SUSPENDED if verification.revoked:
+            return verify
         case AssetStatus.LISTED | AssetStatus.SUSPENDED if launched:
             return NextAction.VIEW_ON_EXCHANGE
         case _:
@@ -188,6 +253,7 @@ class Payout:
 class ListingFacts:
     asset: Asset
     next_action: NextAction
+    verification: VerificationFacts
     wallet: Wallet
     holders: Holders
     shares: ShareSplit | None
@@ -303,6 +369,7 @@ def summarize(
     entries = _payout_entries(session, world_id, ids)
     retained = _treasury_lines(session, world_id, treasuries)
     holdings = _holdings(session, world_id, ids)
+    runs = current_views(session, world_id, assets)
 
     credits: dict[UUID, Decimal] = defaultdict(lambda: _ZERO)
     payouts: list[Payout] = []
@@ -340,10 +407,21 @@ def summarize(
     for asset in assets:
         launched = asset.ipo_at is not None
         report = latest.get(asset.id)
+        verification = verification_facts(
+            runs.get(asset.id),
+            revoked_at=asset.verification_revoked_at,
+            live=world_id == LIVE_WORLD_ID,
+        )
         listings.append(
             ListingFacts(
                 asset=asset,
-                next_action=next_action(asset.status, launched=launched, can_launch=can_launch),
+                next_action=next_action(
+                    asset.status,
+                    launched=launched,
+                    can_launch=can_launch,
+                    verification=verification,
+                ),
+                verification=verification,
                 wallet=Wallet(
                     balance=round_cash(asset.community_wallet),
                     ipo_proceeds=ipo_proceeds(buys.get(asset.id, ())),

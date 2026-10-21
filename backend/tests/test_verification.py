@@ -1137,6 +1137,90 @@ def test_the_live_ipo_waits_for_a_verified_run(live: World_) -> None:
     assert buy(live, asset_id).status_code == 200
 
 
+def summary_listing(w: World_, user: User, asset_id: str) -> dict[str, Any]:
+    body = client_for(w, user).get(f"/communities/{w.community_id}/summary")
+    assert body.status_code == 200, body.text
+    return next(item for item in body.json()["listings"] if item["asset"]["id"] == asset_id)
+
+
+def alert_titles(w: World_, user: User) -> list[tuple[str, str]]:
+    body = client_for(w, user).get("/alerts")
+    assert body.status_code == 200, body.text
+    return [(a["kind"], a["title"]) for a in body.json()["alerts"]]
+
+
+@requires_db
+def test_the_steward_home_sends_the_live_owner_to_verify_before_the_offer(live: World_) -> None:
+    """#216: the next step is never a locked door. Verify, wait for the reviewer, then launch;
+    each decision reaches the community's members as an alert, never the reason."""
+    asset_id = listed(live)["id"]
+    assert summary_listing(live, live.owner, asset_id)["next_action"] == "verify"
+
+    run = evidence(live, asset_id)
+    waiting = summary_listing(live, live.owner, asset_id)
+    assert waiting["next_action"] == "verification_in_review"
+    assert (waiting["verification"]["level"], waiting["verification"]["run_id"]) == (
+        "documents_submitted",
+        run["id"],
+    )
+
+    rejected = decide(live, asset_id, run["id"], "reject", reason="The minutes aren't signed.")
+    assert rejected.status_code == 200, rejected.text
+    after_reject = summary_listing(live, live.steward, asset_id)
+    assert after_reject["next_action"] == "verify"
+    assert after_reject["verification"]["level"] == "rejected"
+    assert after_reject["verification"]["reason"] == "The minutes aren't signed."
+    assert after_reject["verification"]["decided_at"] is not None
+
+    second = evidence(live, asset_id, seed_byte=2)
+    assert decide(live, asset_id, second["id"], "approve", reason="Signed.").status_code == 200
+    ready = summary_listing(live, live.owner, asset_id)
+    assert ready["next_action"] == "launch_ipo"
+    assert ready["verification"] | {"decided_at": None} == {
+        "level": "verified",
+        "required": False,
+        "decided_at": None,
+        "reason": "Signed.",
+        "run_id": second["id"],
+    }
+    assert summary_listing(live, live.steward, asset_id)["next_action"] == "awaiting_ipo"
+
+    name = live.session.get_one(Asset, UUID(asset_id)).name
+    expected = [  # newest first
+        ("verification", f"{name}: land documents verified"),
+        ("verification", f"{name}: documents not approved"),
+    ]
+    for member in (live.owner, live.steward):
+        assert [a for a in alert_titles(live, member) if a[0] == "verification"] == expected
+    assert alert_titles(live, live.outsider) == []
+    assert all("signed" not in str(a).lower() for a in alert_titles(live, live.owner))
+
+
+@requires_db
+def test_a_revocation_sends_holders_and_members_an_alert_and_the_home_to_verify(
+    world: World_,
+) -> None:
+    asset_id = listed(world)["id"]
+    assert summary_listing(world, world.owner, asset_id)["next_action"] == "launch_ipo"
+    assert launch(world, asset_id).status_code == 201
+    run = verified(world, asset_id)
+    assert buy(world, asset_id).status_code == 200
+
+    revoked = decide(world, asset_id, run["id"], "revoke", reason="Disputed title")
+    assert revoked.status_code == 200, revoked.text
+
+    home = summary_listing(world, world.owner, asset_id)
+    assert home["next_action"] == "verify"
+    assert (home["verification"]["level"], home["verification"]["required"]) == ("revoked", True)
+    assert home["verification"]["reason"] == "Disputed title"
+    name = world.session.get_one(Asset, UUID(asset_id)).name
+    for person in (world.owner, world.steward, world.outsider):  # the outsider holds units
+        assert ("verification", f"{name}: verification revoked") in alert_titles(world, person)
+    assert ("verification", f"{name}: verification revoked") not in alert_titles(
+        world, world.other_steward
+    )
+
+
 @requires_db
 def test_a_live_listing_verified_then_edited_is_blocked_again(live: World_) -> None:
     asset = draft(live)

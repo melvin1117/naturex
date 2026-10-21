@@ -567,7 +567,7 @@ class Alert(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     world_id: UUID = Field(foreign_key="worlds.id", index=True)
     asset_id: UUID = Field(foreign_key="assets.id", index=True)
-    kind: str | None = None  # grade_change | health_change | news (T75)
+    kind: str | None = None  # grade_change | health_change | news (T75) | verification (#216)
     title: str | None = None
     message: str | None = None
     severity: int | None = None
