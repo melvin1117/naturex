@@ -431,11 +431,15 @@ def run_quarter(
     job_cap_usd: Decimal,
     run_cap: int,
     spec: ScenarioSpec,
+    job_spent: Callable[[], Decimal] | None = None,
+    before_payout: Callable[[AssetOutcome], None] | None = None,
     on_asset: Callable[[AssetOutcome], None] | None = None,
 ) -> QuarterOutcome:
     """Re-rate and pay `assets` (id, name) for the world's quarter at `step`, which the world
-    already reached. `run_cap` is the per-world hourly run cap for the quarter's runs;
-    `on_asset` sees each asset's result once its re-rate and payout are settled."""
+    already reached. `run_cap` is the per-world hourly run cap for the quarter's runs.
+    `job_spent` is what this quarter has spent so far, for `job_cap_usd` (default: the global
+    spend since this call began). `before_payout` sees each asset once its re-rate settled
+    (it may raise to stop before paying it); `on_asset` once its payout settled too."""
     _refuse_protected(world_id)
     version = timeline_version(spec, step)
     outcome = QuarterOutcome(step, version, replayed)
@@ -444,13 +448,17 @@ def run_quarter(
     for asset_id, name in assets:
         result = AssetOutcome(asset_id, name)
         if outcome.stopped is None:
-            outcome.stopped = budget_stop(budget, spent_total=spend(), spent_at_start=at_start)
+            total = spend()
+            mine = job_spent() if job_spent is not None else total - at_start
+            outcome.stopped = budget_stop(budget, spent_total=total, spent_at_start=total - mine)
         if outcome.stopped is None:
             _rerate(session_factory, runner, world_id, version, spec, run_cap, result)
             if result.detail in STOPS:  # every later asset would be refused
                 outcome.stopped = result.detail
         else:
             result.status, result.detail = "stopped", outcome.stopped
+        if before_payout is not None:
+            before_payout(result)
         _settle_payout(session_factory, world_id, version, result)
         outcome.assets.append(result)
         if on_asset is not None:

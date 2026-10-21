@@ -3375,7 +3375,7 @@
           "admin"
         ],
         "summary": "Get Quarter Job",
-        "description": "A quarter job of the caller's world and each asset's result so far (#201). A job whose\nprocess died (no heartbeat for `JOB_STALE_AFTER`) is taken over and resumed by this read\n(with `LOCAL_JOBS=true`): the claims make it finish without re-rating or paying twice.",
+        "description": "A quarter job of the caller's world and each asset's result so far (#201). With\n`LOCAL_JOBS=true` this read also heals an active job: one whose process died (no heartbeat\nfor `JOB_STALE_AFTER`) is taken over and resumed (the claims make it finish without\nre-rating or paying twice), one that settled nothing for `JOB_STUCK_AFTER` is failed.",
         "operationId": "get_quarter_job_admin_simulate_quarter__job_id__get",
         "parameters": [
           {

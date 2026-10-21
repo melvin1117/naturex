@@ -36,7 +36,7 @@ from app.authz import (
 from app.config import Settings
 from app.deps import CurrentWorld, SessionDep, SettingsDep
 from app.llm import DbCallLog
-from app.models import Alert, AlertRecipient, Asset, LlmCall, QuarterJob
+from app.models import QUARTER_JOB_ACTIVE, Alert, AlertRecipient, Asset, LlmCall, QuarterJob
 from app.schemas import (
     AlertKindOut,
     AssetRatingOut,
@@ -44,6 +44,7 @@ from app.schemas import (
     EventPresetOut,
     QuarterJobOut,
     QuarterJobRef,
+    QuarterJobStatus,
     SentAlertOut,
     SimulatedAssetOut,
     SimulateEventRequest,
@@ -140,6 +141,14 @@ def get_time_machine_env() -> TimeMachineEnv:
         return _env
 
 
+def shutdown_time_machine() -> None:
+    """At API shutdown: stop the quarter jobs' heartbeat and drop queued jobs (if the
+    environment was ever created); an unfinished job is resumed by the next poll."""
+    with _env_lock:
+        if _env is not None:
+            _env.jobs.shutdown()
+
+
 TimeMachineEnvDep = Annotated[TimeMachineEnv, Depends(get_time_machine_env)]
 
 
@@ -170,6 +179,20 @@ def _quarter_context(env: TimeMachineEnv, settings: Settings) -> QuarterContext:
     )
 
 
+_JOB_STATUSES: dict[str, QuarterJobStatus] = {
+    "queued": "queued",
+    "running": "running",
+    "done": "done",
+    "stopped": "stopped",
+    "failed": "failed",
+}
+
+
+def _job_status(value: str) -> QuarterJobStatus:
+    """A stored status (the table's CHECK constraint allows only these)."""
+    return _JOB_STATUSES[value]
+
+
 def _job_location(job_id: UUID) -> str:
     return f"/admin/simulate/quarter/{job_id}"
 
@@ -184,7 +207,7 @@ def _job_out(job: QuarterJob) -> QuarterJobOut:
 
     return QuarterJobOut(
         id=job.id,
-        status=cast(Any, job.status),
+        status=_job_status(job.status),
         error=job.error,
         asset_count=None if job.planned is None else len(job.planned),
         created_at=job.created_at,
@@ -290,7 +313,7 @@ def get_time_machine(
         local_jobs=settings.local_jobs,
         quarter_job=None
         if latest is None
-        else QuarterJobRef(id=latest.id, status=cast(Any, latest.status), period=latest.period),
+        else QuarterJobRef(id=latest.id, status=_job_status(latest.status), period=latest.period),
     )
 
 
@@ -364,15 +387,16 @@ def get_quarter_job(
     settings: SettingsDep,
     env: TimeMachineEnvDep,
 ) -> QuarterJobOut:
-    """A quarter job of the caller's world and each asset's result so far (#201). A job whose
-    process died (no heartbeat for `JOB_STALE_AFTER`) is taken over and resumed by this read
-    (with `LOCAL_JOBS=true`): the claims make it finish without re-rating or paying twice."""
+    """A quarter job of the caller's world and each asset's result so far (#201). With
+    `LOCAL_JOBS=true` this read also heals an active job: one whose process died (no heartbeat
+    for `JOB_STALE_AFTER`) is taken over and resumed (the claims make it finish without
+    re-rating or paying twice), one that settled nothing for `JOB_STUCK_AFTER` is failed."""
     job = quarter_jobs.get_job(session, world.id, job_id)
     if job is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
-    if settings.local_jobs and quarter_jobs.is_stale(session, job):
+    if settings.local_jobs and job.status in QUARTER_JOB_ACTIVE:
         session.commit()
-        if env.jobs.resume_if_stale(_quarter_context(env, settings), job_id):
+        if env.jobs.heal(_quarter_context(env, settings), job_id):
             session.expire_all()
             job = quarter_jobs.get_job(session, world.id, job_id)
             if job is None:

@@ -4,7 +4,8 @@
   moves the world and inserts the job (`queued`); a worker runs it (`running`) and appends each
   settled asset's result to `assets`, then ends it `done`, `stopped` (a budget or rate-limit
   stop) or `failed`. `uq_quarter_jobs_active_world` allows one queued or running job per world.
-  `lease` and `heartbeat_at` let a poll take over a job whose process died and resume it.
+  `lease` and `heartbeat_at` let a poll take over a job whose process died and resume it;
+  `started_at` (the first run) is where the job's spend counts from, across resumes.
 
 Revision ID: 0025
 Revises: 0023
@@ -44,6 +45,7 @@ def upgrade() -> None:
         sa.Column("assets", JSONB(), server_default=sa.text("'[]'::jsonb"), nullable=False),
         sa.Column("requested_by", sa.Uuid(), nullable=True),
         sa.Column("lease", sa.Uuid(), nullable=True),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         _now("heartbeat_at"),
         _now("created_at"),
         _now("updated_at"),

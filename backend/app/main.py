@@ -125,6 +125,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
     shutdown_default_checker()  # T71: queued AI document checks are dropped, not waited for
     shutdown_default_analyzer()  # T40: queued photo analyses too (they read `failed` later)
+    admin.shutdown_time_machine()  # #201: queued quarter jobs too (the next poll resumes them)
 
 
 app = FastAPI(

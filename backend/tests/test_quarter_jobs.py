@@ -8,12 +8,15 @@ wait. A process dying is a `Crash` (a BaseException nothing catches), then an ag
 
 from __future__ import annotations
 
+import logging
+import threading
+import time
 from collections.abc import Callable, Iterator
 from concurrent.futures import Executor, Future
 from dataclasses import replace
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
@@ -27,6 +30,7 @@ from app.main import app
 from app.models import (
     LedgerEntry,
     LedgerKind,
+    LlmCall,
     Metrics,
     MonitorRun,
     QuarterJob,
@@ -42,7 +46,7 @@ from app.services.quarter_jobs import QuarterContext, QuarterJobRunning, Quarter
 from app.services.rating_runs import InlineExecutor
 from tests.conftest import alembic_cfg, requires_db
 from tests.test_time_machine import count, runner, sessions, step_of
-from tests.worlds import mock_time_machine_env, start_demo
+from tests.worlds import drop_worlds, mock_time_machine_env, start_demo
 
 NO_SPEND: Callable[[], Decimal] = lambda: Decimal(0)  # noqa: E731
 
@@ -124,14 +128,17 @@ class CrashAfter:
 
 
 def ctx(
-    conn: Connection, run: Any = None, spend: Callable[[], Decimal] = NO_SPEND
+    conn: Connection,
+    run: Any = None,
+    spend: Callable[[], Decimal] = NO_SPEND,
+    job_cap: Decimal = Decimal(2),
 ) -> QuarterContext:
     return QuarterContext(
         session_factory=sessions(conn),
         runner=run or runner(conn),
         spend=spend,
         llm_budget_usd=Decimal(20),
-        job_cap_usd=Decimal(2),
+        job_cap_usd=job_cap,
         runs_per_hour=6,
     )
 
@@ -507,3 +514,297 @@ def test_migration_0025_downgrades_and_upgrades() -> None:
         command.upgrade(cfg, "head")
         assert has_table()
         engine.dispose()
+
+
+# --- hardening (#201 review) --------------------------------------------------------------------
+
+
+def active_job_id(conn: Connection, world: UUID) -> UUID:
+    with sessions(conn)() as session:
+        return session.exec(
+            select(QuarterJob.id).where(
+                QuarterJob.world_id == world, col(QuarterJob.status).in_(("queued", "running"))
+            )
+        ).one()
+
+
+@requires_db
+def test_a_crash_before_the_quarter_runs_is_logged_and_the_job_recovers(
+    db: Connection,
+    world_id: UUID,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def broken(*_: Any, **__: Any) -> Any:
+        raise RuntimeError("could not connect to postgres://naturex:hunter2@db")
+
+    monkeypatch.setattr(qj, "listed_assets", broken)
+    jobs = QuarterJobs()
+    with caplog.at_level(logging.ERROR, logger="app.services.quarter_jobs"):
+        job_id = jobs.start(ctx(db), world_id, "2026Q4").id
+
+    failed = job_of(db, job_id)
+    assert (failed.status, failed.error) == ("failed", "job_failed:RuntimeError")
+    assert failed.finished_at is not None and not jobs._live
+    logged = "\n".join(r.getMessage() for r in caplog.records)
+    assert "crashed: RuntimeError" in logged and "in run" in logged  # type and frames
+    assert "hunter2" not in logged  # never the message
+    monkeypatch.undo()
+    assert job_of(db, jobs.start(ctx(db), world_id, "2026Q4").id).status == "done"
+
+
+@requires_db
+def test_a_pool_that_refuses_the_job_fails_it_instead_of_leaving_a_phantom(
+    db: Connection, world_id: UUID
+) -> None:
+    class Closed(Executor):
+        def submit(self, fn: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Future[Any]:
+            raise RuntimeError("cannot schedule new futures after shutdown")
+
+    jobs = QuarterJobs(executor=Closed())
+
+    job = job_of(db, jobs.start(ctx(db), world_id, "2026Q4").id)
+
+    assert (job.status, job.error) == ("failed", "job_not_started:RuntimeError")
+    assert not jobs._live
+    assert job_of(db, QuarterJobs().start(ctx(db), world_id, "2026Q4").id).status == "done"
+
+
+@requires_db
+def test_an_attempt_taken_over_mid_asset_neither_pays_nor_records(
+    db: Connection, world_id: UUID
+) -> None:
+    assets = listed(db, world_id)
+    reports = count(db, Report, world_id)
+    takeover = Parked()
+
+    class TakenOverDuringRun:
+        """The first run seals, then another process takes the job over before it's paid."""
+
+        def __init__(self) -> None:
+            self.inner, self.done = runner(db), False
+
+        def start(self, *args: Any, **kwargs: Any) -> UUID:
+            run_id: UUID = self.inner.start(*args, **kwargs)
+            if not self.done:
+                self.done = True
+                job_id = active_job_id(db, world_id)
+                age(db, job_id)
+                assert QuarterJobs(executor=takeover).resume_if_stale(ctx(db), job_id)
+            return run_id
+
+    job_id = QuarterJobs().start(ctx(db, run=TakenOverDuringRun()), world_id, "2026Q4").id
+
+    lost = job_of(db, job_id)
+    assert lost.status == "running" and lost.assets == []  # the first attempt stopped
+    assert payouts(db, world_id) == 0 and count(db, Report, world_id) == reports + 1
+    takeover.run_all()
+
+    job = job_of(db, job_id)
+    assert job.status == "done"
+    assert [UUID(a["asset_id"]) for a in job.assets] == assets
+    assert (job.assets[0]["status"], job.assets[0]["payout"]) == ("already_done", "paid")
+    assert job.assets[0]["run_id"] is not None
+    assert count(db, Report, world_id) == reports + len(assets)
+    assert payouts(db, world_id) == len(assets)
+
+
+@requires_db
+def test_a_reset_mid_attempt_stops_it_without_paying(db: Connection, world_id: UUID) -> None:
+    class ResetDuringRun:
+        def __init__(self) -> None:
+            self.inner = runner(db)
+
+        def start(self, *args: Any, **kwargs: Any) -> UUID:
+            run_id: UUID = self.inner.start(*args, **kwargs)
+            with sessions(db)() as session:
+                reset_world(session, world_id)
+            return run_id
+
+    QuarterJobs().start(ctx(db, run=ResetDuringRun()), world_id, "2026Q4")
+
+    assert count(db, QuarterJob, world_id) == 0
+    assert step_of(db, world_id) == 0 and payouts(db, world_id) == 0
+
+
+def spent(conn: Connection, world: UUID | None, usd: str) -> None:
+    with sessions(conn)() as session:
+        session.add(LlmCall(world_id=world, agent="auditor", cost_usd=Decimal(usd)))
+        session.commit()
+
+
+@requires_db
+def test_the_job_budget_counts_its_own_world_from_its_first_start_across_resumes(
+    db: Connection, world_id: UUID
+) -> None:
+    with sessions(db)() as session:
+        other = create_world(session).id
+
+    class SpendsThenDies:
+        """Each run costs $0.60 in this world (and another world's quarter $5 meanwhile);
+        the process dies after the first."""
+
+        def __init__(self) -> None:
+            self.inner, self.calls = runner(db), 0
+
+        def start(self, *args: Any, **kwargs: Any) -> UUID:
+            run_id: UUID = self.inner.start(*args, **kwargs)
+            spent(db, world_id, "0.60")
+            spent(db, other, "5.00")
+            self.calls += 1
+            if self.calls == 1:
+                raise Crash()
+            return run_id
+
+    cap = Decimal("1.50")  # $0.60 spent + $0.50 per asset: one more asset fits, not two
+    run = SpendsThenDies()
+    job_id = QuarterJobs().start(ctx(db, run=run, job_cap=cap), world_id, "2026Q4").id
+    first = job_of(db, job_id)
+    assert first.started_at is not None
+    age(db, job_id)
+
+    assert QuarterJobs().resume_if_stale(ctx(db, run=run, job_cap=cap), job_id)
+
+    job = job_of(db, job_id)
+    assert job.started_at == first.started_at  # the baseline survives the resume
+    assert (job.status, job.stopped) == ("stopped", "job_budget_exhausted")
+    statuses = [a["status"] for a in job.assets]
+    # Resumed: the 1st (sealed before the crash) and the 2nd fit ($0.60, then $1.20 spent);
+    # another world's $10 never counted, a restarted budget would have run all three.
+    assert statuses == ["already_done", "rerated", "stopped"]
+
+
+@requires_db
+def test_a_wedged_job_is_failed_and_frees_the_world(db: Connection, world_id: UUID) -> None:
+    pool = Parked()
+    jobs = QuarterJobs(executor=pool)
+    job_id = jobs.start(ctx(db), world_id, "2026Q4").id
+    with sessions(db)() as session:  # beating, but nothing settled for an hour
+        session.execute(
+            text("UPDATE quarter_jobs SET updated_at = now() - interval '1 hour' WHERE id = :id"),
+            {"id": job_id},
+        )
+        session.commit()
+
+    replay = jobs.start(ctx(db), world_id, "2026Q4")
+
+    stuck = job_of(db, job_id)
+    assert (stuck.status, stuck.error) == ("failed", qj.JOB_STUCK)
+    assert replay.id != job_id and replay.replayed
+    pool.run_all()  # the wedged attempt finally runs: it finds its job failed and does nothing
+    assert job_of(db, job_id).assets == []
+    assert job_of(db, replay.id).status == "done"
+
+
+class FakeSession:
+    def __init__(self, calls: list[str]) -> None:
+        self.calls = calls
+
+    def __enter__(self) -> FakeSession:
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        return None
+
+    def execute(self, *_: Any) -> None:
+        self.calls.append("beat")
+
+    def commit(self) -> None:
+        return None
+
+
+def test_the_heartbeat_starts_once_survives_a_failed_beat_and_stops_on_shutdown() -> None:
+    calls: list[str] = []
+
+    def factory() -> Any:
+        if not calls:
+            calls.append("failed")
+            raise RuntimeError("database restarting")
+        return FakeSession(calls)
+
+    context = QuarterContext(
+        session_factory=factory,
+        runner=object(),  # type: ignore[arg-type]
+        spend=NO_SPEND,
+        llm_budget_usd=Decimal(20),
+        job_cap_usd=Decimal(2),
+        runs_per_hour=6,
+    )
+    jobs = QuarterJobs(executor=Parked(), heartbeat_s=0.01)
+
+    jobs._submit(context, uuid4(), uuid4())
+    jobs._submit(context, uuid4(), uuid4())
+    deadline = time.monotonic() + 5
+    while calls.count("beat") < 2 and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+    beaters = [t for t in threading.enumerate() if t.name == "quarter-job-heartbeat"]
+    assert len(beaters) == 1 and calls[0] == "failed" and calls.count("beat") >= 2
+    jobs.shutdown()
+    beaters[0].join(5)
+    assert not beaters[0].is_alive()
+    jobs._submit(context, uuid4(), uuid4())  # after shutdown: no new heartbeat
+    assert not [t for t in threading.enumerate() if t.name == "quarter-job-heartbeat"]
+
+
+@requires_db
+def test_two_pollers_resuming_the_same_dead_job_one_wins() -> None:
+    command.upgrade(alembic_cfg(), "head")
+    engine = create_engine(get_settings().database_url)
+    with Session(engine) as setup:
+        seed(setup)
+        world = create_world(setup).id
+        job = QuarterJob(world_id=world, period="2026Q4", step=1, replayed=False, lease=uuid4())
+        setup.add(job)
+        setup.commit()
+        job_id = job.id
+        setup.execute(
+            text("UPDATE quarter_jobs SET heartbeat_at = now() - interval '5 minutes'"),
+        )
+        setup.commit()
+    barrier = threading.Barrier(2)
+    won: list[bool] = []
+
+    def poll() -> None:
+        context = QuarterContext(
+            session_factory=lambda: Session(engine),
+            runner=object(),  # type: ignore[arg-type]
+            spend=NO_SPEND,
+            llm_budget_usd=Decimal(20),
+            job_cap_usd=Decimal(2),
+            runs_per_hour=6,
+        )
+        barrier.wait()
+        won.append(QuarterJobs(executor=Parked()).resume_if_stale(context, job_id))
+
+    try:
+        threads = [threading.Thread(target=poll) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(10)
+        assert sorted(won) == [False, True]
+    finally:
+        drop_worlds(engine, [world])
+        engine.dispose()
+
+
+@requires_db
+def test_polling_without_local_jobs_never_resumes(client: TestClient, api_session: Session) -> None:
+    start_demo(client, api_session, persona_key="admin")
+    pool = Parked()
+    _parked_env(api_session, pool)
+    location = client.post("/admin/simulate/quarter", json={"period": "2026Q4"}).headers["Location"]
+    api_session.execute(text("UPDATE quarter_jobs SET heartbeat_at = now() - interval '1 hour'"))
+    api_session.commit()
+    lease = api_session.exec(select(QuarterJob.lease)).one()
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        _env_file=None, use_mocks=True, local_jobs=False
+    )
+
+    res = client.get(location)
+
+    assert res.status_code == 200 and res.json()["status"] == "queued"
+    api_session.expire_all()
+    assert api_session.exec(select(QuarterJob.lease)).one() == lease
+    assert len(pool.parked) == 1

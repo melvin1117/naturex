@@ -1125,9 +1125,10 @@ export interface paths {
         };
         /**
          * Get Quarter Job
-         * @description A quarter job of the caller's world and each asset's result so far (#201). A job whose
-         *     process died (no heartbeat for `JOB_STALE_AFTER`) is taken over and resumed by this read
-         *     (with `LOCAL_JOBS=true`): the claims make it finish without re-rating or paying twice.
+         * @description A quarter job of the caller's world and each asset's result so far (#201). With
+         *     `LOCAL_JOBS=true` this read also heals an active job: one whose process died (no heartbeat
+         *     for `JOB_STALE_AFTER`) is taken over and resumed (the claims make it finish without
+         *     re-rating or paying twice), one that settled nothing for `JOB_STUCK_AFTER` is failed.
          */
         get: operations["get_quarter_job_admin_simulate_quarter__job_id__get"];
         put?: never;

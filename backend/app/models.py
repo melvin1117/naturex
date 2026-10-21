@@ -673,6 +673,8 @@ class QuarterJob(SQLModel, table=True):
     )
     requested_by: UUID | None = None
     lease: UUID | None = None
+    # When the job first ran: its spend (`MONITOR_JOB_BUDGET_USD`) counts from here, on resume too.
+    started_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     heartbeat_at: datetime = _created_at()
     created_at: datetime = _created_at()
     updated_at: datetime = _created_at()
