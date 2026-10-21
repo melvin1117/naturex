@@ -135,13 +135,18 @@ export function QuarterSection({
         <div className="mt-8 flex flex-wrap items-center gap-3">
           <Dialog
             open={confirming !== null}
-            onOpenChange={(open) => setConfirming(open ? next : null)}
+            onOpenChange={(open) =>
+              setConfirming(open && !quarter.isPending ? next : null)
+            }
           >
             <DialogTrigger asChild>
+              {/* aria-disabled, not disabled, while it runs: the dialog hands focus back
+                  here, and a disabled button would drop it to the page. */}
               <Button
                 size="lg"
-                className="bg-lime text-machine hover:bg-lime/90"
-                disabled={!canRun || quarter.isPending}
+                className="bg-lime text-machine hover:bg-lime/90 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-lime aria-disabled:active:translate-y-0"
+                disabled={!canRun}
+                aria-disabled={quarter.isPending || undefined}
                 data-tour="next-quarter"
               >
                 {quarter.isPending ? (
@@ -172,9 +177,10 @@ export function QuarterSection({
                     </DialogTitle>
                     <DialogDescription>
                       Every listed site ({listed}) is re-rated with the &ldquo;
-                      {confirming.scenario}&rdquo; scenario. Prices re-anchor,
-                      holders get alerts for big changes and the quarter&apos;s
-                      revenue is paid. Only a demo reset undoes it.
+                      {confirming.scenario}&rdquo; scenario. Stake prices
+                      re-anchor, holders get alerts for big changes and the
+                      quarter&apos;s revenue is paid. Only a demo reset undoes
+                      it.
                     </DialogDescription>
                   </DialogHeader>
                   <DialogFooter>
@@ -195,7 +201,7 @@ export function QuarterSection({
             {!state.local_jobs
               ? "Quarters run in-process only with LOCAL_JOBS=true, which is off on this server. Event presets still work."
               : next
-                ? "Re-rates every listed site, re-anchors prices, alerts holders and pays the quarter."
+                ? "Re-rates every listed site, re-anchors stake prices, alerts holders and pays the quarter."
                 : "Reset the demo to start the timeline again."}
           </span>
         </div>

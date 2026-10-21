@@ -28,7 +28,7 @@ export function QuoteTable({
   const slippage = decimal(quote?.slippage_pct);
   return (
     <dl
-      className="space-y-1.5 rounded-2xl bg-secondary p-4 text-sm transition-opacity aria-busy:opacity-60"
+      className="space-y-1.5 rounded-2xl bg-secondary p-4 text-sm [&_dd]:transition-colors aria-busy:[&_dd]:text-muted-foreground"
       aria-busy={loading || refreshing || undefined}
       aria-label="Quote"
     >

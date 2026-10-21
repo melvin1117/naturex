@@ -2,11 +2,8 @@ import { ArrowRight } from "lucide-react";
 
 import { GradeBadge } from "@/components/proto/grade";
 import type { AssetRating } from "@/lib/api/types";
-import { price as fmtPrice } from "@/lib/prototype/format";
 import { asGrade } from "@/lib/report-facts";
-import { ratingChange } from "@/lib/time-machine";
-
-const DASH = "—";
+import { DASH, healthText, priceText, ratingChange } from "@/lib/time-machine";
 
 function Pair({
   before,
@@ -33,15 +30,7 @@ function Pair({
   );
 }
 
-function healthText(h: number | null) {
-  return h === null ? DASH : h.toFixed(1);
-}
-
-function priceText(p: number | null) {
-  return p === null ? DASH : fmtPrice(p);
-}
-
-/** Health, grade and price before → after, as the backend stored them. */
+/** Health, grade and stake price before → after, as the backend stored them. */
 export function changeCells(
   before: AssetRating | null | undefined,
   after: AssetRating | null | undefined,
@@ -69,7 +58,7 @@ export function changeCells(
     ),
     price: (
       <Pair
-        label={`Price ${priceText(p0)} to ${priceText(p1)}`}
+        label={`Stake price ${priceText(p0)} to ${priceText(p1)}`}
         before={<span className="tabular">{priceText(p0)}</span>}
         after={<span className="tabular font-medium">{priceText(p1)}</span>}
       />

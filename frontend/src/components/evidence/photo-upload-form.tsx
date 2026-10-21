@@ -15,6 +15,7 @@ import {
   photoUploadFailure,
 } from "@/lib/field-evidence";
 import { useUploadPhoto } from "@/lib/field-evidence-hooks";
+import { useRestoreFocusAfterPending } from "@/lib/focus";
 
 type Field = "file" | "consent";
 
@@ -70,6 +71,9 @@ export function PhotoUploadForm({
   };
 
   const pending = upload.isPending;
+  // The submit button disables while uploading, which drops focus: give it back after.
+  const submitRef = useRef<HTMLButtonElement>(null);
+  useRestoreFocusAfterPending(pending, submitRef);
   const errorId = (field: Field) => `${id}-${field}-error`;
 
   return (
@@ -124,7 +128,7 @@ export function PhotoUploadForm({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={disabled || pending}>
+        <Button ref={submitRef} type="submit" disabled={disabled || pending}>
           {pending ? (
             <Spinner aria-hidden="true" role="presentation" />
           ) : (

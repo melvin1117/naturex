@@ -16,10 +16,12 @@ import StewardLayout from "@/app/steward/layout";
 import { AccountMenu } from "@/components/account-menu";
 import { JudgeLanding } from "@/components/proto/judge-landing";
 import { AuthForm } from "@/components/proto/auth-form";
+import { PasswordField } from "@/components/proto/password-field";
 import { DemoBar } from "@/components/proto/demo-bar";
 import { TourProvider } from "@/components/proto/tour";
 import { RequireAccount } from "@/components/require-account";
 import { WorldProvider } from "@/components/world-provider";
+import { PASSWORD_RULE } from "@/lib/auth";
 import { createDataLayer, type DataLayer } from "@/lib/data-layer";
 import {
   usePortfolio,
@@ -323,6 +325,72 @@ describe("AuthForm", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("Password")).toHaveFocus(),
     );
+    // The form's error stays attached to the fields, so it's heard on return too.
+    expect(screen.getByLabelText("Password")).toHaveAccessibleDescription(
+      "Email or password is incorrect.",
+    );
+    expect(screen.getByLabelText("Email")).toHaveAccessibleDescription(
+      "Email or password is incorrect.",
+    );
+  });
+
+  it("describes the register password by its rule, its error and the form's error", async () => {
+    setup(<AuthForm mode="register" />, {
+      "POST /auth/register": () =>
+        json(
+          { detail: "busy" },
+          { status: 503, headers: { "Retry-After": "60" } },
+        ),
+    });
+    const password = screen.getByLabelText("Password");
+    expect(password).toHaveAccessibleDescription(PASSWORD_RULE);
+
+    // The rule and the field's own error.
+    fill("Display name", "Rosa");
+    fill("Email", "rosa@example.org");
+    fill("Password", "short");
+    submit(/create account/i);
+    await screen.findByText("Use at least 10 characters for your password.");
+    expect(password).toHaveAttribute(
+      "aria-describedby",
+      "password-hint password-error",
+    );
+
+    // The rule and the form's error.
+    fill("Password", "long-enough-password");
+    submit(/create account/i);
+    await screen.findByText(/NatureX is busy right now/);
+    expect(password).toHaveAttribute(
+      "aria-describedby",
+      "password-hint form-error",
+    );
+    expect(password).toHaveAccessibleDescription(
+      `${PASSWORD_RULE} NatureX is busy right now. Try again in a minute.`,
+    );
+  });
+
+  it("combines all three on the password field", () => {
+    render(
+      <>
+        <PasswordField
+          autoComplete="new-password"
+          hint={PASSWORD_RULE}
+          error="Use at least 10 characters for your password."
+          describedBy="form-error"
+          onEdit={() => {}}
+        />
+        <p id="form-error">Something went wrong on our side. Try again.</p>
+      </>,
+    );
+    const password = screen.getByLabelText("Password");
+    expect(password).toHaveAttribute(
+      "aria-describedby",
+      "password-hint password-error form-error",
+    );
+    expect(password).toHaveAccessibleDescription(
+      `${PASSWORD_RULE} Use at least 10 characters for your password. ` +
+        "Something went wrong on our side. Try again.",
+    );
   });
 
   it("focuses the alert for other form-level errors", async () => {
@@ -408,8 +476,14 @@ describe("RequireAccount", () => {
       { "GET /world": () => json(SIGNED_IN_WORLD) },
     );
     expect(
-      await screen.findByText("The control room is for platform admins"),
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "The control room is for platform admins",
+      }),
     ).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Go to the Marketplace" }),
+    ).toHaveAttribute("href", "/");
     expect(screen.queryByText("Your stakes")).not.toBeInTheDocument();
     expect(router.replace).not.toHaveBeenCalled();
   });

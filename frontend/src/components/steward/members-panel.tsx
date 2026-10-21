@@ -1,7 +1,7 @@
 "use client";
 
 import { TriangleAlertIcon, UserMinus } from "lucide-react";
-import { useId, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 
 import { LoadError } from "@/components/proto/load-error";
 import { StewardPanel } from "@/components/steward/panel";
@@ -29,6 +29,7 @@ import {
   useMeId,
   useRemoveMember,
 } from "@/lib/community-hooks";
+import { useRestoreFocusAfterPending } from "@/lib/focus";
 import { COMMUNITY_ROLE_LABEL } from "@/lib/navigation";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -163,6 +164,9 @@ function AddSteward({ communityId }: { communityId: string }) {
   const [userId, setUserId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [added, setAdded] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // "Add" disables while it runs: focus returns to the field, ready for the next ID or a fix.
+  useRestoreFocusAfterPending(add.isPending, inputRef);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -170,6 +174,7 @@ function AddSteward({ communityId }: { communityId: string }) {
     const value = userId.trim();
     if (!UUID.test(value)) {
       setError("Enter the account ID they shared with you.");
+      inputRef.current?.focus();
       return;
     }
     setError(null);
@@ -191,6 +196,7 @@ function AddSteward({ communityId }: { communityId: string }) {
       <Label htmlFor={`${id}-user`}>Add a steward by account ID</Label>
       <div className="flex gap-2">
         <Input
+          ref={inputRef}
           id={`${id}-user`}
           value={userId}
           onChange={(e) => {

@@ -95,7 +95,7 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
   const pnlPct = decimal(data.unrealized_pnl_pct);
   return (
     <>
-      <div className="mt-8 grid gap-4 rounded-3xl bg-card p-6 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
+      <dl className="mt-8 grid gap-4 rounded-3xl bg-card p-6 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           label="Play money available"
           value={moneyText(data.cash_balance)}
@@ -117,15 +117,15 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
           )}`}
         />
         <Stat
-          label="Unrealised profit and loss"
+          label="Change in value"
           value={signedMoneyText(data.unrealized_pnl)}
           sub="on the stakes you hold, at today's prices"
         />
-      </div>
+      </dl>
 
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
         <div className="min-w-0 space-y-8">
-          <Panel title="Holdings">
+          <Panel title="Stakes" headingLevel="h2">
             {data.holdings.length === 0 ? (
               <div className="py-8 text-center">
                 <Sprout
@@ -149,7 +149,7 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
           </Suspense>
         </div>
         <div className="min-w-0 space-y-8">
-          <Panel title="Alerts">
+          <Panel title="Alerts" headingLevel="h2">
             <AlertsList empty="No alerts yet. When a site you back is re-rated or in the news, you'll hear about it here." />
           </Panel>
           <ImpactCard data={data} />
@@ -159,7 +159,7 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
   );
 }
 
-/** Phones get a card per holding (site, units, value, P&L); wider screens get the table. */
+/** Phones get a card per stake (site, units, value, change); wider screens get the table. */
 function Holdings({
   holdings,
   cards,
@@ -169,7 +169,7 @@ function Holdings({
 }) {
   return (
     <>
-      <ul className="divide-y divide-border sm:hidden" aria-label="Holdings">
+      <ul className="divide-y divide-border sm:hidden" aria-label="Stakes">
         {holdings.map((h) => (
           <HoldingCard
             key={h.asset_id}
@@ -211,7 +211,7 @@ function HoldingCard({
       <dl className="text-right">
         <dt className="sr-only">Value</dt>
         <dd className="tabular font-medium">{moneyText(h.market_value)}</dd>
-        <dt className="sr-only">Unrealised profit and loss</dt>
+        <dt className="sr-only">Change in value</dt>
         <dd className="tabular text-xs">
           {signedMoneyText(h.unrealized_pnl)}
           {pnlPct !== null && <Delta value={pnlPct} className="ml-1 text-xs" />}
@@ -243,7 +243,7 @@ function HoldingsTable({
   cards: Map<string, AssetCard>;
 }) {
   return (
-    <Table>
+    <Table scrollLabel="Your stakes, by site">
       <TableHeader>
         <TableRow>
           <TableHead>Site</TableHead>
@@ -252,7 +252,7 @@ function HoldingsTable({
           <TableHead className="text-right">Avg cost</TableHead>
           <TableHead className="text-right">Price</TableHead>
           <TableHead className="text-right">Value</TableHead>
-          <TableHead className="text-right">Profit and loss</TableHead>
+          <TableHead className="text-right">Change</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>

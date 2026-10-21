@@ -3,11 +3,31 @@
 import * as React from "react";
 import { cn } from "cn";
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+/**
+ * `scrollLabel` opts a wide table into keyboard scrolling: while the table overflows its
+ * container, the container is a focusable region with that label (WCAG 2.1.1), so arrow keys
+ * scroll it. A table that fits gets no extra tab stop.
+ */
+function Table({
+  className,
+  scrollLabel,
+  ...props
+}: React.ComponentProps<"table"> & { scrollLabel?: string }) {
+  const container = React.useRef<HTMLDivElement>(null);
+  const overflowing = useOverflowsX(container, scrollLabel !== undefined);
+  const scrollable = scrollLabel !== undefined && overflowing;
   return (
     <div
+      ref={container}
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={cn(
+        "relative w-full overflow-x-auto",
+        scrollable &&
+          "rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring",
+      )}
+      role={scrollable ? "region" : undefined}
+      aria-label={scrollable ? scrollLabel : undefined}
+      tabIndex={scrollable ? 0 : undefined}
     >
       <table
         data-slot="table"
@@ -16,6 +36,26 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
       />
     </div>
   );
+}
+
+/** Whether the element is wider inside than out, kept current as either side resizes. */
+function useOverflowsX(
+  ref: React.RefObject<HTMLElement | null>,
+  enabled: boolean,
+): boolean {
+  const [overflows, setOverflows] = React.useState(false);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!enabled || !el) return;
+    const measure = () => setOverflows(el.scrollWidth > el.clientWidth);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
+    return () => observer.disconnect();
+  }, [ref, enabled]);
+  return overflows;
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {

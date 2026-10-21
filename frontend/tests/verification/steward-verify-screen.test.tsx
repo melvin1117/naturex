@@ -12,6 +12,7 @@ import { WorldProvider } from "@/components/world-provider";
 import type { AssetDetail } from "@/lib/api/types";
 import { createDataLayer } from "@/lib/data-layer";
 
+import { dropFocus } from "../focus";
 import { stubBrowserApis } from "../exchange/render";
 import {
   BASE,
@@ -197,7 +198,11 @@ describe("StewardVerifyScreen", () => {
             { ...uploaded, run_id: run().id },
           ]),
       ),
-      [UPLOAD]: () => json(uploaded, { status: 201 }),
+      [UPLOAD]: () => {
+        // A browser drops focus from the button while it's disabled for the upload.
+        dropFocus();
+        return json(uploaded, { status: 201 });
+      },
       [SUBMIT]: () => json(run(), { status: 201 }),
       [RUNS]: sequence(
         () => json([]),
@@ -214,11 +219,19 @@ describe("StewardVerifyScreen", () => {
       target: { files: [file] },
     });
     fireEvent.click(screen.getByRole("checkbox", { name: /authorised/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Upload document" }));
+    const upload = screen.getByRole("button", { name: "Upload document" });
+    upload.focus();
+    fireEvent.click(upload);
 
     expect(
       await screen.findByText("Uploaded: Assembly minutes (consent)."),
     ).toBeInTheDocument();
+    // Focus goes back to the button once the upload ends (T48).
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Upload document" }),
+      ).toHaveFocus(),
+    );
     const post = backend.requests.find((r) => r.method === "POST")!;
     const url = new URL(post.url);
     expect(url.searchParams.get("doc_type")).toBe("assembly_minutes");

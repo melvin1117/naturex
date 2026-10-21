@@ -80,7 +80,7 @@ export function ControlRoom() {
           </h1>
           <p className="mt-3 max-w-2xl text-muted-foreground">
             Move the sandbox forward a quarter or inject an event, and watch
-            ratings, prices and alerts respond. Scenarios replay scripted
+            ratings, stake prices and alerts respond. Scenarios replay scripted
             satellite changes for the demo sites (T13).
           </p>
         </div>
@@ -158,8 +158,8 @@ export function ControlRoom() {
             label="Live Auditor call"
           />
           <span className="text-sm text-machine-muted">
-            Re-rates every rated site and re-anchors prices. Reset the demo to
-            start over.
+            Re-rates every rated site and re-anchors stake prices. Reset the
+            demo to start over.
           </span>
         </div>
       </section>

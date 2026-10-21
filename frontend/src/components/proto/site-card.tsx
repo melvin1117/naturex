@@ -54,6 +54,8 @@ export function MiniPrice({
           <AreaChart
             data={points}
             margin={{ top: 4, bottom: 0, left: 0, right: 0 }}
+            // Decorative (the card states the price): no keyboard stop inside aria-hidden.
+            accessibilityLayer={false}
           >
             <defs>
               <linearGradient id={`mini-${id}`} x1="0" y1="0" x2="0" y2="1">
@@ -115,7 +117,7 @@ export function SiteCard({ card }: { card: MarketCard }) {
   return (
     <Link
       href={`/asset/${card.id}`}
-      className="group flex flex-col overflow-hidden rounded-3xl bg-card shadow-soft transition-shadow hover:shadow-lift focus-visible:shadow-lift focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+      className="group flex flex-col overflow-hidden rounded-3xl bg-card shadow-soft transition-shadow hover:shadow-lift focus-visible:shadow-lift focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       <div className="relative">
         <SiteThumb

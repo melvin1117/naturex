@@ -17,7 +17,13 @@ export function Wordmark({
         NatureX
       </span>
       {app && (
-        <span className="text-sm font-medium text-muted-foreground">{app}</span>
+        <>
+          {/* The space keeps the accessible name "NatureX Exchange" (flex doesn't draw it).
+              Below `sm` the app name is only visually hidden, so it stays in that name. */}{" "}
+          <span className="text-sm font-medium text-muted-foreground max-sm:sr-only">
+            {app}
+          </span>
+        </>
       )}
     </span>
   );
@@ -85,7 +91,7 @@ export function LiveBadge({
         <span className="relative inline-flex size-1.5 rounded-full bg-lime-ink" />
       </span>
       {label}
-      <span className="font-medium normal-case opacity-80">· replay</span>
+      <span className="font-medium normal-case">· replay</span>
     </span>
   );
 }
@@ -253,6 +259,7 @@ export function ValueRange({
   );
 }
 
+/** One term of a `<dl>`: always render it inside one. */
 export function Stat({
   label,
   value,
@@ -266,11 +273,11 @@ export function Stat({
 }) {
   return (
     <div className={cn("min-w-0", className)}>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="tabular mt-1 truncate text-2xl font-light tracking-tight">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="tabular mt-1 truncate text-2xl font-light tracking-tight">
         {value}
-      </div>
-      {sub && <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>}
+      </dd>
+      {sub && <dd className="mt-0.5 text-xs text-muted-foreground">{sub}</dd>}
     </div>
   );
 }

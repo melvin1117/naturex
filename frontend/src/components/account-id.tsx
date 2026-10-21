@@ -24,10 +24,11 @@ export function AccountIdCopy({ id }: { id: string }) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   return (
     <div>
-      <div className="flex items-center gap-2">
+      {/* Wraps rather than truncates: the whole ID must stay readable, even at 390 px. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
         <code
           translate="no"
-          className="min-w-0 flex-1 truncate rounded-lg bg-secondary px-2 py-1.5 font-mono text-xs select-all"
+          className="rounded-lg bg-secondary px-2 py-1.5 font-mono text-xs break-all select-all"
         >
           {id}
         </code>

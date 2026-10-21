@@ -173,6 +173,19 @@ describe("Exchange navigation per role", () => {
     expect(backend.calls("GET /me/communities")).toBe(1);
   });
 
+  it("keeps the app's name in the home link when it's hidden on phones", async () => {
+    setup(
+      <ExchangeLayout>
+        <Page />
+      </ExchangeLayout>,
+      SIGNED_IN_WORLD,
+    );
+    const home = await screen.findByRole("link", { name: "NatureX Exchange" });
+    // Below `sm` the name is only visually hidden (sr-only), never removed.
+    expect(within(home).getByText("Exchange")).toHaveClass("max-sm:sr-only");
+    expect(within(home).getByText("Exchange")).not.toHaveClass("hidden");
+  });
+
   it.each([
     ["steward", RIO],
     ["owner", SELVA],
@@ -412,12 +425,20 @@ describe("Steward shell", () => {
       </StewardLayout>,
       SIGNED_IN_WORLD,
     );
+    const title = await screen.findByRole("heading", {
+      level: 1,
+      name: "Start a community",
+    });
+    expect(title).toBeVisible();
+    // Shrinkable columns: a long ID or name can't widen the page at 390 px.
     expect(
-      await screen.findByRole("heading", {
-        level: 1,
-        name: "Start a community",
-      }),
-    ).toBeVisible();
+      screen
+        .getByRole("region", { name: "Start a community" })
+        .querySelector(":scope > .grid"),
+    ).toHaveClass(
+      "grid-cols-[minmax(0,1fr)]",
+      "lg:grid-cols-[minmax(0,1fr)_440px]",
+    );
     expect(screen.queryByText("Page content")).not.toBeInTheDocument();
     // Its pages would all show this empty state, so they aren't offered.
     expect(
@@ -637,7 +658,14 @@ describe("when the account changes", () => {
     ).toBeVisible();
 
     await act(() => layer.session.reload());
-    await screen.findByRole("button", { name: "Account: Ines" });
+    const account = await screen.findByRole("button", {
+      name: "Account: Ines",
+    });
+    // Label in name (2.5.3): what the button shows (the name; the initials are drawn by CSS,
+    // so they aren't text) is part of what it's called.
+    const visible = account.textContent!.trim();
+    expect(visible).toBe("Ines");
+    expect(account).toHaveAccessibleName(new RegExp(visible));
     // Ines's answer hasn't come back: nothing from Rosa, nothing guessed.
     await waitFor(() => expect(backend.calls("GET /me/communities")).toBe(2));
     expect(

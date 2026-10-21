@@ -21,6 +21,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useReturnFocus } from "@/lib/use-return-focus";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MODELS } from "@/lib/prototype/data";
 import { date } from "@/lib/prototype/format";
@@ -58,6 +59,8 @@ export function TraceSheet() {
   const run = runs.find((r) => r.id === runId) ?? runs[0];
   const totals = run ? runTotals(run) : null;
 
+  const returnFocus = useReturnFocus(ui.traceOpen);
+
   return (
     <Sheet
       modal={!tour.active}
@@ -73,6 +76,7 @@ export function TraceSheet() {
         side="right"
         className="w-full gap-0 border-machine-line bg-machine p-0 text-machine-ink sm:max-w-xl"
         data-tour="trace-sheet"
+        onCloseAutoFocus={returnFocus}
         onInteractOutside={(e) => {
           if ((e.target as HTMLElement | null)?.closest("[data-tour-card]"))
             e.preventDefault();

@@ -24,6 +24,7 @@ import {
   photoVerdict,
 } from "@/lib/field-evidence";
 
+import { dropFocus } from "../focus";
 import { stubBrowserApis } from "../exchange/render";
 import {
   BASE,
@@ -284,7 +285,11 @@ describe("FieldEvidenceScreen", () => {
       event_id: null,
     });
     const backend = renderScreen({
-      [UPLOAD]: () => json(pending, { status: 201 }),
+      [UPLOAD]: () => {
+        // A browser drops focus from the button while it's disabled for the upload.
+        dropFocus();
+        return json(pending, { status: 201 });
+      },
       [LIST]: sequence(
         () => json(evidence()),
         () => json(evidence({ photos: [pending] })),
@@ -313,11 +318,19 @@ describe("FieldEvidenceScreen", () => {
     fireEvent.click(
       screen.getByRole("checkbox", { name: /I took this photo/ }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Upload photo" }));
+    const upload = screen.getByRole("button", { name: "Upload photo" });
+    upload.focus();
+    fireEvent.click(upload);
 
     expect(
       await screen.findByText(/the image model is reading it/),
     ).toBeInTheDocument();
+    // Focus goes back to the button once the upload ends (T48).
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Upload photo" }),
+      ).toHaveFocus(),
+    );
     const post = backend.requests.find((r) => r.method === "POST")!;
     expect(post.headers.get("content-type")).toBe("image/jpeg");
     expect((await post.arrayBuffer()).byteLength).toBe(file.size);

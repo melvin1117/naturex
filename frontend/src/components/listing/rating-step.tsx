@@ -35,6 +35,7 @@ import {
   type ListingFailure,
 } from "@/lib/listing";
 import { evidenceHref } from "@/lib/field-evidence";
+import { focusIfLost, useRestoreFocusAfterPending } from "@/lib/focus";
 import { ha } from "@/lib/prototype/format";
 import { num, reportFacts } from "@/lib/report-facts";
 
@@ -114,6 +115,17 @@ export function RatingStep({
   );
   const outcome = listingOutcome(asset);
   const draft = asset.status === "draft";
+  // "Rate this site" disables while it submits. If the listing leaves draft, the run replaces
+  // the button: focus its card's title. If the submit fails, focus returns to the button.
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const rateRef = useRef<HTMLButtonElement>(null);
+  const busy = submit.isPending || submittedRunId !== null;
+  useRestoreFocusAfterPending(draft && busy, rateRef);
+  const wasDraft = useRef(draft);
+  useEffect(() => {
+    if (wasDraft.current && !draft) focusIfLost(titleRef.current);
+    wasDraft.current = draft;
+  }, [draft]);
 
   async function rate() {
     setFailure(null);
@@ -135,7 +147,12 @@ export function RatingStep({
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
       <StepCard aria-labelledby="listing-state-title">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 id="listing-state-title" className="text-lg font-semibold">
+          <h2
+            ref={titleRef}
+            id="listing-state-title"
+            tabIndex={-1}
+            className="text-lg font-semibold outline-none"
+          >
             {draft ? "Ready to rate" : outcome.title}
           </h2>
           {asset.mock && <MockBadge />}
@@ -177,6 +194,7 @@ export function RatingStep({
                 </Button>
               </div>
               <Button
+                ref={rateRef}
                 size="lg"
                 onClick={() => void rate()}
                 disabled={submit.isPending || submittedRunId !== null}

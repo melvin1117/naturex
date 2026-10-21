@@ -12,16 +12,19 @@ export function PasswordField({
   autoComplete,
   hint,
   error,
+  describedBy: extraDescribedBy,
   onEdit,
 }: {
   autoComplete: "current-password" | "new-password";
   hint?: string;
   error?: string;
+  /** Another element that describes the field too (the form's error). */
+  describedBy?: string;
   onEdit: () => void;
 }) {
   const [visible, setVisible] = useState(false);
   const describedBy =
-    [hint && "password-hint", error && "password-error"]
+    [hint && "password-hint", error && "password-error", extraDescribedBy]
       .filter(Boolean)
       .join(" ") || undefined;
 

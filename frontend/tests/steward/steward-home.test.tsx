@@ -27,6 +27,7 @@ import { createDataLayer } from "@/lib/data-layer";
 import { PrototypeProvider } from "@/lib/prototype/store";
 import { stewardAssetId } from "@/components/shell/steward-community";
 
+import { dropFocus } from "../focus";
 import {
   BASE,
   community,
@@ -178,16 +179,20 @@ function setup(
     createEventSource: createFakeEventSource,
     pollIntervalMs: 60_000,
   });
-  render(
+  const tree = (content: ReactNode) => (
     <WorldProvider dataLayer={layer}>
       <PrototypeProvider>
         <TourProvider>
-          <StewardLayout>{page}</StewardLayout>
+          <StewardLayout>{content}</StewardLayout>
         </TourProvider>
       </PrototypeProvider>
-    </WorldProvider>,
+    </WorldProvider>
   );
-  return backend;
+  const view = render(tree(page));
+  return Object.assign(backend, {
+    layer,
+    showPage: (next: ReactNode) => view.rerender(tree(next)),
+  });
 }
 
 describe("creating a community", () => {
@@ -239,12 +244,102 @@ describe("creating a community", () => {
       ),
     );
     expect(backend.calls("GET /me/communities")).toBeGreaterThanOrEqual(2);
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Río Verde" }),
-    ).toBeVisible();
+    const heading = await screen.findByRole("heading", {
+      level: 1,
+      name: "Río Verde",
+    });
+    expect(heading).toBeVisible();
+    // The form that held focus is gone: the new home's name takes it (T48).
+    await waitFor(() => expect(heading).toHaveFocus());
     expect(
       screen.getAllByRole("link", { name: /List your land/ })[0],
     ).toHaveAttribute("href", `/steward/list?community=${created.id}`);
+  }, 15_000);
+
+  function createRoutes(mine: { current: MyCommunity[] }): Routes {
+    return {
+      "GET /me/communities": () => json(mine.current),
+      "POST /communities": () => {
+        mine.current = [{ ...created, role: "owner" }];
+        return json(created, { status: 201 });
+      },
+      [`GET /communities/${created.id}/summary`]: () =>
+        json(summary({ community: created })),
+      [`GET /communities/${created.id}/members`]: () => json(MEMBERS),
+    };
+  }
+
+  /** Focus may move a moment after the heading appears: give it the chance, then check. */
+  async function expectNoFocus(element: HTMLElement) {
+    await expect(
+      waitFor(() => expect(element).toHaveFocus(), { timeout: 400 }),
+    ).rejects.toThrow();
+  }
+
+  async function createFromForm() {
+    fireEvent.change(
+      await screen.findByLabelText("Community name", {}, { timeout: 5000 }),
+      { target: { value: "Río Verde" } },
+    );
+    const button = screen.getByRole("button", { name: "Create community" });
+    button.focus();
+    fireEvent.click(button);
+    // The form, and the button that held focus, give way to the page.
+    dropFocus();
+  }
+
+  it("focuses the page that replaces the form once, on any route (T48)", async () => {
+    nav.pathname = "/steward/list";
+    const backend = setup(<h1>List your land</h1>, {
+      communities: [],
+      routes: createRoutes({ current: [] }),
+    });
+    await createFromForm();
+    const heading = await screen.findByRole("heading", {
+      level: 1,
+      name: "List your land",
+    });
+    await waitFor(() => expect(heading).toHaveFocus());
+
+    // Later pages don't grab focus: nothing is left over to fire again.
+    heading.blur();
+    nav.pathname = "/steward";
+    backend.showPage(<StewardPage />);
+    const home = await screen.findByRole("heading", {
+      level: 1,
+      name: "Río Verde",
+    });
+    await expectNoFocus(home);
+  }, 15_000);
+
+  it("forgets a just-created community on sign-out or another account (T48)", async () => {
+    const backend = setup(<StewardPage />, {
+      communities: [],
+      routes: createRoutes({ current: [] }),
+    });
+    await createFromForm();
+    const heading = await screen.findByRole("heading", {
+      level: 1,
+      name: "Río Verde",
+    });
+    await waitFor(() => expect(heading).toHaveFocus());
+    heading.blur();
+
+    const home = () =>
+      screen.findByRole("heading", { level: 1, name: "Río Verde" });
+    // Another account signed in on this tab, then back.
+    act(() =>
+      backend.layer.session.set({
+        ...SIGNED_IN_WORLD,
+        me: { ...ROSA, id: "77777777-7777-4777-8777-777777777777" },
+      }),
+    );
+    act(() => backend.layer.session.set(SIGNED_IN_WORLD));
+    await expectNoFocus(await home());
+    // Signed out, then back.
+    act(() => backend.layer.session.set({ ...SIGNED_IN_WORLD, me: null }));
+    act(() => backend.layer.session.set(SIGNED_IN_WORLD));
+    await expectNoFocus(await home());
   }, 15_000);
 
   it("shows the account ID to share with an owner, with Copy", async () => {
@@ -758,6 +853,8 @@ describe("community settings", () => {
       routes: {
         [`GET /communities/${SELVA.id}`]: () => json(summary().community),
         [`POST /communities/${SELVA.id}/members`]: async (request) => {
+          // A browser drops focus from "Add" while it's disabled for the request.
+          dropFocus();
           const body = (await request.json()) as { user_id: string };
           return body.user_id === newcomer
             ? json(
@@ -779,14 +876,21 @@ describe("community settings", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Enter the account ID they shared with you.",
     );
+    expect(field).toHaveFocus();
+    const addButton = screen.getByRole("button", { name: "Add" });
     fireEvent.change(field, {
       target: { value: "12345678-1234-4234-8234-123456789012" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    addButton.focus();
+    fireEvent.click(addButton);
     expect(await screen.findByRole("alert")).toHaveTextContent(/No account/);
+    await waitFor(() => expect(field).toHaveFocus());
     fireEvent.change(field, { target: { value: newcomer } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    addButton.focus();
+    fireEvent.click(addButton);
     expect(await screen.findByText("Lucía is now a steward.")).toBeVisible();
+    // Ready for the next ID (T48).
+    await waitFor(() => expect(field).toHaveFocus());
   });
 
   it("shows a steward the details read-only", async () => {

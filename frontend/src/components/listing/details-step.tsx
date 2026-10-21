@@ -88,7 +88,15 @@ export function DetailsStep({
 
   return (
     <StepCard>
-      <form className="grid gap-6 md:grid-cols-2" onSubmit={submit} noValidate>
+      <h2 id="listing-details-title" className="mb-5 text-lg font-semibold">
+        Site details
+      </h2>
+      <form
+        className="grid gap-6 md:grid-cols-2"
+        onSubmit={submit}
+        noValidate
+        aria-labelledby="listing-details-title"
+      >
         <div className="space-y-2">
           <Label htmlFor="listing-community">Community</Label>
           <Input

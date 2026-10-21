@@ -45,7 +45,11 @@ export function NotACommunityMember({
         money.
       </p>
       <div className="mt-6 flex flex-wrap gap-2">
-        <Button asChild>
+        {/* A long site name wraps instead of pushing the page wider than a phone. */}
+        <Button
+          asChild
+          className="h-auto min-h-10 max-w-full shrink py-2 text-left whitespace-normal"
+        >
           <Link href={assetHref(assetId)}>
             See {name} on the Exchange
             <ArrowRight aria-hidden="true" />

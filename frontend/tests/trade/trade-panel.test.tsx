@@ -173,7 +173,7 @@ describe("TradePanel", () => {
     expect(
       await screen.findByText(/Members of this site's community can't trade/),
     ).toBeInTheDocument();
-    expect(buyButton()).toBeDisabled();
+    expect(buyButton()).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByRole("button", { name: "Max" })).toBeDisabled();
   });
 
@@ -191,7 +191,7 @@ describe("TradePanel", () => {
     expect(new URL(request.url).searchParams.toString()).toBe(
       "side=buy&qty=10",
     );
-    expect(buyButton()).toBeEnabled();
+    expect(buyButton()).not.toHaveAttribute("aria-disabled");
   });
 
   it("keeps units a positive whole number", async () => {
@@ -206,7 +206,7 @@ describe("TradePanel", () => {
     expect(units()).toHaveAccessibleDescription(
       "Enter a whole number of units, 1 or more.",
     );
-    expect(buyButton()).toBeDisabled();
+    expect(buyButton()).toHaveAttribute("aria-disabled", "true");
   });
 
   it("refuses a buy that costs more than the available cash", async () => {
@@ -218,7 +218,7 @@ describe("TradePanel", () => {
     expect(units()).toHaveAccessibleDescription(
       "That costs $200.20; you have $150.00 available.",
     );
-    expect(buyButton()).toBeDisabled();
+    expect(buyButton()).toHaveAttribute("aria-disabled", "true");
   });
 
   it("refuses a sell of more units than held", async () => {
@@ -238,7 +238,7 @@ describe("TradePanel", () => {
     );
     expect(
       screen.getByRole("button", { name: "Sell 10 units" }),
-    ).toBeDisabled();
+    ).toHaveAttribute("aria-disabled", "true");
   });
 
   it("disables Sell with nothing held", async () => {
@@ -312,9 +312,15 @@ describe("TradePanel", () => {
     });
     await quoted();
 
-    fireEvent.click(buyButton());
+    const submit = buyButton();
+    submit.focus();
+    fireEvent.click(submit);
 
     const receipt = (await screen.findByText(/Stake added/)).parentElement!;
+    // The button stays focusable (aria-disabled) through the order: focus never drops, and
+    // the status line announces the fill once (the receipt itself isn't a focus target).
+    expect(submit).toHaveFocus();
+    expect(receipt).not.toHaveAttribute("tabindex");
     expect(
       within(receipt).getByText("Play money now").nextSibling,
     ).toHaveTextContent("$9,799.80");
@@ -334,7 +340,7 @@ describe("TradePanel", () => {
     fireEvent.mouseDown(sellTab);
     fireEvent.change(units(), { target: { value: "5" } });
     const sell = await screen.findByRole("button", { name: "Sell 5 units" });
-    await waitFor(() => expect(sell).toBeEnabled());
+    await waitFor(() => expect(sell).not.toHaveAttribute("aria-disabled"));
 
     fireEvent.click(sell);
 
@@ -362,12 +368,14 @@ describe("TradePanel", () => {
           : quoteFor(request),
     });
     await quoted();
-    expect(buyButton()).toBeEnabled();
+    expect(buyButton()).not.toHaveAttribute("aria-disabled");
 
     slow = true;
     act(() => layer.cache.invalidate(["quote", ASSET_ID]));
 
-    await waitFor(() => expect(buyButton()).toBeDisabled());
+    await waitFor(() =>
+      expect(buyButton()).toHaveAttribute("aria-disabled", "true"),
+    );
     // The old numbers stay on screen, marked busy, until the new quote arrives.
     expect(screen.getByLabelText("Quote")).toHaveAttribute("aria-busy", "true");
     fireEvent.submit(units().closest("form")!);
@@ -384,7 +392,7 @@ describe("TradePanel", () => {
       ),
     );
     await quoted("$210.00");
-    expect(buyButton()).toBeEnabled();
+    expect(buyButton()).not.toHaveAttribute("aria-disabled");
   });
 
   it("explains insufficient cash from the order and re-reads the balance", async () => {
@@ -394,12 +402,18 @@ describe("TradePanel", () => {
     await quoted();
     const portfolioReads = backend.calls("GET /portfolio");
 
+    buyButton().focus();
     fireEvent.click(buyButton());
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
         "You don't have enough play money for this order now. Try fewer units.",
       ),
+    );
+    // A units problem: focus stays on the button, and the units field is described by it.
+    expect(buyButton()).toHaveFocus();
+    expect(units()).toHaveAccessibleDescription(
+      /You don't have enough play money for this order now/,
     );
     await waitFor(() =>
       expect(backend.calls("GET /portfolio")).toBeGreaterThan(portfolioReads),
@@ -436,7 +450,7 @@ describe("TradePanel", () => {
     fireEvent.submit(form);
     fireEvent.submit(form);
     const pending = await screen.findByRole("button", { name: "Buying…" });
-    expect(pending).toBeDisabled();
+    expect(pending).toHaveAttribute("aria-disabled", "true");
     fireEvent.click(pending);
     fireEvent.submit(form);
     expect(backend.calls(ORDER)).toBe(1);
@@ -471,10 +485,24 @@ describe("TradePanel", () => {
       });
       await quoted();
 
+      buyButton().focus();
       fireEvent.click(buyButton());
 
       const alert = await screen.findByRole("alert");
       await waitFor(() => expect(alert).toHaveTextContent(message));
+      // Focus stays on the button whatever the outcome; only a units problem describes the
+      // units field (not a sign-in, a may-have-filled or a closed market).
+      expect(buyButton()).toHaveFocus();
+      const unitsProblem =
+        status === 422 ||
+        [
+          "insufficient_cash",
+          "insufficient_shares",
+          "insufficient_supply",
+          "order_too_large",
+        ].includes(detail as string);
+      if (unitsProblem) expect(units()).toHaveAccessibleDescription(message);
+      else expect(units()).not.toHaveAccessibleDescription(message);
       if (link)
         expect(within(alert).getByRole("link", { name: link })).toBeVisible();
       expect(backend.calls(ORDER)).toBe(1);
@@ -508,6 +536,7 @@ describe("TradePanel", () => {
     });
     await quoted();
 
+    buyButton().focus();
     fireEvent.click(buyButton());
 
     await waitFor(() =>
@@ -516,6 +545,9 @@ describe("TradePanel", () => {
       ),
     );
     expect(backend.calls(ORDER)).toBe(1);
+    // Not a units problem: focus stays put and the units field isn't described by it.
+    expect(buyButton()).toHaveFocus();
+    expect(units()).not.toHaveAccessibleDescription(/couldn't confirm/);
   });
 
   it("shows a quote failure on the units field", async () => {
@@ -531,7 +563,7 @@ describe("TradePanel", () => {
     expect(
       screen.getByText("That order is too large. Try fewer units."),
     ).toHaveAttribute("aria-live", "polite");
-    expect(buyButton()).toBeDisabled();
+    expect(buyButton()).toHaveAttribute("aria-disabled", "true");
   });
 
   it("re-quotes when the price ticks", async () => {

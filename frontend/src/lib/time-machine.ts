@@ -7,10 +7,11 @@ import type {
   AssetRating,
   SentAlert,
   SimulatedAsset,
+  SimulateEvent,
   SimulateQuarter,
   TimeMachine,
 } from "./api/types";
-import { quarterLabel } from "./prototype/format";
+import { price, quarterLabel } from "./prototype/format";
 import { num } from "./report-facts";
 
 export type TimeMachineFailure = {
@@ -232,6 +233,42 @@ export function ratingChange(
     grade: [before?.grade ?? null, after?.grade ?? null],
     price: [num(before?.price), num(after?.price)],
   };
+}
+
+/** A missing value in a before → after cell. */
+export const DASH = "—";
+
+/** A health score as the result cells show it. */
+export function healthText(h: number | null): string {
+  return h === null ? DASH : h.toFixed(1);
+}
+
+/** A stake price as the result cells show it. */
+export function priceText(p: number | null): string {
+  return p === null ? DASH : price(p);
+}
+
+/** An injected event's heading: the stored event title, else the preset and the site. */
+export function eventTitle(result: SimulateEvent, name: string): string {
+  return result.event.title ?? `${result.preset} at ${name}`;
+}
+
+/**
+ * What an injected event did, in words: the panel's live region says it once it's done. The
+ * same words as the result cells' screen-reader labels (`changeCells`).
+ */
+export function eventOutcomeText(result: SimulateEvent, name: string): string {
+  const {
+    health,
+    grade,
+    price: stake,
+  } = ratingChange(result.before, result.after);
+  return (
+    `${eventTitle(result, name)}: ` +
+    `health ${healthText(health[0])} to ${healthText(health[1])}, ` +
+    `grade ${grade[0] ?? "none"} to ${grade[1] ?? "none"}, ` +
+    `stake price ${priceText(stake[0])} to ${priceText(stake[1])}.`
+  );
 }
 
 /** One run of a quarter, as its `rating_progress` events report it. */

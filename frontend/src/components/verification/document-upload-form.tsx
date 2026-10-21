@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import type { DocumentType, ListingDocument } from "@/lib/api/types";
+import { useRestoreFocusAfterPending } from "@/lib/focus";
 import {
   ACCEPT_ATTRIBUTE,
   DOC_TYPE_LABEL,
@@ -76,6 +77,9 @@ export function DocumentUploadForm({
   };
 
   const pending = upload.isPending;
+  // The submit button disables while uploading, which drops focus: give it back after.
+  const submitRef = useRef<HTMLButtonElement>(null);
+  useRestoreFocusAfterPending(pending, submitRef);
   const errorId = (field: Field) => `${id}-${field}-error`;
 
   return (
@@ -160,7 +164,7 @@ export function DocumentUploadForm({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={disabled || pending}>
+        <Button ref={submitRef} type="submit" disabled={disabled || pending}>
           {pending ? (
             <Spinner aria-hidden="true" role="presentation" />
           ) : (

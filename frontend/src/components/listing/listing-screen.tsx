@@ -3,7 +3,7 @@
 import { ArrowLeft, Check, RefreshCwIcon, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
 import { ListingFlow as PrototypeListingFlow } from "@/components/proto/listing-flow";
@@ -12,6 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { isApiAssetId } from "@/lib/asset-detail";
 import type { AssetDetail, MyCommunity } from "@/lib/api/types";
+import { focusIfLost } from "@/lib/focus";
 import { useAsset, useWorld } from "@/lib/hooks";
 import {
   boundaryPoints,
@@ -87,6 +88,7 @@ function ListingFromUrl() {
       key={`${active.id}:${shown ?? "new"}`}
       community={active}
       assetId={shown}
+      focusOnMount={shown !== null && shown === created}
       onCreated={(asset) => {
         setCreated(asset.id);
         router.replace(listingHref(active.id, asset.id), { scroll: false });
@@ -98,10 +100,13 @@ function ListingFromUrl() {
 function ListingLoader({
   community,
   assetId,
+  focusOnMount,
   onCreated,
 }: {
   community: MyCommunity;
   assetId: string | null;
+  /** The draft just saved here remounts this loader: its next step takes focus. */
+  focusOnMount: boolean;
   onCreated: (asset: AssetDetail) => void;
 }) {
   const { communities } = useStewardCommunity();
@@ -162,6 +167,7 @@ function ListingLoader({
       community={community}
       meId={meId}
       asset={asset ?? null}
+      focusOnMount={focusOnMount}
       onCreated={onCreated}
     />
   );
@@ -202,11 +208,13 @@ function ListingWizard({
   community,
   meId,
   asset,
+  focusOnMount,
   onCreated,
 }: {
   community: MyCommunity;
   meId: string;
   asset: AssetDetail | null;
+  focusOnMount: boolean;
   onCreated: (asset: AssetDetail) => void;
 }) {
   const storageKey = unsavedListingKey(meId, community.id);
@@ -260,6 +268,15 @@ function ListingWizard({
       : status === "listed" || status === "suspended"
         ? 3
         : 2;
+
+  // A new step replaces the one that held focus: move it to the step, not back to <body>.
+  const stepRef = useRef<HTMLElement>(null);
+  const shownStep = useRef<number | null>(focusOnMount ? null : step);
+  useEffect(() => {
+    if (shownStep.current === step) return;
+    shownStep.current = step;
+    focusIfLost(stepRef.current);
+  }, [step]);
 
   return (
     <Page>
@@ -316,12 +333,18 @@ function ListingWizard({
                 )}
               </span>
               {label}
+              {i < step && <span className="sr-only">, done</span>}
             </span>
           </li>
         ))}
       </ol>
 
-      <div className="mt-6">
+      <section
+        ref={stepRef}
+        tabIndex={-1}
+        aria-label={`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]}`}
+        className="mt-6 rounded-[1.75rem] outline-none"
+      >
         {step === 0 && (
           <DetailsStep
             community={community}
@@ -368,7 +391,7 @@ function ListingWizard({
         {step === 3 && asset && (
           <ListedStep community={community} asset={asset} />
         )}
-      </div>
+      </section>
     </Page>
   );
 }

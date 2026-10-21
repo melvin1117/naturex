@@ -117,6 +117,7 @@ export function TradeForm({
 
   const unitsId = `${ids}-units`;
   const messageId = `${ids}-units-message`;
+  const failureId = `${ids}-order-failure`;
   const maxQty = current?.max_qty ?? quote.data?.max_qty ?? null;
   // Radix points every trigger at its panel, but only the active side's panel is rendered.
   const noPanel = { "aria-controls": undefined };
@@ -158,7 +159,11 @@ export function TradeForm({
               value={unitsText}
               onChange={(event) => change(event.target.value)}
               aria-invalid={fieldMessage && !blocked ? true : undefined}
-              aria-describedby={fieldMessage ? messageId : undefined}
+              aria-describedby={
+                [fieldMessage && messageId, failure?.units && failureId]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
               className="tabular text-lg"
             />
             {/* Always rendered so a quote error arriving later is announced. */}
@@ -205,7 +210,7 @@ export function TradeForm({
           <div role="alert">
             {failure && (
               <div className="rounded-2xl bg-destructive/10 p-3 text-sm text-destructive">
-                <p>{failure.message}</p>
+                <p id={failureId}>{failure.message}</p>
                 {failure.signIn && (
                   <Link
                     href={signInHref}
@@ -225,11 +230,13 @@ export function TradeForm({
               </div>
             )}
           </div>
+          {/* aria-disabled, not disabled: the button keeps keyboard focus through the order
+              and its outcome; `submit` ignores it until a settled quote is ready. */}
           <Button
             type="submit"
-            className="w-full"
+            className="w-full aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
             size="lg"
-            disabled={!ready || pending}
+            aria-disabled={!ready || pending || undefined}
             data-tour="trade-submit"
           >
             {pending

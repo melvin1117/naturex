@@ -4,7 +4,10 @@ import { ApiError } from "@/lib/api/errors";
 import {
   alertBatches,
   eventFailure,
+  eventOutcomeText,
+  healthText,
   MAX_ALERT_IDS,
+  priceText,
   mergeSentAlerts,
   quarterFailure,
   quarterOutcomeText,
@@ -16,7 +19,7 @@ import {
   type QuarterRun,
 } from "@/lib/time-machine";
 
-import { QUARTER, sentAlert, STATE } from "./fixtures";
+import { EVENT, QUARTER, sentAlert, STATE } from "./fixtures";
 
 const error = (
   code: string | null,
@@ -206,5 +209,33 @@ describe("sent alert batches", () => {
         [at("c1", "2026-10-20T11:00:00Z"), at("c2", "2026-10-20T10:00:00Z")],
       ]).map((a) => a.id),
     ).toEqual(["c1", "b1", "c2", "b2"]);
+  });
+});
+
+describe("eventOutcomeText", () => {
+  it("says the change in the result cells' words", () => {
+    expect(eventOutcomeText(EVENT, "Xochimilco Wetland")).toBe(
+      "Encroachment at Xochimilco Wetland (simulated): health 76.2 to 65.4, " +
+        "grade A to BBB, stake price $21.47 to $18.20.",
+    );
+  });
+
+  it("uses the cells' dash for a missing value, and the preset without a title", () => {
+    const result = {
+      ...EVENT,
+      event: { ...EVENT.event, title: null },
+      before: null,
+    };
+    expect(eventOutcomeText(result, "Sumidero Forest")).toBe(
+      "encroachment at Sumidero Forest: health — to 65.4, " +
+        "grade none to BBB, stake price — to $18.20.",
+    );
+  });
+
+  it("formats like the cells", () => {
+    expect(healthText(null)).toBe("—");
+    expect(healthText(81.25)).toBe("81.3");
+    expect(priceText(null)).toBe("—");
+    expect(priceText(23.1)).toBe("$23.10");
   });
 });
