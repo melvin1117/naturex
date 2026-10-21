@@ -306,7 +306,7 @@ export function BoundaryStep({
             ref={stage}
             onKeyDown={onStageKey}
             className={cn(
-              "relative overflow-hidden bg-secondary",
+              "nx-map-stage relative overflow-hidden bg-secondary",
               expanded
                 ? "fixed inset-0 z-50 h-dvh rounded-none"
                 : "h-[min(64dvh,680px)] min-h-[380px] rounded-3xl lg:h-[min(76dvh,820px)]",
@@ -340,7 +340,7 @@ export function BoundaryStep({
                   onLocate={setFocus}
                 />
               </div>
-              <div className="pointer-events-none absolute bottom-7 left-3 z-[1000] max-w-[calc(100%-4.5rem)] [&>*]:pointer-events-auto">
+              <div className="pointer-events-none absolute bottom-7 left-3 z-[1000] max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-4.5rem)]">
                 <DrawingDock
                   mode={editor.mode}
                   corners={current.length}

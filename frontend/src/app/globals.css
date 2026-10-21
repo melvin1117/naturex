@@ -322,6 +322,13 @@
 
 /* Boundary editor handles (#215): a dot inside a larger hit area, so hover can scale the dot
    without fighting Leaflet's positioning transform on the marker itself. */
+/* Phones pinch to zoom: the zoom buttons give their corner to the drawing dock. */
+@media (max-width: 639px) {
+  .nx-map-stage .leaflet-control-zoom {
+    display: none;
+  }
+}
+
 /* Doubled class: leaflet.css (loaded after this file) sets markers to display: block. */
 .nx-handle.nx-handle {
   display: grid;

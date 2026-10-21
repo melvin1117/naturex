@@ -72,7 +72,6 @@ export function PlaceSearch({
 }) {
   const search = usePlaceSearch();
   const inputId = useId();
-  const listId = useId();
   const root = useRef<HTMLDivElement>(null);
   const cache = useRef(new Map<string, PlaceSearchOut>());
   const lastAt = useRef(0);
@@ -162,8 +161,6 @@ export function PlaceSearch({
           autoComplete="off"
           enterKeyHint="search"
           maxLength={120}
-          aria-controls={open && results.length ? listId : undefined}
-          aria-expanded={open && results.length > 0}
           aria-describedby={message ? `${inputId}-message` : undefined}
           className="h-9 min-w-0 flex-1 border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
         />
@@ -186,7 +183,6 @@ export function PlaceSearch({
       {open && results.length > 0 && (
         <div className={cn("nx-rise mt-2 overflow-hidden rounded-2xl", FLOAT)}>
           <ul
-            id={listId}
             aria-label="Places found"
             className="max-h-64 overflow-y-auto p-1"
           >
@@ -423,7 +419,8 @@ export function DrawingDock({
   disabled: boolean;
 }) {
   return (
-    <div className="flex max-w-full flex-col items-start gap-2">
+    // Only the hint and the dock take clicks; the space around them is still the map.
+    <div className="pointer-events-none flex max-w-full flex-col items-start gap-2 [&>*]:pointer-events-auto">
       {hint && (
         <p
           className={cn(
