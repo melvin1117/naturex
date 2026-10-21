@@ -243,7 +243,7 @@ function HoldingsTable({
   cards: Map<string, AssetCard>;
 }) {
   return (
-    <Table>
+    <Table scrollLabel="Your stakes, by site">
       <TableHeader>
         <TableRow>
           <TableHead>Site</TableHead>

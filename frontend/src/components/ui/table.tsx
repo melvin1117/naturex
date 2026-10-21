@@ -3,11 +3,26 @@
 import * as React from "react";
 import { cn } from "cn";
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+/**
+ * `scrollLabel` opts a wide table into keyboard scrolling: its scroll container becomes a
+ * focusable, labelled region (WCAG 2.1.1), so arrow keys scroll it without a pointer.
+ */
+function Table({
+  className,
+  scrollLabel,
+  ...props
+}: React.ComponentProps<"table"> & { scrollLabel?: string }) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={cn(
+        "relative w-full overflow-x-auto",
+        scrollLabel &&
+          "rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring",
+      )}
+      {...(scrollLabel
+        ? { role: "region", "aria-label": scrollLabel, tabIndex: 0 }
+        : {})}
     >
       <table
         data-slot="table"

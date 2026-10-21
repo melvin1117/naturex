@@ -9,6 +9,7 @@ import {
   SheetDescription,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { useReturnFocus } from "@/lib/use-return-focus";
 
 describe("Stat", () => {
@@ -60,5 +61,39 @@ describe("useReturnFocus", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
     expect(opener).toHaveFocus();
+  });
+});
+
+describe("Table", () => {
+  it("leaves the scroll container alone by default", () => {
+    const { container } = render(
+      <Table>
+        <TableBody>
+          <TableRow>
+            <TableCell>1</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>,
+    );
+    const scroller = container.querySelector("[data-slot=table-container]");
+    expect(scroller).not.toHaveAttribute("tabindex");
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+  });
+
+  it("makes a labelled, focusable scroll region with scrollLabel", () => {
+    render(
+      <Table scrollLabel="Your stakes, by site">
+        <TableBody>
+          <TableRow>
+            <TableCell>1</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>,
+    );
+    const region = screen.getByRole("region", {
+      name: "Your stakes, by site",
+    });
+    expect(region).toHaveAttribute("tabindex", "0");
+    expect(region).toContainElement(screen.getByRole("table"));
   });
 });
