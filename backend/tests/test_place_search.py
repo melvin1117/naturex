@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterator, Mapping
 from typing import Any
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -12,19 +14,23 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Connection, create_engine
 from sqlmodel import Session
 
-from app.agents.news_scout import NominatimRateLimiter
 from app.config import get_settings
 from app.db import get_session
 from app.main import app
-from app.routers.places import get_place_search
+from app.routers.places import get_place_search, get_place_search_quota
 from app.sandbox import ensure_live_world
 from app.seed import seed
+from app.services import place_search as place_search_module
+from app.services.nominatim import NominatimRateLimiter
 from app.services.place_search import (
     MAX_RESULTS,
     NOMINATIM_SEARCH_URL,
     NominatimPlaceSearch,
     PlaceSearchBusy,
+    PlaceSearchQuota,
+    PlaceSearchRateLimited,
     PlaceSearchUnavailable,
+    default_place_search,
 )
 from tests.conftest import alembic_cfg, requires_db
 
@@ -136,6 +142,81 @@ def test_failures_are_unavailable(get: FakeGet) -> None:
         searcher(get).search("Xochimilco")
 
 
+def test_a_busy_answer_does_not_take_a_slot() -> None:
+    clock = Clock()
+    limiter = NominatimRateLimiter(clock=clock, sleep=lambda _s: None)
+    assert [limiter.wait(2.0) for _ in range(3)] == [True, True, True]  # slots 100, 101, 102
+    assert limiter.wait(2.0) is False  # 103 is 3 s away
+    clock.now = 101.5
+    # 103 is now 1.5 s away: still free, because the busy answer didn't reserve it.
+    assert limiter.wait(2.0) is True
+    assert limiter.wait(1.0) is False
+
+
+def test_failures_are_retried_but_empty_answers_are_cached() -> None:
+    get = FakeGet(error=httpx.ConnectError("offline"))
+    clock = Clock()
+    search = searcher(get, clock)
+    with pytest.raises(PlaceSearchUnavailable):
+        search.search("Atlantis")
+    get.error = None
+    get.payload = []
+    clock.now += 5
+    assert search.search("Atlantis") == []
+    assert search.search("atlantis") == []
+    assert len(get.calls) == 2
+
+
+def test_identical_searches_in_flight_share_one_request() -> None:
+    release = threading.Event()
+    started = threading.Event()
+
+    class SlowGet(FakeGet):
+        def __call__(
+            self, url: str, *, params: Mapping[str, Any], headers: Mapping[str, str]
+        ) -> Any:
+            started.set()
+            assert release.wait(5)
+            return super().__call__(url, params=params, headers=headers)
+
+    get = SlowGet()
+    search = searcher(get)
+    answers: list[Any] = []
+    first = threading.Thread(target=lambda: answers.append(search.search("Xochimilco")))
+    first.start()
+    assert started.wait(5)
+    second = threading.Thread(target=lambda: answers.append(search.search("xochimilco")))
+    second.start()
+    release.set()
+    first.join(5)
+    second.join(5)
+    assert len(get.calls) == 1
+    assert len(answers) == 2 and answers[0] == answers[1]
+
+
+def test_the_default_searcher_follows_the_user_agent_setting() -> None:
+    place_search_module._default = None
+    first = default_place_search("NatureX-test/1")
+    assert default_place_search("NatureX-test/1") is first
+    second = default_place_search("NatureX-test/2")
+    assert second is not first
+    assert second.user_agent == "NatureX-test/2"
+    place_search_module._default = None
+
+
+def test_the_quota_counts_each_account_per_rolling_minute() -> None:
+    clock = Clock()
+    quota = PlaceSearchQuota(2, clock=clock)
+    rosa, arjun = uuid4(), uuid4()
+    quota.take(rosa)
+    quota.take(rosa)
+    with pytest.raises(PlaceSearchRateLimited):
+        quota.take(rosa)
+    quota.take(arjun)  # another account has its own count
+    clock.now += 60
+    quota.take(rosa)  # a minute later the first two have expired
+
+
 def test_needs_a_user_agent() -> None:
     with pytest.raises(ValueError, match="NOMINATIM_USER_AGENT"):
         NominatimPlaceSearch(" ")
@@ -193,8 +274,9 @@ def test_route_returns_places_with_attribution(client: TestClient) -> None:
     assert body["results"][0]["label"] == "Xochimilco, Mexico City, Mexico"
     assert body["results"][0]["bbox"] == [19.1, -99.2, 19.3, -99.0]
     assert "OpenStreetMap" in body["attribution"]
-    assert client.get("/places/search", params={"q": "x"}).status_code == 422
-    assert client.get("/places/search", params={"q": "  "}).status_code == 422
+    for short in ("x", "  a  "):
+        res = client.get("/places/search", params={"q": short})
+        assert (res.status_code, res.json()["detail"]) == (422, "place_query_too_short")
 
 
 @requires_db
@@ -205,6 +287,14 @@ def test_route_maps_failures_to_codes(client: TestClient) -> None:
     )
     res = client.get("/places/search", params={"q": "Xochimilco"})
     assert (res.status_code, res.json()["detail"]) == (503, "place_search_unavailable")
+
+    one_a_minute = PlaceSearchQuota(1)
+    app.dependency_overrides[get_place_search_quota] = lambda: one_a_minute
+    app.dependency_overrides[get_place_search] = lambda: searcher(FakeGet())
+    assert client.get("/places/search", params={"q": "Xochimilco"}).status_code == 200
+    res = client.get("/places/search", params={"q": "Xochimilco"})
+    assert (res.status_code, res.json()["detail"]) == (429, "place_search_rate_limited")
+    del app.dependency_overrides[get_place_search_quota]
 
     class Busy(NominatimPlaceSearch):
         def search(self, query: str) -> list[Any]:

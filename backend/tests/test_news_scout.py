@@ -24,7 +24,6 @@ from app.agents.news_scout import (
     NewsScoutClassificationItem,
     NewsScoutClassificationOutput,
     NominatimGeocoder,
-    NominatimRateLimiter,
     NominatimResponse,
     TavilyNewsSearch,
     _cache_key,
@@ -41,6 +40,7 @@ from app.config import Settings
 from app.mocks import news_scout_fixture
 from app.schemas import NewsScoutOutput
 from app.seed import DEMO_SITES
+from app.services.nominatim import NominatimRateLimiter
 
 FIXTURES = Path(__file__).parent / "fixtures" / "news"
 ASSET = NewsScoutAsset(

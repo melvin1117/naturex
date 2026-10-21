@@ -3778,7 +3778,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 2,
               "maxLength": 120,
               "title": "Q"
             }
@@ -3798,21 +3797,14 @@
           "401": {
             "description": "auth_required"
           },
+          "422": {
+            "description": "`place_query_too_short`: fewer than 2 characters besides spaces"
+          },
           "429": {
-            "description": "place_search_busy"
+            "description": "`place_search_rate_limited`: this account's searches per minute; `place_search_busy`: the process's Nominatim slot is more than 2 s away (`Retry-After: 1`)"
           },
           "503": {
             "description": "place_search_unavailable"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       }

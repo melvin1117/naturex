@@ -95,6 +95,9 @@ class Settings(BaseSettings):
 
     tavily_api_key: str = ""
     nominatim_user_agent: str = "NatureX/0.1 (https://github.com/melvin1117/naturex)"
+    # Listing map place search (#215): searches per account per rolling minute, per API process
+    # (429 `place_search_rate_limited` after), on top of Nominatim's shared 1 request/s.
+    place_searches_per_user_per_minute: int = Field(default=20, ge=1)
     ee_service_account_json: str = ""
     # Live Earth Engine metrics for new listings (T60). Off by default (tests and CI); on, a new
     # polygon's rating run computes its metrics live with the T11/T13 methods and caches them.

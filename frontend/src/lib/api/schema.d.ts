@@ -7537,16 +7537,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description `place_query_too_short`: fewer than 2 characters besides spaces */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
-            /** @description place_search_busy */
+            /** @description `place_search_rate_limited`: this account's searches per minute; `place_search_busy`: the process's Nominatim slot is more than 2 s away (`Retry-After: 1`) */
             429: {
                 headers: {
                     [name: string]: unknown;
