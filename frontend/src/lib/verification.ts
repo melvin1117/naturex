@@ -124,6 +124,17 @@ export function checkCounts(
   return counts;
 }
 
+/**
+ * The current run while it still waits for a decision: a new submission adds to it, keeping
+ * its documents (#210). Null when there's none, or once it's decided.
+ */
+export function waitingRun(
+  runs: readonly VerificationRun[] | undefined,
+): VerificationRun | null {
+  const run = currentRun(runs);
+  return run?.level === "documents_submitted" ? run : null;
+}
+
 export function currentRun(
   runs: readonly VerificationRun[] | undefined,
 ): VerificationRun | null {
@@ -251,6 +262,10 @@ export function submitFailure(error: ApiError): string {
       return "One of those documents isn't on this listing any more. Choose again.";
     case "document_already_submitted":
       return "One of those documents was already submitted. Choose again.";
+    case "submission_full":
+      return `A submission holds at most ${MAX_RUN_DOCUMENTS} documents. Remove one from your submission to make room, or add fewer.`;
+    case "document_not_in_submission":
+      return "Your submission changed since you opened this page. Reload and choose again.";
     case "listing_closed":
       return "This listing is withdrawn or not eligible, so it can't be verified.";
     case "members_only":

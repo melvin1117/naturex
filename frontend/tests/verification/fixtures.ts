@@ -29,7 +29,7 @@ export function document(
   return {
     id: DOC_TITLE,
     asset_id: ASSET_ID,
-    run_id: null,
+    submitted: false,
     doc_type: "title",
     media_type: "application/pdf",
     size_bytes: 1_258_291,
@@ -84,10 +84,10 @@ export function run(overrides: Partial<VerificationRun> = {}): VerificationRun {
     evidence_kind: "real",
     checklist: CHECKLIST,
     documents: [
-      document({ run_id: RUN_ID }),
+      document({ submitted: true }),
       document({
         id: DOC_MINUTES,
-        run_id: RUN_ID,
+        submitted: true,
         doc_type: "assembly_minutes",
         media_type: "image/png",
         size_bytes: 348_160,

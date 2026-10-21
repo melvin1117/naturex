@@ -52,6 +52,13 @@ export function RunDecision({ run }: { run: VerificationRun }) {
   );
 }
 
+/** A superseded run that was never decided was replaced, not left waiting. */
+function historyLabel(run: VerificationRun): string {
+  if (!run.is_current && run.level === "documents_submitted")
+    return "Replaced by a later submission";
+  return LEVEL_LABEL[run.level];
+}
+
 /** Earlier runs of a listing, newest first; runs are write-once, so this is the full record. */
 export function RunHistory({ runs }: { runs: readonly VerificationRun[] }) {
   if (runs.length === 0) return null;
@@ -66,7 +73,7 @@ export function RunHistory({ runs }: { runs: readonly VerificationRun[] }) {
                 className="size-4 text-muted-foreground"
                 aria-hidden="true"
               />
-              <span className="font-medium">{LEVEL_LABEL[run.level]}</span>
+              <span className="font-medium">{historyLabel(run)}</span>
               <span className="text-muted-foreground">
                 {date(run.created_at)}
               </span>
@@ -76,6 +83,8 @@ export function RunHistory({ runs }: { runs: readonly VerificationRun[] }) {
               </span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
+              {run.documents.length}{" "}
+              {run.documents.length === 1 ? "document" : "documents"}:{" "}
               {run.documents.map((d) => DOC_TYPE_LABEL[d.doc_type]).join(", ")}
             </p>
             {(run.reason || run.revoke_reason) && (
