@@ -3,21 +3,18 @@
 > Part of P01 (#19). Product context: [PRODUCT.md](../../PRODUCT.md). These rules apply to every string in the UI, the tour and the demo video captions.
 
 ## 1. Voice by surface
-
-| Surface                                           | Voice                                                       | Example                                                                                                  |
-| ------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Surface | Voice | Example |
+|---|---|---|
 | Report, grade, value, market, Agent Trace, ledger | **Sober rating agency:** precise, evidence-led, understated | "Health score fell from 74.2 to 63.8 after a reported 40 ha industrial expansion (source: 12 Sep 2026)." |
-| Listing, community, judge landing, tour hints     | **Warm and plain:** celebrates stewards, still honest       | "Draw the boundary of the land your community protects. We'll check the shape and area as you go."       |
+| Listing, community, judge landing, tour hints | **Warm and plain:** celebrates stewards, still honest | "Draw the boundary of the land your community protects. We'll check the shape and area as you go." |
 
 Everywhere:
-
 - Short sentences, active voice, no exclamation marks in sober surfaces.
 - Say what happened, then why, then what to do next.
-- No hype words: _revolutionary, guaranteed, moon, returns, profit, opportunity, invest now_.
+- No hype words: *revolutionary, guaranteed, moon, returns, profit, opportunity, invest now*.
 - Name the AI's role honestly: the AI **explains**, **classifies** and **audits**; formulas **compute**. Never "the AI valued your land".
 
 ## 2. Numbers
-
 - **Values are always a range with a midpoint and confidence.** Format: `$9.8M–$13.4M /yr · mid $11.7M · 87% confidence`. Never show a single value alone.
 - Compact currency for large values (`$11.7M`, `$480K`); full precision only in tables and the trace (`$11,702,340`).
 - Health score: one decimal (`77.6`), out of 100 when shown alone (`77.6 / 100`).
@@ -28,17 +25,16 @@ Everywhere:
 - Prices are play money and always labelled as such the first time they appear on a screen ("Sandbox price").
 
 ## 3. Grades
-
-| Grade | Health score | Label (plain language)         |
-| ----- | ------------ | ------------------------------ |
-| AAA   | ≥ 90         | Exceptional health             |
-| AA    | ≥ 80         | Very strong health             |
-| A     | ≥ 70         | Strong health                  |
-| BBB   | ≥ 60         | Good health                    |
-| BB    | ≥ 50         | Moderate health, some pressure |
-| B     | ≥ 40         | Under pressure                 |
-| C     | ≥ 30         | Serious pressure               |
-| D     | < 30         | Critical                       |
+| Grade | Health score | Label (plain language) |
+|---|---|---|
+| AAA | ≥ 90 | Exceptional health |
+| AA | ≥ 80 | Very strong health |
+| A | ≥ 70 | Strong health |
+| BBB | ≥ 60 | Good health |
+| BB | ≥ 50 | Moderate health, some pressure |
+| B | ≥ 40 | Under pressure |
+| C | ≥ 30 | Serious pressure |
+| D | < 30 | Critical |
 
 - Always show the grade with its health score and plain label the first time on a screen: `A · 77.6 · Strong health`.
 - Grade changes name both grades and the cause: "Downgraded A → BBB: encroachment reported on the northern edge."
@@ -46,14 +42,12 @@ Everywhere:
 - AI adjustments are explicit: "Auditor adjusted −6.0 (cited: event #3, NDVI trend)." Adjustments outside ±10 cannot happen; don't imply they could.
 
 ## 4. Sandbox wording
-
 - The persistent banner: **"Sandbox · play money only. Nothing here is a real security or investment."**
 - First-run judge landing repeats it in one line; the trade panel repeats it near the confirm button.
 - Use "play money", "sandbox balance". Never "funds", "deposit", "withdraw", "wallet" for the user's own money.
 - Mock or cached data is labelled: "Cached result (live service busy)" or "Mock mode: no API keys configured". Live AI steps get a **Live** badge.
 
 ## 5. Vocabulary (softened market terms)
-
 The API and database keep their names (`shares`, `ipo`, `orders`, `community_wallet`). The UI uses the terms below. Market terms appear **only inside the trade panel**, with sandbox framing.
 
 > **Status: proposed.** Review in the P01 PR; change the table, not individual screens.
@@ -79,7 +73,6 @@ The API and database keep their names (`shares`, `ipo`, `orders`, `community_wal
 | P&L | change in value (play money) | P&L (play money) |
 
 ## 6. Errors, empty and waiting states
-
 - Say what happened in plain words, then the fix. No codes unless in the trace.
   - Polygon too small: "This area is 6 ha. Sites need at least 10 ha."
   - Overlap: "This boundary overlaps the Xochimilco Wetland site. Adjust the edge to continue."
@@ -94,23 +87,21 @@ The API and database keep their names (`shares`, `ipo`, `orders`, `community_wal
   - They never contradict the screen: under a rated site, not "once a site has been rated" but "Mock ratings don't include the Auditor's recommendations. A live rating may list concrete steps here that would strengthen the grade."
 
 ## 7. Where feedback goes
-
 Pick the lowest rung that's enough (#216; `frontend/src/lib/feedback.ts`). One announcement per change, and feedback never takes focus unless the user's own action removed what had it.
 
-| Rung         | Use for                                               | How                                                                                                                                           |
-| ------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Inline    | Field validity, a refused order                       | Text under the field (`aria-describedby`, polite), with the fix next to it                                                                    |
-| 2. In place  | The surface the user acted on                         | A receipt, a row that washes (`nx-wash`), a number counting to its new value; a link to where the consequence also lives ("View your stakes") |
-| 3. Toast     | A consequence on another page, or from the background | Signed in or out, a new alert. Sonner, ≤ 4 s (the welcome 2.5 s, alerts 7 s), at most one action. Never an error the user has to fix          |
-| 4. Milestone | Listed, opened to supporters, a first stake           | A staged reveal, once per journey step (WP1)                                                                                                  |
+| Rung | Use for | How |
+|---|---|---|
+| 1. Inline | Field validity, a refused order | Text under the field (`aria-describedby`, polite), with the fix next to it |
+| 2. In place | The surface the user acted on | A receipt, a row that washes (`nx-wash`), a number counting to its new value; a link to where the consequence also lives ("View your stakes") |
+| 3. Toast | A consequence on another page, or from the background | Signed in or out, a new alert. Sonner, ≤ 4 s (the welcome 2.5 s, alerts 7 s), at most one action. Never an error the user has to fix |
+| 4. Milestone | Listed, opened to supporters, a first stake | A staged reveal, once per journey step |
 
-- **Trades:** the receipt is the confirmation, not a toast. After a fill the trade panel's balance and units count to their new values, and the stake's row on _Your stakes_ washes once when the user next opens it.
+- **Trades:** the receipt is the confirmation, not a toast. After a fill the trade panel's balance and units count to their new values, and the stake's row on *Your stakes* washes once when the user next opens it.
 - **Live prices:** a moved price flashes its colour for 600 ms, then settles back to ink and keeps a ▲/▼ arrow (with text for screen readers). Ticks aren't announced.
 - **Toasts sit at the bottom:** bottom-left on wide screens, full width at the bottom on phones, so they never cover the header, the account menu or the trade panel.
 - **Reduced motion:** washes, flashes and counts show their final state at once; the arrow and the text stay.
 
 ## 8. Tour hints
-
 - Two layers on every step, each one or two sentences:
   - 💡 **Why this matters** (warm, product): "Rosa's cooperative gets paid for keeping the wetland alive, without selling it."
   - ⚙️ **Tech behind it** (sober, specific): "Nemotron 3 Ultra audits the evidence; the grade itself comes from a tested formula."
@@ -118,7 +109,6 @@ Pick the lowest rung that's enough (#216; `frontend/src/lib/feedback.ts`). One a
 - Name models exactly as on Token Factory ("Nemotron 3 Super"), and say **Live** only for real calls.
 
 ## 9. Capitalisation and mechanics
-
 - Sentence case for headings, buttons and labels ("Back this site", not "Back This Site").
 - Product names keep their case: NatureX, Nature Ledger, Agent Trace, Time Machine, Copilot, Nemotron, Tavily.
 - Use the Oxford comma; use "and" rather than "&" in body text.
