@@ -35,10 +35,11 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal, get_args
 from uuid import UUID
 
-from sqlalchemy import func, text, update
+from sqlalchemy import ColumnElement, func, text, update
+from sqlalchemy.orm import Mapped
 from sqlmodel import Session, col, select
 
 from app.events import publish
@@ -92,7 +93,9 @@ MAX_DOCUMENTS_PER_ASSET = 20
 """Documents a listing may hold in total (every run's included), so uploads can't fill the DB."""
 MAX_RUN_DOCUMENTS = 3
 """Documents one run covers (ADR-0006 §2), carried-over ones included."""
-DECIDED_LEVELS = (VerificationLevel.VERIFIED, VerificationLevel.REJECTED, VerificationLevel.REVOKED)
+DecidedLevel = Literal["verified", "rejected", "revoked"]
+"""A run's level once a reviewer decided it (#211): the decided listings' filter."""
+DECIDED_LEVELS = tuple(VerificationLevel(level) for level in get_args(DecidedLevel))
 
 # Refusal codes (HTTP 409 unless noted).
 LISTING_CLOSED = "listing_closed"
@@ -266,20 +269,25 @@ def gate_refusal(session: Session, asset: Asset) -> str | None:
     return None
 
 
+LAST_DECISION = func.coalesce(col(VerificationRun.revoked_at), col(VerificationRun.decided_at))
+"""A decided run's latest decision: its revocation, else its decision. The decided listings'
+order (index `ix_verification_runs_decided`)."""
+
+
 def _current_runs(
     session: Session,
     world_id: UUID,
     levels: Sequence[VerificationLevel],
     exclude_communities: Iterable[UUID],
     *,
-    newest_first: bool,
+    order_by: Sequence[ColumnElement[Any] | Mapped[Any]],
     limit: int,
     offset: int,
     asset_id: UUID | None = None,
 ) -> list[tuple[Asset, RunView]]:
     """Listings whose current run is at one of `levels`, without the excluded communities'
-    listings: one page, in two queries (the runs with their assets, then their documents).
-    Oldest submission first, or newest decision (a revocation, else the decision) first."""
+    listings, in `order_by` order: one page, in two queries (the runs with their assets, then
+    their documents). End `order_by` with a unique column so pages never overlap."""
     query = (
         select(VerificationRun, Asset)
         .join(
@@ -293,11 +301,7 @@ def _current_runs(
             col(VerificationRun.level).in_(list(levels)),
         )
     )
-    if newest_first:
-        decided = func.coalesce(col(VerificationRun.revoked_at), col(VerificationRun.decided_at))
-        query = query.order_by(decided.desc(), col(VerificationRun.id))
-    else:
-        query = query.order_by(col(VerificationRun.created_at), col(VerificationRun.id))
+    query = query.order_by(*order_by)
     if asset_id is not None:
         query = query.where(VerificationRun.asset_id == asset_id)
     excluded = list(exclude_communities)
@@ -333,7 +337,7 @@ def review_queue(
         world_id,
         [VerificationLevel.DOCUMENTS_SUBMITTED],
         exclude_communities,
-        newest_first=False,
+        order_by=(col(VerificationRun.created_at), col(VerificationRun.id)),
         limit=limit,
         offset=offset,
         asset_id=asset_id,
@@ -345,21 +349,19 @@ def decided_listings(
     world_id: UUID,
     exclude_communities: Iterable[UUID] = (),
     *,
-    level: VerificationLevel | None = None,
+    level: DecidedLevel | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> list[tuple[Asset, RunView]]:
     """Listings whose current run was decided (verified, rejected or revoked; one `level` if
     given), the latest decision first, without the excluded communities' listings (#211): one
     page, in two queries. A listing with a newer submission waiting is in the queue instead."""
-    if level is not None and level not in DECIDED_LEVELS:
-        raise ValueError(f"{level} isn't a decision")
     return _current_runs(
         session,
         world_id,
-        [level] if level is not None else DECIDED_LEVELS,
+        [VerificationLevel(level)] if level is not None else DECIDED_LEVELS,
         exclude_communities,
-        newest_first=True,
+        order_by=(LAST_DECISION.desc(), col(VerificationRun.id)),
         limit=limit,
         offset=offset,
     )

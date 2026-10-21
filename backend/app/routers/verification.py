@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
@@ -711,9 +711,6 @@ def review_queue(
     ]
 
 
-DecidedLevel = Literal["verified", "rejected", "revoked"]
-
-
 @router.get(
     "/admin/verifications/decided",
     response_model=list[DecidedListingItem],
@@ -725,7 +722,7 @@ def decided_verifications(
     session: SessionDep,
     response: Response,
     level: Annotated[
-        DecidedLevel | None,
+        verification.DecidedLevel | None,
         Query(description="Only listings whose current run is at this level; all three if absent."),
     ] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
@@ -742,7 +739,7 @@ def decided_verifications(
         session,
         actor.world_id,
         list(actor.memberships),
-        level=VerificationLevel(level) if level is not None else None,
+        level=level,
         limit=limit,
         offset=offset,
     )

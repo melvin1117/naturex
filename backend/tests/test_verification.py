@@ -1584,6 +1584,61 @@ def test_decided_listings_newest_decision_first_by_level_and_paged(world: World_
     assert len(statements) == 2, statements
 
 
+def decided_ids(w: World_, **params: Any) -> list[str]:
+    response = client_for(w, w.admin).get("/admin/verifications/decided", params=params)
+    assert response.status_code == 200, response.text
+    return [item["asset_id"] for item in response.json()]
+
+
+@requires_db
+def test_a_revocation_is_a_listings_latest_decision(world: World_) -> None:
+    """Approve A, approve B, revoke A: A's revocation is the latest decision, so A comes first."""
+    a, b = (draft(world, geojson=square(700, lat=lat))["id"] for lat in (9.9, 9.7))
+    run_a = verified(world, a, seed_byte=1)
+    verified(world, b, seed_byte=2)
+    assert decide(world, a, run_a["id"], "revoke", reason="Disputed").status_code == 200
+
+    assert decided_ids(world) == [a, b]
+
+
+@requires_db
+def test_a_resubmitted_listing_waits_in_the_queue_not_among_the_decided(world: World_) -> None:
+    asset = draft(world)["id"]
+    run = evidence(world, asset, seed_byte=1)
+    assert decide(world, asset, run["id"], "reject", reason="Blurry").status_code == 200
+    assert decided_ids(world) == [asset]
+
+    again = evidence(world, asset, seed_byte=2)
+
+    assert decided_ids(world) == []
+    queue = client_for(world, world.admin).get("/admin/verifications").json()
+    assert [item["run"]["id"] for item in queue] == [again["id"]]
+
+
+@requires_db
+def test_decisions_at_the_same_moment_page_without_overlap(world: World_) -> None:
+    """Equal `last_decision_at`: the run ID breaks the tie, so pages never repeat or skip."""
+    assets = [draft(world, geojson=square(700, lat=lat))["id"] for lat in (9.9, 9.7, 9.5)]
+    runs = [evidence(world, asset, seed_byte=i + 1)["id"] for i, asset in enumerate(assets)]
+    moment = datetime(2026, 10, 20, 12, tzinfo=UTC)
+    for asset, run in zip(assets, runs, strict=True):
+        verification.approve(
+            world.session,
+            world_id=world.id,
+            asset_id=UUID(asset),
+            run_id=UUID(run),
+            reviewer=world.admin.id,
+            reason=None,
+            now=moment,
+        )
+
+    pages = [decided_ids(world, limit=1, offset=offset) for offset in range(3)]
+
+    by_run = [a for _, a in sorted(zip(runs, assets, strict=True))]
+    assert [page[0] for page in pages] == by_run
+    assert decided_ids(world) == by_run
+
+
 @requires_db
 def test_decided_listings_are_world_scoped_and_admin_only(world: World_) -> None:
     asset = draft(world)
@@ -1796,7 +1851,7 @@ def test_the_migration_wont_squeeze_a_carried_document_into_one_run(
             )
         session.commit()
     try:
-        with pytest.raises(RuntimeError, match="1 documents are linked to more than one"):
+        with pytest.raises(RuntimeError, match="1 document is linked to more than one"):
             command.downgrade(cfg, "0021")
     finally:
         command.upgrade(cfg, "head")

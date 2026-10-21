@@ -882,6 +882,14 @@ class VerificationRun(SQLModel, table=True):
             "created_at",
             postgresql_where=text("is_current AND level = 'documents_submitted'"),
         ),
+        # Decided listings (#211): the latest decision first.
+        Index(
+            "ix_verification_runs_decided",
+            "world_id",
+            text("coalesce(revoked_at, decided_at) DESC"),
+            "id",
+            postgresql_where=text("is_current AND level IN ('verified','rejected','revoked')"),
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)

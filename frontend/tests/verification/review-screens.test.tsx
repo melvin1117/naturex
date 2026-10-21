@@ -1,5 +1,6 @@
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -38,18 +39,38 @@ import {
   verifiedPanel,
 } from "./fixtures";
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
-  usePathname: () => "/admin/verifications",
-  useSearchParams: () => new URLSearchParams(),
-}));
+// Like Next.js, useSearchParams follows history.replaceState (see `beforeAll`).
+const nav = vi.hoisted(() => ({ listeners: new Set<() => void>() }));
+vi.mock("next/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
+  const subscribe = (listener: () => void) => {
+    nav.listeners.add(listener);
+    return () => void nav.listeners.delete(listener);
+  };
+  return {
+    useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+    usePathname: () => "/admin/verifications",
+    useSearchParams: () =>
+      new URLSearchParams(
+        useSyncExternalStore(subscribe, () => window.location.search),
+      ),
+  };
+});
 
 beforeAll(() => {
+  const replaceState = window.history.replaceState.bind(window.history);
+  window.history.replaceState = (...args) => {
+    replaceState(...args);
+    nav.listeners.forEach((listener) => listener());
+  };
   stubBrowserApis();
   URL.createObjectURL = vi.fn(() => "blob:preview");
   URL.revokeObjectURL = vi.fn();
 });
-beforeEach(() => FakeEventSource.reset());
+beforeEach(() => {
+  FakeEventSource.reset();
+  window.history.replaceState(null, "", "/admin/verifications");
+});
 
 const QUEUE = "GET /admin/verifications";
 const DECIDED = "GET /admin/verifications/decided";
@@ -242,7 +263,8 @@ describe("ReviewQueueScreen decided views (#211)", () => {
   });
 
   it("starts on the view in the address and shows a revocation's reason", async () => {
-    renderAdmin(<ReviewQueueScreen initialView="revoked" />, {
+    window.history.replaceState(null, "", "/admin/verifications?view=revoked");
+    renderAdmin(<ReviewQueueScreen />, {
       [DECIDED]: () =>
         json([
           decided({
@@ -275,7 +297,8 @@ describe("ReviewQueueScreen decided views (#211)", () => {
         asset_name: `Site ${i + 1}`,
       }),
     );
-    renderAdmin(<ReviewQueueScreen initialView="rejected" />, {
+    window.history.replaceState(null, "", "/admin/verifications?view=rejected");
+    renderAdmin(<ReviewQueueScreen />, {
       [DECIDED]: (request) =>
         json(
           new URL(request.url).searchParams.get("offset") === "0" ? page : [],
@@ -284,10 +307,35 @@ describe("ReviewQueueScreen decided views (#211)", () => {
     expect(
       await screen.findByRole("heading", { name: "Site 20" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    const pages = screen.getByRole("navigation", { name: "Rejected pages" });
+    fireEvent.click(within(pages).getByRole("button", { name: "Next" }));
     expect(
       await screen.findByText("No more listings on this page."),
     ).toBeInTheDocument();
+  });
+
+  it("keeps the view in the address, so a remount (Back, reload) restores it", async () => {
+    const routes = { [DECIDED]: () => json([decided()]) };
+    renderAdmin(<ReviewQueueScreen />, routes);
+    await screen.findByRole("list", { name: "Listings waiting for review" });
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Rejected" }));
+    await screen.findByRole("list", {
+      name: "Listings rejected, latest decision first",
+    });
+    expect(window.location.search).toBe("?view=rejected");
+    cleanup();
+    renderAdmin(<ReviewQueueScreen />, routes);
+
+    expect(
+      await screen.findByRole("list", {
+        name: "Listings rejected, latest decision first",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Rejected" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("knows only the four views", () => {

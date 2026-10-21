@@ -2,6 +2,7 @@
 
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { LoadError } from "@/components/proto/load-error";
@@ -52,12 +53,10 @@ const VIEW_LABEL: Record<ReviewView, string> = {
  * first, and listings already decided (verified, rejected, revoked), latest decision first, a
  * page at a time. The backend leaves out the admin's own communities.
  */
-export function ReviewQueueScreen({
-  initialView = "waiting",
-}: {
-  initialView?: ReviewView;
-}) {
-  const [view, setView] = useState<ReviewView>(initialView);
+export function ReviewQueueScreen() {
+  // The address is the state: Back and Forward, a reload and a shared link all land on the
+  // view in it. Next.js keeps useSearchParams in step with history.replaceState.
+  const view = reviewView(useSearchParams().get("view"));
 
   return (
     <div className="mx-auto max-w-5xl px-4 pt-10 pb-16 sm:px-6">
@@ -74,11 +73,9 @@ export function ReviewQueueScreen({
       <Tabs
         value={view}
         // The History API keeps the address shareable without a server round trip.
-        onValueChange={(v) => {
-          const next = reviewView(v);
-          setView(next);
-          window.history.replaceState(null, "", reviewViewHref(next));
-        }}
+        onValueChange={(v) =>
+          window.history.replaceState(null, "", reviewViewHref(reviewView(v)))
+        }
         className="mt-8 gap-6"
       >
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
@@ -102,7 +99,7 @@ export function ReviewQueueScreen({
         </TabsContent>
         {(["verified", "rejected", "revoked"] as const).map((level) => (
           <TabsContent key={level} value={level}>
-            {view === level && <DecidedList key={level} level={level} />}
+            {view === level && <DecidedList level={level} />}
           </TabsContent>
         ))}
       </Tabs>
@@ -116,6 +113,7 @@ function WaitingList() {
   return (
     <Paged
       label="Listings waiting for review"
+      view="Waiting"
       items={queue.data}
       error={queue.error}
       retry={queue.refetch}
@@ -143,6 +141,7 @@ function DecidedList({ level }: { level: DecidedLevel }) {
   return (
     <Paged
       label={`Listings ${label}, latest decision first`}
+      view={LEVEL_LABEL[level]}
       items={decided.data}
       error={decided.error}
       retry={decided.refetch}
@@ -159,6 +158,7 @@ function DecidedList({ level }: { level: DecidedLevel }) {
 
 function Paged<T>({
   label,
+  view,
   items,
   error,
   retry,
@@ -171,6 +171,8 @@ function Paged<T>({
   row,
 }: {
   label: string;
+  /** The view's name, for its page navigation. */
+  view: string;
   items: T[] | undefined;
   error: ApiError | null;
   retry: () => Promise<void>;
@@ -210,7 +212,7 @@ function Paged<T>({
 
       {(offset > 0 || (items?.length ?? 0) === QUEUE_PAGE) && (
         <nav
-          aria-label="Pages"
+          aria-label={`${view} pages`}
           className="mt-6 flex items-center justify-between gap-3"
         >
           <Button

@@ -15,6 +15,8 @@ its own links, so history reads as it was.
   `listing_documents` to the link table.
 - `listing_documents.run_id` (with its foreign key and indexes) is dropped after its links are
   copied, and `listing_documents_write_once` no longer mentions it.
+- `ix_verification_runs_decided` (#211): the decided listings' order, latest decision first
+  (`coalesce(revoked_at, decided_at)`, then `id`), on current decided runs only.
 
 Downgrading fails, naming the count, if any document is linked to more than one run (one
 `run_id` can't hold it); otherwise it restores `run_id` from the links.
@@ -36,6 +38,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 _LINKS = "verification_run_documents"
+_DECIDED = "is_current AND level IN ('verified','rejected','revoked')"
 _WORLD_DELETE = "current_setting('naturex.allow_ledger_delete', true) = 'on'"
 
 
@@ -175,6 +178,12 @@ def upgrade() -> None:
     op.drop_index("ix_listing_documents_world_id_asset_id_run_id", table_name="listing_documents")
     op.drop_constraint("fk_listing_documents_run", "listing_documents", type_="foreignkey")
     op.drop_column("listing_documents", "run_id")
+    op.create_index(
+        "ix_verification_runs_decided",
+        "verification_runs",
+        ["world_id", sa.text("coalesce(revoked_at, decided_at) DESC"), "id"],
+        postgresql_where=sa.text(_DECIDED),
+    )
 
 
 def downgrade() -> None:
@@ -186,10 +195,12 @@ def downgrade() -> None:
         )
     ).scalar_one()
     if shared:
+        documents = "document is" if shared == 1 else "documents are"
         raise RuntimeError(
-            f"{shared} documents are linked to more than one verification run; "
+            f"{shared} {documents} linked to more than one verification run; "
             "listing_documents.run_id can hold only one"
         )
+    op.drop_index("ix_verification_runs_decided", table_name="verification_runs")
     op.add_column("listing_documents", sa.Column("run_id", UUID(as_uuid=True), nullable=True))
     op.create_foreign_key(
         "fk_listing_documents_run",
