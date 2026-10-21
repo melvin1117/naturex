@@ -198,7 +198,8 @@ describe("PortfolioView", () => {
       "−$1.50 since you started with $10,000.00",
     );
     expect(
-      screen.getByText("Change in value", { selector: "dt:not(.sr-only)" }).nextSibling,
+      screen.getByText("Change in value", { selector: "dt:not(.sr-only)" })
+        .nextSibling,
     ).toHaveTextContent("−$1.50");
     const cells = within(row)
       .getAllByRole("cell")
@@ -232,7 +233,8 @@ describe("PortfolioView", () => {
     const row = await tableRow();
     expect(row).toHaveTextContent("\u2212$1,234.50");
     expect(
-      screen.getByText("Change in value", { selector: "dt:not(.sr-only)" }).nextSibling,
+      screen.getByText("Change in value", { selector: "dt:not(.sr-only)" })
+        .nextSibling,
     ).toHaveTextContent(/^\u2212\$1,234\.50$/);
   });
 

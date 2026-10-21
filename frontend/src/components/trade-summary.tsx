@@ -96,7 +96,7 @@ export function Receipt({
     <div
       ref={ref}
       tabIndex={-1}
-      className="nx-rise mt-5 rounded-2xl border border-lime/60 bg-lime/10 p-4"
+      className="nx-rise focus-target mt-5 rounded-2xl border border-lime/60 bg-lime/10 p-4"
       data-tour="trade-receipt"
     >
       <p className="text-sm font-medium">

@@ -412,12 +412,20 @@ describe("Steward shell", () => {
       </StewardLayout>,
       SIGNED_IN_WORLD,
     );
+    const title = await screen.findByRole("heading", {
+      level: 1,
+      name: "Start a community",
+    });
+    expect(title).toBeVisible();
+    // Shrinkable columns: a long ID or name can't widen the page at 390 px.
     expect(
-      await screen.findByRole("heading", {
-        level: 1,
-        name: "Start a community",
-      }),
-    ).toBeVisible();
+      screen
+        .getByRole("region", { name: "Start a community" })
+        .querySelector(":scope > .grid"),
+    ).toHaveClass(
+      "grid-cols-[minmax(0,1fr)]",
+      "lg:grid-cols-[minmax(0,1fr)_440px]",
+    );
     expect(screen.queryByText("Page content")).not.toBeInTheDocument();
     // Its pages would all show this empty state, so they aren't offered.
     expect(

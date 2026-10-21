@@ -3,6 +3,7 @@ import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
 import { Stat } from "@/components/proto/bits";
+import { Alert, AlertTitle } from "@/components/ui/alert";
 import {
   Sheet,
   SheetContent,
@@ -95,5 +96,18 @@ describe("Table", () => {
     });
     expect(region).toHaveAttribute("tabindex", "0");
     expect(region).toContainElement(screen.getByRole("table"));
+  });
+});
+
+describe("AlertTitle", () => {
+  it("wraps long titles instead of cutting them to one line", () => {
+    render(
+      <Alert>
+        <AlertTitle>A long title that needs more than one line</AlertTitle>
+      </Alert>,
+    );
+    expect(
+      screen.getByText("A long title that needs more than one line"),
+    ).not.toHaveClass("line-clamp-1");
   });
 });

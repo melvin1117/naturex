@@ -260,3 +260,26 @@
   font-size: 10px;
   background: oklch(0.988 0.005 118 / 0.85) !important;
 }
+
+/*
+ * Programmatic focus targets (tabIndex={-1}): headings, regions and status messages that
+ * a flow moves focus to, or anything with `.focus-target`. Unlayered, so it wins over an
+ * `outline-none` utility; :focus-visible keeps it off after a mouse click.
+ */
+:where(
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    section,
+    article,
+    [role="region"],
+    [role="status"],
+    [role="alert"]
+  )[tabindex="-1"]:focus-visible,
+.focus-target:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
