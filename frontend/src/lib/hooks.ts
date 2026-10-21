@@ -36,6 +36,7 @@ import type {
   MyCommunity,
   OrderCreate,
   OrderOut,
+  PlaceSearchOut,
   PortfolioOut,
   PricePoint,
   QuoteOut,
@@ -824,6 +825,20 @@ export function useCreateListing(): MutationResult<AssetCreate, AssetDetail> {
   return useApiMutation(
     (api, body: AssetCreate) => unwrap(api.POST("/assets", { body })),
     { onSuccess: (asset, _vars, layer) => afterListingWrite(asset, layer) },
+  );
+}
+
+/**
+ * `GET /places/search`: find a place by name for the listing map (#215). A mutation, not a
+ * query: it runs only when the steward submits a search (Nominatim forbids search-as-you-type).
+ */
+export function usePlaceSearch(): MutationResult<string, PlaceSearchOut> {
+  return useApiMutation(
+    (api, q: string) =>
+      // openapi-fetch widens the `bbox` tuple to number[]; the schema says four numbers.
+      unwrap(
+        api.GET("/places/search", { params: { query: { q } } }),
+      ) as Promise<PlaceSearchOut>,
   );
 }
 

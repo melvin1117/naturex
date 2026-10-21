@@ -109,8 +109,18 @@ export function overlaps(aIn: LatLng[], bIn: LatLng[]) {
   return false;
 }
 
+/** Mirrors the backend's problem codes (`app/tools/geometry.py`), plus too few corners. */
+export type PolygonProblemCode =
+  | "too_few"
+  | "too_complex"
+  | "self_intersection"
+  | "too_small"
+  | "too_large"
+  | "overlap";
+
 export type PolygonCheck =
-  { ok: true; areaHa: number } | { ok: false; areaHa: number; message: string };
+  | { ok: true; areaHa: number }
+  | { ok: false; areaHa: number; message: string; code: PolygonProblemCode };
 
 export function checkPolygon(
   points: LatLng[],
@@ -121,12 +131,14 @@ export function checkPolygon(
     return {
       ok: false,
       areaHa: area,
+      code: "too_few",
       message: "Add at least three corners to close the boundary.",
     };
   if (selfIntersects(points))
     return {
       ok: false,
       areaHa: area,
+      code: "self_intersection",
       message:
         "The boundary crosses itself. Move a corner so the edges don't cross.",
     };
@@ -134,12 +146,14 @@ export function checkPolygon(
     return {
       ok: false,
       areaHa: area,
+      code: "too_small",
       message: `This area is ${area.toFixed(1)} ha. Sites need at least 10 ha.`,
     };
   if (area > 50_000)
     return {
       ok: false,
       areaHa: area,
+      code: "too_large",
       message: `This area is ${Math.round(area).toLocaleString("en-US")} ha. Sites can be at most 50,000 ha.`,
     };
   const clash = others.find((o) => overlaps(points, o.polygon));
@@ -147,6 +161,7 @@ export function checkPolygon(
     return {
       ok: false,
       areaHa: area,
+      code: "overlap",
       message: `This boundary overlaps the ${clash.name} site. Adjust the edge to continue.`,
     };
   return { ok: true, areaHa: area };

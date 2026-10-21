@@ -50,6 +50,33 @@ const CORNERS = vi.hoisted(
       [0.01, 0],
     ] as [number, number][],
 );
+// The signed-in flow's editor map (#215): same stand-in, through the editor's actions.
+vi.mock("@/components/listing/boundary-map", () => ({
+  BoundaryMap: ({
+    points,
+    mode,
+    focus,
+    dispatch,
+  }: {
+    points: [number, number][];
+    mode: string;
+    focus: unknown;
+    dispatch: (action: { type: "add"; point: [number, number] }) => void;
+  }) => (
+    <>
+      <button
+        type="button"
+        onClick={() =>
+          dispatch({ type: "add", point: CORNERS[points.length % 4] })
+        }
+      >
+        Add test corner
+      </button>
+      <output data-testid="map-mode">{mode}</output>
+      <output data-testid="map-focus">{JSON.stringify(focus)}</output>
+    </>
+  ),
+}));
 vi.mock("@/components/proto/draw-map", () => ({
   DrawMap: ({
     points,
@@ -968,8 +995,109 @@ describe("the boundary step (review fixes)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));
     expect(screen.getByText("0 corners")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Undo clear" }));
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     expect(screen.getByText("4 corners")).toBeVisible();
+  });
+
+  it("finishes the shape, and undoes and redoes from the dock or the keyboard (#215)", async () => {
+    setup();
+    await fillDetails();
+    const add = await screen.findByRole("button", { name: "Add test corner" });
+    for (let i = 0; i < 3; i++) fireEvent.click(add);
+    expect(screen.getByTestId("map-mode")).toHaveTextContent("drawing");
+    fireEvent.click(screen.getByRole("button", { name: "Finish" }));
+    expect(screen.getByTestId("map-mode")).toHaveTextContent("editing");
+    expect(screen.queryByRole("button", { name: "Finish" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(screen.getByTestId("map-mode")).toHaveTextContent("drawing");
+    fireEvent.keyDown(add, { key: "z", ctrlKey: true });
+    expect(screen.getByText("2 corners")).toBeVisible();
+    expect(screen.getByText("2 of 3 corners")).toBeVisible();
+    fireEvent.keyDown(add, { key: "z", ctrlKey: true, shiftKey: true });
+    fireEvent.click(screen.getByRole("button", { name: "Redo" }));
+    expect(screen.getByText("3 corners")).toBeVisible();
+    expect(screen.getByTestId("map-mode")).toHaveTextContent("editing");
+    expect(screen.getByRole("button", { name: "Redo" })).toBeDisabled();
+  });
+
+  it("opens a pasted boundary finished, ready to adjust", async () => {
+    setup();
+    await fillDetails();
+    fireEvent.change(await screen.findByLabelText("GeoJSON boundary"), {
+      target: {
+        value: JSON.stringify({
+          type: "Polygon",
+          coordinates: [CORNERS.map(([lat, lon]) => [lon, lat])],
+        }),
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Use this boundary" }));
+    expect(screen.getByText("4 corners")).toBeVisible();
+    expect(screen.getByTestId("map-mode")).toHaveTextContent("editing");
+    expect(screen.getByTestId("map-focus")).toHaveTextContent('"bounds"');
+  });
+
+  it("searches for a place and flies the map there (#215)", async () => {
+    const backend = setup({
+      "GET /places/search": () =>
+        json({
+          results: [
+            {
+              label: "Xochimilco, Mexico City, Mexico",
+              lat: 19.26,
+              lon: -99.1,
+              bbox: [19.1, -99.2, 19.3, -99.0],
+            },
+            { label: "Xochimilco, Oaxaca, Mexico", lat: 17.1, lon: -96.7 },
+          ],
+          attribution: "Place search © OpenStreetMap contributors (Nominatim)",
+        }),
+    });
+    await fillDetails();
+    fireEvent.change(
+      await screen.findByRole("searchbox", { name: "Search for a place" }),
+      { target: { value: "  Xochimilco " } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    const found = await screen.findByRole("list", { name: "Places found" });
+    expect(found).toBeVisible();
+    expect(screen.getByText(/OpenStreetMap contributors/)).toBeVisible();
+    const query = backend.requests.find((r) =>
+      r.url.includes("/places/search"),
+    );
+    expect(new URL(query!.url).searchParams.get("q")).toBe("Xochimilco");
+    expect(JSON.parse(screen.getByTestId("map-focus").textContent!)).toEqual({
+      bounds: [
+        [19.1, -99.2],
+        [19.3, -99.0],
+      ],
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Xochimilco, Oaxaca, Mexico" }),
+    );
+    expect(JSON.parse(screen.getByTestId("map-focus").textContent!)).toEqual({
+      center: [17.1, -96.7],
+      zoom: 14,
+    });
+    expect(screen.queryByRole("list", { name: "Places found" })).toBeNull();
+  });
+
+  it("says when place search is unavailable", async () => {
+    setup({
+      "GET /places/search": () =>
+        json({ detail: "place_search_unavailable" }, { status: 503 }),
+    });
+    await fillDetails();
+    fireEvent.change(
+      await screen.findByRole("searchbox", { name: "Search for a place" }),
+      { target: { value: "Xochimilco" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    expect(
+      await screen.findByText(/Place search isn't available right now/),
+    ).toBeVisible();
   });
 
   it("a 401 while saving offers sign-in and keeps the listing in this tab", async () => {

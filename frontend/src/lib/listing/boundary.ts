@@ -10,6 +10,7 @@ import {
   checkPolygon,
   crossingEdges,
   overlaps,
+  type PolygonProblemCode,
 } from "../prototype/geo";
 
 /** T36 refuses polygons with more points than this. */
@@ -29,7 +30,7 @@ export type HintScope = "all" | "no-overlap" | "size";
 
 export type BoundaryHint =
   | { ok: true; areaHa: number; checked: HintScope }
-  | { ok: false; areaHa: number; message: string };
+  | { ok: false; areaHa: number; message: string; code: PolygonProblemCode };
 
 type Box = [number, number, number, number];
 
@@ -48,11 +49,19 @@ function boxesTouch(a: Box, b: Box): boolean {
   return a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
 }
 
-function sizeProblem(area: number): string | null {
+function sizeProblem(
+  area: number,
+): { code: PolygonProblemCode; message: string } | null {
   if (area < MIN_HA)
-    return `This area is ${area.toFixed(1)} ha. Sites need at least ${MIN_HA} ha.`;
+    return {
+      code: "too_small",
+      message: `This area is ${area.toFixed(1)} ha. Sites need at least ${MIN_HA} ha.`,
+    };
   if (area > MAX_HA)
-    return `This area is ${Math.round(area).toLocaleString("en-US")} ha. Sites can be at most ${MAX_HA.toLocaleString("en-US")} ha.`;
+    return {
+      code: "too_large",
+      message: `This area is ${Math.round(area).toLocaleString("en-US")} ha. Sites can be at most ${MAX_HA.toLocaleString("en-US")} ha.`,
+    };
   return null;
 }
 
@@ -72,13 +81,14 @@ export function boundaryHint(
     return {
       ok: false,
       areaHa: 0,
+      code: "too_complex",
       message: `This boundary has ${points.length.toLocaleString("en-US")} corners. Simplify it to at most ${MAX_BOUNDARY_POINTS.toLocaleString("en-US")}.`,
     };
   if (points.length > HINT_MAX_POINTS) {
     const area = areaHa(points);
     const problem = sizeProblem(area);
     return problem
-      ? { ok: false, areaHa: area, message: problem }
+      ? { ok: false, areaHa: area, ...problem }
       : { ok: true, areaHa: area, checked: "size" };
   }
   const box = bbox(points);
