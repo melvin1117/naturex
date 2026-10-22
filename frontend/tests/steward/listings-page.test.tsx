@@ -346,6 +346,51 @@ describe("withdrawing a listing", () => {
     ).toHaveAttribute("role", "status");
   });
 
+  it("focuses each withdrawn listing in turn, the second one too", async () => {
+    const SECOND = listing("Bosque Bajo", "draft", {
+      next_action: "continue_listing",
+      manage_actions: ["edit", "withdraw"],
+    });
+    const gone = new Set<string>();
+    const closed = (item: ListingSummary): ListingSummary =>
+      gone.has(item.asset.id)
+        ? {
+            ...item,
+            asset: { ...item.asset, status: "withdrawn" },
+            next_action: "none",
+            manage_actions: [],
+          }
+        : item;
+    const withdraw = (item: ListingSummary) => () => {
+      gone.add(item.asset.id);
+      return json({ id: item.asset.id, status: "withdrawn" });
+    };
+    setup({
+      [SUMMARY]: () => json(summary([DRAFT, SECOND].map(closed))),
+      [`POST /assets/${DRAFT.asset.id}/withdraw`]: withdraw(DRAFT),
+      [`POST /assets/${SECOND.asset.id}/withdraw`]: withdraw(SECOND),
+    });
+
+    for (const name of ["Humedal Norte", "Bosque Bajo"]) {
+      fireEvent.click(
+        await screen.findByRole("button", { name: `Withdraw ${name}` }),
+      );
+      const dialog = await screen.findByRole("alertdialog");
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Withdraw listing" }),
+      );
+      await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+      const heading = screen.getByRole("heading", { name, level: 3 });
+      await waitFor(() => expect(heading).toHaveFocus());
+      expect(
+        within(heading.closest("li")!).getByText("Withdrawn just now"),
+      ).toBeVisible();
+      expect(
+        screen.getByText(`${name} was withdrawn. It's under Closed now.`),
+      ).toBeInTheDocument();
+    }
+  });
+
   it("keeps the dialog open with a plain reason when the API refuses", async () => {
     setup({
       [SUMMARY]: () => json(summary([DRAFT])),

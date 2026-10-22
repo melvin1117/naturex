@@ -91,10 +91,12 @@ export function ListingsView({
   const listHref = listingHref(community.id);
 
   // The withdrawn row now sits under Closed: focus it there, since its button is gone.
-  const landed = groups.closed.some((l) => l.asset.id === withdrawn?.id);
+  const withdrawnId = withdrawn?.id;
+  const landed = groups.closed.some((l) => l.asset.id === withdrawnId);
+  // Keyed on the ID too: a second withdrawal in the same visit lands while `landed` stays true.
   useEffect(() => {
     if (landed) withdrawnRef.current?.focus();
-  }, [landed]);
+  }, [landed, withdrawnId]);
 
   async function afterWithdraw(id: string, name: string) {
     await refresh();
