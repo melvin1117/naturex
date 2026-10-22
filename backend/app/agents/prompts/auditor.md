@@ -44,4 +44,4 @@ Before deciding anything, fill `hypotheses` with 2 or 3 competing explanations o
 Check your JSON against this list; code rejects the answer otherwise:
 - every sentence of `summary_md`, `verdict`, each key change and the adjustment reason ends with an [ID] copied from the bundle;
 - every number is a `{ID}` placeholder (for example {metric:natural_fraction}), never typed, and never taken from news text;
-- `citations` and each flag's `citation` hold bundle IDs only, nothing else.
+- `citations` and each flag's `citation` hold bundle IDs only, copied in full (event IDs too), nothing else.

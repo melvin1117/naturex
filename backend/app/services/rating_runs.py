@@ -52,10 +52,12 @@ from sqlmodel import Session, col, select
 from app.agents.auditor import (
     REASONING_EXCERPT_CHARS,
     AuditEvent,
+    AuditorInput,
     AuditResult,
     PreviousReport,
     audit_events_from_news,
     build_auditor_input,
+    event_citation_id,
     no_op_audit,
     run_auditor,
 )
@@ -86,7 +88,7 @@ from app.schemas import (
     RunTraceStep,
     RunTraceTotals,
 )
-from app.services.alerts import alert_on_rerate
+from app.services.alerts import alert_on_rerate, safe_url
 from app.services.earth_obs_live import (
     EARTH_ENGINE_BUSY,
     LiveEarthObs,
@@ -874,19 +876,45 @@ class RunToolbox:
                 bundle, llm=self._llm, world_id=self._spec.world_id, asset_id=self._spec.asset_id
             )
         self.audit = audit
+        urls = {event_citation_id(item): item.url for item in self.news_items if item.url}
         return {
             "source": audit.source,
             "auditor_adjustment": audit.output.auditor_adjustment,
             "flags": [flag.type for flag in audit.output.flags],
-            **_audit_case(audit),
+            **_audit_case(audit, bundle, urls),
         }
 
 
-def _audit_case(audit: AuditResult) -> dict[str, Any]:
+def _audit_case(
+    audit: AuditResult, bundle: AuditorInput, urls: Mapping[str, str]
+) -> dict[str, Any]:
     """The Auditor's case and checks for the Agent Trace: checked, cited model text only, plus
-    a short excerpt of its own notes, labelled as notes by the UI."""
+    a short excerpt of its own notes, labelled as notes by the UI. `evidence` resolves every
+    cited ID to its fact value or news item, so the trace can show what a citation points to."""
     output = audit.output
+    cited = set(audit.citations)
+    for hypothesis in output.hypotheses:
+        cited.update(hypothesis.evidence_for, hypothesis.evidence_against)
+    evidence: dict[str, dict[str, Any]] = {}
+    for citation in bundle.ids:
+        if citation not in cited:
+            continue
+        event = bundle.event(citation)
+        if event is None:
+            evidence[citation] = {"kind": "fact", "value": bundle.fact(citation)}
+            continue
+        evidence[citation] = {
+            "kind": event.source,
+            "title": event.title,
+            "url": safe_url(urls.get(citation)),
+            "published_at": event.published_at.isoformat() if event.published_at else None,
+            "impact_type": event.impact_type,
+            "direction": event.direction,
+            "severity": event.severity,
+        }
     return {
+        "base_health": str(bundle.base_health),
+        "evidence": evidence,
         "agreement": output.agreement,
         "greenwashing_risk": audit.greenwashing_risk,
         "hypotheses": [h.model_dump() for h in output.hypotheses],

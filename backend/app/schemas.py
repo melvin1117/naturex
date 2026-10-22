@@ -160,8 +160,8 @@ class AuditorOutput(BaseModel):
     )
     verdict: str = Field(
         default="",
-        description="One sentence naming the best-supported explanation, ending with [ID] "
-        "citations; numbers only as {ID} placeholders.",
+        description="One sentence (under 400 characters) naming the best-supported "
+        "explanation, ending with [ID] citations; numbers only as {ID} placeholders.",
     )
     auditor_adjustment: int = Field(ge=-10, le=10)
     adjustment_reason: str = Field(

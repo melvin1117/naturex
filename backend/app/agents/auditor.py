@@ -67,7 +67,7 @@ FIX_MAX_TOKENS = 2500
 MAX_HYPOTHESES = 3
 MAX_HYPOTHESIS_IDS = 8
 MAX_HYPOTHESIS_NAME_CHARS = 80
-MAX_VERDICT_CHARS = 400
+MAX_VERDICT_CHARS = 600
 REASONING_EXCERPT_CHARS = 1500
 
 MAX_SUMMARY_CHARS = 3000
@@ -318,6 +318,11 @@ def audit_events_from_news(items: Iterable[NewsScoutItem]) -> list[AuditEvent]:
     return events
 
 
+def event_citation_id(item: NewsScoutItem) -> str:
+    """The bundle citation ID `audit_events_from_news` gives this News Scout item."""
+    return f"event:{item.id or _derived_event_id(item)}"
+
+
 def _derived_event_id(item: NewsScoutItem) -> str:
     """The ID News Scout would give the item (uuid5 of its URL), for items built without one."""
     if item.url:
@@ -534,6 +539,68 @@ def placeholder_value(value: str) -> str:
     return match.group(0) if match else value
 
 
+MIN_EVENT_PREFIX = 8
+
+
+def short_hypothesis_names(output: AuditorOutput) -> AuditorOutput:
+    """A hypothesis name is a label: a long one is cut at a word boundary, not refused."""
+
+    def short(name: str) -> str:
+        name = " ".join(name.split())
+        if len(name) <= MAX_HYPOTHESIS_NAME_CHARS:
+            return name
+        cut = name[: MAX_HYPOTHESIS_NAME_CHARS - 1].rsplit(" ", 1)[0]
+        return cut.rstrip(" ,;:-") + "…"
+
+    return output.model_copy(
+        update={
+            "hypotheses": [h.model_copy(update={"name": short(h.name)}) for h in output.hypotheses]
+        }
+    )
+
+
+def full_event_ids(output: AuditorOutput, bundle: AuditorInput) -> AuditorOutput:
+    """Expand an event ID the model shortened (`event:94cc0471`) to the one bundle event it
+    starts, when exactly one does and the prefix has at least 8 characters. Anything else is
+    left as written, so the checks still refuse it."""
+    events = [e.citation_id for e in bundle.events]
+
+    def full(citation: str) -> str:
+        if not citation.startswith("event:") or citation in events:
+            return citation
+        if len(citation) - len("event:") < MIN_EVENT_PREFIX:
+            return citation
+        matches = [e for e in events if e.startswith(citation)]
+        return matches[0] if len(matches) == 1 else citation
+
+    def text(value: str) -> str:
+        return CITATION_RE.sub(lambda m: full(m.group(0)), value)
+
+    return output.model_copy(
+        update={
+            "hypotheses": [
+                h.model_copy(
+                    update={
+                        "evidence_for": [full(c) for c in h.evidence_for],
+                        "evidence_against": [full(c) for c in h.evidence_against],
+                    }
+                )
+                for h in output.hypotheses
+            ],
+            "verdict": text(output.verdict),
+            "adjustment_reason": text(output.adjustment_reason),
+            "summary_md": text(output.summary_md),
+            "key_changes": [text(t) for t in output.key_changes],
+            "recommendations": [text(t) for t in output.recommendations],
+            "flags": [
+                f.model_copy(update={"citation": full(f.citation) if f.citation else None})
+                for f in output.flags
+            ],
+            "citations": [full(c) for c in output.citations],
+        }
+    )
+
+
 def count_placeholders(output: AuditorOutput) -> int:
     return sum(len(PLACEHOLDER_RE.findall(text)) for _, text in _texts(output))
 
@@ -619,8 +686,8 @@ def check_audit(output: AuditorOutput, bundle: AuditorInput) -> list[str]:
     if len(output.hypotheses) > MAX_HYPOTHESES:
         errors.append(f"at most {MAX_HYPOTHESES} hypotheses")
     for i, hypothesis in enumerate(output.hypotheses):
-        if not hypothesis.name.strip() or len(hypothesis.name) > MAX_HYPOTHESIS_NAME_CHARS:
-            errors.append(f"hypotheses[{i}].name must be 1-{MAX_HYPOTHESIS_NAME_CHARS} characters")
+        if not hypothesis.name.strip():
+            errors.append(f"hypotheses[{i}].name is empty")
         for side in ("evidence_for", "evidence_against"):
             ids = getattr(hypothesis, side)
             if len(ids) > MAX_HYPOTHESIS_IDS:
@@ -892,7 +959,9 @@ def run_auditor(
 
     def review(result: LLMResult[AuditorOutput]) -> tuple[LLMResult[AuditorOutput], list[str]]:
         nonlocal placeholders
-        filled, unknown = fill_placeholders(result.value, bundle)
+        filled, unknown = fill_placeholders(
+            short_hypothesis_names(full_event_ids(result.value, bundle)), bundle
+        )
         placeholders = count_placeholders(result.value)
         return replace(result, value=filled), unknown + check_audit(filled, bundle)
 

@@ -37,9 +37,11 @@ from app.agents.auditor import (
     build_auditor_input,
     check_audit,
     fill_placeholders,
+    full_event_ids,
     no_op_audit,
     placeholder_value,
     run_auditor,
+    short_hypothesis_names,
     system_prompt,
 )
 from app.config import get_settings
@@ -1089,3 +1091,41 @@ def test_a_fixed_answer_keeps_the_reasoning_of_the_thinking_call() -> None:
     assert result.reasoning_tokens == 3100
     assert transport.requests[0]["extra_body"] is None  # the first call thinks
     assert transport.requests[1]["extra_body"] is not None  # the fix round doesn't
+
+
+def test_a_shortened_event_id_is_expanded_when_it_is_unambiguous() -> None:
+    short = EVENT[: len("event:") + 8]
+    output = AuditorOutput(
+        **_case(
+            verdict=f"Encroachment [{short}] best explains it [metric:landcover.built].",
+            citations=[short, "metric:landcover.built", "score:base_health"],
+        )
+    )
+
+    fixed = full_event_ids(output, BUNDLE)
+
+    assert EVENT in fixed.verdict and short + "]" not in fixed.verdict
+    assert fixed.citations[0] == EVENT
+    assert full_event_ids(
+        output.model_copy(update={"citations": ["event:94"]}), BUNDLE
+    ).citations == ["event:94"]
+
+
+def test_a_long_hypothesis_name_is_cut_not_refused() -> None:
+    long = "Mangrove clearing for a coastal road " + "and tourism fill " * 6
+    output = AuditorOutput(
+        **_case(
+            hypotheses=[
+                {
+                    "name": long,
+                    "evidence_for": [EVENT],
+                    "evidence_against": [],
+                    "assessment": "supported",
+                }
+            ]
+        )
+    )
+
+    name = short_hypothesis_names(output).hypotheses[0].name
+
+    assert len(name) <= 80 and name.endswith("…") and name.startswith("Mangrove clearing")

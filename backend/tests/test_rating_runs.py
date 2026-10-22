@@ -533,6 +533,11 @@ def test_run_trace_shows_models_a_cost_baseline_signals_and_the_auditor_case(
     assert audit.output["checks"]["rejected_answers"] == 0
     assert audit.output["checks"]["resolved"] <= audit.output["checks"]["citations"]
     assert {"hypotheses", "verdict", "reasoning_tokens", "notes"} <= set(audit.output)
+    evidence = audit.output["evidence"]
+    event = next(v for k, v in evidence.items() if k.startswith("event:"))
+    assert event["url"] == FIXTURE[0].url and event["title"] == FIXTURE[0].title
+    assert evidence["metric:landcover.built"]["kind"] == "fact"
+    assert audit.output["base_health"]
 
 
 @requires_db
