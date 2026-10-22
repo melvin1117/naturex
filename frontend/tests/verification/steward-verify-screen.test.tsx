@@ -325,6 +325,88 @@ describe("StewardVerifyScreen", () => {
     ).toBeInTheDocument();
   });
 
+  it("after a rejection, leads to new uploads and submits them for a new review", async () => {
+    const rejected = run({
+      level: "rejected",
+      effective_level: "rejected",
+      reviewer_role: "platform_admin",
+      decided_at: "2026-10-19T09:00:00Z",
+      reason: "The minutes are unsigned.",
+    });
+    const fresh = document({
+      id: DOC_EXTRA,
+      doc_type: "assembly_minutes",
+      created_at: "2026-10-20T10:00:00Z",
+    });
+    const sent = rejected.documents;
+    const backend = renderScreen({
+      [RUNS]: sequence(
+        () => json([rejected]),
+        () =>
+          json([
+            run({ id: "77777777-7777-4777-8777-777777777777" }),
+            { ...rejected, is_current: false },
+          ]),
+      ),
+      [DOCS]: sequence(
+        () => json(sent),
+        () => json([...sent, fresh]),
+        () => json([...sent, { ...fresh, submitted: true }]),
+      ),
+      [UPLOAD]: () => json(fresh, { status: 201 }),
+      [SUBMIT]: () => json(run(), { status: 201 }),
+    });
+
+    await screen.findByRole("heading", {
+      name: "The reviewer rejected these documents",
+    });
+    // The earlier documents are kept, and the way forward is a new upload.
+    expect(await screen.findByText("Already submitted")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Your last submission wasn't approved/),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Upload new documents" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Upload new documents" }),
+    ).toHaveFocus();
+
+    await chooseType("Assembly minutes (consent)");
+    fireEvent.change(screen.getByLabelText("File"), {
+      target: {
+        files: [new File(["%PDF-1.7"], "m.pdf", { type: "application/pdf" })],
+      },
+    });
+    fireEvent.click(screen.getByRole("checkbox", { name: /authorised/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Upload document" }));
+    const pick = await screen.findByRole("checkbox", {
+      name: /Assembly minutes \(consent\)/,
+    });
+    await waitFor(() => expect(pick).toBeChecked());
+    expect(
+      screen.getByText(/Submitting sends these for a new review/),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Submit 1 document for review" }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Waiting for a reviewer" }),
+    ).toBeInTheDocument();
+    const submit = backend.requests.find(
+      (r) => r.method === "POST" && r.url.endsWith("/verification/runs"),
+    )!;
+    // A decided run's documents don't carry over: only the new upload is sent.
+    expect(await submit.json()).toEqual({ document_ids: [DOC_EXTRA] });
+    expect(
+      screen.queryByRole("button", { name: "Upload new documents" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Earlier submissions" }),
+    ).toBeInTheDocument();
+  }, 15_000);
+
   it("shows the Exchange's badge for a verified listing and offers the opening offer", async () => {
     renderScreen({
       [RUNS]: () => json([verifiedRun()]),

@@ -26,6 +26,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { useCommunityHomeUpdates } from "@/lib/home-updates";
 import {
   APP_NAV,
   APPS,
@@ -33,6 +34,9 @@ import {
   type AppAccess,
   type AppKey,
 } from "@/lib/navigation";
+
+/** The Steward app's home, which carries a dot while it has updates the member hasn't seen. */
+const STEWARD_HOME = APPS.steward.href;
 
 /**
  * The shell header of the Exchange, the Steward app and the control room (T62). Navigation
@@ -48,6 +52,11 @@ export function AppHeader({ app, tools }: { app: AppKey; tools?: ReactNode }) {
   // An account without a community gets the Steward app's empty state on every page there.
   const showPages = !(app === "steward" && access.canCreateCommunity);
   const href = steward?.href ?? ((path: string) => path);
+  const homeUpdates = useCommunityHomeUpdates(
+    app === "steward" && showPages ? steward?.active?.id : undefined,
+    pathname === STEWARD_HOME,
+  );
+  const updates = homeUpdates ? [STEWARD_HOME] : [];
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-md">
@@ -70,6 +79,7 @@ export function AppHeader({ app, tools }: { app: AppKey; tools?: ReactNode }) {
             app={app}
             pathname={pathname}
             href={href}
+            updates={updates}
             className="hidden lg:block"
           />
         )}
@@ -91,6 +101,7 @@ export function AppHeader({ app, tools }: { app: AppKey; tools?: ReactNode }) {
             href={href}
             offerCreate={offerCreate}
             showPages={showPages}
+            updates={updates}
           />
         </div>
       </div>
@@ -103,6 +114,7 @@ function AppNav({
   pathname,
   href,
   layout = "row",
+  updates = [],
   className,
   onNavigate,
 }: {
@@ -110,9 +122,12 @@ function AppNav({
   pathname: string;
   href: (path: string) => string;
   layout?: "row" | "stack";
+  /** Pages with updates the member hasn't seen: a dot, described as "New updates". */
+  updates?: readonly string[];
   className?: string;
   onNavigate?: () => void;
 }) {
+  const updatesId = useId();
   return (
     <nav aria-label={`${APPS[app].name} navigation`} className={className}>
       <ul
@@ -123,12 +138,14 @@ function AppNav({
       >
         {APP_NAV[app].map((item) => {
           const active = isActive(pathname, item.href);
+          const updated = updates.includes(item.href);
           return (
             <li key={item.href}>
               <Link
                 href={href(item.href)}
                 data-tour={layout === "row" ? item.tour : undefined}
                 aria-current={active ? "page" : undefined}
+                aria-describedby={updated ? updatesId : undefined}
                 onClick={onNavigate}
                 className={cn(
                   "inline-flex h-9 items-center rounded-full px-3.5 text-sm font-medium whitespace-nowrap transition-colors",
@@ -139,12 +156,34 @@ function AppNav({
                 )}
               >
                 {item.label}
+                {updated && <UpdatesDot />}
               </Link>
+              {updated && <UpdatesNote id={updatesId} />}
             </li>
           );
         })}
       </ul>
     </nav>
+  );
+}
+
+/** The dot marking updates the member hasn't seen; `UpdatesNote` says it in words. */
+function UpdatesDot({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      data-updates-dot=""
+      className={cn("ml-2 size-2 shrink-0 rounded-full bg-clay", className)}
+    />
+  );
+}
+
+/** "New updates", the description of the control with the dot (outside it, so not its name). */
+function UpdatesNote({ id }: { id: string }) {
+  return (
+    <span id={id} className="sr-only">
+      New updates
+    </span>
   );
 }
 
@@ -156,6 +195,7 @@ function MobileMenu({
   href,
   offerCreate,
   showPages,
+  updates,
 }: {
   app: AppKey;
   access: AppAccess;
@@ -163,18 +203,30 @@ function MobileMenu({
   href: (path: string) => string;
   offerCreate: boolean;
   showPages: boolean;
+  updates: readonly string[];
 }) {
   const [open, setOpen] = useState(false);
   const steward = useOptionalStewardCommunity();
   const close = () => setOpen(false);
+  const updatesId = useId();
+  const updated = showPages && updates.length > 0;
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-11 lg:hidden">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative size-11 lg:hidden"
+          aria-describedby={updated ? updatesId : undefined}
+        >
           <Menu aria-hidden="true" />
           <span className="sr-only">Open menu</span>
+          {updated && (
+            <UpdatesDot className="absolute top-2.5 right-2.5 ml-0 ring-2 ring-background" />
+          )}
         </Button>
       </SheetTrigger>
+      {updated && <UpdatesNote id={updatesId} />}
       <SheetContent side="right" className="w-[min(20rem,85vw)] gap-6 p-0">
         <SheetHeader className="border-b border-border/70 px-5 py-4">
           <SheetTitle className="font-serif text-2xl font-normal tracking-tight">
@@ -196,6 +248,7 @@ function MobileMenu({
               pathname={pathname}
               href={href}
               layout="stack"
+              updates={updates}
               onNavigate={close}
             />
           )}

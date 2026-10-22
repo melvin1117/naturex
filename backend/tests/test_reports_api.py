@@ -179,6 +179,24 @@ def test_asset_detail_carries_the_change_since_the_ipo(client: TestClient) -> No
 
 
 @requires_db
+def test_asset_detail_carries_the_cover_image_like_its_card(
+    client: TestClient, session: Session
+) -> None:
+    world = _world(client)
+    asset_id = _asset_id(world)
+    assert client.get(f"/assets/{asset_id}").json()["cover_image_url"] is None
+    asset = _world_asset(session, UUID(world["id"]))
+    asset.cover_image_url = "https://cdn.example.org/covers/wetland.jpg"
+    session.add(asset)
+    session.commit()
+
+    detail = client.get(f"/assets/{asset_id}").json()
+    card = next(c for c in client.get("/assets").json() if c["id"] == asset_id)
+
+    assert detail["cover_image_url"] == card["cover_image_url"] == asset.cover_image_url
+
+
+@requires_db
 def test_asset_detail_serves_the_stored_report(client: TestClient) -> None:
     world = _world(client)
 

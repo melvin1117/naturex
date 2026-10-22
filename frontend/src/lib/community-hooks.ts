@@ -38,6 +38,15 @@ function meIdOf({ session }: DataLayer): string | null {
  */
 export function useCommunitySummary(
   communityId: string | undefined,
+  {
+    live = "all",
+  }: {
+    /**
+     * Which live events refetch it: "status" skips trades (whose prices only the home shows);
+     * "off" where another component on the page already listens, so one event costs one fetch.
+     */
+    live?: "all" | "status" | "off";
+  } = {},
 ): QueryResult<CommunitySummary> {
   const id = communityId ?? "";
   const query = useApiQuery(
@@ -53,7 +62,7 @@ export function useCommunitySummary(
   );
   const ours = (assetId: unknown) =>
     query.data?.listings.some((l) => l.asset.id === assetId) ?? false;
-  const enabled = Boolean(communityId);
+  const enabled = Boolean(communityId) && live !== "off";
   // A burst of trades costs one refetch per `SUMMARY_TICK_REFRESH_MS`, not one per tick.
   const tickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refetch = query.refetch;
@@ -73,7 +82,7 @@ export function useCommunitySummary(
         void refetch();
       }, SUMMARY_TICK_REFRESH_MS);
     },
-    { enabled },
+    { enabled: enabled && live === "all" },
   );
   useLiveEvent(
     "rating_progress",

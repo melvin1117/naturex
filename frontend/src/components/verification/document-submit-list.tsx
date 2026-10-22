@@ -37,6 +37,7 @@ export function DocumentSubmitList({
   pending,
   error,
   disabled = false,
+  afterRejection = false,
 }: {
   documents: ListingDocument[];
   /** The waiting run's documents, or null when no run waits for a decision. */
@@ -50,6 +51,8 @@ export function DocumentSubmitList({
   pending: boolean;
   error: ApiError | null;
   disabled?: boolean;
+  /** The current submission was rejected: the next one needs new uploads. */
+  afterRejection?: boolean;
 }) {
   const hintId = useId();
   const open = documents.filter((doc) => !doc.submitted);
@@ -82,10 +85,18 @@ export function DocumentSubmitList({
       ? "None of these documents is labelled as assembly minutes, so the consent check will fail."
       : adding
         ? "Adding runs the automated checks again over every document above; the reviewer then decides on all of them together."
-        : "Submitting runs the automated checks at once; a reviewer then decides.";
+        : afterRejection
+          ? "Submitting sends these for a new review: the automated checks run at once, then a reviewer decides."
+          : "Submitting runs the automated checks at once; a reviewer then decides.";
 
   return (
     <div className="space-y-5">
+      {afterRejection && open.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          Your last submission wasn&apos;t approved. Upload new documents above,
+          then submit them here for a new review.
+        </p>
+      )}
       {adding && (
         <section aria-labelledby={`${hintId}-submission`}>
           <h3 id={`${hintId}-submission`} className="text-sm font-medium">

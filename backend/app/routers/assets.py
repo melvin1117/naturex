@@ -148,6 +148,7 @@ def asset_detail(
         retained_pct=asset.retained_pct if asset.ipo_at else None,
         primary_shares_remaining=asset.primary_shares_remaining,
         community_wallet=asset.community_wallet,
+        cover_image_url=asset.cover_image_url,
         site_key=asset.site_key,
         outline=thumbnail_outline_of(asset),
         mock=is_mock_report(report),

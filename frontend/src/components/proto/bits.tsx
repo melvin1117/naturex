@@ -2,7 +2,7 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import Image from "next/image";
 import { cn } from "cn";
 
-import { BoundaryMap } from "@/components/boundary-map";
+import { BoundaryMap, type BoundaryFrame } from "@/components/boundary-map";
 import type { LonLatRing } from "@/lib/boundary-map";
 import { money, signedPct } from "@/lib/prototype/format";
 
@@ -192,6 +192,8 @@ export function SiteThumb({
   outline,
   alt,
   creditHidden,
+  credit,
+  frame,
   className,
 }: {
   siteKey?: string | null;
@@ -202,13 +204,23 @@ export function SiteThumb({
   alt: string;
   /** Inside a link: keep the map's credit out of the link's name (it stays visible). */
   creditHidden?: boolean;
+  /** False for a thumbnail too small for the map's credit; the caller shows it nearby. */
+  credit?: boolean;
+  /** The map's frame (default: a card's 16:9). */
+  frame?: BoundaryFrame;
   className?: string;
 }) {
   const url = thumbnailUrl(siteKey, src);
   return (
     <div className={cn("relative overflow-hidden bg-lichen", className)}>
       {!url && outline && (
-        <BoundaryMap rings={outline} label={alt} creditHidden={creditHidden} />
+        <BoundaryMap
+          rings={outline}
+          label={alt}
+          creditHidden={creditHidden}
+          credit={credit}
+          frame={frame}
+        />
       )}
       {url && (
         <Image

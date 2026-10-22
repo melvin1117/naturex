@@ -1847,6 +1847,11 @@ export interface components {
             primary_shares_remaining: number;
             /** Community Wallet */
             community_wallet: string;
+            /**
+             * Cover Image Url
+             * @description The listing's cover photo, as on its card; the page's hero.
+             */
+            cover_image_url?: string | null;
             /** Site Key */
             site_key?: string | null;
             /**

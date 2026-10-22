@@ -27,6 +27,8 @@ import { createDataLayer, queryKeys } from "@/lib/data-layer";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { PrototypeProvider } from "@/lib/prototype/store";
 import { stewardAssetId } from "@/components/shell/steward-community";
+import { COPIED_MS } from "@/components/account-id";
+import { homeSeenKey } from "@/lib/home-updates";
 
 import { dropFocus } from "../focus";
 import {
@@ -197,6 +199,35 @@ function setup(
   });
 }
 
+const MENU_CHILD_ROLES = new Set([
+  "menuitem",
+  "menuitemcheckbox",
+  "menuitemradio",
+  "group",
+  "separator",
+  "none",
+  "presentation",
+]);
+
+/**
+ * axe's aria-required-children for role="menu": every child is a menu item, a group or a
+ * separator, or a plain container (a label) with no ARIA of its own; no live region inside.
+ */
+function expectOnlyMenuChildren(menu: HTMLElement) {
+  expect(menu.querySelector("[aria-live]")).toBeNull();
+  for (const child of Array.from(menu.children)) {
+    const role = child.getAttribute("role");
+    if (role) {
+      expect(MENU_CHILD_ROLES, `role="${role}" in the menu`).toContain(role);
+    } else {
+      const aria = child
+        .getAttributeNames()
+        .filter((name) => name.startsWith("aria-"));
+      expect(aria, `${child.tagName} in the menu`).toEqual([]);
+    }
+  }
+}
+
 describe("creating a community", () => {
   const created = {
     id: "99999999-9999-4999-8999-999999999999",
@@ -353,13 +384,41 @@ describe("creating a community", () => {
     setup(<StewardPage />, { communities: [] });
     await screen.findByRole("heading", { level: 1, name: "Start a community" });
     expect(screen.getByText(ROSA.id)).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Copy account ID" }));
-    expect(await screen.findByText("Account ID copied.")).toBeVisible();
+    const button = screen.getByRole("button", { name: "Copy account ID" });
+    fireEvent.click(button);
+    // Confirmed on the button itself, and announced politely: no toast.
+    expect(await within(button).findByText("Copied")).toBeVisible();
+    expect(button).toHaveAccessibleName("Copied");
+    expect(
+      screen.getByText("Account ID copied.").closest("[aria-live]"),
+    ).toHaveAttribute("aria-live", "polite");
     expect(writeText).toHaveBeenCalledWith(ROSA.id);
 
     writeText.mockImplementationOnce(() => Promise.reject(new Error("denied")));
-    fireEvent.click(screen.getByRole("button", { name: "Copy account ID" }));
+    fireEvent.click(button);
     expect(await screen.findByText(/Couldn't copy/)).toBeVisible();
+    expect(button).toHaveAccessibleName("Copy account ID");
+  });
+
+  it("says Copied on the button for a moment, then Copy again", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText: vi.fn(() => Promise.resolve()) },
+        configurable: true,
+      });
+      setup(<StewardPage />, { communities: [] });
+      const button = await screen.findByRole("button", {
+        name: "Copy account ID",
+      });
+      fireEvent.click(button);
+      await waitFor(() => expect(button).toHaveAccessibleName("Copied"));
+      act(() => vi.advanceTimersByTime(COPIED_MS));
+      expect(button).toHaveAccessibleName("Copy account ID");
+      expect(screen.queryByText("Account ID copied.")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("offers the account ID in the account menu on every page", async () => {
@@ -379,6 +438,19 @@ describe("creating a community", () => {
       within(menu).getByRole("menuitem", { name: "Copy account ID" }),
     );
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(ROSA.id));
+    // In place, not a toast: the menu stays open and its item says so.
+    expect(
+      await within(menu).findByRole("menuitem", { name: "Copied" }),
+    ).toBeVisible();
+    // Announced from outside the menu (aria-required-children: a menu owns only items,
+    // groups and separators), so it's still there once the menu closes.
+    const status = screen.getByText("Account ID copied.");
+    expect(status).toHaveAttribute("aria-live", "polite");
+    expect(menu.contains(status)).toBe(false);
+    expectOnlyMenuChildren(menu);
+    fireEvent.keyDown(menu, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    expect(screen.getByText("Account ID copied.")).toBeInTheDocument();
   });
 
   it("checks the name before sending", async () => {
@@ -867,6 +939,114 @@ describe("the community home", () => {
   });
 });
 
+describe("the Community home's updates dot", () => {
+  const steward = () =>
+    screen.getByRole("navigation", { name: "Steward navigation" });
+  const homeLink = () =>
+    within(steward()).getByRole("link", { name: "Community home" });
+  const seenKey = homeSeenKey(ROSA.id, SELVA.id);
+  const inReview = listing({
+    next_action: "verification_in_review",
+    verification: {
+      level: "documents_submitted",
+      in_review: true,
+      required: true,
+    },
+  });
+  const rejected = listing({
+    next_action: "verify",
+    verification: {
+      level: "rejected",
+      in_review: false,
+      required: true,
+      decision: "rejected",
+      decided_at: "2026-10-20T15:00:00Z",
+      reason: "Blurry",
+      run_id: "run-1",
+    },
+  });
+
+  it("shows once something changed since the home was viewed, and clears there", async () => {
+    let current = summary({ listings: [inReview] });
+    const backend = setup(<StewardPage />, {
+      routes: {
+        [`GET /communities/${SELVA.id}/summary`]: () => json(current),
+      },
+    });
+    await screen.findByRole("heading", { level: 1, name: SELVA.name });
+    await waitFor(() => expect(localStorage.getItem(seenKey)).not.toBeNull());
+    const viewed = localStorage.getItem(seenKey);
+    expect(homeLink()).not.toHaveAccessibleDescription();
+
+    // Elsewhere in the app, a reviewer's decision arrives.
+    nav.pathname = "/steward/list";
+    backend.showPage(<p>Elsewhere</p>);
+    expect(homeLink()).not.toHaveAccessibleDescription();
+    current = summary({ listings: [rejected] });
+    act(() => {
+      const source = FakeEventSource.latest();
+      source.open();
+      source.emit("listing_status", 1, {
+        asset_id: rejected.asset.id,
+        community_id: SELVA.id,
+        transition: "suspend",
+        from: "listed",
+        to: "listed",
+        reason: null,
+      });
+    });
+    await waitFor(() =>
+      expect(homeLink()).toHaveAccessibleDescription("New updates"),
+    );
+    expect(
+      steward().querySelector("[data-updates-dot][aria-hidden='true']"),
+    ).not.toBeNull();
+    // The phone menu's button says so too.
+    expect(
+      screen.getByRole("button", { name: "Open menu" }),
+    ).toHaveAccessibleDescription("New updates");
+    expect(localStorage.getItem(seenKey)).toBe(viewed);
+
+    // Viewing the home clears it.
+    nav.pathname = "/steward";
+    backend.showPage(<StewardPage />);
+    await waitFor(() => expect(homeLink()).not.toHaveAccessibleDescription());
+    expect(localStorage.getItem(seenKey)).not.toBe(viewed);
+    expect(document.querySelector("[data-updates-dot]")).toBeNull();
+  });
+
+  it("shows nothing before the home was ever viewed in this browser", async () => {
+    nav.pathname = "/steward/list";
+    const backend = setup(<p>Elsewhere</p>, {
+      routes: {
+        [`GET /communities/${SELVA.id}/summary`]: () =>
+          json(summary({ listings: [rejected] })),
+      },
+    });
+    await waitFor(() =>
+      expect(backend.calls(`GET /communities/${SELVA.id}/summary`)).toBe(1),
+    );
+    await waitFor(() => expect(homeLink()).toBeVisible());
+    expect(homeLink()).not.toHaveAccessibleDescription();
+    expect(localStorage.getItem(seenKey)).toBeNull();
+  });
+
+  it("stays clear when nothing changed", async () => {
+    const backend = setup(<StewardPage />, {
+      routes: {
+        [`GET /communities/${SELVA.id}/summary`]: () =>
+          json(summary({ listings: [rejected] })),
+      },
+    });
+    await screen.findByRole("heading", { level: 1, name: SELVA.name });
+    await waitFor(() => expect(localStorage.getItem(seenKey)).not.toBeNull());
+    nav.pathname = "/steward/community";
+    backend.showPage(<p>Elsewhere</p>);
+    await waitFor(() => expect(homeLink()).not.toHaveAttribute("aria-current"));
+    expect(homeLink()).not.toHaveAccessibleDescription();
+  });
+});
+
 describe("community settings", () => {
   it("lets the owner edit the community, sending only what changed", async () => {
     nav.pathname = "/steward/community";
@@ -888,6 +1068,8 @@ describe("community settings", () => {
       expect(backend.calls("GET /me/communities")).toBeGreaterThan(0),
     );
     const before = backend.calls("GET /me/communities");
+    // The header keeps the summary, for the Community home's updates dot.
+    const summaries = backend.calls(`GET /communities/${SELVA.id}/summary`);
     fireEvent.change(input, { target: { value: "Selva Viva Norte" } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(await screen.findByText("Saved.")).toBeVisible();
@@ -900,7 +1082,12 @@ describe("community settings", () => {
     await waitFor(() =>
       expect(backend.calls("GET /me/communities")).toBe(before + 1),
     );
-    expect(backend.calls(`GET /communities/${SELVA.id}/summary`)).toBe(0);
+    // The edit refreshes the community's data, so the summary the header keeps too, once.
+    await waitFor(() =>
+      expect(backend.calls(`GET /communities/${SELVA.id}/summary`)).toBe(
+        summaries + 1,
+      ),
+    );
     // "Saved." goes once the form changes again.
     fireEvent.change(screen.getByLabelText("Community name"), {
       target: { value: "Selva" },

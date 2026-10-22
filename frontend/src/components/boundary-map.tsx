@@ -16,6 +16,8 @@ export type BoundaryFrame = { width: number; height: number };
 
 /** A marketplace card's 16:9 thumbnail: at most 3 × 2 tiles. */
 export const CARD_FRAME: BoundaryFrame = { width: 384, height: 216 };
+/** A small square thumbnail (e.g. a stake's row): one to four tiles, the whole boundary. */
+export const ICON_FRAME: BoundaryFrame = { width: 96, height: 96 };
 /** A backdrop's frame before it's measured, or where layout isn't available. */
 export const BACKDROP_FRAME: BoundaryFrame = { width: 960, height: 540 };
 /** A measured frame larger than this is drawn smaller and scaled up, to bound the tiles. */
@@ -69,6 +71,7 @@ export function BoundaryMap({
   className,
   creditClassName,
   creditHidden = false,
+  credit = true,
 }: {
   rings: readonly LonLatRing[];
   /** A fixed frame (cards: a bounded tile count), or "container" to fit the parent's shape. */
@@ -79,6 +82,11 @@ export function BoundaryMap({
   creditClassName?: string;
   /** Keep the credit visible but out of a link's accessible name. */
   creditHidden?: boolean;
+  /**
+   * False where the map is too small to carry the credit: the caller then shows
+   * `IMAGERY_ATTRIBUTION` beside it.
+   */
+  credit?: boolean;
 }) {
   // A callback ref, so a remounted box is measured again.
   const [element, setElement] = useState<HTMLDivElement | null>(null);
@@ -106,6 +114,7 @@ export function BoundaryMap({
           label={label}
           creditClassName={creditClassName}
           creditHidden={creditHidden}
+          credit={credit}
           onError={() => setFailedView(viewKey)}
         />
       )}
@@ -118,12 +127,14 @@ function BoundaryLayers({
   label,
   creditClassName,
   creditHidden,
+  credit,
   onError,
 }: {
   view: BoundaryView;
   label?: string;
   creditClassName?: string;
   creditHidden: boolean;
+  credit: boolean;
   onError: () => void;
 }) {
   const { width, height } = view;
@@ -181,16 +192,18 @@ function BoundaryLayers({
           </svg>
         </div>
       </div>
-      <p
-        aria-hidden={creditHidden || undefined}
-        className={cn(
-          // Clear of a corner badge (e.g. the card's grade); long credits wrap.
-          "absolute bottom-1.5 left-2 z-10 max-w-[calc(100%-5.5rem)] rounded-sm bg-black/45 px-1 py-px text-[9px] leading-[11px] text-white",
-          creditClassName,
-        )}
-      >
-        {IMAGERY_ATTRIBUTION}
-      </p>
+      {credit && (
+        <p
+          aria-hidden={creditHidden || undefined}
+          className={cn(
+            // Clear of a corner badge (e.g. the card's grade); long credits wrap.
+            "absolute bottom-1.5 left-2 z-10 max-w-[calc(100%-5.5rem)] rounded-sm bg-black/45 px-1 py-px text-[9px] leading-[11px] text-white",
+            creditClassName,
+          )}
+        >
+          {IMAGERY_ATTRIBUTION}
+        </p>
+      )}
     </>
   );
 }

@@ -1777,6 +1777,55 @@ def test_a_resubmitted_listing_waits_in_the_queue_not_among_the_decided(world: W
 
 
 @requires_db
+def test_after_a_rejection_the_community_uploads_new_documents_and_resubmits(
+    live: World_,
+) -> None:
+    """Rejected → new uploads → submitted again → in review, for the listing's community only.
+    The rejected run keeps its documents; the same file may be uploaded again for the new run."""
+    asset_id = listed(live)["id"]
+    first = evidence(live, asset_id)
+    assert decide(live, asset_id, first["id"], "reject", reason="Blurry").status_code == 200
+    assert summary_listing(live, live.steward, asset_id)["next_action"] == "verify"
+    old_title = next(d["id"] for d in first["documents"] if d["doc_type"] == "title")
+
+    for user in (live.outsider, live.other_steward, live.admin):
+        refused_upload = upload(live, asset_id, png(310, 310), user=user)
+        refused_submit = submit_run(live, asset_id, [old_title], user=user)
+        assert (refused_upload.status_code, refused_upload.json()["detail"]) == (
+            403,
+            "members_only",
+        )
+        assert refused_submit.status_code == 403, refused_submit.text
+    assert stored(live, asset_id) == 2
+
+    # The judged documents can't be sent again as they are; uploading the file again can.
+    again = submit_run(live, asset_id, [old_title])
+    assert (again.status_code, again.json()["detail"]) == (409, "document_already_submitted")
+    same_title = uploaded(live, asset_id, png(601, 400))
+    minutes = uploaded(live, asset_id, pdf(3), media="application/pdf", doc_type="assembly_minutes")
+    resubmitted = submit_run(live, asset_id, [same_title, minutes], user=live.owner)
+
+    assert resubmitted.status_code == 201, resubmitted.text
+    second = resubmitted.json()
+    assert (second["level"], doc_ids(second)) == ("documents_submitted", {same_title, minutes})
+    home = summary_listing(live, live.steward, asset_id)
+    assert home["next_action"] == "verification_in_review"
+    assert (home["verification"]["in_review"], home["verification"]["run_id"]) == (
+        True,
+        second["id"],
+    )
+    runs = runs_of(live, asset_id)
+    assert [(r["id"], r["level"]) for r in runs] == [
+        (second["id"], "documents_submitted"),
+        (first["id"], "rejected"),
+    ]
+    assert doc_ids(runs[1]) == doc_ids(first), "the rejected run keeps its documents"
+    assert stored(live, asset_id) == 4
+    queue = client_for(live, live.admin).get("/admin/verifications").json()
+    assert [item["run"]["id"] for item in queue] == [second["id"]]
+
+
+@requires_db
 def test_decisions_at_the_same_moment_page_without_overlap(world: World_) -> None:
     """Equal `last_decision_at`: the run ID breaks the tie, so pages never repeat or skip."""
     assets = [draft(world, geojson=square(700, lat=lat))["id"] for lat in (9.9, 9.7, 9.5)]
