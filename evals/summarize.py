@@ -130,9 +130,44 @@ def render(summary: dict[str, dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def published(summary: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """The run as a small JSON for the README and the AI control room: per provider, the
+    pass counts per metric, tokens, uncached cost, p50 latency and every failure."""
+    providers = {}
+    for name, stats in summary.items():
+        latencies = sorted(stats["latencies"])
+        providers[name] = {
+            "tests": stats["tests"],
+            "passed": stats["passed"],
+            "errors": stats["errors"],
+            "metrics": {m: {"passed": c[0], "total": c[1]} for m, c in stats["metrics"].items()},
+            "prompt_tokens": stats["prompt_tokens"],
+            "completion_tokens": stats["completion_tokens"],
+            "cost_usd": round(stats["cost_uncached"], 5),
+            "p50_latency_ms": int(statistics.median(latencies)) if latencies else None,
+            "failures": [
+                {"item": item, "metric": metric, "reason": str(reason)[:200]}
+                for item, metric, reason in stats["failures"]
+            ],
+        }
+    return {"eval": "news_scout", "items": len(news_eval.load_items()), "providers": providers}
+
+
 def main(argv: list[str]) -> int:
-    path = Path(argv[1]) if len(argv) > 1 else DEFAULT_RESULTS
-    print(render(summarise(json.loads(path.read_text(encoding="utf-8")))))
+    """`summarize.py [results.json] [--json out.json]`: Markdown to stdout and, with `--json`,
+    the published summary."""
+    args = list(argv[1:])
+    out: Path | None = None
+    if "--json" in args:
+        at = args.index("--json")
+        out = Path(args[at + 1])
+        del args[at : at + 2]
+    path = Path(args[0]) if args else DEFAULT_RESULTS
+    summary = summarise(json.loads(path.read_text(encoding="utf-8")))
+    print(render(summary))
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(published(summary), indent=2) + "\n", encoding="utf-8")
     return 0
 
 

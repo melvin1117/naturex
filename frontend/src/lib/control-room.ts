@@ -20,8 +20,8 @@ export const ROUTING: Route[] = [
   {
     model: "nvidia/nemotron-3-super-120b-a12b",
     actor: "super",
-    jobs: "Runs each rating: calls the tools, then thinks once to plan the follow-up searches and reads",
-    why: "Reliable tool calling at a mid price; it thinks only on the one turn that needs judgment",
+    jobs: "Runs each rating: calls the tools, thinks once to plan the follow-ups, and sorts the news results",
+    why: "Reliable tool calling at a mid price; on the 40-item news eval it scored 39/40 to Nano's 33/40 at the same speed",
     price: [0.3, 0.9],
     reasoning: "Thinking on the planning turn only",
   },
@@ -36,8 +36,8 @@ export const ROUTING: Route[] = [
   {
     model: "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
     actor: "nano",
-    jobs: "Sorts the news results, reads articles for Super's questions, answers Copilot questions",
-    why: "Fast and cheap for many small, well-defined reads",
+    jobs: "Reads articles for Super's questions and answers Copilot questions",
+    why: "Fast and cheap for small, well-defined reads whose answers code checks",
     price: [0.06, 0.24],
     reasoning: "Thinking off",
   },

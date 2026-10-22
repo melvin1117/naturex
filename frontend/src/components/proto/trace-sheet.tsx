@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown, Cpu, Lock, Wrench } from "lucide-react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "cn";
@@ -11,6 +12,7 @@ import {
   WorldModelCalls,
 } from "@/components/agent-trace";
 import { SampleTag } from "@/components/proto/bits";
+import { EvalResults } from "@/components/trace/eval-results";
 import {
   Select,
   SelectContent,
@@ -202,14 +204,14 @@ export function TraceSheet() {
             <ul className="mt-4 space-y-2">
               {[
                 [
-                  "Orchestrator",
+                  "Orchestrator and News Scout",
                   MODELS.orchestrator,
-                  "Tool calling; thinks once to plan the follow-ups",
+                  "Tool calling, sorting the news; thinks once to plan",
                 ],
                 [
-                  "News Scout and Copilot",
+                  "Article reader and Copilot",
                   MODELS.fast,
-                  "Sorts the news, reads articles, chats",
+                  "Reads articles, chats",
                 ],
                 ["Auditor", MODELS.auditor, "Deep reasoning on, capped"],
                 [
@@ -248,44 +250,14 @@ export function TraceSheet() {
             value="evals"
             className="machine-scroll min-h-0 overflow-y-auto px-6 pt-4 pb-8"
           >
-            <p className="text-sm text-machine-muted">
-              The eval harness (T47) scores each task on Nano, Super and Ultra.
-              Results publish here and in the README once{" "}
-              <code className="font-mono text-xs">make eval</code> runs; this
-              table shows the layout only.
-            </p>
-            <div className="mt-4 overflow-hidden rounded-2xl bg-machine-raised">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs text-machine-muted">
-                  <tr>
-                    <th className="px-4 py-2.5 font-medium">Task</th>
-                    <th className="px-4 py-2.5 font-medium">Metric</th>
-                    <th className="px-4 py-2.5 font-medium">Nano</th>
-                    <th className="px-4 py-2.5 font-medium">Super</th>
-                    <th className="px-4 py-2.5 font-medium">Ultra</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-machine-line">
-                  {[
-                    ["News classification", "Accuracy (≥30 items)"],
-                    ["Auditor faithfulness", "Claims cited"],
-                    ["Orchestrator", "Tool-plan success"],
-                  ].map(([task, metric]) => (
-                    <tr key={task}>
-                      <td className="px-4 py-2.5">{task}</td>
-                      <td className="px-4 py-2.5 text-machine-muted">
-                        {metric}
-                      </td>
-                      {[0, 1, 2].map((i) => (
-                        <td key={i} className="px-4 py-2.5 text-machine-muted">
-                          Pending
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <EvalResults />
+            <Link
+              href="/ai"
+              onClick={() => closeTrace()}
+              className="mt-4 inline-block text-sm font-medium text-lime underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-lime focus-visible:outline-none"
+            >
+              Every model at work, with live costs
+            </Link>
           </TabsContent>
         </Tabs>
       </SheetContent>

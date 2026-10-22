@@ -1,4 +1,4 @@
-"""News Scout agent: Nominatim → Tavily → Nemotron Nano (dev-spec §7.5).
+"""News Scout agent: Nominatim → Tavily → Nemotron 3 Super (dev-spec §7.5).
 
 Queries are built in code from the site's name, its region and its ecosystem (`tools.ecosystem`),
 in English and the local language, and run in parallel. Tavily's `advanced` search returns the
@@ -72,6 +72,10 @@ TAVILY_EXCLUDED_DOMAINS = (
 MAX_ARTICLES_FOR_LLM = 8
 DEFAULT_LOOKBACK_DAYS = 30
 PROMPT_VERSION = "news-scout-v4"
+CLASSIFY_TIER = Tier.ORCHESTRATOR
+"""Super sorts the articles: on the 40-item eval (Oct 22) it passed 39/40 against Nano's 33/40
+(Nano kept 4 irrelevant items) at a similar p50 latency, for about $0.001 more per batch. Nano
+stays its fallback (ADR-0003)."""
 MAX_TAVILY_RESPONSE_BYTES = 2 * 1024 * 1024
 CURRENCY_RE = re.compile(
     r"(?:[$€£]\s?\d[\d,]*(?:\.\d+)?\s?(?:m|bn|million|billion)?|\b\d[\d,]*(?:\.\d+)?\s?(?:usd|dollars?)\b)",
@@ -735,7 +739,7 @@ def _scout(
     try:
         result = llm.structured(
             agent="news_scout",
-            tier=Tier.FAST,
+            tier=CLASSIFY_TIER,
             messages=_messages(asset, place.label, articles),
             schema=NewsScoutClassificationOutput,
             max_tokens=_max_tokens_for_articles(len(articles)),

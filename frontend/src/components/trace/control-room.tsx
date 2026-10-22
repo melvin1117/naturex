@@ -17,6 +17,7 @@ import { useAiUsage, useWorld } from "@/lib/hooks";
 import { ACTOR, seconds, usd } from "@/lib/trace-view";
 
 import { ActorIcon } from "./actor";
+import { EvalResults } from "./eval-results";
 
 function Meter({
   value,
@@ -276,6 +277,7 @@ export function ControlRoom() {
                 </li>
               </ul>
             </section>
+            <EvalResults />
             <Link
               href="/"
               className="inline-flex items-center gap-1.5 text-sm font-medium text-lime underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-lime focus-visible:outline-none"

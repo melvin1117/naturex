@@ -53,7 +53,8 @@ Design principles:
 |---|---|---|---|
 | Orchestrator | Nemotron 3 Super `nvidia/nemotron-3-super-120b-a12b` | Reliable tool-calling, good cost/quality | `MODEL_ORCHESTRATOR` |
 | Auditor / Rating Analyst | Nemotron 3 Ultra | Deep cross-evidence reasoning, long context | `MODEL_AUDITOR` |
-| News classification | Nemotron 3 Nano | High volume, cheap, fast | `MODEL_FAST` |
+| News classification | Nemotron 3 Super (Nano as fallback) | 39/40 vs Nano's 33/40 on the 40-item eval at the same speed, ≈ $0.001 more per batch (§18) | `MODEL_ORCHESTRATOR` |
+| Article reading (investigation) | Nemotron 3 Nano | Short, code-checked answers about one page | `MODEL_FAST` |
 | Vision: perception only (satellite before/after, field photos, documents) | Nemotron 3.5 Super VL `nvidia/Nemotron-3.5-Super-VL` (replaced MiniCPM-V on Oct 22) | Valid strict JSON in ~1–2 s; code checks what it saw and Nemotron Ultra judges it | `MODEL_MULTIMODAL` |
 | Copilot | Nemotron 3 Nano | Low latency chat | `MODEL_FAST` |
 | Embeddings | `Qwen/Qwen3-Embedding-8B` with `dimensions=1024` (no NVIDIA embedding model on Token Factory) | RAG over reports; matches `vector(1024)`; no local model | `MODEL_EMBED` |
@@ -1466,7 +1467,8 @@ Implementation: plain pytest + a small runner that writes `evals/results.md` (co
 - **Metrics:** promptfoo scores these named metrics: `schema_valid`, `schema_first_try`, `relevance`, `impact_type`, `direction`, `severity` (±1) and `injection_resistance`. Labels are scored on the post-checked events, the ones production keeps. A provider error counts as a failure in every metric.
 - **Cost and caching:** spend is logged to `llm_calls` as `news_scout_eval`. The provider caches at the transport level, keyed on the exact request payload, because promptfoo's Python-provider cache misses across runs.
 - **Baseline (Nano):** relevance 72% (target 85%), impact_type 79%, first-try schema 100%, injection resistance 0/3. One run costs about $0.002. See `evals/README.md`. T72 (#123) added the labelling guide to the prompt and the injection guards (§7.5 step 5); the scores after T72 are recorded here once the eval is re-run with a Token Factory key.
-- **Left for T47:** `make eval`, macro-F1, `evals/results.md`, and the other §18 rows.
+- **Routing run and Auditor eval (Oct 22):** the News Scout eval on all three tiers (`evals/promptfooconfig.routing.yaml`): Nano 33/40, **Super 39/40**, Ultra 40/40, all 3/3 on injections; production now sorts the news with Super (§3). The Auditor eval (`evals/auditor_eval.py`, 15 cases: 3 sites' real records × no news, fire, encroachment, restoration, injection): first answer accepted 11/15, finished by Ultra 15/15, cites the news 12/12, never against the evidence 15/15, injection ignored 3/3, p50 14 s, $0.019 per audit; every refusal (2 planted numbers, 1 priced-only negative adjustment, 1 computed number) is listed in `evals/results/auditor.json` and shown in the AI control room. `evals/publish.py` copies both summaries to the frontend.
+- **Left for T47:** `make eval`, macro-F1, Copilot grounding and schema reliability across all agents.
 
 ## 19. Engineering quality bar
 - **CI (GitHub Actions):** lint (ruff, eslint), type-check (mypy on `tools/`, `market/` and `ledger.py`; `tsc`), unit and contract tests on every PR. The eval job runs nightly and on demand, so it doesn't burn credits on every push.

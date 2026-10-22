@@ -30,12 +30,12 @@ export const ACTOR: Record<
 > = {
   super: {
     name: "Nemotron 3 Super",
-    role: "Plans the run and calls the tools",
+    role: "Plans the run, calls the tools and sorts the news",
     kind: "model",
   },
   nano: {
     name: "Nemotron 3 Nano",
-    role: "Fast reads: sorts the news",
+    role: "Fast reads: answers questions about an article",
     kind: "model",
   },
   ultra: {
