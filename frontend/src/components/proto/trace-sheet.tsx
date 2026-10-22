@@ -195,21 +195,21 @@ export function TraceSheet() {
             className="machine-scroll min-h-0 overflow-y-auto px-6 pt-4 pb-8"
           >
             <p className="text-sm text-machine-muted">
-              Routing from ADR-0003. Nemotron does all reasoning and text; a
-              non-NVIDIA model only describes photos, because no Nemotron model
-              on Token Factory reads images.
+              Routing from ADR-0003. Nemotron does all reasoning, text and
+              vision; only the Copilot&apos;s embeddings use a non-NVIDIA model,
+              because Token Factory serves no NVIDIA embedding model.
             </p>
             <ul className="mt-4 space-y-2">
               {[
                 [
                   "Orchestrator",
                   MODELS.orchestrator,
-                  "Tool calling, reasoning off",
+                  "Tool calling; thinks once to plan the follow-ups",
                 ],
                 [
                   "News Scout and Copilot",
                   MODELS.fast,
-                  "Fast classification and chat",
+                  "Sorts the news, reads articles, chats",
                 ],
                 ["Auditor", MODELS.auditor, "Deep reasoning on, capped"],
                 [

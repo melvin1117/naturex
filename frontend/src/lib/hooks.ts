@@ -17,6 +17,7 @@ import { forgetCommunity } from "./active-community";
 import type { ApiClient } from "./api/client";
 import { toApiError, unwrap, type ApiError } from "./api/errors";
 import type {
+  AiUsage,
   AlertList,
   AlertOut,
   AlertsMarked,
@@ -777,6 +778,15 @@ export function useWorldTrace(): QueryResult<WorldTrace> {
   const meId = world?.me?.id ?? null;
   return useApiQuery(queryKeys.worldTrace(meId), (api, signal) =>
     unwrap(api.GET("/admin/trace", { signal })),
+  );
+}
+
+/** The AI control room: this world's calls per model, the deployment's spend and Tavily credits. */
+export function useAiUsage(): QueryResult<AiUsage> {
+  const { world } = useWorld();
+  const meId = world?.me?.id ?? null;
+  return useApiQuery(queryKeys.aiUsage(meId), (api, signal) =>
+    unwrap(api.GET("/admin/ai-usage", { signal })),
   );
 }
 

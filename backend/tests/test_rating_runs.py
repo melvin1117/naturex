@@ -1198,10 +1198,27 @@ def test_ai_usage_groups_this_worlds_calls_by_model(api: tuple[TestClient, Defer
                     cost_usd=Decimal("0.01"),
                 )
             )
+        # News Scout logs the asset only: it still counts for the asset's world.
+        nano = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+        for world, asset in ((None, hero), (None, None)):
+            session.add(
+                LlmCall(
+                    world_id=world,
+                    asset_id=asset,
+                    agent="news_scout",
+                    model=nano,
+                    prompt_tokens=10,
+                    completion_tokens=5,
+                    latency_ms=50,
+                    status="ok",
+                    cost_usd=Decimal("0.001"),
+                )
+            )
         session.commit()
 
     body = client.get("/admin/ai-usage").json()
 
+    assert next(m for m in body["models"] if m["model"] == nano)["calls"] == 1
     ultra = next(m for m in body["models"] if m["model"] == ULTRA)
     assert (ultra["calls"], ultra["ok"], ultra["rejected"]) == (3, 2, 1)
     assert ultra["p50_latency_ms"] == 200 and ultra["prompt_tokens"] == 30

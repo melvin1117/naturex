@@ -20,6 +20,7 @@ from typing import Annotated, Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import or_
 from sqlalchemy import select as sa_select
 from sqlmodel import Session, col, func, select
 
@@ -561,7 +562,15 @@ def get_ai_usage(world: CurrentWorld, session: SessionDep, settings: SettingsDep
             func.coalesce(func.sum(LlmCall.completion_tokens), 0).label("completion_tokens"),
             func.coalesce(func.sum(LlmCall.cost_usd), 0).label("cost_usd"),
         )
-        .where(col(LlmCall.world_id) == world.id, outcome != "reserved")
+        .where(
+            # News Scout logs its calls with the asset only, so a world's calls are those with
+            # its ID or one of its assets (the rule `sandbox._delete_world_rows` uses too).
+            or_(
+                col(LlmCall.world_id) == world.id,
+                col(LlmCall.asset_id).in_(select(Asset.id).where(Asset.world_id == world.id)),
+            ),
+            outcome != "reserved",
+        )
         .group_by(col(LlmCall.model))
     )
     models = sorted(

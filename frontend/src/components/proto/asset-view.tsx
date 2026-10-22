@@ -403,6 +403,12 @@ function AssetLoaded({
                 <Bot aria-hidden="true" />
                 How it was rated
               </Button>
+              <Link
+                href="/ai"
+                className="mt-3 block text-sm font-medium text-lime-ink underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                Every model at work, with live costs
+              </Link>
             </section>
           </aside>
         </div>
