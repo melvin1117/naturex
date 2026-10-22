@@ -337,7 +337,7 @@ describe("withdrawing a listing", () => {
       "true",
     );
     await waitFor(() => expect(heading).toHaveFocus());
-    expect(heading.closest("li")).toHaveClass("nx-wash");
+    expect(heading.closest("li")!.firstElementChild).toHaveClass("nx-wash");
     expect(
       within(heading.closest("li")!).getByText("Withdrawn just now"),
     ).toBeVisible();

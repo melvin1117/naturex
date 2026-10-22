@@ -392,8 +392,8 @@ export function CommunitySettingsSkeleton({
 /** One listing's row on the Listings page: thumbnail, name, status line, then its buttons. */
 function ListingRowBones() {
   return (
-    <div className="flex gap-4 py-4 first:pt-0 last:pb-0">
-      <Skeleton className="size-16 shrink-0 rounded-2xl" />
+    <div className="flex gap-4 py-4">
+      <Skeleton className="size-16 shrink-0 rounded-xl" />
       <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-3">
         <div className="w-full max-w-sm min-w-0">
           <Line box="h-6" className="h-4 w-48 max-w-full" />

@@ -75,91 +75,97 @@ export function ListingRow({
   const external = listing.next_action === "view_on_exchange";
 
   return (
-    <li
-      className={cn(
-        "-mx-3 flex gap-4 rounded-2xl px-3 py-4",
-        fresh && "nx-wash",
-      )}
-      data-listing={asset.id}
-    >
-      <Thumb card={asset} />
-      <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0 sm:max-w-md">
-          <h3
-            ref={headingRef}
-            tabIndex={-1}
-            className="font-medium break-words outline-none"
-          >
-            {asset.name}
-          </h3>
-          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-            <Badge className={cn("gap-1.5 border-transparent", tone.className)}>
-              <tone.icon aria-hidden="true" />
-              {words.label}
-            </Badge>
-            <span>
-              {fresh
-                ? "Withdrawn just now"
-                : updatedText(listing.updated_at, now)}
-            </span>
-            <span aria-hidden="true">·</span>
-            <span className="tabular">{ha(Number(asset.area_ha))}</span>
-          </p>
-          {words.detail && (
-            <p className="mt-1.5 text-sm text-pretty text-muted-foreground">
-              {words.detail}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {actions.withdraw && (
-            <WithdrawListingDialog
-              assetId={asset.id}
-              name={asset.name}
-              onWithdrawn={onWithdrawn}
-              onStale={onStale}
-            />
-          )}
-          {actions.edit && (
-            <Button asChild variant="outline" size="sm">
-              <Link
-                href={actions.edit.href}
-                aria-label={`${actions.edit.label}: ${asset.name}`}
-              >
-                <PencilLine aria-hidden="true" />
-                {actions.edit.label}
-              </Link>
-            </Button>
-          )}
-          {actions.view && (
-            <Button asChild variant="outline" size="sm">
-              <Link
-                href={actions.view.href}
-                aria-label={`${actions.view.label}: ${asset.name}`}
-              >
-                {actions.view.label}
-              </Link>
-            </Button>
-          )}
-          {actions.next && (
-            <Button
-              asChild
-              size="sm"
-              variant={actions.next.primary ? "default" : "outline"}
+    <li className="py-2" data-listing={asset.id}>
+      <div
+        className={cn(
+          "-mx-3 flex gap-4 rounded-2xl px-3 py-2",
+          fresh && "nx-wash",
+        )}
+      >
+        <Thumb card={asset} />
+        <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0 sm:max-w-md">
+            <h3
+              ref={headingRef}
+              tabIndex={-1}
+              className="font-medium break-words outline-none"
             >
-              <Link
-                href={actions.next.href}
-                aria-label={`${actions.next.label}: ${asset.name}`}
+              {asset.name}
+            </h3>
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+              <Badge
+                className={cn("gap-1.5 border-transparent", tone.className)}
               >
-                {actions.next.label}
-                {external ? (
-                  <ExternalLink aria-hidden="true" />
-                ) : (
-                  <ArrowRight aria-hidden="true" />
-                )}
-              </Link>
-            </Button>
-          )}
+                <tone.icon aria-hidden="true" />
+                {words.label}
+              </Badge>
+              <span>
+                {fresh
+                  ? "Withdrawn just now"
+                  : updatedText(listing.updated_at, now)}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span className="tabular">{ha(Number(asset.area_ha))}</span>
+            </p>
+            {words.detail && (
+              <p className="mt-1.5 text-sm text-pretty text-muted-foreground">
+                {words.detail}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {actions.withdraw && (
+              // Last on a phone, after the way forward; first (left of it) on wider screens.
+              <span className="order-last sm:order-none">
+                <WithdrawListingDialog
+                  assetId={asset.id}
+                  name={asset.name}
+                  onWithdrawn={onWithdrawn}
+                  onStale={onStale}
+                />
+              </span>
+            )}
+            {actions.edit && (
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  href={actions.edit.href}
+                  aria-label={`${actions.edit.label}: ${asset.name}`}
+                >
+                  <PencilLine aria-hidden="true" />
+                  {actions.edit.label}
+                </Link>
+              </Button>
+            )}
+            {actions.view && (
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  href={actions.view.href}
+                  aria-label={`${actions.view.label}: ${asset.name}`}
+                >
+                  {actions.view.label}
+                </Link>
+              </Button>
+            )}
+            {actions.next && (
+              <Button
+                asChild
+                size="sm"
+                variant={actions.next.primary ? "default" : "outline"}
+              >
+                <Link
+                  href={actions.next.href}
+                  aria-label={`${actions.next.label}: ${asset.name}`}
+                >
+                  {actions.next.label}
+                  {external ? (
+                    <ExternalLink aria-hidden="true" />
+                  ) : (
+                    <ArrowRight aria-hidden="true" />
+                  )}
+                </Link>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </li>
@@ -170,7 +176,7 @@ function Thumb({ card }: { card: ListingSummary["asset"] }) {
   const icon = useMemo(() => siteIcon(card), [card]);
   if (!icon)
     return (
-      <span className="grid size-16 shrink-0 place-items-center rounded-2xl bg-lichen">
+      <span className="grid size-16 shrink-0 place-items-center rounded-xl bg-lichen">
         <Leaf className="size-5 text-lime-ink" aria-hidden="true" />
       </span>
     );
@@ -182,7 +188,7 @@ function Thumb({ card }: { card: ListingSummary["asset"] }) {
       alt=""
       frame={ICON_FRAME}
       credit={false}
-      className="size-16 shrink-0 rounded-2xl"
+      className="size-16 shrink-0 rounded-xl"
     />
   );
 }

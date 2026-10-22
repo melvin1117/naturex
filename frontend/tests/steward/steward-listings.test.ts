@@ -224,6 +224,20 @@ describe("rowActions", () => {
     expect(rowActions(stuck, COMMUNITY).withdraw).toBe(true);
   });
 
+  it.each([
+    [null, "View progress"],
+    ["rating_stale", "Try again"],
+    ["rating_failed:timeout", "Try again"],
+    ["no_satellite_metrics", "View"],
+  ])("a rating with reason %s offers %s", (reason, label) => {
+    const item = listing(
+      "rating",
+      { next_action: "rating_in_progress" },
+      { status_reason: reason },
+    );
+    expect(rowActions(item, COMMUNITY).view?.label).toBe(label);
+  });
+
   it("someone who isn't a member only views", () => {
     const draft = listing("draft", {
       next_action: "continue_listing",

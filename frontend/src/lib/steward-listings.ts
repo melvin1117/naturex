@@ -202,6 +202,15 @@ export function inProgressText(listings: readonly Listing[]): string | null {
   return null;
 }
 
+/** "View progress" while it's rated, "Try again" when the rating stopped and can be retried. */
+function viewLabel({ asset }: Listing): string {
+  if (asset.status !== "rating") return "View";
+  const reason = asset.status_reason ?? "";
+  if (reason.startsWith("rating_failed") || reason === "rating_stale")
+    return "Try again";
+  return reason === "no_satellite_metrics" ? "View" : "View progress";
+}
+
 export interface RowActions {
   /** The next step, as on the Community home; null when it has nothing to open. */
   next: (ListingLink & { primary: boolean }) | null;
@@ -254,7 +263,7 @@ export function rowActions(
     view: next
       ? null
       : {
-          label: listing.asset.status === "rating" ? "View progress" : "View",
+          label: viewLabel(listing),
           href: flow,
         },
   };
