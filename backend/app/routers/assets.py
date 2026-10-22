@@ -6,7 +6,9 @@ rating, needs_evidence, ineligible, withdrawn) belongs to its community: only it
 same-world admins see it (`VIEW_COMMUNITY_DATA`); everyone else gets 404, as if it didn't exist.
 The lifecycle's writes are in `app.routers.listings`.
 
-Field evidence (T40) is in `app.routers.evidence`.
+Field evidence (T40) is in `app.routers.evidence`. A live-rated listing's land-cover overlay
+(#231) is `GET /assets/{asset_id}/overlay.png`, with its metadata in the detail's
+`land_cover_overlay`; the demo sites' precomputed one is in `app.routers.media`.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ from sqlmodel import Session, col, select
 
 from app.authz import Action, Actor, OptionalActor, asset_ref, require
 from app.deps import CurrentWorld, SessionDep, SettingsDep
-from app.models import Asset, AssetStatus, Price, Report
+from app.models import Asset, AssetOverlay, AssetStatus, Price, Report
 from app.routers.reports import present_report, recent_events
 from app.schemas import (
     AssetCard,
@@ -31,6 +33,8 @@ from app.schemas import (
     AssetOutlines,
     AssetStatusOut,
     CachedExample,
+    LandCoverOverlay,
+    OverlayBounds,
     PricePoint,
     ReportOut,
 )
@@ -43,10 +47,13 @@ from app.services.asset_cards import (
 )
 from app.services.cached_example import cached_example
 from app.services.ipo import is_trading
+from app.services.land_cover_overlays import current_overlay
 from app.services.lifecycle import PUBLIC_STATUSES
 from app.services.listings import visible_to
 from app.services.rating_runs import assets_with_active_runs, latest_run_id
+from app.tools.earth_obs import DateWindow
 from app.tools.geometry import outline_rings
+from app.tools.site_images import OVERLAY_ATTRIBUTIONS, OVERLAY_DATASET_ID, OVERLAY_METHOD
 
 router = APIRouter(tags=["assets"])
 
@@ -159,6 +166,7 @@ def asset_detail(
         trading=is_trading(asset),
         ipo_at=asset.ipo_at,
         cached_example=_cached_example(session, asset, active),
+        land_cover_overlay=_land_cover_overlay(session, asset),
         # Only for a listing under review, which only its community and admins can load (so
         # public reads never need the caller's roles: T57).
         latest_run_id=(
@@ -166,6 +174,30 @@ def asset_detail(
             if asset.status not in PUBLIC_STATUSES and visible_to(actor, asset)
             else None
         ),
+    )
+
+
+def _overlay_version(overlay: AssetOverlay) -> str:
+    return f"{overlay.geometry_sha256[:12]}-{int(overlay.created_at.timestamp())}"
+
+
+def _land_cover_overlay(session: Session, asset: Asset) -> LandCoverOverlay | None:
+    overlay = current_overlay(session, asset.world_id, asset.id, asset.geojson, with_png=False)
+    if overlay is None:
+        return None
+    return LandCoverOverlay(
+        version=_overlay_version(overlay),
+        width=overlay.width,
+        height=overlay.height,
+        bounds=OverlayBounds(
+            south=overlay.south, west=overlay.west, north=overlay.north, east=overlay.east
+        ),
+        dataset_id=OVERLAY_DATASET_ID,
+        method=OVERLAY_METHOD,
+        date_window=DateWindow(
+            start=overlay.date_start.isoformat(), end=overlay.date_end.isoformat()
+        ),
+        attributions=list(OVERLAY_ATTRIBUTIONS),
     )
 
 
@@ -238,3 +270,40 @@ def list_prices(
         .order_by(col(Price.ts))
     ).all()
     return [PricePoint(ts=p.ts, price=p.price, reason=p.reason) for p in prices]
+
+
+# Versioned URLs (`?v=`, the detail's `land_cover_overlay.version`) change on re-render.
+OVERLAY_PUBLIC_CACHE = "public, max-age=86400"
+
+
+@router.get(
+    "/assets/{asset_id}/overlay.png",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "Land-cover overlay PNG",
+            "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}},
+        },
+        404: {"description": "Not found in the caller's world, or no overlay (yet)"},
+    },
+    dependencies=[BROWSE_ASSET],
+)
+def get_land_cover_overlay(
+    asset_id: UUID, world: CurrentWorld, actor: OptionalActor, session: SessionDep
+) -> Response:
+    """The listing's Dynamic World land-cover overlay from its live satellite rating (#231):
+    an indexed PNG, transparent outside the boundary, spanning `land_cover_overlay.bounds`.
+    404 `overlay_not_found` before a live rating rendered one for the current boundary."""
+    asset = world_asset(session, world.id, asset_id, actor)
+    overlay = current_overlay(session, world.id, asset.id, asset.geojson)
+    if overlay is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "overlay_not_found")
+    public = asset.status in PUBLIC_STATUSES
+    return Response(
+        content=overlay.png,
+        media_type="image/png",
+        headers={
+            "Cache-Control": OVERLAY_PUBLIC_CACHE if public else PRIVATE_NO_STORE,
+            "X-Content-Type-Options": "nosniff",
+        },
+    )

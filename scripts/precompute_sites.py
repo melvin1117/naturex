@@ -16,7 +16,9 @@ After the observed sites, the script regenerates the Time Machine scenario varia
 
 ``--images`` (T35) renders each site's Dynamic World land-cover overlay (indexed PNG with a
 transparent background) and a Sentinel-2 true-colour marketplace thumbnail (WebP) into
-``backend/data/demo_sites/images/`` with a sidecar ``<site>.images.json``. It needs Pillow:
+``backend/data/demo_sites/images/`` with a sidecar ``<site>.images.json``. The overlay renderer
+(``app.tools.earth_engine.dw_overlay_png``) is shared with live-rated listings (#231). It needs
+Pillow:
 
     cd backend && PATH=$HOME/.local/bin:$PATH uv run --with pillow \
       python ../scripts/precompute_sites.py --images
@@ -47,8 +49,9 @@ from app.tools.earth_engine import (
     DATA_VERSION,
     END_DATE,
     START_12M,
+    compute_png,
     compute_polygon_metrics,
-    dw_mode,
+    dw_overlay_png,
     geometry_from_feature,
     init_ee,
 )
@@ -56,12 +59,16 @@ from app.tools.earth_obs import SCENARIO_DIR, EarthObsMetrics, scenario_path
 from app.tools.scenarios import build_site_scenarios, load_scenario_spec, scenario_document
 from app.tools.site_images import (
     DW_CLASSES,
-    Bounds,
     DW_LABELS,
     DW_PALETTE,
     IMAGES_DIR,
+    OVERLAY_ATTRIBUTIONS,
+    OVERLAY_BAND,
+    OVERLAY_DATASET_ID,
+    OVERLAY_METHOD,
     SCENARIO_NOTE,
-    TRANSPARENT_INDEX,
+    SENTINEL_2_IMAGE_ATTRIBUTION,
+    Bounds,
     LegendEntry,
     OverlayImage,
     PixelGrid,
@@ -69,12 +76,10 @@ from app.tools.site_images import (
     ThumbnailImage,
     VisParams,
     check_site_images,
-    encode_indexed_png,
     image_path,
     load_site_geojson,
     load_site_images,
     overlay_grid,
-    palette_rgba,
     polygon_bounds,
     polygon_ring,
     thumbnail_grid,
@@ -192,7 +197,6 @@ THUMBNAIL_OUTLINE = "#ffffff"
 THUMBNAIL_OUTLINE_PX = 2
 THUMBNAIL_WEBP_QUALITY = 82
 _SUPERSAMPLE = 4
-SENTINEL_2_IMAGE_ATTRIBUTION = "Contains modified Copernicus Sentinel data 2025-2026."
 
 
 def _stable_bounds(bounds: Bounds) -> Bounds:
@@ -216,14 +220,9 @@ def expected_site_images(site_key: str) -> SiteImages:
             width=overlay.width,
             height=overlay.height,
             bounds=bounds,
-            dataset_id="GOOGLE/DYNAMICWORLD/V1",
-            band="label",
-            method=(
-                "Per-pixel mode of the Dynamic World V1 label over the date window (the "
-                "same mode as the landcover metrics), clipped to the polygon and sampled "
-                "nearest-neighbour onto a Web Mercator grid; outside the polygon is "
-                "transparent."
-            ),
+            dataset_id=OVERLAY_DATASET_ID,
+            band=OVERLAY_BAND,
+            method=OVERLAY_METHOD,
             date_window=window,
             palette=DW_PALETTE,
             legend=tuple(
@@ -232,7 +231,7 @@ def expected_site_images(site_key: str) -> SiteImages:
                     zip(DW_CLASSES, DW_LABELS, DW_PALETTE, strict=True)
                 )
             ),
-            attributions=(ATTRIBUTIONS["dynamic_world"], SENTINEL_2_IMAGE_ATTRIBUTION),
+            attributions=OVERLAY_ATTRIBUTIONS,
         ),
         thumbnail=ThumbnailImage(
             file=image_path(site_key, "thumbnail").name,
@@ -256,30 +255,6 @@ def expected_site_images(site_key: str) -> SiteImages:
     )
 
 
-def _compute_png(image: ee.Image, grid: PixelGrid) -> bytes:
-    data = ee.data.computePixels({"expression": image, "fileFormat": "PNG", "grid": grid.ee_grid()})
-    if not isinstance(data, bytes):
-        raise RuntimeError("computePixels did not return PNG bytes.")
-    return data
-
-
-def _overlay_png(aoi: ee.Geometry, grid: PixelGrid) -> bytes:
-    from PIL import Image
-
-    labels = (
-        dw_mode(aoi, ee.Date(START_12M), ee.Date(END_DATE)).clip(aoi).unmask(255, False).toUint8()
-    )
-    with Image.open(io.BytesIO(_compute_png(labels, grid))) as image:
-        if image.size != (grid.width, grid.height):
-            raise RuntimeError(f"Overlay is {image.size}, expected {grid.width}x{grid.height}.")
-        raw = image.getchannel(0).tobytes()
-    unexpected = set(raw) - set(range(len(DW_CLASSES))) - {255}
-    if unexpected:
-        raise RuntimeError(f"Unexpected Dynamic World labels {sorted(unexpected)}.")
-    pixels = raw.replace(b"\xff", bytes([TRANSPARENT_INDEX]))
-    return encode_indexed_png(pixels, grid.width, grid.height, palette_rgba(DW_PALETTE))
-
-
 def _thumbnail_webp(ring: list[tuple[float, float]], grid: PixelGrid) -> bytes:
     from PIL import Image, ImageDraw
 
@@ -301,7 +276,7 @@ def _thumbnail_webp(ring: list[tuple[float, float]], grid: PixelGrid) -> bytes:
             gamma=THUMBNAIL_VIS.gamma,
         )
     )
-    with Image.open(io.BytesIO(_compute_png(composite, grid))) as fetched:
+    with Image.open(io.BytesIO(compute_png(composite, grid))) as fetched:
         rgb = fetched.convert("RGBA")
     if rgb.size != (grid.width, grid.height):
         raise RuntimeError(f"Thumbnail is {rgb.size}, expected {grid.width}x{grid.height}.")
@@ -326,7 +301,8 @@ def write_site_images(site_key: str) -> None:
     aoi = ee.Geometry(geometry_from_feature(geojson))
     bounds = polygon_bounds(geojson)
     IMAGES_DIR.mkdir(exist_ok=True)
-    overlay = _overlay_png(aoi, overlay_grid(bounds))
+    # The same overlay renderer as live-rated listings (#231).
+    overlay = dw_overlay_png(aoi, overlay_grid(bounds))
     thumbnail = _thumbnail_webp(polygon_ring(geojson), thumbnail_grid(bounds))
     for kind, data in (("overlay", overlay), ("thumbnail", thumbnail)):
         path = image_path(site_key, kind)

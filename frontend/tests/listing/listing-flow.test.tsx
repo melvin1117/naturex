@@ -1431,6 +1431,26 @@ describe("the full-screen map (#215)", () => {
     ).toBeVisible();
   });
 
+  it("keeps the map's panes and controls in their own stacking context, under the header (#232)", async () => {
+    setup();
+    await fillDetails();
+    const box = await screen.findByRole("searchbox", {
+      name: "Search for a place",
+    });
+    const stage = box.closest(".nx-map-stage") as HTMLElement;
+    // Leaflet panes and the z-[1000] controls can't escape an isolated stage.
+    expect(stage).toHaveClass("isolate", "relative");
+    expect(stage).not.toHaveClass("fixed");
+    expect(stage).toContainElement(
+      screen.getByRole("button", { name: "Full screen" }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Full screen" }));
+    // Full screen lifts the whole stage above the sticky header (z-40).
+    expect(stage).toHaveClass("isolate", "fixed", "inset-0", "z-50");
+    expect(stage).not.toHaveClass("relative");
+  });
+
   it("keeps Tab within the map's controls", async () => {
     setup();
     await fullScreen();

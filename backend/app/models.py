@@ -1268,3 +1268,49 @@ class FieldPhotoBlob(SQLModel, table=True):
     world_id: UUID
     asset_id: UUID
     content: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+
+
+class AssetOverlay(SQLModel, table=True):
+    """A live-rated listing's Dynamic World land-cover overlay (#231), as the demo sites'
+    precomputed `overlay.png` (T35): an indexed PNG spanning `south`..`east` in Web Mercator.
+
+    One per asset, replaced when a rating renders it for a new boundary or data version
+    (`geometry_sha256`, `data_version`); a row for another boundary is never served."""
+
+    __tablename__ = "asset_overlays"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["world_id", "asset_id"],
+            ["assets.world_id", "assets.id"],
+            name="fk_asset_overlays_asset",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "length(geometry_sha256) = 64", name="ck_asset_overlays_geometry_sha256_len"
+        ),
+        CheckConstraint(
+            "octet_length(png) BETWEEN 1 AND 300000", name="ck_asset_overlays_png_size"
+        ),
+        CheckConstraint(
+            "width BETWEEN 1 AND 1024 AND height BETWEEN 1 AND 1024",
+            name="ck_asset_overlays_dimensions",
+        ),
+        CheckConstraint("south < north AND west < east", name="ck_asset_overlays_bounds"),
+        CheckConstraint("date_start < date_end", name="ck_asset_overlays_date_window"),
+        Index("ix_asset_overlays_world_id", "world_id"),
+    )
+
+    asset_id: UUID = Field(primary_key=True)
+    world_id: UUID
+    geometry_sha256: str = Field(sa_column=Column(String(64), nullable=False))
+    data_version: str
+    png: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+    width: int = Field(sa_column=Column(SmallInteger, nullable=False))
+    height: int = Field(sa_column=Column(SmallInteger, nullable=False))
+    south: float
+    west: float
+    north: float
+    east: float
+    date_start: date
+    date_end: date
+    created_at: datetime = _created_at()

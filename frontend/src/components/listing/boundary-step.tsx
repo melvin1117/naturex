@@ -319,10 +319,12 @@ export function BoundaryStep({
             ref={stage}
             onKeyDown={onStageKey}
             className={cn(
-              "nx-map-stage relative overflow-hidden bg-secondary",
+              // `isolate`: Leaflet's panes (z 400-1000) and the floating controls stay
+              // under the sticky header (#232); full screen lifts the whole stage to z-50.
+              "nx-map-stage isolate overflow-hidden bg-secondary",
               expanded
                 ? "fixed inset-0 z-50 h-dvh rounded-none"
-                : "h-[min(64dvh,680px)] min-h-[380px] rounded-3xl lg:h-[min(76dvh,820px)]",
+                : "relative h-[min(64dvh,680px)] min-h-[380px] rounded-3xl lg:h-[min(76dvh,820px)]",
             )}
           >
             <BoundaryMap

@@ -29,6 +29,7 @@ export type IpoLaunch = Schemas["IpoLaunch"];
 export type IpoOut = Schemas["IpoOut"];
 export type IpoPreview = Schemas["IpoPreviewOut"];
 export type LedgerEntry = Schemas["LedgerEntryOut"];
+export type LandCoverOverlay = Schemas["LandCoverOverlay"];
 export type LegendEntry = Schemas["LegendEntry"];
 export type LedgerVerify = Schemas["LedgerVerifyOut"];
 export type LoginIn = Schemas["LoginIn"];
