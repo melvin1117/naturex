@@ -8,7 +8,8 @@ import { TraceError } from "@/components/agent-trace";
 import { MachineRowsSkeleton } from "@/components/page-skeletons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { RunTrace } from "@/lib/api/types";
-import { useAsset, useRunTrace } from "@/lib/hooks";
+import type { ApiError } from "@/lib/api/errors";
+import { useAsset, useRecordedRun, useRunTrace } from "@/lib/hooks";
 import { date } from "@/lib/prototype/format";
 import {
   auditCase,
@@ -39,16 +40,71 @@ const TAB =
 export function RunTracePage({ runId }: { runId: string }) {
   const trace = useRunTrace(runId);
   const asset = useAsset(trace.data?.asset_id);
-  const name = asset.data?.name;
+  return (
+    <TraceShell
+      assetId={trace.data?.asset_id}
+      name={asset.data?.name}
+      siteKey={asset.data?.site_key}
+      trace={trace.data}
+      error={trace.error}
+      retry={trace.refetch}
+    />
+  );
+}
+
+/** `/trace/recorded/[assetId]`: a demo site's recorded run (a real run committed as data), for
+ * visitors who haven't rated the site themselves. Labelled "Recorded" with its date. */
+export function RecordedTracePage({ assetId }: { assetId: string }) {
+  const asset = useAsset(assetId);
+  const recorded = useRecordedRun(asset.data?.site_key);
+  const trace = useMemo(
+    () =>
+      recorded.data ? { ...recorded.data.trace, asset_id: assetId } : undefined,
+    [recorded.data, assetId],
+  );
+  const notDemo = asset.data && !recorded.data && !recorded.isLoading;
+  return (
+    <TraceShell
+      assetId={assetId}
+      name={asset.data?.name}
+      siteKey={asset.data?.site_key}
+      trace={trace}
+      recordedOn={recorded.data?.recorded_on}
+      error={recorded.error ?? asset.error ?? null}
+      notFound={Boolean(notDemo && !recorded.error)}
+      retry={recorded.refetch}
+    />
+  );
+}
+
+function TraceShell({
+  assetId,
+  name,
+  siteKey,
+  trace,
+  recordedOn,
+  error,
+  notFound = false,
+  retry,
+}: {
+  assetId: string | undefined;
+  name: string | undefined;
+  siteKey: string | null | undefined;
+  trace: RunTrace | undefined;
+  recordedOn?: string;
+  error: ApiError | null;
+  notFound?: boolean;
+  retry: () => unknown;
+}) {
   useEffect(() => {
     if (name) document.title = `How ${name} was rated · NatureX`;
   }, [name]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      {trace.data && (
+      {assetId && (
         <Link
-          href={`/asset/${trace.data.asset_id}`}
+          href={`/asset/${assetId}`}
           className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
@@ -58,21 +114,29 @@ export function RunTracePage({ runId }: { runId: string }) {
       <h1 className="mt-3 font-serif text-4xl leading-tight text-foreground">
         {name ? `How ${name} was rated` : "How this site was rated"}
       </h1>
+      {recordedOn && (
+        <p className="mt-2 max-w-[70ch] text-muted-foreground">
+          A real rating run of this site, recorded on {date(recordedOn)} with
+          the live models and web search, so you can see them at work without
+          spending anything. Its numbers are that run&apos;s. Rate the site in
+          your demo to run it live.
+        </p>
+      )}
       <div className="mt-6 rounded-[28px] bg-machine p-5 text-machine-ink sm:p-8">
-        {!trace.data && trace.error ? (
+        {!trace && (error || notFound) ? (
           <TraceError
             title={
-              trace.error.status === 404
+              notFound || error?.status === 404
                 ? "This rating run's trace isn't available"
                 : "We couldn't load the trace"
             }
-            error={trace.error}
-            retry={trace.error.status === 404 ? undefined : trace.refetch}
+            error={error}
+            retry={notFound || error?.status === 404 ? undefined : retry}
           />
-        ) : !trace.data ? (
+        ) : !trace ? (
           <MachineRowsSkeleton label="Loading the trace…" />
         ) : (
-          <TraceBody trace={trace.data} siteKey={asset.data?.site_key} />
+          <TraceBody trace={trace} siteKey={siteKey} recordedOn={recordedOn} />
         )}
       </div>
     </div>
@@ -82,9 +146,11 @@ export function RunTracePage({ runId }: { runId: string }) {
 function TraceBody({
   trace,
   siteKey,
+  recordedOn,
 }: {
   trace: RunTrace;
   siteKey: string | null | undefined;
+  recordedOn?: string;
 }) {
   const story = useMemo(() => runStory(trace), [trace]);
   const flow = useMemo(() => runFlow(trace), [trace]);
@@ -101,9 +167,14 @@ function TraceBody({
     <>
       <header className="border-b border-machine-line pb-6">
         <p className="text-xs text-machine-muted">
+          {recordedOn ? (
+            <span className="mr-1 rounded-full bg-machine-raised px-2 py-0.5 font-medium text-machine-ink">
+              Recorded {date(recordedOn)}
+            </span>
+          ) : null}
           Run <span className="font-mono">{trace.run_id.slice(0, 8)}</span>
-          {started && ` · ${date(started)}`} · {trace.status} · every model call
-          through Nebius Token Factory
+          {started && !recordedOn && ` · ${date(started)}`} · {trace.status} ·
+          every model call through Nebius Token Factory
         </p>
         {verdict?.verdict && (
           <p className="mt-3 max-w-[70ch] font-serif text-2xl leading-snug sm:text-[28px]">

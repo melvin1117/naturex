@@ -1182,6 +1182,18 @@ class RunTraceOut(BaseModel):
     )
 
 
+class RecordedRunOut(BaseModel):
+    """A real rating run of a demo site, recorded with live models and committed, so every
+    visitor can open a full Agent Trace without spending anything (`services.recorded_runs`).
+    Its numbers are that run's; the site's own report stays the one its world holds."""
+
+    site_key: str
+    recorded_on: date
+    trace: RunTraceOut = Field(
+        description="The run's trace; `asset_id` is a placeholder, not an asset of any world"
+    )
+
+
 PresetNameOut = Literal["fire", "encroachment", "drought", "restoration", "protection"]
 
 

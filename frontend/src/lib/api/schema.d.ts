@@ -1427,6 +1427,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/media/demo-sites/{site_key}/recorded-run.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Recorded Run
+         * @description A real rating run of this demo site, recorded with live models (labelled "Recorded"), so
+         *     the Agent Trace can be opened without spending anything. It never changes a report.
+         */
+        get: operations["get_recorded_run_media_demo_sites__site_key__recorded_run_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/places/search": {
         parameters: {
             query?: never;
@@ -3900,6 +3921,23 @@ export interface components {
             error?: string | null;
             /** Ts */
             ts?: string | null;
+        };
+        /**
+         * RecordedRunOut
+         * @description A real rating run of a demo site, recorded with live models and committed, so every
+         *     visitor can open a full Agent Trace without spending anything (`services.recorded_runs`).
+         *     Its numbers are that run's; the site's own report stays the one its world holds.
+         */
+        RecordedRunOut: {
+            /** Site Key */
+            site_key: string;
+            /**
+             * Recorded On
+             * Format: date
+             */
+            recorded_on: string;
+            /** @description The run's trace; `asset_id` is a placeholder, not an asset of any world */
+            trace: components["schemas"]["RunTraceOut"];
         };
         /** RegisterIn */
         RegisterIn: {
@@ -8153,6 +8191,44 @@ export interface operations {
                 };
             };
             /** @description Unknown demo site */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_recorded_run_media_demo_sites__site_key__recorded_run_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordedRunOut"];
+                };
+            };
+            /** @description Unknown demo site, or no recorded run */
             404: {
                 headers: {
                     [name: string]: unknown;

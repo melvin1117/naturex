@@ -1,0 +1,750 @@
+{
+  "site_key": "mangrove_mx",
+  "recorded_on": "2026-10-22",
+  "trace": {
+    "run_id": "9b83f7c4-0eb0-4507-9eb0-c46177bd859d",
+    "asset_id": "8a5f4310-567b-5d47-a7fe-f53e50a95fb9",
+    "status": "succeeded",
+    "steps": [
+      {
+        "step": "queued",
+        "status": "queued",
+        "tool": null,
+        "pipeline": null,
+        "model": null,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "latency_ms": null,
+        "cost_usd": null,
+        "error": null,
+        "ts": "2026-10-22T18:00:47.045511Z",
+        "attempts": null,
+        "output": null,
+        "llm_calls": []
+      },
+      {
+        "step": "started",
+        "status": "running",
+        "tool": null,
+        "pipeline": "orchestrator",
+        "model": null,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "latency_ms": null,
+        "cost_usd": null,
+        "error": null,
+        "ts": "2026-10-22T18:00:47.058392Z",
+        "attempts": null,
+        "output": null,
+        "llm_calls": []
+      },
+      {
+        "step": "earth_obs",
+        "status": "ok",
+        "tool": "earth_obs",
+        "pipeline": "orchestrator",
+        "model": "nvidia/Nemotron-3.5-Super-VL",
+        "prompt_tokens": 2148,
+        "completion_tokens": 216,
+        "latency_ms": 1670,
+        "cost_usd": "0.0008388",
+        "error": null,
+        "ts": "2026-10-22T18:00:49.927719Z",
+        "attempts": 1,
+        "output": {
+          "mock": false,
+          "vision": {
+            "after": {
+              "water": "No water inside the outline.",
+              "vegetation": "Dense green vegetation covering most of the interior.",
+              "built_or_bare": "No built structures; small bare patches near the south-east edge."
+            },
+            "model": "nvidia/Nemotron-3.5-Super-VL",
+            "before": {
+              "water": "No water inside the outline.",
+              "vegetation": "Dense green vegetation covering most of the interior.",
+              "built_or_bare": "No built structures; small bare patches near the south-east edge."
+            },
+            "changes": [
+              {
+                "id": "image:1",
+                "kind": "no_clear_change",
+                "note": "The site appears unchanged between the two images.",
+                "check": "nothing to confirm",
+                "where": "whole site",
+                "agrees": null,
+                "confidence": "high"
+              }
+            ],
+            "overall": "stable"
+          },
+          "area_ha": 457.9,
+          "signals": [
+            {
+              "z": -2.5,
+              "id": "signal:greenness_2025_06",
+              "end": "2025-06",
+              "pct": -9.8,
+              "kind": "greenness_anomaly",
+              "text": "greenness 10% below a normal June (2025-06)",
+              "start": "2025-06",
+              "months": 1,
+              "strength": "moderate",
+              "direction": -1,
+              "simulated": false
+            },
+            {
+              "z": null,
+              "id": "signal:greenness_last_12m",
+              "end": "2026-09",
+              "pct": 1.2,
+              "kind": "greenness_last_12m",
+              "text": "the latest 12 months' greenness is in line with the same months in earlier years",
+              "start": "2025-10",
+              "months": 12,
+              "strength": "weak",
+              "direction": 0,
+              "simulated": false
+            }
+          ],
+          "wetland": true,
+          "scenario": "baseline",
+          "simulated": false,
+          "data_version": "2026Q3",
+          "cloud_free_obs": 64,
+          "natural_fraction": 1.0
+        },
+        "llm_calls": [
+          {
+            "id": 399,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 856,
+            "completion_tokens": 47,
+            "latency_ms": 1167,
+            "cost_usd": "0.0002991"
+          },
+          {
+            "id": 400,
+            "agent": "site_vision",
+            "model": "nvidia/Nemotron-3.5-Super-VL",
+            "tier": "perception",
+            "status": "ok",
+            "prompt_tokens": 1292,
+            "completion_tokens": 169,
+            "latency_ms": 1601,
+            "cost_usd": "0.0005397"
+          }
+        ]
+      },
+      {
+        "step": "valuation",
+        "status": "ok",
+        "tool": "valuation",
+        "pipeline": "orchestrator",
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "prompt_tokens": 1423,
+        "completion_tokens": 28,
+        "latency_ms": 1,
+        "cost_usd": "0.0004521",
+        "error": null,
+        "ts": "2026-10-22T18:00:51.025393Z",
+        "attempts": 1,
+        "output": {
+          "unit": "Int$2020/yr",
+          "value_low": 2466117,
+          "value_mid": 33801307,
+          "value_high": 33801307,
+          "carbon_stock_tco2": 130883
+        },
+        "llm_calls": [
+          {
+            "id": 401,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 1423,
+            "completion_tokens": 28,
+            "latency_ms": 1023,
+            "cost_usd": "0.0004521"
+          }
+        ]
+      },
+      {
+        "step": "news",
+        "status": "ok",
+        "tool": "news_scout",
+        "pipeline": "orchestrator",
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "prompt_tokens": 5776,
+        "completion_tokens": 564,
+        "latency_ms": 14256,
+        "cost_usd": "0.0022404",
+        "error": null,
+        "ts": "2026-10-22T18:01:06.067155Z",
+        "attempts": 1,
+        "output": {
+          "kept": [
+            {
+              "date": "2026-07-04",
+              "event": "event:34016807-ff1e-5d45-b545-9c7e13b810b0",
+              "source": "yucatan.com.mx",
+              "severity": 3,
+              "direction": -1,
+              "impact_type": "encroachment"
+            },
+            {
+              "date": "2026-07-04",
+              "event": "event:6aa0262f-87ab-5cbe-80a4-9519a5459e2a",
+              "source": "poresto.com",
+              "severity": 3,
+              "direction": -1,
+              "impact_type": "encroachment"
+            },
+            {
+              "date": "2026-07-03",
+              "event": "event:31563d1e-e30d-52e8-8435-3ba4c524b67c",
+              "source": "gob.mx",
+              "severity": 3,
+              "direction": -1,
+              "impact_type": "encroachment"
+            }
+          ],
+          "events": 3,
+          "funnel": {
+            "kept": 3,
+            "found": 20,
+            "unique": 20,
+            "unsafe": 0,
+            "off_site": 0,
+            "relevant": 3,
+            "sent_to_model": 8
+          },
+          "negative": 3,
+          "positive": 0,
+          "relevant": 3,
+          "searches": [
+            {
+              "query": "Ría Celestún Mangrove Yucatán",
+              "credits": 2,
+              "results": 5,
+              "language": null,
+              "latency_ms": 6203
+            },
+            {
+              "query": "Celestún Yucatán mangrove clearing OR pollution OR shrimp farm OR development",
+              "credits": 2,
+              "results": 5,
+              "language": null,
+              "latency_ms": 7400
+            },
+            {
+              "query": "Celestún Yucatán mangrove restoration OR protection OR conservation",
+              "credits": 2,
+              "results": 5,
+              "language": null,
+              "latency_ms": 8937
+            },
+            {
+              "query": "Celestún manglar tala OR relleno OR contaminación OR restauración OR conservación OR protección",
+              "credits": 2,
+              "results": 5,
+              "language": "es",
+              "latency_ms": 4642
+            }
+          ],
+          "ecosystem": "mangrove",
+          "impact_types": ["encroachment"],
+          "max_severity": 3,
+          "dropped_off_site": 0,
+          "locality_unverified": false
+        },
+        "llm_calls": [
+          {
+            "id": 402,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 1543,
+            "completion_tokens": 31,
+            "latency_ms": 759,
+            "cost_usd": "0.0004908"
+          },
+          {
+            "id": 403,
+            "agent": "news_scout",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 4233,
+            "completion_tokens": 533,
+            "latency_ms": 3716,
+            "cost_usd": "0.0017496"
+          }
+        ]
+      },
+      {
+        "step": "plan",
+        "status": "ok",
+        "tool": null,
+        "pipeline": "orchestrator",
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "prompt_tokens": 2621,
+        "completion_tokens": 315,
+        "latency_ms": null,
+        "cost_usd": "0.0010698",
+        "error": null,
+        "ts": "2026-10-22T18:01:08.492081Z",
+        "attempts": null,
+        "output": {
+          "chose": ["search_news"],
+          "notes": "We need to compare earth_obs signals: we have a greenness anomaly signal:greenness_2025_06 (June 2025) showing -9.8% greenness, moderate strength. The kept news items are from July 2026 (dates 2026-07-04, 2026-07-04, 2026-07-03) about encroachment, severity 3. The signal is from June 2025, which is about a year earlier than the news. No kept news dates to that signal period (June 2025). So we should investigate via search_news for that signal with a topic likely explaining greenness drop: suggests fire, drought, or clearing. Since impact type is encroachment, clearing seems plausible. We'll call search_news with signal:greenness_2025_06, topic clearing, and why: to see if local news around June 2025 reports clearing that could explain the greenness drop.\n\nLet's do that.",
+          "reasoning_tokens": 236
+        },
+        "llm_calls": [
+          {
+            "id": 404,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 2621,
+            "completion_tokens": 315,
+            "latency_ms": 2394,
+            "cost_usd": "0.0010698"
+          }
+        ]
+      },
+      {
+        "step": "investigate",
+        "status": "ok",
+        "tool": "search_news",
+        "pipeline": "orchestrator",
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "prompt_tokens": 2637,
+        "completion_tokens": 318,
+        "latency_ms": 9249,
+        "cost_usd": "0.0010773",
+        "error": null,
+        "ts": "2026-10-22T18:01:17.748927Z",
+        "attempts": 1,
+        "output": {
+          "why": "Check if local news around June 2025 reports clearing that could explain the observed greenness drop.",
+          "tool": "search_news",
+          "found": [
+            {
+              "url": "https://www.poresto.com/yucatan/2025/5/28/inmobiliarias-devoran-al-menos-5-mil-hectareas-de-selva-virgen-en-yucatan-destruyen-cenotes-y-el-habitat-de-jaguares.html",
+              "date": "2025-05-28",
+              "event": "event:bcda3d52-c137-5e16-a497-e0ad41a71d60",
+              "title": "Inmobiliarias devoran al menos 5 mil hectáreas de selva ...",
+              "source": "poresto.com",
+              "severity": 4,
+              "direction": -1,
+              "impact_type": "encroachment"
+            }
+          ],
+          "topic": "clearing",
+          "funnel": {
+            "kept": 1,
+            "found": 5,
+            "unique": 5,
+            "unsafe": 0,
+            "off_site": 0,
+            "relevant": 1,
+            "sent_to_model": 5
+          },
+          "signal": "signal:greenness_2025_06",
+          "window": {
+            "end": "2025-08-31",
+            "start": "2025-04-01"
+          },
+          "searches": [
+            {
+              "depth": "advanced",
+              "error": null,
+              "query": "Celestún tala OR deforestación OR construcción OR invasión OR relleno",
+              "topic": "general",
+              "credits": 2,
+              "results": 5,
+              "language": "es",
+              "latency_ms": 6244
+            }
+          ],
+          "signal_text": "greenness 10% below a normal June (2025-06)",
+          "already_known": 0
+        },
+        "llm_calls": [
+          {
+            "id": 405,
+            "agent": "news_scout",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 2637,
+            "completion_tokens": 318,
+            "latency_ms": 2970,
+            "cost_usd": "0.0010773"
+          }
+        ]
+      },
+      {
+        "step": "investigate",
+        "status": "ok",
+        "tool": "read_article",
+        "pipeline": "orchestrator",
+        "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        "prompt_tokens": 3915,
+        "completion_tokens": 283,
+        "latency_ms": 3276,
+        "cost_usd": "0.00109506",
+        "error": null,
+        "ts": "2026-10-22T18:01:22.430567Z",
+        "attempts": 1,
+        "output": {
+          "url": "https://www.poresto.com/yucatan/2025/5/28/inmobiliarias-devoran-al-menos-5-mil-hectareas-de-selva-virgen-en-yucatan-destruyen-cenotes-y-el-habitat-de-jaguares.html",
+          "why": "Verify the location and timing of the high-severity encroachment to confirm it explains the June 2025 greenness drop.",
+          "tool": "read_article",
+          "event": "event:bcda3d52-c137-5e16-a497-e0ad41a71d60",
+          "month": "2025-05",
+          "quote": "La frontera natural de la Reserva de la Biósfera Ría Celestún enfrenta una nueva amenaza, y no se trata de incendios, ni fenómenos climáticos: es el avance implacable del concreto, promovido por constructoras que han puesto sus ojos sobre miles de hectáreas de selva virgen en Kin",
+          "title": "Inmobiliarias devoran al menos 5 mil hectáreas de selva ...",
+          "answers": "yes",
+          "credits": 0.2,
+          "finding": "The text reports encroachment on the Ría Celestún mangrove reserve by several real estate projects.",
+          "question": "Did this encroachment event happen at this specific site and on what date?",
+          "chars_read": 2005,
+          "extract_ms": 1419,
+          "names_site": true,
+          "published_at": "2025-05-28",
+          "quote_checked": true,
+          "model_names_site": true
+        },
+        "llm_calls": [
+          {
+            "id": 406,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 2905,
+            "completion_tokens": 144,
+            "latency_ms": 1377,
+            "cost_usd": "0.0010011"
+          },
+          {
+            "id": 407,
+            "agent": "article_reader",
+            "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+            "tier": "fast",
+            "status": "ok",
+            "prompt_tokens": 1010,
+            "completion_tokens": 139,
+            "latency_ms": 1821,
+            "cost_usd": "0.00009396"
+          }
+        ]
+      },
+      {
+        "step": "evidence",
+        "status": "skipped",
+        "tool": "field_evidence",
+        "pipeline": null,
+        "model": null,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "latency_ms": null,
+        "cost_usd": null,
+        "error": null,
+        "ts": "2026-10-22T18:01:23.177398Z",
+        "attempts": null,
+        "output": null,
+        "llm_calls": []
+      },
+      {
+        "step": "audit",
+        "status": "ok",
+        "tool": "auditor",
+        "pipeline": "orchestrator",
+        "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+        "prompt_tokens": 7848,
+        "completion_tokens": 5529,
+        "latency_ms": 25648,
+        "cost_usd": "0.0222069",
+        "error": null,
+        "ts": "2026-10-22T18:01:48.831014Z",
+        "attempts": 1,
+        "output": {
+          "flags": [
+            "encroachment_pressure",
+            "metric_news_conflict",
+            "water_decline",
+            "valuation_caveat"
+          ],
+          "notes": "The user wants me to audit a rating bundle for \"Ría Celestún Mangrove\" as the NatureX Auditor. I need to analyze the trusted facts, signals, image observations, and events to form hypotheses, reach a verdict, and produce the required JSON output.\n\nLet me first understand the data:\n\n**Metrics:**\n- Area: 457.9 ha\n- Land cover: 72.6% trees, 21.0% flooded vegetation, 2.2% grass, 2.2% water, 2.0% shrub/scrub\n- Natural fraction: 100%\n- NDVI mean: 0.8000\n- NDVI trend: -0.0083 NDVI/yr (not significant at 5%)\n- Water change: -1.2 (JRC surface-water change, scale -100 to 100)\n- Forest loss 5y: 0.00 ha\n- Forest loss 12m: 0.00 ha\n- Biomass: 18.5 t/ha\n- Soil carbon: 69.4 t C/ha\n- Mangrove fraction: 94.8%\n- Cloud-free obs: 64 (2025-10-01 to 2026-10-01)\n\n**Signals:**\n- greenness_2025_06: greenness 10% below normal June (2025-06)\n- greenness_last_12m: latest 12 months' greenness in line with earlier years\n\n**Image:** No clear change between images 5 years apart.\n\n**Events:**\n1. event:34016807-ff1e-5d45-b545-9c7e13b810b0 (2026-07-04): Profepa detected illegal logging, wetland filling, mangrove removal, land use changes affecting 3.53 ha in Celestún and Ría Lagartos.\n2. event:6aa0262f-87ab-5cbe-80a4-9519a5459e2a (2026-07-04): Profepa closed five properties for environmental damage including 1 ha cleared vegetation, 2,578 m² mangrove removal, wetland filling.\n3. event:31563d1e-e30d-52e8-8435-3ba4c524b67c (2026-07-03): Joint Profepa-Conanp operation found illegal activities including 1 ha vegeta",
+          "checks": {
+            "resolved": 18,
+            "citations": 18,
+            "rejected_answers": 0,
+            "placeholders_filled": 1
+          },
+          "rounds": 1,
+          "source": "ultra",
+          "verdict": "The satellite metrics show a stable, healthy mangrove with no detectable loss, while multiple authoritative reports document recent illegal clearing and wetland filling that are likely too recent or too small to appear in the 5-year satellite record yet [metric:forest_loss_5y_ha, metric:forest_loss_12m_ha, signal:greenness_last_12m, event:34016807-ff1e-5d45-b545-9c7e13b810b0, event:6aa0262f-87ab-5cbe-80a4-9519a5459e2a, event:31563d1e-e30d-52e8-8435-3ba4c524b67c, event:bcda3d52-c137-5e16-a497-e0ad41a71d60].",
+          "evidence": {
+            "image:1": {
+              "kind": "image",
+              "value": "no clear change, whole site (high confidence): The site appears unchanged between the two images. [code check: nothing to confirm]"
+            },
+            "metric:area_ha": {
+              "kind": "fact",
+              "value": "457.9 ha"
+            },
+            "valuation:flags": {
+              "kind": "fact",
+              "value": "coastal_water_as_lakes, landcover_renormalised, low_bound_fallback:shrubland, mangrove_fraction_capped"
+            },
+            "metric:ndvi_mean": {
+              "kind": "fact",
+              "value": "0.8000"
+            },
+            "metric:ndvi_trend": {
+              "kind": "fact",
+              "value": "-0.0083 NDVI/yr (Mann-Kendall p 0.0711, not significant at 5%)"
+            },
+            "score:base_health": {
+              "kind": "fact",
+              "value": "76.2 out of 100"
+            },
+            "metric:water_change": {
+              "kind": "fact",
+              "value": "-1.2 (JRC surface-water change, scale -100 to 100)"
+            },
+            "score:threat_pressure": {
+              "kind": "fact",
+              "value": "0.1333 (0-1, 1 = no threats)"
+            },
+            "metric:natural_fraction": {
+              "kind": "fact",
+              "value": "100.0% of land cover is natural"
+            },
+            "metric:forest_loss_5y_ha": {
+              "kind": "fact",
+              "value": "0.00 ha of tree cover lost over 5 years (2021-01-01 to 2025-12-31)"
+            },
+            "signal:greenness_2025_06": {
+              "kind": "fact",
+              "value": "greenness 10% below a normal June (2025-06)"
+            },
+            "metric:forest_loss_12m_ha": {
+              "kind": "fact",
+              "value": "0.00 ha lost in the latest 12 months (2025-01-01 to 2025-12-31)"
+            },
+            "signal:greenness_last_12m": {
+              "kind": "fact",
+              "value": "the latest 12 months' greenness is in line with the same months in earlier years"
+            },
+            "score:negative_severity_sum": {
+              "kind": "fact",
+              "value": "13"
+            },
+            "event:31563d1e-e30d-52e8-8435-3ba4c524b67c": {
+              "url": "https://www.gob.mx/profepa/prensa/segundo-operativo-conjunto-de-profepa-y-conanp-en-areas-naturales-protegidas-de-25-entidades-clausuran-33-actividades-ilegales-429810",
+              "kind": "news",
+              "title": "Segundo operativo conjunto de Profepa y Conanp en áreas naturales protegidas de 25 entidades: clausuran 33 actividades ilegales | Procuraduria Federal de Proteccion al Ambiente | Gobierno | gob.mx",
+              "severity": 3,
+              "direction": -1,
+              "impact_type": "encroachment",
+              "published_at": "2026-07-03"
+            },
+            "event:34016807-ff1e-5d45-b545-9c7e13b810b0": {
+              "url": "https://www.yucatan.com.mx/yucatan/2026/07/04/profepa-detecta-graves-afectaciones-en-celestun-y-ria-lagartos.html",
+              "kind": "news",
+              "title": "Profepa detecta graves afectaciones en Celestún y Ría Lagartos - Diario de Yucatán",
+              "severity": 3,
+              "direction": -1,
+              "impact_type": "encroachment",
+              "published_at": "2026-07-04"
+            },
+            "event:6aa0262f-87ab-5cbe-80a4-9519a5459e2a": {
+              "url": "https://www.poresto.com/yucatan/2026/7/4/la-profepa-clausura-cinco-predios-en-celestun-y-ria-lagartos-por-danos-ambientales.html",
+              "kind": "news",
+              "title": "La Profepa clausura cinco predios en Celestún y Ría Lagartos por daños ambientales - PorEsto",
+              "severity": 3,
+              "direction": -1,
+              "impact_type": "encroachment",
+              "published_at": "2026-07-04"
+            },
+            "event:bcda3d52-c137-5e16-a497-e0ad41a71d60": {
+              "url": "https://www.poresto.com/yucatan/2025/5/28/inmobiliarias-devoran-al-menos-5-mil-hectareas-de-selva-virgen-en-yucatan-destruyen-cenotes-y-el-habitat-de-jaguares.html",
+              "kind": "news",
+              "read": {
+                "month": "2025-05",
+                "quote": "La frontera natural de la Reserva de la Biósfera Ría Celestún enfrenta una nueva amenaza, y no se trata de incendios, ni fenómenos climáticos: es el avance implacable del concreto, promovido por constructoras que han puesto sus ojos sobre miles de hectáreas de selva virgen en Kin",
+                "answers": "yes",
+                "finding": "The text reports encroachment on the Ría Celestún mangrove reserve by several real estate projects.",
+                "question": "Did this encroachment event happen at this specific site and on what date?",
+                "names_site": true,
+                "quote_checked": true
+              },
+              "title": "Inmobiliarias devoran al menos 5 mil hectáreas de selva ...",
+              "severity": 4,
+              "direction": -1,
+              "impact_type": "encroachment",
+              "published_at": "2025-05-28"
+            }
+          },
+          "agreement": 0.3,
+          "hypotheses": [
+            {
+              "name": "Recent encroachment and illegal activities damaging the site",
+              "assessment": "weakened",
+              "evidence_for": [
+                "event:34016807-ff1e-5d45-b545-9c7e13b810b0",
+                "event:6aa0262f-87ab-5cbe-80a4-9519a5459e2a",
+                "event:31563d1e-e30d-52e8-8435-3ba4c524b67c",
+                "event:bcda3d52-c137-5e16-a497-e0ad41a71d60"
+              ],
+              "evidence_against": [
+                "metric:forest_loss_5y_ha",
+                "metric:forest_loss_12m_ha",
+                "metric:ndvi_trend",
+                "signal:greenness_last_12m",
+                "image:1",
+                "metric:water_change"
+              ]
+            },
+            {
+              "name": "Seasonal drought or temporary stress in June 2025",
+              "assessment": "unclear",
+              "evidence_for": [
+                "signal:greenness_2025_06",
+                "metric:water_change"
+              ],
+              "evidence_against": [
+                "signal:greenness_last_12m",
+                "metric:ndvi_mean",
+                "metric:forest_loss_5y_ha",
+                "image:1"
+              ]
+            },
+            {
+              "name": "No material change detected by satellites; reported encroachment too recent or…",
+              "assessment": "supported",
+              "evidence_for": [
+                "metric:forest_loss_5y_ha",
+                "metric:forest_loss_12m_ha",
+                "metric:ndvi_trend",
+                "signal:greenness_last_12m",
+                "image:1",
+                "metric:natural_fraction",
+                "metric:area_ha"
+              ],
+              "evidence_against": [
+                "event:34016807-ff1e-5d45-b545-9c7e13b810b0",
+                "event:6aa0262f-87ab-5cbe-80a4-9519a5459e2a",
+                "event:31563d1e-e30d-52e8-8435-3ba4c524b67c",
+                "event:bcda3d52-c137-5e16-a497-e0ad41a71d60",
+                "score:threat_pressure",
+                "score:negative_severity_sum"
+              ]
+            }
+          ],
+          "rejections": [],
+          "base_health": "76.2",
+          "reasoning_tokens": 2998,
+          "adjustment_reason": "Multiple credible reports document illegal mangrove removal and wetland filling in 2025-2026 [event:34016807-ff1e-5d45-b545-9c7e13b810b0, event:6aa0262f-87ab-5cbe-80a4-9519a5459e2a, event:31563d1e-e30d-52e8-8435-3ba4c524b67c, event:bcda3d52-c137-5e16-a497-e0ad41a71d60], but satellite metrics show zero tree cover loss over 5 years and 12 months [metric:forest_loss_5y_ha, metric:forest_loss_12m_ha] and greenness in line with historical norms [signal:greenness_last_12m], suggesting the damage is too recent or too small to be captured yet.",
+          "greenwashing_risk": "low",
+          "auditor_adjustment": -3
+        },
+        "llm_calls": [
+          {
+            "id": 408,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 3105,
+            "completion_tokens": 26,
+            "latency_ms": 725,
+            "cost_usd": "0.0009549"
+          },
+          {
+            "id": 409,
+            "agent": "auditor",
+            "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+            "tier": "auditor",
+            "status": "ok",
+            "prompt_tokens": 4743,
+            "completion_tokens": 5503,
+            "latency_ms": 25582,
+            "cost_usd": "0.021252"
+          }
+        ]
+      },
+      {
+        "step": "done",
+        "status": "succeeded",
+        "tool": null,
+        "pipeline": "orchestrator",
+        "model": null,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "latency_ms": 61855,
+        "cost_usd": null,
+        "error": null,
+        "ts": "2026-10-22T18:01:48.904193Z",
+        "attempts": null,
+        "output": null,
+        "llm_calls": []
+      }
+    ],
+    "totals": {
+      "llm_calls": 11,
+      "prompt_tokens": 26368,
+      "completion_tokens": 7253,
+      "cost_usd": "0.02898036"
+    },
+    "models": [
+      {
+        "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+        "calls": 1,
+        "prompt_tokens": 4743,
+        "completion_tokens": 5503,
+        "latency_ms": 25582,
+        "cost_usd": "0.021252"
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "calls": 8,
+        "prompt_tokens": 19323,
+        "completion_tokens": 1442,
+        "latency_ms": 14131,
+        "cost_usd": "0.0070947"
+      },
+      {
+        "model": "nvidia/Nemotron-3.5-Super-VL",
+        "calls": 1,
+        "prompt_tokens": 1292,
+        "completion_tokens": 169,
+        "latency_ms": 1601,
+        "cost_usd": "0.0005397"
+      },
+      {
+        "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        "calls": 1,
+        "prompt_tokens": 1010,
+        "completion_tokens": 139,
+        "latency_ms": 1821,
+        "cost_usd": "0.00009396"
+      }
+    ],
+    "baseline": {
+      "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "cost_usd": "0.046328"
+    }
+  }
+}

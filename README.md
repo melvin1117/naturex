@@ -14,7 +14,7 @@ Every number (areas, values, scores, prices) comes from deterministic, tested co
 5. **The audit (Nemotron 3 Ultra, thinking on).** Ultra weighs competing explanations against every cited fact, writes a verdict, and may move health by up to ±10 with cited evidence. Code refuses any uncited claim, unknown ID or number not in the facts, and sends the answer back once.
 6. **Sealed.** The report, its evidence and the run's record go into the hash-chained Nature Ledger.
 
-Every run has an **Agent Trace** (`/trace/<run>`): a story, a flow of every step with its model, tokens, time and cost, a timeline per model, Ultra's case with its notes, the checks code ran, and a cost receipt against an all-Ultra baseline. **The AI at work** (`/ai`) shows each model's live calls, latency, refusals and cost, the spend against the cap, and the eval results.
+Every run has an **Agent Trace** (`/trace/<run>`; each demo site also carries a real run recorded with the live models, at `/trace/recorded/<asset>`, so a visitor sees one without spending anything): a story, a flow of every step with its model, tokens, time and cost, a timeline per model, Ultra's case with its notes, the checks code ran, and a cost receipt against an all-Ultra baseline. **The AI at work** (`/ai`) shows each model's live calls, latency, refusals and cost, the spend against the cap, and the eval results.
 
 ## Model routing (measured)
 All calls go through Nebius Token Factory; Nemotron does all reasoning, text and vision.

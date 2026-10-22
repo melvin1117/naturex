@@ -4022,6 +4022,52 @@
         }
       }
     },
+    "/media/demo-sites/{site_key}/recorded-run.json": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Recorded Run",
+        "description": "A real rating run of this demo site, recorded with live models (labelled \"Recorded\"), so\nthe Agent Trace can be opened without spending anything. It never changes a report.",
+        "operationId": "get_recorded_run_media_demo_sites__site_key__recorded_run_json_get",
+        "parameters": [
+          {
+            "name": "site_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Site Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordedRunOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown demo site, or no recorded run"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/places/search": {
       "get": {
         "tags": [
@@ -9554,6 +9600,31 @@
         ],
         "title": "RatingRunStep",
         "description": "One `rating_progress` event of a run (T27)."
+      },
+      "RecordedRunOut": {
+        "properties": {
+          "site_key": {
+            "type": "string",
+            "title": "Site Key"
+          },
+          "recorded_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Recorded On"
+          },
+          "trace": {
+            "$ref": "#/components/schemas/RunTraceOut",
+            "description": "The run's trace; `asset_id` is a placeholder, not an asset of any world"
+          }
+        },
+        "type": "object",
+        "required": [
+          "site_key",
+          "recorded_on",
+          "trace"
+        ],
+        "title": "RecordedRunOut",
+        "description": "A real rating run of a demo site, recorded with live models and committed, so every\nvisitor can open a full Agent Trace without spending anything (`services.recorded_runs`).\nIts numbers are that run's; the site's own report stays the one its world holds."
       },
       "RegisterIn": {
         "properties": {

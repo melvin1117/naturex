@@ -1,13 +1,17 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import { RunTracePage } from "@/components/trace/run-trace-page";
+import {
+  RecordedTracePage,
+  RunTracePage,
+} from "@/components/trace/run-trace-page";
 import { VerdictStrip } from "@/components/trace/verdict-strip";
-import type { ReportOut } from "@/lib/api/types";
+import type { RecordedRun, ReportOut } from "@/lib/api/types";
 
 import { renderExchange, stubBrowserApis } from "../exchange/render";
 import { json } from "../lib/helpers";
 import celestun from "./fixtures/run-celestun.json";
+import recorded from "./fixtures/recorded-mangrove.json";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
@@ -113,5 +117,84 @@ describe("VerdictStrip", () => {
       <VerdictStrip report={{ ...report, run_id: null } as ReportOut} />,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe("a demo site's recorded run", () => {
+  const recordedRun = recorded as unknown as RecordedRun;
+  const assetId = "a5e7a5e7-0000-4000-8000-000000000001";
+
+  it("stands in for a missing run on the site, labelled with its date", () => {
+    render(
+      <VerdictStrip
+        report={{ run_id: null, auditor: null } as unknown as ReportOut}
+        recorded={recordedRun}
+        assetId={assetId}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        /^The satellite metrics show a stable, healthy mangrove/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /A recorded run, .*2026 · Health −3 with cited evidence/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /See how it was rated/ }),
+    ).toHaveAttribute("href", `/trace/recorded/${assetId}`);
+  });
+
+  it("never replaces the site's own rated run", () => {
+    render(
+      <VerdictStrip
+        report={
+          {
+            run_id: celestun.run_id,
+            auditor: {
+              verdict: "Own verdict [metric:x].",
+              auditor_adjustment: 0,
+            },
+          } as unknown as ReportOut
+        }
+        recorded={recordedRun}
+        assetId={assetId}
+      />,
+    );
+    expect(screen.getByText("Own verdict.")).toBeInTheDocument();
+    expect(screen.queryByText(/A recorded run/)).not.toBeInTheDocument();
+  });
+
+  it("opens as a full trace on the site, marked Recorded", async () => {
+    renderExchange(<RecordedTracePage assetId={assetId} />, {
+      [`GET /assets/${assetId}`]: () =>
+        json({
+          id: assetId,
+          name: "Ría Celestún Mangrove",
+          site_key: "mangrove_mx",
+        }),
+      "GET /media/demo-sites/mangrove_mx/recorded-run.json": () =>
+        json(recorded),
+    });
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "How Ría Celestún Mangrove was rated",
+      }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(/^Recorded /)).toBeInTheDocument();
+    expect(
+      screen.getByText(/A real rating run of this site, recorded on/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Ría Celestún Mangrove" }),
+    ).toHaveAttribute("href", `/asset/${assetId}`);
+    const story = screen.getByRole("list", {
+      name: "What happened in this run",
+    });
+    expect(within(story).getByText(/followed up/)).toBeVisible();
   });
 });

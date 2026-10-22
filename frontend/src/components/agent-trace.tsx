@@ -419,7 +419,7 @@ export function TraceError({
   retry,
 }: {
   title: string;
-  error: ApiError;
+  error: ApiError | null;
   retry?: () => unknown;
 }) {
   return (
@@ -428,7 +428,7 @@ export function TraceError({
       className="mt-4 rounded-2xl bg-clay/20 px-4 py-3 text-sm text-machine-ink"
     >
       <p className="font-medium">{title}</p>
-      <p className="mt-0.5 text-machine-muted">{error.message}</p>
+      {error && <p className="mt-0.5 text-machine-muted">{error.message}</p>}
       {retry && (
         <Button
           variant="outline"

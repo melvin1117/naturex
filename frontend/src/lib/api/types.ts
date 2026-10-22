@@ -50,6 +50,7 @@ export type RunTraceStep = Schemas["RunTraceStep"];
 export type TraceCall = Schemas["TraceCall"];
 export type WorldTrace = Schemas["TraceOut"];
 export type AiUsage = Schemas["AiUsageOut"];
+export type RecordedRun = Schemas["RecordedRunOut"];
 export type ModelStats = Schemas["ModelStats"];
 export type ReportDiff = Schemas["ReportDiff"];
 export type ReportOut = Schemas["ReportOut"];

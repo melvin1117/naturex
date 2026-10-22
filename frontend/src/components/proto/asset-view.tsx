@@ -47,6 +47,7 @@ import {
   useAsset,
   useAssetPrices,
   useAssetReports,
+  useRecordedRun,
   useSiteImages,
 } from "@/lib/hooks";
 import { countryName, siteImageUrl } from "@/lib/market-cards";
@@ -182,6 +183,10 @@ function AssetLoaded({
     () => newsItems(asset.recent_events),
     [asset.recent_events],
   );
+  // A demo site nobody has rated in this world shows its recorded run (free, labelled).
+  const recorded = useRecordedRun(
+    asset.latest_report?.run_id ? null : asset.site_key,
+  );
   const imageUrl = siteImageUrl(asset.site_key, asset.cover_image_url);
   const outline = useMemo(() => outlineRings(asset.outline), [asset.outline]);
   const place = [
@@ -296,7 +301,11 @@ function AssetLoaded({
         </div>
       </section>
 
-      <VerdictStrip report={asset.latest_report} />
+      <VerdictStrip
+        report={asset.latest_report}
+        recorded={recorded.data}
+        assetId={asset.id}
+      />
 
       {!latest ? (
         <p className="mt-8 rounded-3xl bg-card p-8 text-center text-muted-foreground shadow-soft">
@@ -348,6 +357,7 @@ function AssetLoaded({
                 news={news}
                 runId={asset.latest_report?.run_id ?? null}
                 siteKey={asset.site_key}
+                recorded={recorded.data}
               />
             </TabsContent>
             <TabsContent value="price">

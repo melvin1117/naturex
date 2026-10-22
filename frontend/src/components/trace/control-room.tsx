@@ -240,7 +240,8 @@ export function ControlRoom() {
               <p className="rounded-2xl bg-machine-raised px-5 py-4 text-sm text-machine-ink/90">
                 Nothing has run here yet. Rate a site (the tour&apos;s third
                 chapter, or <strong>Rate</strong> on a listing) and the
-                models&apos; calls appear here as they happen.
+                models&apos; calls appear here as they happen. Each demo site
+                also shows a recorded run you can open for free from its page.
               </p>
             )}
             <section aria-labelledby="routing-title">

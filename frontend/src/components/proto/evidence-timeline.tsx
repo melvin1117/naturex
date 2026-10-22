@@ -21,12 +21,16 @@ import { Panel } from "@/components/proto/report-panels";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { DEMO_SITES, demoSiteMediaUrl } from "@/lib/demo-site-images";
+import type { RecordedRun } from "@/lib/api/types";
 import {
   type EvidenceTimeline,
   type NewsItem,
   type TimelineEntry,
   evidenceTimeline,
+  mergeNews,
+  traceNews,
 } from "@/lib/evidence-timeline";
+import { date } from "@/lib/prototype/format";
 import { useRunTrace } from "@/lib/hooks";
 import type { ReportFacts } from "@/lib/report-facts";
 import {
@@ -245,24 +249,29 @@ export function EvidenceTimelinePanel({
   news,
   runId,
   siteKey,
+  recorded,
 }: {
   facts: ReportFacts;
   news: NewsItem[];
   runId: string | null | undefined;
   siteKey: string | null | undefined;
+  /** A demo site's recorded run, used when this world has no run of its own. */
+  recorded?: RecordedRun | null;
 }) {
-  const trace = useRunTrace(runId);
+  const live = useRunTrace(runId);
+  const run = live.data ?? (runId ? undefined : recorded?.trace);
+  const fromRecording = !live.data && Boolean(run);
   const timeline = useMemo(
     () =>
       evidenceTimeline(
         facts.ndvi,
-        trace.data ? runSignals(trace.data) : [],
-        news,
-        trace.data ? runFollowUps(trace.data) : [],
+        run ? runSignals(run) : [],
+        fromRecording && run ? mergeNews(news, traceNews(run)) : news,
+        run ? runFollowUps(run) : [],
       ),
-    [facts.ndvi, news, trace.data],
+    [facts.ndvi, news, run, fromRecording],
   );
-  const vision = trace.data ? runVision(trace.data) : null;
+  const vision = run ? runVision(run) : null;
   const [all, setAll] = useState(false);
   const entries = all ? timeline.entries : timeline.entries.slice(-SHOWN);
   const demo = DEMO_SITES.some((s) => s.key === siteKey);
@@ -302,6 +311,12 @@ export function EvidenceTimelinePanel({
           <div className="mt-5 rounded-2xl bg-muted/60 px-4 py-3">
             <p className="text-sm font-medium">
               Nemotron 3 Super followed up before the audit
+              {fromRecording && recorded && (
+                <span className="font-normal text-muted-foreground">
+                  {" "}
+                  (recorded run, {date(recorded.recorded_on)})
+                </span>
+              )}
             </p>
             <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
               {timeline.followUps.map((note, i) => (

@@ -5,13 +5,17 @@
  *
  * Pure, so it is easy to test; every value comes from the API.
  */
+import type { RunTrace } from "./api/types";
 import type { newsItems } from "./asset-detail";
 import {
   type FollowUp,
   type Signal,
+  auditCase,
+  caseEvidence,
   citationLabel,
   monthRange,
   readVerdict,
+  runFollowUps,
   topicLabel,
 } from "./trace-view";
 
@@ -82,6 +86,62 @@ function pinDirection(items: TimelineNews[]): number {
   if (items.some((i) => i.direction < 0)) return -1;
   if (items.some((i) => i.direction > 0)) return 1;
   return 0;
+}
+
+/**
+ * The news a run found, as timeline items: what the Auditor cited (with its title and link)
+ * and what Super's follow-up searches added. Used for a recorded run, whose news isn't in
+ * this world's events.
+ */
+export function traceNews(trace: RunTrace): NewsItem[] {
+  const items: NewsItem[] = [];
+  const c = auditCase(trace);
+  for (const ref of c ? caseEvidence(c) : []) {
+    if (ref.kind !== "news" || !ref.date) continue;
+    items.push({
+      id: ref.id,
+      title: ref.label,
+      summary: null,
+      date: ref.date,
+      at: ref.date,
+      direction: ref.direction,
+      severity: null,
+      kind: ref.value,
+      sourceLabel: "Found by News Scout",
+      url: ref.url,
+    });
+  }
+  for (const f of runFollowUps(trace)) {
+    if (f.kind !== "search") continue;
+    for (const item of f.found) {
+      if (!item.date) continue;
+      items.push({
+        id: item.event,
+        title: item.title ?? "News report",
+        summary: null,
+        date: item.date,
+        at: item.date,
+        direction: item.direction,
+        severity: item.severity,
+        kind: item.impactType,
+        sourceLabel: "Found by News Scout",
+        url: item.url,
+      });
+    }
+  }
+  return items;
+}
+
+/** `extra` items not already in `news` (by link, else by ID). */
+export function mergeNews(news: NewsItem[], extra: NewsItem[]): NewsItem[] {
+  const seen = new Set(news.map((n) => n.url ?? n.id));
+  const added = extra.filter((n) => {
+    const key = n.url ?? n.id;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return [...news, ...added];
 }
 
 export function evidenceTimeline(

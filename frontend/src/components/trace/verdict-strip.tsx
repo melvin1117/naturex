@@ -1,22 +1,33 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
-import type { ReportOut } from "@/lib/api/types";
-import { modelLabel, withoutCitations } from "@/lib/trace-view";
+import type { RecordedRun, ReportOut } from "@/lib/api/types";
+import { date } from "@/lib/prototype/format";
+import { auditCase, modelLabel, withoutCitations } from "@/lib/trace-view";
 
 import { ActorChip } from "./actor";
 
 /** Under a site's header: the Auditor's verdict in one line, who judged it, and the way to
- * the full trace. Shown only for a report with a verdict and a recorded run. */
+ * the full trace. The site's own rated report wins; a demo site nobody has rated in this world
+ * shows its recorded run instead, labelled with its date. */
 export function VerdictStrip({
   report,
+  recorded,
+  assetId,
 }: {
   report: ReportOut | null | undefined;
+  recorded?: RecordedRun | null;
+  assetId?: string;
 }) {
-  const verdict = report?.auditor?.verdict;
-  const runId = report?.run_id;
-  if (!verdict || !runId) return null;
-  const adjustment = report?.auditor?.auditor_adjustment ?? 0;
+  const own = report?.auditor?.verdict && report?.run_id ? report : null;
+  const recordedCase =
+    !own && recorded && assetId ? auditCase(recorded.trace) : null;
+  const verdict = own?.auditor?.verdict ?? recordedCase?.verdict;
+  if (!verdict) return null;
+  const adjustment = own
+    ? (own.auditor?.auditor_adjustment ?? 0)
+    : (recordedCase?.adjustment ?? 0);
+  const href = own ? `/trace/${own.run_id}` : `/trace/recorded/${assetId}`;
   return (
     <section
       aria-label="The Auditor's verdict"
@@ -29,6 +40,9 @@ export function VerdictStrip({
           note="reasoning on"
         />
         <span className="text-xs text-machine-muted">
+          {recordedCase && recorded
+            ? `A recorded run, ${date(recorded.recorded_on)} · `
+            : ""}
           {adjustment === 0
             ? "No change to the formula's health"
             : `Health ${adjustment > 0 ? "+" : "−"}${Math.abs(adjustment)} with cited evidence`}
@@ -37,8 +51,15 @@ export function VerdictStrip({
       <p className="mt-3 max-w-[75ch] font-serif text-xl leading-snug sm:text-2xl">
         {withoutCitations(verdict)}
       </p>
+      {recordedCase && (
+        <p className="mt-2 max-w-[75ch] text-sm text-machine-muted">
+          A real run of this site with the live models, recorded so you can see
+          them at work for free. The report below is the formula&apos;s; rate
+          the site to run the agents yourself.
+        </p>
+      )}
       <Link
-        href={`/trace/${runId}`}
+        href={href}
         className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-lime underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-lime focus-visible:outline-none"
       >
         See how it was rated: every model, search and check

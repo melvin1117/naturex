@@ -4,11 +4,14 @@ import type { RunTrace } from "@/lib/api/types";
 import {
   type NewsItem,
   evidenceTimeline,
+  mergeNews,
   signalPhrase,
+  traceNews,
 } from "@/lib/evidence-timeline";
 import { runFollowUps, runSignals } from "@/lib/trace-view";
 
 import investigatedJson from "./fixtures/run-celestun-investigated.json";
+import recordedJson from "./fixtures/recorded-mangrove.json";
 
 const run = investigatedJson as unknown as RunTrace;
 const series: [string, number][] = Array.from({ length: 60 }, (_, i) => {
@@ -102,6 +105,25 @@ describe("evidence timeline (a recorded investigated run)", () => {
     });
     expect(signalPhrase("signal:greenness_last_12m")).toBe(
       "the latest 12 months' greenness",
+    );
+  });
+});
+
+describe("the news a recorded run found", () => {
+  const trace = (recordedJson as unknown as { trace: RunTrace }).trace;
+
+  it("comes from the audit's cited news and the follow-up searches, dated", () => {
+    const items = traceNews(trace);
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((i) => /^\d{4}-\d{2}-\d{2}/.test(i.date))).toBe(true);
+    expect(items.every((i) => i.title.length > 0)).toBe(true);
+  });
+
+  it("merges without repeating a link the site already has", () => {
+    const [first, ...rest] = traceNews(trace);
+    const merged = mergeNews([first!], [first!, ...rest, first!]);
+    expect(merged).toHaveLength(
+      1 + new Set(rest.map((r) => r.url ?? r.id)).size,
     );
   });
 });
