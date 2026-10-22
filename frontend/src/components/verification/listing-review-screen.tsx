@@ -10,7 +10,7 @@ import { StewardPanel as Panel } from "@/components/steward/panel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { ScreenSkeleton } from "@/components/page-skeletons";
 import { AiSuggestionPanel } from "@/components/verification/ai-suggestion-panel";
 import { DecisionForm } from "@/components/verification/decision-form";
 import { DocumentPreviews } from "@/components/verification/document-previews";
@@ -91,15 +91,8 @@ export function ListingReviewScreen({ assetId }: { assetId: string }) {
       />
     );
   } else if (!asset.data || !runs.data) {
-    body = (
-      <p
-        role="status"
-        className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"
-      >
-        <Spinner aria-hidden="true" role="presentation" />
-        Loading the review…
-      </p>
-    );
+    // The shape the route's `loading.tsx` drew, back link included (#219).
+    return <ScreenSkeleton label="Loading the review…" wide />;
   } else {
     body = <Review asset={asset.data} runs={runs.data} />;
   }

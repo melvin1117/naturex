@@ -187,9 +187,10 @@ export interface paths {
         /**
          * Summary
          * @description The Steward home (T63; the community's members and same-world admins): its listings with
-         *     their status and next action, the community wallet (IPO proceeds and community-fund
-         *     payouts), the treasury's retained-stake dividends, holders (counted and ranked, never
-         *     named), recent quarterly payouts and the latest reports' stewardship recommendations.
+         *     their status, verification (#216) and next action, the community wallet (IPO proceeds and
+         *     community-fund payouts), the treasury's retained-stake dividends, holders (counted and
+         *     ranked, never named), recent quarterly payouts and the latest reports' stewardship
+         *     recommendations.
          *     Every number comes from stored rows (`app.services.community_summary`). Play money.
          */
         get: operations["summary_communities__community_id__summary_get"];
@@ -476,7 +477,8 @@ export interface paths {
          * Preview Ipo
          * @description The price the owner would launch at now: every term of `ipo_price =
          *     fair_value_per_share`, computed by the market engine from the latest report, and whether
-         *     the launch would go ahead (`launchable`, else `blocked_reason`). Writes nothing; a later
+         *     the launch would go ahead (`launchable`, else `blocked_reason`), with where the listing's
+         *     verification stands (#216). Writes nothing; a later
          *     report can change it, so the launch confirms it with `expected_price`.
          */
         get: operations["preview_ipo_assets__asset_id__ipo_preview_get"];
@@ -1631,10 +1633,10 @@ export interface components {
             asset_name: string;
             /**
              * Kind
-             * @description grade_change / health_change: a re-rate moved the grade or the health score by ≥ 5 points; news: a News Scout event of severity ≥ 4
+             * @description grade_change / health_change: a re-rate moved the grade or the health score by ≥ 5 points; news: a News Scout event of severity ≥ 4; verification: a reviewer approved or rejected the listing's documents, or revoked its verification (never the reviewer's reason)
              * @enum {string}
              */
-            kind: "grade_change" | "health_change" | "news";
+            kind: "grade_change" | "health_change" | "news" | "verification";
             /** Title */
             title: string;
             /** Message */
@@ -2764,6 +2766,8 @@ export interface components {
              * @description Why not, as the code the launch would return: ipo_price_too_high (a share costs more than a new account's starting cash: issue more shares), run_in_progress, or not_verified (the live world needs the listing's current verification run verified and still matching; a revoked one blocks everywhere; T69).
              */
             blocked_reason?: string | null;
+            /** @description Where the listing's verification stands, from the same reading as `blocked_reason` (#216). */
+            verification: components["schemas"]["ListingVerificationOut"];
         };
         /** LedgerEntryOut */
         LedgerEntryOut: {
@@ -2880,8 +2884,9 @@ export interface components {
         /** ListingSummaryOut */
         ListingSummaryOut: {
             asset: components["schemas"]["AssetCard"];
-            /** @description continue_listing (draft), rating_in_progress, add_evidence (needs_evidence), launch_ipo (listed, not launched; owner), awaiting_ipo (the same for stewards and admins), view_on_exchange (trading or suspended), none (ineligible, withdrawn). */
+            /** @description continue_listing (draft), rating_in_progress, add_evidence (needs_evidence), verify (members: verification blocks the opening offer or trading; upload and submit documents), verification_in_review (the same, with a submission waiting for a reviewer), awaiting_verification (the same for same-world admins, who aren't members), launch_ipo (listed, not launched; owner), awaiting_ipo (the same for stewards and admins), view_on_exchange (trading or suspended), none (ineligible, withdrawn). */
             next_action: components["schemas"]["NextAction"];
+            verification: components["schemas"]["ListingVerificationOut"];
             /** Ipo At */
             ipo_at: string | null;
             wallet: components["schemas"]["WalletOut"];
@@ -2895,6 +2900,43 @@ export interface components {
             recommendations: string[];
             /** Report Version */
             report_version: number | null;
+        };
+        /**
+         * ListingVerificationOut
+         * @description A listing's verification for its community (#216): what stands, whether it blocks the
+         *     listing now, and the latest decision with the reviewer's reason. Members and same-world
+         *     admins only (the Steward home), and the owner (the IPO preview).
+         */
+        ListingVerificationOut: {
+            /** @description What stands, as the public panel says it: revoked while a revocation stands (even with a newer submission), else the current run's level, or unverified (no run, or the listing changed since it). */
+            level: components["schemas"]["VerificationLevel"];
+            /**
+             * In Review
+             * @description A submission waits for a reviewer.
+             */
+            in_review: boolean;
+            /**
+             * Required
+             * @description Verification blocks the listing now, as the IPO gate decides: the live world's opening offer needs a verified run, and a revocation blocks the offer and trading in every world until a new run is approved.
+             */
+            required: boolean;
+            /** @description The latest decision (verified, rejected or revoked); null while none. */
+            decision?: components["schemas"]["VerificationLevel"] | null;
+            /**
+             * Decided At
+             * @description When `decision` was made.
+             */
+            decided_at?: string | null;
+            /**
+             * Reason
+             * @description The reviewer's reason or note for `decision`, if any.
+             */
+            reason?: string | null;
+            /**
+             * Run Id
+             * @description The current run, while it still describes the listing.
+             */
+            run_id?: string | null;
         };
         /** LoginIn */
         LoginIn: {
@@ -3017,7 +3059,7 @@ export interface components {
          * @description What the Steward home offers to do next with a listing.
          * @enum {string}
          */
-        NextAction: "continue_listing" | "rating_in_progress" | "add_evidence" | "launch_ipo" | "awaiting_ipo" | "view_on_exchange" | "none";
+        NextAction: "continue_listing" | "rating_in_progress" | "add_evidence" | "verify" | "verification_in_review" | "awaiting_verification" | "launch_ipo" | "awaiting_ipo" | "view_on_exchange" | "none";
         /** OrderCreate */
         OrderCreate: {
             /**
@@ -3735,10 +3777,10 @@ export interface components {
             asset_name: string;
             /**
              * Kind
-             * @description grade_change / health_change: a re-rate moved the grade or the health score by ≥ 5 points; news: a News Scout event of severity ≥ 4
+             * @description grade_change / health_change: a re-rate moved the grade or the health score by ≥ 5 points; news: a News Scout event of severity ≥ 4; verification: a reviewer approved or rejected the listing's documents, or revoked its verification (never the reviewer's reason)
              * @enum {string}
              */
-            kind: "grade_change" | "health_change" | "news";
+            kind: "grade_change" | "health_change" | "news" | "verification";
             /** Title */
             title: string;
             /** Message */

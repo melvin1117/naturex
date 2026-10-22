@@ -10,7 +10,8 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
+import { cn } from "cn";
 
 import { AlertsList } from "@/components/alerts-list";
 import { Delta, SiteBackdrop, Stat } from "@/components/proto/bits";
@@ -22,15 +23,31 @@ import { StewardPanel } from "@/components/steward/panel";
 import { StewardHome as PrototypeStewardHome } from "@/components/proto/steward-home";
 import { useStewardCommunity } from "@/components/shell/steward-community";
 import { MembersPanel } from "@/components/steward/members-panel";
+import {
+  useSeenNotices,
+  VerificationNotices,
+} from "@/components/steward/verification-notices";
 import { WalletCard } from "@/components/steward/wallet-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { VerificationBadge } from "@/components/verification/parts";
 import type { CommunitySummary, ListingSummary } from "@/lib/api/types";
-import { listingAction, sharePct, STATUS_LABEL, units } from "@/lib/community";
+import {
+  decisionNotice,
+  noticeAlerts,
+  type DecisionNotice,
+  listingAction,
+  listingStatusLine,
+  sharePct,
+  STATUS_LABEL,
+  units,
+  unseenNotices,
+  verificationChip,
+} from "@/lib/community";
 import { useCommunitySummary } from "@/lib/community-hooks";
 import { payoutsEmptyText, recommendationsEmptyText } from "@/lib/empty-states";
-import { useWorld } from "@/lib/hooks";
-import { marketCard, type MarketCard } from "@/lib/market-cards";
+import { useAlerts, useMarkAlertRead, useWorld } from "@/lib/hooks";
+import { marketCard } from "@/lib/market-cards";
 import { evidenceHref } from "@/lib/field-evidence";
 import { verifyHref } from "@/lib/listing/links";
 import { COMMUNITY_ROLE_LABEL, withCommunity } from "@/lib/navigation";
@@ -77,6 +94,27 @@ function Home({ summary }: { summary: CommunitySummary }) {
   const featured =
     listings.find((l) => l.asset.status === "listed") ?? listings[0];
   const trading = listings.filter((l) => l.asset.trading).length;
+  const { seen, readAt, dismiss } = useSeenNotices(world?.me?.id);
+  // A reviewer's decision is for the community's members; an admin reading the home isn't one.
+  const notices =
+    seen && readAt !== null && role
+      ? unseenNotices(
+          listings.map((l) =>
+            decisionNotice(l, community.id, { owner: isOwner, now: readAt }),
+          ),
+          seen,
+        )
+      : [];
+  // Dismissing a notice also reads the bell's alert about the same decision.
+  const alerts = useAlerts({ communityId: community.id });
+  const markRead = useMarkAlertRead();
+  const dismissNotice = (notice: DecisionNotice) => {
+    dismiss(notice);
+    for (const id of noticeAlerts(alerts.data?.alerts ?? [], notice)) {
+      void markRead.mutate(id);
+    }
+  };
+  const headingRef = useRef<HTMLHeadingElement>(null);
 
   return (
     <div className="mx-auto max-w-7xl px-4 pt-10 pb-16 sm:px-6">
@@ -85,7 +123,11 @@ function Home({ summary }: { summary: CommunitySummary }) {
           <p className="text-sm text-muted-foreground">
             {world?.me?.name} · {role ? COMMUNITY_ROLE_LABEL[role] : "Admin"}
           </p>
-          <h1 className="mt-1 font-serif text-5xl leading-none tracking-tight text-balance break-words sm:text-6xl">
+          <h1
+            ref={headingRef}
+            tabIndex={-1}
+            className="mt-1 font-serif text-5xl leading-none tracking-tight text-balance break-words outline-none sm:text-6xl"
+          >
             {community.name}
           </h1>
         </div>
@@ -107,17 +149,24 @@ function Home({ summary }: { summary: CommunitySummary }) {
         </div>
       </div>
 
+      <VerificationNotices
+        notices={notices}
+        onDismiss={dismissNotice}
+        focusWhenEmpty={headingRef}
+        className="mt-8"
+      />
+
       {listings.length > 0 && (
         <dl className="mt-8 grid gap-4 rounded-3xl bg-card p-6 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
           <Stat
             label="Community fund"
             value={moneyText(summary.wallet.balance)}
-            sub="IPO proceeds and payouts · play money"
+            sub="From supporters and quarterly payouts · play money"
           />
           <Stat
-            label="Retained-stake dividends"
+            label="Payouts on kept units"
             value={moneyText(summary.wallet.retained_dividends)}
-            sub="paid to the treasury"
+            sub="for the units your community keeps"
           />
           <Stat
             label="Supporters"
@@ -135,7 +184,11 @@ function Home({ summary }: { summary: CommunitySummary }) {
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-8">
           {featured ? (
-            <FeaturedListing listing={featured} communityId={community.id} />
+            <FeaturedListing
+              listing={featured}
+              communityId={community.id}
+              owner={isOwner}
+            />
           ) : (
             <EmptyHome listHref={listHref} />
           )}
@@ -147,6 +200,7 @@ function Home({ summary }: { summary: CommunitySummary }) {
                     key={listing.asset.id}
                     listing={listing}
                     communityId={community.id}
+                    owner={isOwner}
                   />
                 ))}
               </ul>
@@ -224,10 +278,12 @@ function EmptyHome({ listHref }: { listHref: string }) {
 function ActionButton({
   listing,
   communityId,
+  owner,
   tone,
 }: {
   listing: ListingSummary;
   communityId: string;
+  owner: boolean;
   tone: "image" | "plain";
 }) {
   const action = listingAction(
@@ -235,39 +291,66 @@ function ActionButton({
     listing.asset.id,
     communityId,
     listing.asset.status,
+    { owner, verification: listing.verification },
+  );
+  const secondary = action.secondary && (
+    <ListingLink
+      href={action.secondary.href}
+      label={`${action.secondary.label}: ${listing.asset.name}`}
+      tone={tone}
+    >
+      {action.secondary.label}
+    </ListingLink>
   );
   if (!action.href) {
     return (
-      <span
-        className={
-          tone === "image"
-            ? "inline-flex items-center rounded-full bg-white/15 px-3 py-1.5 text-sm"
-            : "text-sm text-muted-foreground"
-        }
-      >
-        {action.label}
-      </span>
+      <>
+        <span
+          className={
+            tone === "image"
+              ? "inline-flex items-center rounded-full bg-white/15 px-3 py-1.5 text-sm"
+              : "text-sm text-muted-foreground"
+          }
+        >
+          {action.label}
+        </span>
+        {secondary}
+      </>
     );
   }
   const external = listing.next_action === "view_on_exchange";
+  const lime = tone === "image" && action.primary;
   return (
-    <Button
-      asChild
-      size={tone === "image" ? "default" : "sm"}
-      variant={tone === "image" || action.primary ? "default" : "outline"}
-      className={
-        tone === "image" ? "bg-lime text-foreground hover:bg-lime/90" : ""
-      }
-    >
-      <Link href={action.href}>
-        {action.label}
-        {external ? (
-          <ExternalLink aria-hidden="true" />
-        ) : (
-          <ArrowRight aria-hidden="true" />
+    <>
+      <Button
+        asChild
+        size={tone === "image" ? "default" : "sm"}
+        variant={action.primary ? "default" : "outline"}
+        className={cn(
+          lime && "bg-lime text-foreground hover:bg-lime/90",
+          tone === "image" &&
+            !action.primary &&
+            "border-white/40 bg-transparent text-white hover:bg-white/15 hover:text-white",
         )}
-      </Link>
-    </Button>
+      >
+        <Link
+          href={action.href}
+          aria-label={
+            tone === "plain"
+              ? `${action.label}: ${listing.asset.name}`
+              : undefined
+          }
+        >
+          {action.label}
+          {external ? (
+            <ExternalLink aria-hidden="true" />
+          ) : (
+            <ArrowRight aria-hidden="true" />
+          )}
+        </Link>
+      </Button>
+      {secondary}
+    </>
   );
 }
 
@@ -307,7 +390,7 @@ function ListingLink({
   );
 }
 
-/** The listing's verification screen (T70). */
+/** The listing's verification screen (T70), unless the next step already leads there. */
 function VerifyLink({
   listing,
   communityId,
@@ -317,7 +400,10 @@ function VerifyLink({
   communityId: string;
   tone: "image" | "plain";
 }) {
-  if (closed(listing)) return null;
+  // The next step already leads to the verification screen: no second link to it.
+  const next = listing.next_action;
+  if (closed(listing) || next === "verify" || next === "verification_in_review")
+    return null;
   return (
     <ListingLink
       href={verifyHref(listing.asset.id, communityId)}
@@ -353,21 +439,32 @@ function EvidenceLink({
   );
 }
 
-function statusLine(listing: ListingSummary, card: MarketCard): string {
-  if (card.trading) return "Open to supporters";
-  if (listing.next_action === "launch_ipo")
-    return "Rated and listed. Launch the opening offer when you're ready.";
-  if (listing.next_action === "awaiting_ipo")
-    return "Rated and listed. The owner launches the opening offer.";
-  return STATUS_LABEL[card.status] ?? card.status;
+/** The listing's verification, shown once it's listed: what the opening offer waits for. */
+function VerificationChip({
+  listing,
+  tone,
+}: {
+  listing: ListingSummary;
+  tone: "image" | "light";
+}) {
+  const status = listing.asset.status;
+  if (status !== "listed" && status !== "suspended") return null;
+  const level = listing.verification.level;
+  return (
+    <VerificationBadge level={level} tone={tone}>
+      {verificationChip(listing.verification)}
+    </VerificationBadge>
+  );
 }
 
 function FeaturedListing({
   listing,
   communityId,
+  owner,
 }: {
   listing: ListingSummary;
   communityId: string;
+  owner: boolean;
 }) {
   const card = marketCard(listing.asset);
   return (
@@ -386,6 +483,7 @@ function FeaturedListing({
             <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs">
               {STATUS_LABEL[card.status] ?? card.status}
             </span>
+            <VerificationChip listing={listing} tone="image" />
             {listing.asset.mock && (
               <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs">
                 Mock data
@@ -399,7 +497,8 @@ function FeaturedListing({
             {card.name}
           </h2>
           <p className="mt-2 text-white/85">
-            {ha(card.areaHa)} · {statusLine(listing, card)}
+            {ha(card.areaHa)} ·{" "}
+            {listingStatusLine(listing, card.status, card.trading)}
           </p>
           {card.trading && card.price !== null && (
             <p className="mt-1 text-white/85">
@@ -428,6 +527,7 @@ function FeaturedListing({
             <ActionButton
               listing={listing}
               communityId={communityId}
+              owner={owner}
               tone="image"
             />
             <VerifyLink
@@ -450,9 +550,11 @@ function FeaturedListing({
 function ListingRow({
   listing,
   communityId,
+  owner,
 }: {
   listing: ListingSummary;
   communityId: string;
+  owner: boolean;
 }) {
   const card = marketCard(listing.asset);
   return (
@@ -463,6 +565,7 @@ function ListingRow({
           <Badge variant="secondary">
             {STATUS_LABEL[card.status] ?? card.status}
           </Badge>
+          <VerificationChip listing={listing} tone="light" />
           {card.grade && <span>Grade {card.grade}</span>}
           <span>{ha(card.areaHa)}</span>
           {card.trading && (
@@ -482,6 +585,7 @@ function ListingRow({
         <ActionButton
           listing={listing}
           communityId={communityId}
+          owner={owner}
           tone="plain"
         />
       </div>
@@ -569,7 +673,7 @@ function Payouts({ summary }: { summary: CommunitySummary }) {
                     To the fund
                   </th>
                   <th scope="col" className="pb-2 pl-4 text-right font-normal">
-                    Retained-stake dividend
+                    On kept units
                   </th>
                 </tr>
               </thead>

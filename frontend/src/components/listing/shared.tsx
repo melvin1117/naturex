@@ -5,10 +5,10 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { cn } from "cn";
 
+import { PageSkeleton } from "@/components/page-skeletons";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import type { MyCommunity } from "@/lib/api/types";
 import { loginHref } from "@/lib/auth";
 import {
@@ -21,17 +21,12 @@ export function Page({ children }: { children: ReactNode }) {
   return <div className="mx-auto max-w-6xl px-4 pt-10 sm:px-6">{children}</div>;
 }
 
-export function Loading({ children }: { children: ReactNode }) {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"
-    >
-      <Spinner aria-hidden="true" role="presentation" />
-      {children}
-    </div>
-  );
+/**
+ * The listing page while its session or listing loads: the shape the route's `loading.tsx`
+ * drew (`PageSkeleton`), so it goes from skeleton to content without a spinner between (#219).
+ */
+export function Loading({ children }: { children: string }) {
+  return <PageSkeleton label={children} />;
 }
 
 export function StepCard({

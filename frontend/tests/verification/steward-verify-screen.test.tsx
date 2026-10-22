@@ -117,6 +117,11 @@ describe("StewardVerifyScreen", () => {
     expect(
       screen.getByText("Loading the verification record…"),
     ).toBeInTheDocument();
+    // The screen's shape, as its route's `loading.tsx` drew it (#219).
+    expect(
+      window.document.querySelector("[data-skeleton=screen]"),
+    ).not.toBeNull();
+    expect(window.document.querySelector(".animate-spin")).toBeNull();
     expect(
       await screen.findByRole("heading", {
         level: 1,

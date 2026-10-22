@@ -6,10 +6,12 @@ import { usePathname } from "next/navigation";
 import { cn } from "cn";
 
 import { LoadingRegion } from "@/components/loading-region";
+import { MarketplaceHeading } from "@/components/proto/marketplace-heading";
 import { useOptionalStewardCommunity } from "@/components/shell/steward-community";
 import { TimeMachineHeading } from "@/components/time-machine/time-machine-heading";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ReviewQueueHeading } from "@/components/verification/review-queue-heading";
 import { skeletonKind, type SkeletonKind } from "@/lib/route-skeleton";
 
 /**
@@ -162,6 +164,115 @@ export function AssetPageSkeleton({ label }: { label?: string }) {
   );
 }
 
+/** The Marketplace's stat strip beside its heading, while the sites load. */
+export function MarketStatsSkeleton() {
+  return (
+    <div
+      className="grid grid-cols-3 gap-6 rounded-3xl bg-card px-6 py-4 shadow-soft"
+      aria-hidden="true"
+      data-skeleton="market-stats"
+    >
+      {[0, 1, 2].map((i) => (
+        <StatBones key={i} />
+      ))}
+    </div>
+  );
+}
+
+/** A site card: the 16:9 image, name and place, the two stats, the sparkline, the footer. */
+function SiteCardBones() {
+  return (
+    <div className="flex flex-col overflow-hidden rounded-3xl bg-card shadow-soft">
+      <Skeleton className="aspect-[16/9] w-full rounded-none" />
+      <div className="flex flex-1 flex-col gap-4 p-5">
+        <div>
+          <div className="flex h-[1.375rem] items-center">
+            <Skeleton className="h-4 w-3/4" />
+          </div>
+          <div className="mt-1 flex h-5 items-center">
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          {[0, 1].map((i) => (
+            <div key={i}>
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="mt-2 h-6 w-24" />
+              <Skeleton className="mt-1.5 h-3 w-28 max-w-full" />
+            </div>
+          ))}
+        </div>
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <div className="mt-auto flex items-center justify-between gap-3 border-t pt-3">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-20" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The Marketplace below its heading (#219): the top-rated feature card on its photographic
+ * ground, the "All sites" row with its filters, then site cards.
+ */
+export function MarketBoardSkeleton({
+  label = "Loading sites…",
+}: {
+  label?: string;
+}) {
+  return (
+    <LoadingRegion name="marketplace" label={label}>
+      <div className="grid gap-8 rounded-[2rem] bg-lichen p-6 shadow-lift sm:p-8 lg:grid-cols-[auto_1fr_auto] lg:items-center lg:gap-10 lg:p-10">
+        <Skeleton className="mx-auto size-[188px] rounded-full bg-card/70 lg:mx-0" />
+        <div className="min-w-0 space-y-5">
+          <div>
+            <Skeleton className="h-6 w-56 rounded-full bg-card/70" />
+            <Skeleton className="mt-3 h-10 w-3/4 bg-card/70 sm:h-12" />
+            <Skeleton className="mt-3 h-4 w-48 bg-card/70" />
+          </div>
+          <Skeleton className="h-16 w-full max-w-md bg-card/70" />
+        </div>
+        <div className="flex flex-col gap-4 rounded-3xl bg-card/40 p-5 lg:w-64">
+          <Skeleton className="h-10 w-16 rounded-full bg-card/70" />
+          <div>
+            <Skeleton className="h-3 w-32 bg-card/70" />
+            <Skeleton className="mt-2 h-8 w-28 bg-card/70" />
+            <Skeleton className="mt-2 h-4 w-36 bg-card/70" />
+          </div>
+          <Skeleton className="h-9 w-full rounded-full bg-card/70" />
+        </div>
+      </div>
+      <div className="mt-12">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h2 className="text-xl font-semibold">All sites</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <Skeleton className="h-10 w-72 max-w-full rounded-full bg-card" />
+            <Skeleton className="h-9 w-44 rounded-full bg-card" />
+          </div>
+        </div>
+        <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <SiteCardBones key={i} />
+          ))}
+        </div>
+      </div>
+    </LoadingRegion>
+  );
+}
+
+/** The whole Marketplace, for its route's `loading.tsx`: the real heading, then the board. */
+export function MarketplaceSkeleton({ label }: { label?: string }) {
+  return (
+    <div className="mx-auto max-w-7xl px-4 pt-10 sm:px-6">
+      <MarketplaceHeading stats={<MarketStatsSkeleton />} />
+      <div className="mt-8">
+        <MarketBoardSkeleton label={label} />
+      </div>
+    </div>
+  );
+}
+
 /** Below the portfolio's heading: the stat strip, then stakes beside alerts. */
 export function PortfolioBodySkeleton({
   label = "Loading your stakes…",
@@ -285,14 +396,17 @@ export function CommunitySettingsSkeleton({
 export function ScreenSkeleton({
   label = "Loading…",
   wide = false,
+  checklist = false,
 }: {
   label?: string;
   /** The admin's listing review is wider than the steward's screens. */
   wide?: boolean;
+  /** The opening offer's "Before you open to supporters" band between header and columns. */
+  checklist?: boolean;
 }) {
   return (
     <LoadingRegion
-      name={wide ? "review" : "screen"}
+      name={checklist ? "ipo" : wide ? "review" : "screen"}
       label={label}
       className={cn(
         "mx-auto px-4 pt-8 pb-16 sm:px-6",
@@ -304,12 +418,49 @@ export function ScreenSkeleton({
       <Line box="mt-1 h-[2.8125rem] sm:h-15" className="h-9 w-full max-w-md" />
       <Line box="mt-2 h-6" className="h-4 w-full max-w-2xl" />
       <Line box="h-6" className="h-4 w-2/3 max-w-xl" />
-      <div className="mt-8 grid gap-8 lg:grid-cols-2">
+      {checklist && <ChecklistBand />}
+      <div
+        className={cn(
+          "grid lg:grid-cols-2",
+          checklist ? "mt-6 gap-6" : "mt-8 gap-8",
+        )}
+      >
         <Panel className="rounded-[1.75rem]" lines={6} />
         <Panel className="rounded-[1.75rem]" lines={4} />
       </div>
     </LoadingRegion>
   );
+}
+
+/** The opening offer's checklist band, as `OpeningChecklist` draws it: a heading, three steps. */
+function ChecklistBand() {
+  return (
+    <div className="mt-8 rounded-[1.75rem] bg-card p-5 shadow-soft sm:p-6">
+      <div className="flex h-7 items-center">
+        <Skeleton className="h-5 w-64 max-w-full" />
+      </div>
+      <div className="mt-4 grid gap-4 md:grid-cols-3 md:gap-6">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex gap-3 p-3 md:flex-col md:gap-2">
+            <Skeleton className="size-5 shrink-0 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-4 w-40 max-w-full" />
+              <Skeleton className="h-3.5 w-full max-w-56" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** The opening offer: the focused screen with its checklist band. */
+export function IpoSkeleton({
+  label = "Checking this site…",
+}: {
+  label?: string;
+}) {
+  return <ScreenSkeleton label={label} checklist />;
 }
 
 /** The Time Machine's dark panel: the quarter, the timeline and the run button. */
@@ -354,9 +505,43 @@ export function TimeMachineSkeleton({ label }: { label?: string }) {
   );
 }
 
+/** Rows of listings in the verification area, as `QueueRow` and `DecidedRow` draw them. */
+export function QueueRowsSkeleton({
+  label = "Loading the queue…",
+  className,
+}: {
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <LoadingRegion name="queue" label={label} className={className}>
+      <div className="space-y-3">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-card p-5 shadow-soft"
+          >
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-7 w-56 max-w-full" />
+              <div className="flex flex-wrap gap-2">
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-5 w-16 rounded-full" />
+                <Skeleton className="h-5 w-28 rounded-full" />
+              </div>
+              <Skeleton className="h-3 w-48 max-w-full" />
+              <Skeleton className="h-4 w-40 max-w-full" />
+            </div>
+            <Skeleton className="h-9 w-28 shrink-0 rounded-full" />
+          </div>
+        ))}
+      </div>
+    </LoadingRegion>
+  );
+}
+
 /**
- * The verification queue: its heading (as `ReviewQueueScreen` draws it, owned by #210/#211;
- * extract a shared heading once that lands) and rows of listings.
+ * The verification area: its heading (the screen's own, shared), the views' tab bar, then rows
+ * of listings, where `ReviewQueueScreen` draws them.
  */
 export function QueueSkeleton({
   label = "Loading the queue…",
@@ -365,30 +550,14 @@ export function QueueSkeleton({
 }) {
   return (
     <div className="mx-auto max-w-5xl px-4 pt-10 pb-16 sm:px-6">
-      <h1 className="font-serif text-5xl leading-none tracking-tight sm:text-6xl">
-        Verification queue
-      </h1>
-      <p className="mt-3 max-w-2xl text-muted-foreground">
-        Listings whose communities submitted land documents, oldest first. Read
-        the documents, the automated checks and the map, then approve or reject
-        with a reason. Your own communities&apos; listings never appear here.
-      </p>
-      <LoadingRegion name="queue" label={label} className="mt-8">
-        <div className="space-y-3">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between gap-4 rounded-3xl bg-card p-5 shadow-soft"
-            >
-              <div className="min-w-0 flex-1">
-                <Skeleton className="h-5 w-48 max-w-full" />
-                <Skeleton className="mt-2 h-4 w-72 max-w-full" />
-              </div>
-              <Skeleton className="h-9 w-24 shrink-0 rounded-full" />
-            </div>
-          ))}
-        </div>
-      </LoadingRegion>
+      <ReviewQueueHeading />
+      <div
+        aria-hidden="true"
+        className="mt-8 flex h-11 w-full items-center rounded-full bg-card p-1 shadow-soft sm:w-[21.5rem]"
+      >
+        <Skeleton className="h-full w-20 rounded-full" />
+      </div>
+      <QueueRowsSkeleton label={label} className="mt-6" />
     </div>
   );
 }
@@ -399,7 +568,7 @@ export function PageSkeleton({ label = "Loading…" }: { label?: string }) {
     <LoadingRegion
       name="page"
       label={label}
-      className="mx-auto max-w-5xl px-4 pt-10 pb-16 sm:px-6"
+      className="mx-auto max-w-6xl px-4 pt-10 pb-16 sm:px-6"
     >
       <Line box="h-5" className="h-3.5 w-36" />
       <Line box="mt-3 h-12 sm:h-15" className="h-10 w-full max-w-md sm:h-12" />
@@ -458,11 +627,13 @@ const ROUTE_SKELETON: Record<
   SkeletonKind,
   (props: { label: string }) => React.ReactNode
 > = {
+  marketplace: MarketplaceSkeleton,
   asset: AssetPageSkeleton,
   portfolio: PortfolioSkeleton,
   "steward-home": StewardHomeSkeleton,
   "community-settings": CommunitySettingsSkeleton,
   screen: ScreenSkeleton,
+  ipo: IpoSkeleton,
   review: (props) => <ScreenSkeleton {...props} wide />,
   "time-machine": TimeMachineSkeleton,
   queue: QueueSkeleton,

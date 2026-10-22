@@ -4,6 +4,7 @@ import { AlertTriangle, ShieldCheck, ShieldX } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "cn";
 
+import { MachineRowsSkeleton } from "@/components/page-skeletons";
 import { LoadError } from "@/components/proto/load-error";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -47,6 +48,7 @@ export function LedgerPanel({
   tamperedAt,
   highlightedAt,
   empty = "No ledger entries yet.",
+  loading = false,
 }: {
   entries: LedgerRow[];
   check: LedgerCheck | null;
@@ -55,6 +57,8 @@ export function LedgerPanel({
   /** The entry a link pointed at (`#ledger-entry-<seq>`), outlined. */
   highlightedAt?: number | null;
   empty?: string;
+  /** The entries are on their way: rows in their shape, under the real heading. */
+  loading?: boolean;
 }) {
   return (
     <section className="rounded-3xl bg-machine p-6 text-machine-ink shadow-soft">
@@ -102,7 +106,9 @@ export function LedgerPanel({
           </div>
         )}
       </div>
-      {entries.length === 0 ? (
+      {loading ? (
+        <MachineRowsSkeleton label="Loading the ledger…" className="mt-5" />
+      ) : entries.length === 0 ? (
         <p className="mt-5 text-sm text-machine-muted">{empty}</p>
       ) : (
         <ol className="mt-5 space-y-2">
@@ -248,13 +254,17 @@ export function ApiLedgerTab({ assetId }: { assetId: string }) {
     );
   if (!ledger.data)
     return (
-      <p
-        role="status"
-        className="flex items-center justify-center gap-2 rounded-3xl bg-machine py-16 text-sm text-machine-muted"
-      >
-        <Spinner aria-hidden="true" role="presentation" />
-        Loading the ledger…
-      </p>
+      <LedgerPanel
+        entries={[]}
+        check={null}
+        loading
+        actions={
+          <Button className={LEDGER_PRIMARY} disabled>
+            <ShieldCheck aria-hidden="true" />
+            Verify chain
+          </Button>
+        }
+      />
     );
 
   const result = verifier.data;

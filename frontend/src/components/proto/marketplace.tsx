@@ -1,13 +1,16 @@
 "use client";
 
-import { Compass, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
-import Link from "next/link";
+import { RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 
+import {
+  MarketBoardSkeleton,
+  MarketStatsSkeleton,
+} from "@/components/page-skeletons";
 import { Stat } from "@/components/proto/bits";
+import { MarketplaceHeading } from "@/components/proto/marketplace-heading";
 import { FeatureSiteCard, SiteCard } from "@/components/proto/site-card";
-import { useTour } from "@/components/proto/tour";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,43 +46,13 @@ function useMarketCards() {
 }
 
 export function Marketplace() {
-  const tour = useTour();
   return (
     <div className="mx-auto max-w-7xl px-4 pt-10 sm:px-6">
-      <div className="flex flex-wrap items-end justify-between gap-6">
-        <div>
-          <h1 className="font-serif text-5xl leading-none tracking-tight sm:text-6xl">
-            Marketplace
-          </h1>
-          <p className="mt-3 max-w-xl text-muted-foreground">
-            Living land, rated by AI from satellite data and local news. Back a
-            site with play money and follow its health every quarter.
-          </p>
-        </div>
-        <MarketStats />
-      </div>
-
-      {!tour.active && (
-        <div className="mt-8 flex flex-wrap items-center gap-3 rounded-3xl bg-lichen px-5 py-3.5 text-sm">
-          <Compass className="size-4 text-lime-ink" aria-hidden="true" />
-          <span>
-            <span className="font-medium">New here?</span> The guided tour walks
-            through listing, rating, backing and monitoring in about seven
-            minutes, on a scripted demo world.
-          </span>
-          <div className="ml-auto flex gap-2">
-            <Button size="sm" variant="ghost" asChild>
-              <Link href="/judge">Judge landing</Link>
-            </Button>
-            <Button size="sm" onClick={tour.start}>
-              Start the tour
-            </Button>
-          </div>
-        </div>
-      )}
-
+      <MarketplaceHeading stats={<MarketStats />} />
       <div className="mt-8">
-        <WorldGate>
+        <WorldGate
+          fallback={<MarketBoardSkeleton label="Opening your demo world…" />}
+        >
           <MarketBoard />
         </WorldGate>
       </div>
@@ -88,8 +61,10 @@ export function Marketplace() {
 }
 
 function MarketStats() {
-  const { cards } = useMarketCards();
-  if (!cards || cards.length === 0) return null;
+  const { cards, error } = useMarketCards();
+  // Hold the strip's place while the sites load, so the heading row doesn't reflow.
+  if (!cards) return error ? null : <MarketStatsSkeleton />;
+  if (cards.length === 0) return null;
   const rated = cards.filter((c) => c.grade !== null);
   const valued = rated.flatMap((c) =>
     c.valueMid === null ? [] : [c.valueMid],
@@ -159,7 +134,7 @@ export function MarketBoard() {
       </Alert>
     );
 
-  if (!cards) return <MarketSkeleton />;
+  if (!cards) return <MarketBoardSkeleton />;
 
   if (cards.length === 0)
     return (
@@ -229,28 +204,5 @@ export function MarketBoard() {
         )}
       </section>
     </>
-  );
-}
-
-function MarketSkeleton() {
-  return (
-    <div role="status" aria-live="polite">
-      <span className="sr-only">Loading sites…</span>
-      <div
-        className="h-72 animate-pulse rounded-[2rem] bg-card shadow-soft motion-reduce:animate-none"
-        aria-hidden="true"
-      />
-      <div
-        className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
-        aria-hidden="true"
-      >
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className="h-96 animate-pulse rounded-3xl bg-card shadow-soft motion-reduce:animate-none"
-          />
-        ))}
-      </div>
-    </div>
   );
 }

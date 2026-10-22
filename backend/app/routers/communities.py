@@ -72,6 +72,7 @@ from app.schemas import (
 )
 from app.services.asset_cards import cards, latest_reports
 from app.services.community_summary import Wallet, summarize
+from app.services.verification import verification_out
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["communities"])
@@ -356,9 +357,10 @@ def _wallet_out(wallet: Wallet) -> WalletOut:
 )
 def summary(granted: CommunityData, session: SessionDep, response: Response) -> CommunitySummaryOut:
     """The Steward home (T63; the community's members and same-world admins): its listings with
-    their status and next action, the community wallet (IPO proceeds and community-fund
-    payouts), the treasury's retained-stake dividends, holders (counted and ranked, never
-    named), recent quarterly payouts and the latest reports' stewardship recommendations.
+    their status, verification (#216) and next action, the community wallet (IPO proceeds and
+    community-fund payouts), the treasury's retained-stake dividends, holders (counted and
+    ranked, never named), recent quarterly payouts and the latest reports' stewardship
+    recommendations.
     Every number comes from stored rows (`app.services.community_summary`). Play money."""
     actor = granted.signed_in
     community = _community(session, granted)
@@ -376,6 +378,7 @@ def summary(granted: CommunityData, session: SessionDep, response: Response) -> 
         community.world_id,
         assets,
         latest={asset_id: versions[0] for asset_id, versions in reports.items()},
+        can_manage=role is not None,
         can_launch=role == CommunityRole.OWNER,
     )
     card_of = {
@@ -390,6 +393,7 @@ def summary(granted: CommunityData, session: SessionDep, response: Response) -> 
             ListingSummaryOut(
                 asset=card_of[listing.asset.id],
                 next_action=listing.next_action,
+                verification=verification_out(listing.verification),
                 ipo_at=listing.asset.ipo_at,
                 wallet=_wallet_out(listing.wallet),
                 holders=HoldersOut(

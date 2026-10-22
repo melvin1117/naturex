@@ -515,6 +515,35 @@ class IpoTermsOut(BaseModel):
     retained_shares: int = Field(description="Held by the community's treasury.")
 
 
+class ListingVerificationOut(BaseModel):
+    """A listing's verification for its community (#216): what stands, whether it blocks the
+    listing now, and the latest decision with the reviewer's reason. Members and same-world
+    admins only (the Steward home), and the owner (the IPO preview)."""
+
+    level: VerificationLevel = Field(
+        description="What stands, as the public panel says it: revoked while a revocation "
+        "stands (even with a newer submission), else the current run's level, or unverified "
+        "(no run, or the listing changed since it)."
+    )
+    in_review: bool = Field(description="A submission waits for a reviewer.")
+    required: bool = Field(
+        description="Verification blocks the listing now, as the IPO gate decides: the live "
+        "world's opening offer needs a verified run, and a revocation blocks the offer and "
+        "trading in every world until a new run is approved."
+    )
+    decision: VerificationLevel | None = Field(
+        default=None,
+        description="The latest decision (verified, rejected or revoked); null while none.",
+    )
+    decided_at: datetime | None = Field(default=None, description="When `decision` was made.")
+    reason: str | None = Field(
+        default=None, description="The reviewer's reason or note for `decision`, if any."
+    )
+    run_id: UUID | None = Field(
+        default=None, description="The current run, while it still describes the listing."
+    )
+
+
 class IpoPreviewOut(IpoTermsOut):
     launchable: bool = Field(description="Whether POST /assets/{id}/ipo would go ahead now.")
     blocked_reason: str | None = Field(
@@ -523,6 +552,10 @@ class IpoPreviewOut(IpoTermsOut):
         "share costs more than a new account's starting cash: issue more shares), "
         "run_in_progress, or not_verified (the live world needs the listing's current "
         "verification run verified and still matching; a revoked one blocks everywhere; T69).",
+    )
+    verification: ListingVerificationOut = Field(
+        description="Where the listing's verification stands, from the same reading as "
+        "`blocked_reason` (#216)."
     )
 
 
@@ -896,10 +929,11 @@ class StreamEvent(BaseModel):
     ts: datetime
 
 
-AlertKindOut = Literal["grade_change", "health_change", "news"]
+AlertKindOut = Literal["grade_change", "health_change", "news", "verification"]
 ALERT_KIND_DESCRIPTION = (
     "grade_change / health_change: a re-rate moved the grade or the health score by ≥ 5 points; "
-    "news: a News Scout event of severity ≥ 4"
+    "news: a News Scout event of severity ≥ 4; verification: a reviewer approved or rejected the "
+    "listing's documents, or revoked its verification (never the reviewer's reason)"
 )
 
 
@@ -1426,6 +1460,9 @@ class NextAction(StrEnum):
     CONTINUE_LISTING = "continue_listing"
     RATING_IN_PROGRESS = "rating_in_progress"
     ADD_EVIDENCE = "add_evidence"
+    VERIFY = "verify"
+    VERIFICATION_IN_REVIEW = "verification_in_review"
+    AWAITING_VERIFICATION = "awaiting_verification"
     LAUNCH_IPO = "launch_ipo"
     AWAITING_IPO = "awaiting_ipo"
     VIEW_ON_EXCHANGE = "view_on_exchange"
@@ -1472,10 +1509,14 @@ class ListingSummaryOut(BaseModel):
     asset: AssetCard
     next_action: NextAction = Field(
         description="continue_listing (draft), rating_in_progress, add_evidence "
-        "(needs_evidence), launch_ipo (listed, not launched; owner), awaiting_ipo (the same "
-        "for stewards and admins), view_on_exchange (trading or suspended), none (ineligible, "
-        "withdrawn)."
+        "(needs_evidence), verify (members: verification blocks the opening offer or "
+        "trading; upload and submit documents), verification_in_review (the same, with a "
+        "submission waiting for a reviewer), awaiting_verification (the same for same-world "
+        "admins, who aren't members), launch_ipo (listed, not launched; owner), awaiting_ipo "
+        "(the same for stewards and admins), view_on_exchange (trading or suspended), none "
+        "(ineligible, withdrawn)."
     )
+    verification: ListingVerificationOut
     ipo_at: datetime | None
     wallet: WalletOut
     holders: HoldersOut

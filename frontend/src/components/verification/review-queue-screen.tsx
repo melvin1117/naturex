@@ -5,15 +5,16 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
+import { QueueRowsSkeleton } from "@/components/page-skeletons";
 import { LoadError } from "@/components/proto/load-error";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   CheckResultLabel,
   VerificationBadge,
 } from "@/components/verification/parts";
+import { ReviewQueueHeading } from "@/components/verification/review-queue-heading";
 import type {
   CheckResult,
   DecidedListingItem,
@@ -60,15 +61,7 @@ export function ReviewQueueScreen() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 pt-10 pb-16 sm:px-6">
-      <h1 className="font-serif text-5xl leading-none tracking-tight sm:text-6xl">
-        Verifications
-      </h1>
-      <p className="mt-3 max-w-2xl text-muted-foreground">
-        Listings whose communities submitted land documents. Read the documents,
-        the automated checks and the map, then approve or reject with a reason;
-        decided listings stay here so you can find them again. Your own
-        communities&apos; listings never appear here.
-      </p>
+      <ReviewQueueHeading />
 
       <Tabs
         value={view}
@@ -200,13 +193,7 @@ function Paged<T>({
         ) : error ? (
           <LoadError title={errorTitle} error={error} retry={retry} />
         ) : (
-          <p
-            role="status"
-            className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"
-          >
-            <Spinner aria-hidden="true" role="presentation" />
-            {loading}
-          </p>
+          <QueueRowsSkeleton label={loading} />
         )}
       </div>
 

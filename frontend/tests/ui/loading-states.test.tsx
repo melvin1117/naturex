@@ -1,6 +1,8 @@
 import { act, render, screen } from "@testing-library/react";
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -9,11 +11,15 @@ import {
   SLOW_NOTE,
 } from "@/components/loading-region";
 import {
+  IpoSkeleton,
   MachineRowsSkeleton,
   RouteSkeleton,
+  ScreenSkeleton,
 } from "@/components/page-skeletons";
+import { TourProvider } from "@/components/proto/tour";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HANDOFF_MS, resetLoadingChains } from "@/lib/loading-chain";
+import { PrototypeProvider } from "@/lib/prototype/store";
 import { skeletonKind } from "@/lib/route-skeleton";
 
 declare global {
@@ -39,6 +45,15 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
 });
+
+/** Like app/layout.tsx: the Marketplace heading offers the guided tour. */
+function Shell({ children }: { children: ReactNode }) {
+  return (
+    <PrototypeProvider>
+      <TourProvider>{children}</TourProvider>
+    </PrototypeProvider>
+  );
+}
 
 /** The one region on screen. */
 function region() {
@@ -171,8 +186,9 @@ const LOADERS = Object.entries(
 });
 
 describe("route loading states", () => {
-  it("covers the asset page, portfolio, steward and admin routes", () => {
+  it("covers the Marketplace, asset page, portfolio, steward and admin routes", () => {
     expect(LOADERS.map((l) => l.route).sort()).toEqual([
+      "/",
       "/admin",
       "/admin/verifications",
       "/admin/verifications/x",
@@ -180,17 +196,34 @@ describe("route loading states", () => {
       "/portfolio",
       "/steward",
       "/steward/assets/x",
+      "/steward/assets/x/ipo",
       "/steward/community",
       "/steward/list",
+    ]);
+  });
+
+  it("draws the Marketplace's skeleton only for the Marketplace", () => {
+    // A loading.tsx is a Suspense boundary for every page below its folder: in
+    // `(exchange)/` it would flash the Marketplace on the way to a site or Your stakes.
+    const exchange = join(process.cwd(), "src/app/(exchange)");
+    expect(existsSync(join(exchange, "loading.tsx"))).toBe(false);
+    const market = join(exchange, "(market)");
+    expect(existsSync(join(market, "loading.tsx"))).toBe(true);
+    const below = readdirSync(market, { withFileTypes: true });
+    expect(below.filter((entry) => entry.isDirectory())).toEqual([]);
+    expect(below.map((entry) => entry.name).sort()).toEqual([
+      "loading.tsx",
+      "page.tsx",
     ]);
   });
 
   it.each(LOADERS.map((l) => [l.route, l.Loading] as const))(
     "%s: the gates' shape for the route, one status, no spinner",
     (route, Loading) => {
-      // A screen folder's pages (`/steward/assets/x/ipo`) share its loading state.
-      const page = route === "/steward/assets/x" ? `${route}/ipo` : route;
-      render(<Loading />);
+      // A screen folder's pages (`/steward/assets/x/verify`) share its loading state; the
+      // opening offer has its own, with the checklist band (#216).
+      const page = route === "/steward/assets/x" ? `${route}/verify` : route;
+      render(<Loading />, { wrapper: Shell });
       expect(region()).toHaveAttribute("data-skeleton", skeletonKind(page));
       expect(screen.getAllByRole("status")).toHaveLength(1);
       expect(document.querySelector(".animate-spin")).toBeNull();
@@ -198,12 +231,13 @@ describe("route loading states", () => {
   );
 
   it.each([
+    ["/", "Marketplace"],
     ["/admin", "Time Machine"],
-    ["/admin/verifications", "Verification queue"],
+    ["/admin/verifications", "Verifications"],
     ["/portfolio", "Your stakes"],
   ])("%s draws its real heading", (route, heading) => {
     const { Loading } = LOADERS.find((l) => l.route === route)!;
-    render(<Loading />);
+    render(<Loading />, { wrapper: Shell });
     expect(
       screen.getByRole("heading", { name: heading, level: 1 }),
     ).toBeVisible();
@@ -221,22 +255,55 @@ describe("route loading states", () => {
 
 describe("RouteSkeleton", () => {
   it.each([
+    ["/", "marketplace"],
     ["/asset/35df5b9e-90ff-4205-a82e-9ca6e0e06729", "asset"],
     ["/portfolio", "portfolio"],
     ["/steward", "steward-home"],
     ["/steward/community", "community-settings"],
-    ["/steward/assets/abc/ipo", "screen"],
+    ["/steward/assets/abc/verify", "screen"],
+    ["/steward/assets/abc/evidence", "screen"],
+    ["/steward/assets/abc/ipo", "ipo"],
     ["/admin", "time-machine"],
     ["/admin/verifications", "queue"],
     ["/admin/verifications/abc", "review"],
     ["/steward/list", "page"],
   ])("draws %s's shape with the gate's label", (path, shape) => {
     nav.pathname = path;
-    render(<RouteSkeleton label="Checking your session…" />);
+    render(<RouteSkeleton label="Checking your session…" />, {
+      wrapper: Shell,
+    });
     expect(region()).toHaveAttribute("data-skeleton", shape);
     expect(screen.getByRole("status")).toHaveTextContent(
       "Checking your session…",
     );
+  });
+});
+
+describe("IpoSkeleton", () => {
+  /** The cards of a skeleton, in order: their radius, and their columns' parent. */
+  function cards() {
+    return [
+      ...region().querySelectorAll<HTMLElement>(".bg-card.shadow-soft"),
+    ].map((card) => ({
+      radius: [...card.classList].find((c) => c.startsWith("rounded-")),
+      inColumns: card.parentElement!.className.includes("lg:grid-cols-2"),
+    }));
+  }
+
+  it("draws the opening offer's checklist band between the header and the columns", () => {
+    render(<IpoSkeleton />);
+    expect(region()).toHaveAttribute("data-skeleton", "ipo");
+    expect(cards()).toEqual([
+      { radius: "rounded-[1.75rem]", inColumns: false },
+      { radius: "rounded-[1.75rem]", inColumns: true },
+      { radius: "rounded-[1.75rem]", inColumns: true },
+    ]);
+  });
+
+  it("keeps the other focused screens without it", () => {
+    render(<ScreenSkeleton />);
+    expect(region()).toHaveAttribute("data-skeleton", "screen");
+    expect(cards().every((c) => c.inColumns)).toBe(true);
   });
 });
 

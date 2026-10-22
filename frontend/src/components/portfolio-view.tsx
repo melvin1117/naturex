@@ -2,16 +2,19 @@
 
 import { Leaf, RefreshCwIcon, Sprout, Trees } from "lucide-react";
 import Link from "next/link";
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { cn } from "cn";
 
 import { AlertsList } from "@/components/alerts-list";
 import { CopilotChat } from "@/components/copilot-chat";
+import { CountTo } from "@/components/live-number";
 import { PortfolioBodySkeleton } from "@/components/page-skeletons";
 import { Delta, SiteThumb, Stat } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
 import { Portfolio as PrototypePortfolio } from "@/components/proto/portfolio";
 import { Panel } from "@/components/proto/report-panels";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -28,10 +31,13 @@ import { GRADE_ORDER, int } from "@/lib/prototype/format";
 import {
   assetHref,
   decimal,
+  forgetFills,
+  freshFills,
   money,
   moneyText,
   signedMoneyText,
   unitPriceText,
+  type FreshFill,
 } from "@/lib/trade";
 
 /**
@@ -87,6 +93,10 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
   const assets = useAssets();
   const cards = new Map((assets.data ?? []).map((card) => [card.id, card]));
   const pnlPct = decimal(data.unrealized_pnl_pct);
+  // A trade made a moment ago on an asset page: show its stake changing here (#216 WP2).
+  const account = useWorld().world?.me?.id;
+  const [fresh] = useState(() => freshFills(account));
+  useEffect(() => forgetFills(fresh.values()), [fresh]);
   return (
     <>
       <dl className="mt-8 grid gap-4 rounded-3xl bg-card p-6 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
@@ -135,7 +145,7 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
                 </Button>
               </div>
             ) : (
-              <Holdings holdings={data.holdings} cards={cards} />
+              <Holdings holdings={data.holdings} cards={cards} fresh={fresh} />
             )}
           </Panel>
           <Suspense fallback={null}>
@@ -157,9 +167,11 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
 function Holdings({
   holdings,
   cards,
+  fresh,
 }: {
   holdings: HoldingOut[];
   cards: Map<string, AssetCard>;
+  fresh: Map<string, FreshFill>;
 }) {
   return (
     <>
@@ -169,37 +181,87 @@ function Holdings({
             key={h.asset_id}
             holding={h}
             card={cards.get(h.asset_id)}
+            fill={fillFor(h, fresh)}
           />
         ))}
       </ul>
       <div className="-mx-6 hidden overflow-x-auto px-6 sm:block">
-        <HoldingsTable holdings={holdings} cards={cards} />
+        <HoldingsTable holdings={holdings} cards={cards} fresh={fresh} />
       </div>
     </>
   );
 }
 
+/** The fill that just changed this stake, if the stake still holds what the fill left. */
+function fillFor(
+  h: HoldingOut,
+  fresh: Map<string, FreshFill>,
+): FreshFill | undefined {
+  const fill = fresh.get(h.asset_id);
+  return fill?.unitsAfter === h.shares ? fill : undefined;
+}
+
+/**
+ * The fresh fill as text: the wash and the count are motion (gone under reduced motion), and
+ * this says the same thing without it.
+ */
+function FreshBadge({ fill }: { fill: FreshFill }) {
+  const delta = fill.unitsAfter - fill.unitsBefore;
+  const n = Math.abs(delta);
+  return (
+    <Badge
+      variant="secondary"
+      className="tabular bg-lime/30 font-medium text-lime-ink"
+    >
+      {delta >= 0 ? "+" : "−"}
+      {int(n)} {n === 1 ? "unit" : "units"} just now
+    </Badge>
+  );
+}
+
+/** A stake's units, counting from before a fresh fill to what it holds now. */
+function Units({
+  holding: h,
+  fill,
+}: {
+  holding: HoldingOut;
+  fill?: FreshFill;
+}) {
+  return <CountTo value={h.shares} from={fill?.unitsBefore} format={int} />;
+}
+
 function HoldingCard({
   holding: h,
   card,
+  fill,
 }: {
   holding: HoldingOut;
   card: AssetCard | undefined;
+  fill?: FreshFill;
 }) {
   const pnlPct = decimal(h.unrealized_pnl_pct);
   return (
-    <li className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+    <li
+      className={cn(
+        "-mx-2 flex items-center gap-3 rounded-2xl px-2 py-3 first:pt-0 last:pb-0",
+        fill && "nx-wash",
+      )}
+      data-fresh={fill ? "" : undefined}
+    >
       <SiteIcon card={card} />
       <div className="min-w-0 flex-1">
-        <Link
-          href={assetHref(h.asset_id)}
-          className="font-medium hover:underline"
-        >
-          {h.asset_name}
-        </Link>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <Link
+            href={assetHref(h.asset_id)}
+            className="font-medium hover:underline"
+          >
+            {h.asset_name}
+          </Link>
+          {fill && <FreshBadge fill={fill} />}
+        </div>
         <p className="tabular text-xs text-muted-foreground">
-          {int(h.shares)} {h.shares === 1 ? "unit" : "units"} ·{" "}
-          {unitPriceText(h.mark_price)}
+          <Units holding={h} fill={fill} /> {h.shares === 1 ? "unit" : "units"}{" "}
+          · {unitPriceText(h.mark_price)}
         </p>
       </div>
       <dl className="text-right">
@@ -232,9 +294,11 @@ function SiteIcon({ card }: { card: AssetCard | undefined }) {
 function HoldingsTable({
   holdings,
   cards,
+  fresh,
 }: {
   holdings: HoldingOut[];
   cards: Map<string, AssetCard>;
+  fresh: Map<string, FreshFill>;
 }) {
   return (
     <Table scrollLabel="Your stakes, by site">
@@ -254,16 +318,24 @@ function HoldingsTable({
           const card = cards.get(h.asset_id);
           const grade = asGrade(card?.grade);
           const pnlPct = decimal(h.unrealized_pnl_pct);
+          const fill = fillFor(h, fresh);
           return (
-            <TableRow key={h.asset_id}>
+            <TableRow
+              key={h.asset_id}
+              className={cn(fill && "nx-wash")}
+              data-fresh={fill ? "" : undefined}
+            >
               <TableCell>
-                <Link
-                  href={assetHref(h.asset_id)}
-                  className="flex items-center gap-3 font-medium hover:underline"
-                >
-                  <SiteIcon card={card} />
-                  {h.asset_name}
-                </Link>
+                <div className="flex items-center gap-3">
+                  <Link
+                    href={assetHref(h.asset_id)}
+                    className="flex items-center gap-3 font-medium hover:underline"
+                  >
+                    <SiteIcon card={card} />
+                    {h.asset_name}
+                  </Link>
+                  {fill && <FreshBadge fill={fill} />}
+                </div>
               </TableCell>
               <TableCell>
                 {grade ? (
@@ -273,7 +345,7 @@ function HoldingsTable({
                 )}
               </TableCell>
               <TableCell className="tabular text-right">
-                {int(h.shares)}
+                <Units holding={h} fill={fill} />
               </TableCell>
               <TableCell className="tabular text-right">
                 {unitPriceText(h.avg_cost)}

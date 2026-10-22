@@ -9,6 +9,8 @@
  * - `useCountUp(value)`: a newly computed number counting up once, landing exactly on `value`.
  * - `usePacedCount(target, stepMs)`: a count that catches up with `target` one step at a time,
  *   so a burst of real events reads as a sequence.
+ * - `useValueTick(value)`: which way a live value (a price) last moved, and a count of its moves,
+ *   so a numeral can flash once per move and keep a direction arrow.
  * - `stagger(index)`: the inline style that delays a CSS keyframe (`nx-rise`, `nx-fade`…) for
  *   item `index` of a list that appears as a list, e.g. new portfolio rows.
  *
@@ -26,6 +28,8 @@ import {
 export const DURATION = {
   /** Tabs, popovers, hover: a routine change of state. */
   ui: 160,
+  /** A live value that moved (`nx-flash`), or a number counting to its new value after a fill. */
+  tick: 600,
   /** Content arriving (`nx-rise`). */
   content: 360,
   /** The grade stamp pressing onto the card (`nx-stamp`). */
@@ -37,7 +41,7 @@ export const DURATION = {
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 
 /** The ease-out curve (`--nx-ease-out`) for values driven frame by frame: a quartic ease-out. */
-function easeOut(t: number): number {
+export function easeOut(t: number): number {
   return 1 - (1 - clamp01(t)) ** 4;
 }
 
@@ -161,4 +165,48 @@ export function usePacedCount(
  */
 export function stagger(index: number, step = 60, base = 0): CSSProperties {
   return { animationDelay: `${Math.round(base + index * step)}ms` };
+}
+
+export type ValueTick = {
+  /** Which way the value last moved while on screen; null until it has moved. */
+  direction: "up" | "down" | null;
+  /** How many moves have been seen: a new key per move restarts the flash. */
+  moves: number;
+};
+
+/**
+ * Follows a live value (a stake price) and reports its last move. The first value, and a value
+ * that comes or goes (null), is not a move: only a change between two known values is. While
+ * `armed` is false (e.g. the first refresh of a cached value after the page opened), changes
+ * are taken as they are, not as moves; a change counts only if the hook was already armed.
+ * Motion-free (it only reports); the flash it drives is CSS, off under reduced motion, and the
+ * direction stays so the change never relies on colour or motion alone.
+ */
+export function useValueTick(
+  value: number | null,
+  { armed = true }: { armed?: boolean } = {},
+): ValueTick {
+  const [state, setState] = useState<
+    ValueTick & { last: number | null; armed: boolean }
+  >({ last: value, direction: null, moves: 0, armed });
+  let next = state;
+  if (value !== state.last || armed !== state.armed) {
+    const moved =
+      state.armed &&
+      value !== state.last &&
+      value !== null &&
+      state.last !== null;
+    next = {
+      last: value,
+      armed,
+      direction: moved
+        ? value > state.last!
+          ? "up"
+          : "down"
+        : state.direction,
+      moves: moved ? state.moves + 1 : state.moves,
+    };
+    setState(next);
+  }
+  return { direction: next.direction, moves: next.moves };
 }

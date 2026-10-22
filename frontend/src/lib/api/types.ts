@@ -89,6 +89,7 @@ export type CommunityUpdate = Schemas["CommunityUpdate"];
 export type CommunityMember = Schemas["CommunityMemberOut"];
 export type CommunitySummary = Schemas["CommunitySummaryOut"];
 export type ListingSummary = Schemas["ListingSummaryOut"];
+export type ListingVerification = Schemas["ListingVerificationOut"];
 export type NextAction = Schemas["NextAction"];
 export type PayoutSummary = Schemas["PayoutSummaryOut"];
 export type Wallet = Schemas["WalletOut"];

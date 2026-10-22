@@ -64,6 +64,10 @@ The API and database keep their names (`shares`, `ipo`, `orders`, `community_wal
 | portfolio | **Your stakes** (page title), route stays `/portfolio` | |
 | holdings | stakes | |
 | community wallet | **Community fund** | |
+| IPO proceeds | **from supporters** ("What supporters paid for units in the opening offer") | |
+| launch the IPO | **Open to supporters** (the steward's next step); the screen's button stays **Launch opening offer** | |
+| retained stake / retained shares | **the units your community keeps** | units kept |
+| retained-stake dividends (treasury) | **payouts on the units you kept** ("Payouts on kept units" where space is short) | |
 | investor | **supporter** (Arjun's persona label stays "investor") | |
 | fair value per share | fair stake price | fair price per unit |
 | P&L | change in value (play money) | P&L (play money) |
@@ -72,7 +76,9 @@ The API and database keep their names (`shares`, `ipo`, `orders`, `community_wal
 - Say what happened in plain words, then the fix. No codes unless in the trace.
   - Polygon too small: "This area is 6 ha. Sites need at least 10 ha."
   - Overlap: "This boundary overlaps the Xochimilco Wetland site. Adjust the edge to continue."
-  - Not enough play money: "You have $420 of play money. This needs $1,000."
+  - Not enough play money: "You have $420 of play money. This needs $1,000. You can buy up to 41 units now."
+- When fewer units would go through, say how many and offer them as a one-tap fix that changes the field, never one that places the order: **Change to 41 units**. The number is the API's (the quote's `max_qty`, or the units held), never estimated in the browser.
+- A refused order says "Nothing was traded."; a refused quote doesn't (nothing could have been).
 - Waking server: "Waking up the NatureX servers… this can take about 30 seconds."
 - Loading: a page-shaped skeleton, never a centred spinner for a page; one status names what's loading ("Loading the site…"). After 8 seconds without an answer it says why, without claiming what it can't know: "Still loading. The NatureX servers may be waking up, which can take about 30 seconds."
 - Fallbacks are never errors: "Live satellite service is busy, so we're showing a cached example from a nearby site."
@@ -80,14 +86,30 @@ The API and database keep their names (`shares`, `ipo`, `orders`, `community_wal
   - In one or two sentences they say what will appear, what makes it appear and, where there is one, the next action.
   - They never contradict the screen: under a rated site, not "once a site has been rated" but "Mock ratings don't include the Auditor's recommendations. A live rating may list concrete steps here that would strengthen the grade."
 
-## 7. Tour hints
+## 7. Where feedback goes
+Pick the lowest rung that's enough (#216; `frontend/src/lib/feedback.ts`). One announcement per change, and feedback never takes focus unless the user's own action removed what had it.
+
+| Rung | Use for | How |
+|---|---|---|
+| 1. Inline | Field validity, a refused order | Text under the field (`aria-describedby`, polite), with the fix next to it |
+| 2. In place | The surface the user acted on | A receipt, a row that washes (`nx-wash`), a number counting to its new value; a link to where the consequence also lives ("View your stakes") |
+| 3. Toast | A consequence on another page, or from the background | Signed in or out, a new alert. Sonner, ≤ 4 s (the welcome 2.5 s, alerts 7 s), at most one action. Never an error the user has to fix |
+| 4. Milestone | Listed, opened to supporters, a first stake | A staged reveal, once per journey step |
+
+- **Trades:** the receipt is the confirmation, not a toast. After a fill the trade panel's balance and units count to their new values, and the stake's row on *Your stakes* washes once when the user next opens it, with a text badge ("+60 units just now").
+- **Refused orders** are announced once, by their alert; the numbers under the field stay on screen without being read out again.
+- **Live prices:** on the asset page's hero, a moved price flashes its colour for 600 ms, then settles back to ink and keeps a ▲/▼ arrow (with text for screen readers). Refreshing a cached price on arrival isn't a move. Ticks aren't announced, and Marketplace cards don't flash.
+- **Toasts sit at the bottom:** bottom-left on wide screens, full width at the bottom on phones, so they never cover the header, the account menu or the trade panel.
+- **Reduced motion:** washes, flashes and counts show their final state at once; the arrow and the text stay.
+
+## 8. Tour hints
 - Two layers on every step, each one or two sentences:
   - 💡 **Why this matters** (warm, product): "Rosa's cooperative gets paid for keeping the wetland alive, without selling it."
   - ⚙️ **Tech behind it** (sober, specific): "Nemotron 3 Ultra audits the evidence; the grade itself comes from a tested formula."
 - Buttons: **Next**, **Back**, **Do it for me**, **Skip tour**. Never "Got it!".
 - Name models exactly as on Token Factory ("Nemotron 3 Super"), and say **Live** only for real calls.
 
-## 8. Capitalisation and mechanics
+## 9. Capitalisation and mechanics
 - Sentence case for headings, buttons and labels ("Back this site", not "Back This Site").
 - Product names keep their case: NatureX, Nature Ledger, Agent Trace, Time Machine, Copilot, Nemotron, Tavily.
 - Use the Oxford comma; use "and" rather than "&" in body text.

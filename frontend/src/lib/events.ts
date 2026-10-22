@@ -63,7 +63,7 @@ export interface AlertPayload {
   alert_id: string;
   asset_id: string;
   asset_name: string;
-  kind: "grade_change" | "health_change" | "news";
+  kind: "grade_change" | "health_change" | "news" | "verification";
   title: string;
   message: string;
   severity: number;

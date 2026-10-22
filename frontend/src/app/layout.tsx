@@ -10,6 +10,7 @@ import { TraceSheet } from "@/components/proto/trace-sheet";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WorldProvider } from "@/components/world-provider";
+import { TOASTER_PROPS } from "@/lib/feedback";
 import { PrototypeProvider } from "@/lib/prototype/store";
 
 import "./globals.css";
@@ -63,7 +64,8 @@ export default function RootLayout({
                 <TraceSheet />
                 <CopilotSheet />
                 <AlertToaster />
-                <Toaster position="top-right" offset={{ top: 64, right: 16 }} />
+                {/* Bottom, clear of the header, account menu and trade panel (lib/feedback). */}
+                <Toaster {...TOASTER_PROPS} />
               </TourProvider>
             </TooltipProvider>
           </PrototypeProvider>

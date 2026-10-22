@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import AssetPage from "@/app/(exchange)/asset/[id]/page";
-import MarketplacePage from "@/app/(exchange)/page";
+import MarketplacePage from "@/app/(exchange)/(market)/page";
 import PortfolioPage from "@/app/(exchange)/portfolio/page";
 import AdminPage from "@/app/admin/page";
 import DevUiPage from "@/app/dev/ui/page";
@@ -103,7 +103,9 @@ describe("routes", () => {
 
   it("/steward/list shows a loader, then the prototype flow to an anonymous demo visitor", async () => {
     render(<ListPage />, { wrapper: Providers });
-    expect(screen.getByRole("status")).toHaveTextContent("Loading…");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Loading the listing form…",
+    );
     expect(
       await screen.findByRole("heading", { level: 1, name: "List your land" }),
     ).toBeInTheDocument();

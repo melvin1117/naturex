@@ -127,7 +127,8 @@ describe("skeletonKind", () => {
     ["/portfolio", "portfolio"],
     ["/portfolio/", "portfolio"],
     ["/steward", "steward-home"],
-    ["/steward/assets/abc/ipo", "screen"],
+    ["/steward/assets/abc/ipo", "ipo"],
+    ["/steward/assets/abc/verify", "screen"],
     ["/steward/assets/abc/verify", "screen"],
     ["/steward/assets/abc/evidence", "screen"],
     ["/steward/list", "page"],
@@ -135,7 +136,7 @@ describe("skeletonKind", () => {
     ["/admin", "time-machine"],
     ["/admin/verifications", "queue"],
     ["/admin/verifications/abc", "review"],
-    ["/", "page"],
+    ["/", "marketplace"],
   ])("%s → %s", (path, kind) => {
     expect(skeletonKind(path)).toBe(kind);
   });

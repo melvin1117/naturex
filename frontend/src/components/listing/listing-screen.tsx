@@ -44,10 +44,10 @@ const STEPS = ["Details", "Boundary", "Rating", "Opening offer"];
 export function ListingScreen() {
   const { world } = useWorld();
   // Until the session answers, signed-in stewards must not glimpse the prototype.
-  if (!world) return <Loading>Loading…</Loading>;
+  if (!world) return <Loading>Loading the listing form…</Loading>;
   if (!world.me) return <PrototypeListingFlow />;
   return (
-    <Suspense fallback={<Loading>Loading…</Loading>}>
+    <Suspense fallback={<Loading>Loading the listing form…</Loading>}>
       <ListingFromUrl />
     </Suspense>
   );

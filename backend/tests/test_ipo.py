@@ -396,7 +396,7 @@ def test_the_launch_prices_seeds_the_stake_records_and_opens_the_float(world: Wo
     assert response.status_code == 201, response.text
     assert response.headers["cache-control"] == "no-store"
     body = response.json()
-    preview_only = {"launched_at", "launchable", "blocked_reason"}
+    preview_only = {"launched_at", "launchable", "blocked_reason", "verification"}
     assert {k: v for k, v in body.items() if k not in preview_only} == {
         k: v for k, v in shown.items() if k not in preview_only
     }

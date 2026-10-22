@@ -17,6 +17,8 @@ Rules and hashes live in `app.tools.verification` (pure) and file safety in
   a revocation. Each decision appends a `verification` ledger entry.
 - **Revoke** (`revoke`): the current verified run becomes `revoked` and a listed asset is
   suspended (`verification_revoked`) in the same transaction, with both ledger entries.
+- **Alert** (#216): each decision and revocation alerts the community's members and the
+  listing's holders (`app.services.alerts.verification_alert`), without the reviewer's reason.
 - **The gate** (`gate_refusal`): in the live world the IPO needs the current run `verified`, in
   review mode with real evidence and a matching fingerprint; in every world a revoked current
   run blocks it. Sandboxes are otherwise ungated until T76's demo mode verifies their listings.
@@ -60,6 +62,8 @@ from app.models import (
     VerificationRun,
     VerificationRunDocument,
 )
+from app.schemas import ListingVerificationOut
+from app.services.alerts import raise_alert, verification_alert
 from app.services.lifecycle import TERMINAL_STATUSES, ListingEvent, SuspensionReason, transition
 from app.services.listings import (
     OVERLAP,
@@ -231,6 +235,28 @@ def current_view(session: Session, asset: Asset) -> RunView | None:
     return None if run is None else view_of(session, asset, run)
 
 
+def current_views(session: Session, world_id: UUID, assets: Sequence[Asset]) -> dict[UUID, RunView]:
+    """Each listing's current run with its documents, by asset (listings without one are left
+    out), in two queries: the Steward home's verification status (#216)."""
+    by_id = {asset.id: asset for asset in assets}
+    if not by_id:
+        return {}
+    runs = session.exec(
+        select(VerificationRun).where(
+            VerificationRun.world_id == world_id,
+            col(VerificationRun.asset_id).in_(list(by_id)),
+            col(VerificationRun.is_current),
+        )
+    ).all()
+    linked = linked_documents(session, world_id, [run.id for run in runs])
+    views = {}
+    for run in runs:
+        documents = linked.get(run.id, [])
+        matches = _fingerprint_now(by_id[run.asset_id], run, documents) == run.input_fingerprint
+        views[run.asset_id] = RunView(run, documents, matches)
+    return views
+
+
 def runs_of(session: Session, asset: Asset) -> list[RunView]:
     """Every run of the listing, newest first, with its documents."""
     runs = session.exec(
@@ -258,15 +284,92 @@ def is_verified(view: RunView | None) -> bool:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class Standing:
+    """A listing's verification as it stands (#216): one derivation for the IPO gate, the
+    public panel, the Steward home and the IPO preview."""
+
+    level: VerificationLevel
+    """What stands, as the public panel says it: a revocation until an approval clears it
+    (even with a newer submission), else the current run's level while it still describes the
+    listing, else `unverified`."""
+    in_review: bool
+    """A submission that still describes the listing waits for a reviewer."""
+    required: bool
+    """The gate refuses `not_verified` now: a standing revocation (every world), or the live
+    world without a verified run."""
+    revoked: bool
+    """A revocation stands (`assets.verification_revoked_at`): no IPO, trading paused."""
+    decision: VerificationLevel | None = None
+    """The latest decision: the current run's approval, rejection or revocation, else a
+    standing revocation."""
+    decided_at: datetime | None = None
+    reason: str | None = None
+    """The reviewer's reason or note for `decision` (members and admins only)."""
+    run_id: UUID | None = None
+    """The current run, while it still describes the listing."""
+
+
+def standing(view: RunView | None, *, revoked_at: datetime | None, live: bool) -> Standing:
+    """Pure: the listing's standing from its current run (`view`), its revocation and its world
+    (`live`: ADR-0006's gate needs a verified run there)."""
+    run = view.run if view is not None and view.fingerprint_matches else None
+    revoked = revoked_at is not None
+    current_revoked = run is not None and run.level is VerificationLevel.REVOKED
+    if revoked and not current_revoked:
+        level = VerificationLevel.REVOKED
+    else:
+        level = run.level if run is not None else VerificationLevel.UNVERIFIED
+    decision: VerificationLevel | None = None
+    decided_at: datetime | None = None
+    reason: str | None = None
+    if run is not None and run.level in (VerificationLevel.VERIFIED, VerificationLevel.REJECTED):
+        decision, decided_at, reason = run.level, run.decided_at, run.reason
+    elif current_revoked and run is not None:
+        decision, decided_at, reason = run.level, run.revoked_at, run.revoke_reason
+    elif revoked:
+        decision, decided_at = VerificationLevel.REVOKED, revoked_at
+    return Standing(
+        level=level,
+        in_review=run is not None and run.level is VerificationLevel.DOCUMENTS_SUBMITTED,
+        required=revoked or (live and not is_verified(view)),
+        revoked=revoked,
+        decision=decision,
+        decided_at=decided_at,
+        reason=reason,
+        run_id=run.id if run is not None else None,
+    )
+
+
+def listing_standing(
+    session: Session, asset: Asset, view: RunView | None | Literal[False] = False
+) -> Standing:
+    """The asset's standing; `view` is its current run if the caller loaded it already."""
+    current = current_view(session, asset) if view is False else view
+    return standing(
+        current, revoked_at=asset.verification_revoked_at, live=asset.world_id == LIVE_WORLD_ID
+    )
+
+
+def verification_out(stands: Standing) -> ListingVerificationOut:
+    return ListingVerificationOut(
+        level=stands.level,
+        in_review=stands.in_review,
+        required=stands.required,
+        decision=stands.decision,
+        decided_at=stands.decided_at,
+        reason=stands.reason,
+        run_id=stands.run_id,
+    )
+
+
 def gate_refusal(session: Session, asset: Asset) -> str | None:
     """Why the asset may not launch its IPO now (`not_verified`), or None. See the module
     docstring: live-world assets need a verified run; a revocation not yet cleared by an
-    approval (`assets.verification_revoked_at`) blocks in every world."""
-    if asset.verification_revoked_at is not None:
-        return NOT_VERIFIED
-    if asset.world_id == LIVE_WORLD_ID and not is_verified(current_view(session, asset)):
-        return NOT_VERIFIED
-    return None
+    approval (`assets.verification_revoked_at`) blocks in every world (`Standing.required`)."""
+    if asset.verification_revoked_at is None and asset.world_id != LIVE_WORLD_ID:
+        return None  # A sandbox without a revocation needs no run: don't load one.
+    return NOT_VERIFIED if listing_standing(session, asset).required else None
 
 
 LAST_DECISION = func.coalesce(col(VerificationRun.revoked_at), col(VerificationRun.decided_at))
@@ -754,6 +857,13 @@ def _publish(session: Session, asset: Asset, run: VerificationRun, *, private: b
     )
 
 
+def _alert(session: Session, asset: Asset, run: VerificationRun) -> None:
+    """Tell the community (and any holders) about the decision, without its reason (#216)."""
+    draft = verification_alert(asset.name, run.id, run.level)
+    if draft is not None:
+        raise_alert(session, asset.world_id, asset, draft)
+
+
 def _record_decision(session: Session, asset: Asset, view: RunView) -> None:
     session.add(view.run)
     session.flush()
@@ -808,6 +918,7 @@ def approve(
     ):
         record(session, asset, transition(asset.status, ListingEvent.RESUME))
     _publish(session, asset, run, private=False)
+    _alert(session, asset, run)
     return view
 
 
@@ -836,6 +947,7 @@ def reject(
     view = view_of(session, asset, run)
     _record_decision(session, asset, view)
     _publish(session, asset, run, private=False)
+    _alert(session, asset, run)
     return view
 
 
@@ -873,4 +985,5 @@ def revoke(
         )
         record(session, asset, step)
     _publish(session, asset, run, private=False)
+    _alert(session, asset, run)
     return view

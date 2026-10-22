@@ -1,9 +1,11 @@
 """Monitoring alerts (T75, stories D1 D3 C3): when to alert, who gets it, read/unread.
 
-**When (pure, `rating_alert` / `news_alert`).** A re-rate alerts when the health score moved by
-`HEALTH_ALERT_DELTA` (5) points or more, or the grade changed; News Scout alerts on a relevant
-event of severity `NEWS_ALERT_SEVERITY` (4) or more. Titles, messages and severities are built
-here from the stored numbers, never by a model; a news alert quotes the News Scout summary.
+**When (pure, `rating_alert` / `news_alert` / `verification_alert`).** A re-rate alerts when the
+health score moved by `HEALTH_ALERT_DELTA` (5) points or more, or the grade changed; News Scout
+alerts on a relevant event of severity `NEWS_ALERT_SEVERITY` (4) or more; a verification
+decision (approved, rejected, revoked; #216) always alerts, without the reviewer's reason (only
+members may read it, and holders get alerts too). Titles, messages and severities are built
+here from the stored facts, never by a model; a news alert quotes the News Scout summary.
 
 **Who (`raise_alert`).** The asset's holders (shares > 0, treasuries excluded) and its
 community's members at the moment the alert is raised, one `alert_recipients` row each; the
@@ -41,6 +43,7 @@ from app.models import (
     StreamEventType,
     User,
     UserKind,
+    VerificationLevel,
 )
 from app.schemas import AlertKindOut, AlertOut, NewsScoutItem
 from app.services.listings import audience as listing_audience
@@ -59,6 +62,7 @@ class AlertKind(StrEnum):
     GRADE_CHANGE = "grade_change"
     HEALTH_CHANGE = "health_change"
     NEWS = "news"
+    VERIFICATION = "verification"
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,6 +205,45 @@ def news_alert(asset_id: UUID, asset_name: str, item: NewsScoutItem) -> AlertDra
         severity=item.severity,
         dedupe_key=news_key(asset_id, item),
         url=safe_url(item.url),
+    )
+
+
+_VERIFICATION_ALERT: dict[VerificationLevel, tuple[str, str, int]] = {
+    VerificationLevel.VERIFIED: (
+        "{name}: land documents verified",
+        "A NatureX reviewer approved the community's land documents for this listing.",
+        2,
+    ),
+    VerificationLevel.REJECTED: (
+        "{name}: documents not approved",
+        "A NatureX reviewer didn't approve the land documents submitted for this listing. "
+        "Its community can read why under Verification on the Steward home, and submit again.",
+        3,
+    ),
+    VerificationLevel.REVOKED: (
+        "{name}: verification revoked",
+        "A NatureX reviewer revoked this listing's verification. The opening offer and "
+        "trading stay closed until new documents are approved.",
+        4,
+    ),
+}
+
+
+def verification_alert(
+    asset_name: str, run_id: UUID, level: VerificationLevel
+) -> AlertDraft | None:
+    """The alert a verification decision raises (#216): approved, rejected or revoked, once per
+    run and decision; None for any other level. Never the reviewer's reason or identity."""
+    template = _VERIFICATION_ALERT.get(level)
+    if template is None:
+        return None
+    title, message, severity = template
+    return AlertDraft(
+        kind=AlertKind.VERIFICATION,
+        title=title.format(name=asset_name)[:TITLE_MAX],
+        message=message[:MESSAGE_MAX],
+        severity=severity,
+        dedupe_key=f"verification:{run_id}:{level.value}",
     )
 
 

@@ -259,6 +259,13 @@
   }
 }
 
+/* A live value that moved: its numeral takes the move's colour, then settles back to ink. */
+@keyframes nx-flash {
+  from {
+    color: var(--nx-flash-color, var(--lime-ink));
+  }
+}
+
 .nx-stamp {
   animation: nx-stamp var(--nx-duration-stamp) var(--nx-ease-out) both;
 }
@@ -278,6 +285,9 @@
 .nx-wash {
   animation: nx-wash 1.5s var(--nx-ease-out);
 }
+.nx-flash {
+  animation: nx-flash 600ms var(--nx-ease-out);
+}
 .nx-flow {
   background-image: linear-gradient(
     90deg,
@@ -296,7 +306,8 @@
   .nx-dot-on,
   .nx-grow-x,
   .nx-fade,
-  .nx-wash {
+  .nx-wash,
+  .nx-flash {
     animation: none;
   }
   /* Sheets, dialogs, menus and skeletons: settle at once instead of sliding or pulsing. */

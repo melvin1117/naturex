@@ -513,6 +513,49 @@ describe("AssetView", () => {
     window.history.replaceState(null, "", "/");
   });
 
+  it("loads the ledger in its own panel's shape, not a spinner (#219)", async () => {
+    nav.search = new URLSearchParams("tab=ledger");
+    let release: () => void = () => {};
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /ledger/${ID}`]: () =>
+          new Promise((resolve) => {
+            release = () => resolve(json(ledger));
+          }),
+      }),
+    );
+
+    const region = await waitFor(() => {
+      const found = document.querySelector('[data-skeleton="machine-rows"]');
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    expect(
+      screen.getByRole("heading", { name: "Nature Ledger" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Verify chain" })).toBeDisabled();
+    expect(region.querySelector(".animate-spin")).toBeNull();
+    act(() => release());
+    expect(await screen.findByText("#0")).toBeInTheDocument();
+    expect(document.querySelector('[data-skeleton="machine-rows"]')).toBeNull();
+  });
+
+  it("loads the price history as a chart-shaped skeleton (#219)", async () => {
+    nav.search = new URLSearchParams("tab=price");
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({ [`GET /assets/${ID}/prices`]: () => new Promise(() => {}) }),
+    );
+
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-skeleton="price-chart"]'),
+      ).not.toBeNull(),
+    );
+    expect(document.querySelector(".animate-spin")).toBeNull();
+  });
+
   it("loads the ledger and verifies it on the server", async () => {
     nav.search = new URLSearchParams("tab=ledger");
     const { backend } = renderExchange(<AssetView id={ID} />, routes());
@@ -542,9 +585,9 @@ describe("AssetView", () => {
         ),
       }),
     );
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Verify chain" }),
-    );
+    // The panel's real chrome shows while the entries load; verify once they're here.
+    expect(await screen.findByText("#0")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Verify chain" }));
     expect(
       await screen.findByText("Chain intact: its 1 entry verified."),
     ).toBeInTheDocument();
@@ -576,9 +619,9 @@ describe("AssetView", () => {
           json({ valid: false, entries: 1, head: null, broken_at: 0 }),
       }),
     );
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Verify chain" }),
-    );
+    // The panel's real chrome shows while the entries load; verify once they're here.
+    expect(await screen.findByText("#0")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Verify chain" }));
     expect(
       await screen.findByText("Tampering detected at entry #0."),
     ).toBeInTheDocument();

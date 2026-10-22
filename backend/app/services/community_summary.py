@@ -20,8 +20,14 @@ estimated. Money is in play-money dollars, cents exact.
   the retained stake). Supporters are counted and ranked by shares **without names or account
   IDs**: the home doesn't need to know who they are, and members could otherwise watch
   individual investors (T67's privacy rule, applied to this members-only view too).
-- **Next action** per listing, from its status, whether its IPO has launched and whether the
-  caller may launch it (the owner): `next_action`.
+- **Verification** per listing (#216): its standing (`app.services.verification.standing`, the
+  same reading as the IPO gate and the public panel) with the latest decision and the
+  reviewer's reason, which only members and same-world admins (this endpoint's audience) read.
+- **Next action** per listing, from its status, whether its IPO has launched, whether the
+  caller manages it (a member) or may launch it (the owner), and whether verification blocks
+  it: `next_action`. The home never offers a step the backend would refuse: while verification
+  blocks the opening offer (or a revocation pauses trading), a member's next step is to verify,
+  not to launch; a same-world admin, who isn't a member, is only told what it waits for.
 """
 
 from __future__ import annotations
@@ -49,6 +55,8 @@ from app.models import (
     Report,
 )
 from app.schemas import NextAction
+from app.services.verification import Standing, current_views, standing
+from app.worlds import LIVE_WORLD_ID
 
 TOP_HOLDERS = 5
 RECENT_PAYOUTS = 12
@@ -56,11 +64,27 @@ _ZERO = Decimal("0.00")
 _HUNDRED = Decimal("100")
 
 
-def next_action(status: AssetStatus, *, launched: bool, can_launch: bool) -> NextAction:
+def next_action(
+    status: AssetStatus,
+    *,
+    launched: bool,
+    can_manage: bool,
+    can_launch: bool,
+    verification: Standing,
+) -> NextAction:
     """draft → continue listing; rating → rating in progress; needs_evidence → add evidence;
-    listed before its IPO → launch it (the owner) or wait for the owner (stewards, admins);
-    listed and launched, or suspended after its IPO (public, trading paused) → view on the
-    Exchange; suspended before its IPO, ineligible and withdrawn → none (nothing to open)."""
+    listed before its IPO → verify it while verification blocks the offer (in review while a
+    submission waits), else launch it (the owner) or wait for the owner (stewards, admins);
+    listed or suspended with a revocation standing → verify again (trading is paused until an
+    approval); listed and launched, or suspended after its IPO (public, trading paused) → view
+    on the Exchange; suspended before its IPO, ineligible and withdrawn → none. Only members
+    (`can_manage`) verify: a same-world admin reading the home gets `awaiting_verification`."""
+    if not can_manage:
+        verify = NextAction.AWAITING_VERIFICATION
+    elif verification.in_review:
+        verify = NextAction.VERIFICATION_IN_REVIEW
+    else:
+        verify = NextAction.VERIFY
     match status:
         case AssetStatus.DRAFT:
             return NextAction.CONTINUE_LISTING
@@ -69,7 +93,11 @@ def next_action(status: AssetStatus, *, launched: bool, can_launch: bool) -> Nex
         case AssetStatus.NEEDS_EVIDENCE:
             return NextAction.ADD_EVIDENCE
         case AssetStatus.LISTED if not launched:
+            if verification.required:
+                return verify
             return NextAction.LAUNCH_IPO if can_launch else NextAction.AWAITING_IPO
+        case AssetStatus.LISTED | AssetStatus.SUSPENDED if verification.revoked:
+            return verify
         case AssetStatus.LISTED | AssetStatus.SUSPENDED if launched:
             return NextAction.VIEW_ON_EXCHANGE
         case _:
@@ -188,6 +216,7 @@ class Payout:
 class ListingFacts:
     asset: Asset
     next_action: NextAction
+    verification: Standing
     wallet: Wallet
     holders: Holders
     shares: ShareSplit | None
@@ -291,6 +320,7 @@ def summarize(
     assets: Sequence[Asset],
     *,
     latest: Mapping[UUID, Report],
+    can_manage: bool,
     can_launch: bool,
 ) -> CommunitySummary:
     """The home's numbers for these listings (one community's) and their latest reports, both
@@ -303,6 +333,7 @@ def summarize(
     entries = _payout_entries(session, world_id, ids)
     retained = _treasury_lines(session, world_id, treasuries)
     holdings = _holdings(session, world_id, ids)
+    runs = current_views(session, world_id, assets)
 
     credits: dict[UUID, Decimal] = defaultdict(lambda: _ZERO)
     payouts: list[Payout] = []
@@ -340,10 +371,22 @@ def summarize(
     for asset in assets:
         launched = asset.ipo_at is not None
         report = latest.get(asset.id)
+        verification = standing(
+            runs.get(asset.id),
+            revoked_at=asset.verification_revoked_at,
+            live=world_id == LIVE_WORLD_ID,
+        )
         listings.append(
             ListingFacts(
                 asset=asset,
-                next_action=next_action(asset.status, launched=launched, can_launch=can_launch),
+                next_action=next_action(
+                    asset.status,
+                    launched=launched,
+                    can_manage=can_manage,
+                    can_launch=can_launch,
+                    verification=verification,
+                ),
+                verification=verification,
                 wallet=Wallet(
                     balance=round_cash(asset.community_wallet),
                     ipo_proceeds=ipo_proceeds(buys.get(asset.id, ())),

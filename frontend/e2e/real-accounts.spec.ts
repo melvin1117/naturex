@@ -184,13 +184,22 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
   });
 
   await test.step("the opening offer waits for verification", async () => {
-    await owner.getByRole("link", { name: "Set up the opening offer" }).click();
-    await expect(owner.getByText("Verification comes first")).toBeVisible();
+    // The next step is to verify, not a locked offer (#216); the offer is a preview beside it.
+    await expect(
+      owner.getByRole("link", { name: "Verify this listing" }),
+    ).toBeVisible();
+    await owner
+      .getByRole("link", { name: "Preview the opening offer" })
+      .click();
+    const checklist = owner.getByRole("region", {
+      name: "Before you open to supporters",
+    });
+    await expect(checklist).toContainText("Documents verified · Needed");
     await expect(
       owner.getByRole("button", { name: "Launch opening offer" }),
     ).toBeDisabled();
     ipoPath = new URL(owner.url()).pathname + new URL(owner.url()).search;
-    await owner.getByRole("link", { name: "Verify this listing" }).click();
+    await checklist.getByRole("link", { name: "Verify this listing" }).click();
   });
 
   await test.step("the owner uploads documents and submits them", async () => {
@@ -259,8 +268,19 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
     ).toContainText("Approved. The listing is verified");
   });
 
-  await test.step("the owner launches the IPO", async () => {
-    await owner.goto(ipoPath);
+  await test.step("the owner is told it's verified, then launches the IPO", async () => {
+    await owner.goto(`/steward?community=${communityId}`);
+    const notice = owner.getByRole("listitem", { name: `${SITE} is verified` });
+    await expect(notice).toContainText(
+      "Title and assembly minutes match the boundary.",
+    );
+    await notice.getByRole("link", { name: "Open to supporters" }).click();
+    await expect(
+      owner
+        .getByRole("region", { name: "Before you open to supporters" })
+        .getByRole("listitem")
+        .filter({ hasText: "Documents verified" }),
+    ).toContainText("Done");
     const launch = owner.getByRole("button", { name: "Launch opening offer" });
     await expect(launch).toBeEnabled();
     await launch.click();
@@ -325,7 +345,10 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
     const panel = tradePanel(investor);
     const status = panel.getByRole("status");
     await panel.getByRole("textbox", { name: "Units" }).fill("100");
-    await panel.getByRole("button", { name: "Buy 100 units" }).click();
+    const buy = panel.getByRole("button", { name: "Buy 100 units" });
+    // The order button stays focusable but inert (aria-disabled) until its quote is in.
+    await expect(buy).not.toHaveAttribute("aria-disabled", "true");
+    await buy.click();
     await expect(status).toContainText("Bought 100 units");
     await expect(status).toContainText(/You paid \$[\d,]+\.\d{2}/);
     paid = /You paid (\$[\d,]+\.\d{2})/.exec(
@@ -334,13 +357,24 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
 
     await panel.getByRole("tab", { name: "Sell units" }).click();
     await panel.getByRole("textbox", { name: "Units" }).fill("40");
-    await panel.getByRole("button", { name: "Sell 40 units" }).click();
+    const sell = panel.getByRole("button", { name: "Sell 40 units" });
+    // The order button stays focusable but inert (aria-disabled) until its quote is in.
+    await expect(sell).not.toHaveAttribute("aria-disabled", "true");
+    await sell.click();
     await expect(status).toContainText("Sold 40 units");
     await expect(status).toContainText("60 units held");
+    // The receipt points to where the stake lives (#216 WP2), on every fill.
+    await expect(
+      panel.getByRole("link", { name: "View your stakes" }),
+    ).toHaveAttribute("href", "/portfolio");
   });
 
   await test.step("the portfolio shows the stake", async () => {
-    await investor.getByRole("link", { name: "Your stakes" }).click();
+    // The header's link (the receipt also links: "View your stakes").
+    await investor
+      .getByRole("banner")
+      .getByRole("link", { name: "Your stakes" })
+      .click();
     await expect(
       investor.getByRole("heading", { name: "Your stakes", level: 1 }),
     ).toBeVisible();

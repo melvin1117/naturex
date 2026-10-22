@@ -3,17 +3,18 @@
 import { ArrowLeft, Bot, MapPin } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
 
 import { CopilotChat } from "@/components/copilot-chat";
 import { FieldEvidencePanel } from "@/components/evidence/field-evidence-panel";
 import { AssetBodySkeleton } from "@/components/page-skeletons";
 import { Delta, SiteBackdrop, ValueRange } from "@/components/proto/bits";
-import { PriceChart } from "@/components/proto/charts";
+import { PriceChart, PriceChartSkeleton } from "@/components/proto/charts";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
 import { ApiLedgerTab } from "@/components/proto/ledger-panels";
 import { LoadError } from "@/components/proto/load-error";
+import { PriceTick } from "@/components/live-number";
 import {
   LandPanel,
   NewsList,
@@ -25,7 +26,6 @@ import {
 } from "@/components/proto/report-panels";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TradePanel } from "@/components/trade-panel";
 import {
@@ -90,6 +90,7 @@ export function AssetView({ id }: { id: string }) {
 
 function AssetBody({ id }: { id: string }) {
   const asset = useAsset(id);
+  const fresh = useFetchedSinceMount(asset.isFetching);
 
   if (!asset.data && asset.error)
     return asset.error.status === 404 || asset.error.status === 422 ? (
@@ -102,7 +103,18 @@ function AssetBody({ id }: { id: string }) {
       />
     );
   if (!asset.data) return <AssetBodySkeleton />;
-  return <AssetLoaded asset={asset.data} />;
+  return <AssetLoaded asset={asset.data} fresh={fresh} />;
+}
+
+/**
+ * True once the asset has been read from the API since the page opened: a cached value being
+ * refreshed on arrival isn't a price move, so the hero only flashes after this.
+ */
+function useFetchedSinceMount(isFetching: boolean): boolean {
+  const [phase, setPhase] = useState<"idle" | "fetching" | "done">("idle");
+  if (phase === "idle" && isFetching) setPhase("fetching");
+  if (phase === "fetching" && !isFetching) setPhase("done");
+  return phase === "done";
 }
 
 function NotFound() {
@@ -120,7 +132,14 @@ function NotFound() {
   );
 }
 
-function AssetLoaded({ asset }: { asset: AssetDetail }) {
+function AssetLoaded({
+  asset,
+  fresh,
+}: {
+  asset: AssetDetail;
+  /** The asset has been read since the page opened (see `useFetchedSinceMount`). */
+  fresh: boolean;
+}) {
   const pathname = usePathname();
   const { openTrace } = usePrototype();
   const params = useSearchParams();
@@ -231,7 +250,12 @@ function AssetLoaded({ asset }: { asset: AssetDetail }) {
                     Stake price · play money
                   </div>
                   <div className="tabular text-4xl font-light tracking-tight">
-                    {current === null ? "—" : fmtPrice(current)}
+                    <PriceTick
+                      value={current}
+                      format={fmtPrice}
+                      tone="image"
+                      armed={fresh}
+                    />
                   </div>
                   {change !== null && (
                     <Delta
@@ -466,13 +490,7 @@ function PricePanel({
           retry={retry}
         />
       ) : loading ? (
-        <p
-          role="status"
-          className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground"
-        >
-          <Spinner aria-hidden="true" role="presentation" />
-          Loading prices…
-        </p>
+        <PriceChartSkeleton />
       ) : points.length > 1 ? (
         <PriceChart prices={points} events={news} perDay={false} />
       ) : (

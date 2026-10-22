@@ -46,7 +46,7 @@ from app.models import Asset, AssetStatus, Holding, LedgerKind, Price, Report, S
 from app.services.listings import RUN_IN_PROGRESS, lock_asset, lock_world_key_share
 from app.services.rating import fair_value_inputs, latest_report
 from app.services.rating_runs import run_active
-from app.services.verification import gate_refusal
+from app.services.verification import Standing, gate_refusal, listing_standing
 from app.tools.verification import NOT_VERIFIED as NOT_VERIFIED
 
 ALREADY_LAUNCHED = "ipo_already_launched"
@@ -81,6 +81,8 @@ class IpoQuote:
     report_version: int
     terms: IpoTerms
     blocked_reason: str | None = None
+    verification: Standing | None = None
+    """The listing's verification, read with the gate (previews only, #216)."""
 
     @property
     def launchable(self) -> bool:
@@ -144,15 +146,6 @@ def check_gate(session: Session, asset: Asset) -> None:
         raise IpoRefused(refusal)
 
 
-def _blocker(session: Session, asset: Asset) -> str | None:
-    """Why a launch would be refused now, before pricing: the gate, then an active run."""
-    try:
-        check_gate(session, asset)
-    except IpoRefused as exc:
-        return exc.code
-    return RUN_IN_PROGRESS if run_active(session, asset.world_id, asset.id) else None
-
-
 def preview(session: Session, world_id: UUID, asset_id: UUID, offering: Offering) -> IpoQuote:
     """The IPO price an owner would launch at now, with every term and whether the launch would
     go ahead (`blocked_reason`). Read-only, no locks, so an active run is advisory here.
@@ -166,8 +159,20 @@ def preview(session: Session, world_id: UUID, asset_id: UUID, offering: Offering
         raise LookupError(f"asset {asset_id} not found in world {world_id}")
     check_launchable(asset)
     priced = quote(asset, latest_report(session, world_id, asset_id), offering)
-    blocked = _blocker(session, asset) or priced.blocked_reason
-    return IpoQuote(priced.asset_id, priced.report_id, priced.report_version, priced.terms, blocked)
+    # Why a launch would be refused now: the gate, then an active run, then the price. Where
+    # verification stands is read the gate's way (`Standing.required` is its `not_verified`).
+    blocked = priced.blocked_reason
+    try:
+        check_gate(session, asset)
+    except IpoRefused as exc:
+        blocked = exc.code
+    else:
+        if run_active(session, asset.world_id, asset.id):
+            blocked = RUN_IN_PROGRESS
+    stands = listing_standing(session, asset)
+    return IpoQuote(
+        priced.asset_id, priced.report_id, priced.report_version, priced.terms, blocked, stands
+    )
 
 
 def _ledger_payload(asset: Asset, q: IpoQuote) -> dict[str, Any]:

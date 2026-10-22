@@ -256,6 +256,8 @@ describe("FieldEvidenceScreen", () => {
   it("shows loading, then an empty listing with the privacy and AI notes", async () => {
     renderScreen();
     expect(screen.getByText("Loading the field evidence…")).toBeInTheDocument();
+    expect(document.querySelector("[data-skeleton=screen]")).not.toBeNull();
+    expect(document.querySelector(".animate-spin")).toBeNull();
     expect(
       await screen.findByRole("heading", { level: 1, name: "Bosque Vivo" }),
     ).toBeInTheDocument();

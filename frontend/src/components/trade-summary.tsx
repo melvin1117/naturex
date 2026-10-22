@@ -127,7 +127,8 @@ export function Receipt({
         />
         <ReceiptCell label="Units held" value={int(order.shares_held)} />
       </dl>
-      {opened && (
+      {/* The consequence also lives on another page: point to it here, not in a toast. */}
+      {opened ? (
         <p className="mt-3 text-sm">
           You now hold a stake in {community}. Follow its rating and alerts in{" "}
           <Link
@@ -137,6 +138,15 @@ export function Receipt({
             Your stakes
           </Link>
           .
+        </p>
+      ) : (
+        <p className="mt-3 text-sm">
+          <Link
+            href="/portfolio"
+            className="font-medium underline underline-offset-4"
+          >
+            View your stakes
+          </Link>
         </p>
       )}
       {order.primary_qty > 0 && (

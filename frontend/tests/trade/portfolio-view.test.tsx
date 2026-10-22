@@ -5,11 +5,13 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { PortfolioView } from "@/components/portfolio-view";
 import { WorldProvider } from "@/components/world-provider";
+import type { OrderOut } from "@/lib/api/types";
 import { createDataLayer } from "@/lib/data-layer";
+import { clearFills, freshFills, noteFill } from "@/lib/trade";
 
 import {
   BASE,
@@ -21,6 +23,7 @@ import {
   SIGNED_IN_WORLD,
 } from "../lib/helpers";
 import { EVENT_SOURCE, REPORT_SOURCE, sseResponse } from "../copilot/fixtures";
+import { stubMotion } from "../motion";
 import { ASSET_ID, cards, holding, portfolio } from "./fixtures";
 
 vi.mock("next/navigation", () => ({
@@ -53,6 +56,8 @@ function renderPortfolio(routes: Routes = {}) {
   return backend;
 }
 
+const ME = SIGNED_IN_WORLD.me!.id;
+
 const HELD = portfolio({
   cash_balance: "9799.80",
   holdings: [
@@ -77,9 +82,96 @@ async function tableRow() {
     .closest("tr")!;
 }
 
-beforeEach(() => FakeEventSource.reset());
+beforeEach(() => {
+  FakeEventSource.reset();
+  clearFills();
+});
 
 describe("PortfolioView", () => {
+  it("washes the stake a trade just changed, once (#216 WP2)", async () => {
+    noteFill(
+      {
+        id: "o1",
+        asset_id: ASSET_ID,
+        side: "buy",
+        qty: 4,
+        shares_held: 10,
+      } as OrderOut,
+      ME,
+    );
+    renderPortfolio({ "GET /portfolio": () => json(HELD) });
+
+    const row = await tableRow();
+    expect(row).toHaveClass("nx-wash");
+    expect(row).toHaveAttribute("data-fresh");
+    // Its units land on the API's value (reduced motion in jsdom: at once).
+    expect(within(row).getByText("10")).toBeInTheDocument();
+    const card = screen
+      .getByRole("list", { name: "Stakes" })
+      .querySelector("li")!;
+    expect(card).toHaveClass("nx-wash");
+    // Shown once: coming back later doesn't replay it.
+    await waitFor(() => expect(freshFills(ME).size).toBe(0));
+  });
+
+  it("says what changed in text too, for reduced motion (#216 WP2)", async () => {
+    const motion = stubMotion({ reduce: true });
+    onTestFinished(() => motion.restore());
+    noteFill(
+      {
+        id: "o6",
+        asset_id: ASSET_ID,
+        side: "sell",
+        qty: 40,
+        shares_held: 10,
+      } as OrderOut,
+      ME,
+    );
+    renderPortfolio({ "GET /portfolio": () => json(HELD) });
+
+    const row = await tableRow();
+    expect(within(row).getByText("−40 units just now")).toBeVisible();
+    expect(within(row).getByText("10")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("list", { name: "Stakes" })).getByText(
+        "−40 units just now",
+      ),
+    ).toBeVisible();
+  });
+
+  it("never shows another account's fill", async () => {
+    noteFill(
+      {
+        id: "o7",
+        asset_id: ASSET_ID,
+        side: "buy",
+        qty: 4,
+        shares_held: 10,
+      } as OrderOut,
+      "someone-else",
+    );
+    renderPortfolio({ "GET /portfolio": () => json(HELD) });
+
+    expect(await tableRow()).not.toHaveClass("nx-wash");
+    expect(screen.queryByText(/just now/)).not.toBeInTheDocument();
+  });
+
+  it("doesn't wash a stake that changed again since the fill", async () => {
+    noteFill(
+      {
+        id: "o2",
+        asset_id: ASSET_ID,
+        side: "buy",
+        qty: 4,
+        shares_held: 7,
+      } as OrderOut,
+      ME,
+    );
+    renderPortfolio({ "GET /portfolio": () => json(HELD) });
+
+    expect(await tableRow()).not.toHaveClass("nx-wash");
+  });
+
   it("shows my alerts next to my stakes (T75)", async () => {
     renderPortfolio({
       "GET /alerts": () =>
