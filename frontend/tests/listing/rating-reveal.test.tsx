@@ -365,6 +365,8 @@ describe("ListedStep", () => {
           next_action,
           verification,
           ipo_at: null,
+          updated_at: "2026-10-18T00:00:00Z",
+          manage_actions: [],
           wallet: {
             balance: "0.00",
             ipo_proceeds: "0.00",

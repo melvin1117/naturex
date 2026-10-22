@@ -49,6 +49,7 @@ from app.deps import SessionDep
 from app.models import (
     COMMUNITY_NAME_INDEX,
     Asset,
+    AssetStatus,
     Community,
     CommunityMember,
     CommunityRole,
@@ -72,6 +73,7 @@ from app.schemas import (
 )
 from app.services.asset_cards import cards, latest_reports
 from app.services.community_summary import Wallet, summarize
+from app.services.rating_runs import assets_with_active_runs
 from app.services.verification import verification_out
 
 log = logging.getLogger(__name__)
@@ -373,6 +375,8 @@ def summary(granted: CommunityData, session: SessionDep, response: Response) -> 
     ids = [asset.id for asset in assets]
     # The latest two reports (the cards' trend), loaded once for the cards and the summary.
     reports = latest_reports(session, community.world_id, ids, per_asset=2)
+    # Withdrawing a listing being rated waits for its run: read the runs only when it matters.
+    rating = role is not None and any(a.status is AssetStatus.RATING for a in assets)
     facts = summarize(
         session,
         community.world_id,
@@ -380,6 +384,7 @@ def summary(granted: CommunityData, session: SessionDep, response: Response) -> 
         latest={asset_id: versions[0] for asset_id, versions in reports.items()},
         can_manage=role is not None,
         can_launch=role == CommunityRole.OWNER,
+        active_runs=assets_with_active_runs(session, community.world_id) if rating else (),
     )
     card_of = {
         card.id: card for card in cards(session, community.world_id, assets, reports=reports)
@@ -395,6 +400,8 @@ def summary(granted: CommunityData, session: SessionDep, response: Response) -> 
                 next_action=listing.next_action,
                 verification=verification_out(listing.verification),
                 ipo_at=listing.asset.ipo_at,
+                updated_at=listing.updated_at,
+                manage_actions=list(listing.manage_actions),
                 wallet=_wallet_out(listing.wallet),
                 holders=HoldersOut(
                     count=listing.holders.count,

@@ -2972,6 +2972,12 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * ListingManageAction
+         * @description A change a member may make to a listing now, as the lifecycle allows it (#233).
+         * @enum {string}
+         */
+        ListingManageAction: "edit" | "withdraw";
         /** ListingSummaryOut */
         ListingSummaryOut: {
             asset: components["schemas"]["AssetCard"];
@@ -2980,6 +2986,17 @@ export interface components {
             verification: components["schemas"]["ListingVerificationOut"];
             /** Ipo At */
             ipo_at: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             * @description When the listing last changed: its newest Nature Ledger entry (a lifecycle step, a report, a verification decision, its opening offer or a payout), else when it was created.
+             */
+            updated_at: string;
+            /**
+             * Manage Actions
+             * @description What the caller may change now (members only; empty for an admin): edit (a draft) and withdraw (a draft, needs_evidence, or rating with no active run). The same rules as the routes, so the Steward app never offers a refused step.
+             */
+            manage_actions: components["schemas"]["ListingManageAction"][];
             wallet: components["schemas"]["WalletOut"];
             holders: components["schemas"]["HoldersOut"];
             /** @description None before the IPO: no shares exist yet. */

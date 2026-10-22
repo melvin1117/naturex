@@ -39,13 +39,14 @@ from app.models import (
     VerificationRun,
 )
 from app.sandbox import create_world, ensure_live_world
-from app.schemas import NextAction
+from app.schemas import ListingManageAction, NextAction
 from app.seed import LIVE_WORLD_ID, seed
 from app.services.community_summary import (
     RECENT_PAYOUTS,
     Wallet,
     holder_summary,
     ipo_proceeds,
+    manage_actions,
     next_action,
     share_split,
     total_wallet,
@@ -151,6 +152,35 @@ def test_a_non_member_is_never_offered_to_verify_or_launch(
         status, launched=launched, can_manage=False, can_launch=False, verification=verification
     )
     assert action is expected
+
+
+EDIT, WITHDRAW = ListingManageAction.EDIT, ListingManageAction.WITHDRAW
+
+
+@pytest.mark.parametrize(
+    ("status", "run_active", "expected"),
+    [
+        (AssetStatus.DRAFT, False, (EDIT, WITHDRAW)),
+        # A run that failed or waits for metrics can be withdrawn; an active one can't (yet).
+        (AssetStatus.RATING, False, (WITHDRAW,)),
+        (AssetStatus.RATING, True, ()),
+        (AssetStatus.NEEDS_EVIDENCE, False, (WITHDRAW,)),
+        # Once listed it can't be withdrawn: supporters may hold it.
+        (AssetStatus.LISTED, False, ()),
+        (AssetStatus.SUSPENDED, False, ()),
+        (AssetStatus.INELIGIBLE, False, ()),
+        (AssetStatus.WITHDRAWN, False, ()),
+    ],
+)
+def test_manage_actions_follow_the_lifecycle(
+    status: AssetStatus, run_active: bool, expected: tuple[ListingManageAction, ...]
+) -> None:
+    assert manage_actions(status, can_manage=True, run_active=run_active) == expected
+
+
+@pytest.mark.parametrize("status", list(AssetStatus))
+def test_a_non_member_is_never_offered_a_change(status: AssetStatus) -> None:
+    assert manage_actions(status, can_manage=False, run_active=False) == ()
 
 
 def _view(level: VerificationLevel, *, matches: bool = True, **fields: Any) -> RunView:
@@ -529,6 +559,60 @@ def test_listings_show_their_next_action_per_role(session: Session, client: Test
     assert body["role"] is None
     listed = next(item for item in body["listings"] if item["asset"]["status"] == "listed")
     assert listed["next_action"] == "awaiting_verification"
+
+
+@DB
+def test_members_are_offered_the_changes_the_routes_allow(
+    session: Session, client: TestClient
+) -> None:
+    owner = person(session, "Owner")
+    community = owned_community(client, session, owner)
+    for status in AssetStatus:
+        draft(session, community, f"Parcel {status.value}", status)
+    steward = person(session, "Steward")
+    add_member(session, community, steward.id, CommunityRole.STEWARD)
+    session.commit()
+
+    expected = {
+        "draft": ["edit", "withdraw"],
+        "rating": ["withdraw"],  # no run is active
+        "needs_evidence": ["withdraw"],
+        "listed": [],
+        "suspended": [],
+        "ineligible": [],
+        "withdrawn": [],
+    }
+    for member in (owner, steward):
+        body = summary_of(sign_in(client, session, member), community.id).json()
+        offered = {item["asset"]["status"]: item["manage_actions"] for item in body["listings"]}
+        assert offered == expected
+
+    admin = person(session, "Ops", is_admin=True)
+    body = summary_of(sign_in(client, session, admin), community.id).json()
+    assert all(item["manage_actions"] == [] for item in body["listings"])
+
+
+@DB
+def test_last_updated_is_the_newest_ledger_entry(session: Session, client: TestClient) -> None:
+    owner = person(session, "Owner")
+    community = owned_community(client, session, owner)
+    quiet = draft(session, community, "Quiet", AssetStatus.DRAFT)
+    busy = draft(session, community, "Busy", AssetStatus.DRAFT)
+    entry = append(
+        session,
+        world_id=community.world_id,
+        asset_id=busy.id,
+        kind=LedgerKind.LISTING,
+        payload={"transition": "edit", "from": "draft", "to": "draft"},
+    )
+    session.commit()
+
+    body = summary_of(sign_in(client, session, owner), community.id).json()
+    updated = {item["asset"]["id"]: item["updated_at"] for item in body["listings"]}
+    assert datetime.fromisoformat(updated[str(busy.id)]) == entry.created_at
+    assert entry.created_at > busy.created_at
+    # No ledger entry yet: when it was created.
+    assert datetime.fromisoformat(updated[str(quiet.id)]) == quiet.created_at
 
 
 @DB

@@ -28,18 +28,23 @@ estimated. Money is in play-money dollars, cents exact.
   it: `next_action`. The home never offers a step the backend would refuse: while verification
   blocks the opening offer (or a revocation pauses trading), a member's next step is to verify,
   not to launch; a same-world admin, who isn't a member, is only told what it waits for.
+- **Manage actions** per listing (#233): what a member may change now, read from the lifecycle's
+  own transitions (`manage_actions`): edit a draft, withdraw one never listed while no rating
+  run is active. **Last updated** is the listing's newest Nature Ledger entry (every lifecycle
+  step, report, verification decision, opening offer and payout appends one), else its creation.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlmodel import Session, col, select
 
 from app.market.engine import round_cash, round_pct
@@ -54,7 +59,8 @@ from app.models import (
     PayoutLine,
     Report,
 )
-from app.schemas import NextAction
+from app.schemas import ListingManageAction, NextAction
+from app.services.lifecycle import ListingEvent, TransitionRefused, transition
 from app.services.verification import Standing, current_views, standing
 from app.worlds import LIVE_WORLD_ID
 
@@ -102,6 +108,32 @@ def next_action(
             return NextAction.VIEW_ON_EXCHANGE
         case _:
             return NextAction.NONE
+
+
+_MANAGE_EVENTS = (
+    (ListingManageAction.EDIT, ListingEvent.EDIT),
+    (ListingManageAction.WITHDRAW, ListingEvent.WITHDRAW),
+)
+
+
+def manage_actions(
+    status: AssetStatus, *, can_manage: bool, run_active: bool
+) -> tuple[ListingManageAction, ...]:
+    """The changes a member may make now, as `transition` allows them: edit a draft; withdraw a
+    draft, a needs_evidence listing, or a rating one whose run isn't active (the route refuses
+    `run_in_progress` otherwise). Nothing for a non-member (a same-world admin)."""
+    if not can_manage:
+        return ()
+    allowed: list[ListingManageAction] = []
+    for action, event in _MANAGE_EVENTS:
+        if event is ListingEvent.WITHDRAW and status is AssetStatus.RATING and run_active:
+            continue
+        try:
+            transition(status, event)
+        except TransitionRefused:
+            continue
+        allowed.append(action)
+    return tuple(allowed)
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,6 +248,9 @@ class Payout:
 class ListingFacts:
     asset: Asset
     next_action: NextAction
+    manage_actions: tuple[ListingManageAction, ...]
+    updated_at: datetime
+    """The newest ledger entry's time, else the listing's creation."""
     verification: Standing
     wallet: Wallet
     holders: Holders
@@ -314,6 +349,18 @@ def _holdings(
     ]
 
 
+def _last_entries(
+    session: Session, world_id: UUID, asset_ids: Sequence[UUID]
+) -> dict[UUID, datetime]:
+    """Each listing's newest ledger entry time (one grouped query)."""
+    rows = session.exec(
+        select(LedgerEntry.asset_id, func.max(LedgerEntry.created_at))
+        .where(LedgerEntry.world_id == world_id, col(LedgerEntry.asset_id).in_(asset_ids))
+        .group_by(col(LedgerEntry.asset_id))
+    ).all()
+    return {asset_id: at for asset_id, at in rows if at is not None}
+
+
 def summarize(
     session: Session,
     world_id: UUID,
@@ -322,9 +369,11 @@ def summarize(
     latest: Mapping[UUID, Report],
     can_manage: bool,
     can_launch: bool,
+    active_runs: Collection[UUID] = frozenset(),
 ) -> CommunitySummary:
     """The home's numbers for these listings (one community's) and their latest reports, both
-    loaded by the caller (the reports with the cards', so they're read once)."""
+    loaded by the caller (the reports with the cards', so they're read once). `active_runs`:
+    the listings with a rating run still active, which can't be withdrawn yet."""
     ids = [asset.id for asset in assets]
     if not ids:
         return CommunitySummary((), EMPTY_WALLET, 0, (), 0)
@@ -334,6 +383,7 @@ def summarize(
     retained = _treasury_lines(session, world_id, treasuries)
     holdings = _holdings(session, world_id, ids)
     runs = current_views(session, world_id, assets)
+    last_entries = _last_entries(session, world_id, ids)
 
     credits: dict[UUID, Decimal] = defaultdict(lambda: _ZERO)
     payouts: list[Payout] = []
@@ -386,6 +436,10 @@ def summarize(
                     can_launch=can_launch,
                     verification=verification,
                 ),
+                manage_actions=manage_actions(
+                    asset.status, can_manage=can_manage, run_active=asset.id in active_runs
+                ),
+                updated_at=max(asset.created_at, last_entries.get(asset.id, asset.created_at)),
                 verification=verification,
                 wallet=Wallet(
                     balance=round_cash(asset.community_wallet),
