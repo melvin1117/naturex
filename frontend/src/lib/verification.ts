@@ -181,7 +181,7 @@ export function stewardStatus(run: VerificationRun | null): Status {
     case "rejected":
       return {
         title: "The reviewer rejected these documents",
-        body: "Read the reason below, then upload what's missing and submit again.",
+        body: "Read the reason below, then upload new documents and submit them for a new review. The documents you sent stay in this listing's record but can't be sent twice: to use one again, upload the file again.",
         tone: "negative",
       };
     case "revoked":

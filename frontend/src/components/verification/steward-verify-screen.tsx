@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Info } from "lucide-react";
+import { ArrowRight, Info, Upload } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
@@ -125,6 +125,7 @@ function Loaded({
   const [selected, setSelected] = useState<string[]>([]);
   const [removed, setRemoved] = useState<string[]>([]);
   const statusRef = useRef<HTMLHeadingElement>(null);
+  const uploadRef = useRef<HTMLHeadingElement>(null);
   const [focusStatus, setFocusStatus] = useState(false);
   useEffect(() => {
     if (!focusStatus) return;
@@ -140,6 +141,8 @@ function Loaded({
   const keptCount =
     waiting?.documents.filter((doc) => !removed.includes(doc.id)).length ?? 0;
   const closed = CLOSED.has(asset.status);
+  // A rejected submission is answered with new uploads (decided documents don't carry over).
+  const rejected = current?.level === "rejected" && !closed;
   // Only an approval lifts a revocation (`assets.verification_revoked_at`), not a newer
   // submission; when the current run is the revoked one, its status already says so.
   const revocationStands =
@@ -212,6 +215,9 @@ function Loaded({
             communityId={communityId}
             revocationStands={revocationStands}
             headingRef={statusRef}
+            onUploadNew={
+              rejected ? () => uploadRef.current?.focus() : undefined
+            }
           />
           {current && (
             <IpoCard aria-labelledby="checks-heading">
@@ -249,8 +255,13 @@ function Loaded({
             </Alert>
           )}
           <IpoCard aria-labelledby="upload-heading">
-            <h2 id="upload-heading" className="text-lg font-semibold">
-              Upload a document
+            <h2
+              id="upload-heading"
+              ref={uploadRef}
+              tabIndex={-1}
+              className="scroll-mt-24 text-lg font-semibold outline-none"
+            >
+              {rejected ? "Upload new documents" : "Upload a document"}
             </h2>
             <p className="mt-1 mb-5 text-sm text-muted-foreground">
               For example a land title or agrarian certificate, the assembly
@@ -282,6 +293,7 @@ function Loaded({
                 pending={submit.isPending}
                 error={submit.error}
                 disabled={closed}
+                afterRejection={rejected}
               />
             ) : documents.error ? (
               <ErrorAlert
@@ -313,6 +325,7 @@ function StatusCard({
   communityId,
   revocationStands,
   headingRef,
+  onUploadNew,
 }: {
   run: VerificationRun | null;
   /** The public record: its badge is the Exchange's wording. */
@@ -321,6 +334,8 @@ function StatusCard({
   communityId: string | null;
   revocationStands: boolean;
   headingRef: React.Ref<HTMLHeadingElement>;
+  /** After a rejection: take the steward to the upload form, for a new submission. */
+  onUploadNew?: () => void;
 }) {
   const status = stewardStatus(run);
   const canLaunch =
@@ -352,6 +367,12 @@ function StatusCard({
         <div className="mt-5">
           <RunDecision run={run} />
         </div>
+      )}
+      {onUploadNew && (
+        <Button className="mt-5" onClick={onUploadNew}>
+          <Upload aria-hidden="true" />
+          Upload new documents
+        </Button>
       )}
       {(canLaunch || onExchange) && (
         <div className="mt-5 flex flex-wrap gap-2">
