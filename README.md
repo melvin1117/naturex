@@ -56,6 +56,15 @@ Run with real calls on Oct 22; reproduce with [evals/README.md](./evals/README.m
 - `LLM_BUDGET_USD` is a hard cap on logged spend per database; `LLM_RESERVE_USD` keeps the last dollars for judging; Tavily searches pause at 150 credits.
 - The $25 Token Factory credit is shared by every environment, so each gets a slice: deployed demo $15 (with $2 reserved), each laptop $1, evals $1.50, demo recording $1, about $4 headroom. `make check-keys` reminds you to check the account total in the console.
 
+## Real data in a deployment
+Don't copy rows between databases: reports, prices, news and the hash-chained ledger are linked by IDs, so a copy breaks "Verify ledger". Instead, run the real pipeline once in the target database after deploying with real keys:
+
+```bash
+cd backend && USE_MOCKS=false EARTH_ENGINE_LIVE=true uv run python -m app.jobs.rerate_all
+```
+
+It rates every listed site of the live world with the live models (about $0.03 a site), stores audited reports with their Agent Traces, saves the news it found and pays the quarter's play-money revenue. It runs once per quarter per site; a site that fails or hits the hourly cap is picked up by the next run. The daily `news_sweep` keeps news coming after that. Until a site has its own run, its page shows the recorded one, labelled "Recorded".
+
 ## Limitations
 - The three demo sites use precomputed satellite metrics and images; live Earth Engine runs only for new polygons when `EARTH_ENGINE_LIVE` is on, and the before/after vision runs only for the demo sites.
 - Uploaded photos and documents are read by a model only after Token Factory's data terms are confirmed (`FIELD_EVIDENCE_AI_LIVE`, `VERIFICATION_AI_LIVE` are off by default).
