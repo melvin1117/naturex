@@ -233,6 +233,17 @@ export function IpoLaunchScreen({ assetId }: { assetId: string }) {
           community keeps. The rest opens to supporters at the fair price from
           the latest rating; what they pay goes to your community fund.
         </p>
+        {asset.data.latest_report?.run_id && (
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+            <Link
+              href={`/trace/${asset.data.latest_report.run_id}`}
+              className="font-medium text-foreground underline underline-offset-4 hover:no-underline"
+            >
+              See how the AI rated it
+            </Link>
+            : every model, search and check behind the price.
+          </p>
+        )}
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           Geotagged field photos of the land can raise the next rating&apos;s
           confidence, which sets part of this price.{" "}

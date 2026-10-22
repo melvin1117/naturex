@@ -311,7 +311,9 @@ describe("TraceSheet away from a real site", () => {
     // It teaches: what appears, why it may be empty and where to look instead.
     expect(panel).toHaveTextContent("Live ratings log their model calls here");
     expect(panel).toHaveTextContent("Mock ratings don't call a model");
-    expect(panel).toHaveTextContent("Open a site and choose How it was rated");
+    expect(panel).toHaveTextContent(
+      "Open a site: its How the AI rated it card shows every step",
+    );
     expect(
       within(panel).queryByRole("list", { name: "Latest model calls" }),
     ).toBeNull();

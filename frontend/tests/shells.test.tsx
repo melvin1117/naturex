@@ -247,6 +247,25 @@ describe("Exchange navigation per role", () => {
     expect(
       within(pages).getByRole("link", { name: "Marketplace" }),
     ).not.toHaveAttribute("aria-current");
+    expect(
+      within(pages).getByRole("link", { name: "AI at work" }),
+    ).toHaveAttribute("href", "/ai");
+  });
+
+  it("marks AI at work on its page", async () => {
+    nav.pathname = "/ai";
+    setup(
+      <ExchangeLayout>
+        <Page />
+      </ExchangeLayout>,
+      WORLD,
+    );
+    const pages = screen.getByRole("navigation", {
+      name: "Exchange navigation",
+    });
+    expect(
+      within(pages).getByRole("link", { name: "AI at work" }),
+    ).toHaveAttribute("aria-current", "page");
   });
 });
 

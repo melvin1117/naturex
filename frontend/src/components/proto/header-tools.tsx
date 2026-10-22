@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Bot, MessageCircle } from "lucide-react";
+import { Bell, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -24,14 +24,15 @@ import {
 } from "@/lib/prototype/world";
 
 /**
- * The header tools (Copilot, Agent Trace, alerts). The shell header
- * (`components/shell/app-header.tsx`) shows them in its `tools` slot. Signed-in accounts get
- * their real alerts (T75, #199) and the real Agent Trace (T34); anonymous visitors keep the
- * prototype's scripted alerts.
+ * The header tools (Copilot, alerts). The shell header (`components/shell/app-header.tsx`)
+ * shows them in its `tools` slot. Signed-in accounts get their real alerts (T75, #199);
+ * anonymous visitors keep the prototype's scripted alerts. The Agent Trace isn't here: a
+ * site's page opens its own runs ("How the AI rated it"), and the exchange's "AI at work"
+ * page (`/ai`) shows every model call.
  */
 export function PrototypeHeaderTools({ app }: { app: AppKey }) {
   const pathname = usePathname();
-  const { world, openCopilot, openTrace } = usePrototype();
+  const { world, openCopilot } = usePrototype();
   const { world: apiWorld, status } = useWorld();
   const signedIn = Boolean(apiWorld?.me);
   // Until the world answers we don't know whose alerts to show: a plain bell, not the
@@ -57,15 +58,6 @@ export function PrototypeHeaderTools({ app }: { app: AppKey }) {
           <span className="sr-only xl:not-sr-only">Copilot</span>
         </Button>
       )}
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => openTrace()}
-        data-tour="trace-button"
-      >
-        <Bot aria-hidden="true" />
-        <span className="sr-only xl:not-sr-only">Agent Trace</span>
-      </Button>
       {loading ? (
         <PendingAlertsBell />
       ) : signedIn ? (

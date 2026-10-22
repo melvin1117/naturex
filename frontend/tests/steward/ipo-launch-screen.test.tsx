@@ -416,6 +416,22 @@ describe("IpoLaunchScreen", () => {
     ).toBeVisible();
   });
 
+  it("links the rating behind the price to its Agent Trace", async () => {
+    const run = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b";
+    const rated = unlaunched();
+    renderLaunch({
+      [ASSET]: () =>
+        json({
+          ...rated,
+          latest_report: { ...rated.latest_report!, run_id: run },
+        }),
+    });
+    await steps();
+    expect(
+      screen.getByRole("link", { name: "See how the AI rated it" }),
+    ).toHaveAttribute("href", `/trace/${run}`);
+  });
+
   it("links a listing that needs verification to its verification screen", async () => {
     renderLaunch({
       [PREVIEW]: (request) =>

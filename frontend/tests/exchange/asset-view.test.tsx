@@ -8,11 +8,13 @@ import {
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AssetView } from "@/components/proto/asset-view";
+import { TraceSheet } from "@/components/proto/trace-sheet";
 import type { AssetDetail } from "@/lib/api/types";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { NO_OVERLAY_NOTE } from "@/lib/land-cover-overlay";
 
 import { FakeEventSource, json, sequence } from "../lib/helpers";
+import recorded from "../trace/fixtures/recorded-mangrove.json";
 import asset from "./fixtures/asset.json";
 import images from "./fixtures/images.json";
 import ledger from "./fixtures/ledger.json";
@@ -163,9 +165,65 @@ describe("AssetView", () => {
     expect(
       screen.getByRole("link", { name: "Sign in to ask the Copilot" }),
     ).toHaveAttribute("href", "/login?next=%2Fasset%2Fx");
+    // No run, and the recording didn't load: once that's settled, the card says so.
+    const trace = screen.getByRole("region", { name: "How the AI rated it" });
     expect(
-      screen.getByRole("button", { name: "How it was rated" }),
-    ).toBeEnabled();
+      await within(trace).findByText(
+        "Its trace appears here after its first rating.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(trace).queryByRole("button")).toBeNull();
+    expect(within(trace).queryByRole("link", { name: /Open/ })).toBeNull();
+  });
+
+  it("leads from the site to its latest run's full Agent Trace", async () => {
+    const run = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b";
+    renderExchange(
+      <>
+        <AssetView id={ID} />
+        <TraceSheet />
+      </>,
+      routes({
+        [`GET /assets/${ID}`]: () =>
+          json({
+            ...ASSET,
+            latest_report: { ...ASSET.latest_report, run_id: run },
+          }),
+      }),
+    );
+    const trace = await screen.findByRole("region", {
+      name: "How the AI rated it",
+    });
+    expect(
+      within(trace).getByRole("link", { name: /Open the Agent Trace/ }),
+    ).toHaveAttribute("href", `/trace/${run}`);
+    expect(
+      within(trace).getByRole("link", {
+        name: "Every model at work, with live costs",
+      }),
+    ).toHaveAttribute("href", "/ai");
+    fireEvent.click(within(trace).getByRole("button", { name: "Quick look" }));
+    expect(
+      await screen.findByRole("dialog", { name: "Agent Trace" }),
+    ).toBeInTheDocument();
+  });
+
+  it("leads a demo site nobody has rated here to its recorded run", async () => {
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        "GET /media/demo-sites/wetland_mx/recorded-run.json": () =>
+          json({ ...recorded, site_key: "wetland_mx" }),
+      }),
+    );
+    const trace = await screen.findByRole("region", {
+      name: "How the AI rated it",
+    });
+    expect(
+      await within(trace).findByRole("link", { name: /Open the recorded run/ }),
+    ).toHaveAttribute("href", `/trace/recorded/${ID}`);
+    // The drawer has only this world's runs, none here: no quick look at nothing.
+    expect(within(trace).queryByRole("button")).toBeNull();
   });
 
   it("draws the boundary in the hero of a site without a thumbnail", async () => {

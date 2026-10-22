@@ -97,7 +97,7 @@ Each calls the auth route, then re-reads `GET /world` (`session.reload()`) and r
 
 ## App shells and roles (T62)
 
-`app/(exchange)`, `app/steward` and `app/admin` each have a layout with the shell header (`components/shell/app-header.tsx`; the prototype's Copilot, Agent Trace and alerts go in its `tools` slot from `components/proto/header-tools.tsx`) and a `<main id="main">` that the skip link in `app/layout.tsx` jumps to (standalone pages such as `/login` and `/judge` have one too). The root layout also holds the demo bar slot (T65): the sandbox notice on every page, plus the scripted demo's controls for anonymous visitors.
+`app/(exchange)`, `app/steward` and `app/admin` each have a layout with the shell header (`components/shell/app-header.tsx`; the Copilot and alerts go in its `tools` slot (the Agent Trace opens from a site's "How the AI rated it" card, and "AI at work" (`/ai`) is in the Exchange's pages) from `components/proto/header-tools.tsx`) and a `<main id="main">` that the skip link in `app/layout.tsx` jumps to (standalone pages such as `/login` and `/judge` have one too). The root layout also holds the demo bar slot (T65): the sandbox notice on every page, plus the scripted demo's controls for anonymous visitors.
 
 What the header offers comes from `appAccess()` in `navigation.ts` (pure, unit-tested), through `useAppAccess()` (`components/shell/app-switcher.tsx`):
 

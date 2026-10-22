@@ -343,9 +343,9 @@ export function WorldModelCalls() {
   const calls = trace.data.steps;
   const howItWasRated = (
     <>
-      Open a site and choose{" "}
-      <span className="text-machine-ink">How it was rated</span> to see every
-      step of its rating runs.
+      Open a site: its{" "}
+      <span className="text-machine-ink">How the AI rated it</span> card shows
+      every step of its rating runs.
     </>
   );
   if (calls.length === 0) {

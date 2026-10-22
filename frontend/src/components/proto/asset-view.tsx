@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Bot, MapPin } from "lucide-react";
+import { ArrowLeft, MapPin } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
@@ -14,6 +14,7 @@ import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
 import { EvidenceTimelinePanel } from "@/components/proto/evidence-timeline";
 import { VerdictStrip } from "@/components/trace/verdict-strip";
+import { RatingTraceCard } from "@/components/trace/rating-trace-card";
 import { ApiLedgerTab } from "@/components/proto/ledger-panels";
 import { LoadError } from "@/components/proto/load-error";
 import { PriceTick } from "@/components/live-number";
@@ -50,6 +51,7 @@ import {
   useRecordedRun,
   useSiteImages,
 } from "@/lib/hooks";
+import { DEMO_SITES } from "@/lib/demo-site-images";
 import { countryName, siteImageUrl } from "@/lib/market-cards";
 import {
   GRADE_LABEL,
@@ -187,6 +189,12 @@ function AssetLoaded({
   const recorded = useRecordedRun(
     asset.latest_report?.run_id ? null : asset.site_key,
   );
+  const traceRunId = asset.latest_report?.run_id ?? asset.latest_run_id ?? null;
+  // A demo site without a run of its own waits for its recording before offering a trace.
+  const findingRecording =
+    !traceRunId &&
+    DEMO_SITES.some((s) => s.key === asset.site_key) &&
+    (recorded.status === "idle" || recorded.status === "loading");
   const imageUrl = siteImageUrl(asset.site_key, asset.cover_image_url);
   const outline = useMemo(() => outlineRings(asset.outline), [asset.outline]);
   const place = [
@@ -395,6 +403,18 @@ function AssetLoaded({
             <Suspense fallback={null}>
               <TradePanel assetId={asset.id} />
             </Suspense>
+            {traceRunId ? (
+              <RatingTraceCard
+                href={`/trace/${traceRunId}`}
+                onOpen={() => openTrace(traceRunId)}
+              />
+            ) : (
+              <RatingTraceCard
+                href={recorded.data ? `/trace/recorded/${asset.id}` : null}
+                recorded
+                pending={findingRecording}
+              />
+            )}
             <Suspense fallback={null}>
               <CopilotChat
                 key={asset.id}
@@ -402,32 +422,6 @@ function AssetLoaded({
                 assetName={asset.name}
               />
             </Suspense>
-            <section className="rounded-3xl bg-card p-6 shadow-soft">
-              <h2 className="text-base font-semibold">How it was rated</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                The Agent Trace shows every step of a rating run: which model or
-                tool ran, tokens, time and a summary of its output.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                onClick={() =>
-                  openTrace(
-                    asset.latest_report?.run_id ?? asset.latest_run_id ?? null,
-                  )
-                }
-              >
-                <Bot aria-hidden="true" />
-                How it was rated
-              </Button>
-              <Link
-                href="/ai"
-                className="mt-3 block text-sm font-medium text-lime-ink underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-              >
-                Every model at work, with live costs
-              </Link>
-            </section>
           </aside>
         </div>
       )}

@@ -283,7 +283,7 @@ export function ControlRoom() {
               href="/"
               className="inline-flex items-center gap-1.5 text-sm font-medium text-lime underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-lime focus-visible:outline-none"
             >
-              Open a site and its &ldquo;How it was rated&rdquo; trace to see
+              Open a site and its &ldquo;How the AI rated it&rdquo; trace to see
               one run step by step
               <ArrowRight className="size-4" aria-hidden="true" />
             </Link>
