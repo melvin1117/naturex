@@ -18,7 +18,8 @@ class Ecosystem(StrEnum):
     MANGROVE = "mangrove"
     WETLAND = "wetland"
     MARINE = "marine"
-    """Water-dominant coastal or reef sites."""
+    """Reef, coral, seagrass or marine sites: named so, since land cover can't tell a coast
+    from a lake."""
     FOREST = "forest"
     GRASSLAND = "grassland"
     MIXED = "mixed"
@@ -57,6 +58,13 @@ _NAME_HINTS: tuple[tuple[Ecosystem, frozenset[str]], ...] = (
                 "estero",
                 "laguna",
                 "lagoon",
+                "lake",
+                "lakes",
+                "lago",
+                "lagos",
+                "reservoir",
+                "embalse",
+                "presa",
             }
         ),
     ),
@@ -90,8 +98,11 @@ def _from_landcover(landcover: Mapping[str, float]) -> Ecosystem:
     share = {key: float(value) for key, value in landcover.items()}
     water = share.get("water", 0.0)
     flooded = share.get("flooded_vegetation", 0.0)
+    # Open water is a wetland in the Ramsar sense (lake, lagoon, estuary, shallow coast). Land
+    # cover can't tell a reef from a lake, and reef queries for a lake find nothing, so a
+    # marine site needs a hint in its name.
     if water >= WATER_DOMINANT:
-        return Ecosystem.MARINE
+        return Ecosystem.WETLAND
     if water + flooded >= WETLAND_MIN and flooded > 0:
         return Ecosystem.WETLAND
     if share.get("trees", 0.0) >= FOREST_MIN:

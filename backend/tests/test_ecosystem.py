@@ -44,6 +44,8 @@ def test_little_mangrove_does_not_make_a_mangrove_site() -> None:
         ("Manglares de Nichupté", Ecosystem.MANGROVE),
         ("Selva Lacandona", Ecosystem.FOREST),
         ("Pradera alta", Ecosystem.GRASSLAND),
+        ("Lago de Chapala", Ecosystem.WETLAND),
+        ("Lake Titicaca shore", Ecosystem.WETLAND),
     ],
 )
 def test_name_hints_in_english_and_spanish(name: str, expected: Ecosystem) -> None:
@@ -53,7 +55,8 @@ def test_name_hints_in_english_and_spanish(name: str, expected: Ecosystem) -> No
 @pytest.mark.parametrize(
     ("landcover", "expected"),
     [
-        ({"water": 0.7, "built": 0.1}, Ecosystem.MARINE),
+        # A mostly-water site with no hint in its name may be an inland lake: never a reef.
+        ({"water": 0.7, "built": 0.1}, Ecosystem.WETLAND),
         ({"water": 0.2, "flooded_vegetation": 0.15, "grass": 0.5}, Ecosystem.WETLAND),
         ({"trees": 0.55, "grass": 0.3}, Ecosystem.FOREST),
         ({"grass": 0.35, "shrub_and_scrub": 0.3}, Ecosystem.GRASSLAND),
