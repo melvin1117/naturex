@@ -54,7 +54,11 @@ running() { kill -0 -- "-$api_pid" 2>/dev/null || kill -0 -- "-$web_pid" 2>/dev/
 
 stop() {
   local status="${1:-0}"
-  trap - INT TERM HUP EXIT
+  # Nothing may cut the cleanup short: not a failed echo after the terminal closed (set -e),
+  # nor a second Ctrl-C during the wait (signals are ignored until the servers are gone).
+  set +e
+  trap '' INT TERM HUP
+  trap - EXIT
   echo "Stopping the API and the web app..."
   kill -TERM -- "-$api_pid" 2>/dev/null || true
   kill -TERM -- "-$web_pid" 2>/dev/null || true
