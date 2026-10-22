@@ -807,8 +807,11 @@ def test_a_validated_photo_lifts_a_needs_evidence_listing_over_the_gate(
 
     view = client_as(world, world.steward).get(f"/assets/{asset_id}/evidence").json()
     assert view["confidence"]["counted"] is True and view["confidence"]["points"] == "0.0"
-    public = client_as(world, world.outsider).get(f"/assets/{asset_id}/evidence/summary").json()
-    assert public["counted_in_latest_report"] is True
+    # Listed but not launched yet: only its community (and admins) can read the summary.
+    hidden = client_as(world, world.outsider).get(f"/assets/{asset_id}/evidence/summary")
+    assert hidden.status_code == 404
+    summary = client_as(world, world.steward).get(f"/assets/{asset_id}/evidence/summary").json()
+    assert summary["counted_in_latest_report"] is True
 
     # The report counts it: the same photo deleted and uploaded again isn't new evidence.
     (photo_id,) = [p["id"] for p in view["photos"]]

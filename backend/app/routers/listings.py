@@ -186,7 +186,7 @@ def create_listing(
     """Create a **draft** listing in a community the caller owns or stewards, in the session's
     world. Needs `attestation: true`; the polygon must pass T36's checks and not overlap a
     submitted listing in the world or one of the community's own drafts. Nothing is public
-    until it's listed."""
+    until it's listed and its opening offer launched (`lifecycle.is_public`)."""
     actor = granted.signed_in
     community = body.community_id
     details = ListingDetails(

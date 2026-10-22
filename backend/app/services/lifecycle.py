@@ -47,7 +47,9 @@ from app.tools.scoring import (
 
 GATE_REASONS = frozenset({GATE_CONFIDENCE_BELOW_70, GATE_GRADE_BELOW_C, GATE_FOREST_LOSS})
 
-PUBLIC_STATUSES = frozenset({AssetStatus.LISTED, AssetStatus.SUSPENDED})
+GATED_STATUSES = frozenset({AssetStatus.LISTED, AssetStatus.SUSPENDED})
+"""Listings that passed the listing gate: listed, or suspended by an admin. Not a visibility
+rule: ask `is_public` (or `app.services.visibility.public_assets` in a query)."""
 TERMINAL_STATUSES = frozenset({AssetStatus.INELIGIBLE, AssetStatus.WITHDRAWN})
 SUBMITTED_STATUSES = frozenset(
     {AssetStatus.RATING, AssetStatus.NEEDS_EVIDENCE, AssetStatus.LISTED, AssetStatus.SUSPENDED}
@@ -56,8 +58,6 @@ SUBMITTED_STATUSES = frozenset(
 Drafts claim land only against their own community's other drafts."""
 OPEN_STATUSES = frozenset({AssetStatus.DRAFT, AssetStatus.RATING, AssetStatus.NEEDS_EVIDENCE})
 """Listings in progress, counted against a community's open-listing cap."""
-"""Statuses anyone in the world may see (marketplace, asset pages, ledger). The rest belong to
-the listing's community and same-world admins."""
 
 EVIDENCE_REQUIRED = "evidence_required"
 METRICS_UNAVAILABLE = "metrics_unavailable"
@@ -148,8 +148,13 @@ def gate_outcome(gate: GateResult) -> tuple[AssetStatus, str | None]:
     return AssetStatus.INELIGIBLE, ",".join(gate.reasons)
 
 
-def is_public(status: AssetStatus) -> bool:
-    return status in PUBLIC_STATUSES
+def is_public(status: AssetStatus, ipo_at: datetime | None) -> bool:
+    """Anyone in the world may see the asset (marketplace, asset pages, ledger, Copilot, live
+    events): it passed the listing gate and its IPO opened it on the exchange. In the live world
+    a launch needs a verified listing (ADR-0006), so a listing waiting for verification or for
+    its launch belongs to its community and same-world admins. A launched listing that is later
+    suspended or revoked stays public: its holders still need to see it."""
+    return status in GATED_STATUSES and ipo_at is not None
 
 
 def is_newer_data_version(candidate: str | None, current: str | None) -> bool:
