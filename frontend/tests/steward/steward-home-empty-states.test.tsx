@@ -92,6 +92,8 @@ function listing(overrides: Partial<ListingSummary> = {}): ListingSummary {
     asset: card(),
     next_action: "launch_ipo",
     ipo_at: null,
+    updated_at: "2026-10-18T00:00:00Z",
+    manage_actions: [],
     wallet: WALLET,
     holders: { count: 0, shares_held: 0, top: [] },
     shares: null,

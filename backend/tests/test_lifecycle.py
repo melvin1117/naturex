@@ -1159,6 +1159,55 @@ def test_a_rating_listing_is_revised_or_withdrawn_only_without_an_active_run(
     assert client_as(world, world.outsider).post(f"/assets/{asset['id']}/revise").status_code == 404
 
 
+def _offered(w: World_, user: User, asset_id: str) -> tuple[str, list[str], datetime]:
+    """(status, manage_actions, updated_at) of a listing on its community's summary."""
+    response = client_as(w, user).get(f"/communities/{w.community_id}/summary")
+    assert response.status_code == 200, response.text
+    item = next(i for i in response.json()["listings"] if i["asset"]["id"] == asset_id)
+    return (
+        item["asset"]["status"],
+        item["manage_actions"],
+        datetime.fromisoformat(item["updated_at"]),
+    )
+
+
+@requires_db
+def test_the_summary_offers_withdraw_only_when_the_route_allows_it(world: World_) -> None:
+    """The Steward app's Listings page (#233) offers what the summary says: never a 409."""
+    asset = draft(world)
+    status, actions, created = _offered(world, world.steward, asset["id"])
+    assert (status, actions) == ("draft", ["edit", "withdraw"])
+
+    submit(world, asset["id"])
+    status, actions, submitted = _offered(world, world.owner, asset["id"])
+    assert (status, actions) == ("rating", [])  # its run is active
+    assert submitted >= created
+    busy = client_as(world, world.owner).post(f"/assets/{asset['id']}/withdraw")
+    assert (busy.status_code, busy.json()["detail"]) == (409, "run_in_progress")
+
+    world.runner.settings = _settings(use_mocks=False)
+    world.executor.run_all()  # fails: no metrics, so it waits in rating with no active run
+    assert _offered(world, world.owner, asset["id"])[:2] == ("rating", ["withdraw"])
+    # Only members change it: an admin reads the summary but is refused; outsiders can't see it.
+    assert _offered(world, world.admin, asset["id"])[1] == []
+    refused = client_as(world, world.admin).post(f"/assets/{asset['id']}/withdraw")
+    assert (refused.status_code, refused.json()["detail"]) == (403, "members_only")
+    assert (
+        client_as(world, world.outsider).get(f"/communities/{world.community_id}/summary")
+    ).status_code == 403
+    hidden = client_as(world, world.outsider).post(f"/assets/{asset['id']}/withdraw")
+    assert hidden.status_code == 404
+
+    assert (
+        client_as(world, world.steward).post(f"/assets/{asset['id']}/withdraw").status_code == 200
+    )
+    status, actions, withdrawn = _offered(world, world.owner, asset["id"])
+    assert (status, actions) == ("withdrawn", [])
+    assert withdrawn >= submitted
+    again = client_as(world, world.owner).post(f"/assets/{asset['id']}/withdraw")
+    assert (again.status_code, again.json()["detail"]) == (409, "cannot_withdraw_withdrawn")
+
+
 @requires_db
 def test_a_withdrawn_listing_frees_its_land_and_stays_private(world: World_) -> None:
     asset = draft(world)

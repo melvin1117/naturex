@@ -1541,6 +1541,15 @@ class NextAction(StrEnum):
     NONE = "none"
 
 
+class ListingManageAction(StrEnum):
+    """A change a member may make to a listing now, as the lifecycle allows it (#233)."""
+
+    EDIT = "edit"
+    """`PATCH /assets/{id}`: a draft's details and boundary."""
+    WITHDRAW = "withdraw"
+    """`POST /assets/{id}/withdraw`: a listing never listed, with no rating run active."""
+
+
 class WalletOut(BaseModel):
     """Play money. `balance` is the community wallet (`community_wallet`) and equals
     `ipo_proceeds + community_fund_payouts`; `retained_dividends` went to the treasury for its
@@ -1590,6 +1599,16 @@ class ListingSummaryOut(BaseModel):
     )
     verification: ListingVerificationOut
     ipo_at: datetime | None
+    updated_at: datetime = Field(
+        description="When the listing last changed: its newest Nature Ledger entry (a "
+        "lifecycle step, a report, a verification decision, its opening offer or a payout), "
+        "else when it was created."
+    )
+    manage_actions: list[ListingManageAction] = Field(
+        description="What the caller may change now (members only; empty for an admin): edit "
+        "(a draft) and withdraw (a draft, needs_evidence, or rating with no active run). "
+        "The same rules as the routes, so the Steward app never offers a refused step."
+    )
     wallet: WalletOut
     holders: HoldersOut
     shares: SharesOut | None = Field(description="None before the IPO: no shares exist yet.")

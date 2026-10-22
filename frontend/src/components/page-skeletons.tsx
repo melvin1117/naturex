@@ -389,6 +389,67 @@ export function CommunitySettingsSkeleton({
   );
 }
 
+/** One listing's row on the Listings page: thumbnail, name, status line, then its buttons. */
+function ListingRowBones() {
+  return (
+    <div className="flex gap-4 py-4">
+      <Skeleton className="size-16 shrink-0 rounded-xl" />
+      <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-3">
+        <div className="w-full max-w-sm min-w-0">
+          <Line box="h-6" className="h-4 w-48 max-w-full" />
+          <Line box="mt-1 h-6" className="h-5 w-64 max-w-full" />
+          <Line box="mt-1 h-5" className="h-3.5 w-full" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-24 rounded-full" />
+          <Skeleton className="h-8 w-24 rounded-full" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The Steward app's Listings page (#233): its real heading, the intro and button, then the
+ * In progress and Live groups as cards of rows.
+ */
+export function ListingsSkeleton({
+  label = "Loading your listings…",
+}: {
+  label?: string;
+}) {
+  return (
+    <div className="mx-auto max-w-5xl px-4 pt-10 pb-16 sm:px-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="w-full max-w-md min-w-0">
+          <div aria-hidden="true">
+            <Line box="h-5" className="h-3.5 w-40" />
+          </div>
+          <h1 className="mt-1 font-serif text-5xl leading-none tracking-tight sm:text-6xl">
+            Listings
+          </h1>
+        </div>
+        <div aria-hidden="true">
+          <Ground className="h-10 w-32 rounded-full" />
+        </div>
+      </div>
+      <LoadingRegion name="listings" label={label}>
+        <Line box="mt-3 h-6" className="h-4 w-full max-w-xl" />
+        {[3, 1].map((rows, i) => (
+          <div key={i} className="mt-8 rounded-3xl bg-card p-6 shadow-soft">
+            <Skeleton className="h-5 w-32" />
+            <div className="mt-5 divide-y divide-border">
+              {Array.from({ length: rows }, (_, row) => (
+                <ListingRowBones key={row} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </LoadingRegion>
+    </div>
+  );
+}
+
 /**
  * A focused screen (opening offer, verification, field photos, a review): the back button,
  * a line above the site's name, its intro, then two columns.
@@ -632,6 +693,7 @@ const ROUTE_SKELETON: Record<
   portfolio: PortfolioSkeleton,
   "steward-home": StewardHomeSkeleton,
   "community-settings": CommunitySettingsSkeleton,
+  listings: ListingsSkeleton,
   screen: ScreenSkeleton,
   ipo: IpoSkeleton,
   review: (props) => <ScreenSkeleton {...props} wide />,

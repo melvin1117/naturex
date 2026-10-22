@@ -168,6 +168,22 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
     ).toBeVisible();
   });
 
+  await test.step("the Listings page shows the draft, and Continue resumes it", async () => {
+    await owner.getByRole("link", { name: "Listings", exact: true }).click();
+    const inProgress = owner.getByRole("region", { name: /^In progress/ });
+    await expect(inProgress.getByRole("heading", { name: SITE })).toBeVisible();
+    await expect(
+      inProgress.getByText("Draft: not submitted yet"),
+    ).toBeVisible();
+    await expect(
+      inProgress.getByRole("button", { name: `Withdraw ${SITE}` }),
+    ).toBeVisible();
+    await inProgress.getByRole("link", { name: `Continue: ${SITE}` }).click();
+    await expect(
+      owner.getByRole("heading", { name: "Ready to rate" }),
+    ).toBeVisible();
+  });
+
   await test.step("the rating runs and the land is listed", async () => {
     await owner.getByRole("button", { name: "Rate this site" }).click();
     await expect(

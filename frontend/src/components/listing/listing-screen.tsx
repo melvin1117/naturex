@@ -56,8 +56,11 @@ export function ListingScreen() {
 function ListingFromUrl() {
   const router = useRouter();
   const { active } = useStewardCommunity();
-  const raw = useSearchParams().get("asset");
+  const params = useSearchParams();
+  const raw = params.get("asset");
   const assetId = raw && isApiAssetId(raw) ? raw : null;
+  // "Edit details" on the Listings page (#233) opens a draft on its details, not its review.
+  const onDetails = params.get("step") === "details";
   // A draft just created here, until the URL catches up (`router.replace`) and while it shows it.
   const [created, setCreated] = useState<string | null>(null);
   const [previous, setPrevious] = useState(assetId);
@@ -89,6 +92,7 @@ function ListingFromUrl() {
       key={`${active.id}:${shown ?? "new"}`}
       community={active}
       assetId={shown}
+      onDetails={onDetails}
       focusOnMount={shown !== null && shown === created}
       onCreated={(asset) => {
         setCreated(asset.id);
@@ -101,11 +105,13 @@ function ListingFromUrl() {
 function ListingLoader({
   community,
   assetId,
+  onDetails = false,
   focusOnMount,
   onCreated,
 }: {
   community: MyCommunity;
   assetId: string | null;
+  onDetails?: boolean;
   /** The draft just saved here remounts this loader: its next step takes focus. */
   focusOnMount: boolean;
   onCreated: (asset: AssetDetail) => void;
@@ -168,6 +174,7 @@ function ListingLoader({
       community={community}
       meId={meId}
       asset={asset ?? null}
+      onDetails={onDetails}
       focusOnMount={focusOnMount}
       onCreated={onCreated}
     />
@@ -209,12 +216,15 @@ function ListingWizard({
   community,
   meId,
   asset,
+  onDetails = false,
   focusOnMount,
   onCreated,
 }: {
   community: MyCommunity;
   meId: string;
   asset: AssetDetail | null;
+  /** Open a saved draft on its details instead of its review. */
+  onDetails?: boolean;
   focusOnMount: boolean;
   onCreated: (asset: AssetDetail) => void;
 }) {
@@ -261,8 +271,8 @@ function ListingWizard({
     return () => window.removeEventListener("beforeunload", warn);
   }, [unsaved]);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  // A resumed draft opens on its review; a new listing on its details.
-  const [draftStep, setDraftStep] = useState(asset ? 2 : 0);
+  // A resumed draft opens on its review (or its details, when asked); a new one on its details.
+  const [draftStep, setDraftStep] = useState(asset && !onDetails ? 2 : 0);
   const status = asset?.status ?? "draft";
   // A run watched here: its pipeline finishes before the listed step, which then reveals (#216).
   const [ratingHeld, setRatingHeld] = useState(false);

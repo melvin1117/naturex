@@ -5,6 +5,7 @@ import {
   Camera,
   Check,
   ExternalLink,
+  ListChecks,
   Settings,
   ShieldCheck,
   Users,
@@ -49,9 +50,10 @@ import { payoutsEmptyText, recommendationsEmptyText } from "@/lib/empty-states";
 import { useAlerts, useMarkAlertRead, useWorld } from "@/lib/hooks";
 import { marketCard } from "@/lib/market-cards";
 import { evidenceHref } from "@/lib/field-evidence";
-import { verifyHref } from "@/lib/listing/links";
+import { listingsHref, verifyHref } from "@/lib/listing/links";
 import { COMMUNITY_ROLE_LABEL, withCommunity } from "@/lib/navigation";
 import { date, ha, quarterLabel } from "@/lib/prototype/format";
+import { inProgressText } from "@/lib/steward-listings";
 import { moneyText, unitPriceText } from "@/lib/trade";
 
 /**
@@ -91,6 +93,8 @@ function Home({ summary }: { summary: CommunitySummary }) {
   const isOwner = role === "owner";
   const listHref = withCommunity("/steward/list", community.id);
   const settingsHref = withCommunity("/steward/community", community.id);
+  const manageHref = listingsHref(community.id);
+  const unfinished = inProgressText(listings);
   const featured =
     listings.find((l) => l.asset.status === "listed") ?? listings[0];
   const trading = listings.filter((l) => l.asset.trading).length;
@@ -132,6 +136,19 @@ function Home({ summary }: { summary: CommunitySummary }) {
           </h1>
         </div>
         <div className="flex flex-wrap gap-2">
+          {listings.length > 0 && (
+            <Button asChild variant="outline">
+              <Link href={manageHref}>
+                <ListChecks aria-hidden="true" />
+                Listings{" "}
+                {unfinished && (
+                  <span className="tabular rounded-full bg-lime/40 px-2 py-0.5 text-xs text-lime-ink">
+                    {unfinished}
+                  </span>
+                )}
+              </Link>
+            </Button>
+          )}
           <Button asChild variant="outline">
             <Link href={settingsHref}>
               <Settings aria-hidden="true" />
@@ -193,7 +210,17 @@ function Home({ summary }: { summary: CommunitySummary }) {
             <EmptyHome listHref={listHref} />
           )}
           {listings.length > 1 && (
-            <StewardPanel title="Your sites">
+            <StewardPanel
+              title="Your sites"
+              action={
+                <Link
+                  href={manageHref}
+                  className="text-sm font-medium underline underline-offset-4"
+                >
+                  Manage listings
+                </Link>
+              }
+            >
               <ul className="divide-y divide-border">
                 {listings.map((listing) => (
                   <ListingRow
