@@ -50,6 +50,7 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlmodel import Session, col, select
 
 from app.agents.auditor import (
+    REASONING_EXCERPT_CHARS,
     AuditEvent,
     AuditResult,
     PreviousReport,
@@ -68,12 +69,14 @@ from app.agents.orchestrator import (
     Tool,
     orchestrate,
 )
-from app.config import Settings
+from app.config import Settings, get_settings
 from app.events import lock_world_publisher, publish
-from app.llm import CallLog, CallRecord, LLMClient, LLMError, LLMResult
+from app.llm import PRICES_PER_M, CallLog, CallRecord, LLMClient, LLMError, LLMResult, cost_usd
 from app.market.anchoring import reanchor_on_rerate
 from app.models import Asset, AssetStatus, Report, StreamEventType, World, WorldEvent
 from app.schemas import (
+    CostBaseline,
+    ModelUsage,
     NewsScoutItem,
     NewsScoutOutput,
     RatingRunOut,
@@ -875,7 +878,32 @@ class RunToolbox:
             "source": audit.source,
             "auditor_adjustment": audit.output.auditor_adjustment,
             "flags": [flag.type for flag in audit.output.flags],
+            **_audit_case(audit),
         }
+
+
+def _audit_case(audit: AuditResult) -> dict[str, Any]:
+    """The Auditor's case and checks for the Agent Trace: checked, cited model text only, plus
+    a short excerpt of its own notes, labelled as notes by the UI."""
+    output = audit.output
+    return {
+        "agreement": output.agreement,
+        "greenwashing_risk": audit.greenwashing_risk,
+        "hypotheses": [h.model_dump() for h in output.hypotheses],
+        "verdict": output.verdict or None,
+        "adjustment_reason": output.adjustment_reason or None,
+        "rounds": audit.rounds,
+        "rejections": [r[:200] for r in audit.rejections[:8]],
+        "reasoning_tokens": audit.reasoning_tokens,
+        "notes": (audit.reasoning or "")[:REASONING_EXCERPT_CHARS] or None,
+        "checks": {
+            "citations": len(output.citations),
+            "resolved": len(audit.citations),
+            "placeholders_filled": audit.placeholders_filled,
+            # Every round of a no-op audit was refused; an accepted audit's last round passed.
+            "rejected_answers": max(0, audit.rounds - (0 if audit.fallback else 1)),
+        },
+    }
 
 
 def _world_asset(session: Session, world_id: UUID, asset_id: UUID) -> Asset | None:
@@ -1612,6 +1640,43 @@ def get_run(
     )
 
 
+def model_usage(
+    calls: Sequence[Mapping[str, Any]], *, baseline_model: str
+) -> tuple[list[ModelUsage], CostBaseline | None]:
+    """Group a run's recorded calls by model, and price its text-model tokens on
+    `baseline_model` (embeddings and image reading have no text-model equivalent)."""
+    grouped: dict[str, list[Mapping[str, Any]]] = {}
+    for call in calls:
+        grouped.setdefault(str(call.get("model") or "unknown"), []).append(call)
+    models = [
+        ModelUsage(
+            model=model,
+            calls=len(rows),
+            prompt_tokens=sum(int(r.get("prompt_tokens") or 0) for r in rows),
+            completion_tokens=sum(int(r.get("completion_tokens") or 0) for r in rows),
+            latency_ms=sum(int(r.get("latency_ms") or 0) for r in rows),
+            cost_usd=sum((Decimal(str(r.get("cost_usd") or 0)) for r in rows), Decimal(0)),
+        )
+        for model, rows in grouped.items()
+    ]
+    models.sort(key=lambda m: m.cost_usd, reverse=True)
+    text = [c for c in calls if c.get("tier") not in ("embed", "perception")]
+    if not text or baseline_model not in PRICES_PER_M:
+        return models, None
+    cost = sum(
+        (
+            cost_usd(
+                baseline_model,
+                int(c.get("prompt_tokens") or 0),
+                int(c.get("completion_tokens") or 0),
+            )
+            for c in text
+        ),
+        Decimal(0),
+    )
+    return models, CostBaseline(model=baseline_model, cost_usd=cost)
+
+
 def get_run_trace(session: Session, world_id: UUID, run_id: UUID) -> RunTraceOut | None:
     """Read the scoped run's spans, or the sealed report's snapshot after event pruning."""
     run = get_run(session, world_id, run_id)
@@ -1639,8 +1704,12 @@ def get_run_trace(session: Session, world_id: UUID, run_id: UUID) -> RunTraceOut
         (p["totals"] for p, _ in reversed(spans) if isinstance(p.get("totals"), dict)),
         stored.get("totals"),
     )
+    calls = [c for payload, _ in spans for c in payload.get("llm_calls", []) or []]
+    models, baseline = model_usage(calls, baseline_model=get_settings().model_auditor)
     return RunTraceOut(
         totals=RunTraceTotals.model_validate(totals) if isinstance(totals, dict) else None,
+        models=models,
+        baseline=baseline,
         run_id=run_id,
         asset_id=run.asset_id,
         status=run.status,

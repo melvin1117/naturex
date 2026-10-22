@@ -1113,6 +1113,24 @@ class RunTraceTotals(BaseModel):
     cost_usd: Decimal
 
 
+class ModelUsage(BaseModel):
+    """One model's share of a run: how often it was called, its tokens, time and cost."""
+
+    model: str
+    calls: int
+    prompt_tokens: int
+    completion_tokens: int
+    latency_ms: int
+    cost_usd: Decimal
+
+
+class CostBaseline(BaseModel):
+    """What the run's text-model tokens would have cost on one model (the routing receipt)."""
+
+    model: str
+    cost_usd: Decimal
+
+
 class RunTraceOut(BaseModel):
     run_id: UUID
     asset_id: UUID
@@ -1120,6 +1138,13 @@ class RunTraceOut(BaseModel):
     steps: list[RunTraceStep]
     totals: RunTraceTotals | None = Field(
         default=None, description="The sealed run's totals; null until the run seals a report"
+    )
+    models: list[ModelUsage] = Field(
+        default_factory=list, description="Every model call of the run, grouped by model"
+    )
+    baseline: CostBaseline | None = Field(
+        default=None,
+        description="The same text-model tokens priced on the largest Nemotron (Ultra)",
     )
 
 
@@ -1319,6 +1344,36 @@ class TraceStep(BaseModel):
 class TraceOut(BaseModel):
     asset_id: UUID | None = None
     steps: list[TraceStep]
+
+
+class ModelStats(BaseModel):
+    """One model's calls in a world: outcomes, latency, tokens and cost."""
+
+    model: str
+    calls: int
+    ok: int
+    rejected: int = Field(description="Schema-valid answers the code checks refused")
+    invalid: int = Field(description="Answers that failed the schema")
+    errors: int
+    p50_latency_ms: int | None = None
+    p95_latency_ms: int | None = None
+    prompt_tokens: int
+    completion_tokens: int
+    cost_usd: Decimal
+
+
+class AiUsageOut(BaseModel):
+    """The AI control room: this world's model calls, the deployment's LLM spend against its
+    cap, and the Tavily account's credits left."""
+
+    models: list[ModelStats]
+    world_cost_usd: Decimal
+    spent_usd: Decimal = Field(description="Every logged model call of this deployment")
+    budget_usd: Decimal = Field(description="LLM_BUDGET_USD, the deployment's hard cap")
+    tavily_credits_left: int | None = Field(
+        default=None, description="Tavily account credits left; null when unknown or mocked"
+    )
+    tavily_min_credits_left: int
 
 
 # ----- Nature Ledger (T30) -----

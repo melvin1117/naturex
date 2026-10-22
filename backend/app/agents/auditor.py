@@ -534,6 +534,10 @@ def placeholder_value(value: str) -> str:
     return match.group(0) if match else value
 
 
+def count_placeholders(output: AuditorOutput) -> int:
+    return sum(len(PLACEHOLDER_RE.findall(text)) for _, text in _texts(output))
+
+
 def fill_placeholders(
     output: AuditorOutput, bundle: AuditorInput
 ) -> tuple[AuditorOutput, list[str]]:
@@ -838,6 +842,8 @@ class AuditResult:
     T27: show "not assessed" for None; `output.greenwashing_risk` is only a schema filler."""
     reasoning: str | None = None
     reasoning_tokens: int | None = None
+    placeholders_filled: int = 0
+    """`{fact-id}` placeholders in the accepted answer that code replaced with exact values."""
 
 
 @cache
@@ -866,6 +872,7 @@ def run_auditor(
     base = auditor_messages(bundle)
     rejections: list[str] = []
     rounds = 0
+    placeholders = 0
 
     def ask(
         messages: list[dict[str, Any]], tier: Tier, *, think: bool = False
@@ -884,7 +891,9 @@ def run_auditor(
         )
 
     def review(result: LLMResult[AuditorOutput]) -> tuple[LLMResult[AuditorOutput], list[str]]:
+        nonlocal placeholders
         filled, unknown = fill_placeholders(result.value, bundle)
+        placeholders = count_placeholders(result.value)
         return replace(result, value=filled), unknown + check_audit(filled, bundle)
 
     try:
@@ -894,7 +903,7 @@ def run_auditor(
         deliberation = first
         checked, problems = review(first)
         if not problems:
-            return _accepted(checked, bundle, rounds, rejections)
+            return _accepted(checked, bundle, rounds, rejections, placeholders=placeholders)
         llm.mark(first, REJECTED)
         rejections += problems
 
@@ -906,7 +915,9 @@ def run_auditor(
         second = ask(retry, first.tier)
         checked, problems = review(second)
         if not problems:
-            return _accepted(checked, bundle, rounds, rejections, deliberation)
+            return _accepted(
+                checked, bundle, rounds, rejections, deliberation, placeholders=placeholders
+            )
         llm.mark(second, REJECTED)
         rejections += problems
 
@@ -916,7 +927,9 @@ def run_auditor(
             third = ask([*base, {"role": "user", "content": note}], lower)
             checked, problems = review(third)
             if not problems:
-                return _accepted(checked, bundle, rounds, rejections, deliberation)
+                return _accepted(
+                    checked, bundle, rounds, rejections, deliberation, placeholders=placeholders
+                )
             llm.mark(third, REJECTED)
             rejections += problems
     except (LLMError, SQLAlchemyError) as exc:
@@ -941,6 +954,8 @@ def _accepted(
     rounds: int,
     rejections: Sequence[str],
     deliberation: LLMResult[AuditorOutput] | None = None,
+    *,
+    placeholders: int = 0,
 ) -> AuditResult:
     """`deliberation` is the thinking call whose rejected answer a fix round corrected: its
     reasoning is the one shown."""
@@ -961,6 +976,7 @@ def _accepted(
         greenwashing_risk=output.greenwashing_risk,
         reasoning=thought.reasoning,
         reasoning_tokens=thought.reasoning_tokens,
+        placeholders_filled=placeholders,
     )
 
 

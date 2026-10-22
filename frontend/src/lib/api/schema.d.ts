@@ -1184,6 +1184,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/ai-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ai Usage
+         * @description Per-model outcomes, latency and cost in this world, plus the deployment's spend and the
+         *     Tavily credits left (cached a minute), for the AI control room.
+         */
+        get: operations["get_ai_usage_admin_ai_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/trace": {
         parameters: {
             query?: never;
@@ -1619,6 +1640,34 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * AiUsageOut
+         * @description The AI control room: this world's model calls, the deployment's LLM spend against its
+         *     cap, and the Tavily account's credits left.
+         */
+        AiUsageOut: {
+            /** Models */
+            models: components["schemas"]["ModelStats"][];
+            /** World Cost Usd */
+            world_cost_usd: string;
+            /**
+             * Spent Usd
+             * @description Every logged model call of this deployment
+             */
+            spent_usd: string;
+            /**
+             * Budget Usd
+             * @description LLM_BUDGET_USD, the deployment's hard cap
+             */
+            budget_usd: string;
+            /**
+             * Tavily Credits Left
+             * @description Tavily account credits left; null when unknown or mocked
+             */
+            tavily_credits_left?: number | null;
+            /** Tavily Min Credits Left */
+            tavily_min_credits_left: number;
         };
         /** AlertListOut */
         AlertListOut: {
@@ -2328,6 +2377,16 @@ export interface components {
             type: "sources";
             /** Sources */
             sources: components["schemas"]["CopilotSource"][];
+        };
+        /**
+         * CostBaseline
+         * @description What the run's text-model tokens would have cost on one model (the routing receipt).
+         */
+        CostBaseline: {
+            /** Model */
+            model: string;
+            /** Cost Usd */
+            cost_usd: string;
         };
         /** DateWindow */
         DateWindow: {
@@ -3090,6 +3149,58 @@ export interface components {
              * @description Indexes into `ReportDiff.reasons` that cite this metric.
              */
             reason_refs: number[];
+        };
+        /**
+         * ModelStats
+         * @description One model's calls in a world: outcomes, latency, tokens and cost.
+         */
+        ModelStats: {
+            /** Model */
+            model: string;
+            /** Calls */
+            calls: number;
+            /** Ok */
+            ok: number;
+            /**
+             * Rejected
+             * @description Schema-valid answers the code checks refused
+             */
+            rejected: number;
+            /**
+             * Invalid
+             * @description Answers that failed the schema
+             */
+            invalid: number;
+            /** Errors */
+            errors: number;
+            /** P50 Latency Ms */
+            p50_latency_ms?: number | null;
+            /** P95 Latency Ms */
+            p95_latency_ms?: number | null;
+            /** Prompt Tokens */
+            prompt_tokens: number;
+            /** Completion Tokens */
+            completion_tokens: number;
+            /** Cost Usd */
+            cost_usd: string;
+        };
+        /**
+         * ModelUsage
+         * @description One model's share of a run: how often it was called, its tokens, time and cost.
+         */
+        ModelUsage: {
+            /** Model */
+            model: string;
+            /** Calls */
+            calls: number;
+            /** Prompt Tokens */
+            prompt_tokens: number;
+            /** Completion Tokens */
+            completion_tokens: number;
+            /** Latency Ms */
+            latency_ms: number;
+            /** Cost Usd */
+            cost_usd: string;
         };
         /**
          * MyCommunityOut
@@ -3861,6 +3972,13 @@ export interface components {
             steps: components["schemas"]["RunTraceStep"][];
             /** @description The sealed run's totals; null until the run seals a report */
             totals?: components["schemas"]["RunTraceTotals"] | null;
+            /**
+             * Models
+             * @description Every model call of the run, grouped by model
+             */
+            models?: components["schemas"]["ModelUsage"][];
+            /** @description The same text-model tokens priced on the largest Nemotron (Ultra) */
+            baseline?: components["schemas"]["CostBaseline"] | null;
         };
         /**
          * RunTraceStep
@@ -7538,6 +7656,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ai_usage_admin_ai_usage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiUsageOut"];
                 };
             };
         };

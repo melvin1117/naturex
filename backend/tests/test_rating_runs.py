@@ -502,6 +502,37 @@ def test_run_trace_exposes_real_steps_calls_and_safe_outputs(db: Connection, sit
     assert archived.steps[-1].ts is not None
     assert sum(len(step.llm_calls) for step in archived.steps) == len(h.log.records)
     assert archived.totals == trace.totals
+    assert archived.models == trace.models
+
+
+@requires_db
+def test_run_trace_shows_models_a_cost_baseline_signals_and_the_auditor_case(
+    db: Connection, site: Site
+) -> None:
+    h = harness(db, *happy_script())
+    run_id = h.runner.start(site.world_id, site.asset_id)
+
+    with sessions(db)() as session:
+        trace = rating_runs.get_run_trace(session, site.world_id, run_id)
+    assert trace is not None
+    by_model = {m.model: m for m in trace.models}
+    assert set(by_model) == {SUPER, ULTRA}
+    assert sum(m.calls for m in trace.models) == len(h.log.records)
+    assert sum((m.cost_usd for m in trace.models), Decimal(0)) == sum(
+        (r.cost_usd for r in h.log.records), Decimal(0)
+    )
+    assert trace.baseline is not None and trace.baseline.model == ULTRA
+    assert trace.baseline.cost_usd >= by_model[ULTRA].cost_usd
+
+    earth = next(s for s in trace.steps if s.step == "earth_obs")
+    assert earth.output is not None
+    assert all(sig["id"].startswith("signal:") for sig in earth.output["signals"])
+    audit = next(s for s in trace.steps if s.step == "audit")
+    assert audit.output is not None
+    assert audit.output["rounds"] == 1 and audit.output["rejections"] == []
+    assert audit.output["checks"]["rejected_answers"] == 0
+    assert audit.output["checks"]["resolved"] <= audit.output["checks"]["citations"]
+    assert {"hypotheses", "verdict", "reasoning_tokens", "notes"} <= set(audit.output)
 
 
 @requires_db
@@ -1063,6 +1094,38 @@ def test_admin_trace_reads_world_scoped_call_log_not_mock_steps(
         (step["agent"], step["model"], step["prompt_tokens"]) for step in trace.json()["steps"]
     ]
     assert calls == [("auditor", "nvidia/nemotron-3-ultra", 24)]
+
+
+@requires_db
+def test_ai_usage_groups_this_worlds_calls_by_model(api: tuple[TestClient, Deferred]) -> None:
+    client, _ = api
+    hero = UUID(_hero(client))
+    world_id = UUID(client.get("/world").json()["id"])
+    with sessions(API_SESSION[0].connection())() as session:
+        for status, latency in (("ok", 100), ("ok", 300), ("rejected", 200), ("reserved", 0)):
+            session.add(
+                LlmCall(
+                    world_id=world_id,
+                    asset_id=hero,
+                    agent="auditor",
+                    model=ULTRA,
+                    prompt_tokens=10,
+                    completion_tokens=5,
+                    latency_ms=latency,
+                    status=status,
+                    cost_usd=Decimal("0.01"),
+                )
+            )
+        session.commit()
+
+    body = client.get("/admin/ai-usage").json()
+
+    ultra = next(m for m in body["models"] if m["model"] == ULTRA)
+    assert (ultra["calls"], ultra["ok"], ultra["rejected"]) == (3, 2, 1)
+    assert ultra["p50_latency_ms"] == 200 and ultra["prompt_tokens"] == 30
+    assert Decimal(body["world_cost_usd"]) >= Decimal("0.03")
+    assert Decimal(body["budget_usd"]) > 0
+    assert body["tavily_credits_left"] is None  # mocked: no Tavily call
 
 
 @requires_db

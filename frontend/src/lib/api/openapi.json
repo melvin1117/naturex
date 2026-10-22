@@ -3529,6 +3529,28 @@
         }
       }
     },
+    "/admin/ai-usage": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Ai Usage",
+        "description": "Per-model outcomes, latency and cost in this world, plus the deployment's spend and the\nTavily credits left (cached a minute), for the AI control room.",
+        "operationId": "get_ai_usage_admin_ai_usage_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiUsageOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/trace": {
       "get": {
         "tags": [
@@ -4454,6 +4476,60 @@
         ],
         "title": "AiSuggestionOut",
         "description": "The AI document check of a run (T71, ADR-0006 \u00a72), for the reviewer only. **Untrusted\nheuristic**: show it labelled as such, next to its excerpts; it never changed a check or the\nlevel. `status: failed` means no model answered (or the budget was spent): `suggestion` is\nnull. A run has no AI suggestion while the check is pending or when it doesn't run (the live\nworld while `VERIFICATION_AI_LIVE=false`): see the queue item's `ai_suggestion_status`."
+      },
+      "AiUsageOut": {
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelStats"
+            },
+            "type": "array",
+            "title": "Models"
+          },
+          "world_cost_usd": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "World Cost Usd"
+          },
+          "spent_usd": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Spent Usd",
+            "description": "Every logged model call of this deployment"
+          },
+          "budget_usd": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Budget Usd",
+            "description": "LLM_BUDGET_USD, the deployment's hard cap"
+          },
+          "tavily_credits_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tavily Credits Left",
+            "description": "Tavily account credits left; null when unknown or mocked"
+          },
+          "tavily_min_credits_left": {
+            "type": "integer",
+            "title": "Tavily Min Credits Left"
+          }
+        },
+        "type": "object",
+        "required": [
+          "models",
+          "world_cost_usd",
+          "spent_usd",
+          "budget_usd",
+          "tavily_min_credits_left"
+        ],
+        "title": "AiUsageOut",
+        "description": "The AI control room: this world's model calls, the deployment's LLM spend against its\ncap, and the Tavily account's credits left."
       },
       "AlertListOut": {
         "properties": {
@@ -6110,6 +6186,26 @@
         ],
         "title": "CopilotSourcesEvent",
         "description": "First event: what was retrieved (the caller's world and visible assets only)."
+      },
+      "CostBaseline": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "cost_usd": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cost Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model",
+          "cost_usd"
+        ],
+        "title": "CostBaseline",
+        "description": "What the run's text-model tokens would have cost on one model (the routing receipt)."
       },
       "DateWindow": {
         "properties": {
@@ -7834,6 +7930,125 @@
         ],
         "title": "MetricChange",
         "description": "One stored number that differs between two report versions (T37)."
+      },
+      "ModelStats": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "calls": {
+            "type": "integer",
+            "title": "Calls"
+          },
+          "ok": {
+            "type": "integer",
+            "title": "Ok"
+          },
+          "rejected": {
+            "type": "integer",
+            "title": "Rejected",
+            "description": "Schema-valid answers the code checks refused"
+          },
+          "invalid": {
+            "type": "integer",
+            "title": "Invalid",
+            "description": "Answers that failed the schema"
+          },
+          "errors": {
+            "type": "integer",
+            "title": "Errors"
+          },
+          "p50_latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P50 Latency Ms"
+          },
+          "p95_latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95 Latency Ms"
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "title": "Prompt Tokens"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "title": "Completion Tokens"
+          },
+          "cost_usd": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cost Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model",
+          "calls",
+          "ok",
+          "rejected",
+          "invalid",
+          "errors",
+          "prompt_tokens",
+          "completion_tokens",
+          "cost_usd"
+        ],
+        "title": "ModelStats",
+        "description": "One model's calls in a world: outcomes, latency, tokens and cost."
+      },
+      "ModelUsage": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "calls": {
+            "type": "integer",
+            "title": "Calls"
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "title": "Prompt Tokens"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "title": "Completion Tokens"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms"
+          },
+          "cost_usd": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cost Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model",
+          "calls",
+          "prompt_tokens",
+          "completion_tokens",
+          "latency_ms",
+          "cost_usd"
+        ],
+        "title": "ModelUsage",
+        "description": "One model's share of a run: how often it was called, its tokens, time and cost."
       },
       "MyCommunityOut": {
         "properties": {
@@ -9588,6 +9803,25 @@
               }
             ],
             "description": "The sealed run's totals; null until the run seals a report"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelUsage"
+            },
+            "type": "array",
+            "title": "Models",
+            "description": "Every model call of the run, grouped by model"
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CostBaseline"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The same text-model tokens priced on the largest Nemotron (Ultra)"
           }
         },
         "type": "object",

@@ -20,6 +20,7 @@ from typing import Annotated, Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import select as sa_select
 from sqlmodel import Session, col, func, select
 
 from app.authz import (
@@ -38,10 +39,12 @@ from app.deps import CurrentWorld, SessionDep, SettingsDep
 from app.llm import DbCallLog
 from app.models import QUARTER_JOB_ACTIVE, Alert, AlertRecipient, Asset, LlmCall, QuarterJob
 from app.schemas import (
+    AiUsageOut,
     AlertKindOut,
     AssetRatingOut,
     EventOut,
     EventPresetOut,
+    ModelStats,
     QuarterJobOut,
     QuarterJobRef,
     QuarterJobStatus,
@@ -66,6 +69,7 @@ from app.services.rating_runs import (
     RunRateLimited,
     default_runner,
 )
+from app.services.tavily_credits import shared_credits
 from app.tools.scenarios import ScenarioVersion, load_scenario_spec, timeline_version
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -529,6 +533,54 @@ def get_sent_alerts(
         )
         for alert, name, count in rows
     ]
+
+
+def world_target(actor: OptionalActor) -> WorldRef:
+    return WorldRef(acting_world(actor))
+
+
+@router.get(
+    "/ai-usage", response_model=AiUsageOut, dependencies=[require(Action.BROWSE, world_target)]
+)
+def get_ai_usage(world: CurrentWorld, session: SessionDep, settings: SettingsDep) -> AiUsageOut:
+    """Per-model outcomes, latency and cost in this world, plus the deployment's spend and the
+    Tavily credits left (cached a minute), for the AI control room."""
+    latency = col(LlmCall.latency_ms)
+    outcome = col(LlmCall.status)
+    query = (
+        sa_select(
+            col(LlmCall.model).label("model"),
+            func.count().label("calls"),
+            func.count().filter(outcome == "ok").label("ok"),
+            func.count().filter(outcome == "rejected").label("rejected"),
+            func.count().filter(outcome == "invalid_output").label("invalid"),
+            func.count().filter(outcome == "error").label("errors"),
+            func.percentile_disc(0.5).within_group(latency).label("p50_latency_ms"),
+            func.percentile_disc(0.95).within_group(latency).label("p95_latency_ms"),
+            func.coalesce(func.sum(LlmCall.prompt_tokens), 0).label("prompt_tokens"),
+            func.coalesce(func.sum(LlmCall.completion_tokens), 0).label("completion_tokens"),
+            func.coalesce(func.sum(LlmCall.cost_usd), 0).label("cost_usd"),
+        )
+        .where(col(LlmCall.world_id) == world.id, outcome != "reserved")
+        .group_by(col(LlmCall.model))
+    )
+    models = sorted(
+        (ModelStats.model_validate(dict(row)) for row in session.execute(query).mappings()),
+        key=lambda m: m.calls,
+        reverse=True,
+    )
+    spent = session.exec(select(func.coalesce(func.sum(LlmCall.cost_usd), 0))).one()
+    credits = None
+    if not settings.use_mocks and settings.tavily_api_key:
+        credits = shared_credits(settings.tavily_api_key).left()
+    return AiUsageOut(
+        models=models,
+        world_cost_usd=sum((m.cost_usd for m in models), Decimal(0)),
+        spent_usd=Decimal(spent),
+        budget_usd=Decimal(str(settings.llm_budget_usd)),
+        tavily_credits_left=credits,
+        tavily_min_credits_left=settings.tavily_min_credits_left,
+    )
 
 
 @router.get("/trace", response_model=TraceOut, dependencies=[require(Action.BROWSE, trace_target)])
