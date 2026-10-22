@@ -85,7 +85,8 @@ function DemoControls() {
               {SANDBOX_NOTICE}
               <span className="hidden md:inline">
                 {" "}
-                Prototype with scripted data.
+                Personas and the tour use a scripted demo; the marketplace is
+                live.
               </span>
             </span>
           </span>
