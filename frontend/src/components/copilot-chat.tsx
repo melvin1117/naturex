@@ -28,6 +28,7 @@ import {
 } from "@/lib/copilot";
 import { useDataLayer } from "@/lib/data-layer";
 import { useWorld } from "@/lib/hooks";
+import { modelLabel } from "@/lib/trace-view";
 
 export const COPILOT_SUGGESTIONS = [
   "Why did the price change?",
@@ -54,6 +55,8 @@ interface Turn {
   sourcesFound: number;
   citations: CopilotSource[];
   mode: "model" | "extractive" | "refusal" | null;
+  /** The Token Factory model that wrote a `model` answer. */
+  model: string | null;
   error: string | null;
   /** Asked world-wide: its citation chips name their site. */
   worldWide: boolean;
@@ -148,6 +151,7 @@ export function CopilotChat(
         sourcesFound: 0,
         citations: [],
         mode: null,
+        model: null,
         error: null,
         worldWide: !assetId,
       },
@@ -174,6 +178,7 @@ export function CopilotChat(
                 answer: event.answer,
                 citations: event.citations,
                 mode: event.mode,
+                model: event.model ?? null,
               }));
             else
               update(id, () => ({
@@ -347,6 +352,7 @@ function TurnView({
             {turn.sourcesFound === 1 ? "source" : "sources"}…
           </span>
         )}
+        {turn.status === "done" && <AnswerChips turn={turn} />}
         {turn.answer && (
           <p>
             <AnswerText
@@ -369,7 +375,10 @@ function TurnView({
                 ? "Quoted from the record:"
                 : "Sources:"}
             </p>
-            <ul className="mt-1 flex flex-wrap gap-1.5">
+            <ul
+              className="mt-1 flex flex-wrap gap-1.5"
+              aria-label="Sources of this answer"
+            >
               {turn.citations.map((s) => (
                 <li key={s.ref} className="max-w-full min-w-0">
                   <Link
@@ -390,6 +399,46 @@ function TurnView({
         )}
       </div>
     </div>
+  );
+}
+
+/** What a finished answer used, in plain words: the search, who wrote it, what code checked. */
+export function answerChips(
+  turn: Pick<Turn, "sourcesFound" | "mode" | "model" | "citations">,
+): string[] {
+  const n = turn.sourcesFound;
+  const chips = [
+    `Searched the record · ${n} ${n === 1 ? "source" : "sources"}`,
+  ];
+  if (turn.mode === "model") chips.push(`Written by ${modelLabel(turn.model)}`);
+  else if (turn.mode === "extractive") chips.push("Quoted by code, no model");
+  else if (turn.mode === "refusal") chips.push("Not in the record");
+  if (turn.mode !== "refusal") {
+    const c = turn.citations.length;
+    chips.push(
+      c
+        ? `Code checked ${c} ${c === 1 ? "citation" : "citations"}`
+        : "No citation to check",
+    );
+  }
+  return chips;
+}
+
+function AnswerChips({ turn }: { turn: Turn }) {
+  return (
+    <ul
+      className="mb-2 flex flex-wrap gap-1.5"
+      aria-label="How this answer was made"
+    >
+      {answerChips(turn).map((chip) => (
+        <li
+          key={chip}
+          className="rounded-full bg-card px-2.5 py-0.5 text-xs text-muted-foreground"
+        >
+          {chip}
+        </li>
+      ))}
+    </ul>
   );
 }
 
