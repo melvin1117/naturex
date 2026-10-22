@@ -12,6 +12,7 @@ import { Delta, SiteBackdrop, ValueRange } from "@/components/proto/bits";
 import { PriceChart, PriceChartSkeleton } from "@/components/proto/charts";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
+import { EvidenceTimelinePanel } from "@/components/proto/evidence-timeline";
 import { VerdictStrip } from "@/components/trace/verdict-strip";
 import { ApiLedgerTab } from "@/components/proto/ledger-panels";
 import { LoadError } from "@/components/proto/load-error";
@@ -23,7 +24,6 @@ import {
   ReportTab,
   ScorePanel,
   ServicesPanel,
-  TrendPanel,
 } from "@/components/proto/report-panels";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { Button } from "@/components/ui/button";
@@ -335,7 +335,12 @@ function AssetLoaded({
                 simulated={latest.simulated}
                 caption={images.data && overlayCaption(images.data)}
               />
-              <TrendPanel facts={latest} />
+              <EvidenceTimelinePanel
+                facts={latest}
+                news={news}
+                runId={asset.latest_report?.run_id ?? null}
+                siteKey={asset.site_key}
+              />
             </TabsContent>
             <TabsContent value="price">
               <PricePanel

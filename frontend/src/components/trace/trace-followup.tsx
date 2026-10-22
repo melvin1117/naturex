@@ -77,12 +77,14 @@ export function PlanDetail({ plan }: { plan: Plan }) {
 function Why({ text }: { text: string }) {
   if (!text) return null;
   return (
-    <blockquote className="border-l-2 border-lime/60 pl-3 text-[13px] leading-relaxed text-machine-ink">
-      {text}
-      <span className="mt-1 block text-[11px] text-machine-muted">
+    <figure>
+      <blockquote className="font-serif text-[17px] leading-snug text-machine-ink">
+        “{text}”
+      </blockquote>
+      <figcaption className="mt-1.5 text-[11px] text-machine-muted">
         Why, in Nemotron 3 Super&apos;s words
-      </span>
-    </blockquote>
+      </figcaption>
+    </figure>
   );
 }
 
