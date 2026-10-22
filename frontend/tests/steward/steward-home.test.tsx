@@ -27,6 +27,7 @@ import { createDataLayer, queryKeys } from "@/lib/data-layer";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { PrototypeProvider } from "@/lib/prototype/store";
 import { stewardAssetId } from "@/components/shell/steward-community";
+import { COPIED_MS } from "@/components/account-id";
 
 import { dropFocus } from "../focus";
 import {
@@ -353,13 +354,41 @@ describe("creating a community", () => {
     setup(<StewardPage />, { communities: [] });
     await screen.findByRole("heading", { level: 1, name: "Start a community" });
     expect(screen.getByText(ROSA.id)).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Copy account ID" }));
-    expect(await screen.findByText("Account ID copied.")).toBeVisible();
+    const button = screen.getByRole("button", { name: "Copy account ID" });
+    fireEvent.click(button);
+    // Confirmed on the button itself, and announced politely: no toast.
+    expect(await within(button).findByText("Copied")).toBeVisible();
+    expect(button).toHaveAccessibleName("Copied");
+    expect(
+      screen.getByText("Account ID copied.").closest("[aria-live]"),
+    ).toHaveAttribute("aria-live", "polite");
     expect(writeText).toHaveBeenCalledWith(ROSA.id);
 
     writeText.mockImplementationOnce(() => Promise.reject(new Error("denied")));
-    fireEvent.click(screen.getByRole("button", { name: "Copy account ID" }));
+    fireEvent.click(button);
     expect(await screen.findByText(/Couldn't copy/)).toBeVisible();
+    expect(button).toHaveAccessibleName("Copy account ID");
+  });
+
+  it("says Copied on the button for a moment, then Copy again", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText: vi.fn(() => Promise.resolve()) },
+        configurable: true,
+      });
+      setup(<StewardPage />, { communities: [] });
+      const button = await screen.findByRole("button", {
+        name: "Copy account ID",
+      });
+      fireEvent.click(button);
+      await waitFor(() => expect(button).toHaveAccessibleName("Copied"));
+      act(() => vi.advanceTimersByTime(COPIED_MS));
+      expect(button).toHaveAccessibleName("Copy account ID");
+      expect(screen.queryByText("Account ID copied.")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("offers the account ID in the account menu on every page", async () => {
@@ -379,6 +408,14 @@ describe("creating a community", () => {
       within(menu).getByRole("menuitem", { name: "Copy account ID" }),
     );
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(ROSA.id));
+    // In place, not a toast: the menu stays open and its item says so.
+    expect(
+      await within(menu).findByRole("menuitem", { name: "Copied" }),
+    ).toBeVisible();
+    expect(within(menu).getByText("Account ID copied.")).toHaveAttribute(
+      "aria-live",
+      "polite",
+    );
   });
 
   it("checks the name before sending", async () => {

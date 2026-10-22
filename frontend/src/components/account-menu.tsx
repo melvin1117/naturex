@@ -1,12 +1,12 @@
 "use client";
 
-import { Copy, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
 import { toast } from "sonner";
 
-import { copyText } from "@/components/account-id";
+import { CopyIcon, useCopy } from "@/components/account-id";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -124,20 +124,7 @@ function AccountMenuContent() {
             {me.id}
           </code>
         </DropdownMenuLabel>
-        <DropdownMenuItem
-          onSelect={() =>
-            void copyText(me.id).then((ok) =>
-              ok
-                ? toast("Account ID copied")
-                : toast.error("We couldn't copy your account ID", {
-                    description: "Select it in the menu and copy it yourself.",
-                  }),
-            )
-          }
-        >
-          <Copy aria-hidden="true" />
-          Copy account ID
-        </DropdownMenuItem>
+        <CopyAccountIdItem id={me.id} />
         <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={signOut.isPending}
@@ -148,5 +135,38 @@ function AccountMenuContent() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * "Copy account ID", confirmed on the item itself (a check and "Copied" for a moment, announced
+ * politely) rather than a toast; the menu stays open so the confirmation can be seen.
+ */
+function CopyAccountIdItem({ id }: { id: string }) {
+  const { state, copy } = useCopy(id);
+  return (
+    <>
+      <DropdownMenuItem
+        data-state-copy={state}
+        onSelect={(event) => {
+          event.preventDefault();
+          void copy();
+        }}
+      >
+        <CopyIcon copied={state === "copied"} />
+        {state === "copied"
+          ? "Copied"
+          : state === "failed"
+            ? "Couldn't copy. Select the ID above"
+            : "Copy account ID"}
+      </DropdownMenuItem>
+      <span aria-live="polite" className="sr-only">
+        {state === "copied"
+          ? "Account ID copied."
+          : state === "failed"
+            ? "Couldn't copy your account ID. Select it above and copy it yourself."
+            : ""}
+      </span>
+    </>
   );
 }
