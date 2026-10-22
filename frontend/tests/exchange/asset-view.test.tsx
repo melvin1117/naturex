@@ -184,6 +184,47 @@ describe("AssetView", () => {
     expect(map.querySelectorAll("img").length).toBeGreaterThan(0);
   });
 
+  it("shows the cover photo in the hero of a listing that has one", async () => {
+    const cover = "https://cdn.example.org/covers/wetland.jpg";
+    const { container } = renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /assets/${ID}`]: () =>
+          json({
+            ...ASSET,
+            site_key: null,
+            cover_image_url: cover,
+            outline: [OUTLINE],
+          }),
+      }),
+    );
+    const hero = await screen.findByRole("region", {
+      name: "Xochimilco Wetland",
+    });
+    expect(hero.querySelector(`img[src="${cover}"]`)).not.toBeNull();
+    expect(container.querySelector("[data-boundary-map]")).toBeNull();
+  });
+
+  it("ignores a cover that isn't https and draws the boundary instead", async () => {
+    const { container } = renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /assets/${ID}`]: () =>
+          json({
+            ...ASSET,
+            site_key: null,
+            cover_image_url: "http://cdn.example.org/cover.jpg",
+            outline: [OUTLINE],
+          }),
+      }),
+    );
+    const hero = await screen.findByRole("region", {
+      name: "Xochimilco Wetland",
+    });
+    expect(hero.querySelector('img[src^="http://"]')).toBeNull();
+    expect(container.querySelector("[data-boundary-map]")).not.toBeNull();
+  });
+
   it("keeps the placeholder in the hero of a site without an outline", async () => {
     const { container } = renderExchange(
       <AssetView id={ID} />,

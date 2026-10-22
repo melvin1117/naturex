@@ -2,10 +2,11 @@
 
 import { Leaf, RefreshCwIcon, Sprout, Trees } from "lucide-react";
 import Link from "next/link";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { cn } from "cn";
 
 import { AlertsList } from "@/components/alerts-list";
+import { ICON_FRAME } from "@/components/boundary-map";
 import { CopilotChat } from "@/components/copilot-chat";
 import { CountTo } from "@/components/live-number";
 import { PortfolioBodySkeleton } from "@/components/page-skeletons";
@@ -25,7 +26,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { AssetCard, HoldingOut, PortfolioOut } from "@/lib/api/types";
+import { outlineRings } from "@/lib/boundary-map";
 import { useAssets, usePortfolio, useWorld } from "@/lib/hooks";
+import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
+import { siteImageUrl } from "@/lib/market-cards";
 import type { Grade } from "@/lib/prototype/data";
 import { GRADE_ORDER, int } from "@/lib/prototype/format";
 import {
@@ -188,6 +192,11 @@ function Holdings({
       <div className="-mx-6 hidden overflow-x-auto px-6 sm:block">
         <HoldingsTable holdings={holdings} cards={cards} fresh={fresh} />
       </div>
+      {showsMap(holdings, cards) && (
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          Site maps: {IMAGERY_ATTRIBUTION}
+        </p>
+      )}
     </>
   );
 }
@@ -277,11 +286,36 @@ function HoldingCard({
   );
 }
 
+/**
+ * What a stake's thumbnail shows, as on its Marketplace card: the site's satellite thumbnail,
+ * else its cover photo, else its boundary on satellite imagery (#212); null for the leaf.
+ */
+function siteIcon(card: AssetCard | undefined) {
+  if (!card) return null;
+  const src = card.site_key ? null : siteImageUrl(null, card.cover_image_url);
+  const outline = outlineRings(card.outline);
+  if (!card.site_key && !src && outline.length === 0) return null;
+  return { siteKey: card.site_key ?? null, src, outline };
+}
+
+/** A boundary map stands in for at least one stake's thumbnail: its credit goes below. */
+function showsMap(holdings: HoldingOut[], cards: Map<string, AssetCard>) {
+  return holdings.some((h) => {
+    const icon = siteIcon(cards.get(h.asset_id));
+    return icon !== null && !icon.siteKey && !icon.src;
+  });
+}
+
 function SiteIcon({ card }: { card: AssetCard | undefined }) {
-  return card?.site_key ? (
+  const icon = useMemo(() => siteIcon(card), [card]);
+  return icon ? (
     <SiteThumb
-      siteKey={card.site_key}
+      siteKey={icon.siteKey}
+      src={icon.src}
+      outline={icon.outline}
       alt=""
+      frame={ICON_FRAME}
+      credit={false}
       className="size-10 shrink-0 rounded-xl"
     />
   ) : (

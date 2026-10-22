@@ -5009,6 +5009,18 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Community Wallet"
           },
+          "cover_image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Image Url",
+            "description": "The listing's cover photo, as on its card; the page's hero."
+          },
           "site_key": {
             "anyOf": [
               {

@@ -436,6 +436,9 @@ class AssetDetail(BaseModel):
     )
     primary_shares_remaining: int
     community_wallet: Decimal
+    cover_image_url: str | None = Field(
+        default=None, description="The listing's cover photo, as on its card; the page's hero."
+    )
     site_key: str | None = None
     outline: list[list[list[float]]] = Field(default_factory=list, description=_OUTLINE_DESCRIPTION)
     mock: bool = Field(default=False, description=_MOCK_DESCRIPTION)

@@ -11,6 +11,7 @@ import { PortfolioView } from "@/components/portfolio-view";
 import { WorldProvider } from "@/components/world-provider";
 import type { OrderOut } from "@/lib/api/types";
 import { createDataLayer } from "@/lib/data-layer";
+import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { clearFills, freshFills, noteFill } from "@/lib/trade";
 
 import {
@@ -366,6 +367,62 @@ describe("PortfolioView", () => {
     expect(
       within(card).getByText("Change in value").nextSibling,
     ).toHaveTextContent("−$1.50");
+  });
+
+  it("shows a new listing's boundary map as its thumbnail, with the map credit", async () => {
+    const OUTLINE = [
+      [-99.1, 19.28],
+      [-99.09, 19.28],
+      [-99.09, 19.29],
+      [-99.1, 19.28],
+    ];
+    renderPortfolio({
+      "GET /portfolio": () => json(HELD),
+      "GET /assets": () =>
+        json([{ ...cards[0], site_key: null, outline: [OUTLINE] }]),
+    });
+    const row = await tableRow();
+    await waitFor(() =>
+      expect(row.querySelector("[data-boundary-map] img")).not.toBeNull(),
+    );
+    // Too small for the map's own credit: it's under the stakes instead.
+    expect(within(row).queryByText(IMAGERY_ATTRIBUTION)).toBeNull();
+    expect(screen.getByText(`Site maps: ${IMAGERY_ATTRIBUTION}`)).toBeVisible();
+  });
+
+  it("prefers a new listing's cover photo to its map", async () => {
+    const cover = "https://cdn.example.org/covers/wetland.jpg";
+    renderPortfolio({
+      "GET /portfolio": () => json(HELD),
+      "GET /assets": () =>
+        json([
+          {
+            ...cards[0],
+            site_key: null,
+            cover_image_url: cover,
+            outline: [
+              [
+                [-99.1, 19.28],
+                [-99.09, 19.28],
+                [-99.09, 19.29],
+              ],
+            ],
+          },
+        ]),
+    });
+    const row = await tableRow();
+    expect(row.querySelector(`img[src="${cover}"]`)).not.toBeNull();
+    expect(row.querySelector("[data-boundary-map]")).toBeNull();
+    expect(screen.queryByText(/Site maps:/)).toBeNull();
+  });
+
+  it("keeps the curated thumbnail and no map credit for a demo site", async () => {
+    renderPortfolio({ "GET /portfolio": () => json(HELD) });
+    const row = await tableRow();
+    expect(
+      row.querySelector('img[src*="wetland_mx.thumbnail"]'),
+    ).not.toBeNull();
+    expect(screen.queryByText(/Site maps:/)).toBeNull();
   });
 
   it("invites a first stake when nothing is held", async () => {

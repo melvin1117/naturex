@@ -177,7 +177,7 @@ function AssetLoaded({
     () => newsItems(asset.recent_events),
     [asset.recent_events],
   );
-  const imageUrl = siteImageUrl(asset.site_key);
+  const imageUrl = siteImageUrl(asset.site_key, asset.cover_image_url);
   const outline = useMemo(() => outlineRings(asset.outline), [asset.outline]);
   const place = [
     countryName(asset.country ?? null),
