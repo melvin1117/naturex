@@ -6,6 +6,7 @@ import { useEffect, useMemo } from "react";
 
 import { TraceError } from "@/components/agent-trace";
 import { MachineRowsSkeleton } from "@/components/page-skeletons";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { RunTrace } from "@/lib/api/types";
 import type { ApiError } from "@/lib/api/errors";
@@ -72,7 +73,8 @@ export function RecordedTracePage({ assetId }: { assetId: string }) {
       recordedOn={recorded.data?.recorded_on}
       error={recorded.error ?? asset.error ?? null}
       notFound={Boolean(notDemo && !recorded.error)}
-      retry={recorded.refetch}
+      retry={() => (asset.error ? asset.refetch() : recorded.refetch())}
+      liveRunId={asset.data?.latest_report?.run_id ?? null}
     />
   );
 }
@@ -86,6 +88,7 @@ function TraceShell({
   error,
   notFound = false,
   retry,
+  liveRunId = null,
 }: {
   assetId: string | undefined;
   name: string | undefined;
@@ -95,6 +98,8 @@ function TraceShell({
   error: ApiError | null;
   notFound?: boolean;
   retry: () => unknown;
+  /** The site's own rated run, which supersedes a recorded one. */
+  liveRunId?: string | null;
 }) {
   useEffect(() => {
     if (name) document.title = `How ${name} was rated · NatureX`;
@@ -114,6 +119,18 @@ function TraceShell({
       <h1 className="mt-3 font-serif text-4xl leading-tight text-foreground">
         {name ? `How ${name} was rated` : "How this site was rated"}
       </h1>
+      {recordedOn && liveRunId && (
+        <p className="mt-2 max-w-[70ch] rounded-2xl bg-card px-4 py-3 text-sm shadow-soft">
+          This site has been rated in your demo since.{" "}
+          <Link
+            href={`/trace/${liveRunId}`}
+            className="font-medium underline underline-offset-4"
+          >
+            Open that run&apos;s trace
+          </Link>
+          .
+        </p>
+      )}
       {recordedOn && (
         <p className="mt-2 max-w-[70ch] text-muted-foreground">
           A real rating run of this site, recorded on {date(recordedOn)} with
@@ -168,9 +185,9 @@ function TraceBody({
       <header className="border-b border-machine-line pb-6">
         <p className="text-xs text-machine-muted">
           {recordedOn ? (
-            <span className="mr-1 rounded-full bg-machine-raised px-2 py-0.5 font-medium text-machine-ink">
+            <Badge className="mr-1 bg-machine-raised text-machine-ink">
               Recorded {date(recordedOn)}
-            </span>
+            </Badge>
           ) : null}
           Run <span className="font-mono">{trace.run_id.slice(0, 8)}</span>
           {started && !recordedOn && ` · ${date(started)}`} · {trace.status} ·

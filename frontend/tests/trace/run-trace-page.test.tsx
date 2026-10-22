@@ -148,6 +148,37 @@ describe("a demo site's recorded run", () => {
     ).toHaveAttribute("href", `/trace/recorded/${assetId}`);
   });
 
+  it("stays out of a site that has a run of its own, even without a verdict", () => {
+    const { container } = render(
+      <VerdictStrip
+        report={
+          { run_id: celestun.run_id, auditor: null } as unknown as ReportOut
+        }
+        recorded={recordedRun}
+        assetId={assetId}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("points to the site's own run once it has been rated", async () => {
+    renderExchange(<RecordedTracePage assetId={assetId} />, {
+      [`GET /assets/${assetId}`]: () =>
+        json({
+          id: assetId,
+          name: "Ría Celestún Mangrove",
+          site_key: "mangrove_mx",
+          latest_report: { run_id: celestun.run_id },
+        }),
+      "GET /media/demo-sites/mangrove_mx/recorded-run.json": () =>
+        json(recorded),
+    });
+
+    expect(
+      await screen.findByRole("link", { name: "Open that run's trace" }),
+    ).toHaveAttribute("href", `/trace/${celestun.run_id}`);
+  });
+
   it("never replaces the site's own rated run", () => {
     render(
       <VerdictStrip

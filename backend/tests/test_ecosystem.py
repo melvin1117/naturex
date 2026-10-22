@@ -46,6 +46,9 @@ def test_little_mangrove_does_not_make_a_mangrove_site() -> None:
         ("Pradera alta", Ecosystem.GRASSLAND),
         ("Lago de Chapala", Ecosystem.WETLAND),
         ("Lake Titicaca shore", Ecosystem.WETLAND),
+        # Common place names aren't ecosystem words: Lagos de Moreno is a town in Jalisco.
+        ("Bosque Lagos de Moreno", Ecosystem.FOREST),
+        ("Selva La Presa", Ecosystem.FOREST),
     ],
 )
 def test_name_hints_in_english_and_spanish(name: str, expected: Ecosystem) -> None:

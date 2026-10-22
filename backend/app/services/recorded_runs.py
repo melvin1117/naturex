@@ -27,6 +27,11 @@ def placeholder_asset_id(site_key: str) -> UUID:
     return uuid5(NAMESPACE_URL, f"naturex:recorded-run:{site_key}")
 
 
+def placeholder_run_id(site_key: str) -> UUID:
+    """The recorded trace's `run_id`: stable per site and never a run of any world."""
+    return uuid5(NAMESPACE_URL, f"naturex:recorded-run:{site_key}:run")
+
+
 def recorded_run_path(site_key: str) -> Path | None:
     """The committed file for a known demo site, or None (invalid, unknown or not recorded)."""
     if not SITE_KEY_RE.fullmatch(site_key) or site_key not in known_site_keys():
@@ -50,10 +55,22 @@ def recorded_run(site_key: str) -> RecordedRunOut | None:
 
 
 def record(site_key: str, trace: RunTraceOut, recorded_on: date) -> RecordedRunOut:
-    """The file's content for a finished run: the world's asset ID swapped for a placeholder."""
-    placeholder = placeholder_asset_id(site_key)
+    """The file's content for a finished run, with nothing that names a row of the recording
+    database: the asset and run IDs become placeholders and the call-log IDs are dropped."""
+    steps = [
+        step.model_copy(
+            update={"llm_calls": [c.model_copy(update={"id": None}) for c in step.llm_calls]}
+        )
+        for step in trace.steps
+    ]
     return RecordedRunOut(
         site_key=site_key,
         recorded_on=recorded_on,
-        trace=trace.model_copy(update={"asset_id": placeholder}),
+        trace=trace.model_copy(
+            update={
+                "asset_id": placeholder_asset_id(site_key),
+                "run_id": placeholder_run_id(site_key),
+                "steps": steps,
+            }
+        ),
     )

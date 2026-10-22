@@ -2,7 +2,7 @@
   "site_key": "restoration_forest",
   "recorded_on": "2026-10-22",
   "trace": {
-    "run_id": "8bcc065e-3cf5-427e-9bef-85d878e13fee",
+    "run_id": "abf01a2c-bf54-5329-a4da-5ff3b16c2ce8",
     "asset_id": "98ea5885-090f-5700-8dbc-665652671cbb",
     "status": "succeeded",
     "steps": [
@@ -116,7 +116,7 @@
         },
         "llm_calls": [
           {
-            "id": 410,
+            "id": null,
             "agent": "orchestrator",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -127,7 +127,7 @@
             "cost_usd": "0.0002955"
           },
           {
-            "id": 411,
+            "id": null,
             "agent": "site_vision",
             "model": "nvidia/Nemotron-3.5-Super-VL",
             "tier": "perception",
@@ -161,7 +161,7 @@
         },
         "llm_calls": [
           {
-            "id": 412,
+            "id": null,
             "agent": "orchestrator",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -238,7 +238,7 @@
         },
         "llm_calls": [
           {
-            "id": 413,
+            "id": null,
             "agent": "orchestrator",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -249,7 +249,7 @@
             "cost_usd": "0.0005217"
           },
           {
-            "id": 414,
+            "id": null,
             "agent": "news_scout",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -283,7 +283,7 @@
         },
         "llm_calls": [
           {
-            "id": 415,
+            "id": null,
             "agent": "orchestrator",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -344,7 +344,7 @@
         },
         "llm_calls": [
           {
-            "id": 416,
+            "id": null,
             "agent": "news_scout",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -521,7 +521,7 @@
         },
         "llm_calls": [
           {
-            "id": 417,
+            "id": null,
             "agent": "orchestrator",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -532,7 +532,7 @@
             "cost_usd": "0.0007101"
           },
           {
-            "id": 418,
+            "id": null,
             "agent": "auditor",
             "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
             "tier": "auditor",

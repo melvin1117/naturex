@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import type { RunTrace } from "@/lib/api/types";
@@ -113,17 +116,35 @@ describe("the news a recorded run found", () => {
   const trace = (recordedJson as unknown as { trace: RunTrace }).trace;
 
   it("comes from the audit's cited news and the follow-up searches, dated", () => {
-    const items = traceNews(trace);
+    const items = traceNews(trace, "Recorded run, 22 Oct 2026");
     expect(items.length).toBeGreaterThan(0);
+    expect(new Set(items.map((i) => i.sourceLabel))).toEqual(
+      new Set(["Recorded run, 22 Oct 2026"]),
+    );
     expect(items.every((i) => /^\d{4}-\d{2}-\d{2}/.test(i.date))).toBe(true);
     expect(items.every((i) => i.title.length > 0)).toBe(true);
   });
 
   it("merges without repeating a link the site already has", () => {
-    const [first, ...rest] = traceNews(trace);
+    const [first, ...rest] = traceNews(trace, "Recorded run");
     const merged = mergeNews([first!], [first!, ...rest, first!]);
     expect(merged).toHaveLength(
       1 + new Set(rest.map((r) => r.url ?? r.id)).size,
     );
+  });
+});
+
+describe("the frontend's copy of a recording", () => {
+  it("matches the committed backend file", () => {
+    const backend = JSON.parse(
+      readFileSync(
+        resolve(
+          __dirname,
+          "../../../backend/data/demo_sites/recorded_runs/mangrove_mx.json",
+        ),
+        "utf-8",
+      ),
+    );
+    expect(recordedJson).toEqual(backend);
   });
 });

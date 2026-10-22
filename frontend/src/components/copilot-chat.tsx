@@ -13,6 +13,7 @@ import {
 } from "react";
 import { cn } from "cn";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -431,11 +432,13 @@ function AnswerChips({ turn }: { turn: Turn }) {
       aria-label="How this answer was made"
     >
       {answerChips(turn).map((chip) => (
-        <li
-          key={chip}
-          className="rounded-full bg-card px-2.5 py-0.5 text-xs text-muted-foreground"
-        >
-          {chip}
+        <li key={chip}>
+          <Badge
+            variant="outline"
+            className="bg-card font-normal text-muted-foreground"
+          >
+            {chip}
+          </Badge>
         </li>
       ))}
     </ul>

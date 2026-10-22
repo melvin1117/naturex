@@ -945,7 +945,9 @@ class RunToolbox:
                 world_id=self._spec.world_id,
                 asset_id=self._spec.asset_id,
             )
-        except (LLMError, ValueError, OSError) as exc:
+        except Exception as exc:
+            # Optional: any failure (the model, a call-log write, a file) leaves the
+            # satellite step done and the run going on without the reading.
             log.warning("site vision failed for a rating run: %s", type(exc).__name__)
             return {"error": type(exc).__name__}
         return self.vision.to_json()
@@ -1014,8 +1016,8 @@ class RunToolbox:
         self.news_items = list(output.events)
         self.news_ok = not output.news_paused
         relevant = [event for event in events if event.relevant]
-        # Counts, categories and our own query text only: article text never reaches the
-        # orchestrator (T72).
+        # The trace's view. Super gets it through `for_model`, which turns `searches` into a
+        # count (the queries carry the listing's name); article text never reaches it (T72).
         return {
             "events": len(events),
             "relevant": len(relevant),
@@ -1119,11 +1121,14 @@ class RunToolbox:
         if new:
             self.news_items = [*self.news_items, *new]
             self.news_events = _dedupe(audit_events_from_news(self.news_items))
+        found = sum(s.results for s in output.searches)
+        in_window = output.funnel.found if output.funnel else 0
         seen = {
             "signal": signal.id,
             "topic": args.topic,
             "window": _months(window),
-            "results": sum(s.results for s in output.searches),
+            "results_in_window": in_window,
+            "outside_window": max(0, found - in_window),
             "new_kept": [_event_labels(item) for item in new],
             "dropped_off_site": output.dropped_off_site,
             **({"news_paused": True} if output.news_paused else {}),
@@ -1135,6 +1140,7 @@ class RunToolbox:
             "window": {"start": window[0].isoformat(), "end": window[1].isoformat()},
             "searches": [s.model_dump() for s in output.searches],
             **({"funnel": output.funnel.model_dump()} if output.funnel else {}),
+            "outside_window": max(0, found - in_window),
             "found": [_event_view(item) for item in new],
             "already_known": len(output.events) - len(new),
         }

@@ -20,8 +20,9 @@ export function VerdictStrip({
   assetId?: string;
 }) {
   const own = report?.auditor?.verdict && report?.run_id ? report : null;
+  // A recording stands in only while the site has no rated run of its own.
   const recordedCase =
-    !own && recorded && assetId ? auditCase(recorded.trace) : null;
+    !report?.run_id && recorded && assetId ? auditCase(recorded.trace) : null;
   const verdict = own?.auditor?.verdict ?? recordedCase?.verdict;
   if (!verdict) return null;
   const adjustment = own

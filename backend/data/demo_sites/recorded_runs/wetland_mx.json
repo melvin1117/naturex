@@ -2,7 +2,7 @@
   "site_key": "wetland_mx",
   "recorded_on": "2026-10-22",
   "trace": {
-    "run_id": "55065eb6-fa62-4c57-8b93-aec6db2c31a6",
+    "run_id": "807b2c7e-dc60-538a-bb8e-4fc658a6dcdb",
     "asset_id": "8f2c2a72-7f17-50ff-ae61-455ac3369e40",
     "status": "succeeded",
     "steps": [
@@ -116,7 +116,7 @@
         },
         "llm_calls": [
           {
-            "id": 386,
+            "id": null,
             "agent": "orchestrator",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -127,7 +127,7 @@
             "cost_usd": "0.0002955"
           },
           {
-            "id": 387,
+            "id": null,
             "agent": "site_vision",
             "model": "nvidia/Nemotron-3.5-Super-VL",
             "tier": "perception",
@@ -161,7 +161,7 @@
         },
         "llm_calls": [
           {
-            "id": 388,
+            "id": null,
             "agent": "orchestrator",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -276,7 +276,7 @@
         },
         "llm_calls": [
           {
-            "id": 389,
+            "id": null,
             "agent": "orchestrator",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -287,7 +287,7 @@
             "cost_usd": "0.0005187"
           },
           {
-            "id": 390,
+            "id": null,
             "agent": "news_scout",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -321,7 +321,7 @@
         },
         "llm_calls": [
           {
-            "id": 391,
+            "id": null,
             "agent": "orchestrator",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -367,7 +367,7 @@
         },
         "llm_calls": [
           {
-            "id": 392,
+            "id": null,
             "agent": "article_reader",
             "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
             "tier": "fast",
@@ -413,7 +413,7 @@
         },
         "llm_calls": [
           {
-            "id": 393,
+            "id": null,
             "agent": "orchestrator",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -424,7 +424,7 @@
             "cost_usd": "0.0010449"
           },
           {
-            "id": 394,
+            "id": null,
             "agent": "article_reader",
             "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
             "tier": "fast",
@@ -506,7 +506,7 @@
         },
         "llm_calls": [
           {
-            "id": 395,
+            "id": null,
             "agent": "orchestrator",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -517,7 +517,7 @@
             "cost_usd": "0.0010203"
           },
           {
-            "id": 396,
+            "id": null,
             "agent": "news_scout",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -750,7 +750,7 @@
         },
         "llm_calls": [
           {
-            "id": 397,
+            "id": null,
             "agent": "orchestrator",
             "model": "nvidia/nemotron-3-super-120b-a12b",
             "tier": "orchestrator",
@@ -761,7 +761,7 @@
             "cost_usd": "0.0010308"
           },
           {
-            "id": 398,
+            "id": null,
             "agent": "auditor",
             "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
             "tier": "auditor",

@@ -91,9 +91,9 @@ function pinDirection(items: TimelineNews[]): number {
 /**
  * The news a run found, as timeline items: what the Auditor cited (with its title and link)
  * and what Super's follow-up searches added. Used for a recorded run, whose news isn't in
- * this world's events.
+ * this world's events, so `sourceLabel` names the recording.
  */
-export function traceNews(trace: RunTrace): NewsItem[] {
+export function traceNews(trace: RunTrace, sourceLabel: string): NewsItem[] {
   const items: NewsItem[] = [];
   const c = auditCase(trace);
   for (const ref of c ? caseEvidence(c) : []) {
@@ -107,7 +107,7 @@ export function traceNews(trace: RunTrace): NewsItem[] {
       direction: ref.direction,
       severity: null,
       kind: ref.value,
-      sourceLabel: "Found by News Scout",
+      sourceLabel,
       url: ref.url,
     });
   }
@@ -124,7 +124,7 @@ export function traceNews(trace: RunTrace): NewsItem[] {
         direction: item.direction,
         severity: item.severity,
         kind: item.impactType,
-        sourceLabel: "Found by News Scout",
+        sourceLabel,
         url: item.url,
       });
     }

@@ -266,10 +266,15 @@ export function EvidenceTimelinePanel({
       evidenceTimeline(
         facts.ndvi,
         run ? runSignals(run) : [],
-        fromRecording && run ? mergeNews(news, traceNews(run)) : news,
+        fromRecording && run && recorded
+          ? mergeNews(
+              news,
+              traceNews(run, `Recorded run, ${date(recorded.recorded_on)}`),
+            )
+          : news,
         run ? runFollowUps(run) : [],
       ),
-    [facts.ndvi, news, run, fromRecording],
+    [facts.ndvi, news, run, fromRecording, recorded],
   );
   const vision = run ? runVision(run) : null;
   const [all, setAll] = useState(false);
@@ -366,7 +371,11 @@ export function EvidenceTimelinePanel({
         )}
       </Panel>
       {demo && siteKey && (
-        <BeforeAfterPanel siteKey={siteKey} vision={vision} />
+        <BeforeAfterPanel
+          siteKey={siteKey}
+          vision={vision}
+          recordedOn={fromRecording ? recorded?.recorded_on : undefined}
+        />
       )}
     </>
   );
@@ -376,9 +385,12 @@ export function EvidenceTimelinePanel({
 function BeforeAfterPanel({
   siteKey,
   vision,
+  recordedOn,
 }: {
   siteKey: string;
   vision: Vision | null;
+  /** Set when the reading comes from the site's recorded run. */
+  recordedOn?: string;
 }) {
   const [at, setAt] = useState(50);
   const reading = vision && !vision.error ? vision : null;
@@ -423,7 +435,14 @@ function BeforeAfterPanel({
       {reading && (
         <div className="mt-4 text-sm">
           <p className="font-medium">
-            Nemotron 3.5 Super VL:{" "}
+            Nemotron 3.5 Super VL
+            {recordedOn && (
+              <span className="font-normal text-muted-foreground">
+                {" "}
+                (recorded run, {date(recordedOn)})
+              </span>
+            )}
+            :{" "}
             {changes?.length
               ? changes
                   .map((c) => `${changeLabel(c.kind)} (${c.where})`)

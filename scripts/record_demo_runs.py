@@ -7,7 +7,9 @@ Usage (repo root; a migrated, seeded database; NEBIUS_API_KEY, TAVILY_API_KEY an
         uv run python ../scripts/record_demo_runs.py [--sites wetland_mx] [--run-ids <uuid>...]
 
 Each demo asset of the live world is rated inline by the production runner (Super, Tavily,
-Super VL, Nano, Ultra). The finished run's Agent Trace is written to
+Super VL, Nano, Ultra). **That writes a new report, fair value and ledger entry in the live
+world of DATABASE_URL**, so use a local or scratch database: the script refuses
+ENVIRONMENT=production. The finished run's Agent Trace is written to
 `backend/data/demo_sites/recorded_runs/<site>.json` with today's date and a placeholder asset
 ID. `--run-ids` exports finished runs instead of starting new ones. A run that failed, fell
 back to the fixed pipeline or ended on the no-op audit is refused: a recording should show the
@@ -38,16 +40,28 @@ from app.services.rating_runs import get_run_trace  # noqa: E402
 from app.services.recorded_runs import RECORDED_DIR, record  # noqa: E402
 from app.worlds import LIVE_WORLD_ID  # noqa: E402
 
+ULTRA = "nvidia/Nemotron-3-Ultra-550b-a55b"
+VISION = "nvidia/Nemotron-3.5-Super-VL"
+SHOWN_STEPS = {"earth_obs", "news", "plan", "investigate", "audit", "done"}
+
 
 def problems(trace: RunTraceOut) -> list[str]:
+    """Why a run can't be the recording (the same bar as `tests/test_recorded_runs.py`)."""
     found: list[str] = []
     if trace.status.value != "succeeded":
         found.append(f"status {trace.status.value}")
     if any(step.pipeline == "fixed" for step in trace.steps):
         found.append("the fixed pipeline ran part of it")
+    missing = SHOWN_STEPS - {step.step for step in trace.steps}
+    if missing:
+        found.append(f"no {', '.join(sorted(missing))} step")
     audit = next((s for s in trace.steps if s.step == "audit"), None)
-    if audit is None or (audit.output or {}).get("source") == "fallback":
-        found.append("no model audit")
+    if audit is None or (audit.output or {}).get("source") != "ultra":
+        found.append("not audited by Ultra")
+    models = {usage.model for usage in trace.models}
+    for model in (ULTRA, VISION):
+        if model not in models:
+            found.append(f"no {model} call")
     return found
 
 
@@ -60,6 +74,8 @@ def main() -> None:
     settings = get_settings()
     if settings.use_mocks:
         raise SystemExit("USE_MOCKS=true: a recording must use the real models")
+    if settings.environment == "production" and not args.run_ids:
+        raise SystemExit("ENVIRONMENT=production: rating would change the live demo's reports")
     RECORDED_DIR.mkdir(parents=True, exist_ok=True)
     today = datetime.now(UTC).date()
 

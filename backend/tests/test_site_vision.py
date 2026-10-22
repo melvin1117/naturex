@@ -7,6 +7,7 @@ from datetime import date
 
 import pytest
 
+from app.agents import site_vision
 from app.agents.auditor import ScoreInputs, build_auditor_input, check_audit
 from app.agents.site_vision import (
     ImageChange,
@@ -19,6 +20,7 @@ from app.agents.site_vision import (
 from app.llm import LLMClient
 from app.schemas import AuditorOutput
 from app.tools.earth_obs import load_site_metrics
+from app.tools.signals import Signal
 from app.tools.valuation import value_metrics
 from tests.test_llm import FakeTransport, MemoryCallLog, reply, settings
 
@@ -51,6 +53,10 @@ def test_demo_sites_have_both_views_and_unknown_sites_have_none() -> None:
     [
         ("clearing", {"forest_loss_ha": 3.2}, True),
         ("clearing", {"forest_loss_ha": 0.5}, None),
+        # Tree loss confirms a clearing, never a road or a building by itself.
+        ("road", {"forest_loss_ha": 30.0}, None),
+        ("new_structures", {"forest_loss_ha": 30.0}, None),
+        ("burn_scar", {"forest_loss_ha": 30.0}, True),
         ("clearing", {"forest_loss_ha": 0.0, "landcover": {"trees": 0.9}}, False),
         ("clearing", {"forest_loss_ha": 0.0, "landcover": {"built": 0.2}}, None),
         ("water_loss", {"water_change": -20.0}, True),
@@ -78,6 +84,20 @@ def test_a_greenness_change_needs_a_significant_trend_or_a_matching_signal() -> 
     assert cross_check(change("vegetation_loss"), load_site_metrics("mangrove_mx"))[0] is True
     assert cross_check(change("regrowth"), WETLAND)[0] is True
     assert cross_check(change("vegetation_loss"), WETLAND)[0] is False
+
+
+def test_the_12_month_summary_alone_never_confirms_a_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    summary = Signal(
+        "signal:greenness_last_12m", "greenness_last_12m", 1, "2025-10", "2026-09", "x", "moderate"
+    )
+    monkeypatch.setattr(site_vision, "find_signals", lambda _m: [summary])
+    flat = WETLAND.model_copy(update={"ndvi_trend": 0.002})
+    assert cross_check(change("regrowth"), flat) == (
+        None,
+        "greenness drifts that way, but not significantly",
+    )
 
 
 def test_one_call_with_both_images_and_no_numbers_kept() -> None:

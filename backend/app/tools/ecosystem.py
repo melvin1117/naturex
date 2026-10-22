@@ -61,10 +61,8 @@ _NAME_HINTS: tuple[tuple[Ecosystem, frozenset[str]], ...] = (
                 "lake",
                 "lakes",
                 "lago",
-                "lagos",
                 "reservoir",
                 "embalse",
-                "presa",
             }
         ),
     ),

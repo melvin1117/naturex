@@ -61,6 +61,8 @@ Cell = Literal[
     "whole site",
 ]
 HARM: frozenset[str] = frozenset({"clearing", "new_structures", "road", "burn_scar"})
+TREE_LOSS_KINDS: frozenset[str] = frozenset({"clearing", "burn_scar"})
+"""The harm kinds that tree-loss data can confirm."""
 
 
 class ImageChange(BaseModel):
@@ -202,8 +204,10 @@ def _greenness_change(metrics: EarthObsMetrics, direction: int) -> str | None:
     if details.significant_05 and metrics.ndvi_trend * direction > 0:
         return "the 5-year greenness trend is significant"
     for signal in find_signals(metrics):
-        if signal.direction == direction and not signal.simulated and signal.kind != "cloud_gap":
-            return "a greenness signal in the record matches"
+        # A dated month off its seasonal normal; the undated 12-month summary is too weak.
+        real = signal.kind == "greenness_anomaly" and not signal.simulated
+        if real and signal.direction == direction:
+            return "a dated greenness change in the record matches"
     return None
 
 
@@ -214,10 +218,11 @@ def cross_check(change: ImageChange, metrics: EarthObsMetrics) -> tuple[bool | N
     developed = sum(cover.get(k, 0.0) for k in ("built", "bare", "crops"))
     if change.kind in HARM:
         share = metrics.forest_loss_ha / metrics.area_ha if metrics.area_ha > 0 else 0.0
-        if share >= MIN_LOSS_SHARE:
+        if share >= MIN_LOSS_SHARE and change.kind in TREE_LOSS_KINDS:
             return True, "the forest-loss data shows a real share of the tree cover lost"
         if metrics.forest_loss_ha > 0:
-            return None, "some tree loss is recorded, too little to confirm it"
+            # Tree loss backs a clearing or a burn, never a road or a building by itself.
+            return None, "some tree loss is recorded; it can't confirm this kind of change"
         if developed >= 0.05:
             return None, "no tree loss recorded, but built, bare or cropped land is present"
         return False, "not confirmed: no tree loss and almost no built or bare land"

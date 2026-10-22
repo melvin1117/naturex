@@ -61,7 +61,13 @@ from app.models import (
 from app.models import WorldEvent as WorldEventRow
 from app.routers.runs import get_rating_runner
 from app.sandbox import _delete_world_rows, create_world, ensure_live_world
-from app.schemas import NewsScoutItem, NewsScoutOutput, NewsSearchRecord, RatingRunStatus
+from app.schemas import (
+    NewsFunnel,
+    NewsScoutItem,
+    NewsScoutOutput,
+    NewsSearchRecord,
+    RatingRunStatus,
+)
 from app.seed import seed
 from app.services import rating_runs
 from app.services.diff import audited_step, diff_reports
@@ -1577,6 +1583,8 @@ class FakeInvestigator:
                     credits=2,
                 )
             ],
+            # One of Tavily's 4 results was published outside the signal's window.
+            funnel=NewsFunnel(found=3, unique=3, sent_to_model=3, relevant=2, kept=2),
         )
 
     def read(self, asset: Any, url: str, question: str, llm: Any, world_id: UUID) -> ArticleCheck:
@@ -1668,6 +1676,7 @@ def test_super_investigates_between_the_news_and_the_audit(db: Connection, site:
 
     # Super saw labels only: no title, summary or URL of what was found or read.
     searched = json.loads(tool_requests[4]["messages"][-1]["content"])
+    assert (searched["results_in_window"], searched["outside_window"]) == (3, 1)
     assert searched["new_kept"] == [
         {
             "event": FIRE_EVENT,

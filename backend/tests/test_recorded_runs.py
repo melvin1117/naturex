@@ -8,6 +8,7 @@ from app.main import app
 from app.seed import DEMO_SITES
 from app.services.recorded_runs import (
     placeholder_asset_id,
+    placeholder_run_id,
     recorded_run,
     recorded_run_path,
 )
@@ -20,6 +21,8 @@ def test_every_demo_site_has_a_recorded_run_of_the_models_at_work() -> None:
         trace = recorded.trace
         assert recorded.site_key == site.key
         assert trace.asset_id == placeholder_asset_id(site.key)
+        assert trace.run_id == placeholder_run_id(site.key)
+        assert all(call.id is None for step in trace.steps for call in step.llm_calls)
         assert trace.status.value == "succeeded"
         steps = [step.step for step in trace.steps]
         assert {"earth_obs", "news", "plan", "investigate", "audit", "done"} <= set(steps)
