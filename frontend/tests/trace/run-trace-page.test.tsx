@@ -1,7 +1,9 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { RunTracePage } from "@/components/trace/run-trace-page";
+import { VerdictStrip } from "@/components/trace/verdict-strip";
+import type { ReportOut } from "@/lib/api/types";
 
 import { renderExchange, stubBrowserApis } from "../exchange/render";
 import { json } from "../lib/helpers";
@@ -79,5 +81,37 @@ describe("RunTracePage (a real run recorded on Oct 22)", () => {
     const panel = screen.getByRole("complementary", { name: "Selected step" });
     expect(within(panel).getByText("Tavily searches")).toBeVisible();
     expect(within(panel).getAllByText(/credits/).length).toBe(4);
+  });
+});
+
+describe("VerdictStrip", () => {
+  const report = {
+    run_id: celestun.run_id,
+    auditor: {
+      verdict:
+        "Clearing is reported [event:abc] but not yet seen [metric:forest_loss_12m_ha].",
+      auditor_adjustment: -2,
+    },
+  } as unknown as ReportOut;
+
+  it("shows the verdict without citations and links to the run's trace", () => {
+    render(<VerdictStrip report={report} />);
+
+    expect(
+      screen.getByText("Clearing is reported but not yet seen."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Health −2 with cited evidence"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /See how it was rated/ }),
+    ).toHaveAttribute("href", `/trace/${celestun.run_id}`);
+  });
+
+  it("stays hidden for a report without a verdict or a run", () => {
+    const { container } = render(
+      <VerdictStrip report={{ ...report, run_id: null } as ReportOut} />,
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 });

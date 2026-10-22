@@ -12,6 +12,7 @@ import { Delta, SiteBackdrop, ValueRange } from "@/components/proto/bits";
 import { PriceChart, PriceChartSkeleton } from "@/components/proto/charts";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
+import { VerdictStrip } from "@/components/trace/verdict-strip";
 import { ApiLedgerTab } from "@/components/proto/ledger-panels";
 import { LoadError } from "@/components/proto/load-error";
 import { PriceTick } from "@/components/live-number";
@@ -290,6 +291,8 @@ function AssetLoaded({
           )}
         </div>
       </section>
+
+      <VerdictStrip report={asset.latest_report} />
 
       {!latest ? (
         <p className="mt-8 rounded-3xl bg-card p-8 text-center text-muted-foreground shadow-soft">
