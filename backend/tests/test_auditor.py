@@ -10,6 +10,7 @@ from collections.abc import Iterator
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
@@ -35,16 +36,19 @@ from app.agents.auditor import (
     auditor_messages,
     build_auditor_input,
     check_audit,
+    fill_placeholders,
     no_op_audit,
+    placeholder_value,
     run_auditor,
     system_prompt,
 )
 from app.config import get_settings
-from app.llm import THINKING_OFF, DbCallLog, LLMClient
+from app.llm import DbCallLog, LLMClient
 from app.models import LlmCall
 from app.schemas import AuditorOutput, NewsScoutItem
 from app.tools.earth_obs import load_site_metrics
 from app.tools.scoring import DEFAULT_AGREEMENT, score_metrics
+from app.tools.signals import Signal
 from app.tools.valuation import value_metrics
 from tests.conftest import alembic_cfg, requires_db
 from tests.test_llm import NANO, SUPER, ULTRA, FakeTransport, MemoryCallLog, reply, settings
@@ -245,9 +249,11 @@ def test_valid_answer_is_accepted_and_moves_health_by_exactly_the_adjustment() -
     assert EVENT in result.citations and "metric:landcover.built" in result.citations
 
     request = transport.requests[0]
-    assert request["extra_body"] == THINKING_OFF  # thinking off for JSON (module docstring)
+    # Thinking on (module docstring): no strict json_schema, the schema rides in the prompt.
+    assert request["extra_body"] is None
     assert request["max_tokens"] == MAX_TOKENS
-    assert request["response_format"]["json_schema"]["name"] == "AuditorOutput"
+    assert "response_format" not in request
+    assert '"hypotheses"' in request["messages"][-1]["content"]
     assert request["messages"][0]["content"] == system_prompt()
 
     base = INPUTS.score()
@@ -566,9 +572,74 @@ def test_p7_negative_adjustment_citing_only_counted_events_is_rejected() -> None
     )
 
     assert errors == [
-        "a negative adjustment must also cite the metric or report fact that disagrees; "
-        "score:threat_pressure already prices relevant negative events"
+        "a negative adjustment must also cite the metric, signal or report fact that "
+        "disagrees; score:threat_pressure already prices relevant negative events"
     ]
+
+
+def _with_signals(*found: Signal) -> AuditorInput:
+    metrics = load_site_metrics("wetland_mx")
+    events = audit_events_from_news(mocks.news_scout_fixture())
+    inputs = ScoreInputs.from_metrics(metrics, is_wetland=True, data_age_days=6, events=events)
+    return build_auditor_input(
+        asset_name="Xochimilco Wetland",
+        rating_date=RATING_DATE,
+        metrics=metrics,
+        valuation=value_metrics(metrics),
+        base=inputs.score(),
+        events=events,
+        signals=found,
+    )
+
+
+DROP = Signal(
+    id="signal:greenness_2026_09",
+    kind="greenness_anomaly",
+    direction=-1,
+    start="2026-09",
+    end="2026-09",
+    text="greenness 15% below a normal September (2026-09)",
+    strength="moderate",
+)
+LAST_YEAR = Signal(
+    id="signal:greenness_last_12m",
+    kind="greenness_last_12m",
+    direction=-1,
+    start="2025-10",
+    end="2026-09",
+    text="the latest 12 months' greenness is 4% below the same months in earlier years",
+    strength="moderate",
+)
+
+
+def test_signals_are_citable_facts_with_trusted_numbers() -> None:
+    bundle = _with_signals(DROP, LAST_YEAR)
+
+    assert bundle.fact(DROP.id) == DROP.text
+    assert f"{DROP.id} = {DROP.text}" in bundle.render()
+    reason = f"A reported expansion [{EVENT}] matches a dated drop in greenness [{DROP.id}]."
+    summary = (
+        f"Greenness was 15% below a normal September [{DROP.id}] when encroachment was "
+        f"reported [{EVENT}]."
+    )
+    errors = check_audit(
+        AuditorOutput(
+            **answer(auditor_adjustment=-3, adjustment_reason=reason, summary_md=summary)
+        ),
+        bundle,
+    )
+    assert errors == []
+
+
+def test_the_already_priced_latest_year_alone_cannot_justify_an_adjustment() -> None:
+    bundle = _with_signals(DROP, LAST_YEAR)
+    reason = f"The latest year is browner [{LAST_YEAR.id}]."
+
+    errors = check_audit(
+        AuditorOutput(**answer(auditor_adjustment=-3, adjustment_reason=reason)), bundle
+    )
+
+    assert any("only facts the score already prices" in error for error in errors)
 
 
 # --- Agreement needs evidence (review P2) ----------------------------------------------------
@@ -871,3 +942,150 @@ def test_number_guard_treats_percent_spellings_alike() -> None:
     facts = ["metric:landcover.trees = 35.7%"]
     assert invented_numbers("Trees cover 35.7 % and 35.7 percent [x].", facts) == []
     assert invented_numbers("Trees cover 35.7 hectares.", facts) == ["35.7"]
+
+
+# --- Numbers through placeholders --------------------------------------------------------------
+
+
+def test_placeholders_become_the_exact_fact_values() -> None:
+    output = AuditorOutput(
+        **answer(
+            summary_md="The site covers {metric:area_ha} [metric:area_ha] and is worth "
+            "{valuation:value_mid} [valuation:value_mid].",
+            key_changes=["Surface water changed by {metric:water_change} [metric:water_change]."],
+        )
+    )
+
+    filled, unknown = fill_placeholders(output, BUNDLE)
+
+    assert unknown == []
+    assert f"covers {BUNDLE.fact('metric:area_ha')} [metric:area_ha]" in filled.summary_md
+    assert "{" not in filled.summary_md and "{" not in filled.key_changes[0]
+    assert check_audit(filled, BUNDLE) == []
+
+
+def test_an_unknown_placeholder_is_rejected_and_left_visible() -> None:
+    output = AuditorOutput(**answer(summary_md="Value {metric:made_up} [score:base_health]."))
+
+    filled, unknown = fill_placeholders(output, BUNDLE)
+
+    assert unknown == ["unknown placeholder {'metric:made_up'}"]
+    assert "{metric:made_up}" in filled.summary_md
+
+
+def test_a_placeholder_answer_passes_on_the_first_try_and_is_stored_filled() -> None:
+    summary = "Base health is {score:base_health} [score:base_health] [" + EVENT + "]."
+
+    result, transport = run(raw(summary_md=summary))
+
+    assert result.rounds == 1 and result.rejections == ()
+    assert "{score:base_health}" not in result.output.summary_md
+    assert BUNDLE.fact("score:base_health") in result.output.summary_md
+    assert len(transport.requests) == 1
+
+
+# --- The case: hypotheses and a verdict ---------------------------------------------------------
+
+
+def _case(**overrides: Any) -> dict[str, Any]:
+    case: dict[str, Any] = {
+        "hypotheses": [
+            {
+                "name": "clearing for the industrial park",
+                "evidence_for": [EVENT, "metric:landcover.built"],
+                "evidence_against": [],
+                "assessment": "supported",
+            },
+            {
+                "name": "seasonal drought",
+                "evidence_for": [],
+                "evidence_against": ["metric:ndvi_trend"],
+                "assessment": "weakened",
+            },
+        ],
+        "verdict": f"Encroachment [{EVENT}] best explains the change [metric:landcover.built].",
+    }
+    return answer(**{**case, **overrides})
+
+
+def test_a_cited_case_is_accepted_and_kept_with_the_audit() -> None:
+    result, _ = run(reply(json.dumps(_case()), prompt_tokens=2000, completion_tokens=900))
+
+    assert result.rounds == 1 and result.rejections == ()
+    assert [h.name for h in result.output.hypotheses] == [
+        "clearing for the industrial park",
+        "seasonal drought",
+    ]
+    assert result.output.verdict.startswith("Encroachment [")
+
+
+@pytest.mark.parametrize(
+    ("overrides", "error"),
+    [
+        (
+            {"verdict": "Encroachment best explains it."},
+            "verdict needs [ID] citations when hypotheses are given",
+        ),
+        (
+            {
+                "hypotheses": [
+                    {
+                        "name": "made up",
+                        "evidence_for": ["metric:not_in_bundle"],
+                        "evidence_against": [],
+                        "assessment": "unclear",
+                    }
+                ]
+            },
+            "hypotheses[0].evidence_for cites an unknown ID: 'metric:not_in_bundle'",
+        ),
+        (
+            {
+                "hypotheses": [
+                    {
+                        "name": f"h{i}",
+                        "evidence_for": [],
+                        "evidence_against": [],
+                        "assessment": "unclear",
+                    }
+                    for i in range(4)
+                ]
+            },
+            "at most 3 hypotheses",
+        ),
+    ],
+)
+def test_the_case_is_checked_in_code(overrides: dict[str, Any], error: str) -> None:
+    assert error in check_audit(AuditorOutput(**_case(**overrides)), BUNDLE)
+
+
+def test_an_answer_without_a_case_still_passes() -> None:
+    assert check_audit(AuditorOutput(**answer()), BUNDLE) == []
+
+
+def test_a_placeholder_inserts_the_leading_number_and_unit_only() -> None:
+    assert placeholder_value("83.9% of land cover is natural") == "83.9%"
+    assert placeholder_value("$2,669,511/yr ($2.7M/yr)") == "$2,669,511/yr"
+    assert placeholder_value("-6.6 (JRC surface-water change, scale -100 to 100)") == "-6.6"
+    assert placeholder_value("2026Q3 (observed)") == "2026Q3 (observed)"
+    assert placeholder_value("greenness 15% below a normal September (2026-09)").startswith(
+        "greenness"
+    )
+
+
+def test_a_fixed_answer_keeps_the_reasoning_of_the_thinking_call() -> None:
+    thinking = reply(
+        json.dumps(answer(summary_md="No citations here.")),
+        reasoning="Drought or clearing? The dates match the report.",
+        prompt_tokens=2000,
+        completion_tokens=4000,
+    )
+    thinking.usage.completion_tokens_details = SimpleNamespace(reasoning_tokens=3100)
+
+    result, transport = run(thinking, raw())
+
+    assert result.rounds == 2 and result.source == "ultra"
+    assert result.reasoning == "Drought or clearing? The dates match the report."
+    assert result.reasoning_tokens == 3100
+    assert transport.requests[0]["extra_body"] is None  # the first call thinks
+    assert transport.requests[1]["extra_body"] is not None  # the fix round doesn't

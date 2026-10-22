@@ -228,6 +228,8 @@ class LLMResult[T]:
     """Nemotron's reasoning text when reasoning was on (returned in `message.reasoning`)."""
     call_id: int | None = None
     """Call-log handle of the answering attempt (the `llm_calls` row ID), for `LLMClient.mark`."""
+    reasoning_tokens: int | None = None
+    """Output tokens the model spent thinking, when the provider reports them."""
 
 
 def _describe(exc: Exception) -> str:
@@ -290,6 +292,12 @@ def _reasoning(message: Any) -> str | None:
     return str(text) if text else None
 
 
+def _reasoning_tokens(usage: Any) -> int | None:
+    details = getattr(usage, "completion_tokens_details", None)
+    value = getattr(details, "reasoning_tokens", None)
+    return int(value) if isinstance(value, int) else None
+
+
 def _classify(exc: openai.APIError) -> str:
     """`retry` (transient or malformed response) or `fail` (our request is wrong)."""
     if isinstance(exc, openai.APIStatusError):
@@ -342,7 +350,9 @@ class LLMClient:
         asset_id: UUID | None = None,
     ) -> LLMResult[T]:
         """A Pydantic-validated JSON answer. The schema is sent both in `response_format`
-        and in the prompt (T02: both together are the most reliable)."""
+        and in the prompt (T02: both together are the most reliable), except with reasoning
+        on: Token Factory's strict `json_schema` then lets Nemotron write past `max_tokens`
+        without closing the JSON (spike, Oct 22), so the prompt alone carries the schema."""
         json_schema = schema.model_json_schema()
         full = [
             *messages,
@@ -369,7 +379,7 @@ class LLMClient:
             max_tokens=max_tokens,
             world_id=world_id,
             asset_id=asset_id,
-            response_format=response_format,
+            **({} if reasoning else {"response_format": response_format}),
         )
 
     def text(
@@ -601,6 +611,7 @@ class LLMClient:
                 attempts=attempt,
                 reasoning=_reasoning(message),
                 call_id=handle,
+                reasoning_tokens=_reasoning_tokens(usage),
             )
         raise LLMError(f"{agent}: no usable answer after {len(failures)} attempts: {failures}")
 

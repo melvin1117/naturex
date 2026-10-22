@@ -17,11 +17,13 @@ also fails (or the budget, network or models fail), `run_auditor` returns a dete
 no-op audit, so a rating never blocks on the LLM. `apply_audit` is the only way the result
 touches a number: it re-runs `scoring.score` with the bounded adjustment and agreement.
 
-Thinking: **off** for the JSON call (T02's "off for JSON" option). ADR-0003's T02 spike had
-Ultra 3/3 valid and correct with `json_schema` and reasoning off (0.8 s, $0.0009), and the T26
-live smoke showed that with reasoning on Ultra spent the whole 3,000-token cap thinking and
-returned truncated JSON on both attempts. `run_auditor(reasoning=True)` stays available for
-the T47 evals.
+Thinking: **on**. Ultra first weighs 2-3 competing explanations (for example seasonal drought
+against clearing) with the bundle IDs for and against each, then decides. With reasoning on,
+`LLMClient.structured` sends the schema in the prompt only: Token Factory's strict `json_schema`
+plus reasoning ran past `max_tokens` without closing the JSON (T26 live smoke, Oct 22 spike),
+while the prompt-only schema with an 8,000-token cap returned valid JSON in 14 s for about
+$0.02 (`reasoning_effort` and a `reasoning_budget` are ignored there). Prose numbers are
+written as `{fact-id}` placeholders that code fills with the exact value (`fill_placeholders`).
 """
 
 from __future__ import annotations
@@ -31,7 +33,7 @@ import logging
 import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
@@ -49,15 +51,24 @@ from app.schemas import AuditorFlag, AuditorOutput, NewsScoutItem
 from app.tools import scoring
 from app.tools.earth_obs import DateWindow, EarthObsMetrics
 from app.tools.scoring import DEFAULT_AGREEMENT, MAX_AUDITOR_ADJUSTMENT, Number, ScoreResult
+from app.tools.signals import PRICED_SIGNAL_IDS, Signal
 from app.tools.valuation import ValuationResult
 
 log = logging.getLogger(__name__)
 
 AGENT_NAME = "auditor"
 PROMPT_PATH = Path(__file__).parent / "prompts" / "auditor.md"
-# A full answer is ~600-900 tokens; Ultra's worst case is about $0.007 per attempt.
-MAX_TOKENS = 1800
-REASONING = False
+# Measured on the hero bundle (Oct 22): ~4,200 reasoning tokens plus a ~1,500-token answer,
+# 14 s and $0.02. A 3,500 cap left no room for the answer. Worst case about $0.03 an attempt.
+MAX_TOKENS = 8000
+REASONING = True
+FIX_MAX_TOKENS = 2500
+"""A correction round (thinking off) only rewrites the answer it is shown."""
+MAX_HYPOTHESES = 3
+MAX_HYPOTHESIS_IDS = 8
+MAX_HYPOTHESIS_NAME_CHARS = 80
+MAX_VERDICT_CHARS = 400
+REASONING_EXCERPT_CHARS = 1500
 
 MAX_SUMMARY_CHARS = 3000
 MAX_SUMMARY_WORDS = 400
@@ -73,11 +84,17 @@ MAX_FEEDBACK_ERRORS = 8
 REJECTED = "rejected"
 """`llm_calls.status` of a schema-valid answer that `check_audit` refused."""
 
-ID_PREFIXES = ("metric", "valuation", "score", "event", "report")
+ID_PREFIXES = ("metric", "signal", "valuation", "score", "event", "report")
 CITATION_RE = re.compile(
     r"\b(?:" + "|".join(ID_PREFIXES) + r"):[A-Za-z0-9_](?:[A-Za-z0-9_.\-]*[A-Za-z0-9_])?"
 )
 _EVENT_ID_RE = r"^[A-Za-z0-9_](?:[A-Za-z0-9_.\-]{0,62}[A-Za-z0-9_])?$"
+_PLACEHOLDER_NUMBER_RE = re.compile(
+    r"[+-]?\$?\d[\d,]*(?:\.\d+)?"
+    r"(?:%|/yr| (?:out of 100|t C/ha|t/ha|tCO2/yr|tCO2|NDVI/yr|ha))?(?=$|[\s(;,])"
+)
+# `{metric:area_ha}` in the prose: code writes the fact's exact value there (`fill_placeholders`).
+PLACEHOLDER_RE = re.compile(r"\{(" + CITATION_RE.pattern.removeprefix(r"\b") + r")\}")
 _HTML_TAG_RE = re.compile(r"<[A-Za-z!/?]")
 _LINK_RE = re.compile(r"\]\(|!\[|https?://", re.IGNORECASE)
 _MAX_SHOWN_ID = 80
@@ -318,12 +335,14 @@ def build_auditor_input(
     base: ScoreResult,
     events: Sequence[AuditEvent] = (),
     previous: PreviousReport | None = None,
+    signals: Sequence[Signal] = (),
 ) -> AuditorInput:
     """Flatten deterministic results into citable facts. `base` must be the pre-audit score."""
     if base.auditor_adjustment != 0 or base.agreement_source != "default":
         raise ValueError("build the bundle from the base score, before any audit is applied")
     facts = [
         *_metric_facts(metrics),
+        *((signal.id, signal.text) for signal in signals),
         *_valuation_facts(valuation),
         *_score_facts(base),
         *(_previous_facts(previous, base, valuation) if previous else []),
@@ -343,7 +362,9 @@ def build_auditor_input(
 def _metric_facts(m: EarthObsMetrics) -> list[tuple[str, str]]:
     trend = m.ndvi_trend_details
     windows = m.date_windows
+    kind = "a scripted Time Machine scenario, not observations" if m.simulated else "observed"
     facts = [
+        ("metric:data_version", f"{m.data_version} ({kind})"),
         ("metric:area_ha", f"{_fixed(m.area_ha, 1)} ha"),
         *(
             (f"metric:landcover.{name}", _pct(share))
@@ -492,6 +513,8 @@ def _compact_money(amount: int) -> str:
 
 def _texts(output: AuditorOutput) -> list[tuple[str, str]]:
     return [
+        *((f"hypotheses[{i}].name", h.name) for i, h in enumerate(output.hypotheses)),
+        ("verdict", output.verdict),
         ("adjustment_reason", output.adjustment_reason),
         ("summary_md", output.summary_md),
         *((f"key_changes[{i}]", text) for i, text in enumerate(output.key_changes)),
@@ -502,6 +525,46 @@ def _texts(output: AuditorOutput) -> list[tuple[str, str]]:
 
 def inline_citations(text: str) -> list[str]:
     return CITATION_RE.findall(text)
+
+
+def placeholder_value(value: str) -> str:
+    """What `{fact-id}` becomes: the fact's leading number and unit ("83.9%", "206.7 ha",
+    "$2,669,511/yr"), or its whole text when it doesn't start with a number."""
+    match = _PLACEHOLDER_NUMBER_RE.match(value)
+    return match.group(0) if match else value
+
+
+def fill_placeholders(
+    output: AuditorOutput, bundle: AuditorInput
+) -> tuple[AuditorOutput, list[str]]:
+    """Replace each `{fact-id}` with that fact's exact value, so a number in the prose is
+    always the one code computed. Returns the filled answer and any unknown placeholders."""
+    errors: list[str] = []
+
+    def fill(text: str) -> str:
+        def one(match: re.Match[str]) -> str:
+            value = bundle.fact(match.group(1))
+            if value is None:
+                errors.append(f"unknown placeholder {{{_shown(match.group(1))}}}")
+                return match.group(0)
+            return placeholder_value(value)
+
+        return PLACEHOLDER_RE.sub(one, text)
+
+    filled = output.model_copy(
+        update={
+            "hypotheses": [h.model_copy(update={"name": fill(h.name)}) for h in output.hypotheses],
+            "verdict": fill(output.verdict),
+            "adjustment_reason": fill(output.adjustment_reason),
+            "summary_md": fill(output.summary_md),
+            "key_changes": [fill(text) for text in output.key_changes],
+            "recommendations": [fill(text) for text in output.recommendations],
+            "flags": [
+                flag.model_copy(update={"detail": fill(flag.detail)}) for flag in output.flags
+            ],
+        }
+    )
+    return filled, list(dict.fromkeys(errors))
 
 
 def check_audit(output: AuditorOutput, bundle: AuditorInput) -> list[str]:
@@ -548,6 +611,26 @@ def check_audit(output: AuditorOutput, bundle: AuditorInput) -> list[str]:
     if agreement_valid:
         errors += _agreement_errors(output, bundle)
 
+    # The case: a few named explanations whose evidence resolves, and a cited verdict.
+    if len(output.hypotheses) > MAX_HYPOTHESES:
+        errors.append(f"at most {MAX_HYPOTHESES} hypotheses")
+    for i, hypothesis in enumerate(output.hypotheses):
+        if not hypothesis.name.strip() or len(hypothesis.name) > MAX_HYPOTHESIS_NAME_CHARS:
+            errors.append(f"hypotheses[{i}].name must be 1-{MAX_HYPOTHESIS_NAME_CHARS} characters")
+        for side in ("evidence_for", "evidence_against"):
+            ids = getattr(hypothesis, side)
+            if len(ids) > MAX_HYPOTHESIS_IDS:
+                errors.append(f"hypotheses[{i}].{side} lists more than {MAX_HYPOTHESIS_IDS} IDs")
+            errors += [
+                f"hypotheses[{i}].{side} cites an unknown ID: {_shown(c)}"
+                for c in ids
+                if c not in known
+            ]
+    if output.hypotheses and not inline_citations(output.verdict):
+        errors.append("verdict needs [ID] citations when hypotheses are given")
+    if len(output.verdict) > MAX_VERDICT_CHARS:
+        errors.append(f"verdict must be under {MAX_VERDICT_CHARS} characters")
+
     # Flags: typed, cited, and consistent with the greenwashing rating and simulated data.
     if len(output.flags) > MAX_FLAGS:
         errors.append(f"at most {MAX_FLAGS} flags")
@@ -585,7 +668,8 @@ def check_audit(output: AuditorOutput, bundle: AuditorInput) -> list[str]:
     if len(reason) > MAX_REASON_CHARS:
         errors.append(f"adjustment_reason must be under {MAX_REASON_CHARS} characters")
     for field, text in _texts(output):
-        if field not in ("summary_md", "adjustment_reason") and len(text) > MAX_ITEM_CHARS:
+        long_ok = ("summary_md", "adjustment_reason", "verdict")
+        if field not in long_ok and len(text) > MAX_ITEM_CHARS:
             errors.append(f"{field} must be under {MAX_ITEM_CHARS} characters")
         if _HTML_TAG_RE.search(text):
             errors.append(f"{field} contains HTML; use Markdown only")
@@ -614,6 +698,7 @@ def _is_priced(citation: str) -> bool:
     return (
         citation.startswith(("score:", "valuation:", "metric:landcover."))
         or citation in _PRICED_METRICS
+        or citation in PRICED_SIGNAL_IDS
     )
 
 
@@ -662,10 +747,12 @@ def _justification_errors(adjustment: int, reason: str, bundle: AuditorInput) ->
             "a positive adjustment must cite a relevant direction 1 news event or validated "
             "field evidence"
         )
-    if sign < 0 and not any(c.startswith(("metric:", "report:previous.")) for c in cited):
+    if sign < 0 and not any(
+        c.startswith(("metric:", "signal:", "report:previous.")) for c in cited
+    ):
         errors.append(
-            "a negative adjustment must also cite the metric or report fact that disagrees; "
-            "score:threat_pressure already prices relevant negative events"
+            "a negative adjustment must also cite the metric, signal or report fact that "
+            "disagrees; score:threat_pressure already prices relevant negative events"
         )
     return errors
 
@@ -750,6 +837,7 @@ class AuditResult:
     """The audit's greenwashing risk, or None when it was **not assessed** (the no-op audit).
     T27: show "not assessed" for None; `output.greenwashing_risk` is only a schema filler."""
     reasoning: str | None = None
+    reasoning_tokens: int | None = None
 
 
 @cache
@@ -773,13 +861,15 @@ def run_auditor(
     max_tokens: int = MAX_TOKENS,
     reasoning: bool = REASONING,
 ) -> AuditResult:
-    """Ultra → (retry with errors) → one tier down → deterministic no-op. Never raises on
-    model, budget or call-log failures."""
+    """Ultra (thinking) → Ultra fixes the rejected answer (thinking off) → one tier down →
+    deterministic no-op. Never raises on model, budget or call-log failures."""
     base = auditor_messages(bundle)
     rejections: list[str] = []
     rounds = 0
 
-    def ask(messages: list[dict[str, Any]], tier: Tier) -> LLMResult[AuditorOutput]:
+    def ask(
+        messages: list[dict[str, Any]], tier: Tier, *, think: bool = False
+    ) -> LLMResult[AuditorOutput]:
         nonlocal rounds
         rounds += 1
         return llm.structured(
@@ -787,17 +877,24 @@ def run_auditor(
             tier=tier,
             messages=messages,
             schema=AuditorOutput,
-            reasoning=reasoning,
-            max_tokens=max_tokens,
+            reasoning=think,
+            max_tokens=max_tokens if think else FIX_MAX_TOKENS,
             world_id=world_id,
             asset_id=asset_id,
         )
 
+    def review(result: LLMResult[AuditorOutput]) -> tuple[LLMResult[AuditorOutput], list[str]]:
+        filled, unknown = fill_placeholders(result.value, bundle)
+        return replace(result, value=filled), unknown + check_audit(filled, bundle)
+
     try:
-        first = ask(base, Tier.AUDITOR)
-        problems = check_audit(first.value, bundle)
+        # Ultra thinks once. Its decisions are in that answer, so a rejected answer goes back
+        # for a quick fix with thinking off (strict JSON), not for a second deliberation.
+        first = ask(base, Tier.AUDITOR, think=reasoning)
+        deliberation = first
+        checked, problems = review(first)
         if not problems:
-            return _accepted(first, bundle, rounds, rejections)
+            return _accepted(checked, bundle, rounds, rejections)
         llm.mark(first, REJECTED)
         rejections += problems
 
@@ -807,9 +904,9 @@ def run_auditor(
             {"role": "user", "content": _feedback(problems, "Your answer was rejected")},
         ]
         second = ask(retry, first.tier)
-        problems = check_audit(second.value, bundle)
+        checked, problems = review(second)
         if not problems:
-            return _accepted(second, bundle, rounds, rejections)
+            return _accepted(checked, bundle, rounds, rejections, deliberation)
         llm.mark(second, REJECTED)
         rejections += problems
 
@@ -817,9 +914,9 @@ def run_auditor(
         if lower is not None:
             note = _feedback(rejections, "Earlier answers were rejected")
             third = ask([*base, {"role": "user", "content": note}], lower)
-            problems = check_audit(third.value, bundle)
+            checked, problems = review(third)
             if not problems:
-                return _accepted(third, bundle, rounds, rejections)
+                return _accepted(checked, bundle, rounds, rejections, deliberation)
             llm.mark(third, REJECTED)
             rejections += problems
     except (LLMError, SQLAlchemyError) as exc:
@@ -843,7 +940,11 @@ def _accepted(
     bundle: AuditorInput,
     rounds: int,
     rejections: Sequence[str],
+    deliberation: LLMResult[AuditorOutput] | None = None,
 ) -> AuditResult:
+    """`deliberation` is the thinking call whose rejected answer a fix round corrected: its
+    reasoning is the one shown."""
+    thought = deliberation if deliberation is not None and not result.reasoning else result
     answer = result.value
     line = adjustment_line(bundle, answer.auditor_adjustment, answer.adjustment_reason)
     output = answer.model_copy(update={"summary_md": f"{answer.summary_md.rstrip()}\n\n{line}"})
@@ -858,7 +959,8 @@ def _accepted(
         rounds=rounds,
         rejections=tuple(rejections),
         greenwashing_risk=output.greenwashing_risk,
-        reasoning=result.reasoning,
+        reasoning=thought.reasoning,
+        reasoning_tokens=thought.reasoning_tokens,
     )
 
 

@@ -2003,13 +2003,53 @@ export interface components {
             citation?: string | null;
         };
         /**
+         * AuditorHypothesis
+         * @description One explanation the Auditor weighed, with the bundle IDs for and against it.
+         */
+        AuditorHypothesis: {
+            /**
+             * Name
+             * @description A short explanation, e.g. 'seasonal drought' or 'clearing'.
+             */
+            name: string;
+            /**
+             * Evidence For
+             * @description Bundle IDs supporting it
+             */
+            evidence_for?: string[];
+            /**
+             * Evidence Against
+             * @description Bundle IDs weakening it
+             */
+            evidence_against?: string[];
+            /**
+             * Assessment
+             * @enum {string}
+             */
+            assessment: "supported" | "weakened" | "unclear";
+        };
+        /**
          * AuditorOutput
          * @description Nemotron Ultra auditor JSON (dev-spec §7.7).
          */
         AuditorOutput: {
+            /**
+             * Hypotheses
+             * @description 2-3 competing explanations of what the metrics, signals and events show, weighed before deciding.
+             */
+            hypotheses?: components["schemas"]["AuditorHypothesis"][];
+            /**
+             * Verdict
+             * @description One sentence naming the best-supported explanation, ending with [ID] citations; numbers only as {ID} placeholders.
+             * @default
+             */
+            verdict: string;
             /** Auditor Adjustment */
             auditor_adjustment: number;
-            /** Adjustment Reason */
+            /**
+             * Adjustment Reason
+             * @description Why the adjustment, with [ID] citations; empty when it is 0.
+             */
             adjustment_reason: string;
             /** Agreement */
             agreement: number;
@@ -2020,15 +2060,21 @@ export interface components {
              * @enum {string}
              */
             greenwashing_risk: "low" | "medium" | "high";
-            /** Key Changes */
+            /**
+             * Key Changes
+             * @description Each ends with an [ID]; numbers as {ID} placeholders.
+             */
             key_changes?: string[];
             /** Recommendations */
             recommendations?: string[];
-            /** Summary Md */
+            /**
+             * Summary Md
+             * @description Markdown for non-experts. Every sentence ends with an [ID] citation; write every number as an {ID} placeholder, e.g. 'covers {metric:area_ha} [metric:area_ha]'.
+             */
             summary_md: string;
             /**
              * Citations
-             * @description Metric or event IDs cited in the report
+             * @description Every bundle ID you cited, copied exactly; nothing else.
              */
             citations?: string[];
         };

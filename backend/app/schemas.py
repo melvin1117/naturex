@@ -141,20 +141,46 @@ class AuditorFlag(BaseModel):
     citation: str | None = None
 
 
+class AuditorHypothesis(BaseModel):
+    """One explanation the Auditor weighed, with the bundle IDs for and against it."""
+
+    name: str = Field(description="A short explanation, e.g. 'seasonal drought' or 'clearing'.")
+    evidence_for: list[str] = Field(default_factory=list, description="Bundle IDs supporting it")
+    evidence_against: list[str] = Field(default_factory=list, description="Bundle IDs weakening it")
+    assessment: Literal["supported", "weakened", "unclear"]
+
+
 class AuditorOutput(BaseModel):
     """Nemotron Ultra auditor JSON (dev-spec §7.7)."""
 
+    hypotheses: list[AuditorHypothesis] = Field(
+        default_factory=list,
+        description="2-3 competing explanations of what the metrics, signals and events show, "
+        "weighed before deciding.",
+    )
+    verdict: str = Field(
+        default="",
+        description="One sentence naming the best-supported explanation, ending with [ID] "
+        "citations; numbers only as {ID} placeholders.",
+    )
     auditor_adjustment: int = Field(ge=-10, le=10)
-    adjustment_reason: str
+    adjustment_reason: str = Field(
+        description="Why the adjustment, with [ID] citations; empty when it is 0."
+    )
     agreement: float = Field(ge=0, le=1)
     flags: list[AuditorFlag] = Field(default_factory=list)
     greenwashing_risk: Literal["low", "medium", "high"]
-    key_changes: list[str] = Field(default_factory=list)
+    key_changes: list[str] = Field(
+        default_factory=list, description="Each ends with an [ID]; numbers as {ID} placeholders."
+    )
     recommendations: list[str] = Field(default_factory=list)
-    summary_md: str
+    summary_md: str = Field(
+        description="Markdown for non-experts. Every sentence ends with an [ID] citation; write "
+        "every number as an {ID} placeholder, e.g. 'covers {metric:area_ha} [metric:area_ha]'."
+    )
     citations: list[str] = Field(
         default_factory=list,
-        description="Metric or event IDs cited in the report",
+        description="Every bundle ID you cited, copied exactly; nothing else.",
     )
 
 

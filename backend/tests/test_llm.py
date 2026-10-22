@@ -198,6 +198,25 @@ def test_reasoning_on_sends_no_toggle_and_returns_the_reasoning_text() -> None:
 
     assert transport.requests[0]["extra_body"] is None
     assert result.reasoning == "The article reports a fire, so..."
+    # Strict json_schema with reasoning on runs past max_tokens (Oct 22 spike): the prompt
+    # alone carries the schema, and Pydantic still validates the answer.
+    assert "response_format" not in transport.requests[0]
+    assert "JSON Schema" in transport.requests[0]["messages"][-1]["content"]
+
+
+def test_reasoning_tokens_are_reported_when_the_provider_counts_them() -> None:
+    answer = reply(GOOD, reasoning="thinking")
+    answer.usage.completion_tokens_details = SimpleNamespace(reasoning_tokens=812)
+    transport = FakeTransport(answer, reply(GOOD))
+
+    thought = client(transport).structured(
+        agent="auditor", tier=Tier.AUDITOR, messages=MESSAGES, schema=Event, reasoning=True
+    )
+    plain = client(transport).structured(
+        agent="news_scout", tier=Tier.FAST, messages=MESSAGES, schema=Event
+    )
+
+    assert (thought.reasoning_tokens, plain.reasoning_tokens) == (812, None)
 
 
 def test_fenced_or_think_prefixed_json_is_accepted() -> None:

@@ -5426,8 +5426,63 @@
         ],
         "title": "AuditorFlag"
       },
+      "AuditorHypothesis": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "A short explanation, e.g. 'seasonal drought' or 'clearing'."
+          },
+          "evidence_for": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence For",
+            "description": "Bundle IDs supporting it"
+          },
+          "evidence_against": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Against",
+            "description": "Bundle IDs weakening it"
+          },
+          "assessment": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "weakened",
+              "unclear"
+            ],
+            "title": "Assessment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "assessment"
+        ],
+        "title": "AuditorHypothesis",
+        "description": "One explanation the Auditor weighed, with the bundle IDs for and against it."
+      },
       "AuditorOutput": {
         "properties": {
+          "hypotheses": {
+            "items": {
+              "$ref": "#/components/schemas/AuditorHypothesis"
+            },
+            "type": "array",
+            "title": "Hypotheses",
+            "description": "2-3 competing explanations of what the metrics, signals and events show, weighed before deciding."
+          },
+          "verdict": {
+            "type": "string",
+            "title": "Verdict",
+            "description": "One sentence naming the best-supported explanation, ending with [ID] citations; numbers only as {ID} placeholders.",
+            "default": ""
+          },
           "auditor_adjustment": {
             "type": "integer",
             "maximum": 10.0,
@@ -5436,7 +5491,8 @@
           },
           "adjustment_reason": {
             "type": "string",
-            "title": "Adjustment Reason"
+            "title": "Adjustment Reason",
+            "description": "Why the adjustment, with [ID] citations; empty when it is 0."
           },
           "agreement": {
             "type": "number",
@@ -5465,7 +5521,8 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Key Changes"
+            "title": "Key Changes",
+            "description": "Each ends with an [ID]; numbers as {ID} placeholders."
           },
           "recommendations": {
             "items": {
@@ -5476,7 +5533,8 @@
           },
           "summary_md": {
             "type": "string",
-            "title": "Summary Md"
+            "title": "Summary Md",
+            "description": "Markdown for non-experts. Every sentence ends with an [ID] citation; write every number as an {ID} placeholder, e.g. 'covers {metric:area_ha} [metric:area_ha]'."
           },
           "citations": {
             "items": {
@@ -5484,7 +5542,7 @@
             },
             "type": "array",
             "title": "Citations",
-            "description": "Metric or event IDs cited in the report"
+            "description": "Every bundle ID you cited, copied exactly; nothing else."
           }
         },
         "type": "object",

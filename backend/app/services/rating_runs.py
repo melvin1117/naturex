@@ -108,6 +108,7 @@ from app.tools.earth_obs import (
 )
 from app.tools.ecosystem import Ecosystem, infer_ecosystem
 from app.tools.geometry import geometry_sha256, metrics_match_polygon
+from app.tools.signals import Signal, find_signals
 from app.worlds import LIVE_WORLD_ID
 
 log = logging.getLogger(__name__)
@@ -583,6 +584,7 @@ class RunToolbox:
         self.metrics: EarthObsMetrics | None = None
         self.is_wetland: bool | None = None
         self.valuation: SiteRating | None = None
+        self.signals: list[Signal] = []
         self.news_events: list[AuditEvent] = []
         self.news_items: list[NewsScoutItem] = []
         """News Scout's kept events, stored with the report (`services.news_events`)."""
@@ -727,6 +729,7 @@ class RunToolbox:
             except ValueError as exc:
                 raise ToolFailed("no_baseline", retryable=False) from exc
         self.metrics, self.is_wetland = metrics, wetland
+        self.signals = find_signals(metrics)
         return {
             "data_version": metrics.data_version,
             "scenario": metrics.scenario,
@@ -736,6 +739,8 @@ class RunToolbox:
             "cloud_free_obs": metrics.cloud_free_obs,
             "wetland": wetland,
             "mock": is_mock_metrics(metrics),
+            # Dated changes found by code in the 5-year history (`tools.signals`).
+            "signals": [signal.to_json() for signal in self.signals],
         }
 
     def _bound_metrics(self) -> tuple[EarthObsMetrics, bool]:
@@ -854,6 +859,7 @@ class RunToolbox:
                 base=base.score,
                 events=events,
                 previous=previous,
+                signals=self.signals,
             )
         except ValueError as exc:
             raise ToolFailed("bundle_invalid", retryable=False) from exc
