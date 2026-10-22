@@ -151,7 +151,7 @@ export function SiteVisionView({
       <p className="text-xs text-machine-muted">
         {modelLabel(vision.model)} describes; it never measures. Each change is
         checked against the satellite metrics before the Auditor sees it.
-        Contains modified Copernicus Sentinel data.
+        Contains modified Copernicus Sentinel data 2021–2026.
       </p>
     </div>
   );

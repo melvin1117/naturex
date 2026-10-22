@@ -1103,6 +1103,19 @@ def test_a_fixed_answer_keeps_the_reasoning_of_the_thinking_call() -> None:
     assert transport.requests[1]["extra_body"] is not None  # the fix round doesn't
 
 
+def test_ultras_notes_are_never_shown_under_supers_answer() -> None:
+    thinking = reply(
+        json.dumps(answer(summary_md="No citations here.")),
+        reasoning="Ultra weighed drought against clearing.",
+    )
+    refused = reply(json.dumps(answer(summary_md="Still no citations.")))
+
+    result, transport = run(thinking, refused, raw())
+
+    assert result.source == "super" and models(transport)[-1] == SUPER
+    assert result.reasoning is None and result.reasoning_tokens is None
+
+
 def test_a_shortened_event_id_is_expanded_when_it_is_unambiguous() -> None:
     short = EVENT[: len("event:") + 8]
     output = AuditorOutput(

@@ -22,7 +22,7 @@ import html
 import logging
 import re
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any, Literal, Protocol
@@ -61,7 +61,11 @@ TEXT_CHAR_LIMIT = 3_000
 QUESTION_CHARS = 160
 FINDING_CHARS = 220
 QUOTE_CHARS = 280
-MIN_QUOTE_CHARS = 12
+MIN_TEXT_CHARS = 12
+"""A page shorter than this (after the injection cut) has nothing to read."""
+MIN_QUOTE_CHARS = 30
+MIN_QUOTE_WORDS = 5
+"""A verified quote is a real sentence fragment: "the fire was" proves nothing."""
 MAX_TOKENS = 500
 _MONTH_RE = re.compile(r"(\d{4})-(0[1-9]|1[0-2])")
 READ_RULE = (
@@ -201,9 +205,10 @@ def _fold(text: str) -> str:
 
 
 def checked_quote(quote: str, text: str) -> str:
-    """The quote when it appears verbatim (ignoring case and spacing) in the text, else ''."""
+    """The quote when it appears verbatim (ignoring case and spacing) in the text and is long
+    enough to say something (`MIN_QUOTE_CHARS`, `MIN_QUOTE_WORDS`), else ''."""
     clean = " ".join(quote.split()).strip(" \"'“”«»")[:QUOTE_CHARS]
-    if len(clean) < MIN_QUOTE_CHARS:
+    if len(clean) < MIN_QUOTE_CHARS or len(clean.split()) < MIN_QUOTE_WORDS:
         return ""
     return clean if _fold(clean) in _fold(text) else ""
 
@@ -269,7 +274,7 @@ def read_article(
     if cut:
         log.warning("Article reader cut suspected prompt injection from %r", url)
     text = text[:TEXT_CHAR_LIMIT]
-    if len(text) < MIN_QUOTE_CHARS:
+    if len(text) < MIN_TEXT_CHARS:
         raise ArticleUnavailable("unsafe" if cut else "empty")
 
     place = resolve_place(asset, settings, geocoder)
@@ -299,8 +304,3 @@ def read_article(
         extract_ms=extract_ms,
         credits=EXTRACT_CREDITS,
     )
-
-
-def readable(urls: Mapping[str, str], read: Sequence[str]) -> list[str]:
-    """Event IDs with a URL that haven't been read yet, in their original order."""
-    return [event for event, url in urls.items() if url and event not in read]

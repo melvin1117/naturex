@@ -445,8 +445,24 @@ class LiveInvestigator:
         )
 
 
+def for_model(summary: dict[str, Any]) -> dict[str, Any]:
+    """A step's result as the orchestrator sees it. The news searches stay in the trace only:
+    their queries carry the listing's name, which the community wrote, so Super gets the
+    count, not the text."""
+    if "searches" not in summary:
+        return summary
+    return {**summary, "searches": len(summary["searches"])}
+
+
 def investigator_for(settings: Settings) -> Investigator | None:
     return None if settings.use_mocks else LiveInvestigator(settings)
+
+
+def investigable(signal: Signal) -> bool:
+    """A signal worth a dated news search: a real month or run of months off its seasonal
+    normal. The 12-month summary has no single window, a cloud gap is no event, and a Time
+    Machine scenario's scripted change has no news to find."""
+    return signal.kind == "greenness_anomaly" and not signal.simulated
 
 
 def signal_window(signal: Signal, today: date) -> tuple[date, date]:
@@ -726,7 +742,7 @@ class RunToolbox:
 
     def choices(self) -> dict[Tool, list[str]]:
         return {
-            Tool.SEARCH_NEWS: [signal.id for signal in self.signals],
+            Tool.SEARCH_NEWS: [s.id for s in self.signals if investigable(s)],
             Tool.READ_ARTICLE: self._readable(),
         }
 
@@ -841,7 +857,7 @@ class RunToolbox:
             )
             return {"status": "failed", "error": error}
         self._done[tool] = status
-        return {"status": "ok", **summary}
+        return {"status": "ok", **for_model(summary)}
 
     # --- the steps (deterministic code, or a guarded agent) ---
 
@@ -907,6 +923,10 @@ class RunToolbox:
         """The vision model's before/after reading of a demo site (optional: a failure is
         recorded in the output and the run goes on without it)."""
         if not self._deps.settings.site_vision_live or self._llm is None:
+            return None
+        if metrics.simulated:
+            # A Time Machine scenario scripts the metrics; the images are the real ones, so a
+            # code check of one against the other would mean nothing.
             return None
         images = site_images(self._asset.site_key)
         if images is None:
@@ -1098,9 +1118,16 @@ class RunToolbox:
         )
         if investigator is None or llm is None or item is None or item.url is None:
             raise ToolFailed("not_available", retryable=False)
-        check = investigator.read(
-            self._scout_asset(), item.url, args.question, llm, self._spec.world_id
-        )
+        try:
+            check = investigator.read(
+                self._scout_asset(), item.url, args.question, llm, self._spec.world_id
+            )
+        except (ToolFailed, ArticleUnavailable, LLMError):
+            raise
+        except Exception as exc:
+            # An optional follow-up never fails the rating (a call-log write, a parse error).
+            log.warning("article read failed: %s", type(exc).__name__)
+            raise ToolFailed("read_error") from exc
         self.readings[args.event] = check
         seen = {"event": args.event, **check.labels()}
         trace = {

@@ -50,6 +50,7 @@ def test_demo_sites_have_both_views_and_unknown_sites_have_none() -> None:
     ("kind", "metrics", "agrees"),
     [
         ("clearing", {"forest_loss_ha": 3.2}, True),
+        ("clearing", {"forest_loss_ha": 0.5}, None),
         ("clearing", {"forest_loss_ha": 0.0, "landcover": {"trees": 0.9}}, False),
         ("clearing", {"forest_loss_ha": 0.0, "landcover": {"built": 0.2}}, None),
         ("water_loss", {"water_change": -20.0}, True),
@@ -63,6 +64,20 @@ def test_code_checks_each_described_change_against_the_metrics(
 ) -> None:
     m = WETLAND.model_copy(update=metrics)
     assert cross_check(change(kind), m)[0] is agrees
+
+
+def test_a_greenness_change_needs_a_significant_trend_or_a_matching_signal() -> None:
+    # Sumidero: greenness drifts down (p = 0.9) with no dated drop, so "less vegetation" is
+    # only a hint; Celestún's June 2025 drop confirms it; Xochimilco's spring rise confirms
+    # regrowth.
+    forest = load_site_metrics("restoration_forest")
+    assert cross_check(change("vegetation_loss"), forest) == (
+        None,
+        "greenness drifts that way, but not significantly",
+    )
+    assert cross_check(change("vegetation_loss"), load_site_metrics("mangrove_mx"))[0] is True
+    assert cross_check(change("regrowth"), WETLAND)[0] is True
+    assert cross_check(change("vegetation_loss"), WETLAND)[0] is False
 
 
 def test_one_call_with_both_images_and_no_numbers_kept() -> None:

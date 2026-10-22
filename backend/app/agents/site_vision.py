@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 
 from app.llm import LLMClient, LLMResult, Tier
 from app.tools.earth_obs import EarthObsMetrics
+from app.tools.signals import find_signals
 from app.tools.site_images import image_path
 
 AGENT_NAME = "site_vision"
@@ -190,13 +191,33 @@ def _clean_view(view: ImageView) -> ImageView:
     )
 
 
+MIN_LOSS_SHARE = 0.01
+"""Tree loss of at least 1% of the site confirms a described clearing; less only hints at it."""
+
+
+def _greenness_change(metrics: EarthObsMetrics, direction: int) -> str | None:
+    """Why the record backs a greenness change in `direction`, or None: a significant 5-year
+    trend that way, or a real dated signal that way (a seasonal swing is neither)."""
+    details = metrics.ndvi_trend_details
+    if details.significant_05 and metrics.ndvi_trend * direction > 0:
+        return "the 5-year greenness trend is significant"
+    for signal in find_signals(metrics):
+        if signal.direction == direction and not signal.simulated and signal.kind != "cloud_gap":
+            return "a greenness signal in the record matches"
+    return None
+
+
 def cross_check(change: ImageChange, metrics: EarthObsMetrics) -> tuple[bool | None, str]:
-    """What the satellite metrics say about one described change (deterministic)."""
+    """What the satellite metrics say about one described change (deterministic). A change is
+    confirmed only by evidence of its own size and kind, never by the sign of a noisy trend."""
     cover = metrics.landcover
     developed = sum(cover.get(k, 0.0) for k in ("built", "bare", "crops"))
     if change.kind in HARM:
+        share = metrics.forest_loss_ha / metrics.area_ha if metrics.area_ha > 0 else 0.0
+        if share >= MIN_LOSS_SHARE:
+            return True, "the forest-loss data shows a real share of the tree cover lost"
         if metrics.forest_loss_ha > 0:
-            return True, "the forest-loss data shows tree cover lost over 5 years"
+            return None, "some tree loss is recorded, too little to confirm it"
         if developed >= 0.05:
             return None, "no tree loss recorded, but built, bare or cropped land is present"
         return False, "not confirmed: no tree loss and almost no built or bare land"
@@ -212,17 +233,16 @@ def cross_check(change: ImageChange, metrics: EarthObsMetrics) -> tuple[bool | N
             if metrics.water_change > 5
             else (False, "not confirmed: surface water did not increase")
         )
-    if change.kind == "vegetation_loss":
+    if change.kind in ("vegetation_loss", "regrowth"):
+        direction = -1 if change.kind == "vegetation_loss" else 1
+        why = _greenness_change(metrics, direction)
+        if why is not None:
+            return True, why
+        drifting = metrics.ndvi_trend * direction > 0
         return (
-            (True, "greenness is trending down")
-            if metrics.ndvi_trend < 0
-            else (False, "not confirmed: greenness is not trending down")
-        )
-    if change.kind == "regrowth":
-        return (
-            (True, "greenness is trending up")
-            if metrics.ndvi_trend > 0
-            else (False, "not confirmed: greenness is not trending up")
+            (None, "greenness drifts that way, but not significantly")
+            if drifting
+            else (False, "not confirmed: greenness is not moving that way")
         )
     return None, "nothing to confirm"
 

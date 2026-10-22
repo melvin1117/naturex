@@ -1176,7 +1176,12 @@ def _accepted(
 ) -> AuditResult:
     """`deliberation` is the thinking call whose rejected answer a fix round corrected: its
     reasoning is the one shown."""
-    thought = deliberation if deliberation is not None and not result.reasoning else result
+    # Show the thinking call's notes for a fix of its own answer, never under another model's.
+    thought = (
+        deliberation
+        if deliberation is not None and deliberation.tier is result.tier and not result.reasoning
+        else result
+    )
     answer = result.value
     line = adjustment_line(bundle, answer.auditor_adjustment, answer.adjustment_reason)
     output = answer.model_copy(update={"summary_md": f"{answer.summary_md.rstrip()}\n\n{line}"})

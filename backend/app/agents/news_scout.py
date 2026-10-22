@@ -425,7 +425,7 @@ class TavilyNewsSearch:
             "include_answer": False,
             "include_raw_content": False,
             "include_published_date": True,
-            "filter_by_published_date": False,
+            "filter_by_published_date": query.start_date is not None,
             "exclude_domains": list(TAVILY_EXCLUDED_DOMAINS),
         }
         if query.language:
@@ -670,6 +670,7 @@ def run_followup_search(
         today=today,
         result_cache=result_cache,
         cache_key=cache_key,
+        window=window,
     )
 
 
@@ -686,6 +687,7 @@ def _scout(
     today: Callable[[], date],
     result_cache: NewsScoutCache,
     cache_key: str,
+    window: tuple[date, date] | None = None,
 ) -> NewsScoutOutput:
     if news_search is None and credits is None:
         credits = shared_credits(settings.tavily_api_key)
@@ -711,6 +713,10 @@ def _scout(
 
     found, searches = _search_all(active_search, queries_for(place), lookback_days)
     degraded = degraded or any(record.error for record in searches)
+    if window is not None:
+        # A dated follow-up claims "news from these months": Tavily may date a page by its
+        # last update or not at all, so code keeps only articles published in the window.
+        found = [a for a in found if a.published_at and window[0] <= a.published_at <= window[1]]
 
     unique = _dedupe_articles(found)
     usable = []

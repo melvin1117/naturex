@@ -18,6 +18,7 @@ import { cn } from "cn";
 
 import { ChartTooltip, ndviSummary } from "@/components/proto/charts";
 import { Panel } from "@/components/proto/report-panels";
+import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { DEMO_SITES, demoSiteMediaUrl } from "@/lib/demo-site-images";
 import {
@@ -303,8 +304,8 @@ export function EvidenceTimelinePanel({
               Nemotron 3 Super followed up before the audit
             </p>
             <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
-              {timeline.followUps.map((note) => (
-                <li key={note}>{note}</li>
+              {timeline.followUps.map((note, i) => (
+                <li key={`${i}-${note}`}>{note}</li>
               ))}
             </ul>
           </div>
@@ -321,16 +322,18 @@ export function EvidenceTimelinePanel({
               ))}
             </ol>
             {timeline.entries.length > SHOWN && (
-              <button
+              <Button
                 type="button"
+                variant="link"
+                size="sm"
                 onClick={() => setAll((a) => !a)}
                 aria-expanded={all}
-                className="mt-2 text-sm font-medium text-lime-ink underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="mt-2 h-auto px-0 text-lime-ink"
               >
                 {all
                   ? "Show the latest only"
                   : `Show all ${timeline.entries.length}`}
-              </button>
+              </Button>
             )}
           </section>
         )}
@@ -387,7 +390,7 @@ function BeforeAfterPanel({
           style={{ left: `calc(${at}% - 1px)` }}
         />
         <span className="absolute top-3 left-3 rounded-full bg-black/55 px-2.5 py-1 text-xs text-white">
-          Oct 2021 – Sep 2022
+          Five years earlier
         </span>
         <span className="absolute top-3 right-3 rounded-full bg-black/55 px-2.5 py-1 text-xs text-white">
           Latest 12 months
@@ -422,7 +425,7 @@ function BeforeAfterPanel({
       )}
       <p className="mt-3 text-xs text-muted-foreground">
         Sentinel-2 true-colour composites with the site&apos;s outline. Contains
-        modified Copernicus Sentinel data.
+        modified Copernicus Sentinel data 2021–2026.
       </p>
     </Panel>
   );

@@ -21,6 +21,8 @@ import {
   withoutCitations,
 } from "@/lib/trace-view";
 
+import { Button } from "@/components/ui/button";
+
 import { ActorChip, ActorIcon } from "./actor";
 import { SiteVisionView } from "./site-vision";
 import { FollowUpDetail, PlanDetail } from "./trace-followup";
@@ -67,13 +69,14 @@ function NodeButton({
 }) {
   const muted = node.status === "skipped";
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={() => onSelect(node)}
       aria-pressed={selected}
       className={cn(
-        "flex w-full items-start gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors",
-        "hover:bg-machine-raised focus-visible:ring-2 focus-visible:ring-lime focus-visible:outline-none",
+        "h-auto w-full items-start justify-start gap-3 rounded-2xl px-3 py-2.5 text-left font-normal whitespace-normal active:translate-y-0",
+        "text-machine-ink hover:bg-machine-raised hover:text-machine-ink focus-visible:ring-2 focus-visible:ring-lime focus-visible:outline-none",
         selected && "bg-machine-raised ring-1 ring-lime/60",
         muted && "opacity-60",
       )}
@@ -109,7 +112,7 @@ function NodeButton({
           </span>
         )}
       </span>
-    </button>
+    </Button>
   );
 }
 

@@ -4,7 +4,7 @@ Usage (repo root, after an eval run): backend/.venv/bin/python evals/publish.py
 
 The AI control room and the README show these numbers, failures included. The frontend keeps
 its own small copy because its build context doesn't include `evals/`;
-`frontend/tests/trace/evals-data.test.ts` fails when the copy drifts from the results.
+`backend/tests/test_evals_published.py` fails when the copy drifts from the results.
 """
 
 from __future__ import annotations

@@ -1505,8 +1505,42 @@ def test_a_dated_query_sends_start_and_end_dates_instead_of_a_time_range() -> No
     search.search(SearchQuery("Xochimilco"), max_results=5, lookback_days=30)
 
     assert (sent[0]["start_date"], sent[0]["end_date"]) == ("2025-01-01", "2025-06-30")
-    assert "time_range" not in sent[0]
+    assert "time_range" not in sent[0] and sent[0]["filter_by_published_date"] is True
     assert sent[1]["time_range"] == "month" and "start_date" not in sent[1]
+    assert sent[1]["filter_by_published_date"] is False
+
+
+def test_a_followup_keeps_only_articles_published_in_its_window() -> None:
+    def fire(url: str, published: date | None) -> NewsArticle:
+        return NewsArticle(
+            title="Incendio en Xochimilco",
+            url=url,
+            published_at=published,
+            content="Un incendio de pastizal en Xochimilco, Ciudad de México.",
+        )
+
+    inside = fire("https://example.com/in", date(2025, 3, 20))
+    llm = FakeLLM(NewsScoutClassificationOutput(events=[relevant(1, impact_type="fire")]))
+    result = run_followup_search(
+        ASSET,
+        "fire",
+        WINDOW,
+        settings=Settings(_env_file=None, use_mocks=False),
+        llm=llm,
+        geocoder=FakeGeocoder(XOCHIMILCO),
+        news_search=FakeNewsSearch(
+            [
+                fire("https://example.com/old", date(2023, 3, 1)),
+                fire("https://example.com/undated", None),
+                inside,
+            ]
+        ),
+        cache=NewsScoutCache(),
+        today=lambda: date(2026, 10, 22),
+    )
+
+    assert [e.url for e in result.events] == [inside.url]
+    assert result.funnel is not None and result.funnel.found == 1
 
 
 def test_followup_search_uses_the_same_guards_classifier_and_gate() -> None:

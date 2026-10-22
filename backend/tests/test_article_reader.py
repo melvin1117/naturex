@@ -190,6 +190,8 @@ def test_question_quote_and_month_helpers() -> None:
         "controlaron un incendio de pastizal"
     )
     assert checked_quote("too short", PAGE) == ""
+    # On the page, but too short to verify anything.
+    assert checked_quote("un incendio de pastizal", PAGE) == ""
     assert checked_month("2025-3", date(2026, 1, 1)) is None
     assert checked_month("1999-12", date(2026, 1, 1)) is None
     assert checked_month("2026-02", date(2026, 1, 31)) is None
