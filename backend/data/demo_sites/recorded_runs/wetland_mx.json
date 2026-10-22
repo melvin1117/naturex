@@ -1,0 +1,838 @@
+{
+  "site_key": "wetland_mx",
+  "recorded_on": "2026-10-22",
+  "trace": {
+    "run_id": "807b2c7e-dc60-538a-bb8e-4fc658a6dcdb",
+    "asset_id": "8f2c2a72-7f17-50ff-ae61-455ac3369e40",
+    "status": "succeeded",
+    "steps": [
+      {
+        "step": "queued",
+        "status": "queued",
+        "tool": null,
+        "pipeline": null,
+        "model": null,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "latency_ms": null,
+        "cost_usd": null,
+        "error": null,
+        "ts": "2026-10-22T17:59:25.953736Z",
+        "attempts": null,
+        "output": null,
+        "llm_calls": []
+      },
+      {
+        "step": "started",
+        "status": "running",
+        "tool": null,
+        "pipeline": "orchestrator",
+        "model": null,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "latency_ms": null,
+        "cost_usd": null,
+        "error": null,
+        "ts": "2026-10-22T17:59:26.006836Z",
+        "attempts": null,
+        "output": null,
+        "llm_calls": []
+      },
+      {
+        "step": "earth_obs",
+        "status": "ok",
+        "tool": "earth_obs",
+        "pipeline": "orchestrator",
+        "model": "nvidia/Nemotron-3.5-Super-VL",
+        "prompt_tokens": 2148,
+        "completion_tokens": 283,
+        "latency_ms": 1966,
+        "cost_usd": "0.0008991",
+        "error": null,
+        "ts": "2026-10-22T17:59:29.588278Z",
+        "attempts": 1,
+        "output": {
+          "mock": false,
+          "vision": {
+            "after": {
+              "water": "Large dark water body in the north with several small islands, plus a smaller dark pond in the south-east",
+              "vegetation": "Dense green vegetation along the western strip and scattered green patches across the central and eastern areas",
+              "built_or_bare": "Bare brown ground in the north-east and south-east, with a narrow linear feature along the western edge"
+            },
+            "model": "nvidia/Nemotron-3.5-Super-VL",
+            "before": {
+              "water": "Large dark water body in the north with several small islands, plus a smaller dark pond in the south-east",
+              "vegetation": "Dense green vegetation along the western strip and scattered green patches across the central and eastern areas",
+              "built_or_bare": "Bare brown ground in the north-east and south-east, with a narrow linear feature along the western edge"
+            },
+            "changes": [
+              {
+                "id": "image:1",
+                "kind": "no_clear_change",
+                "note": "No clear real change inside the outline between the two images",
+                "check": "nothing to confirm",
+                "where": "whole site",
+                "agrees": null,
+                "confidence": "high"
+              }
+            ],
+            "overall": "stable"
+          },
+          "area_ha": 206.7,
+          "signals": [
+            {
+              "z": 3.1,
+              "id": "signal:greenness_2026_04",
+              "end": "2026-06",
+              "pct": 18.9,
+              "kind": "greenness_anomaly",
+              "text": "greenness above its seasonal normal for 3 months (2026-04 to 2026-06), 19% above a normal April at its highest",
+              "start": "2026-04",
+              "months": 3,
+              "strength": "moderate",
+              "direction": 1,
+              "simulated": false
+            },
+            {
+              "z": null,
+              "id": "signal:greenness_last_12m",
+              "end": "2026-09",
+              "pct": 5.1,
+              "kind": "greenness_last_12m",
+              "text": "the latest 12 months' greenness is 5% above the same months in earlier years",
+              "start": "2025-10",
+              "months": 12,
+              "strength": "moderate",
+              "direction": 1,
+              "simulated": false
+            }
+          ],
+          "wetland": true,
+          "scenario": "baseline",
+          "simulated": false,
+          "data_version": "2026Q3",
+          "cloud_free_obs": 73,
+          "natural_fraction": 0.839
+        },
+        "llm_calls": [
+          {
+            "id": null,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 856,
+            "completion_tokens": 43,
+            "latency_ms": 1577,
+            "cost_usd": "0.0002955"
+          },
+          {
+            "id": null,
+            "agent": "site_vision",
+            "model": "nvidia/Nemotron-3.5-Super-VL",
+            "tier": "perception",
+            "status": "ok",
+            "prompt_tokens": 1292,
+            "completion_tokens": 240,
+            "latency_ms": 1848,
+            "cost_usd": "0.0006036"
+          }
+        ]
+      },
+      {
+        "step": "valuation",
+        "status": "ok",
+        "tool": "valuation",
+        "pipeline": "orchestrator",
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "prompt_tokens": 1514,
+        "completion_tokens": 28,
+        "latency_ms": 311,
+        "cost_usd": "0.0004794",
+        "error": null,
+        "ts": "2026-10-22T17:59:30.611545Z",
+        "attempts": 1,
+        "output": {
+          "unit": "Int$2020/yr",
+          "value_low": 2121067,
+          "value_mid": 2669511,
+          "value_high": 2669511,
+          "carbon_stock_tco2": 8828
+        },
+        "llm_calls": [
+          {
+            "id": null,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 1514,
+            "completion_tokens": 28,
+            "latency_ms": 686,
+            "cost_usd": "0.0004794"
+          }
+        ]
+      },
+      {
+        "step": "news",
+        "status": "ok",
+        "tool": "news_scout",
+        "pipeline": "orchestrator",
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "prompt_tokens": 5706,
+        "completion_tokens": 525,
+        "latency_ms": 12998,
+        "cost_usd": "0.0021843",
+        "error": null,
+        "ts": "2026-10-22T17:59:44.472416Z",
+        "attempts": 1,
+        "output": {
+          "kept": [
+            {
+              "date": "2025-12-08",
+              "event": "event:98f6c4c6-a172-5092-ab29-671c2b391482",
+              "source": "cdn-dynmedia-1.microsoft.com",
+              "severity": 3,
+              "direction": 1,
+              "impact_type": "restoration"
+            },
+            {
+              "date": "2026-02-03",
+              "event": "event:26ee19cd-2a2d-551c-be5e-c8b43ae51d4c",
+              "source": "greentology.life",
+              "severity": 2,
+              "direction": 1,
+              "impact_type": "restoration"
+            },
+            {
+              "date": "2026-02-18",
+              "event": "event:bdc5f514-a4cc-5478-a5f7-1f6b6b46604e",
+              "source": "cumbrevidaypaz.com.mx",
+              "severity": 4,
+              "direction": 1,
+              "impact_type": "protection"
+            },
+            {
+              "date": "2026-06-17",
+              "event": "event:bfbbb5dd-84b0-5d7b-b9ae-e7fe75f93639",
+              "source": "media.base44.com",
+              "severity": 4,
+              "direction": -1,
+              "impact_type": "other"
+            }
+          ],
+          "events": 4,
+          "funnel": {
+            "kept": 4,
+            "found": 20,
+            "unique": 16,
+            "unsafe": 0,
+            "off_site": 0,
+            "relevant": 4,
+            "sent_to_model": 8
+          },
+          "negative": 1,
+          "positive": 3,
+          "relevant": 4,
+          "searches": [
+            {
+              "query": "Xochimilco Wetland Ciudad de México",
+              "credits": 2,
+              "results": 5,
+              "language": null,
+              "latency_ms": 5937
+            },
+            {
+              "query": "Xochimilco Ciudad de México wetland drainage OR pollution OR development OR drought OR fire",
+              "credits": 2,
+              "results": 5,
+              "language": null,
+              "latency_ms": 5344
+            },
+            {
+              "query": "Xochimilco Ciudad de México wetland restoration OR protection OR conservation",
+              "credits": 2,
+              "results": 5,
+              "language": null,
+              "latency_ms": 6118
+            },
+            {
+              "query": "Xochimilco humedal desecación OR contaminación OR invasión OR sequía OR restauración OR conservación OR protección",
+              "credits": 2,
+              "results": 5,
+              "language": "es",
+              "latency_ms": 4527
+            }
+          ],
+          "ecosystem": "wetland",
+          "impact_types": [
+            "other",
+            "protection",
+            "restoration"
+          ],
+          "max_severity": 4,
+          "dropped_off_site": 0,
+          "locality_unverified": false
+        },
+        "llm_calls": [
+          {
+            "id": null,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 1630,
+            "completion_tokens": 33,
+            "latency_ms": 834,
+            "cost_usd": "0.0005187"
+          },
+          {
+            "id": null,
+            "agent": "news_scout",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 4076,
+            "completion_tokens": 492,
+            "latency_ms": 4489,
+            "cost_usd": "0.0016656"
+          }
+        ]
+      },
+      {
+        "step": "plan",
+        "status": "ok",
+        "tool": null,
+        "pipeline": "orchestrator",
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "prompt_tokens": 2824,
+        "completion_tokens": 769,
+        "latency_ms": null,
+        "cost_usd": "0.0015393",
+        "error": null,
+        "ts": "2026-10-22T17:59:49.659032Z",
+        "attempts": null,
+        "output": {
+          "chose": [
+            "read_article"
+          ],
+          "notes": "We need to compare earth_obs signals with kept news. Earth obs shows a greenness increase (positive anomaly) Apr-Jun 2026, +19%. Kept news includes events: Dec 2025 restoration severity 3, Feb 2026 restoration severity 2, Feb 2026 protection severity 4, Jun 2026 other severity 4 (negative direction). There's a positive greenness signal Apr-Jun 2026, which aligns with restoration activities maybe causing increased greenness. Also there is a negative event in June 2026 (other, severity 4, direction -1) possibly something damaging? But overall we have both positive and negative.\n\nWe should investigate the greenness signal: see if any news explains it. Since we have a dated signal greenness_2026_04 (Apr-Jun 2026). Look for news that could explain greenness increase: topic restoration seems plausible. We have restoration events in Dec 2025 and Feb 2026. Could those cause greenness increase Apr-Jun? Possibly. So we should call search_news for signal:greenness_2026_04 with topic restoration, explaining we want to see if restoration news matches the greenness increase.\n\nBut also note instruction: Investigate before auditor whenever search_news or read_article is offered: 1. For a dated signal from earth_obs (one with its own months, not the latest-12-months summary) that no kept news item dates to, call search_news with that signal and the topic most likely to explain it. Here we have kept news items with dates: Dec 2025, Feb 2026 (two), Feb 2026, Jun 2026. The signal period Apr-Jun ",
+          "reasoning_tokens": 663
+        },
+        "llm_calls": [
+          {
+            "id": null,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 2824,
+            "completion_tokens": 769,
+            "latency_ms": 5156,
+            "cost_usd": "0.0015393"
+          }
+        ]
+      },
+      {
+        "step": "investigate",
+        "status": "ok",
+        "tool": "read_article",
+        "pipeline": "orchestrator",
+        "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        "prompt_tokens": 1110,
+        "completion_tokens": 110,
+        "latency_ms": 2434,
+        "cost_usd": "0.000093",
+        "error": null,
+        "ts": "2026-10-22T17:59:52.100530Z",
+        "attempts": 1,
+        "output": {
+          "url": "https://media.base44.com/files/public/6a0001949163ade945a0c48b/c34f6f4db_CARTARAMSARENESPAOL1.pdf",
+          "why": "To determine if the negative June 2026 event affected the asset and could explain the greenness anomaly.",
+          "tool": "read_article",
+          "event": "event:bfbbb5dd-84b0-5d7b-b9ae-e7fe75f93639",
+          "month": "2026-08",
+          "quote": "Solicitud de evaluación internacional sobre el deterioro del Sitio Ramsar \"Sistema Lacustre Ejidos de Xochimilco y San Gregorio Atlapulco\" Ciudad de México, 3 de agosto de 2026",
+          "title": "Solicitud de evaluación internacional sobre el deterioro del ...",
+          "answers": "yes",
+          "credits": 0.2,
+          "finding": "The text reports a request for an international evaluation of the Ramsar site's conservation status.",
+          "question": "Did this event happen at this site and when?",
+          "chars_read": 2405,
+          "extract_ms": 459,
+          "names_site": true,
+          "published_at": "2026-06-17",
+          "quote_checked": true,
+          "model_names_site": true
+        },
+        "llm_calls": [
+          {
+            "id": null,
+            "agent": "article_reader",
+            "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+            "tier": "fast",
+            "status": "ok",
+            "prompt_tokens": 1110,
+            "completion_tokens": 110,
+            "latency_ms": 1943,
+            "cost_usd": "0.000093"
+          }
+        ]
+      },
+      {
+        "step": "investigate",
+        "status": "ok",
+        "tool": "read_article",
+        "pipeline": "orchestrator",
+        "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        "prompt_tokens": 4080,
+        "completion_tokens": 259,
+        "latency_ms": 2244,
+        "cost_usd": "0.00113292",
+        "error": null,
+        "ts": "2026-10-22T17:59:56.209431Z",
+        "attempts": 1,
+        "output": {
+          "url": "https://cumbrevidaypaz.com.mx/manifiesto",
+          "why": "To verify if the February 2026 protection event affected the asset and could contribute to the observed greenness increase.",
+          "tool": "read_article",
+          "event": "event:bdc5f514-a4cc-5478-a5f7-1f6b6b46604e",
+          "month": "2025-02",
+          "quote": "En 2025 podrían desparecer los ajolotes en los canales de Xochimilco – UNAM",
+          "title": "Manifiesto – Cumbre Xochimilco",
+          "answers": "yes",
+          "credits": 0.2,
+          "finding": "The text states that in 2025 the axolotls could disappear from the canals of Xochimilco.",
+          "question": "Did this event happen at this site and when?",
+          "chars_read": 2291,
+          "extract_ms": 452,
+          "names_site": true,
+          "published_at": "2026-02-18",
+          "quote_checked": true,
+          "model_names_site": true
+        },
+        "llm_calls": [
+          {
+            "id": null,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 2985,
+            "completion_tokens": 166,
+            "latency_ms": 1797,
+            "cost_usd": "0.0010449"
+          },
+          {
+            "id": null,
+            "agent": "article_reader",
+            "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+            "tier": "fast",
+            "status": "ok",
+            "prompt_tokens": 1095,
+            "completion_tokens": 93,
+            "latency_ms": 1752,
+            "cost_usd": "0.00008802"
+          }
+        ]
+      },
+      {
+        "step": "investigate",
+        "status": "ok",
+        "tool": "search_news",
+        "pipeline": "orchestrator",
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "prompt_tokens": 5933,
+        "completion_tokens": 455,
+        "latency_ms": 7326,
+        "cost_usd": "0.0021894",
+        "error": null,
+        "ts": "2026-10-22T18:00:05.130706Z",
+        "attempts": 1,
+        "output": {
+          "why": "To find if local restoration efforts in early 2026 could explain the observed greenness increase from April-June 2026.",
+          "tool": "search_news",
+          "found": [
+            {
+              "url": "https://www.jefaturadegobierno.cdmx.gob.mx/comunicacion/nota/sedema-y-alcaldia-xochimilco-realizan-tequio-por-la-restauracion-en-la-cienega-chica",
+              "date": "2026-07-16",
+              "event": "event:23ffbb5c-b871-5c8d-b06b-2cdf0868f86f",
+              "title": "SEDEMA y Alcaldía Xochimilco realizan Tequio por la Restauración en la Ciénega Chica",
+              "source": "jefaturadegobierno.cdmx.gob.mx",
+              "severity": 2,
+              "direction": 1,
+              "impact_type": "restoration"
+            },
+            {
+              "url": "https://www.aneas.com.mx/cabello-humano-limpia-canales-xochimilco",
+              "date": "2026-03-17",
+              "event": "event:1f78723e-82a0-5125-b29e-dd25b11fd167",
+              "title": "Cabello humano limpia los canales de Xochimilco: una solución ambiental innovadora para proteger el agua | ANEAS",
+              "source": "aneas.com.mx",
+              "severity": 2,
+              "direction": 1,
+              "impact_type": "pollution"
+            }
+          ],
+          "topic": "restoration",
+          "funnel": {
+            "kept": 2,
+            "found": 5,
+            "unique": 5,
+            "unsafe": 0,
+            "off_site": 0,
+            "relevant": 2,
+            "sent_to_model": 5
+          },
+          "signal": "signal:greenness_2026_04",
+          "window": {
+            "end": "2026-08-31",
+            "start": "2026-02-01"
+          },
+          "searches": [
+            {
+              "depth": "advanced",
+              "error": null,
+              "query": "Xochimilco restauración OR reforestación OR limpieza OR protección",
+              "topic": "general",
+              "credits": 2,
+              "results": 5,
+              "language": "es",
+              "latency_ms": 2647
+            }
+          ],
+          "signal_text": "greenness above its seasonal normal for 3 months (2026-04 to 2026-06), 19% above a normal April at its highest",
+          "already_known": 0
+        },
+        "llm_calls": [
+          {
+            "id": null,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 2930,
+            "completion_tokens": 157,
+            "latency_ms": 1529,
+            "cost_usd": "0.0010203"
+          },
+          {
+            "id": null,
+            "agent": "news_scout",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 3003,
+            "completion_tokens": 298,
+            "latency_ms": 4601,
+            "cost_usd": "0.0011691"
+          }
+        ]
+      },
+      {
+        "step": "evidence",
+        "status": "skipped",
+        "tool": "field_evidence",
+        "pipeline": null,
+        "model": null,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "latency_ms": null,
+        "cost_usd": null,
+        "error": null,
+        "ts": "2026-10-22T18:00:06.954974Z",
+        "attempts": null,
+        "output": null,
+        "llm_calls": []
+      },
+      {
+        "step": "audit",
+        "status": "ok",
+        "tool": "auditor",
+        "pipeline": "orchestrator",
+        "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+        "prompt_tokens": 8366,
+        "completion_tokens": 5265,
+        "latency_ms": 39910,
+        "cost_usd": "0.0217558",
+        "error": null,
+        "ts": "2026-10-22T18:00:46.872261Z",
+        "attempts": 1,
+        "output": {
+          "flags": [
+            "water_decline",
+            "encroachment_pressure",
+            "greenwashing_claim_mismatch",
+            "metric_news_conflict"
+          ],
+          "notes": "The user wants me to audit this rating bundle for Xochimilco Wetland. I need to follow the instructions carefully.\n\nFirst, I need to weigh the case by creating hypotheses. Let me analyze the data:\n\n**Metrics:**\n- Area: 206.7 ha\n- Land cover: trees 35.7%, water 24.8%, built 12.9%, grass 10.2%, shrub 10.1%, crops 3.2%, flooded vegetation 3.0%\n- Natural fraction: 83.9%\n- NDVI mean: 0.6008, trend +0.0097/yr (not significant)\n- Water change: -6.6 (JRC surface-water change, scale -100 to 100) - negative, indicating decline\n- Forest loss 5y: 0.00 ha, 12m: 0.00 ha\n- Biomass: 17.7 t/ha, SOC: 55.4 t C/ha\n- Mangrove fraction: 0%\n- Cloud-free obs: 73 (2025-10-01 to 2026-10-01)\n\n**Signals:**\n- greenness_2026_04: greenness above seasonal normal for 3 months (2026-04 to 2026-06), 19% above normal April at highest\n- greenness_last_12m: latest 12 months' greenness 5% above same months in earlier years\n\n**Valuation:** ~$2.7M/yr mid\n\n**Scores:**\n- vegetation_vigor: 0.6255\n- natural_cover: 0.8389\n- habitat_loss: 1.0000 (no loss)\n- water_stability: 0.4340 (low)\n- threat_pressure: 0.7333\n- negative_severity_sum: 4\n- base_health: 73.6, grade A\n- confidence_before_audit: 71.0%\n\n**Previous report:** health 71.6, confidence 72.5%, auditor_adjustment +0\n\n**Image:** no clear change between 5 years apart\n\n**Events:**\n1. event:98f6c4c6 - restoration, direction 1, severity 3, published 2025-12-08: Microsoft-backed initiative to restore water quality and biodiversity using traditional agriculture\n2. event:2",
+          "checks": {
+            "resolved": 17,
+            "citations": 17,
+            "rejected_answers": 0,
+            "placeholders_filled": 1
+          },
+          "rounds": 1,
+          "source": "ultra",
+          "verdict": "Restoration projects show localized greenness gains in spring 2026 [signal:greenness_2026_04] but systemic water decline continues [metric:water_change] and a recent report warns of habitat degradation and species loss [event:bfbbb5dd-84b0-5d7b-b9ae-e7fe75f93639].",
+          "evidence": {
+            "metric:area_ha": {
+              "kind": "fact",
+              "value": "206.7 ha"
+            },
+            "metric:ndvi_trend": {
+              "kind": "fact",
+              "value": "+0.0097 NDVI/yr (Mann-Kendall p 0.0986, not significant at 5%)"
+            },
+            "score:base_health": {
+              "kind": "fact",
+              "value": "73.6 out of 100"
+            },
+            "metric:water_change": {
+              "kind": "fact",
+              "value": "-6.6 (JRC surface-water change, scale -100 to 100)"
+            },
+            "score:water_stability": {
+              "kind": "fact",
+              "value": "0.4340 (0-1)"
+            },
+            "metric:landcover.built": {
+              "kind": "fact",
+              "value": "12.9%"
+            },
+            "metric:natural_fraction": {
+              "kind": "fact",
+              "value": "83.9% of land cover is natural"
+            },
+            "metric:forest_loss_5y_ha": {
+              "kind": "fact",
+              "value": "0.00 ha of tree cover lost over 5 years (2021-01-01 to 2025-12-31)"
+            },
+            "signal:greenness_2026_04": {
+              "kind": "fact",
+              "value": "greenness above its seasonal normal for 3 months (2026-04 to 2026-06), 19% above a normal April at its highest"
+            },
+            "signal:greenness_last_12m": {
+              "kind": "fact",
+              "value": "the latest 12 months' greenness is 5% above the same months in earlier years"
+            },
+            "score:confidence_before_audit": {
+              "kind": "fact",
+              "value": "71.0% = 100 x (0.4 coverage 1.0000 + 0.3 agreement 0.5000 (default) + 0.2 field evidence 0.3000 + 0.1 recency 1.0000)"
+            },
+            "event:1f78723e-82a0-5125-b29e-dd25b11fd167": {
+              "url": "https://www.aneas.com.mx/cabello-humano-limpia-canales-xochimilco",
+              "kind": "news",
+              "title": "Cabello humano limpia los canales de Xochimilco: una solución ambiental innovadora para proteger el agua | ANEAS",
+              "severity": 2,
+              "direction": 1,
+              "impact_type": "pollution",
+              "published_at": "2026-03-17"
+            },
+            "event:23ffbb5c-b871-5c8d-b06b-2cdf0868f86f": {
+              "url": "https://www.jefaturadegobierno.cdmx.gob.mx/comunicacion/nota/sedema-y-alcaldia-xochimilco-realizan-tequio-por-la-restauracion-en-la-cienega-chica",
+              "kind": "news",
+              "title": "SEDEMA y Alcaldía Xochimilco realizan Tequio por la Restauración en la Ciénega Chica",
+              "severity": 2,
+              "direction": 1,
+              "impact_type": "restoration",
+              "published_at": "2026-07-16"
+            },
+            "event:26ee19cd-2a2d-551c-be5e-c8b43ae51d4c": {
+              "url": "https://greentology.life/conservacion/los-humedales-de-mexico-esenciales-y-amenazados-4-formas-en-que-la-sociedad-puede-protegerlos",
+              "kind": "news",
+              "title": "Los humedales de México, esenciales y amenazados: 4 formas en que la sociedad puede protegerlos - Greentology",
+              "severity": 2,
+              "direction": 1,
+              "impact_type": "restoration",
+              "published_at": "2026-02-03"
+            },
+            "event:98f6c4c6-a172-5092-ab29-671c2b391482": {
+              "url": "https://cdn-dynmedia-1.microsoft.com/is/content/microsoftcorp/microsoft/msc/documents/presentations/CSR/Conservation-International-Case-Study.pdf",
+              "kind": "news",
+              "title": "Saving the axolotl through traditional agriculture",
+              "severity": 3,
+              "direction": 1,
+              "impact_type": "restoration",
+              "published_at": "2025-12-08"
+            },
+            "event:bdc5f514-a4cc-5478-a5f7-1f6b6b46604e": {
+              "url": "https://cumbrevidaypaz.com.mx/manifiesto",
+              "kind": "news",
+              "read": {
+                "month": "2025-02",
+                "quote": "En 2025 podrían desparecer los ajolotes en los canales de Xochimilco – UNAM",
+                "answers": "yes",
+                "finding": "The text states that in 2025 the axolotls could disappear from the canals of Xochimilco.",
+                "question": "Did this event happen at this site and when?",
+                "names_site": true,
+                "quote_checked": true
+              },
+              "title": "Manifiesto – Cumbre Xochimilco",
+              "severity": 4,
+              "direction": 1,
+              "impact_type": "protection",
+              "published_at": "2026-02-18"
+            },
+            "event:bfbbb5dd-84b0-5d7b-b9ae-e7fe75f93639": {
+              "url": "https://media.base44.com/files/public/6a0001949163ade945a0c48b/c34f6f4db_CARTARAMSARENESPAOL1.pdf",
+              "kind": "news",
+              "read": {
+                "month": "2026-08",
+                "quote": "Solicitud de evaluación internacional sobre el deterioro del Sitio Ramsar \"Sistema Lacustre Ejidos de Xochimilco y San Gregorio Atlapulco\" Ciudad de México, 3 de agosto de 2026",
+                "answers": "yes",
+                "finding": "The text reports a request for an international evaluation of the Ramsar site's conservation status.",
+                "question": "Did this event happen at this site and when?",
+                "names_site": true,
+                "quote_checked": true
+              },
+              "title": "Solicitud de evaluación internacional sobre el deterioro del ...",
+              "severity": 4,
+              "direction": -1,
+              "impact_type": "other",
+              "published_at": "2026-06-17"
+            }
+          },
+          "agreement": 0.5,
+          "hypotheses": [
+            {
+              "name": "Restoration projects driving greenness gains",
+              "assessment": "supported",
+              "evidence_for": [
+                "signal:greenness_2026_04",
+                "signal:greenness_last_12m",
+                "event:98f6c4c6-a172-5092-ab29-671c2b391482",
+                "event:26ee19cd-2a2d-551c-be5e-c8b43ae51d4c",
+                "event:23ffbb5c-b871-5c8d-b06b-2cdf0868f86f",
+                "event:1f78723e-82a0-5125-b29e-dd25b11fd167"
+              ],
+              "evidence_against": [
+                "metric:water_change",
+                "event:bfbbb5dd-84b0-5d7b-b9ae-e7fe75f93639",
+                "event:bdc5f514-a4cc-5478-a5f7-1f6b6b46604e"
+              ]
+            },
+            {
+              "name": "Systemic water decline and habitat degradation continuing",
+              "assessment": "supported",
+              "evidence_for": [
+                "metric:water_change",
+                "event:bfbbb5dd-84b0-5d7b-b9ae-e7fe75f93639",
+                "event:bdc5f514-a4cc-5478-a5f7-1f6b6b46604e",
+                "score:water_stability"
+              ],
+              "evidence_against": [
+                "signal:greenness_2026_04",
+                "signal:greenness_last_12m",
+                "metric:forest_loss_5y_ha",
+                "metric:ndvi_trend"
+              ]
+            },
+            {
+              "name": "Localized restoration offset by broader hydrological decline",
+              "assessment": "supported",
+              "evidence_for": [
+                "metric:water_change",
+                "signal:greenness_2026_04",
+                "event:98f6c4c6-a172-5092-ab29-671c2b391482",
+                "event:bfbbb5dd-84b0-5d7b-b9ae-e7fe75f93639",
+                "metric:landcover.built"
+              ],
+              "evidence_against": []
+            }
+          ],
+          "rejections": [],
+          "base_health": "73.6",
+          "reasoning_tokens": 4035,
+          "adjustment_reason": null,
+          "greenwashing_risk": "medium",
+          "auditor_adjustment": 0
+        },
+        "llm_calls": [
+          {
+            "id": null,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 3355,
+            "completion_tokens": 27,
+            "latency_ms": 1798,
+            "cost_usd": "0.0010308"
+          },
+          {
+            "id": null,
+            "agent": "auditor",
+            "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+            "tier": "auditor",
+            "status": "ok",
+            "prompt_tokens": 5011,
+            "completion_tokens": 5238,
+            "latency_ms": 39792,
+            "cost_usd": "0.020725"
+          }
+        ]
+      },
+      {
+        "step": "done",
+        "status": "succeeded",
+        "tool": null,
+        "pipeline": "orchestrator",
+        "model": null,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "latency_ms": 81038,
+        "cost_usd": null,
+        "error": null,
+        "ts": "2026-10-22T18:00:47.000116Z",
+        "attempts": null,
+        "output": null,
+        "llm_calls": []
+      }
+    ],
+    "totals": {
+      "llm_calls": 13,
+      "prompt_tokens": 31681,
+      "completion_tokens": 7694,
+      "cost_usd": "0.03027322"
+    },
+    "models": [
+      {
+        "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+        "calls": 1,
+        "prompt_tokens": 5011,
+        "completion_tokens": 5238,
+        "latency_ms": 39792,
+        "cost_usd": "0.020725"
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "calls": 9,
+        "prompt_tokens": 23173,
+        "completion_tokens": 2013,
+        "latency_ms": 22467,
+        "cost_usd": "0.0087636"
+      },
+      {
+        "model": "nvidia/Nemotron-3.5-Super-VL",
+        "calls": 1,
+        "prompt_tokens": 1292,
+        "completion_tokens": 240,
+        "latency_ms": 1848,
+        "cost_usd": "0.0006036"
+      },
+      {
+        "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        "calls": 2,
+        "prompt_tokens": 2205,
+        "completion_tokens": 203,
+        "latency_ms": 3695,
+        "cost_usd": "0.00018102"
+      }
+    ],
+    "baseline": {
+      "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "cost_usd": "0.052751"
+    }
+  }
+}

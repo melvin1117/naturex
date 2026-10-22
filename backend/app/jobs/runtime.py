@@ -20,6 +20,9 @@ from app.services.monitoring import JobReport, NewsFn, SessionFactory, parse_job
 from app.services.rating_runs import InlineExecutor, RatingRunner, build_runner, news_runner
 from app.worlds import LIVE_WORLD_ID
 
+# The daily sweep looks for what is new since about the last run.
+SWEEP_NEWS_LOOKBACK_DAYS = 7
+
 
 def session_factory() -> Session:
     return Session(engine)
@@ -37,7 +40,7 @@ def inline_runner(settings: Settings, sessions: SessionFactory = session_factory
 
 def production_news(settings: Settings, sessions: SessionFactory = session_factory) -> NewsFn:
     """News Scout as rating runs call it: the fixture with USE_MOCKS, else Token Factory."""
-    run = news_runner(settings)
+    run = news_runner(settings, lookback_days=SWEEP_NEWS_LOOKBACK_DAYS)
     llm = None if settings.use_mocks else get_llm_client(settings, sessions)
     return lambda asset: run(asset, llm)
 

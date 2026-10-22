@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import { CopilotChat } from "@/components/copilot-chat";
+import { CopilotChat, answerChips } from "@/components/copilot-chat";
 
 import { renderExchange, stubBrowserApis } from "../exchange/render";
 import { json, SIGNED_IN_WORLD } from "../lib/helpers";
@@ -56,8 +56,21 @@ describe("CopilotChat", () => {
     expect(
       screen.getByRole("link", { name: "Source R2: Report v2" }),
     ).toHaveAttribute("href", `/asset/${ASSET_ID}?tab=report`);
-    const sources = screen.getByRole("list");
+    const sources = screen.getByRole("list", {
+      name: "Sources of this answer",
+    });
     expect(within(sources).getAllByRole("link")).toHaveLength(2);
+    // What made the answer, in plain words.
+    const made = screen.getByRole("list", { name: "How this answer was made" });
+    expect(
+      within(made)
+        .getAllByRole("listitem")
+        .map((c) => c.textContent),
+    ).toEqual([
+      expect.stringMatching(/^Searched the record · \d+ sources?$/),
+      "Written by Nemotron 3 Nano",
+      "Code checked 2 citations",
+    ]);
     expect(screen.getByText(/health fell from 77.60 to 72.30/)).toBeVisible();
     // The list follows the answer down to its source links.
     expect(screen.getByTestId("copilot-turns").scrollTop).toBe(900);
@@ -169,5 +182,20 @@ describe("CopilotChat", () => {
     unmount();
 
     expect(request!.signal.aborted).toBe(true);
+  });
+});
+
+describe("answerChips", () => {
+  it("says who wrote the answer, or that code quoted it, and what code checked", () => {
+    const base = { sourcesFound: 1, model: null, citations: [] };
+    expect(answerChips({ ...base, mode: "extractive" })).toEqual([
+      "Searched the record · 1 source",
+      "Quoted by code, no model",
+      "No citation to check",
+    ]);
+    expect(answerChips({ ...base, mode: "refusal" })).toEqual([
+      "Searched the record · 1 source",
+      "Not in the record",
+    ]);
   });
 });

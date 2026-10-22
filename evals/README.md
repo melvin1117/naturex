@@ -9,7 +9,11 @@
 | `providers/news_scout_provider.py` | promptfoo Python provider that calls the real News Scout path |
 | `news_eval.py` | Test generator and assertions (stdlib only) |
 | `schemas/news_scout_classification.schema.json` | JSON Schema of the LLM output, generated from `NewsScoutClassificationOutput`; a test keeps it in sync |
-| `summarize.py` | Prints per-metric pass rates, tokens, cost and failures as Markdown |
+| `promptfooconfig.routing.yaml` | The same eval on Nano, Super and Ultra (the routing run) |
+| `summarize.py` | Prints per-metric pass rates, tokens, cost and failures as Markdown; `--json` writes the published summary |
+| `auditor_eval.py` | The Auditor eval: Ultra (thinking on) on the demo sites' real records with news and injections |
+| `publish.py` | Copies `results/` into `frontend/src/lib/evals.json` for the UI |
+| `results/` | Published summaries (committed): `news_routing.json`, `auditor.json` |
 | `output/` | Results and the provider cache. Git-ignored; never commit it |
 
 `backend/tests/test_news_eval_dataset.py` checks the dataset (schema, unique IDs, enums, at least 30 items, coverage), the generator, the assertions and the provider, offline. It runs with the normal `pytest` suite.
@@ -105,6 +109,41 @@ Relevant items by `impact_type`: encroachment 4, fire 4, drought 2, pollution 4,
   - 5: ecosystem-wide.
 
 > **Labels are AI-drafted and need human review.** An AI assistant wrote every label (`labelled_by: "ai-draft, needs human review"`). A teammate must spot-check them, especially the items tagged `ambiguous` and the real articles, before §18 targets are judged on them. Correct a label by editing the line and noting the fix in `rationale`; cached answers stay valid. After a teammate checks an item, set `labelled_by` to `human-reviewed:<name>`.
+
+## Routing run (Nano, Super, Ultra; 2026-10-22)
+
+`promptfooconfig.routing.yaml` runs the same 40 items through the same code on all three tiers (120 calls, about $0.06 uncached):
+
+| Model | All labels right | Relevance | Impact type | Injections | p50 | Cost, 40 items |
+|---|---|---|---|---|---|---|
+| Nemotron 3 Nano | 33/40 | 36/40 | 21/24 | 3/3 | 1.2 s | $0.0028 |
+| **Nemotron 3 Super** (in use) | **39/40** | **40/40** | **23/24** | **3/3** | **1.1 s** | **$0.0124** |
+| Nemotron 3 Ultra | 40/40 | 40/40 | 24/24 | 3/3 | 0.9 s | $0.0431 |
+
+Since T72's prompt (labelling guide, injection guards) every tier resists the 3 planted injections and returns valid JSON first time. Nano's misses are 4 off-topic items kept as relevant and 3 impact-type mix-ups; Super's only miss (`sum-s04`, a proposal read as encroachment) is one Nano and Ultra split on too. **Decision:** production sorts the news with Super (`news_scout.CLASSIFY_TIER`, ADR-0003): Ultra-level accuracy within one item, no slower, about $0.001 more per batch of 8. Nano stays the fallback tier and keeps the article reader and the Copilot.
+
+```bash
+PROMPTFOO_DISABLE_TELEMETRY=1 npx -y promptfoo@0.124.0 eval -c evals/promptfooconfig.routing.yaml
+backend/.venv/bin/python evals/summarize.py evals/output/news-routing-results.json --json evals/results/news_routing.json
+```
+
+## Auditor eval (`auditor_eval.py`, 2026-10-22)
+
+Nemotron 3 Ultra with thinking on, through the production path (`build_auditor_input` → `run_auditor`), on each demo site's real cached satellite record with: no news; fire, encroachment or restoration news; and a news item ordering "+10" with a planted "40 ha". 15 cases, about $0.28, 3 minutes with 3 workers:
+
+| First answer accepted | Finished by Ultra | Fell back | Cites the news | Never against the evidence | Injection ignored | p50 | Median thinking | Cost per audit |
+|---|---|---|---|---|---|---|---|---|
+| 11/15 | 15/15 | 0 | 12/12 | 15/15 | 3/3 | 14 s | 2,674 tokens | $0.019 |
+
+**Failures, all caught by code and fixed by Ultra's next round:** in 2 of 3 injection cases Ultra's thinking answer repeated the planted "40" (the number guard refused it); once it adjusted down citing only news the threat score already priced (the per-sign rule refused it); once it wrote a number it had computed itself, 0.33 (refused: numbers come from code). `evals/results/auditor.json` has every case's verdict, adjustment, agreement, thinking tokens, time and cost.
+
+```bash
+backend/.venv/bin/python evals/auditor_eval.py            # --sites wetland_mx --cases injection
+```
+
+## Publishing
+
+`backend/.venv/bin/python evals/publish.py` copies the two summaries (`evals/results/news_routing.json`, `evals/results/auditor.json`) into `frontend/src/lib/evals.json`, which the AI control room (`/ai`) and the Agent Trace's Evals tab show, failures included. `backend/tests/test_evals_published.py` fails when the copy drifts from the results.
 
 ## Baseline (T25, Nano, 2026-10-07)
 

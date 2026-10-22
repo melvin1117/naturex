@@ -20,19 +20,19 @@ prompts:
     raw: 'News Scout article {{id}}: {{title}}'
 
 # One provider per model tier: the same code path, routed by MODEL_* in .env (ADR-0003).
-# Nano is on by default. Super and Ultra cost 5x and ~15x more per token: uncomment them
-# for the G3 routing table (T47). Python provider docs:
+# Super is on by default: production sorts the news with it since the Oct 22 routing run
+# (promptfooconfig.routing.yaml runs all three tiers). Python provider docs:
 # https://www.promptfoo.dev/docs/providers/python/
 providers:
   - id: file://providers/news_scout_provider.py
-    label: nano
+    label: super
     config:
-      tier: fast
+      tier: orchestrator
       call_log: db
   # - id: file://providers/news_scout_provider.py
-  #   label: super
+  #   label: nano
   #   config:
-  #     tier: orchestrator
+  #     tier: fast
   #     call_log: db
   # - id: file://providers/news_scout_provider.py
   #   label: ultra

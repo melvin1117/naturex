@@ -19,13 +19,14 @@ Budget: about $25–50 of Token Factory credit per account, with the demo key ne
 | Part | Model ID | $ per 1M tokens (in / out) | Fallback |
 |---|---|---|---|
 | Orchestrator (tool calling) | `nvidia/nemotron-3-super-120b-a12b` | 0.30 / 0.90 | `nvidia/Nemotron-3_5-Lightning`, then the fixed Python pipeline |
-| News Scout (classification, reasoning off) | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | 0.06 / 0.24 | Lightning |
+| News Scout (classification, reasoning off) | `nvidia/nemotron-3-super-120b-a12b` since Oct 22 (was Nano) | 0.30 / 0.90 | Nano |
+| Article reader (investigation, reasoning off) | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | 0.06 / 0.24 | – |
 | Auditor (deep reasoning, capped) | `nvidia/Nemotron-3-Ultra-550b-a55b` | 1.00 / 3.00 | Super, report flagged `degraded_model` |
 | Copilot (streamed chat, tools) | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | 0.06 / 0.24 | Lightning |
-| Field Evidence: perception only | `openbmb/MiniCPM-V-4_5` (vision, JSON mode) | 0.66 / 1.11 | Code checks only (EXIF GPS/date) |
+| Vision: satellite before/after, field photos, documents (perception only) | `nvidia/Nemotron-3.5-Super-VL` (strict `json_schema`, thinking off); was `openbmb/MiniCPM-V-4_5` until Oct 22 | 0.30 / 0.90 | Code checks only (EXIF GPS/date, metrics) |
 | Copilot retrieval (embeddings) | `Qwen/Qwen3-Embedding-8B` with `dimensions=1024` | 0.01 / – | – |
 
-Field Evidence splits **seeing from judging**. MiniCPM-V describes the photo, code checks that the GPS and date fall inside the polygon and recent window, and the Nemotron Ultra Auditor decides what the evidence means for the rating.
+Vision splits **seeing from judging**. The vision model describes the image, code checks it (a photo's GPS and date against the polygon and recent window; a satellite change against the measured metrics), and the Nemotron Ultra Auditor decides what the evidence means for the rating.
 
 Estimated cost: ≈ $0.035 per full rating, ≈ $0.0002 per photo, ≈ $0.0003 per Copilot answer. Repeat Time Machine ratings are cached per `(asset, data_version, events)`, so judging doesn't re-spend.
 
@@ -72,10 +73,16 @@ Estimated cost: ≈ $0.035 per full rating, ≈ $0.0002 per photo, ≈ $0.0003 p
 
 **Update (T26, 2026-10-07):** the Auditor's JSON call runs with thinking **off**. On the full audit task (about 2,500 prompt tokens), Ultra with thinking on spent its whole 3,000-token cap reasoning and returned truncated JSON on both attempts; with thinking off it returned a valid audit in about 2 s for under $0.005 per call. Details in [dev-spec §7.7](../specs/dev-spec.md).
 
+**Update (2026-10-22): Ultra reasons again, and Nemotron reads images.**
+- **Auditor:** thinking is back **on**, with the JSON schema in the prompt only (no `response_format`) and Pydantic validation, `max_tokens=16000`. With thinking on, a strict `json_schema` made Nemotron run to the token cap; `reasoning_budget` and `reasoning_effort` are ignored by Token Factory. Ultra reasoned for 3,000–6,800 tokens and passed every check on its first answer on all three demo sites, at $0.021–0.034 per rating. Later calls keep thinking off with strict JSON: a broken thinking answer is asked again that way; a rejected one goes back once for a fix, then to Super, then to the no-op.
+- **Vision:** `nvidia/Nemotron-3.5-Super-VL` is now served, so it replaces MiniCPM-V for every image (rule #1: a non-NVIDIA model only where no Nemotron model can do the job). Spike on the two prompt-injection fixtures, 3 runs each, strict `json_schema`, thinking off: **6/6 valid on the first attempt** in 0.7–1.6 s, every document field read correctly, the planted instructions flagged every time, ≈ $0.0004–0.0006 per image. One caveat: a schema with `maxItems` on a free-text list or an extra enum field could make it loop on whitespace until the cap, so the site-vision schema keeps lists uncapped and caps them in code.
+- **Embeddings** stay on Qwen3-Embedding-8B: still no NVIDIA embedding model on Token Factory.
+- **News Scout moves to Super (eval-backed).** The 40-item News Scout eval on all three tiers (`evals/promptfooconfig.routing.yaml`): Nano 33/40 (4 off-topic items kept, 3 impact-type mix-ups), Super 39/40, Ultra 40/40; p50 1.2 / 1.1 / 0.9 s; $0.0028 / $0.0124 / $0.0431 for the 40 items. Super matches Ultra within one item at under a third of its cost and is no slower than Nano on Token Factory, so news classification runs on Super (`news_scout.CLASSIFY_TIER`) with Nano as its fallback; Nano keeps the article reader and the Copilot. About $0.001 more per batch of 8 articles.
+
 ## Consequences
 - The backend stays a small CPU-only container with no GPU and no model weights, so every hosting option ranked in [dev-spec §21](../specs/dev-spec.md) works: Nebius Serverless, Azure Container Apps (team-approved credits), or Hugging Face Spaces / Render.
 - Model IDs live in `.env` (`MODEL_*`), so swapping a model is a config change. `make check-keys` warns if a configured ID isn't served.
-- The Agent Trace drawer and the README must show which model handled each step, including the two non-NVIDIA ones.
+- The Agent Trace drawer and the README must show which model handled each step, including the non-NVIDIA one (embeddings).
 - Photo evidence (T40) is now cheap and feasible, but stays "only if ahead".
 
 ## Alternatives considered

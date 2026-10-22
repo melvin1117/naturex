@@ -1,0 +1,443 @@
+{
+  "run_id": "947c6944-82da-4711-a4a6-f089f175a9dc",
+  "asset_id": "d0907999-8c14-4bae-bc54-cda823bec3fc",
+  "status": "succeeded",
+  "steps": [
+    {
+      "step": "queued",
+      "status": "queued",
+      "tool": null,
+      "pipeline": null,
+      "model": null,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_ms": null,
+      "cost_usd": null,
+      "error": null,
+      "ts": "2026-10-22T08:26:35.384011Z",
+      "attempts": null,
+      "output": null,
+      "llm_calls": []
+    },
+    {
+      "step": "started",
+      "status": "running",
+      "tool": null,
+      "pipeline": "orchestrator",
+      "model": null,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_ms": null,
+      "cost_usd": null,
+      "error": null,
+      "ts": "2026-10-22T08:26:35.402007Z",
+      "attempts": null,
+      "output": null,
+      "llm_calls": []
+    },
+    {
+      "step": "earth_obs",
+      "status": "ok",
+      "tool": "earth_obs",
+      "pipeline": "orchestrator",
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "prompt_tokens": 680,
+      "completion_tokens": 59,
+      "latency_ms": 13,
+      "cost_usd": "0.0002571",
+      "error": null,
+      "ts": "2026-10-22T08:26:37.116140Z",
+      "attempts": 1,
+      "output": {
+        "mock": false,
+        "area_ha": 400.2,
+        "signals": [
+          {
+            "z": 2.7,
+            "id": "signal:greenness_2026_05",
+            "end": "2026-06",
+            "pct": 31.4,
+            "kind": "greenness_anomaly",
+            "text": "greenness above its seasonal normal for 2 months (2026-05 to 2026-06), 31% above a normal June at its highest",
+            "start": "2026-05",
+            "months": 2,
+            "strength": "moderate",
+            "direction": 1,
+            "simulated": false
+          },
+          {
+            "z": null,
+            "id": "signal:greenness_last_12m",
+            "end": "2026-09",
+            "pct": 3.0,
+            "kind": "greenness_last_12m",
+            "text": "the latest 12 months' greenness is in line with the same months in earlier years",
+            "start": "2025-10",
+            "months": 12,
+            "strength": "weak",
+            "direction": 0,
+            "simulated": false
+          }
+        ],
+        "wetland": false,
+        "scenario": "baseline",
+        "simulated": false,
+        "data_version": "2026Q3",
+        "cloud_free_obs": 63,
+        "natural_fraction": 1.0
+      },
+      "llm_calls": [
+        {
+          "id": 56,
+          "agent": "orchestrator",
+          "model": "nvidia/nemotron-3-super-120b-a12b",
+          "tier": "orchestrator",
+          "status": "ok",
+          "prompt_tokens": 680,
+          "completion_tokens": 59,
+          "latency_ms": 1631,
+          "cost_usd": "0.0002571"
+        }
+      ]
+    },
+    {
+      "step": "valuation",
+      "status": "ok",
+      "tool": "valuation",
+      "pipeline": "orchestrator",
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "prompt_tokens": 1088,
+      "completion_tokens": 22,
+      "latency_ms": 3,
+      "cost_usd": "0.0003462",
+      "error": null,
+      "ts": "2026-10-22T08:26:38.011204Z",
+      "attempts": 1,
+      "output": {
+        "unit": "Int$2020/yr",
+        "value_low": 1295918,
+        "value_mid": 2424480,
+        "value_high": 2424480,
+        "carbon_stock_tco2": 52657
+      },
+      "llm_calls": [
+        {
+          "id": 57,
+          "agent": "orchestrator",
+          "model": "nvidia/nemotron-3-super-120b-a12b",
+          "tier": "orchestrator",
+          "status": "ok",
+          "prompt_tokens": 1088,
+          "completion_tokens": 22,
+          "latency_ms": 857,
+          "cost_usd": "0.0003462"
+        }
+      ]
+    },
+    {
+      "step": "news",
+      "status": "ok",
+      "tool": "news_scout",
+      "pipeline": "orchestrator",
+      "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+      "prompt_tokens": 4423,
+      "completion_tokens": 633,
+      "latency_ms": 5835,
+      "cost_usd": "0.0007209",
+      "error": null,
+      "ts": "2026-10-22T08:26:44.531872Z",
+      "attempts": 1,
+      "output": {
+        "events": 0,
+        "funnel": {
+          "kept": 0,
+          "found": 20,
+          "unique": 17,
+          "unsafe": 0,
+          "off_site": 0,
+          "relevant": 0,
+          "sent_to_model": 8
+        },
+        "negative": 0,
+        "positive": 0,
+        "relevant": 0,
+        "searches": [
+          {
+            "query": "Sumidero Canyon Restoration Forest Chiapas",
+            "credits": 2,
+            "results": 5,
+            "language": null,
+            "latency_ms": 344
+          },
+          {
+            "query": "Sumidero Chiapas forest deforestation OR fire OR logging OR drought",
+            "credits": 2,
+            "results": 5,
+            "language": null,
+            "latency_ms": 344
+          },
+          {
+            "query": "Sumidero Chiapas forest restoration OR protection OR conservation",
+            "credits": 2,
+            "results": 5,
+            "language": null,
+            "latency_ms": 344
+          },
+          {
+            "query": "Sumidero bosque deforestación OR incendio OR tala OR restauración OR conservación OR protección",
+            "credits": 2,
+            "results": 5,
+            "language": "es",
+            "latency_ms": 342
+          }
+        ],
+        "ecosystem": "forest",
+        "impact_types": [],
+        "max_severity": 0,
+        "dropped_off_site": 0,
+        "locality_unverified": false
+      },
+      "llm_calls": [
+        {
+          "id": 58,
+          "agent": "orchestrator",
+          "model": "nvidia/nemotron-3-super-120b-a12b",
+          "tier": "orchestrator",
+          "status": "ok",
+          "prompt_tokens": 1199,
+          "completion_tokens": 24,
+          "latency_ms": 608,
+          "cost_usd": "0.0003813"
+        },
+        {
+          "id": 59,
+          "agent": "news_scout",
+          "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+          "tier": "fast",
+          "status": "ok",
+          "prompt_tokens": 3224,
+          "completion_tokens": 609,
+          "latency_ms": 5296,
+          "cost_usd": "0.0003396"
+        }
+      ]
+    },
+    {
+      "step": "evidence",
+      "status": "skipped",
+      "tool": "field_evidence",
+      "pipeline": null,
+      "model": null,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_ms": null,
+      "cost_usd": null,
+      "error": null,
+      "ts": "2026-10-22T08:26:45.180494Z",
+      "attempts": null,
+      "output": null,
+      "llm_calls": []
+    },
+    {
+      "step": "audit",
+      "status": "ok",
+      "tool": "auditor",
+      "pipeline": "orchestrator",
+      "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "prompt_tokens": 5236,
+      "completion_tokens": 4943,
+      "latency_ms": 11474,
+      "cost_usd": "0.0189051",
+      "error": null,
+      "ts": "2026-10-22T08:26:56.664048Z",
+      "attempts": 1,
+      "output": {
+        "flags": ["forest_loss", "other"],
+        "notes": "The user wants me to audit a rating bundle for \"Sumidero Canyon Restoration Forest\". I need to analyze the trusted facts, signals, and events (none in this case) and produce a JSON output with specific fields.\n\nFirst, let me understand the data:\n\n- Site: Sumidero Canyon Restoration Forest\n- Rating date: 2026-10-22 (Q4 2026)\n- Data version: 2026Q3\n- Simulated: false\n- Area: 400.2 ha\n- Land cover: 60.7% trees, 36.5% shrub_and_scrub, 2.4% water, 0.3% grass\n- Natural fraction: 100% natural\n- NDVI mean: 0.6652\n- NDVI trend: -0.0013 NDVI/yr (not significant, p=0.8959)\n- Water change: +0.1 (JRC surface-water change, scale -100 to 100)\n- Forest loss 5y: 26.81 ha (2021-01-01 to 2025-12-31)\n- Forest loss 12m: 0.86 ha (2025-01-01 to 2025-12-31)\n- Biomass: 63.6 t/ha\n- Soil carbon: 56.7 t C/ha\n- Mangrove fraction: 0%\n- Cloud-free observations: 63 (2025-10-01 to 2026-10-01)\n- Signal: greenness above seasonal normal for 2 months (2026-05 to 2026-06), 31% above normal June at highest\n- Signal: latest 12 months greenness in line with same months in earlier years\n- Valuation: low $1.3M/yr, mid $2.4M/yr, high $2.4M/yr\n- Carbon stock: 52,657 tCO2\n- Sequestration: 1,005 tCO2/yr\n- Scores: vegetation_vigor 0.6658, natural_cover 1.0, habitat_loss 0.3301, water_stability 1.0, threat_pressure 1.0, negative_severity_sum 0\n- Base health: 76.6 (grade A)\n- Confidence before audit: 71.0%\n- Previous version: health 76.6, confidence 65%, value_mid $2.4M/yr, auditor_adjustment +0\n- No events\n\nNow I need to:\n1",
+        "checks": {
+          "resolved": 12,
+          "citations": 12,
+          "rejected_answers": 0,
+          "placeholders_filled": 5
+        },
+        "rounds": 1,
+        "source": "ultra",
+        "verdict": "The site remains a stable natural forest with a brief greenness peak in mid-2026 and low but ongoing tree cover loss [metric:natural_fraction, signal:greenness_2026_05, signal:greenness_last_12m, metric:forest_loss_12m_ha, score:threat_pressure].",
+        "evidence": {
+          "metric:area_ha": {
+            "kind": "fact",
+            "value": "400.2 ha"
+          },
+          "metric:ndvi_trend": {
+            "kind": "fact",
+            "value": "-0.0013 NDVI/yr (Mann-Kendall p 0.8959, not significant at 5%)"
+          },
+          "score:base_health": {
+            "kind": "fact",
+            "value": "76.6 out of 100"
+          },
+          "score:habitat_loss": {
+            "kind": "fact",
+            "value": "0.3301 (0-1, 1 = no loss)"
+          },
+          "score:threat_pressure": {
+            "kind": "fact",
+            "value": "1.0000 (0-1, 1 = no threats)"
+          },
+          "score:water_stability": {
+            "kind": "fact",
+            "value": "1.0000 (0-1)"
+          },
+          "metric:natural_fraction": {
+            "kind": "fact",
+            "value": "100.0% of land cover is natural"
+          },
+          "metric:forest_loss_5y_ha": {
+            "kind": "fact",
+            "value": "26.81 ha of tree cover lost over 5 years (2021-01-01 to 2025-12-31)"
+          },
+          "signal:greenness_2026_05": {
+            "kind": "fact",
+            "value": "greenness above its seasonal normal for 2 months (2026-05 to 2026-06), 31% above a normal June at its highest"
+          },
+          "metric:forest_loss_12m_ha": {
+            "kind": "fact",
+            "value": "0.86 ha lost in the latest 12 months (2025-01-01 to 2025-12-31)"
+          },
+          "signal:greenness_last_12m": {
+            "kind": "fact",
+            "value": "the latest 12 months' greenness is in line with the same months in earlier years"
+          },
+          "score:confidence_before_audit": {
+            "kind": "fact",
+            "value": "71.0% = 100 x (0.4 coverage 1.0000 + 0.3 agreement 0.5000 (default) + 0.2 field evidence 0.3000 + 0.1 recency 1.0000)"
+          }
+        },
+        "agreement": 0.5,
+        "hypotheses": [
+          {
+            "name": "Stable natural forest with minor seasonal variation",
+            "assessment": "supported",
+            "evidence_for": [
+              "metric:natural_fraction",
+              "metric:ndvi_trend",
+              "signal:greenness_last_12m",
+              "score:threat_pressure",
+              "score:water_stability"
+            ],
+            "evidence_against": [
+              "signal:greenness_2026_05",
+              "metric:forest_loss_5y_ha",
+              "metric:forest_loss_12m_ha",
+              "score:habitat_loss"
+            ]
+          },
+          {
+            "name": "Recent greenness surge indicates temporary favorable conditions",
+            "assessment": "weakened",
+            "evidence_for": ["signal:greenness_2026_05"],
+            "evidence_against": [
+              "signal:greenness_last_12m",
+              "metric:ndvi_trend"
+            ]
+          },
+          {
+            "name": "Gradual forest loss despite high natural cover",
+            "assessment": "unclear",
+            "evidence_for": [
+              "metric:forest_loss_5y_ha",
+              "metric:forest_loss_12m_ha",
+              "score:habitat_loss"
+            ],
+            "evidence_against": [
+              "score:threat_pressure",
+              "metric:natural_fraction"
+            ]
+          }
+        ],
+        "rejections": [],
+        "base_health": "76.6",
+        "reasoning_tokens": 3833,
+        "adjustment_reason": null,
+        "greenwashing_risk": "low",
+        "auditor_adjustment": 0
+      },
+      "llm_calls": [
+        {
+          "id": 60,
+          "agent": "orchestrator",
+          "model": "nvidia/nemotron-3-super-120b-a12b",
+          "tier": "orchestrator",
+          "status": "ok",
+          "prompt_tokens": 1582,
+          "completion_tokens": 25,
+          "latency_ms": 614,
+          "cost_usd": "0.0004971"
+        },
+        {
+          "id": 61,
+          "agent": "auditor",
+          "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+          "tier": "auditor",
+          "status": "ok",
+          "prompt_tokens": 3654,
+          "completion_tokens": 4918,
+          "latency_ms": 11396,
+          "cost_usd": "0.018408"
+        }
+      ]
+    },
+    {
+      "step": "done",
+      "status": "succeeded",
+      "tool": null,
+      "pipeline": "orchestrator",
+      "model": null,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_ms": 21324,
+      "cost_usd": null,
+      "error": null,
+      "ts": "2026-10-22T08:26:56.713665Z",
+      "attempts": null,
+      "output": null,
+      "llm_calls": []
+    }
+  ],
+  "totals": {
+    "llm_calls": 6,
+    "prompt_tokens": 11427,
+    "completion_tokens": 5657,
+    "cost_usd": "0.0202293"
+  },
+  "models": [
+    {
+      "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "calls": 1,
+      "prompt_tokens": 3654,
+      "completion_tokens": 4918,
+      "latency_ms": 11396,
+      "cost_usd": "0.018408"
+    },
+    {
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "calls": 4,
+      "prompt_tokens": 4549,
+      "completion_tokens": 130,
+      "latency_ms": 3710,
+      "cost_usd": "0.0014817"
+    },
+    {
+      "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+      "calls": 1,
+      "prompt_tokens": 3224,
+      "completion_tokens": 609,
+      "latency_ms": 5296,
+      "cost_usd": "0.0003396"
+    }
+  ],
+  "baseline": {
+    "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+    "cost_usd": "0.028398"
+  }
+}

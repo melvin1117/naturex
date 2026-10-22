@@ -77,13 +77,17 @@ class Settings(BaseSettings):
     # documents (`is_sample`) to the model; with USE_MOCKS a fake model runs and nothing leaves.
     verification_ai_live: bool = False
     # Field evidence (T40): photo uploads per account per rolling hour (429 after; at most 5
-    # photos per listing). MiniCPM-V reads the re-encoded photos (no EXIF, so no location) only
-    # with FIELD_EVIDENCE_AI_LIVE=true, in every world: until Token Factory's data terms are
-    # confirmed no uploaded photo goes to a real model (T71's precedent). Off, a photo is stored
-    # and checked (location, date) but never validated, so it can't raise confidence. With
-    # USE_MOCKS a fake model labels photos and nothing is sent.
+    # photos per listing). The vision model reads the re-encoded photos (no EXIF, so no
+    # location) only with FIELD_EVIDENCE_AI_LIVE=true, in every world: until Token Factory's data
+    # terms are confirmed no uploaded photo goes to a real model (T71's precedent). Off, a photo
+    # is stored and checked (location, date) but never validated, so it can't raise confidence.
+    # With USE_MOCKS a fake model labels photos and nothing is sent.
     evidence_uploads_per_hour: int = Field(default=10, ge=1)
     field_evidence_ai_live: bool = False
+    # Site vision: the vision model (MODEL_MULTIMODAL) compares a demo site's committed
+    # Sentinel-2 views five years apart during a rating run. Public satellite imagery only.
+    # Off by default so scripted test runs stay deterministic; .env.example turns it on.
+    site_vision_live: bool = False
 
     nebius_api_key: str = ""
     token_factory_base_url: str = "https://api.tokenfactory.nebius.com/v1/"
@@ -94,6 +98,9 @@ class Settings(BaseSettings):
     model_embed: str = ""
 
     tavily_api_key: str = ""
+    # News Scout pauses new searches when the Tavily account (all environments, read from
+    # `/usage`) has fewer credits than this left, so judging never meets an empty quota.
+    tavily_min_credits_left: int = 150
     nominatim_user_agent: str = "NatureX/0.1 (https://github.com/melvin1117/naturex)"
     # Listing map place search (#215): searches per account per rolling minute, per API process
     # (429 `place_search_rate_limited` after), on top of Nominatim's shared 1 request/s.

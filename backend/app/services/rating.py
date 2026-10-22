@@ -36,7 +36,13 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlmodel import Session, col, select
 
-from app.agents.auditor import AuditEvent, AuditResult, ScoreInputs, apply_audit
+from app.agents.auditor import (
+    REASONING_EXCERPT_CHARS,
+    AuditEvent,
+    AuditResult,
+    ScoreInputs,
+    apply_audit,
+)
 from app.ledger import append
 from app.market.engine import fair_value_per_share, fair_value_total
 from app.models import Asset, LedgerKind, Metrics, Report
@@ -493,6 +499,9 @@ def audit_snapshot(audit: AuditResult) -> dict[str, Any]:
         "rejections": [rejection[:200] for rejection in audit.rejections[:8]],
         "citations": list(audit.citations),
         "greenwashing_risk": audit.greenwashing_risk,
+        "reasoning_tokens": audit.reasoning_tokens,
+        # The model's own notes, shown collapsed and labelled as notes, never as evidence.
+        "reasoning_excerpt": (audit.reasoning or "")[:REASONING_EXCERPT_CHARS] or None,
     }
 
 

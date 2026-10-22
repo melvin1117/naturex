@@ -88,8 +88,40 @@ class NewsScoutItem(BaseModel):
     url: str | None = None
 
 
+class NewsSearchRecord(BaseModel):
+    """One Tavily search of a News Scout run, for the Agent Trace (no article text)."""
+
+    query: str
+    topic: str
+    language: str | None = None
+    depth: str
+    results: int = 0
+    latency_ms: int = 0
+    credits: int = 0
+    error: str | None = None
+
+
+class NewsFunnel(BaseModel):
+    """How many articles survived each News Scout check, for the Agent Trace."""
+
+    found: int = 0
+    unique: int = 0
+    unsafe: int = Field(default=0, description="Skipped: the article was only injected text.")
+    sent_to_model: int = 0
+    relevant: int = 0
+    off_site: int = 0
+    kept: int = 0
+
+
 class NewsScoutOutput(BaseModel):
     events: list[NewsScoutItem]
+    searches: list[NewsSearchRecord] = Field(default_factory=list)
+    funnel: NewsFunnel | None = None
+    news_paused: bool = Field(
+        default=False,
+        description="True when no search ran because the Tavily account is near its credit "
+        "limit (`TAVILY_MIN_CREDITS_LEFT`).",
+    )
     dropped_off_site: int = Field(
         default=0,
         ge=0,
@@ -109,20 +141,46 @@ class AuditorFlag(BaseModel):
     citation: str | None = None
 
 
+class AuditorHypothesis(BaseModel):
+    """One explanation the Auditor weighed, with the bundle IDs for and against it."""
+
+    name: str = Field(description="A short explanation, e.g. 'seasonal drought' or 'clearing'.")
+    evidence_for: list[str] = Field(default_factory=list, description="Bundle IDs supporting it")
+    evidence_against: list[str] = Field(default_factory=list, description="Bundle IDs weakening it")
+    assessment: Literal["supported", "weakened", "unclear"]
+
+
 class AuditorOutput(BaseModel):
     """Nemotron Ultra auditor JSON (dev-spec §7.7)."""
 
+    hypotheses: list[AuditorHypothesis] = Field(
+        default_factory=list,
+        description="2-3 competing explanations of what the metrics, signals and events show, "
+        "weighed before deciding.",
+    )
+    verdict: str = Field(
+        default="",
+        description="One sentence (under 400 characters) naming the best-supported "
+        "explanation, ending with [ID] citations; numbers only as {ID} placeholders.",
+    )
     auditor_adjustment: int = Field(ge=-10, le=10)
-    adjustment_reason: str
+    adjustment_reason: str = Field(
+        description="Why the adjustment, with [ID] citations; empty when it is 0."
+    )
     agreement: float = Field(ge=0, le=1)
     flags: list[AuditorFlag] = Field(default_factory=list)
     greenwashing_risk: Literal["low", "medium", "high"]
-    key_changes: list[str] = Field(default_factory=list)
+    key_changes: list[str] = Field(
+        default_factory=list, description="Each ends with an [ID]; numbers as {ID} placeholders."
+    )
     recommendations: list[str] = Field(default_factory=list)
-    summary_md: str
+    summary_md: str = Field(
+        description="Markdown for non-experts. Every sentence ends with an [ID] citation; write "
+        "every number as an {ID} placeholder, e.g. 'covers {metric:area_ha} [metric:area_ha]'."
+    )
     citations: list[str] = Field(
         default_factory=list,
-        description="Metric or event IDs cited in the report",
+        description="Every bundle ID you cited, copied exactly; nothing else.",
     )
 
 
@@ -683,7 +741,8 @@ class FieldEvidenceOut(BaseModel):
     max_photos: int
     validated: int
     ai_analysis: AiAnalysisMode = Field(
-        description="What reads the photos: model (MiniCPM-V on Nebius Token Factory, only "
+        description="What reads the photos: model (Nemotron 3.5 Super VL on Nebius Token "
+        "Factory, only "
         "with FIELD_EVIDENCE_AI_LIVE), mock (USE_MOCKS: a fake model, nothing sent) or off "
         "(no photo is sent to a model, so none is validated)."
     )
@@ -1088,6 +1147,24 @@ class RunTraceTotals(BaseModel):
     cost_usd: Decimal
 
 
+class ModelUsage(BaseModel):
+    """One model's share of a run: how often it was called, its tokens, time and cost."""
+
+    model: str
+    calls: int
+    prompt_tokens: int
+    completion_tokens: int
+    latency_ms: int
+    cost_usd: Decimal
+
+
+class CostBaseline(BaseModel):
+    """What the run's text-model tokens would have cost on one model (the routing receipt)."""
+
+    model: str
+    cost_usd: Decimal
+
+
 class RunTraceOut(BaseModel):
     run_id: UUID
     asset_id: UUID
@@ -1095,6 +1172,25 @@ class RunTraceOut(BaseModel):
     steps: list[RunTraceStep]
     totals: RunTraceTotals | None = Field(
         default=None, description="The sealed run's totals; null until the run seals a report"
+    )
+    models: list[ModelUsage] = Field(
+        default_factory=list, description="Every model call of the run, grouped by model"
+    )
+    baseline: CostBaseline | None = Field(
+        default=None,
+        description="The same text-model tokens priced on the largest Nemotron (Ultra)",
+    )
+
+
+class RecordedRunOut(BaseModel):
+    """A real rating run of a demo site, recorded with live models and committed, so every
+    visitor can open a full Agent Trace without spending anything (`services.recorded_runs`).
+    Its numbers are that run's; the site's own report stays the one its world holds."""
+
+    site_key: str
+    recorded_on: date
+    trace: RunTraceOut = Field(
+        description="The run's trace; `asset_id` is a placeholder, not an asset of any world"
     )
 
 
@@ -1294,6 +1390,36 @@ class TraceStep(BaseModel):
 class TraceOut(BaseModel):
     asset_id: UUID | None = None
     steps: list[TraceStep]
+
+
+class ModelStats(BaseModel):
+    """One model's calls in a world: outcomes, latency, tokens and cost."""
+
+    model: str
+    calls: int
+    ok: int
+    rejected: int = Field(description="Schema-valid answers the code checks refused")
+    invalid: int = Field(description="Answers that failed the schema")
+    errors: int
+    p50_latency_ms: int | None = None
+    p95_latency_ms: int | None = None
+    prompt_tokens: int
+    completion_tokens: int
+    cost_usd: Decimal
+
+
+class AiUsageOut(BaseModel):
+    """The AI control room: this world's model calls, the deployment's LLM spend against its
+    cap, and the Tavily account's credits left."""
+
+    models: list[ModelStats]
+    world_cost_usd: Decimal
+    spent_usd: Decimal = Field(description="Every logged model call of this deployment")
+    budget_usd: Decimal = Field(description="LLM_BUDGET_USD, the deployment's hard cap")
+    tavily_credits_left: int | None = Field(
+        default=None, description="Tavily account credits left; null when unknown or mocked"
+    )
+    tavily_min_credits_left: int
 
 
 # ----- Nature Ledger (T30) -----

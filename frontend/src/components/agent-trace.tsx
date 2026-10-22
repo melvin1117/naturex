@@ -33,6 +33,8 @@ import {
   useWorldTrace,
 } from "@/lib/hooks";
 import { date } from "@/lib/prototype/format";
+import { auditCase, runStory, withoutCitations } from "@/lib/trace-view";
+import { TraceStory } from "@/components/trace/trace-story";
 import {
   modelName,
   runOptions,
@@ -158,8 +160,27 @@ function RunTraceBody({ trace }: { trace: RunTrace }) {
         This run hasn&apos;t recorded any steps yet.
       </p>
     );
+  const story = runStory(trace);
+  const audit = auditCase(trace);
   return (
     <>
+      {audit?.verdict && (
+        <p className="mt-4 font-serif text-xl leading-snug text-machine-ink">
+          {withoutCitations(audit.verdict)}
+        </p>
+      )}
+      <Link
+        href={`/trace/${trace.run_id}`}
+        className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-lime underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-lime focus-visible:outline-none"
+      >
+        Open the full trace: flow, timeline, reasoning, checks and cost
+        <ArrowRight className="size-4" aria-hidden="true" />
+      </Link>
+      {story.length > 0 && (
+        <div className="mt-5">
+          <TraceStory lines={story} compact />
+        </div>
+      )}
       <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           ["Model calls", String(totals.llmCalls)],
@@ -392,13 +413,13 @@ export function WorldModelCalls() {
   );
 }
 
-function TraceError({
+export function TraceError({
   title,
   error,
   retry,
 }: {
   title: string;
-  error: ApiError;
+  error: ApiError | null;
   retry?: () => unknown;
 }) {
   return (
@@ -407,7 +428,7 @@ function TraceError({
       className="mt-4 rounded-2xl bg-clay/20 px-4 py-3 text-sm text-machine-ink"
     >
       <p className="font-medium">{title}</p>
-      <p className="mt-0.5 text-machine-muted">{error.message}</p>
+      {error && <p className="mt-0.5 text-machine-muted">{error.message}</p>}
       {retry && (
         <Button
           variant="outline"

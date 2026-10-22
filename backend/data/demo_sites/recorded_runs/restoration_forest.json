@@ -1,0 +1,601 @@
+{
+  "site_key": "restoration_forest",
+  "recorded_on": "2026-10-22",
+  "trace": {
+    "run_id": "abf01a2c-bf54-5329-a4da-5ff3b16c2ce8",
+    "asset_id": "98ea5885-090f-5700-8dbc-665652671cbb",
+    "status": "succeeded",
+    "steps": [
+      {
+        "step": "queued",
+        "status": "queued",
+        "tool": null,
+        "pipeline": null,
+        "model": null,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "latency_ms": null,
+        "cost_usd": null,
+        "error": null,
+        "ts": "2026-10-22T18:01:48.936312Z",
+        "attempts": null,
+        "output": null,
+        "llm_calls": []
+      },
+      {
+        "step": "started",
+        "status": "running",
+        "tool": null,
+        "pipeline": "orchestrator",
+        "model": null,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "latency_ms": null,
+        "cost_usd": null,
+        "error": null,
+        "ts": "2026-10-22T18:01:48.954869Z",
+        "attempts": null,
+        "output": null,
+        "llm_calls": []
+      },
+      {
+        "step": "earth_obs",
+        "status": "ok",
+        "tool": "earth_obs",
+        "pipeline": "orchestrator",
+        "model": "nvidia/Nemotron-3.5-Super-VL",
+        "prompt_tokens": 2147,
+        "completion_tokens": 294,
+        "latency_ms": 2170,
+        "cost_usd": "0.0009087",
+        "error": null,
+        "ts": "2026-10-22T18:01:52.430950Z",
+        "attempts": 1,
+        "output": {
+          "mock": false,
+          "vision": {
+            "after": {
+              "water": "The same dark river follows the bottom edge, with the inlet in the south-west corner appearing similar in extent and colour.",
+              "vegetation": "Dense green forest still dominates the interior, with comparable patchy brown areas and no obvious large-scale loss or gain.",
+              "built_or_bare": "No new built structures or significant bare ground are visible inside the outline."
+            },
+            "model": "nvidia/Nemotron-3.5-Super-VL",
+            "before": {
+              "water": "A dark river runs along the bottom edge inside the outline, with a narrow inlet extending into the south-west corner.",
+              "vegetation": "Dense green forest covers most of the interior, with some patchy brown areas suggesting mixed canopy or clearings.",
+              "built_or_bare": "No built structures are visible inside the outline; bare ground appears only in small scattered patches within the forest."
+            },
+            "changes": [
+              {
+                "id": "image:1",
+                "kind": "no_clear_change",
+                "note": "The forest, water extent, and ground cover inside the outline appear essentially unchanged between the two dates.",
+                "check": "nothing to confirm",
+                "where": "whole site",
+                "agrees": null,
+                "confidence": "high"
+              }
+            ],
+            "overall": "stable"
+          },
+          "area_ha": 400.2,
+          "signals": [
+            {
+              "z": 2.7,
+              "id": "signal:greenness_2026_05",
+              "end": "2026-06",
+              "pct": 31.4,
+              "kind": "greenness_anomaly",
+              "text": "greenness above its seasonal normal for 2 months (2026-05 to 2026-06), 31% above a normal June at its highest",
+              "start": "2026-05",
+              "months": 2,
+              "strength": "moderate",
+              "direction": 1,
+              "simulated": false
+            },
+            {
+              "z": null,
+              "id": "signal:greenness_last_12m",
+              "end": "2026-09",
+              "pct": 3.0,
+              "kind": "greenness_last_12m",
+              "text": "the latest 12 months' greenness is in line with the same months in earlier years",
+              "start": "2025-10",
+              "months": 12,
+              "strength": "weak",
+              "direction": 0,
+              "simulated": false
+            }
+          ],
+          "wetland": false,
+          "scenario": "baseline",
+          "simulated": false,
+          "data_version": "2026Q3",
+          "cloud_free_obs": 63,
+          "natural_fraction": 1.0
+        },
+        "llm_calls": [
+          {
+            "id": null,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 856,
+            "completion_tokens": 43,
+            "latency_ms": 1227,
+            "cost_usd": "0.0002955"
+          },
+          {
+            "id": null,
+            "agent": "site_vision",
+            "model": "nvidia/Nemotron-3.5-Super-VL",
+            "tier": "perception",
+            "status": "ok",
+            "prompt_tokens": 1291,
+            "completion_tokens": 251,
+            "latency_ms": 2111,
+            "cost_usd": "0.0006132"
+          }
+        ]
+      },
+      {
+        "step": "valuation",
+        "status": "ok",
+        "tool": "valuation",
+        "pipeline": "orchestrator",
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "prompt_tokens": 1523,
+        "completion_tokens": 28,
+        "latency_ms": 3,
+        "cost_usd": "0.0004821",
+        "error": null,
+        "ts": "2026-10-22T18:01:53.118902Z",
+        "attempts": 1,
+        "output": {
+          "unit": "Int$2020/yr",
+          "value_low": 1295918,
+          "value_mid": 2424480,
+          "value_high": 2424480,
+          "carbon_stock_tco2": 52657
+        },
+        "llm_calls": [
+          {
+            "id": null,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 1523,
+            "completion_tokens": 28,
+            "latency_ms": 661,
+            "cost_usd": "0.0004821"
+          }
+        ]
+      },
+      {
+        "step": "news",
+        "status": "ok",
+        "tool": "news_scout",
+        "pipeline": "orchestrator",
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "prompt_tokens": 5160,
+        "completion_tokens": 361,
+        "latency_ms": 13054,
+        "cost_usd": "0.0018729",
+        "error": null,
+        "ts": "2026-10-22T18:02:06.979057Z",
+        "attempts": 1,
+        "output": {
+          "events": 0,
+          "funnel": {
+            "kept": 0,
+            "found": 20,
+            "unique": 19,
+            "unsafe": 0,
+            "off_site": 0,
+            "relevant": 0,
+            "sent_to_model": 8
+          },
+          "negative": 0,
+          "positive": 0,
+          "relevant": 0,
+          "searches": [
+            {
+              "query": "Sumidero Canyon Restoration Forest Chiapas",
+              "credits": 2,
+              "results": 5,
+              "language": null,
+              "latency_ms": 7064
+            },
+            {
+              "query": "Sumidero Chiapas forest deforestation OR fire OR logging OR drought",
+              "credits": 2,
+              "results": 5,
+              "language": null,
+              "latency_ms": 5429
+            },
+            {
+              "query": "Sumidero Chiapas forest restoration OR protection OR conservation",
+              "credits": 2,
+              "results": 5,
+              "language": null,
+              "latency_ms": 5914
+            },
+            {
+              "query": "Sumidero bosque deforestación OR incendio OR tala OR restauración OR conservación OR protección",
+              "credits": 2,
+              "results": 5,
+              "language": "es",
+              "latency_ms": 3376
+            }
+          ],
+          "ecosystem": "forest",
+          "impact_types": [],
+          "max_severity": 0,
+          "dropped_off_site": 0,
+          "locality_unverified": false
+        },
+        "llm_calls": [
+          {
+            "id": null,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 1640,
+            "completion_tokens": 33,
+            "latency_ms": 779,
+            "cost_usd": "0.0005217"
+          },
+          {
+            "id": null,
+            "agent": "news_scout",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 3520,
+            "completion_tokens": 328,
+            "latency_ms": 3822,
+            "cost_usd": "0.0013512"
+          }
+        ]
+      },
+      {
+        "step": "plan",
+        "status": "ok",
+        "tool": null,
+        "pipeline": "orchestrator",
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "prompt_tokens": 2116,
+        "completion_tokens": 202,
+        "latency_ms": null,
+        "cost_usd": "0.0008166",
+        "error": null,
+        "ts": "2026-10-22T18:02:09.496238Z",
+        "attempts": null,
+        "output": {
+          "chose": [
+            "search_news"
+          ],
+          "notes": "We need to compare signals with kept news. Kept news count = 0, so there is a dated signal (greenness_2026_05) with no kept news dating to it. Need to investigate: call search_news with signal and topic most likely to explain it. Greenness increase suggests restoration or wet season. Topic options: fire, drought, flood, pollution, clearing, restoration. Increase likely restoration or wet season (not flood? flood could increase greenness). Choose restoration. Provide why. Then call search_news.",
+          "reasoning_tokens": 113
+        },
+        "llm_calls": [
+          {
+            "id": null,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 2116,
+            "completion_tokens": 202,
+            "latency_ms": 2474,
+            "cost_usd": "0.0008166"
+          }
+        ]
+      },
+      {
+        "step": "investigate",
+        "status": "ok",
+        "tool": "search_news",
+        "pipeline": "orchestrator",
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "prompt_tokens": 3010,
+        "completion_tokens": 301,
+        "latency_ms": 7618,
+        "cost_usd": "0.0011739",
+        "error": null,
+        "ts": "2026-10-22T18:02:17.122466Z",
+        "attempts": 1,
+        "output": {
+          "why": "Check if local news reports restoration efforts that could explain the May-June 2026 greenness increase, as no kept news currently matches this signal.",
+          "tool": "search_news",
+          "found": [],
+          "topic": "restoration",
+          "funnel": {
+            "kept": 0,
+            "found": 5,
+            "unique": 5,
+            "unsafe": 0,
+            "off_site": 0,
+            "relevant": 0,
+            "sent_to_model": 5
+          },
+          "signal": "signal:greenness_2026_05",
+          "window": {
+            "end": "2026-08-31",
+            "start": "2026-03-01"
+          },
+          "searches": [
+            {
+              "depth": "advanced",
+              "error": null,
+              "query": "Sumidero restauración OR reforestación OR limpieza OR protección",
+              "topic": "general",
+              "credits": 2,
+              "results": 5,
+              "language": "es",
+              "latency_ms": 4819
+            }
+          ],
+          "signal_text": "greenness above its seasonal normal for 2 months (2026-05 to 2026-06), 31% above a normal June at its highest",
+          "already_known": 0
+        },
+        "llm_calls": [
+          {
+            "id": null,
+            "agent": "news_scout",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 3010,
+            "completion_tokens": 301,
+            "latency_ms": 2762,
+            "cost_usd": "0.0011739"
+          }
+        ]
+      },
+      {
+        "step": "evidence",
+        "status": "skipped",
+        "tool": "field_evidence",
+        "pipeline": null,
+        "model": null,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "latency_ms": null,
+        "cost_usd": null,
+        "error": null,
+        "ts": "2026-10-22T18:02:17.881251Z",
+        "attempts": null,
+        "output": null,
+        "llm_calls": []
+      },
+      {
+        "step": "audit",
+        "status": "ok",
+        "tool": "auditor",
+        "pipeline": "orchestrator",
+        "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+        "prompt_tokens": 6233,
+        "completion_tokens": 3482,
+        "latency_ms": 13796,
+        "cost_usd": "0.0150221",
+        "error": null,
+        "ts": "2026-10-22T18:02:31.684870Z",
+        "attempts": 1,
+        "output": {
+          "flags": [
+            "forest_loss"
+          ],
+          "notes": "The user wants me to audit a rating bundle for \"Sumidero Canyon Restoration Forest\". I need to analyze the trusted facts, signals, image observations, and events (none in this case) to form hypotheses, reach a verdict, and produce the required JSON output.\n\nLet me first understand the data:\n\n**Metrics:**\n- Area: 400.2 ha\n- Land cover: 60.7% trees, 36.5% shrub/scrub, 2.4% water, 0.3% grass\n- Natural fraction: 100% natural\n- NDVI mean: 0.6652\n- NDVI trend: -0.0013 NDVI/yr (not significant, p=0.8959)\n- Water change: +0.1 (JRC surface-water change, scale -100 to 100)\n- Forest loss 5y: 26.81 ha (2021-2025)\n- Forest loss 12m: 0.86 ha (2025)\n- Biomass: 63.6 t/ha\n- Soil carbon: 56.7 t C/ha\n- Mangrove fraction: 0%\n- Cloud-free obs: 63 (2025-10-01 to 2026-10-01)\n\n**Signals:**\n- greenness_2026_05: greenness above seasonal normal for 2 months (2026-05 to 2026-06), 31% above normal June at highest\n- greenness_last_12m: latest 12 months' greenness in line with same months in earlier years\n\n**Image:**\n- No clear change between two dates 5 years apart (high confidence)\n\n**Events:** None\n\n**Scores:**\n- vegetation_vigor: 0.6658\n- natural_cover: 1.0000\n- habitat_loss: 0.3301 (1 = no loss, so this is low - meaning significant loss)\n- water_stability: 1.0000\n- threat_pressure: 1.0000 (1 = no threats)\n- negative_severity_sum: 0\n- base_health: 76.6 (grade A)\n- confidence_before_audit: 71.0%\n\n**Previous report:** Same health, confidence 68%, adjustment +0\n\nNow I need to form 2-3 hypotheses. Let me t",
+          "checks": {
+            "resolved": 14,
+            "citations": 14,
+            "rejected_answers": 0,
+            "placeholders_filled": 1
+          },
+          "rounds": 1,
+          "source": "ultra",
+          "verdict": "The site shows historical forest loss that has sharply slowed, with current metrics indicating stability and only minor seasonal greenness variation [metric:forest_loss_5y_ha, metric:forest_loss_12m_ha, signal:greenness_2026_05, signal:greenness_last_12m, image:1].",
+          "evidence": {
+            "image:1": {
+              "kind": "image",
+              "value": "no clear change, whole site (high confidence): The forest, water extent, and ground cover inside the outline appear essentially unchanged between the two dates. [code check: nothing to confirm]"
+            },
+            "metric:area_ha": {
+              "kind": "fact",
+              "value": "400.2 ha"
+            },
+            "metric:ndvi_trend": {
+              "kind": "fact",
+              "value": "-0.0013 NDVI/yr (Mann-Kendall p 0.8959, not significant at 5%)"
+            },
+            "score:base_health": {
+              "kind": "fact",
+              "value": "76.6 out of 100"
+            },
+            "score:habitat_loss": {
+              "kind": "fact",
+              "value": "0.3301 (0-1, 1 = no loss)"
+            },
+            "metric:water_change": {
+              "kind": "fact",
+              "value": "+0.1 (JRC surface-water change, scale -100 to 100)"
+            },
+            "score:threat_pressure": {
+              "kind": "fact",
+              "value": "1.0000 (0-1, 1 = no threats)"
+            },
+            "score:water_stability": {
+              "kind": "fact",
+              "value": "1.0000 (0-1)"
+            },
+            "metric:natural_fraction": {
+              "kind": "fact",
+              "value": "100.0% of land cover is natural"
+            },
+            "metric:forest_loss_5y_ha": {
+              "kind": "fact",
+              "value": "26.81 ha of tree cover lost over 5 years (2021-01-01 to 2025-12-31)"
+            },
+            "signal:greenness_2026_05": {
+              "kind": "fact",
+              "value": "greenness above its seasonal normal for 2 months (2026-05 to 2026-06), 31% above a normal June at its highest"
+            },
+            "metric:forest_loss_12m_ha": {
+              "kind": "fact",
+              "value": "0.86 ha lost in the latest 12 months (2025-01-01 to 2025-12-31)"
+            },
+            "signal:greenness_last_12m": {
+              "kind": "fact",
+              "value": "the latest 12 months' greenness is in line with the same months in earlier years"
+            },
+            "score:confidence_before_audit": {
+              "kind": "fact",
+              "value": "71.0% = 100 x (0.4 coverage 1.0000 + 0.3 agreement 0.5000 (default) + 0.2 field evidence 0.3000 + 0.1 recency 1.0000)"
+            }
+          },
+          "agreement": 0.5,
+          "hypotheses": [
+            {
+              "name": "Stable forest with minor seasonal variation",
+              "assessment": "supported",
+              "evidence_for": [
+                "metric:natural_fraction",
+                "score:water_stability",
+                "score:threat_pressure",
+                "image:1",
+                "signal:greenness_last_12m",
+                "metric:ndvi_trend",
+                "metric:forest_loss_12m_ha"
+              ],
+              "evidence_against": [
+                "metric:forest_loss_5y_ha",
+                "score:habitat_loss",
+                "signal:greenness_2026_05"
+              ]
+            },
+            {
+              "name": "Gradual degradation with recent recovery",
+              "assessment": "weakened",
+              "evidence_for": [
+                "metric:forest_loss_5y_ha",
+                "score:habitat_loss",
+                "metric:forest_loss_12m_ha",
+                "signal:greenness_2026_05"
+              ],
+              "evidence_against": [
+                "metric:natural_fraction",
+                "score:threat_pressure",
+                "image:1",
+                "signal:greenness_last_12m",
+                "metric:ndvi_trend"
+              ]
+            },
+            {
+              "name": "Seasonal variation only, no material change",
+              "assessment": "unclear",
+              "evidence_for": [
+                "signal:greenness_last_12m",
+                "image:1",
+                "metric:natural_fraction",
+                "score:water_stability",
+                "score:threat_pressure",
+                "metric:ndvi_trend"
+              ],
+              "evidence_against": [
+                "metric:forest_loss_5y_ha",
+                "score:habitat_loss",
+                "signal:greenness_2026_05"
+              ]
+            }
+          ],
+          "rejections": [],
+          "base_health": "76.6",
+          "reasoning_tokens": 2242,
+          "adjustment_reason": null,
+          "greenwashing_risk": "low",
+          "auditor_adjustment": 0
+        },
+        "llm_calls": [
+          {
+            "id": null,
+            "agent": "orchestrator",
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "tier": "orchestrator",
+            "status": "ok",
+            "prompt_tokens": 2292,
+            "completion_tokens": 25,
+            "latency_ms": 735,
+            "cost_usd": "0.0007101"
+          },
+          {
+            "id": null,
+            "agent": "auditor",
+            "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+            "tier": "auditor",
+            "status": "ok",
+            "prompt_tokens": 3941,
+            "completion_tokens": 3457,
+            "latency_ms": 13728,
+            "cost_usd": "0.014312"
+          }
+        ]
+      },
+      {
+        "step": "done",
+        "status": "succeeded",
+        "tool": null,
+        "pipeline": "orchestrator",
+        "model": null,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "latency_ms": 42785,
+        "cost_usd": null,
+        "error": null,
+        "ts": "2026-10-22T18:02:31.727099Z",
+        "attempts": null,
+        "output": null,
+        "llm_calls": []
+      }
+    ],
+    "totals": {
+      "llm_calls": 9,
+      "prompt_tokens": 20189,
+      "completion_tokens": 4668,
+      "cost_usd": "0.0202763"
+    },
+    "models": [
+      {
+        "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+        "calls": 1,
+        "prompt_tokens": 3941,
+        "completion_tokens": 3457,
+        "latency_ms": 13728,
+        "cost_usd": "0.014312"
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "calls": 7,
+        "prompt_tokens": 14957,
+        "completion_tokens": 960,
+        "latency_ms": 12460,
+        "cost_usd": "0.0053511"
+      },
+      {
+        "model": "nvidia/Nemotron-3.5-Super-VL",
+        "calls": 1,
+        "prompt_tokens": 1291,
+        "completion_tokens": 251,
+        "latency_ms": 2111,
+        "cost_usd": "0.0006132"
+      }
+    ],
+    "baseline": {
+      "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "cost_usd": "0.032149"
+    }
+  }
+}

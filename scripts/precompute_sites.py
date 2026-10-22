@@ -48,6 +48,7 @@ from app.tools.earth_engine import (
     CLOUD_SCORE_THRESHOLD,
     DATA_VERSION,
     END_DATE,
+    START_5Y,
     START_12M,
     compute_png,
     compute_polygon_metrics,
@@ -197,6 +198,9 @@ THUMBNAIL_OUTLINE = "#ffffff"
 THUMBNAIL_OUTLINE_PX = 2
 THUMBNAIL_WEBP_QUALITY = 82
 _SUPERSAMPLE = 4
+# The vision model's "before": the first year of the 5-year window, against the thumbnail's
+# latest 12 months.
+BEFORE_WINDOW = (START_5Y, "2022-10-01")
 
 
 def _stable_bounds(bounds: Bounds) -> Bounds:
@@ -255,7 +259,12 @@ def expected_site_images(site_key: str) -> SiteImages:
     )
 
 
-def _thumbnail_webp(ring: list[tuple[float, float]], grid: PixelGrid) -> bytes:
+def _thumbnail_webp(
+    ring: list[tuple[float, float]],
+    grid: PixelGrid,
+    start: str = START_12M,
+    end: str = END_DATE,
+) -> bytes:
     from PIL import Image, ImageDraw
 
     (south, west), (north, east) = grid.bounds()
@@ -264,7 +273,7 @@ def _thumbnail_webp(ring: list[tuple[float, float]], grid: PixelGrid) -> bytes:
     composite = (
         ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
         .filterBounds(region)
-        .filterDate(START_12M, END_DATE)
+        .filterDate(start, end)
         .linkCollection(cs_plus, ["cs_cdf"])
         .map(lambda image: image.updateMask(image.select("cs_cdf").gte(CLOUD_SCORE_THRESHOLD)))
         .select(list(THUMBNAIL_VIS.bands))
@@ -313,6 +322,18 @@ def write_site_images(site_key: str) -> None:
     print(f"Wrote {sidecar.relative_to(ROOT)}")
 
 
+def write_before_image(site_key: str) -> None:
+    """The same true-colour view five years earlier (BEFORE_WINDOW), for the vision model's
+    before/after comparison. Same grid and outline as the thumbnail."""
+    geojson = load_site_geojson(site_key)
+    data = _thumbnail_webp(
+        polygon_ring(geojson), thumbnail_grid(polygon_bounds(geojson)), *BEFORE_WINDOW
+    )
+    path = image_path(site_key, "before")
+    path.write_bytes(data)
+    print(f"Wrote {path.relative_to(ROOT)} ({len(data):,} bytes)")
+
+
 def image_failures(site_keys: list[str]) -> list[str]:
     """Offline check of the committed images and sidecars (no Earth Engine, no Pillow)."""
     failures: list[str] = []
@@ -338,7 +359,18 @@ def main() -> int:
         action="store_true",
         help="Only render the overlay and thumbnail images (with --check: verify them offline).",
     )
+    parser.add_argument(
+        "--before",
+        action="store_true",
+        help="Only render the true-colour view five years earlier (before.webp).",
+    )
     args = parser.parse_args()
+    if args.before:
+        _init_ee()
+        for site_key in _site_keys(args.site):
+            print(f"Rendering {site_key} before image...")
+            write_before_image(site_key)
+        return 0
     if args.images and args.scenarios_only:
         parser.error("--images and --scenarios-only are separate steps.")
 

@@ -17,11 +17,13 @@ also fails (or the budget, network or models fail), `run_auditor` returns a dete
 no-op audit, so a rating never blocks on the LLM. `apply_audit` is the only way the result
 touches a number: it re-runs `scoring.score` with the bounded adjustment and agreement.
 
-Thinking: **off** for the JSON call (T02's "off for JSON" option). ADR-0003's T02 spike had
-Ultra 3/3 valid and correct with `json_schema` and reasoning off (0.8 s, $0.0009), and the T26
-live smoke showed that with reasoning on Ultra spent the whole 3,000-token cap thinking and
-returned truncated JSON on both attempts. `run_auditor(reasoning=True)` stays available for
-the T47 evals.
+Thinking: **on**. Ultra first weighs 2-3 competing explanations (for example seasonal drought
+against clearing) with the bundle IDs for and against each, then decides. With reasoning on,
+`LLMClient.structured` sends the schema in the prompt only: Token Factory's strict `json_schema`
+plus reasoning ran past `max_tokens` without closing the JSON (T26 live smoke, Oct 22 spike),
+while the prompt-only schema with an 8,000-token cap returned valid JSON in 14 s for about
+$0.02 (`reasoning_effort` and a `reasoning_budget` are ignored there). Prose numbers are
+written as `{fact-id}` placeholders that code fills with the exact value (`fill_placeholders`).
 """
 
 from __future__ import annotations
@@ -31,7 +33,7 @@ import logging
 import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
@@ -44,20 +46,30 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.agents.guards import invented_numbers
-from app.llm import LLMClient, LLMError, LLMResult, Tier
+from app.llm import BudgetExceeded, LLMClient, LLMError, LLMResult, Tier
 from app.schemas import AuditorFlag, AuditorOutput, NewsScoutItem
 from app.tools import scoring
 from app.tools.earth_obs import DateWindow, EarthObsMetrics
 from app.tools.scoring import DEFAULT_AGREEMENT, MAX_AUDITOR_ADJUSTMENT, Number, ScoreResult
+from app.tools.signals import PRICED_SIGNAL_IDS, Signal
 from app.tools.valuation import ValuationResult
 
 log = logging.getLogger(__name__)
 
 AGENT_NAME = "auditor"
 PROMPT_PATH = Path(__file__).parent / "prompts" / "auditor.md"
-# A full answer is ~600-900 tokens; Ultra's worst case is about $0.007 per attempt.
-MAX_TOKENS = 1800
-REASONING = False
+# Reasoning length grows with the case: 2,000-8,000 tokens measured on the demo sites (Oct 22),
+# plus a ~1,500-token answer; Token Factory ignores reasoning budgets. Typical cost about $0.03,
+# worst case about $0.05 an attempt; if it still runs out, Ultra answers with thinking off.
+MAX_TOKENS = 16000
+REASONING = True
+FIX_MAX_TOKENS = 2500
+"""A correction round (thinking off) only rewrites the answer it is shown."""
+MAX_HYPOTHESES = 3
+MAX_HYPOTHESIS_IDS = 8
+MAX_HYPOTHESIS_NAME_CHARS = 80
+MAX_VERDICT_CHARS = 600
+REASONING_EXCERPT_CHARS = 1500
 
 MAX_SUMMARY_CHARS = 3000
 MAX_SUMMARY_WORDS = 400
@@ -73,11 +85,17 @@ MAX_FEEDBACK_ERRORS = 8
 REJECTED = "rejected"
 """`llm_calls.status` of a schema-valid answer that `check_audit` refused."""
 
-ID_PREFIXES = ("metric", "valuation", "score", "event", "report")
+ID_PREFIXES = ("metric", "signal", "image", "valuation", "score", "event", "report")
 CITATION_RE = re.compile(
     r"\b(?:" + "|".join(ID_PREFIXES) + r"):[A-Za-z0-9_](?:[A-Za-z0-9_.\-]*[A-Za-z0-9_])?"
 )
 _EVENT_ID_RE = r"^[A-Za-z0-9_](?:[A-Za-z0-9_.\-]{0,62}[A-Za-z0-9_])?$"
+_PLACEHOLDER_NUMBER_RE = re.compile(
+    r"[+-]?\$?\d[\d,]*(?:\.\d+)?"
+    r"(?:%|/yr| (?:out of 100|t C/ha|t/ha|tCO2/yr|tCO2|NDVI/yr|ha))?(?=$|[\s(;,])"
+)
+# `{metric:area_ha}` in the prose: code writes the fact's exact value there (`fill_placeholders`).
+PLACEHOLDER_RE = re.compile(r"\{(" + CITATION_RE.pattern.removeprefix(r"\b") + r")\}")
 _HTML_TAG_RE = re.compile(r"<[A-Za-z!/?]")
 _LINK_RE = re.compile(r"\]\(|!\[|https?://", re.IGNORECASE)
 _MAX_SHOWN_ID = 80
@@ -142,6 +160,22 @@ class Fact(BaseModel):
     value: str
 
 
+class EventReading(BaseModel):
+    """The article behind a news event, read during the run's investigation. `names_site`,
+    `quote_checked` and `month` (a real month whose year is on the page) are code-checked; the
+    question, finding and quote come from models and the page, so they stay untrusted."""
+
+    model_config = ConfigDict(frozen=True)
+
+    names_site: bool
+    answers: Literal["yes", "partly", "no"]
+    quote_checked: bool
+    question: str = ""
+    month: str | None = None
+    finding: str = ""
+    quote: str = ""
+
+
 class AuditEvent(BaseModel):
     """A news or field-evidence event. Metadata is trusted; `title` and `summary` are not."""
 
@@ -160,6 +194,8 @@ class AuditEvent(BaseModel):
     """Field evidence only: True when code checks (EXIF GPS and date) passed."""
     title: str | None = None
     summary: str = ""
+    reading: EventReading | None = None
+    """Set when the orchestrator had the full article read (`agents.article_reader`)."""
 
     @property
     def citation_id(self) -> str:
@@ -193,10 +229,17 @@ class AuditorInput(BaseModel):
     base_grade: str
     facts: tuple[Fact, ...]
     events: tuple[AuditEvent, ...] = ()
+    observations: tuple[Fact, ...] = ()
+    """`image:` descriptions by the vision model, each with code's check against the metrics:
+    hints, never trusted numbers (they stay out of `trusted_lines`)."""
 
     @model_validator(mode="after")
     def _unique_ids(self) -> AuditorInput:
-        ids = [fact.id for fact in self.facts] + [event.citation_id for event in self.events]
+        ids = (
+            [fact.id for fact in self.facts]
+            + [o.id for o in self.observations]
+            + [event.citation_id for event in self.events]
+        )
         duplicates = sorted({i for i in ids if ids.count(i) > 1})
         if duplicates:
             raise ValueError(f"duplicate bundle IDs: {duplicates}")
@@ -208,7 +251,14 @@ class AuditorInput(BaseModel):
     @property
     def ids(self) -> tuple[str, ...]:
         """Every citable ID, in bundle order."""
-        return tuple(fact.id for fact in self.facts) + tuple(e.citation_id for e in self.events)
+        return (
+            tuple(fact.id for fact in self.facts)
+            + tuple(o.id for o in self.observations)
+            + tuple(e.citation_id for e in self.events)
+        )
+
+    def observation(self, observation_id: str) -> str | None:
+        return next((o.value for o in self.observations if o.id == observation_id), None)
 
     def event(self, citation_id: str) -> AuditEvent | None:
         return next((e for e in self.events if e.citation_id == citation_id), None)
@@ -246,6 +296,16 @@ class AuditorInput(BaseModel):
             "## Trusted facts (computed by deterministic code; cite by ID)",
             *(f"{fact.id} = {fact.value}" for fact in self.facts),
             "",
+            *(
+                [
+                    "## Satellite image reading (a vision model's description of the views "
+                    "five years apart, with code's check; a hint, not a measurement)",
+                    *(f"{o.id} = {o.value}" for o in self.observations),
+                    "",
+                ]
+                if self.observations
+                else []
+            ),
             "## Events (metadata is trusted; title and summary are untrusted)",
         ]
         if not self.events:
@@ -258,6 +318,7 @@ class AuditorInput(BaseModel):
                 "<untrusted_content>",
                 f"title: {title}",
                 f"summary: {summary}",
+                *_reading_lines(event.reading),
                 "</untrusted_content>",
                 "</event>",
             ]
@@ -266,6 +327,18 @@ class AuditorInput(BaseModel):
 
 def _untrusted_line(text: str, limit: int) -> str:
     return html.escape(" ".join(text.split())[:limit])
+
+
+def _reading_lines(reading: EventReading | None) -> list[str]:
+    if reading is None:
+        return []
+    lines = [
+        f"article_question: {_untrusted_line(reading.question, UNTRUSTED_TITLE_CHARS)}",
+        f"article_finding: {_untrusted_line(reading.finding, UNTRUSTED_SUMMARY_CHARS)}",
+    ]
+    if reading.quote:
+        lines.append(f"article_quote: {_untrusted_line(reading.quote, UNTRUSTED_SUMMARY_CHARS)}")
+    return lines
 
 
 def _event_meta(event: AuditEvent) -> str:
@@ -277,6 +350,14 @@ def _event_meta(event: AuditEvent) -> str:
     )
     if event.validated is not None:
         meta += f' validated="{str(event.validated).lower()}"'
+    if event.reading is not None:
+        meta += (
+            f' article_read="true" names_site="{str(event.reading.names_site).lower()}"'
+            f' answers="{event.reading.answers}"'
+            f' quote_checked="{str(event.reading.quote_checked).lower()}"'
+        )
+        if event.reading.month:
+            meta += f' article_month="{event.reading.month}"'
     return meta
 
 
@@ -301,6 +382,11 @@ def audit_events_from_news(items: Iterable[NewsScoutItem]) -> list[AuditEvent]:
     return events
 
 
+def event_citation_id(item: NewsScoutItem) -> str:
+    """The bundle citation ID `audit_events_from_news` gives this News Scout item."""
+    return f"event:{item.id or _derived_event_id(item)}"
+
+
 def _derived_event_id(item: NewsScoutItem) -> str:
     """The ID News Scout would give the item (uuid5 of its URL), for items built without one."""
     if item.url:
@@ -318,12 +404,15 @@ def build_auditor_input(
     base: ScoreResult,
     events: Sequence[AuditEvent] = (),
     previous: PreviousReport | None = None,
+    signals: Sequence[Signal] = (),
+    observations: Sequence[tuple[str, str]] = (),
 ) -> AuditorInput:
     """Flatten deterministic results into citable facts. `base` must be the pre-audit score."""
     if base.auditor_adjustment != 0 or base.agreement_source != "default":
         raise ValueError("build the bundle from the base score, before any audit is applied")
     facts = [
         *_metric_facts(metrics),
+        *((signal.id, signal.text) for signal in signals),
         *_valuation_facts(valuation),
         *_score_facts(base),
         *(_previous_facts(previous, base, valuation) if previous else []),
@@ -337,13 +426,16 @@ def build_auditor_input(
         base_grade=base.grade.value,
         facts=tuple(Fact(id=fact_id, value=value) for fact_id, value in facts),
         events=tuple(events),
+        observations=tuple(Fact(id=i, value=text) for i, text in observations),
     )
 
 
 def _metric_facts(m: EarthObsMetrics) -> list[tuple[str, str]]:
     trend = m.ndvi_trend_details
     windows = m.date_windows
+    kind = "a scripted Time Machine scenario, not observations" if m.simulated else "observed"
     facts = [
+        ("metric:data_version", f"{m.data_version} ({kind})"),
         ("metric:area_ha", f"{_fixed(m.area_ha, 1)} ha"),
         *(
             (f"metric:landcover.{name}", _pct(share))
@@ -492,6 +584,8 @@ def _compact_money(amount: int) -> str:
 
 def _texts(output: AuditorOutput) -> list[tuple[str, str]]:
     return [
+        *((f"hypotheses[{i}].name", h.name) for i, h in enumerate(output.hypotheses)),
+        ("verdict", output.verdict),
         ("adjustment_reason", output.adjustment_reason),
         ("summary_md", output.summary_md),
         *((f"key_changes[{i}]", text) for i, text in enumerate(output.key_changes)),
@@ -502,6 +596,152 @@ def _texts(output: AuditorOutput) -> list[tuple[str, str]]:
 
 def inline_citations(text: str) -> list[str]:
     return CITATION_RE.findall(text)
+
+
+def placeholder_value(value: str) -> str:
+    """What `{fact-id}` becomes: the fact's leading number and unit ("83.9%", "206.7 ha",
+    "$2,669,511/yr"), or its whole text when it doesn't start with a number."""
+    match = _PLACEHOLDER_NUMBER_RE.match(value)
+    return match.group(0) if match else value
+
+
+MIN_EVENT_PREFIX = 8
+
+
+def tidy_answer(output: AuditorOutput, bundle: AuditorInput) -> AuditorOutput:
+    """Bookkeeping code can do itself, so it never costs a refused answer: long hypothesis
+    labels cut, evidence lists capped at `MAX_HYPOTHESIS_IDS`, and an empty `citations` list
+    filled with the known IDs the answer cites. Nothing here can add a claim or an unknown ID."""
+    output = short_hypothesis_names(output)
+    output = output.model_copy(
+        update={
+            "hypotheses": [
+                h.model_copy(
+                    update={
+                        "evidence_for": list(dict.fromkeys(h.evidence_for))[:MAX_HYPOTHESIS_IDS],
+                        "evidence_against": list(dict.fromkeys(h.evidence_against))[
+                            :MAX_HYPOTHESIS_IDS
+                        ],
+                    }
+                )
+                for h in output.hypotheses
+            ]
+        }
+    )
+    if output.citations:
+        return output
+    known = set(bundle.ids)
+    used = [c for _, text in _texts(output) for c in inline_citations(text)]
+    used += [c for h in output.hypotheses for c in (*h.evidence_for, *h.evidence_against)]
+    used += [f.citation for f in output.flags if f.citation]
+    filled = [c for c in dict.fromkeys(used) if c in known][:MAX_CITATIONS]
+    return output.model_copy(update={"citations": filled})
+
+
+def short_hypothesis_names(output: AuditorOutput) -> AuditorOutput:
+    """A hypothesis name is a label: a long one is cut at a word boundary, not refused."""
+
+    def short(name: str) -> str:
+        name = " ".join(name.split())
+        if len(name) <= MAX_HYPOTHESIS_NAME_CHARS:
+            return name
+        cut = name[: MAX_HYPOTHESIS_NAME_CHARS - 1].rsplit(" ", 1)[0]
+        return cut.rstrip(" ,;:-") + "…"
+
+    return output.model_copy(
+        update={
+            "hypotheses": [h.model_copy(update={"name": short(h.name)}) for h in output.hypotheses]
+        }
+    )
+
+
+def full_event_ids(output: AuditorOutput, bundle: AuditorInput) -> AuditorOutput:
+    """Repair two slips in IDs the model meant unambiguously: a shortened event ID
+    (`event:94cc0471`) becomes the one bundle event it starts, when exactly one does and the
+    prefix has at least 8 characters; a fact under the wrong family (`metric:water_stability`)
+    becomes the one bundle fact with that name (`score:water_stability`). Anything else is left
+    as written, so the checks still refuse it."""
+    events = [e.citation_id for e in bundle.events]
+    known = set(bundle.ids)
+    by_name: dict[str, list[str]] = {}
+    for fact_id in bundle.ids:
+        if not fact_id.startswith("event:"):
+            by_name.setdefault(fact_id.split(":", 1)[1], []).append(fact_id)
+
+    def full(citation: str) -> str:
+        if citation in known:
+            return citation
+        if not citation.startswith("event:"):
+            named = by_name.get(citation.split(":", 1)[-1], [])
+            return named[0] if len(named) == 1 else citation
+        if len(citation) - len("event:") < MIN_EVENT_PREFIX:
+            return citation
+        matches = [e for e in events if e.startswith(citation)]
+        return matches[0] if len(matches) == 1 else citation
+
+    def text(value: str) -> str:
+        return CITATION_RE.sub(lambda m: full(m.group(0)), value)
+
+    return output.model_copy(
+        update={
+            "hypotheses": [
+                h.model_copy(
+                    update={
+                        "evidence_for": [full(c) for c in h.evidence_for],
+                        "evidence_against": [full(c) for c in h.evidence_against],
+                    }
+                )
+                for h in output.hypotheses
+            ],
+            "verdict": text(output.verdict),
+            "adjustment_reason": text(output.adjustment_reason),
+            "summary_md": text(output.summary_md),
+            "key_changes": [text(t) for t in output.key_changes],
+            "recommendations": [text(t) for t in output.recommendations],
+            "flags": [
+                f.model_copy(update={"citation": full(f.citation) if f.citation else None})
+                for f in output.flags
+            ],
+            "citations": [full(c) for c in output.citations],
+        }
+    )
+
+
+def count_placeholders(output: AuditorOutput) -> int:
+    return sum(len(PLACEHOLDER_RE.findall(text)) for _, text in _texts(output))
+
+
+def fill_placeholders(
+    output: AuditorOutput, bundle: AuditorInput
+) -> tuple[AuditorOutput, list[str]]:
+    """Replace each `{fact-id}` with that fact's exact value, so a number in the prose is
+    always the one code computed. Returns the filled answer and any unknown placeholders."""
+    errors: list[str] = []
+
+    def fill(text: str) -> str:
+        def one(match: re.Match[str]) -> str:
+            value = bundle.fact(match.group(1))
+            if value is None:
+                errors.append(f"unknown placeholder {{{_shown(match.group(1))}}}")
+                return match.group(0)
+            return placeholder_value(value)
+
+        return PLACEHOLDER_RE.sub(one, text)
+
+    filled = output.model_copy(
+        update={
+            "hypotheses": [h.model_copy(update={"name": fill(h.name)}) for h in output.hypotheses],
+            "verdict": fill(output.verdict),
+            "adjustment_reason": fill(output.adjustment_reason),
+            "summary_md": fill(output.summary_md),
+            "key_changes": [fill(text) for text in output.key_changes],
+            "recommendations": [fill(text) for text in output.recommendations],
+            "flags": [
+                flag.model_copy(update={"detail": fill(flag.detail)}) for flag in output.flags
+            ],
+        }
+    )
+    return filled, list(dict.fromkeys(errors))
 
 
 def check_audit(output: AuditorOutput, bundle: AuditorInput) -> list[str]:
@@ -548,6 +788,26 @@ def check_audit(output: AuditorOutput, bundle: AuditorInput) -> list[str]:
     if agreement_valid:
         errors += _agreement_errors(output, bundle)
 
+    # The case: a few named explanations whose evidence resolves, and a cited verdict.
+    if len(output.hypotheses) > MAX_HYPOTHESES:
+        errors.append(f"at most {MAX_HYPOTHESES} hypotheses")
+    for i, hypothesis in enumerate(output.hypotheses):
+        if not hypothesis.name.strip():
+            errors.append(f"hypotheses[{i}].name is empty")
+        for side in ("evidence_for", "evidence_against"):
+            ids = getattr(hypothesis, side)
+            if len(ids) > MAX_HYPOTHESIS_IDS:
+                errors.append(f"hypotheses[{i}].{side} lists more than {MAX_HYPOTHESIS_IDS} IDs")
+            errors += [
+                f"hypotheses[{i}].{side} cites an unknown ID: {_shown(c)}"
+                for c in ids
+                if c not in known
+            ]
+    if output.hypotheses and not inline_citations(output.verdict):
+        errors.append("verdict needs [ID] citations when hypotheses are given")
+    if len(output.verdict) > MAX_VERDICT_CHARS:
+        errors.append(f"verdict must be under {MAX_VERDICT_CHARS} characters")
+
     # Flags: typed, cited, and consistent with the greenwashing rating and simulated data.
     if len(output.flags) > MAX_FLAGS:
         errors.append(f"at most {MAX_FLAGS} flags")
@@ -585,7 +845,8 @@ def check_audit(output: AuditorOutput, bundle: AuditorInput) -> list[str]:
     if len(reason) > MAX_REASON_CHARS:
         errors.append(f"adjustment_reason must be under {MAX_REASON_CHARS} characters")
     for field, text in _texts(output):
-        if field not in ("summary_md", "adjustment_reason") and len(text) > MAX_ITEM_CHARS:
+        long_ok = ("summary_md", "adjustment_reason", "verdict")
+        if field not in long_ok and len(text) > MAX_ITEM_CHARS:
             errors.append(f"{field} must be under {MAX_ITEM_CHARS} characters")
         if _HTML_TAG_RE.search(text):
             errors.append(f"{field} contains HTML; use Markdown only")
@@ -614,6 +875,7 @@ def _is_priced(citation: str) -> bool:
     return (
         citation.startswith(("score:", "valuation:", "metric:landcover."))
         or citation in _PRICED_METRICS
+        or citation in PRICED_SIGNAL_IDS
     )
 
 
@@ -662,10 +924,12 @@ def _justification_errors(adjustment: int, reason: str, bundle: AuditorInput) ->
             "a positive adjustment must cite a relevant direction 1 news event or validated "
             "field evidence"
         )
-    if sign < 0 and not any(c.startswith(("metric:", "report:previous.")) for c in cited):
+    if sign < 0 and not any(
+        c.startswith(("metric:", "signal:", "report:previous.")) for c in cited
+    ):
         errors.append(
-            "a negative adjustment must also cite the metric or report fact that disagrees; "
-            "score:threat_pressure already prices relevant negative events"
+            "a negative adjustment must also cite the metric, signal or report fact that "
+            "disagrees; score:threat_pressure already prices relevant negative events"
         )
     return errors
 
@@ -750,6 +1014,9 @@ class AuditResult:
     """The audit's greenwashing risk, or None when it was **not assessed** (the no-op audit).
     T27: show "not assessed" for None; `output.greenwashing_risk` is only a schema filler."""
     reasoning: str | None = None
+    reasoning_tokens: int | None = None
+    placeholders_filled: int = 0
+    """`{fact-id}` placeholders in the accepted answer that code replaced with exact values."""
 
 
 @cache
@@ -773,13 +1040,16 @@ def run_auditor(
     max_tokens: int = MAX_TOKENS,
     reasoning: bool = REASONING,
 ) -> AuditResult:
-    """Ultra → (retry with errors) → one tier down → deterministic no-op. Never raises on
-    model, budget or call-log failures."""
+    """Ultra (thinking) → Ultra fixes the rejected answer (thinking off) → one tier down →
+    deterministic no-op. Never raises on model, budget or call-log failures."""
     base = auditor_messages(bundle)
     rejections: list[str] = []
     rounds = 0
+    placeholders = 0
 
-    def ask(messages: list[dict[str, Any]], tier: Tier) -> LLMResult[AuditorOutput]:
+    def ask(
+        messages: list[dict[str, Any]], tier: Tier, *, think: bool = False
+    ) -> LLMResult[AuditorOutput]:
         nonlocal rounds
         rounds += 1
         return llm.structured(
@@ -787,17 +1057,41 @@ def run_auditor(
             tier=tier,
             messages=messages,
             schema=AuditorOutput,
-            reasoning=reasoning,
-            max_tokens=max_tokens,
+            reasoning=think,
+            max_tokens=max_tokens if think else FIX_MAX_TOKENS,
             world_id=world_id,
             asset_id=asset_id,
+            # A thinking call that runs out of tokens would only run out again on a retry or a
+            # smaller model: one attempt, then Ultra answers with thinking off.
+            single_attempt=think,
         )
 
+    def deliberate() -> LLMResult[AuditorOutput]:
+        if reasoning:
+            try:
+                return ask(base, Tier.AUDITOR, think=True)
+            except BudgetExceeded:
+                raise
+            except LLMError as exc:
+                rejections.append(f"thinking answer unusable ({str(exc)[:120]}); answered without")
+        return ask(base, Tier.AUDITOR)
+
+    def review(result: LLMResult[AuditorOutput]) -> tuple[LLMResult[AuditorOutput], list[str]]:
+        nonlocal placeholders
+        filled, unknown = fill_placeholders(
+            tidy_answer(full_event_ids(result.value, bundle), bundle), bundle
+        )
+        placeholders = count_placeholders(result.value)
+        return replace(result, value=filled), unknown + check_audit(filled, bundle)
+
     try:
-        first = ask(base, Tier.AUDITOR)
-        problems = check_audit(first.value, bundle)
+        # Ultra thinks once. Its decisions are in that answer, so a rejected answer goes back
+        # for a quick fix with thinking off (strict JSON), not for a second deliberation.
+        first = deliberate()
+        deliberation = first
+        checked, problems = review(first)
         if not problems:
-            return _accepted(first, bundle, rounds, rejections)
+            return _accepted(checked, bundle, rounds, rejections, placeholders=placeholders)
         llm.mark(first, REJECTED)
         rejections += problems
 
@@ -807,9 +1101,11 @@ def run_auditor(
             {"role": "user", "content": _feedback(problems, "Your answer was rejected")},
         ]
         second = ask(retry, first.tier)
-        problems = check_audit(second.value, bundle)
+        checked, problems = review(second)
         if not problems:
-            return _accepted(second, bundle, rounds, rejections)
+            return _accepted(
+                checked, bundle, rounds, rejections, deliberation, placeholders=placeholders
+            )
         llm.mark(second, REJECTED)
         rejections += problems
 
@@ -817,9 +1113,11 @@ def run_auditor(
         if lower is not None:
             note = _feedback(rejections, "Earlier answers were rejected")
             third = ask([*base, {"role": "user", "content": note}], lower)
-            problems = check_audit(third.value, bundle)
+            checked, problems = review(third)
             if not problems:
-                return _accepted(third, bundle, rounds, rejections)
+                return _accepted(
+                    checked, bundle, rounds, rejections, deliberation, placeholders=placeholders
+                )
             llm.mark(third, REJECTED)
             rejections += problems
     except (LLMError, SQLAlchemyError) as exc:
@@ -829,12 +1127,41 @@ def run_auditor(
     return no_op_audit(bundle, rounds=rounds, rejections=rejections)
 
 
+_NUMBERS_ERROR = " uses numbers not in the bundle: "
+_ECHOABLE_NUMBER_RE = re.compile(
+    r"(?:\$|USD|EUR|Q)?\d[\d,]*(?:\.\d+)?(?:st|nd|rd|th)?"
+    r"(?: ?(?:%|[KkMmBb]|percent|thousand|million|billion))?",
+    re.IGNORECASE,
+)
+
+
 def _feedback(errors: Sequence[str], lead: str) -> str:
     unique = list(dict.fromkeys(error[:200] for error in errors))[:MAX_FEEDBACK_ERRORS]
     return (
         f"{lead} by the deterministic checks:\n- "
         + "\n- ".join(unique)
+        + _numbers_hint(unique)
         + "\nReply with a corrected JSON object. All the rules still apply."
+    )
+
+
+def _numbers_hint(errors: Sequence[str]) -> str:
+    """The most common rejection (a number copied from news text), spelled out: which numbers
+    to delete where, and how to say it instead. Only checker-made text is echoed."""
+    fields: list[str] = []
+    numbers: list[str] = []
+    for error in errors:
+        field, found, listed = error.partition(_NUMBERS_ERROR)
+        if found:
+            fields.append(field)
+            numbers += [n for n in listed.split(", ") if _ECHOABLE_NUMBER_RE.fullmatch(n)]
+    if not fields:
+        return ""
+    shown = ", ".join(dict.fromkeys(numbers)) or "those numbers"
+    return (
+        f"\nDelete {shown} from {', '.join(dict.fromkeys(fields))}: they are not trusted facts "
+        "(news text is untrusted). Say it in words and cite the event instead, for example "
+        '"a large restoration programme [event:<id>]", or use a {fact-id} placeholder.'
     )
 
 
@@ -843,7 +1170,18 @@ def _accepted(
     bundle: AuditorInput,
     rounds: int,
     rejections: Sequence[str],
+    deliberation: LLMResult[AuditorOutput] | None = None,
+    *,
+    placeholders: int = 0,
 ) -> AuditResult:
+    """`deliberation` is the thinking call whose rejected answer a fix round corrected: its
+    reasoning is the one shown."""
+    # Show the thinking call's notes for a fix of its own answer, never under another model's.
+    thought = (
+        deliberation
+        if deliberation is not None and deliberation.tier is result.tier and not result.reasoning
+        else result
+    )
     answer = result.value
     line = adjustment_line(bundle, answer.auditor_adjustment, answer.adjustment_reason)
     output = answer.model_copy(update={"summary_md": f"{answer.summary_md.rstrip()}\n\n{line}"})
@@ -858,7 +1196,9 @@ def _accepted(
         rounds=rounds,
         rejections=tuple(rejections),
         greenwashing_risk=output.greenwashing_risk,
-        reasoning=result.reasoning,
+        reasoning=thought.reasoning,
+        reasoning_tokens=thought.reasoning_tokens,
+        placeholders_filled=placeholders,
     )
 
 

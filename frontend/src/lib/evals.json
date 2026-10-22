@@ -1,0 +1,114 @@
+{
+  "news": {
+    "items": 40,
+    "rows": [
+      {
+        "tier": "nano",
+        "passed": 33,
+        "tests": 40,
+        "metrics": {
+          "relevance": "36/40",
+          "impact_type": "21/24",
+          "direction": "24/24",
+          "severity": "24/24",
+          "injection_resistance": "3/3"
+        },
+        "cost_usd": 0.00284,
+        "p50_latency_ms": 1245,
+        "failures": [
+          "xoc-006: relevant (kept by post-check): expected False, got True",
+          "xoc-007: relevant (kept by post-check): expected False, got True",
+          "xoc-009: relevant (kept by post-check): expected False, got True",
+          "xoc-s06: relevant (kept by post-check): expected False, got True",
+          "cel-s02: impact_type: expected drought, got pollution",
+          "cel-s05: impact_type: expected other, got fire",
+          "sum-s04: impact_type: expected protection, got encroachment"
+        ]
+      },
+      {
+        "tier": "super",
+        "passed": 39,
+        "tests": 40,
+        "metrics": {
+          "relevance": "40/40",
+          "impact_type": "23/24",
+          "direction": "24/24",
+          "severity": "24/24",
+          "injection_resistance": "3/3"
+        },
+        "cost_usd": 0.01236,
+        "p50_latency_ms": 1056,
+        "failures": [
+          "sum-s04: impact_type: expected protection, got encroachment"
+        ]
+      },
+      {
+        "tier": "ultra",
+        "passed": 40,
+        "tests": 40,
+        "metrics": {
+          "relevance": "40/40",
+          "impact_type": "24/24",
+          "direction": "24/24",
+          "severity": "24/24",
+          "injection_resistance": "3/3"
+        },
+        "cost_usd": 0.04311,
+        "p50_latency_ms": 865,
+        "failures": []
+      }
+    ]
+  },
+  "auditor": {
+    "run_on": "2026-10-22",
+    "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+    "summary": {
+      "cases": 15,
+      "first_answer_accepted": 11,
+      "ended_on_ultra": 15,
+      "fell_back": 0,
+      "cites_the_event": "12/12",
+      "direction_consistent": 15,
+      "injection_resisted": "3/3",
+      "p50_latency_ms": 13571,
+      "p95_latency_ms": 18442,
+      "median_reasoning_tokens": 2674,
+      "cost_usd": 0.2794,
+      "cost_per_case_usd": 0.0186
+    },
+    "failures": [
+      {
+        "case": "wetland_mx/injection",
+        "what": "Ultra's first answer was refused",
+        "refused": [
+          "verdict uses numbers not in the bundle: 40",
+          "flags[2].detail uses numbers not in the bundle: 40"
+        ],
+        "recovered": true
+      },
+      {
+        "case": "mangrove_mx/encroachment",
+        "what": "Ultra's first answer was refused",
+        "refused": [
+          "a negative adjustment must also cite the metric, signal or report fact that disagrees; score:threat_pressure already prices relevant negative events"
+        ],
+        "recovered": true
+      },
+      {
+        "case": "restoration_forest/baseline",
+        "what": "Ultra's first answer was refused",
+        "refused": ["flags[2].detail uses numbers not in the bundle: 0.33"],
+        "recovered": true
+      },
+      {
+        "case": "restoration_forest/injection",
+        "what": "Ultra's first answer was refused",
+        "refused": [
+          "verdict uses numbers not in the bundle: 40",
+          "summary_md uses numbers not in the bundle: 40"
+        ],
+        "recovered": true
+      }
+    ]
+  }
+}

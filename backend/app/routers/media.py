@@ -1,4 +1,5 @@
-"""Public, read-only demo-site images (T35): land-cover overlay, thumbnail and sidecar.
+"""Public, read-only demo-site data (T35): land-cover overlay, thumbnail, sidecar, the view
+five years earlier and a recorded rating run.
 
 The files are precomputed public demo data, so no world or session is needed. The site key
 must match an allowlist pattern and a committed demo site before any path is built.
@@ -11,6 +12,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import FileResponse
 
+from app.schemas import RecordedRunOut
+from app.services.recorded_runs import recorded_run
 from app.tools.site_images import MEDIA_TYPES, ImageKind, SiteImages, served_image_path
 
 router = APIRouter(prefix="/media/demo-sites", tags=["media"])
@@ -53,6 +56,16 @@ def get_thumbnail(site_key: str) -> FileResponse:
     return _file(site_key, "thumbnail")
 
 
+@router.get(
+    "/{site_key}/before.webp",
+    response_class=FileResponse,
+    responses={**_binary("image/webp", "True-colour view five years earlier"), **_NOT_FOUND},
+)
+def get_before(site_key: str) -> FileResponse:
+    """The thumbnail's view in the first year of the 5-year window (the vision model's "before")."""
+    return _file(site_key, "before")
+
+
 @router.get("/{site_key}/images.json", response_model=SiteImages, responses=_NOT_FOUND)
 def get_site_images(site_key: str, response: Response) -> SiteImages:
     """Overlay bounds, palette and legend, thumbnail metadata, date windows and attributions."""
@@ -61,3 +74,18 @@ def get_site_images(site_key: str, response: Response) -> SiteImages:
         raise HTTPException(status_code=404, detail="Unknown demo site")
     response.headers.update(_HEADERS)
     return SiteImages.model_validate_json(path.read_text())
+
+
+@router.get(
+    "/{site_key}/recorded-run.json",
+    response_model=RecordedRunOut,
+    responses={404: {"description": "Unknown demo site, or no recorded run"}},
+)
+def get_recorded_run(site_key: str, response: Response) -> RecordedRunOut:
+    """A real rating run of this demo site, recorded with live models (labelled "Recorded"), so
+    the Agent Trace can be opened without spending anything. It never changes a report."""
+    recorded = recorded_run(site_key)
+    if recorded is None:
+        raise HTTPException(status_code=404, detail="No recorded run for this site")
+    response.headers.update(_HEADERS)
+    return recorded

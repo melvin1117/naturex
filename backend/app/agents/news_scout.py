@@ -1,4 +1,10 @@
-"""News Scout agent: Nominatim → Tavily → Nemotron Nano (dev-spec §7.5).
+"""News Scout agent: Nominatim → Tavily → Nemotron 3 Super (dev-spec §7.5).
+
+Queries are built in code from the site's name, its region and its ecosystem (`tools.ecosystem`),
+in English and the local language, and run in parallel. Tavily's `advanced` search returns the
+most relevant chunks of each page. A locality gate then keeps only articles that name the site,
+or a place near it together with its region or country, so a same-named county in another state
+can't reach the rating.
 
 Sources:
 - Nominatim policy: https://operations.osmfoundation.org/policies/nominatim/
@@ -15,6 +21,7 @@ import threading
 import time
 import unicodedata
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from email.utils import parsedate_to_datetime
@@ -27,23 +34,48 @@ from pydantic import BaseModel, Field, ValidationError
 from app.config import Settings
 from app.llm import LLMError, LLMResult, Tier
 from app.mocks import news_scout_fixture
-from app.schemas import NewsScoutItem, NewsScoutOutput
+from app.schemas import NewsFunnel, NewsScoutItem, NewsScoutOutput, NewsSearchRecord
 from app.services.nominatim import DEFAULT_NOMINATIM_RATE_LIMITER, NominatimRateLimiter
+from app.services.tavily_credits import shared_credits
+from app.tools.ecosystem import Ecosystem, infer_ecosystem
 
 log = logging.getLogger(__name__)
 
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 OPENSTREETMAP_ATTRIBUTION = "© OpenStreetMap contributors"
-EXTERNAL_TIMEOUT_S = 15.0
+EXTERNAL_TIMEOUT_S = 20.0
 RESULT_CACHE_TTL_S = 24 * 60 * 60
 EMPTY_RESULT_CACHE_TTL_S = 60 * 60
 ARTICLE_CHAR_LIMIT = 2_500
 SUMMARY_CHAR_LIMIT = 240
 TAVILY_MAX_RESULTS = 5
+TAVILY_SEARCH_DEPTH = "advanced"
+TAVILY_CHUNKS_PER_SOURCE = 3
+# Tavily credits per search: `advanced` costs 2, every other depth 1.
+TAVILY_CREDITS = {"advanced": 2}
+# Social, video and travel pages are rarely reporting; they crowd out local news.
+TAVILY_EXCLUDED_DOMAINS = (
+    "facebook.com",
+    "instagram.com",
+    "youtube.com",
+    "tiktok.com",
+    "x.com",
+    "twitter.com",
+    "pinterest.com",
+    "reddit.com",
+    "wikipedia.org",
+    "tripadvisor.com",
+    "expedia.com",
+    "booking.com",
+)
 MAX_ARTICLES_FOR_LLM = 8
 DEFAULT_LOOKBACK_DAYS = 30
-PROMPT_VERSION = "news-scout-v3"
+PROMPT_VERSION = "news-scout-v4"
+CLASSIFY_TIER = Tier.ORCHESTRATOR
+"""Super sorts the articles: on the 40-item eval (Oct 22) it passed 39/40 against Nano's 33/40
+(Nano kept 4 irrelevant items) at a similar p50 latency, for about $0.001 more per batch. Nano
+stays its fallback (ADR-0003)."""
 MAX_TAVILY_RESPONSE_BYTES = 2 * 1024 * 1024
 CURRENCY_RE = re.compile(
     r"(?:[$€£]\s?\d[\d,]*(?:\.\d+)?\s?(?:m|bn|million|billion)?|\b\d[\d,]*(?:\.\d+)?\s?(?:usd|dollars?)\b)",
@@ -138,6 +170,8 @@ class NewsScoutAsset:
     centroid_lat: float
     centroid_lon: float
     country: str | None = None
+    ecosystem: Ecosystem | None = None
+    """From satellite land cover and the name (`tools.ecosystem`); picks the search words."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,11 +187,26 @@ class NewsArticle:
 @dataclass(frozen=True, slots=True)
 class GeocodedPlace:
     """Reverse-geocode result: `label` feeds the queries and prompt, `place_names` the
-    locality gate (locality up to state or region, never the country)."""
+    locality gate (locality up to state or region, never the country), `regions` the state or
+    region alone (a county or town name needs one of these, or the country, beside it)."""
 
     label: str
     place_names: tuple[str, ...] = ()
     country: str | None = None
+    regions: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SearchQuery:
+    text: str
+    topic: Literal["news", "general"] = "news"
+    language: str | None = None
+    """ISO 639-1 code of a non-English query; Tavily boosts results in that language."""
+    country: str | None = None
+    """Tavily country name to boost (`general` topic only)."""
+    start_date: date | None = None
+    """With `end_date`: only results published in this window (an investigation follow-up)."""
+    end_date: date | None = None
 
 
 class Geocoder(Protocol):
@@ -165,7 +214,9 @@ class Geocoder(Protocol):
 
 
 class NewsSearch(Protocol):
-    def search(self, query: str, *, max_results: int, lookback_days: int) -> list[NewsArticle]: ...
+    def search(
+        self, query: SearchQuery, *, max_results: int, lookback_days: int
+    ) -> list[NewsArticle]: ...
 
 
 class StructuredLLM(Protocol):
@@ -346,7 +397,10 @@ class NominatimGeocoder:
         if not label:
             raise LookupError("Nominatim returned no usable place name")
         place = GeocodedPlace(
-            label=label, place_names=_place_names(response), country=response.address.country
+            label=label,
+            place_names=_place_names(response),
+            country=response.address.country,
+            regions=_regions(response),
         )
         self._cache[key] = place
         return place
@@ -359,20 +413,32 @@ class TavilyNewsSearch:
         self._api_key = api_key
         self._http_post = http_post or _http_post_json
 
-    def search(self, query: str, *, max_results: int, lookback_days: int) -> list[NewsArticle]:
+    def search(
+        self, query: SearchQuery, *, max_results: int, lookback_days: int
+    ) -> list[NewsArticle]:
         payload: dict[str, Any] = {
-            "query": query,
-            "topic": "news",
-            "search_depth": "basic",
+            "query": query.text,
+            "topic": query.topic,
+            "search_depth": TAVILY_SEARCH_DEPTH,
+            "chunks_per_source": TAVILY_CHUNKS_PER_SOURCE,
             "max_results": max_results,
             "include_answer": False,
-            "include_raw_content": "text",
+            "include_raw_content": False,
             "include_published_date": True,
-            "filter_by_published_date": False,
+            "filter_by_published_date": query.start_date is not None,
+            "exclude_domains": list(TAVILY_EXCLUDED_DOMAINS),
         }
-        time_range = _time_range(lookback_days)
-        if time_range is not None:
-            payload["time_range"] = time_range
+        if query.language:
+            payload["language"] = query.language
+        if query.country and query.topic == "general":
+            payload["country"] = query.country
+        if query.start_date and query.end_date:
+            payload["start_date"] = query.start_date.isoformat()
+            payload["end_date"] = query.end_date.isoformat()
+        else:
+            time_range = _time_range(lookback_days)
+            if time_range is not None:
+                payload["time_range"] = time_range
 
         response = self._http_post(
             TAVILY_SEARCH_URL,
@@ -397,18 +463,140 @@ class TavilyNewsSearch:
         ]
 
 
-def build_queries(*, asset_name: str, place: str) -> list[str]:
-    target = _query_locality(asset_name=asset_name, place=place)
-    return [
-        f"{target} wetland factory permit development",
-        f"{target} fire OR drought OR pollution",
-        f"{target} wetland restoration OR protected area OR conservation",
+# Search words per ecosystem: what the site is, and what harms it.
+_WORDS_EN: dict[Ecosystem, tuple[str, str]] = {
+    Ecosystem.MANGROVE: ("mangrove", "clearing OR pollution OR shrimp farm OR development"),
+    Ecosystem.WETLAND: ("wetland", "drainage OR pollution OR development OR drought OR fire"),
+    Ecosystem.MARINE: ("reef", "bleaching OR pollution OR development OR algae OR spill"),
+    Ecosystem.FOREST: ("forest", "deforestation OR fire OR logging OR drought"),
+    Ecosystem.GRASSLAND: ("grassland", "fire OR conversion OR drought OR overgrazing"),
+    Ecosystem.MIXED: ("nature reserve", "pollution OR development OR fire OR drought"),
+}
+_POSITIVE_EN = "restoration OR protection OR conservation"
+_WORDS_ES: dict[Ecosystem, tuple[str, str]] = {
+    Ecosystem.MANGROVE: ("manglar", "tala OR relleno OR contaminación"),
+    Ecosystem.WETLAND: ("humedal", "desecación OR contaminación OR invasión OR sequía"),
+    Ecosystem.MARINE: ("arrecife", "blanqueamiento OR contaminación OR sargazo"),
+    Ecosystem.FOREST: ("bosque", "deforestación OR incendio OR tala"),
+    Ecosystem.GRASSLAND: ("pastizal", "incendio OR sequía OR desmonte"),
+    Ecosystem.MIXED: ("reserva natural", "contaminación OR invasión OR incendio"),
+}
+_POSITIVE_ES = "restauración OR conservación OR protección"
+# ISO 3166 country code → (query language, Tavily country name for the `general` topic).
+LOCAL_LANGUAGE: dict[str, tuple[str, str]] = {
+    "MX": ("es", "mexico"),
+    "ES": ("es", "spain"),
+    "CO": ("es", "colombia"),
+    "PE": ("es", "peru"),
+    "CL": ("es", "chile"),
+    "AR": ("es", "argentina"),
+    "EC": ("es", "ecuador"),
+    "GT": ("es", "guatemala"),
+    "CR": ("es", "costa rica"),
+}
+
+
+def build_queries(asset: NewsScoutAsset, place: GeocodedPlace) -> list[SearchQuery]:
+    """English news queries about the site, its threats and its recovery, plus one in the local
+    language where we know it. Built in code: no model writes a query."""
+    ecosystem = asset.ecosystem or infer_ecosystem(name=asset.name)
+    core = _query_name(asset.name)
+    region = place.regions[0] if place.regions else ""
+    noun, threats = _WORDS_EN[ecosystem]
+    texts = [
+        f"{asset.name} {region}",
+        f"{core} {region} {noun} {threats}",
+        f"{core} {region} {noun} {_POSITIVE_EN}",
     ]
+    queries = [SearchQuery(" ".join(text.split())) for text in texts]
+    local = LOCAL_LANGUAGE.get((asset.country or "").upper())
+    if local is not None:
+        language, country = local
+        noun_es, threats_es = _WORDS_ES[ecosystem]
+        queries.append(
+            SearchQuery(
+                " ".join(f"{core} {noun_es} {threats_es} OR {_POSITIVE_ES}".split()),
+                topic="general",
+                language=language,
+                country=country,
+            )
+        )
+    unique: dict[str, SearchQuery] = {}
+    for query in queries:
+        unique.setdefault(query.text.casefold(), query)
+    return list(unique.values())
+
+
+FollowUpTopic = Literal["fire", "drought", "flood", "pollution", "clearing", "restoration"]
+"""What an investigation search looks for (the orchestrator picks one; code writes the query)."""
+FOLLOW_UP_TOPICS: dict[str, tuple[str, str]] = {
+    "fire": ("fire OR wildfire OR burning", "incendio OR quema"),
+    "drought": ("drought OR low water OR dried up", "sequía OR estiaje OR desecación"),
+    "flood": ("flood OR flooding OR hurricane OR storm", "inundación OR huracán OR tormenta"),
+    "pollution": (
+        "pollution OR sewage OR spill OR contamination",
+        "contaminación OR aguas residuales OR derrame",
+    ),
+    "clearing": (
+        "clearing OR deforestation OR construction OR encroachment",
+        "tala OR deforestación OR construcción OR invasión OR relleno",
+    ),
+    "restoration": (
+        "restoration OR reforestation OR cleanup OR protection",
+        "restauración OR reforestación OR limpieza OR protección",
+    ),
+}
+
+
+def followup_query(
+    asset: NewsScoutAsset, place: GeocodedPlace, topic: FollowUpTopic, window: tuple[date, date]
+) -> SearchQuery:
+    """One dated query: in the local language where we know it (local press covers small sites
+    best), otherwise English news."""
+    start, end = window
+    core = _query_name(asset.name)
+    english, spanish = FOLLOW_UP_TOPICS[topic]
+    local = LOCAL_LANGUAGE.get((asset.country or "").upper())
+    if local is not None:
+        language, country = local
+        return SearchQuery(
+            " ".join(f"{core} {spanish}".split()),
+            topic="general",
+            language=language,
+            country=country,
+            start_date=start,
+            end_date=end,
+        )
+    region = place.regions[0] if place.regions else ""
+    return SearchQuery(
+        " ".join(f"{core} {region} {english}".split()), start_date=start, end_date=end
+    )
+
+
+def resolve_place(
+    asset: NewsScoutAsset, settings: Settings, geocoder: Geocoder | None = None
+) -> GeocodedPlace:
+    """The asset's place (cached reverse geocode), or a fallback label when it fails."""
+    active = geocoder or NominatimGeocoder(settings.nominatim_user_agent)
+    try:
+        return active.reverse(asset.centroid_lat, asset.centroid_lon)
+    except (httpx.HTTPError, ValidationError, ValueError, LookupError):
+        return GeocodedPlace(label=_fallback_place(asset))
+
+
+def names_the_site(asset_name: str, place: GeocodedPlace, text: str) -> bool:
+    """Code's locality check (the same gate as for search results) on a piece of text."""
+    article = NewsArticle(title=None, url="", published_at=None, content=text)
+    return _on_site(article, _gate_terms(asset_name, place))
 
 
 def clear_news_scout_caches() -> None:
     _DEFAULT_RESULT_CACHE.clear()
     _DEFAULT_NOMINATIM_CACHE.clear()
+
+
+class CreditGuard(Protocol):
+    def allows(self, minimum_left: int) -> bool: ...
 
 
 def run_news_scout(
@@ -419,6 +607,7 @@ def run_news_scout(
     geocoder: Geocoder | None = None,
     news_search: NewsSearch | None = None,
     cache: NewsScoutCache | None = None,
+    credits: CreditGuard | None = None,
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     today: Callable[[], date] = lambda: datetime.now(UTC).date(),
 ) -> NewsScoutOutput:
@@ -430,6 +619,81 @@ def run_news_scout(
     cached = result_cache.get(cache_key)
     if cached is not None:
         return cached
+    return _scout(
+        asset,
+        lambda place: build_queries(asset, place),
+        settings=settings,
+        llm=llm,
+        geocoder=geocoder,
+        news_search=news_search,
+        credits=credits,
+        lookback_days=lookback_days,
+        today=today,
+        result_cache=result_cache,
+        cache_key=cache_key,
+    )
+
+
+def run_followup_search(
+    asset: NewsScoutAsset,
+    topic: FollowUpTopic,
+    window: tuple[date, date],
+    *,
+    settings: Settings,
+    llm: StructuredLLM,
+    geocoder: Geocoder | None = None,
+    news_search: NewsSearch | None = None,
+    cache: NewsScoutCache | None = None,
+    credits: CreditGuard | None = None,
+    today: Callable[[], date] = lambda: datetime.now(UTC).date(),
+) -> NewsScoutOutput:
+    """One investigation search: a topic the orchestrator chose, in the dated window of a
+    satellite signal. Code writes the query; the results go through the same guards, classifier
+    and locality gate as every other search."""
+    if settings.use_mocks:
+        return NewsScoutOutput(events=[])
+    start, end = window
+    result_cache = cache or _DEFAULT_RESULT_CACHE
+    cache_key = f"{_cache_key(asset, 0)}:followup:{topic}:{start}:{end}"
+    cached = result_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    return _scout(
+        asset,
+        lambda place: [followup_query(asset, place, topic, window)],
+        settings=settings,
+        llm=llm,
+        geocoder=geocoder,
+        news_search=news_search,
+        credits=credits,
+        lookback_days=max(1, (today() - start).days),
+        today=today,
+        result_cache=result_cache,
+        cache_key=cache_key,
+        window=window,
+    )
+
+
+def _scout(
+    asset: NewsScoutAsset,
+    queries_for: Callable[[GeocodedPlace], list[SearchQuery]],
+    *,
+    settings: Settings,
+    llm: StructuredLLM,
+    geocoder: Geocoder | None,
+    news_search: NewsSearch | None,
+    credits: CreditGuard | None,
+    lookback_days: int,
+    today: Callable[[], date],
+    result_cache: NewsScoutCache,
+    cache_key: str,
+    window: tuple[date, date] | None = None,
+) -> NewsScoutOutput:
+    if news_search is None and credits is None:
+        credits = shared_credits(settings.tavily_api_key)
+    if credits is not None and not credits.allows(settings.tavily_min_credits_left):
+        log.warning("News Scout paused: the Tavily account is near its credit limit")
+        return NewsScoutOutput(events=[], news_paused=True)
 
     active_geocoder = geocoder or NominatimGeocoder(settings.nominatim_user_agent)
     active_search = news_search or TavilyNewsSearch(settings.tavily_api_key)
@@ -440,26 +704,23 @@ def run_news_scout(
     except (httpx.HTTPError, ValidationError, ValueError, LookupError):
         degraded = True
         place = GeocodedPlace(label=_fallback_place(asset))
-    terms = _locality_terms(asset.name, place)
+    gate = _gate_terms(asset.name, place)
     unverified = not _place_terms(place)
     if unverified:
         # Gated on the asset name alone: not worth caching for 24 h.
         degraded = True
         log.warning("News Scout has no geocoded place names; gating on the asset name only")
 
-    found: list[NewsArticle] = []
-    for query in build_queries(asset_name=asset.name, place=place.label):
-        try:
-            found.extend(
-                active_search.search(
-                    query, max_results=TAVILY_MAX_RESULTS, lookback_days=lookback_days
-                )
-            )
-        except (httpx.HTTPError, ValidationError, ValueError):
-            degraded = True
+    found, searches = _search_all(active_search, queries_for(place), lookback_days)
+    degraded = degraded or any(record.error for record in searches)
+    if window is not None:
+        # A dated follow-up claims "news from these months": Tavily may date a page by its
+        # last update or not at all, so code keeps only articles published in the window.
+        found = [a for a in found if a.published_at and window[0] <= a.published_at <= window[1]]
 
+    unique = _dedupe_articles(found)
     usable = []
-    for article in _dedupe_articles(found):
+    for article in unique:
         if _emptied_by_redaction(article):
             log.warning(
                 "News Scout skipped an article that was only injected text: %r", article.url
@@ -467,8 +728,16 @@ def run_news_scout(
         else:
             usable.append(article)
     articles = _top_articles(usable, limit=MAX_ARTICLES_FOR_LLM)
+    funnel = NewsFunnel(
+        found=len(found),
+        unique=len(unique),
+        unsafe=len(unique) - len(usable),
+        sent_to_model=len(articles),
+    )
     if not articles:
-        output = NewsScoutOutput(events=[], locality_unverified=unverified)
+        output = NewsScoutOutput(
+            events=[], searches=searches, funnel=funnel, locality_unverified=unverified
+        )
         if not degraded:
             result_cache.set(cache_key, output, ttl_s=EMPTY_RESULT_CACHE_TTL_S)
         return output
@@ -476,20 +745,28 @@ def run_news_scout(
     try:
         result = llm.structured(
             agent="news_scout",
-            tier=Tier.FAST,
+            tier=CLASSIFY_TIER,
             messages=_messages(asset, place.label, articles),
             schema=NewsScoutClassificationOutput,
             max_tokens=_max_tokens_for_articles(len(articles)),
             asset_id=asset.id,
         )
     except (LLMError, ValidationError, ValueError):
-        return NewsScoutOutput(events=[], locality_unverified=unverified)
+        return NewsScoutOutput(
+            events=[], searches=searches, funnel=funnel, locality_unverified=unverified
+        )
 
-    events, dropped = _locality_gate(
-        _post_check(result.value.events, articles, today=today), articles, terms
+    checked = _post_check(result.value.events, articles, today=today)
+    events, dropped = _locality_gate(checked, articles, gate)
+    funnel = funnel.model_copy(
+        update={"relevant": len(checked), "off_site": dropped, "kept": len(events)}
     )
     output = NewsScoutOutput(
-        events=events, dropped_off_site=dropped, locality_unverified=unverified
+        events=events,
+        searches=searches,
+        funnel=funnel,
+        dropped_off_site=dropped,
+        locality_unverified=unverified,
     )
     if not degraded:
         result_cache.set(
@@ -498,6 +775,42 @@ def run_news_scout(
             ttl_s=EMPTY_RESULT_CACHE_TTL_S if not output.events else None,
         )
     return output
+
+
+def _search_all(
+    search: NewsSearch, queries: Sequence[SearchQuery], lookback_days: int
+) -> tuple[list[NewsArticle], list[NewsSearchRecord]]:
+    """Every query in parallel; results keep the queries' order. A failed query is recorded
+    with its error and contributes no articles."""
+
+    def one(query: SearchQuery) -> tuple[list[NewsArticle], NewsSearchRecord]:
+        started = time.perf_counter()
+        error: str | None = None
+        results: list[NewsArticle] = []
+        try:
+            results = search.search(
+                query, max_results=TAVILY_MAX_RESULTS, lookback_days=lookback_days
+            )
+        except (httpx.HTTPError, ValidationError, ValueError) as exc:
+            error = type(exc).__name__
+        record = NewsSearchRecord(
+            query=query.text,
+            topic=query.topic,
+            language=query.language,
+            depth=TAVILY_SEARCH_DEPTH,
+            results=len(results),
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            credits=0 if error else TAVILY_CREDITS.get(TAVILY_SEARCH_DEPTH, 1),
+            error=error,
+        )
+        return results, record
+
+    if not queries:
+        return [], []
+    with ThreadPoolExecutor(max_workers=len(queries)) as pool:
+        outcomes = list(pool.map(one, queries))
+    found = [article for results, _ in outcomes for article in results]
+    return found, [record for _, record in outcomes]
 
 
 def _http_get_json(
@@ -597,6 +910,13 @@ def _place_names(response: NominatimResponse) -> tuple[str, ...]:
     return tuple(_unique(name for name in names if name != address.country))
 
 
+def _regions(response: NominatimResponse) -> tuple[str, ...]:
+    """The state or region (never the country): the level that disambiguates a county name."""
+    address = response.address
+    names = (name.strip() for name in (address.state, address.region) if name and name.strip())
+    return tuple(_unique(name for name in names if name != address.country))
+
+
 def _fold(text: str) -> str:
     """Casefolded words without accents, joined by single spaces (for whole-word matching)."""
     decomposed = unicodedata.normalize("NFKD", _normalize_untrusted(text))
@@ -607,6 +927,33 @@ def _fold(text: str) -> str:
 def _locality_terms(asset_name: str, place: GeocodedPlace) -> tuple[str, ...]:
     """Folded names an on-site article should mention: the geocoded places and the asset."""
     return tuple(_unique([*_place_terms(place), *_asset_terms(asset_name, place.country)]))
+
+
+@dataclass(frozen=True, slots=True)
+class LocalityGate:
+    """`strong` terms put an article on site alone (the asset's own name, its state or region).
+    A `local` term (a county or town) needs a strong term, a second local term or the country
+    beside it: Monroe County, Florida is not Monroe County, Michigan."""
+
+    strong: tuple[str, ...]
+    local: tuple[str, ...] = ()
+    country: str | None = None
+
+
+def _gate_terms(asset_name: str, place: GeocodedPlace) -> LocalityGate:
+    places = _place_terms(place)
+    assets = _asset_terms(asset_name, place.country)
+    regions = {_fold(region) for region in place.regions}
+    if not regions:
+        # No region to disambiguate with (a fallback geocode): every name is enough alone.
+        return LocalityGate(strong=tuple(_unique([*places, *assets])))
+    strong = [term for term in places if term in regions]
+    local = [term for term in places if term not in regions and term not in assets]
+    return LocalityGate(
+        strong=tuple(_unique([*strong, *assets])),
+        local=tuple(_unique(local)),
+        country=_fold(place.country or "") or None,
+    )
 
 
 def _place_terms(place: GeocodedPlace) -> list[str]:
@@ -650,15 +997,15 @@ def _specific_term(term: str) -> bool:
 def _locality_gate(
     events: Sequence[NewsScoutItem],
     articles: Sequence[NewsArticle],
-    terms: Sequence[str],
+    gate: LocalityGate,
 ) -> tuple[list[NewsScoutItem], int]:
-    """Keep a relevant event only if the text the model saw names the asset or its place."""
+    """Keep a relevant event only if the text the model saw places it at the asset."""
     by_url = {_normalize_url(article.url): article for article in articles}
     kept: list[NewsScoutItem] = []
     dropped = 0
     for event in events:
         article = by_url.get(_normalize_url(event.url or ""))
-        if article is not None and _mentions_any(article, terms):
+        if article is not None and _on_site(article, gate):
             kept.append(event)
             continue
         dropped += 1
@@ -666,27 +1013,28 @@ def _locality_gate(
     return kept, dropped
 
 
-def _mentions_any(article: NewsArticle, terms: Sequence[str]) -> bool:
+def _on_site(article: NewsArticle, gate: LocalityGate) -> bool:
     title = _redact_injection(article.title)[0] if article.title else ""
     # The same truncated body the prompt carries (`_article_text_for_prompt`, before escaping).
     body = _redact_injection(_combined_article_text(article))[0][:ARTICLE_CHAR_LIMIT]
     text = f" {_fold(f'{title} {body}')} "
-    return any(f" {term} " in text for term in terms)
+    if any(f" {term} " in text for term in gate.strong):
+        return True
+    local = [term for term in gate.local if f" {term} " in text]
+    if len(local) >= 2:
+        return True
+    return bool(local) and gate.country is not None and f" {gate.country} " in text
 
 
-def _query_locality(*, asset_name: str, place: str) -> str:
-    for candidate in (place.split(",", 1)[0].strip(), asset_name):
-        if candidate:
-            return _strip_asset_descriptors(candidate)
-    return "wetland"
-
-
-def _strip_asset_descriptors(candidate: str) -> str:
-    words = candidate.split()
-    descriptor_words = {"wetland", "wetlands", "reserve", "parcel", "forest", "mx"}
-    while len(words) > 1 and words[-1].lower() in descriptor_words:
+def _query_name(asset_name: str) -> str:
+    """The asset's name without leading or trailing descriptors (`Ría Celestún Mangrove` →
+    `Celestún`), keeping its accents for the search."""
+    words = asset_name.split()
+    while len(words) > 1 and _weak_word(_fold(words[-1])):
         words.pop()
-    return " ".join(words) if words else candidate
+    while len(words) > 1 and _weak_word(_fold(words[0])):
+        words.pop(0)
+    return " ".join(words) if words else asset_name
 
 
 def _fallback_place(asset: NewsScoutAsset) -> str:
@@ -695,7 +1043,7 @@ def _fallback_place(asset: NewsScoutAsset) -> str:
 
 def _cache_key(asset: NewsScoutAsset, lookback_days: int) -> str:
     return (
-        f"{PROMPT_VERSION}:{asset.id}:{asset.name.lower()}:"
+        f"{PROMPT_VERSION}:{asset.id}:{asset.name.lower()}:{asset.ecosystem or ''}:"
         f"{round(asset.centroid_lat, 3)}:{round(asset.centroid_lon, 3)}:{lookback_days}"
     )
 

@@ -12,6 +12,8 @@ import { Delta, SiteBackdrop, ValueRange } from "@/components/proto/bits";
 import { PriceChart, PriceChartSkeleton } from "@/components/proto/charts";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
+import { EvidenceTimelinePanel } from "@/components/proto/evidence-timeline";
+import { VerdictStrip } from "@/components/trace/verdict-strip";
 import { ApiLedgerTab } from "@/components/proto/ledger-panels";
 import { LoadError } from "@/components/proto/load-error";
 import { PriceTick } from "@/components/live-number";
@@ -22,7 +24,6 @@ import {
   ReportTab,
   ScorePanel,
   ServicesPanel,
-  TrendPanel,
 } from "@/components/proto/report-panels";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ import {
   useAsset,
   useAssetPrices,
   useAssetReports,
+  useRecordedRun,
   useSiteImages,
 } from "@/lib/hooks";
 import { countryName, siteImageUrl } from "@/lib/market-cards";
@@ -181,6 +183,10 @@ function AssetLoaded({
     () => newsItems(asset.recent_events),
     [asset.recent_events],
   );
+  // A demo site nobody has rated in this world shows its recorded run (free, labelled).
+  const recorded = useRecordedRun(
+    asset.latest_report?.run_id ? null : asset.site_key,
+  );
   const imageUrl = siteImageUrl(asset.site_key, asset.cover_image_url);
   const outline = useMemo(() => outlineRings(asset.outline), [asset.outline]);
   const place = [
@@ -295,6 +301,12 @@ function AssetLoaded({
         </div>
       </section>
 
+      <VerdictStrip
+        report={asset.latest_report}
+        recorded={recorded.data}
+        assetId={asset.id}
+      />
+
       {!latest ? (
         <p className="mt-8 rounded-3xl bg-card p-8 text-center text-muted-foreground shadow-soft">
           This site hasn&apos;t been rated yet.
@@ -340,7 +352,13 @@ function AssetLoaded({
                     : !asset.site_key && NO_OVERLAY_NOTE
                 }
               />
-              <TrendPanel facts={latest} />
+              <EvidenceTimelinePanel
+                facts={latest}
+                news={news}
+                runId={asset.latest_report?.run_id ?? null}
+                siteKey={asset.site_key}
+                recorded={recorded.data}
+              />
             </TabsContent>
             <TabsContent value="price">
               <PricePanel
@@ -403,6 +421,12 @@ function AssetLoaded({
                 <Bot aria-hidden="true" />
                 How it was rated
               </Button>
+              <Link
+                href="/ai"
+                className="mt-3 block text-sm font-medium text-lime-ink underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                Every model at work, with live costs
+              </Link>
             </section>
           </aside>
         </div>

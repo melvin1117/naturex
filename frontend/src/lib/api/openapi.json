@@ -3577,6 +3577,28 @@
         }
       }
     },
+    "/admin/ai-usage": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Ai Usage",
+        "description": "Per-model outcomes, latency and cost in this world, plus the deployment's spend and the\nTavily credits left (cached a minute), for the AI control room.",
+        "operationId": "get_ai_usage_admin_ai_usage_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiUsageOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/trace": {
       "get": {
         "tags": [
@@ -3907,6 +3929,53 @@
         }
       }
     },
+    "/media/demo-sites/{site_key}/before.webp": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Before",
+        "description": "The thumbnail's view in the first year of the 5-year window (the vision model's \"before\").",
+        "operationId": "get_before_media_demo_sites__site_key__before_webp_get",
+        "parameters": [
+          {
+            "name": "site_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Site Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "True-colour view five years earlier",
+            "content": {
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown demo site"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/media/demo-sites/{site_key}/images.json": {
       "get": {
         "tags": [
@@ -3939,6 +4008,52 @@
           },
           "404": {
             "description": "Unknown demo site"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/media/demo-sites/{site_key}/recorded-run.json": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Recorded Run",
+        "description": "A real rating run of this demo site, recorded with live models (labelled \"Recorded\"), so\nthe Agent Trace can be opened without spending anything. It never changes a report.",
+        "operationId": "get_recorded_run_media_demo_sites__site_key__recorded_run_json_get",
+        "parameters": [
+          {
+            "name": "site_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Site Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordedRunOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown demo site, or no recorded run"
           },
           "422": {
             "description": "Validation Error",
@@ -4502,6 +4617,60 @@
         ],
         "title": "AiSuggestionOut",
         "description": "The AI document check of a run (T71, ADR-0006 \u00a72), for the reviewer only. **Untrusted\nheuristic**: show it labelled as such, next to its excerpts; it never changed a check or the\nlevel. `status: failed` means no model answered (or the budget was spent): `suggestion` is\nnull. A run has no AI suggestion while the check is pending or when it doesn't run (the live\nworld while `VERIFICATION_AI_LIVE=false`): see the queue item's `ai_suggestion_status`."
+      },
+      "AiUsageOut": {
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelStats"
+            },
+            "type": "array",
+            "title": "Models"
+          },
+          "world_cost_usd": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "World Cost Usd"
+          },
+          "spent_usd": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Spent Usd",
+            "description": "Every logged model call of this deployment"
+          },
+          "budget_usd": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Budget Usd",
+            "description": "LLM_BUDGET_USD, the deployment's hard cap"
+          },
+          "tavily_credits_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tavily Credits Left",
+            "description": "Tavily account credits left; null when unknown or mocked"
+          },
+          "tavily_min_credits_left": {
+            "type": "integer",
+            "title": "Tavily Min Credits Left"
+          }
+        },
+        "type": "object",
+        "required": [
+          "models",
+          "world_cost_usd",
+          "spent_usd",
+          "budget_usd",
+          "tavily_min_credits_left"
+        ],
+        "title": "AiUsageOut",
+        "description": "The AI control room: this world's model calls, the deployment's LLM spend against its\ncap, and the Tavily account's credits left."
       },
       "AlertListOut": {
         "properties": {
@@ -5485,8 +5654,63 @@
         ],
         "title": "AuditorFlag"
       },
+      "AuditorHypothesis": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "A short explanation, e.g. 'seasonal drought' or 'clearing'."
+          },
+          "evidence_for": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence For",
+            "description": "Bundle IDs supporting it"
+          },
+          "evidence_against": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Against",
+            "description": "Bundle IDs weakening it"
+          },
+          "assessment": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "weakened",
+              "unclear"
+            ],
+            "title": "Assessment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "assessment"
+        ],
+        "title": "AuditorHypothesis",
+        "description": "One explanation the Auditor weighed, with the bundle IDs for and against it."
+      },
       "AuditorOutput": {
         "properties": {
+          "hypotheses": {
+            "items": {
+              "$ref": "#/components/schemas/AuditorHypothesis"
+            },
+            "type": "array",
+            "title": "Hypotheses",
+            "description": "2-3 competing explanations of what the metrics, signals and events show, weighed before deciding."
+          },
+          "verdict": {
+            "type": "string",
+            "title": "Verdict",
+            "description": "One sentence (under 400 characters) naming the best-supported explanation, ending with [ID] citations; numbers only as {ID} placeholders.",
+            "default": ""
+          },
           "auditor_adjustment": {
             "type": "integer",
             "maximum": 10.0,
@@ -5495,7 +5719,8 @@
           },
           "adjustment_reason": {
             "type": "string",
-            "title": "Adjustment Reason"
+            "title": "Adjustment Reason",
+            "description": "Why the adjustment, with [ID] citations; empty when it is 0."
           },
           "agreement": {
             "type": "number",
@@ -5524,7 +5749,8 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Key Changes"
+            "title": "Key Changes",
+            "description": "Each ends with an [ID]; numbers as {ID} placeholders."
           },
           "recommendations": {
             "items": {
@@ -5535,7 +5761,8 @@
           },
           "summary_md": {
             "type": "string",
-            "title": "Summary Md"
+            "title": "Summary Md",
+            "description": "Markdown for non-experts. Every sentence ends with an [ID] citation; write every number as an {ID} placeholder, e.g. 'covers {metric:area_ha} [metric:area_ha]'."
           },
           "citations": {
             "items": {
@@ -5543,7 +5770,7 @@
             },
             "type": "array",
             "title": "Citations",
-            "description": "Metric or event IDs cited in the report"
+            "description": "Every bundle ID you cited, copied exactly; nothing else."
           }
         },
         "type": "object",
@@ -6112,6 +6339,26 @@
         "title": "CopilotSourcesEvent",
         "description": "First event: what was retrieved (the caller's world and visible assets only)."
       },
+      "CostBaseline": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "cost_usd": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cost Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model",
+          "cost_usd"
+        ],
+        "title": "CostBaseline",
+        "description": "What the run's text-model tokens would have cost on one model (the routing receipt)."
+      },
       "DateWindow": {
         "properties": {
           "start": {
@@ -6438,7 +6685,7 @@
               "off"
             ],
             "title": "Ai Analysis",
-            "description": "What reads the photos: model (MiniCPM-V on Nebius Token Factory, only with FIELD_EVIDENCE_AI_LIVE), mock (USE_MOCKS: a fake model, nothing sent) or off (no photo is sent to a model, so none is validated)."
+            "description": "What reads the photos: model (Nemotron 3.5 Super VL on Nebius Token Factory, only with FIELD_EVIDENCE_AI_LIVE), mock (USE_MOCKS: a fake model, nothing sent) or off (no photo is sent to a model, so none is validated)."
           },
           "confidence": {
             "$ref": "#/components/schemas/ConfidenceEffectOut"
@@ -7924,6 +8171,125 @@
         "title": "MetricChange",
         "description": "One stored number that differs between two report versions (T37)."
       },
+      "ModelStats": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "calls": {
+            "type": "integer",
+            "title": "Calls"
+          },
+          "ok": {
+            "type": "integer",
+            "title": "Ok"
+          },
+          "rejected": {
+            "type": "integer",
+            "title": "Rejected",
+            "description": "Schema-valid answers the code checks refused"
+          },
+          "invalid": {
+            "type": "integer",
+            "title": "Invalid",
+            "description": "Answers that failed the schema"
+          },
+          "errors": {
+            "type": "integer",
+            "title": "Errors"
+          },
+          "p50_latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P50 Latency Ms"
+          },
+          "p95_latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95 Latency Ms"
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "title": "Prompt Tokens"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "title": "Completion Tokens"
+          },
+          "cost_usd": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cost Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model",
+          "calls",
+          "ok",
+          "rejected",
+          "invalid",
+          "errors",
+          "prompt_tokens",
+          "completion_tokens",
+          "cost_usd"
+        ],
+        "title": "ModelStats",
+        "description": "One model's calls in a world: outcomes, latency, tokens and cost."
+      },
+      "ModelUsage": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "calls": {
+            "type": "integer",
+            "title": "Calls"
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "title": "Prompt Tokens"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "title": "Completion Tokens"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms"
+          },
+          "cost_usd": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cost Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model",
+          "calls",
+          "prompt_tokens",
+          "completion_tokens",
+          "latency_ms",
+          "cost_usd"
+        ],
+        "title": "ModelUsage",
+        "description": "One model's share of a run: how often it was called, its tokens, time and cost."
+      },
       "MyCommunityOut": {
         "properties": {
           "id": {
@@ -9235,6 +9601,31 @@
         "title": "RatingRunStep",
         "description": "One `rating_progress` event of a run (T27)."
       },
+      "RecordedRunOut": {
+        "properties": {
+          "site_key": {
+            "type": "string",
+            "title": "Site Key"
+          },
+          "recorded_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Recorded On"
+          },
+          "trace": {
+            "$ref": "#/components/schemas/RunTraceOut",
+            "description": "The run's trace; `asset_id` is a placeholder, not an asset of any world"
+          }
+        },
+        "type": "object",
+        "required": [
+          "site_key",
+          "recorded_on",
+          "trace"
+        ],
+        "title": "RecordedRunOut",
+        "description": "A real rating run of a demo site, recorded with live models and committed, so every\nvisitor can open a full Agent Trace without spending anything (`services.recorded_runs`).\nIts numbers are that run's; the site's own report stays the one its world holds."
+      },
       "RegisterIn": {
         "properties": {
           "email": {
@@ -9706,6 +10097,25 @@
               }
             ],
             "description": "The sealed run's totals; null until the run seals a report"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelUsage"
+            },
+            "type": "array",
+            "title": "Models",
+            "description": "Every model call of the run, grouped by model"
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CostBaseline"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The same text-model tokens priced on the largest Nemotron (Ultra)"
           }
         },
         "type": "object",

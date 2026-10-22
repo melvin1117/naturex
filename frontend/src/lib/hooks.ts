@@ -17,6 +17,7 @@ import { forgetCommunity } from "./active-community";
 import type { ApiClient } from "./api/client";
 import { toApiError, unwrap, type ApiError } from "./api/errors";
 import type {
+  AiUsage,
   AlertList,
   AlertOut,
   AlertsMarked,
@@ -41,6 +42,7 @@ import type {
   PricePoint,
   QuoteOut,
   RatingRun,
+  RecordedRun,
   RegisterIn,
   ReportDiff,
   RunTrace,
@@ -55,6 +57,7 @@ import {
   viewerKey,
   type DataLayer,
 } from "./data-layer";
+import { DEMO_SITES } from "./demo-site-images";
 import type { LiveEventHandler, LiveEventType, Transport } from "./events";
 import {
   hashKey,
@@ -777,6 +780,37 @@ export function useWorldTrace(): QueryResult<WorldTrace> {
   const meId = world?.me?.id ?? null;
   return useApiQuery(queryKeys.worldTrace(meId), (api, signal) =>
     unwrap(api.GET("/admin/trace", { signal })),
+  );
+}
+
+/**
+ * A demo site's recorded rating run (`GET /media/demo-sites/{site_key}/recorded-run.json`): a
+ * real run committed as data, shown labelled "Recorded" until the visitor rates the site.
+ * Only asked for demo sites; others have none.
+ */
+export function useRecordedRun(
+  siteKey: string | null | undefined,
+): QueryResult<RecordedRun> {
+  const enabled = Boolean(siteKey && DEMO_SITES.some((s) => s.key === siteKey));
+  return useApiQuery(
+    queryKeys.recordedRun(siteKey ?? ""),
+    (api, signal) =>
+      unwrap(
+        api.GET("/media/demo-sites/{site_key}/recorded-run.json", {
+          params: { path: { site_key: siteKey ?? "" } },
+          signal,
+        }),
+      ),
+    { enabled },
+  );
+}
+
+/** The AI control room: this world's calls per model, the deployment's spend and Tavily credits. */
+export function useAiUsage(): QueryResult<AiUsage> {
+  const { world } = useWorld();
+  const meId = world?.me?.id ?? null;
+  return useApiQuery(queryKeys.aiUsage(meId), (api, signal) =>
+    unwrap(api.GET("/admin/ai-usage", { signal })),
   );
 }
 

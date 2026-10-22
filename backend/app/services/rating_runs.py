@@ -42,6 +42,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from math import ceil
 from typing import Any, Literal, Protocol, cast
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel
@@ -49,31 +50,51 @@ from sqlalchemy import func, text
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlmodel import Session, col, select
 
+from app.agents.article_reader import ArticleCheck, ArticleUnavailable, read_article
 from app.agents.auditor import (
+    REASONING_EXCERPT_CHARS,
     AuditEvent,
+    AuditorInput,
     AuditResult,
+    EventReading,
     PreviousReport,
     audit_events_from_news,
     build_auditor_input,
+    event_citation_id,
     no_op_audit,
     run_auditor,
 )
-from app.agents.news_scout import NewsScoutAsset, run_news_scout
+from app.agents.news_scout import (
+    FollowUpTopic,
+    NewsScoutAsset,
+    run_followup_search,
+    run_news_scout,
+)
 from app.agents.orchestrator import (
+    INVESTIGATION,
+    MAX_INVESTIGATIONS,
+    PIPELINE_ORDER,
     STEP_NAMES,
+    WHY_CHARS,
     FallbackReason,
     Orchestration,
     Pipeline,
+    ReadArticleArgs,
     RunAborted,
+    SearchNewsArgs,
     Tool,
     orchestrate,
 )
+from app.agents.site_vision import SiteVision, read_site_change, site_images
 from app.config import Settings
 from app.events import lock_world_publisher, publish
-from app.llm import CallLog, CallRecord, LLMClient, LLMError, LLMResult
+from app.llm import PRICES_PER_M, CallLog, CallRecord, LLMClient, LLMError, LLMResult, cost_usd
 from app.market.anchoring import reanchor_on_rerate
 from app.models import Asset, AssetStatus, Report, StreamEventType, World, WorldEvent
 from app.schemas import (
+    CostBaseline,
+    ModelUsage,
+    NewsScoutItem,
     NewsScoutOutput,
     RatingRunOut,
     RatingRunStatus,
@@ -82,7 +103,7 @@ from app.schemas import (
     RunTraceStep,
     RunTraceTotals,
 )
-from app.services.alerts import alert_on_rerate
+from app.services.alerts import alert_on_rerate, safe_url
 from app.services.earth_obs_live import (
     EARTH_ENGINE_BUSY,
     LIVE_SITE_KEY_PREFIX,
@@ -97,6 +118,7 @@ from app.services.land_cover_overlays import LiveOverlays, OverlayJob, build_liv
 from app.services.lifecycle import is_public
 from app.services.listings import apply_rating_result, lock_asset, note_rating_failure
 from app.services.listings import audience as listing_audience
+from app.services.news_events import record_news
 from app.services.rating import SiteRating, asset_is_wetland, latest_report, rate_asset, rate_site
 from app.tools.earth_obs import (
     EarthObsMetrics,
@@ -106,12 +128,16 @@ from app.tools.earth_obs import (
     load_site_metrics,
     mock_listing_metrics,
 )
+from app.tools.ecosystem import Ecosystem, infer_ecosystem
 from app.tools.geometry import geometry_sha256, metrics_match_polygon
+from app.tools.signals import Signal, find_signals
 from app.worlds import LIVE_WORLD_ID
 
 log = logging.getLogger(__name__)
 
 ORCHESTRATION_VERSION = "naturex-orchestrator/1.0 (T27)"
+# A rating weighs a year of news; the daily sweep looks at the latest week.
+RATING_NEWS_LOOKBACK_DAYS = 365
 RUN_WINDOW = timedelta(hours=1)
 RUN_STALE_AFTER = timedelta(minutes=15)
 RUN_WORKERS = 4
@@ -367,15 +393,119 @@ class _NoLLM:
         raise LLMError("no LLM in this run")
 
 
-def news_runner(settings: Settings) -> NewsRunner:
+def news_runner(
+    settings: Settings, *, lookback_days: int = RATING_NEWS_LOOKBACK_DAYS
+) -> NewsRunner:
+    """News Scout for rating runs (a year of news by default) and for the daily sweep."""
+
     def run(asset: NewsScoutAsset, llm: LLMClient | None) -> NewsScoutOutput:
         if settings.use_mocks:
             return run_news_scout(asset, settings=settings, llm=_NoLLM())
         if llm is None:
             raise ToolFailed("llm_unavailable", retryable=False)
-        return run_news_scout(asset, settings=settings, llm=llm)
+        return run_news_scout(asset, settings=settings, llm=llm, lookback_days=lookback_days)
 
     return run
+
+
+class Investigator(Protocol):
+    """The orchestrator's optional follow-ups (live only: never in mock mode)."""
+
+    def search(
+        self,
+        asset: NewsScoutAsset,
+        topic: FollowUpTopic,
+        window: tuple[date, date],
+        llm: LLMClient,
+    ) -> NewsScoutOutput: ...
+
+    def read(
+        self, asset: NewsScoutAsset, url: str, question: str, llm: LLMClient, world_id: UUID
+    ) -> ArticleCheck: ...
+
+
+@dataclass(frozen=True, slots=True)
+class LiveInvestigator:
+    """Tavily search and extract with the News Scout guards, on the run's LLM client."""
+
+    settings: Settings
+
+    def search(
+        self,
+        asset: NewsScoutAsset,
+        topic: FollowUpTopic,
+        window: tuple[date, date],
+        llm: LLMClient,
+    ) -> NewsScoutOutput:
+        return run_followup_search(asset, topic, window, settings=self.settings, llm=llm)
+
+    def read(
+        self, asset: NewsScoutAsset, url: str, question: str, llm: LLMClient, world_id: UUID
+    ) -> ArticleCheck:
+        return read_article(
+            asset, url, question, settings=self.settings, llm=llm, world_id=world_id
+        )
+
+
+def for_model(summary: dict[str, Any]) -> dict[str, Any]:
+    """A step's result as the orchestrator sees it. The news searches stay in the trace only:
+    their queries carry the listing's name, which the community wrote, so Super gets the
+    count, not the text."""
+    if "searches" not in summary:
+        return summary
+    return {**summary, "searches": len(summary["searches"])}
+
+
+def investigator_for(settings: Settings) -> Investigator | None:
+    return None if settings.use_mocks else LiveInvestigator(settings)
+
+
+def investigable(signal: Signal) -> bool:
+    """A signal worth a dated news search: a real month or run of months off its seasonal
+    normal. The 12-month summary has no single window, a cloud gap is no event, and a Time
+    Machine scenario's scripted change has no news to find."""
+    return signal.kind == "greenness_anomaly" and not signal.simulated
+
+
+def signal_window(signal: Signal, today: date) -> tuple[date, date]:
+    """The news window for a signal: two months either side of its months, up to today."""
+
+    def shift(month: str, by: int) -> tuple[int, int]:
+        year, mon = int(month[:4]), int(month[5:7])
+        index = year * 12 + (mon - 1) + by
+        return index // 12, index % 12 + 1
+
+    start_year, start_month = shift(signal.start, -2)
+    end_year, end_month = shift(signal.end, 3)
+    start = date(start_year, start_month, 1)
+    end = min(date(end_year, end_month, 1) - timedelta(days=1), today)
+    return (min(start, end), end)
+
+
+def _months(window: tuple[date, date]) -> str:
+    return f"{window[0]:%Y-%m}..{window[1]:%Y-%m}"
+
+
+def _domain(url: str | None) -> str | None:
+    host = (urlsplit(url or "").hostname or "").removeprefix("www.")
+    return host[:60] or None
+
+
+def _event_labels(item: NewsScoutItem) -> dict[str, Any]:
+    """A kept item as the orchestrator sees it: labels and the site's domain, no text."""
+    return {
+        "event": event_citation_id(item),
+        "date": item.published_at.isoformat() if item.published_at else None,
+        "impact_type": item.impact_type,
+        "direction": item.direction,
+        "severity": item.severity,
+        "source": _domain(item.url),
+    }
+
+
+def _event_view(item: NewsScoutItem) -> dict[str, Any]:
+    """A kept item for the Agent Trace (titles are public news, shown as text)."""
+    return {**_event_labels(item), "title": item.title, "url": safe_url(item.url)}
 
 
 # ----- call recording ---------------------------------------------------------------------------
@@ -450,7 +580,12 @@ def usage(calls: Sequence[_Recorded], *, agent: str | None = None) -> dict[str, 
     }
 
 
-_TOOL_AGENT = {Tool.NEWS_SCOUT: "news_scout", Tool.AUDITOR: "auditor"}
+_TOOL_AGENT = {
+    Tool.NEWS_SCOUT: "news_scout",
+    Tool.AUDITOR: "auditor",
+    Tool.SEARCH_NEWS: "news_scout",
+    Tool.READ_ARTICLE: "article_reader",
+}
 
 
 # ----- progress ---------------------------------------------------------------------------------
@@ -512,6 +647,7 @@ class RunDeps:
     today: Callable[[], date]
     clock: Callable[[], float] = time.perf_counter
     live: LiveEarthObs | None = None
+    investigator: Investigator | None = None
     overlays: LiveOverlays | None = None
 
 
@@ -577,7 +713,15 @@ class RunToolbox:
         self.metrics: EarthObsMetrics | None = None
         self.is_wetland: bool | None = None
         self.valuation: SiteRating | None = None
+        self.signals: list[Signal] = []
+        self.vision: SiteVision | None = None
         self.news_events: list[AuditEvent] = []
+        self.news_items: list[NewsScoutItem] = []
+        """News Scout's kept events, stored with the report (`services.news_events`)."""
+        self.news_ok = False
+        self.investigations: dict[Tool, int] = {}
+        self.readings: dict[str, ArticleCheck] = {}
+        """Read articles by event citation ID, shown to the Auditor with the event."""
         self.evidence_events: list[AuditEvent] = []
         self.audit: AuditResult | None = None
         self.steps: list[dict[str, Any]] = []
@@ -594,10 +738,34 @@ class RunToolbox:
         return _dedupe([*self.news_events, *self.evidence_events])
 
     def offered(self) -> tuple[Tool, ...]:
-        return tuple(t for t in Tool if t is not Tool.FIELD_EVIDENCE or self._evidence)
+        core = [t for t in PIPELINE_ORDER if t is not Tool.FIELD_EVIDENCE or self._evidence]
+        return (*core, *(t for t in (Tool.SEARCH_NEWS, Tool.READ_ARTICLE) if self._may(t)))
 
     def is_done(self, tool: Tool) -> bool:
         return tool in self._done
+
+    def choices(self) -> dict[Tool, list[str]]:
+        return {
+            Tool.SEARCH_NEWS: [s.id for s in self.signals if investigable(s)],
+            Tool.READ_ARTICLE: self._readable(),
+        }
+
+    def _readable(self) -> list[str]:
+        return [
+            event_citation_id(item)
+            for item in self.news_items
+            if item.url and item.relevant and event_citation_id(item) not in self.readings
+        ]
+
+    def _may(self, tool: Tool) -> bool:
+        """Investigation is offered between the news and the audit, live runs only."""
+        if self._deps.investigator is None or self._llm is None:
+            return False
+        if not (self.is_done(Tool.EARTH_OBS) and self.news_ok) or self.is_done(Tool.AUDITOR):
+            return False
+        if self.investigations.get(tool, 0) >= MAX_INVESTIGATIONS:
+            return False
+        return bool(self.choices()[tool])
 
     def _drain(self) -> list[_Recorded]:
         return self._recorder.drain() if self._recorder else []
@@ -625,7 +793,26 @@ class RunToolbox:
             }
         )
 
-    def call(self, tool: Tool, *, pipeline: Pipeline) -> dict[str, Any]:
+    def plan(self, notes: str | None, reasoning_tokens: int | None, chose: Sequence[str]) -> None:
+        self._record_step(
+            {
+                "step": "plan",
+                "status": "ok",
+                "pipeline": "orchestrator",
+                "output": {
+                    "notes": notes,
+                    "reasoning_tokens": reasoning_tokens,
+                    "chose": [name for name in chose if name in {t.value for t in Tool}],
+                },
+                **usage(self._drain(), agent="orchestrator"),
+            }
+        )
+
+    def call(
+        self, tool: Tool, *, pipeline: Pipeline, args: BaseModel | None = None
+    ) -> dict[str, Any]:
+        if tool in INVESTIGATION:
+            return self._investigate(tool, args, pipeline)
         if tool is Tool.AUDITOR and not self._evidence and not self.is_done(Tool.FIELD_EVIDENCE):
             self._done[Tool.FIELD_EVIDENCE] = "skipped"
             self._record_step(
@@ -674,7 +861,7 @@ class RunToolbox:
             )
             return {"status": "failed", "error": error}
         self._done[tool] = status
-        return {"status": "ok", **summary}
+        return {"status": "ok", **for_model(summary)}
 
     # --- the steps (deterministic code, or a guarded agent) ---
 
@@ -721,6 +908,8 @@ class RunToolbox:
                 raise ToolFailed("no_baseline", retryable=False) from exc
         self.metrics, self.is_wetland = metrics, wetland
         self._start_overlay(metrics)
+        self.signals = find_signals(metrics)
+        vision = self._read_images(metrics)
         return {
             "data_version": metrics.data_version,
             "scenario": metrics.scenario,
@@ -730,7 +919,38 @@ class RunToolbox:
             "cloud_free_obs": metrics.cloud_free_obs,
             "wetland": wetland,
             "mock": is_mock_metrics(metrics),
+            # Dated changes found by code in the 5-year history (`tools.signals`).
+            "signals": [signal.to_json() for signal in self.signals],
+            **({"vision": vision} if vision else {}),
         }
+
+    def _read_images(self, metrics: EarthObsMetrics) -> dict[str, Any] | None:
+        """The vision model's before/after reading of a demo site (optional: a failure is
+        recorded in the output and the run goes on without it)."""
+        if not self._deps.settings.site_vision_live or self._llm is None:
+            return None
+        if metrics.simulated:
+            # A Time Machine scenario scripts the metrics; the images are the real ones, so a
+            # code check of one against the other would mean nothing.
+            return None
+        images = site_images(self._asset.site_key)
+        if images is None:
+            return None
+        try:
+            self.vision = read_site_change(
+                images,
+                metrics=metrics,
+                llm=self._llm,
+                ecosystem=self._ecosystem().value,
+                world_id=self._spec.world_id,
+                asset_id=self._spec.asset_id,
+            )
+        except Exception as exc:
+            # Optional: any failure (the model, a call-log write, a file) leaves the
+            # satellite step done and the run going on without the reading.
+            log.warning("site vision failed for a rating run: %s", type(exc).__name__)
+            return {"error": type(exc).__name__}
+        return self.vision.to_json()
 
     def _start_overlay(self, metrics: EarthObsMetrics) -> None:
         """Render the listing's land-cover overlay alongside the rating (#231): live world, live
@@ -783,15 +1003,7 @@ class RunToolbox:
         }
 
     def _news(self) -> dict[str, Any]:
-        asset = self._asset
-        lat, lon = asset.centroid_lat, asset.centroid_lon
-        if (lat is None or lon is None) and self.metrics is not None:
-            lat, lon = self.metrics.centroid.lat, self.metrics.centroid.lon
-        if lat is None or lon is None:
-            raise ToolFailed("no_location", retryable=False)
-        scout_asset = NewsScoutAsset(
-            id=asset.id, name=asset.name, centroid_lat=lat, centroid_lon=lon, country=asset.country
-        )
+        scout_asset = self._scout_asset()
         try:
             output = self._deps.news(scout_asset, self._llm)
         except ToolFailed:
@@ -801,8 +1013,11 @@ class RunToolbox:
             raise ToolFailed("news_scout_error") from exc
         events = _dedupe(audit_events_from_news(output.events))
         self.news_events = events
+        self.news_items = list(output.events)
+        self.news_ok = not output.news_paused
         relevant = [event for event in events if event.relevant]
-        # Counts and categories only: article text never reaches the orchestrator (T72).
+        # The trace's view. Super gets it through `for_model`, which turns `searches` into a
+        # count (the queries carry the listing's name); article text never reaches it (T72).
         return {
             "events": len(events),
             "relevant": len(relevant),
@@ -812,7 +1027,160 @@ class RunToolbox:
             "impact_types": sorted({event.impact_type for event in relevant}),
             "dropped_off_site": output.dropped_off_site,
             "locality_unverified": output.locality_unverified,
+            **({"news_paused": True} if output.news_paused else {}),
+            "ecosystem": scout_asset.ecosystem.value if scout_asset.ecosystem else None,
+            "searches": [
+                {
+                    "query": s.query,
+                    "language": s.language,
+                    "results": s.results,
+                    "latency_ms": s.latency_ms,
+                    "credits": s.credits,
+                    **({"error": s.error} if s.error else {}),
+                }
+                for s in output.searches
+            ],
+            **({"funnel": output.funnel.model_dump()} if output.funnel else {}),
+            # Labels of each kept item (no title, summary or URL), so the orchestrator can
+            # choose one to read.
+            **({"kept": [_event_labels(i) for i in output.events]} if output.events else {}),
         }
+
+    def _scout_asset(self) -> NewsScoutAsset:
+        asset = self._asset
+        lat, lon = asset.centroid_lat, asset.centroid_lon
+        if (lat is None or lon is None) and self.metrics is not None:
+            lat, lon = self.metrics.centroid.lat, self.metrics.centroid.lon
+        if lat is None or lon is None:
+            raise ToolFailed("no_location", retryable=False)
+        return NewsScoutAsset(
+            id=asset.id,
+            name=asset.name,
+            centroid_lat=lat,
+            centroid_lon=lon,
+            country=asset.country,
+            ecosystem=self._ecosystem(),
+        )
+
+    # --- investigation (optional; the orchestrator decides) ---
+
+    def _investigate(
+        self, tool: Tool, args: BaseModel | None, pipeline: Pipeline
+    ) -> dict[str, Any]:
+        """One follow-up. A failure is recorded and returned to the model, never fatal."""
+        self.investigations[tool] = self.investigations.get(tool, 0) + 1
+        start = self._deps.clock()
+        why = " ".join(str(getattr(args, "why", "")).split())[:WHY_CHARS]
+        error: str | None = None
+        seen: dict[str, Any] = {}
+        trace: dict[str, Any] = {}
+        try:
+            if isinstance(args, SearchNewsArgs):
+                seen, trace = self._search_news(args)
+            elif isinstance(args, ReadArticleArgs):
+                seen, trace = self._read_article(args)
+            else:
+                raise ToolFailed("invalid_arguments", retryable=False)
+        except (ToolFailed, ArticleUnavailable) as exc:
+            error = exc.code
+        except LLMError as exc:
+            log.warning("investigation %s failed: %s", tool.value, type(exc).__name__)
+            error = "llm_error"
+        self._record_step(
+            {
+                "step": STEP_NAMES[tool],
+                "status": "ok" if error is None else "failed",
+                "tool": tool.value,
+                "pipeline": pipeline,
+                "attempts": 1,
+                "latency_ms": int((self._deps.clock() - start) * 1000),
+                "error": error,
+                "output": {"tool": tool.value, "why": why, **trace},
+                **usage(self._drain(), agent=_TOOL_AGENT.get(tool)),
+            }
+        )
+        if error is not None:
+            return {"status": "failed", "error": error}
+        return {"status": "ok", **seen}
+
+    def _search_news(self, args: SearchNewsArgs) -> tuple[dict[str, Any], dict[str, Any]]:
+        investigator, llm = self._deps.investigator, self._llm
+        signal = next((s for s in self.signals if s.id == args.signal), None)
+        if investigator is None or llm is None or signal is None:
+            raise ToolFailed("not_available", retryable=False)
+        window = signal_window(signal, self.as_of)
+        try:
+            output = investigator.search(self._scout_asset(), args.topic, window, llm)
+        except ToolFailed:
+            raise
+        except Exception as exc:
+            log.warning("follow-up search failed: %s", type(exc).__name__)
+            raise ToolFailed("search_error") from exc
+        known = {event_citation_id(item) for item in self.news_items}
+        new = [item for item in output.events if event_citation_id(item) not in known]
+        if new:
+            self.news_items = [*self.news_items, *new]
+            self.news_events = _dedupe(audit_events_from_news(self.news_items))
+        found = sum(s.results for s in output.searches)
+        in_window = output.funnel.found if output.funnel else 0
+        seen = {
+            "signal": signal.id,
+            "topic": args.topic,
+            "window": _months(window),
+            "results_in_window": in_window,
+            "outside_window": max(0, found - in_window),
+            "new_kept": [_event_labels(item) for item in new],
+            "dropped_off_site": output.dropped_off_site,
+            **({"news_paused": True} if output.news_paused else {}),
+        }
+        trace = {
+            "signal": signal.id,
+            "signal_text": signal.text,
+            "topic": args.topic,
+            "window": {"start": window[0].isoformat(), "end": window[1].isoformat()},
+            "searches": [s.model_dump() for s in output.searches],
+            **({"funnel": output.funnel.model_dump()} if output.funnel else {}),
+            "outside_window": max(0, found - in_window),
+            "found": [_event_view(item) for item in new],
+            "already_known": len(output.events) - len(new),
+        }
+        return seen, trace
+
+    def _read_article(self, args: ReadArticleArgs) -> tuple[dict[str, Any], dict[str, Any]]:
+        investigator, llm = self._deps.investigator, self._llm
+        item = next(
+            (i for i in self.news_items if event_citation_id(i) == args.event and i.url), None
+        )
+        if investigator is None or llm is None or item is None or item.url is None:
+            raise ToolFailed("not_available", retryable=False)
+        try:
+            check = investigator.read(
+                self._scout_asset(), item.url, args.question, llm, self._spec.world_id
+            )
+        except (ToolFailed, ArticleUnavailable, LLMError):
+            raise
+        except Exception as exc:
+            # An optional follow-up never fails the rating (a call-log write, a parse error).
+            log.warning("article read failed: %s", type(exc).__name__)
+            raise ToolFailed("read_error") from exc
+        self.readings[args.event] = check
+        seen = {"event": args.event, **check.labels()}
+        trace = {
+            "event": args.event,
+            "title": item.title,
+            "published_at": item.published_at.isoformat() if item.published_at else None,
+            **check.to_json(),
+            "url": safe_url(check.url),
+        }
+        return seen, trace
+
+    def _ecosystem(self) -> Ecosystem:
+        m = self.metrics
+        return infer_ecosystem(
+            name=self._asset.name,
+            landcover=m.landcover if m else None,
+            mangrove_fraction=m.mangrove_fraction if m else None,
+        )
 
     def _field_evidence(self) -> dict[str, Any]:
         events = self._deps.evidence.load(self._spec.world_id, self._spec.asset_id)
@@ -826,9 +1194,24 @@ class RunToolbox:
             "positive": sum(1 for event in validated if event.direction == 1),
         }
 
+    def _with_reading(self, event: AuditEvent) -> AuditEvent:
+        check = self.readings.get(event.citation_id)
+        if check is None:
+            return event
+        reading = EventReading(
+            names_site=check.names_site,
+            answers=check.answers,
+            quote_checked=check.quote_checked,
+            question=check.question,
+            month=check.month,
+            finding=check.finding,
+            quote=check.quote,
+        )
+        return event.model_copy(update={"reading": reading})
+
     def _auditor(self) -> dict[str, Any]:
         metrics, _ = self._bound_metrics()
-        events = self.events
+        events = [self._with_reading(event) for event in self.events]
         base = self._rate(events)
         with self._deps.session_factory() as session:
             previous = previous_for_bundle(
@@ -843,6 +1226,8 @@ class RunToolbox:
                 base=base.score,
                 events=events,
                 previous=previous,
+                signals=self.signals,
+                observations=[(c.id, c.text()) for c in self.vision.changes] if self.vision else (),
             )
         except ValueError as exc:
             raise ToolFailed("bundle_invalid", retryable=False) from exc
@@ -854,11 +1239,68 @@ class RunToolbox:
                 bundle, llm=self._llm, world_id=self._spec.world_id, asset_id=self._spec.asset_id
             )
         self.audit = audit
+        urls = {event_citation_id(item): item.url for item in self.news_items if item.url}
         return {
             "source": audit.source,
             "auditor_adjustment": audit.output.auditor_adjustment,
             "flags": [flag.type for flag in audit.output.flags],
+            **_audit_case(audit, bundle, urls),
         }
+
+
+def _audit_case(
+    audit: AuditResult, bundle: AuditorInput, urls: Mapping[str, str]
+) -> dict[str, Any]:
+    """The Auditor's case and checks for the Agent Trace: checked, cited model text only, plus
+    a short excerpt of its own notes, labelled as notes by the UI. `evidence` resolves every
+    cited ID to its fact value or news item, so the trace can show what a citation points to."""
+    output = audit.output
+    cited = set(audit.citations)
+    for hypothesis in output.hypotheses:
+        cited.update(hypothesis.evidence_for, hypothesis.evidence_against)
+    evidence: dict[str, dict[str, Any]] = {}
+    for citation in bundle.ids:
+        if citation not in cited:
+            continue
+        event = bundle.event(citation)
+        if event is None:
+            seen = bundle.observation(citation)
+            evidence[citation] = (
+                {"kind": "image", "value": seen}
+                if seen is not None
+                else {"kind": "fact", "value": bundle.fact(citation)}
+            )
+            continue
+        evidence[citation] = {
+            "kind": event.source,
+            "title": event.title,
+            "url": safe_url(urls.get(citation)),
+            "published_at": event.published_at.isoformat() if event.published_at else None,
+            "impact_type": event.impact_type,
+            "direction": event.direction,
+            "severity": event.severity,
+            **({"read": event.reading.model_dump()} if event.reading else {}),
+        }
+    return {
+        "base_health": str(bundle.base_health),
+        "evidence": evidence,
+        "agreement": output.agreement,
+        "greenwashing_risk": audit.greenwashing_risk,
+        "hypotheses": [h.model_dump() for h in output.hypotheses],
+        "verdict": output.verdict or None,
+        "adjustment_reason": output.adjustment_reason or None,
+        "rounds": audit.rounds,
+        "rejections": [r[:200] for r in audit.rejections[:8]],
+        "reasoning_tokens": audit.reasoning_tokens,
+        "notes": (audit.reasoning or "")[:REASONING_EXCERPT_CHARS] or None,
+        "checks": {
+            "citations": len(output.citations),
+            "resolved": len(audit.citations),
+            "placeholders_filled": audit.placeholders_filled,
+            # Every round of a no-op audit was refused; an accepted audit's last round passed.
+            "rejected_answers": max(0, audit.rounds - (0 if audit.fallback else 1)),
+        },
+    }
 
 
 def _world_asset(session: Session, world_id: UUID, asset_id: UUID) -> Asset | None:
@@ -913,6 +1355,8 @@ class RatingRunner:
     evidence: EvidenceProvider = field(default_factory=NoFieldEvidence)
     today: Callable[[], date] = field(default=lambda: datetime.now(UTC).date())
     max_pending: int = MAX_PENDING_RUNS
+    investigator: Investigator | None = None
+    """The orchestrator's optional follow-ups (Tavily search and extract); None turns them off."""
     _slots: threading.BoundedSemaphore = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -1090,6 +1534,7 @@ class RatingRunner:
                 evidence=self.evidence,
                 today=self.today,
                 live=self.live_metrics,
+                investigator=self.investigator,
                 overlays=self.live_overlays,
             )
             toolbox = RunToolbox(
@@ -1279,6 +1724,10 @@ class RatingRunner:
                 extra_flags=flags,
             )
             listing = apply_rating_result(session, asset, report)
+            if not self.settings.use_mocks:
+                # The news this run found shows on the asset page at once. The daily sweep
+                # alerts on it; a rating run never does.
+                record_news(session, spec.world_id, spec.asset_id, toolbox.news_items, alert=False)
             publish(
                 session,
                 spec.world_id,
@@ -1595,6 +2044,59 @@ def get_run(
     )
 
 
+BASELINE_MODEL = "nvidia/Nemotron-3-Ultra-550b-a55b"
+"""The cost receipt's "all on the biggest model" price when a run has no Auditor-tier call."""
+
+
+def baseline_model_for(calls: Sequence[Mapping[str, Any]]) -> str:
+    """The model the run's Auditor tier ran on (the largest Nemotron it used), read from the
+    run itself so a trace prices the same on every server, whatever its MODEL_* settings."""
+    for call in calls:
+        model = call.get("model")
+        if call.get("tier") == "auditor" and isinstance(model, str) and model in PRICES_PER_M:
+            return model
+    return BASELINE_MODEL
+
+
+def model_usage(
+    calls: Sequence[Mapping[str, Any]], *, baseline_model: str | None = None
+) -> tuple[list[ModelUsage], CostBaseline | None]:
+    """Group a run's recorded calls by model, and price its text-model tokens on
+    `baseline_model` (by default `baseline_model_for`; embeddings and image reading have no
+    text-model equivalent)."""
+    baseline_model = baseline_model or baseline_model_for(calls)
+    grouped: dict[str, list[Mapping[str, Any]]] = {}
+    for call in calls:
+        grouped.setdefault(str(call.get("model") or "unknown"), []).append(call)
+    models = [
+        ModelUsage(
+            model=model,
+            calls=len(rows),
+            prompt_tokens=sum(int(r.get("prompt_tokens") or 0) for r in rows),
+            completion_tokens=sum(int(r.get("completion_tokens") or 0) for r in rows),
+            latency_ms=sum(int(r.get("latency_ms") or 0) for r in rows),
+            cost_usd=sum((Decimal(str(r.get("cost_usd") or 0)) for r in rows), Decimal(0)),
+        )
+        for model, rows in grouped.items()
+    ]
+    models.sort(key=lambda m: m.cost_usd, reverse=True)
+    text = [c for c in calls if c.get("tier") not in ("embed", "perception")]
+    if not text or baseline_model not in PRICES_PER_M:
+        return models, None
+    cost = sum(
+        (
+            cost_usd(
+                baseline_model,
+                int(c.get("prompt_tokens") or 0),
+                int(c.get("completion_tokens") or 0),
+            )
+            for c in text
+        ),
+        Decimal(0),
+    )
+    return models, CostBaseline(model=baseline_model, cost_usd=cost)
+
+
 def get_run_trace(session: Session, world_id: UUID, run_id: UUID) -> RunTraceOut | None:
     """Read the scoped run's spans, or the sealed report's snapshot after event pruning."""
     run = get_run(session, world_id, run_id)
@@ -1622,8 +2124,12 @@ def get_run_trace(session: Session, world_id: UUID, run_id: UUID) -> RunTraceOut
         (p["totals"] for p, _ in reversed(spans) if isinstance(p.get("totals"), dict)),
         stored.get("totals"),
     )
+    calls = [c for payload, _ in spans for c in payload.get("llm_calls", []) or []]
+    models, baseline = model_usage(calls)
     return RunTraceOut(
         totals=RunTraceTotals.model_validate(totals) if isinstance(totals, dict) else None,
+        models=models,
+        baseline=baseline,
         run_id=run_id,
         asset_id=run.asset_id,
         status=run.status,
@@ -1703,6 +2209,7 @@ def build_runner(
         live_metrics=live,
         live_overlays=build_live_overlays(session_factory, live),
         evidence=DbEvidenceProvider(session_factory),
+        investigator=investigator_for(settings),
     )
 
 

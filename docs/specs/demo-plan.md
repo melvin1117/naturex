@@ -68,7 +68,7 @@
 | Problem | Solution |
 |---|---|
 | Judges affect each other or the live world | Each demo session gets its own sandbox world: `world_id` on every tenant table (users, communities, members, sessions, assets, holdings, orders, prices, events, reports, alerts, ledger), composite foreign keys so rows can't link across worlds (ADR-0005), plus Reset my demo |
-| Credit costs | Demo sites use **cached real ratings** (browsing is free); Time Machine uses a short live Auditor call; "Rate your own land" limited to **2 live runs per visitor**; global `LLM_BUDGET_USD` cap |
+| Credit costs | Demo sites use **cached real ratings** (browsing is free), and each shows a **recorded real run** (verdict, Agent Trace, follow-ups) labelled "Recorded" until it is rated live; Time Machine uses a short live Auditor call; "Rate your own land" limited to **2 live runs per visitor**; global `LLM_BUDGET_USD` cap |
 | Free host asleep | GitHub Actions `/healthz` pings every few hours; "Waking up… ~30 s" screen; re-check everything before Dec 1 |
 | Credits run out during judging | Reserve ~40% of the budget for Dec 1–15; at the cap, live steps fall back to cached results with a clear notice |
 | Earth Engine slow or down | "Live satellite service busy; showing a nearby cached example" instead of an error |

@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+# The routing-table run: the News Scout eval on Nano, Super and Ultra through the same code
+# path (ADR-0003). About $0.05 uncached. Run from the repo root; see evals/README.md.
+#   PROMPTFOO_DISABLE_TELEMETRY=1 npx -y promptfoo@0.124.0 eval -c evals/promptfooconfig.routing.yaml
+description: NatureX News Scout classification (news-scout-v2 prompt)
+
+# Every Python step (test generator, provider, assertions) must run in the backend venv,
+# which has the app's dependencies (`cd backend && uv sync`). Paths are relative to the repo
+# root, where the eval runs. promptfoo 0.124 caches the first Python it resolves for the whole
+# run, so a per-provider `pythonExecutable` is ignored once the generator has run; set it here.
+# https://www.promptfoo.dev/docs/providers/python/#custom-python-executable
+env:
+  PROMPTFOO_PYTHON: backend/.venv/bin/python
+
+# The provider builds the real News Scout prompt from the test vars (app.agents.news_scout
+# `_messages`), so this prompt is only a label. It still feeds promptfoo's cache key.
+prompts:
+  - id: news-scout-v2
+    label: news-scout-v2
+    raw: 'News Scout article {{id}}: {{title}}'
+
+# One provider per model tier: the same code path, routed by MODEL_* in .env (ADR-0003).
+# Nano is on by default. Super and Ultra cost 5x and ~15x more per token: uncomment them
+# for the G3 routing table (T47). Python provider docs:
+# https://www.promptfoo.dev/docs/providers/python/
+providers:
+  - id: file://providers/news_scout_provider.py
+    label: nano
+    config:
+      tier: fast
+      call_log: db
+  - id: file://providers/news_scout_provider.py
+    label: super
+    config:
+      tier: orchestrator
+      call_log: db
+  - id: file://providers/news_scout_provider.py
+    label: ultra
+    config:
+      tier: auditor
+      call_log: db
+
+# One test per line of news.jsonl. Assertions per test (named metrics, summed by promptfoo):
+#   all:        schema_valid (is-json + committed JSON Schema), schema_first_try, relevance
+#   relevant:   impact_type, direction, severity (±1)
+#   injection:  injection_resistance (labels unchanged, canary not echoed)
+# Generator config can narrow the run, e.g. config: {sites: [wetland_mx], limit: 5}.
+# https://www.promptfoo.dev/docs/configuration/test-cases/#python
+tests:
+  - path: file://news_eval.py:generate_tests
+    config: {}
+
+# Cache on (the default; listed so nobody turns it off by accident): re-runs with the same
+# prompt, vars and provider config cost nothing. https://www.promptfoo.dev/docs/configuration/caching/
+evaluateOptions:
+  cache: true
+  maxConcurrency: 2
+
+# Relative to the cwd (the repo root). Git-ignored; never commit eval output.
+outputPath:
+  - evals/output/news-routing-results.json

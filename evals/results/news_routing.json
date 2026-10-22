@@ -1,0 +1,168 @@
+{
+  "eval": "news_scout",
+  "items": 40,
+  "providers": {
+    "super": {
+      "tests": 40,
+      "passed": 39,
+      "errors": 0,
+      "metrics": {
+        "schema_valid": {
+          "passed": 40,
+          "total": 40
+        },
+        "schema_first_try": {
+          "passed": 40,
+          "total": 40
+        },
+        "relevance": {
+          "passed": 40,
+          "total": 40
+        },
+        "impact_type": {
+          "passed": 23,
+          "total": 24
+        },
+        "direction": {
+          "passed": 24,
+          "total": 24
+        },
+        "severity": {
+          "passed": 24,
+          "total": 24
+        },
+        "injection_resistance": {
+          "passed": 3,
+          "total": 3
+        }
+      },
+      "prompt_tokens": 32643,
+      "completion_tokens": 2849,
+      "cost_usd": 0.01236,
+      "p50_latency_ms": 1056,
+      "failures": [
+        {
+          "item": "sum-s04",
+          "metric": "impact_type",
+          "reason": "impact_type: expected protection, got encroachment"
+        }
+      ]
+    },
+    "nano": {
+      "tests": 40,
+      "passed": 33,
+      "errors": 0,
+      "metrics": {
+        "schema_valid": {
+          "passed": 40,
+          "total": 40
+        },
+        "schema_first_try": {
+          "passed": 40,
+          "total": 40
+        },
+        "relevance": {
+          "passed": 36,
+          "total": 40
+        },
+        "impact_type": {
+          "passed": 21,
+          "total": 24
+        },
+        "direction": {
+          "passed": 24,
+          "total": 24
+        },
+        "severity": {
+          "passed": 24,
+          "total": 24
+        },
+        "injection_resistance": {
+          "passed": 3,
+          "total": 3
+        }
+      },
+      "prompt_tokens": 32643,
+      "completion_tokens": 3687,
+      "cost_usd": 0.00284,
+      "p50_latency_ms": 1245,
+      "failures": [
+        {
+          "item": "xoc-006",
+          "metric": "relevance",
+          "reason": "relevant (kept by post-check): expected False, got True"
+        },
+        {
+          "item": "xoc-007",
+          "metric": "relevance",
+          "reason": "relevant (kept by post-check): expected False, got True"
+        },
+        {
+          "item": "xoc-009",
+          "metric": "relevance",
+          "reason": "relevant (kept by post-check): expected False, got True"
+        },
+        {
+          "item": "xoc-s06",
+          "metric": "relevance",
+          "reason": "relevant (kept by post-check): expected False, got True"
+        },
+        {
+          "item": "cel-s02",
+          "metric": "impact_type",
+          "reason": "impact_type: expected drought, got pollution"
+        },
+        {
+          "item": "cel-s05",
+          "metric": "impact_type",
+          "reason": "impact_type: expected other, got fire"
+        },
+        {
+          "item": "sum-s04",
+          "metric": "impact_type",
+          "reason": "impact_type: expected protection, got encroachment"
+        }
+      ]
+    },
+    "ultra": {
+      "tests": 40,
+      "passed": 40,
+      "errors": 0,
+      "metrics": {
+        "schema_valid": {
+          "passed": 40,
+          "total": 40
+        },
+        "schema_first_try": {
+          "passed": 40,
+          "total": 40
+        },
+        "relevance": {
+          "passed": 40,
+          "total": 40
+        },
+        "impact_type": {
+          "passed": 24,
+          "total": 24
+        },
+        "direction": {
+          "passed": 24,
+          "total": 24
+        },
+        "severity": {
+          "passed": 24,
+          "total": 24
+        },
+        "injection_resistance": {
+          "passed": 3,
+          "total": 3
+        }
+      },
+      "prompt_tokens": 32643,
+      "completion_tokens": 3489,
+      "cost_usd": 0.04311,
+      "p50_latency_ms": 865,
+      "failures": []
+    }
+  }
+}

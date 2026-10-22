@@ -83,7 +83,7 @@ def test_overlay_is_transparent_outside_the_polygon() -> None:
 
 
 def _copy_site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, site_key: str) -> None:
-    for kind in ("overlay", "thumbnail", "sidecar"):
+    for kind in ("overlay", "thumbnail", "sidecar", "before"):
         shutil.copy(image_path(site_key, kind), tmp_path)
     monkeypatch.setattr(site_images, "IMAGES_DIR", tmp_path)
 

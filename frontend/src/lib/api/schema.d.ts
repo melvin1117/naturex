@@ -1206,6 +1206,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/ai-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ai Usage
+         * @description Per-model outcomes, latency and cost in this world, plus the deployment's spend and the
+         *     Tavily credits left (cached a minute), for the AI control room.
+         */
+        get: operations["get_ai_usage_admin_ai_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/trace": {
         parameters: {
             query?: never;
@@ -1366,6 +1387,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/media/demo-sites/{site_key}/before.webp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Before
+         * @description The thumbnail's view in the first year of the 5-year window (the vision model's "before").
+         */
+        get: operations["get_before_media_demo_sites__site_key__before_webp_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media/demo-sites/{site_key}/images.json": {
         parameters: {
             query?: never;
@@ -1378,6 +1419,27 @@ export interface paths {
          * @description Overlay bounds, palette and legend, thumbnail metadata, date windows and attributions.
          */
         get: operations["get_site_images_media_demo_sites__site_key__images_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media/demo-sites/{site_key}/recorded-run.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Recorded Run
+         * @description A real rating run of this demo site, recorded with live models (labelled "Recorded"), so
+         *     the Agent Trace can be opened without spending anything. It never changes a report.
+         */
+        get: operations["get_recorded_run_media_demo_sites__site_key__recorded_run_json_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1641,6 +1703,34 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * AiUsageOut
+         * @description The AI control room: this world's model calls, the deployment's LLM spend against its
+         *     cap, and the Tavily account's credits left.
+         */
+        AiUsageOut: {
+            /** Models */
+            models: components["schemas"]["ModelStats"][];
+            /** World Cost Usd */
+            world_cost_usd: string;
+            /**
+             * Spent Usd
+             * @description Every logged model call of this deployment
+             */
+            spent_usd: string;
+            /**
+             * Budget Usd
+             * @description LLM_BUDGET_USD, the deployment's hard cap
+             */
+            budget_usd: string;
+            /**
+             * Tavily Credits Left
+             * @description Tavily account credits left; null when unknown or mocked
+             */
+            tavily_credits_left?: number | null;
+            /** Tavily Min Credits Left */
+            tavily_min_credits_left: number;
         };
         /** AlertListOut */
         AlertListOut: {
@@ -2027,13 +2117,53 @@ export interface components {
             citation?: string | null;
         };
         /**
+         * AuditorHypothesis
+         * @description One explanation the Auditor weighed, with the bundle IDs for and against it.
+         */
+        AuditorHypothesis: {
+            /**
+             * Name
+             * @description A short explanation, e.g. 'seasonal drought' or 'clearing'.
+             */
+            name: string;
+            /**
+             * Evidence For
+             * @description Bundle IDs supporting it
+             */
+            evidence_for?: string[];
+            /**
+             * Evidence Against
+             * @description Bundle IDs weakening it
+             */
+            evidence_against?: string[];
+            /**
+             * Assessment
+             * @enum {string}
+             */
+            assessment: "supported" | "weakened" | "unclear";
+        };
+        /**
          * AuditorOutput
          * @description Nemotron Ultra auditor JSON (dev-spec §7.7).
          */
         AuditorOutput: {
+            /**
+             * Hypotheses
+             * @description 2-3 competing explanations of what the metrics, signals and events show, weighed before deciding.
+             */
+            hypotheses?: components["schemas"]["AuditorHypothesis"][];
+            /**
+             * Verdict
+             * @description One sentence (under 400 characters) naming the best-supported explanation, ending with [ID] citations; numbers only as {ID} placeholders.
+             * @default
+             */
+            verdict: string;
             /** Auditor Adjustment */
             auditor_adjustment: number;
-            /** Adjustment Reason */
+            /**
+             * Adjustment Reason
+             * @description Why the adjustment, with [ID] citations; empty when it is 0.
+             */
             adjustment_reason: string;
             /** Agreement */
             agreement: number;
@@ -2044,15 +2174,21 @@ export interface components {
              * @enum {string}
              */
             greenwashing_risk: "low" | "medium" | "high";
-            /** Key Changes */
+            /**
+             * Key Changes
+             * @description Each ends with an [ID]; numbers as {ID} placeholders.
+             */
             key_changes?: string[];
             /** Recommendations */
             recommendations?: string[];
-            /** Summary Md */
+            /**
+             * Summary Md
+             * @description Markdown for non-experts. Every sentence ends with an [ID] citation; write every number as an {ID} placeholder, e.g. 'covers {metric:area_ha} [metric:area_ha]'.
+             */
             summary_md: string;
             /**
              * Citations
-             * @description Metric or event IDs cited in the report
+             * @description Every bundle ID you cited, copied exactly; nothing else.
              */
             citations?: string[];
         };
@@ -2307,6 +2443,16 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["CopilotSource"][];
         };
+        /**
+         * CostBaseline
+         * @description What the run's text-model tokens would have cost on one model (the routing receipt).
+         */
+        CostBaseline: {
+            /** Model */
+            model: string;
+            /** Cost Usd */
+            cost_usd: string;
+        };
         /** DateWindow */
         DateWindow: {
             /** Start */
@@ -2450,7 +2596,7 @@ export interface components {
             validated: number;
             /**
              * Ai Analysis
-             * @description What reads the photos: model (MiniCPM-V on Nebius Token Factory, only with FIELD_EVIDENCE_AI_LIVE), mock (USE_MOCKS: a fake model, nothing sent) or off (no photo is sent to a model, so none is validated).
+             * @description What reads the photos: model (Nemotron 3.5 Super VL on Nebius Token Factory, only with FIELD_EVIDENCE_AI_LIVE), mock (USE_MOCKS: a fake model, nothing sent) or off (no photo is sent to a model, so none is validated).
              * @enum {string}
              */
             ai_analysis: "model" | "mock" | "off";
@@ -3125,6 +3271,58 @@ export interface components {
             reason_refs: number[];
         };
         /**
+         * ModelStats
+         * @description One model's calls in a world: outcomes, latency, tokens and cost.
+         */
+        ModelStats: {
+            /** Model */
+            model: string;
+            /** Calls */
+            calls: number;
+            /** Ok */
+            ok: number;
+            /**
+             * Rejected
+             * @description Schema-valid answers the code checks refused
+             */
+            rejected: number;
+            /**
+             * Invalid
+             * @description Answers that failed the schema
+             */
+            invalid: number;
+            /** Errors */
+            errors: number;
+            /** P50 Latency Ms */
+            p50_latency_ms?: number | null;
+            /** P95 Latency Ms */
+            p95_latency_ms?: number | null;
+            /** Prompt Tokens */
+            prompt_tokens: number;
+            /** Completion Tokens */
+            completion_tokens: number;
+            /** Cost Usd */
+            cost_usd: string;
+        };
+        /**
+         * ModelUsage
+         * @description One model's share of a run: how often it was called, its tokens, time and cost.
+         */
+        ModelUsage: {
+            /** Model */
+            model: string;
+            /** Calls */
+            calls: number;
+            /** Prompt Tokens */
+            prompt_tokens: number;
+            /** Completion Tokens */
+            completion_tokens: number;
+            /** Latency Ms */
+            latency_ms: number;
+            /** Cost Usd */
+            cost_usd: string;
+        };
+        /**
          * MyCommunityOut
          * @description A community the caller belongs to, with the caller's role in it.
          */
@@ -3724,6 +3922,23 @@ export interface components {
             /** Ts */
             ts?: string | null;
         };
+        /**
+         * RecordedRunOut
+         * @description A real rating run of a demo site, recorded with live models and committed, so every
+         *     visitor can open a full Agent Trace without spending anything (`services.recorded_runs`).
+         *     Its numbers are that run's; the site's own report stays the one its world holds.
+         */
+        RecordedRunOut: {
+            /** Site Key */
+            site_key: string;
+            /**
+             * Recorded On
+             * Format: date
+             */
+            recorded_on: string;
+            /** @description The run's trace; `asset_id` is a placeholder, not an asset of any world */
+            trace: components["schemas"]["RunTraceOut"];
+        };
         /** RegisterIn */
         RegisterIn: {
             /** Email */
@@ -3908,6 +4123,13 @@ export interface components {
             steps: components["schemas"]["RunTraceStep"][];
             /** @description The sealed run's totals; null until the run seals a report */
             totals?: components["schemas"]["RunTraceTotals"] | null;
+            /**
+             * Models
+             * @description Every model call of the run, grouped by model
+             */
+            models?: components["schemas"]["ModelUsage"][];
+            /** @description The same text-model tokens priced on the largest Nemotron (Ultra) */
+            baseline?: components["schemas"]["CostBaseline"] | null;
         };
         /**
          * RunTraceStep
@@ -7627,6 +7849,26 @@ export interface operations {
             };
         };
     };
+    get_ai_usage_admin_ai_usage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiUsageOut"];
+                };
+            };
+        };
+    };
     get_trace_admin_trace_get: {
         parameters: {
             query?: {
@@ -7890,6 +8132,44 @@ export interface operations {
             };
         };
     };
+    get_before_media_demo_sites__site_key__before_webp_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description True-colour view five years earlier */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/webp": string;
+                };
+            };
+            /** @description Unknown demo site */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_site_images_media_demo_sites__site_key__images_json_get: {
         parameters: {
             query?: never;
@@ -7911,6 +8191,44 @@ export interface operations {
                 };
             };
             /** @description Unknown demo site */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_recorded_run_media_demo_sites__site_key__recorded_run_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordedRunOut"];
+                };
+            };
+            /** @description Unknown demo site, or no recorded run */
             404: {
                 headers: {
                     [name: string]: unknown;
