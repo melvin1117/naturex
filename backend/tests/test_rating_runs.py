@@ -45,8 +45,11 @@ from app.ledger import verify
 from app.llm import THINKING_OFF, LLMClient
 from app.main import app
 from app.models import (
+    Alert,
     Asset,
     AssetStatus,
+    Event,
+    EventSource,
     LedgerEntry,
     LlmCall,
     Report,
@@ -519,12 +522,60 @@ def test_news_reaches_the_orchestrator_as_counts_only(db: Connection, site: Site
         "impact_types": ["encroachment"],
         "dropped_off_site": 0,
         "locality_unverified": False,
+        "ecosystem": "wetland",
+        "searches": [],
     }
     text = json.dumps([r["messages"] for r in orchestrator_requests])
     item = FIXTURE[0]
     for untrusted in (item.title, item.summary, item.url):
         assert untrusted and untrusted not in text
     assert str(site.asset_id) not in text
+
+
+def _tavily_events(db: Connection, site: Site) -> list[Event]:
+    with sessions(db)() as session:
+        return list(
+            session.exec(
+                select(Event).where(
+                    Event.world_id == site.world_id,
+                    Event.asset_id == site.asset_id,
+                    Event.source == EventSource.TAVILY,
+                )
+            ).all()
+        )
+
+
+@requires_db
+def test_a_rating_run_stores_its_news_once_and_alerts_nobody(db: Connection, site: Site) -> None:
+    with sessions(db)() as session:
+        alerts_before = session.exec(select(func.count()).select_from(Alert)).one()
+    h = harness(db, *happy_script())
+    h.runner.start(site.world_id, site.asset_id)
+    h2 = harness(db, *happy_script())
+    h2.runner.start(site.world_id, site.asset_id)
+
+    stored = _tavily_events(db, site)
+    assert [(e.url, e.impact_type, e.severity) for e in stored] == [
+        (FIXTURE[0].url, FIXTURE[0].impact_type, FIXTURE[0].severity)
+    ]
+    with sessions(db)() as session:
+        assert session.exec(select(func.count()).select_from(Alert)).one() == alerts_before
+
+
+@requires_db
+def test_mock_news_is_never_stored(db: Connection, site: Site) -> None:
+    cfg = settings(use_mocks=True)
+    runner = RatingRunner(
+        session_factory=sessions(db),
+        settings=cfg,
+        executor=Inline(),
+        llm_factory=lambda wrap: None,  # type: ignore[arg-type,return-value]
+        news=news_runner(cfg),
+        today=lambda: RATING_DATE,
+    )
+    runner.start(site.world_id, site.asset_id)
+
+    assert _tavily_events(db, site) == []
 
 
 # ----- misbehaviour → fixed pipeline ------------------------------------------------------------

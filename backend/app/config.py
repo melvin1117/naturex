@@ -94,6 +94,9 @@ class Settings(BaseSettings):
     model_embed: str = ""
 
     tavily_api_key: str = ""
+    # News Scout pauses new searches when the Tavily account (all environments, read from
+    # `/usage`) has fewer credits than this left, so judging never meets an empty quota.
+    tavily_min_credits_left: int = 150
     nominatim_user_agent: str = "NatureX/0.1 (https://github.com/melvin1117/naturex)"
     # Listing map place search (#215): searches per account per rolling minute, per API process
     # (429 `place_search_rate_limited` after), on top of Nominatim's shared 1 request/s.

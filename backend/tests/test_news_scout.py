@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -25,6 +26,7 @@ from app.agents.news_scout import (
     NewsScoutClassificationOutput,
     NominatimGeocoder,
     NominatimResponse,
+    SearchQuery,
     TavilyNewsSearch,
     _cache_key,
     _locality_terms,
@@ -33,6 +35,7 @@ from app.agents.news_scout import (
     _place_names,
     _post_check,
     _redact_injection,
+    _regions,
     build_queries,
     run_news_scout,
 )
@@ -41,6 +44,7 @@ from app.mocks import news_scout_fixture
 from app.schemas import NewsScoutOutput
 from app.seed import DEMO_SITES
 from app.services.nominatim import NominatimRateLimiter
+from app.tools.ecosystem import Ecosystem
 
 FIXTURES = Path(__file__).parent / "fixtures" / "news"
 ASSET = NewsScoutAsset(
@@ -75,8 +79,10 @@ class FakeNewsSearch:
         self.articles = articles
         self.queries: list[str] = []
 
-    def search(self, query: str, *, max_results: int, lookback_days: int) -> list[NewsArticle]:
-        self.queries.append(query)
+    def search(
+        self, query: SearchQuery, *, max_results: int, lookback_days: int
+    ) -> list[NewsArticle]:
+        self.queries.append(query.text)
         return self.articles[:max_results]
 
 
@@ -93,25 +99,168 @@ class FakeLLM:
 def articles_from_tavily(name: str) -> list[NewsArticle]:
     def post(_url: str, *, json_payload: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
         assert json_payload["topic"] == "news"
-        assert json_payload["include_raw_content"] == "text"
+        assert json_payload["include_raw_content"] is False
+        assert json_payload["search_depth"] == "advanced"
+        assert json_payload["chunks_per_source"] == 3
+        assert "facebook.com" in json_payload["exclude_domains"]
         assert json_payload["include_answer"] is False
         assert headers["Authorization"] == "Bearer tvly-test"
         return fixture(name)
 
     return TavilyNewsSearch("tvly-test", http_post=post).search(
-        "Xochimilco wetland factory permit", max_results=5, lookback_days=30
+        SearchQuery("Xochimilco wetland factory permit"), max_results=5, lookback_days=30
     )
 
 
-def test_build_queries_use_place_asset_name_and_nature_terms() -> None:
-    queries = build_queries(asset_name="Xochimilco Wetland", place="Xochimilco, Mexico City")
+PENNEKAMP = NewsScoutAsset(
+    id=UUID("33333333-3333-3333-3333-333333333309"),
+    name="John Pennekamp",
+    centroid_lat=24.972,
+    centroid_lon=-80.548,
+    country="US",
+    ecosystem=Ecosystem.MARINE,
+)
+MONROE_FL = GeocodedPlace(
+    label="Monroe County, United States",
+    place_names=("Monroe County", "Florida"),
+    country="United States",
+    regions=("Florida",),
+)
 
-    assert len(queries) == 3
-    assert queries[0] == "Xochimilco wetland factory permit development"
-    assert all('"' not in query for query in queries)
-    assert all("Xochimilco Wetland" not in query for query in queries)
-    assert any("fire OR drought OR pollution" in query for query in queries)
-    assert any("restoration OR protected area" in query for query in queries)
+
+def test_build_queries_name_the_site_its_region_and_its_ecosystem() -> None:
+    queries = build_queries(PENNEKAMP, MONROE_FL)
+
+    assert [q.text for q in queries] == [
+        "John Pennekamp Florida",
+        "John Pennekamp Florida reef bleaching OR pollution OR development OR algae OR spill",
+        "John Pennekamp Florida reef restoration OR protection OR conservation",
+    ]
+    assert all(q.topic == "news" and q.language is None for q in queries)
+    assert all("wetland" not in q.text for q in queries)
+
+
+def test_build_queries_add_one_local_language_query() -> None:
+    asset = NewsScoutAsset(
+        id=UUID("33333333-3333-3333-3333-333333333302"),
+        name="Ría Celestún Mangrove",
+        centroid_lat=20.9,
+        centroid_lon=-90.3,
+        country="MX",
+        ecosystem=Ecosystem.MANGROVE,
+    )
+    place = GeocodedPlace(
+        label="Celestún, México", place_names=("Celestún", "Yucatán"), regions=("Yucatán",)
+    )
+
+    queries = build_queries(asset, place)
+
+    assert queries[1].text.startswith("Celestún Yucatán mangrove ")
+    spanish = queries[-1]
+    assert spanish.text.startswith("Celestún manglar ")
+    assert "restauración" in spanish.text
+    assert (spanish.topic, spanish.language, spanish.country) == ("general", "es", "mexico")
+
+
+def test_build_queries_without_an_ecosystem_read_the_name_or_stay_neutral() -> None:
+    named = build_queries(ASSET, FakeGeocoder().place)
+    unnamed = build_queries(replace(ASSET, name="Parcela Xochimilco"), FakeGeocoder().place)
+
+    assert named[0].text == "Xochimilco Wetland"
+    assert " wetland drainage OR " in named[1].text and "humedal" in named[-1].text
+    assert "nature reserve" in unnamed[1].text and "reserva natural" in unnamed[-1].text
+    assert len({q.text for q in named}) == len(named)
+
+
+def test_tavily_payload_boosts_language_and_country_only_where_allowed() -> None:
+    sent: list[dict[str, Any]] = []
+
+    def post(_url: str, *, json_payload: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
+        sent.append(json_payload)
+        return {"results": []}
+
+    search = TavilyNewsSearch("tvly-test", http_post=post)
+    search.search(
+        SearchQuery("Celestún manglar", topic="general", language="es", country="mexico"),
+        max_results=5,
+        lookback_days=365,
+    )
+    search.search(
+        SearchQuery("Pennekamp reef", topic="news", language=None, country="mexico"),
+        max_results=5,
+        lookback_days=30,
+    )
+
+    assert sent[0]["language"] == "es" and sent[0]["country"] == "mexico"
+    assert sent[0]["time_range"] == "year"
+    assert "language" not in sent[1] and "country" not in sent[1]
+
+
+MICHIGAN_FIRE = NewsArticle(
+    title="1 dead after assault, house fire in Monroe County",
+    url="https://example.com/mi/monroe-fire",
+    published_at=date(2026, 10, 17),
+    content="Deputies in Monroe County, Michigan responded to a house fire on Sunday.",
+    score=0.9,
+)
+KEYS_REEF = NewsArticle(
+    title="County approves $2M for new Pennekamp aquarium center",
+    url="https://example.com/fl/pennekamp-aquarium",
+    published_at=date(2026, 9, 24),
+    content="Monroe County commissioners approved funding for the John Pennekamp park plan.",
+    score=0.8,
+)
+KEYS_COUNTY = NewsArticle(
+    title="Water quality meeting in Monroe County",
+    url="https://example.com/fl/water-quality",
+    published_at=date(2026, 10, 19),
+    content="Monroe County, Florida will host a water quality meeting in Marathon.",
+    score=0.7,
+)
+
+
+def test_a_same_named_county_in_another_state_is_dropped() -> None:
+    result = run_news_scout(
+        PENNEKAMP,
+        settings=Settings(_env_file=None, use_mocks=False),
+        llm=FakeLLM(NewsScoutClassificationOutput(events=[relevant(1), relevant(2), relevant(3)])),
+        geocoder=FakeGeocoder(MONROE_FL),
+        news_search=FakeNewsSearch([MICHIGAN_FIRE, KEYS_REEF, KEYS_COUNTY]),
+        cache=NewsScoutCache(),
+        today=lambda: date(2026, 10, 22),
+    )
+
+    assert {event.url for event in result.events} == {KEYS_REEF.url, KEYS_COUNTY.url}
+    assert result.dropped_off_site == 1
+    assert result.funnel is not None
+    assert (result.funnel.sent_to_model, result.funnel.off_site, result.funnel.kept) == (3, 1, 2)
+
+
+def test_searches_are_recorded_for_the_trace_with_their_credits() -> None:
+    class HalfBroken(FakeNewsSearch):
+        def search(
+            self, query: SearchQuery, *, max_results: int, lookback_days: int
+        ) -> list[NewsArticle]:
+            if "restoration" in query.text:
+                raise httpx.TimeoutException("timeout")
+            return super().search(query, max_results=max_results, lookback_days=lookback_days)
+
+    result = run_news_scout(
+        PENNEKAMP,
+        settings=Settings(_env_file=None, use_mocks=False),
+        llm=FakeLLM(NewsScoutClassificationOutput(events=[])),
+        geocoder=FakeGeocoder(MONROE_FL),
+        news_search=HalfBroken([KEYS_REEF]),
+        cache=NewsScoutCache(),
+    )
+
+    assert [s.query for s in result.searches] == [
+        q.text for q in build_queries(PENNEKAMP, MONROE_FL)
+    ]
+    failed = [s for s in result.searches if s.error]
+    assert len(failed) == 1 and failed[0].credits == 0 and failed[0].results == 0
+    assert all(s.credits == 2 and s.depth == "advanced" for s in result.searches if not s.error)
+    assert result.funnel is not None and result.funnel.found == 2 and result.funnel.unique == 1
 
 
 def test_live_nominatim_fixture_prefers_display_locality_over_state() -> None:
@@ -286,7 +435,7 @@ def test_result_cache_hit_does_not_recall_geocoder_search_or_llm() -> None:
 
     assert second == first
     assert len(geocoder.calls) == 1
-    assert len(search.queries) == 3
+    assert len(search.queries) == 4
     assert len(llm.calls) == 1
 
     now[0] += timedelta(hours=25).total_seconds()
@@ -468,7 +617,9 @@ def test_query_failures_keep_successful_articles_but_do_not_cache_degraded_resul
         def __init__(self) -> None:
             self.calls = 0
 
-        def search(self, query: str, *, max_results: int, lookback_days: int) -> list[NewsArticle]:
+        def search(
+            self, query: SearchQuery, *, max_results: int, lookback_days: int
+        ) -> list[NewsArticle]:
             self.calls += 1
             if self.calls == 1:
                 raise httpx.TimeoutException("timeout")
@@ -477,7 +628,7 @@ def test_query_failures_keep_successful_articles_but_do_not_cache_degraded_resul
                     title="Restoration story",
                     url="https://example.com/news/restoration",
                     published_at=date(2026, 9, 12),
-                    content=f"{query} reports Xochimilco wetland restoration.",
+                    content=f"{query.text} reports Xochimilco wetland restoration.",
                     score=0.9,
                 )
             ]
@@ -551,7 +702,7 @@ def test_geocode_failure_falls_back_to_asset_name_and_country() -> None:
         cache=NewsScoutCache(),
     )
 
-    assert search.queries[0].startswith("Xochimilco wetland")
+    assert search.queries[0] == "Xochimilco Wetland"
 
 
 def test_every_query_failure_returns_empty_without_caching() -> None:
@@ -559,7 +710,9 @@ def test_every_query_failure_returns_empty_without_caching() -> None:
         def __init__(self) -> None:
             self.calls = 0
 
-        def search(self, query: str, *, max_results: int, lookback_days: int) -> list[NewsArticle]:
+        def search(
+            self, query: SearchQuery, *, max_results: int, lookback_days: int
+        ) -> list[NewsArticle]:
             self.calls += 1
             raise httpx.TimeoutException("timeout")
 
@@ -586,7 +739,7 @@ def test_every_query_failure_returns_empty_without_caching() -> None:
 
     assert first.events == []
     assert second.events == []
-    assert search.calls == 6
+    assert search.calls == 8
     assert llm.calls == []
 
 
@@ -612,7 +765,7 @@ def test_empty_results_cache_for_one_hour_only() -> None:
         news_search=search,
         cache=cache,
     )
-    assert len(search.queries) == 3
+    assert len(search.queries) == 4
 
     now[0] += timedelta(hours=2).total_seconds()
     run_news_scout(
@@ -623,7 +776,7 @@ def test_empty_results_cache_for_one_hour_only() -> None:
         news_search=search,
         cache=cache,
     )
-    assert len(search.queries) == 6
+    assert len(search.queries) == 8
 
 
 def test_llm_prompt_caps_articles_and_scales_output_tokens() -> None:
@@ -631,7 +784,9 @@ def test_llm_prompt_caps_articles_and_scales_output_tokens() -> None:
         def __init__(self, articles: list[NewsArticle]) -> None:
             self.articles = articles
 
-        def search(self, query: str, *, max_results: int, lookback_days: int) -> list[NewsArticle]:
+        def search(
+            self, query: SearchQuery, *, max_results: int, lookback_days: int
+        ) -> list[NewsArticle]:
             return self.articles
 
     articles = [
@@ -1165,6 +1320,7 @@ def test_live_nominatim_fixture_yields_place_names_without_the_country() -> None
     )
 
     assert _place_names(response) == ("Xochimilco", "Ciudad de México")
+    assert _regions(response) == ("Ciudad de México",)
 
 
 def test_missing_geocode_gates_on_the_asset_name_and_flags_it(

@@ -88,8 +88,40 @@ class NewsScoutItem(BaseModel):
     url: str | None = None
 
 
+class NewsSearchRecord(BaseModel):
+    """One Tavily search of a News Scout run, for the Agent Trace (no article text)."""
+
+    query: str
+    topic: str
+    language: str | None = None
+    depth: str
+    results: int = 0
+    latency_ms: int = 0
+    credits: int = 0
+    error: str | None = None
+
+
+class NewsFunnel(BaseModel):
+    """How many articles survived each News Scout check, for the Agent Trace."""
+
+    found: int = 0
+    unique: int = 0
+    unsafe: int = Field(default=0, description="Skipped: the article was only injected text.")
+    sent_to_model: int = 0
+    relevant: int = 0
+    off_site: int = 0
+    kept: int = 0
+
+
 class NewsScoutOutput(BaseModel):
     events: list[NewsScoutItem]
+    searches: list[NewsSearchRecord] = Field(default_factory=list)
+    funnel: NewsFunnel | None = None
+    news_paused: bool = Field(
+        default=False,
+        description="True when no search ran because the Tavily account is near its credit "
+        "limit (`TAVILY_MIN_CREDITS_LEFT`).",
+    )
     dropped_off_site: int = Field(
         default=0,
         ge=0,

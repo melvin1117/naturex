@@ -37,9 +37,9 @@ from sqlmodel import Session, col, select
 
 from app.agents.news_scout import NewsScoutAsset
 from app.market.revenue import CommunityStakeMissing, PayoutAlreadyApplied, pay_quarter
-from app.models import Alert, Asset, AssetStatus, Event, EventSource, MonitorRun
-from app.schemas import NewsScoutItem, NewsScoutOutput, RatingRunStatus
-from app.services.alerts import news_alert, raise_alert, safe_url
+from app.models import Alert, Asset, AssetStatus, MonitorRun
+from app.schemas import NewsScoutOutput, RatingRunStatus
+from app.services.news_events import record_news
 from app.services.rating import latest_report
 from app.services.rating_runs import (
     AssetNotRateable,
@@ -502,46 +502,3 @@ def _news_failed(
     with session_factory() as session:
         finish(session, NEWS_SWEEP, report.period, asset_id, "failed", detail)
     report.failed.append((asset_id, detail))
-
-
-def record_news(
-    session: Session,
-    world_id: UUID,
-    asset_id: UUID,
-    items: Sequence[NewsScoutItem],
-    *,
-    alert: bool = True,
-) -> tuple[int, int]:
-    """Store the relevant events not stored yet and, with `alert`, raise their alerts, in the
-    caller's transaction. Returns (events stored, alerts raised)."""
-    asset = session.exec(
-        select(Asset).where(Asset.world_id == world_id, Asset.id == asset_id)
-    ).one()
-    stored = alerted = 0
-    for item in items:
-        if not item.relevant:
-            continue
-        url = safe_url(item.url)
-        same = select(Event.id).where(Event.world_id == world_id, Event.asset_id == asset_id)
-        same = same.where(Event.url == url) if url else same.where(Event.title == item.title)
-        if session.exec(same.limit(1)).first() is None:
-            session.add(
-                Event(
-                    world_id=world_id,
-                    asset_id=asset_id,
-                    source=EventSource.TAVILY,
-                    title=item.title,
-                    url=url,
-                    published_at=item.published_at,
-                    impact_type=item.impact_type,
-                    direction=item.direction,
-                    severity=item.severity,
-                    summary=item.summary,
-                )
-            )
-            stored += 1
-        draft = news_alert(asset_id, asset.name, item) if alert else None
-        if draft is not None and raise_alert(session, world_id, asset, draft) is not None:
-            alerted += 1
-    session.flush()
-    return stored, alerted

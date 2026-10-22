@@ -74,6 +74,7 @@ from app.llm import CallLog, CallRecord, LLMClient, LLMError, LLMResult
 from app.market.anchoring import reanchor_on_rerate
 from app.models import Asset, AssetStatus, Report, StreamEventType, World, WorldEvent
 from app.schemas import (
+    NewsScoutItem,
     NewsScoutOutput,
     RatingRunOut,
     RatingRunStatus,
@@ -95,6 +96,7 @@ from app.services.field_evidence import DbEvidenceProvider
 from app.services.lifecycle import is_public
 from app.services.listings import apply_rating_result, lock_asset, note_rating_failure
 from app.services.listings import audience as listing_audience
+from app.services.news_events import record_news
 from app.services.rating import SiteRating, asset_is_wetland, latest_report, rate_asset, rate_site
 from app.tools.earth_obs import (
     EarthObsMetrics,
@@ -104,12 +106,15 @@ from app.tools.earth_obs import (
     load_site_metrics,
     mock_listing_metrics,
 )
+from app.tools.ecosystem import Ecosystem, infer_ecosystem
 from app.tools.geometry import geometry_sha256, metrics_match_polygon
 from app.worlds import LIVE_WORLD_ID
 
 log = logging.getLogger(__name__)
 
 ORCHESTRATION_VERSION = "naturex-orchestrator/1.0 (T27)"
+# A rating weighs a year of news; the daily sweep looks at the latest week.
+RATING_NEWS_LOOKBACK_DAYS = 365
 RUN_WINDOW = timedelta(hours=1)
 RUN_STALE_AFTER = timedelta(minutes=15)
 RUN_WORKERS = 4
@@ -365,13 +370,17 @@ class _NoLLM:
         raise LLMError("no LLM in this run")
 
 
-def news_runner(settings: Settings) -> NewsRunner:
+def news_runner(
+    settings: Settings, *, lookback_days: int = RATING_NEWS_LOOKBACK_DAYS
+) -> NewsRunner:
+    """News Scout for rating runs (a year of news by default) and for the daily sweep."""
+
     def run(asset: NewsScoutAsset, llm: LLMClient | None) -> NewsScoutOutput:
         if settings.use_mocks:
             return run_news_scout(asset, settings=settings, llm=_NoLLM())
         if llm is None:
             raise ToolFailed("llm_unavailable", retryable=False)
-        return run_news_scout(asset, settings=settings, llm=llm)
+        return run_news_scout(asset, settings=settings, llm=llm, lookback_days=lookback_days)
 
     return run
 
@@ -575,6 +584,8 @@ class RunToolbox:
         self.is_wetland: bool | None = None
         self.valuation: SiteRating | None = None
         self.news_events: list[AuditEvent] = []
+        self.news_items: list[NewsScoutItem] = []
+        """News Scout's kept events, stored with the report (`services.news_events`)."""
         self.evidence_events: list[AuditEvent] = []
         self.audit: AuditResult | None = None
         self.steps: list[dict[str, Any]] = []
@@ -761,7 +772,12 @@ class RunToolbox:
         if lat is None or lon is None:
             raise ToolFailed("no_location", retryable=False)
         scout_asset = NewsScoutAsset(
-            id=asset.id, name=asset.name, centroid_lat=lat, centroid_lon=lon, country=asset.country
+            id=asset.id,
+            name=asset.name,
+            centroid_lat=lat,
+            centroid_lon=lon,
+            country=asset.country,
+            ecosystem=self._ecosystem(),
         )
         try:
             output = self._deps.news(scout_asset, self._llm)
@@ -772,8 +788,10 @@ class RunToolbox:
             raise ToolFailed("news_scout_error") from exc
         events = _dedupe(audit_events_from_news(output.events))
         self.news_events = events
+        self.news_items = list(output.events)
         relevant = [event for event in events if event.relevant]
-        # Counts and categories only: article text never reaches the orchestrator (T72).
+        # Counts, categories and our own query text only: article text never reaches the
+        # orchestrator (T72).
         return {
             "events": len(events),
             "relevant": len(relevant),
@@ -783,7 +801,29 @@ class RunToolbox:
             "impact_types": sorted({event.impact_type for event in relevant}),
             "dropped_off_site": output.dropped_off_site,
             "locality_unverified": output.locality_unverified,
+            **({"news_paused": True} if output.news_paused else {}),
+            "ecosystem": scout_asset.ecosystem.value if scout_asset.ecosystem else None,
+            "searches": [
+                {
+                    "query": s.query,
+                    "language": s.language,
+                    "results": s.results,
+                    "latency_ms": s.latency_ms,
+                    "credits": s.credits,
+                    **({"error": s.error} if s.error else {}),
+                }
+                for s in output.searches
+            ],
+            **({"funnel": output.funnel.model_dump()} if output.funnel else {}),
         }
+
+    def _ecosystem(self) -> Ecosystem:
+        m = self.metrics
+        return infer_ecosystem(
+            name=self._asset.name,
+            landcover=m.landcover if m else None,
+            mangrove_fraction=m.mangrove_fraction if m else None,
+        )
 
     def _field_evidence(self) -> dict[str, Any]:
         events = self._deps.evidence.load(self._spec.world_id, self._spec.asset_id)
@@ -1246,6 +1286,10 @@ class RatingRunner:
                 extra_flags=flags,
             )
             listing = apply_rating_result(session, asset, report)
+            if not self.settings.use_mocks:
+                # The news this run found shows on the asset page at once. The daily sweep
+                # alerts on it; a rating run never does.
+                record_news(session, spec.world_id, spec.asset_id, toolbox.news_items, alert=False)
             publish(
                 session,
                 spec.world_id,
