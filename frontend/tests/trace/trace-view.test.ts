@@ -9,19 +9,24 @@ import {
   citationLabel,
   costReceipt,
   modelLabel,
+  monthRange,
   newsFunnel,
   runFlow,
+  runFollowUps,
+  runPlan,
   runSearches,
   runSignals,
   runStory,
   runTimeline,
   runVision,
+  topicLabel,
   withoutCitations,
 } from "@/lib/trace-view";
 
 import celestunJson from "./fixtures/run-celestun.json";
 import sumideroJson from "./fixtures/run-sumidero.json";
 import visionJson from "./fixtures/run-xochimilco-vision.json";
+import investigatedJson from "./fixtures/run-celestun-investigated.json";
 
 // Real runs recorded on Oct 22, 2026 (live Token Factory and Tavily, demo sites).
 const celestun = celestunJson as unknown as RunTrace;
@@ -196,5 +201,98 @@ describe("vision (a run with Nemotron 3.5 Super VL, Oct 22)", () => {
     const lanes = runTimeline(vision).lanes.map((l) => l.actor);
     expect(lanes).toContain("vision");
     expect(changeLabel("vegetation_loss")).toBe("less vegetation");
+  });
+});
+
+describe("investigation (Super plans and follows up, Oct 22)", () => {
+  const run = investigatedJson as unknown as RunTrace;
+
+  it("reads Super's plan and its two follow-ups", () => {
+    const plan = runPlan(run)!;
+    expect(plan.chose).toEqual(["search_news"]);
+    expect(plan.reasoningTokens).toBeGreaterThan(0);
+    expect(plan.notes).toMatch(/greenness/);
+    expect(plan.costUsd).toBeGreaterThan(0);
+
+    const [search, read] = runFollowUps(run);
+    expect(search).toMatchObject({
+      kind: "search",
+      topic: "drought",
+      signal: "signal:greenness_2025_06",
+    });
+    expect(search!.kind === "search" && search!.searches[0]!.language).toBe(
+      "es",
+    );
+    expect(read).toMatchObject({
+      kind: "read",
+      namesSite: true,
+      quoteChecked: true,
+    });
+    expect(read!.why).toMatch(/encroachment/);
+    expect(runPlan(celestun)).toBeNull();
+    expect(runFollowUps(celestun)).toEqual([]);
+  });
+
+  it("tells it in the story and counts it in the receipt", () => {
+    const line = runStory(run).find((l) => l.key === "followup")!;
+    expect(line.actor).toBe("super");
+    expect(line.text).toMatch(
+      /followed up: searched local news for drought in Apr–Aug 2025 \(1 new\); had an article read \(names the site/,
+    );
+    expect(line.details).toHaveLength(2);
+    const receipt = costReceipt(run);
+    expect(receipt.searches).toBe(5);
+    expect(receipt.reads).toBe(1);
+    expect(receipt.credits).toBeCloseTo(10.2);
+    expect(costReceipt(celestun).reads).toBe(0);
+  });
+
+  it("puts the plan and each follow-up on the flow and the timeline", () => {
+    const flow = runFlow(run);
+    const ids = flow.map((n) => n.id);
+    expect(ids).toEqual([
+      "earth_obs",
+      "valuation",
+      "news",
+      "plan",
+      "investigate-0",
+      "investigate-1",
+      "evidence",
+      "audit",
+      "done",
+    ]);
+    const plan = flow.find((n) => n.id === "plan")!;
+    expect(plan).toMatchObject({ actor: "super", decision: null });
+    expect(plan.costUsd).toBeGreaterThan(0);
+    const search = flow.find((n) => n.id === "investigate-0")!;
+    expect(search.title).toBe("Search again: drought");
+    expect(search.decision?.text).toBe("Nemotron 3 Super chose it in its plan");
+    expect(search.children.map((c) => c.id)).toEqual([
+      "investigate-0-search-0",
+      "investigate-0-classify-0",
+    ]);
+    const read = flow.find((n) => n.id === "investigate-1")!;
+    expect(read.decision?.text).toBe("Nemotron 3 Super called read_article");
+    expect(read.children.map((c) => c.title)).toEqual([
+      "Open the page",
+      "Answer the question",
+      "Check the answer",
+    ]);
+    const labels = runTimeline(run).lanes.flatMap((l) =>
+      l.bars.map((b) => b.label),
+    );
+    expect(labels).toEqual(
+      expect.arrayContaining([
+        "plan (thinking)",
+        "search: drought",
+        "open the page",
+        "read the article",
+      ]),
+    );
+  });
+
+  it("words the helpers plainly", () => {
+    expect(monthRange("2024-11-01", "2025-03-31")).toBe("Nov 2024–Mar 2025");
+    expect(topicLabel("clearing")).toBe("clearing or construction");
   });
 });

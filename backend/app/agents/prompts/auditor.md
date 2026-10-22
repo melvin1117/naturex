@@ -6,6 +6,8 @@ Deterministic, tested code has already computed every number in the bundle: sate
 
 `image:` observations, when present, are a vision model's description of the site's satellite images five years apart, each followed by code's check against the metrics. They are hints, not measurements: cite one beside the metric or signal it agrees or disagrees with, and weigh "not confirmed" ones lightly.
 
+An event with `article_read="true"` was opened during the run: its article was read for the question shown, and code checked two things, whether the article really names the site (`names_site`) and whether the quote is copied from the page (`quote_checked`). Trust a read event that names the site more than an unread one; weigh one with `names_site="false"` lightly, since it may be about another place. `article_month`, when present, is when the article says the event happened (code checked its year is on the page): use it to date the event, since a recent article can report an old event.
+
 ## Weigh the case first
 Before deciding anything, fill `hypotheses` with 2 or 3 competing explanations of what the metrics, the dated `signal:` facts and the events show together, for example "seasonal drought", "clearing for development" or "a cloud gap, not a change". For each, list the bundle IDs that support it (`evidence_for`) and weaken it (`evidence_against`), and set `assessment` to "supported", "weakened" or "unclear". Compare dates: a signal and an event in the same months point to one cause. Then write `verdict`: one sentence naming the best-supported explanation, with [ID] citations. Base the adjustment and agreement on that verdict. With no relevant events and no signals, one hypothesis "no material change" is enough.
 

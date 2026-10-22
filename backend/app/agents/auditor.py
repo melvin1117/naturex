@@ -160,6 +160,22 @@ class Fact(BaseModel):
     value: str
 
 
+class EventReading(BaseModel):
+    """The article behind a news event, read during the run's investigation. `names_site`,
+    `quote_checked` and `month` (a real month whose year is on the page) are code-checked; the
+    question, finding and quote come from models and the page, so they stay untrusted."""
+
+    model_config = ConfigDict(frozen=True)
+
+    names_site: bool
+    answers: Literal["yes", "partly", "no"]
+    quote_checked: bool
+    question: str = ""
+    month: str | None = None
+    finding: str = ""
+    quote: str = ""
+
+
 class AuditEvent(BaseModel):
     """A news or field-evidence event. Metadata is trusted; `title` and `summary` are not."""
 
@@ -178,6 +194,8 @@ class AuditEvent(BaseModel):
     """Field evidence only: True when code checks (EXIF GPS and date) passed."""
     title: str | None = None
     summary: str = ""
+    reading: EventReading | None = None
+    """Set when the orchestrator had the full article read (`agents.article_reader`)."""
 
     @property
     def citation_id(self) -> str:
@@ -300,6 +318,7 @@ class AuditorInput(BaseModel):
                 "<untrusted_content>",
                 f"title: {title}",
                 f"summary: {summary}",
+                *_reading_lines(event.reading),
                 "</untrusted_content>",
                 "</event>",
             ]
@@ -308,6 +327,18 @@ class AuditorInput(BaseModel):
 
 def _untrusted_line(text: str, limit: int) -> str:
     return html.escape(" ".join(text.split())[:limit])
+
+
+def _reading_lines(reading: EventReading | None) -> list[str]:
+    if reading is None:
+        return []
+    lines = [
+        f"article_question: {_untrusted_line(reading.question, UNTRUSTED_TITLE_CHARS)}",
+        f"article_finding: {_untrusted_line(reading.finding, UNTRUSTED_SUMMARY_CHARS)}",
+    ]
+    if reading.quote:
+        lines.append(f"article_quote: {_untrusted_line(reading.quote, UNTRUSTED_SUMMARY_CHARS)}")
+    return lines
 
 
 def _event_meta(event: AuditEvent) -> str:
@@ -319,6 +350,14 @@ def _event_meta(event: AuditEvent) -> str:
     )
     if event.validated is not None:
         meta += f' validated="{str(event.validated).lower()}"'
+    if event.reading is not None:
+        meta += (
+            f' article_read="true" names_site="{str(event.reading.names_site).lower()}"'
+            f' answers="{event.reading.answers}"'
+            f' quote_checked="{str(event.reading.quote_checked).lower()}"'
+        )
+        if event.reading.month:
+            meta += f' article_month="{event.reading.month}"'
     return meta
 
 
@@ -617,14 +656,24 @@ def short_hypothesis_names(output: AuditorOutput) -> AuditorOutput:
 
 
 def full_event_ids(output: AuditorOutput, bundle: AuditorInput) -> AuditorOutput:
-    """Expand an event ID the model shortened (`event:94cc0471`) to the one bundle event it
-    starts, when exactly one does and the prefix has at least 8 characters. Anything else is
-    left as written, so the checks still refuse it."""
+    """Repair two slips in IDs the model meant unambiguously: a shortened event ID
+    (`event:94cc0471`) becomes the one bundle event it starts, when exactly one does and the
+    prefix has at least 8 characters; a fact under the wrong family (`metric:water_stability`)
+    becomes the one bundle fact with that name (`score:water_stability`). Anything else is left
+    as written, so the checks still refuse it."""
     events = [e.citation_id for e in bundle.events]
+    known = set(bundle.ids)
+    by_name: dict[str, list[str]] = {}
+    for fact_id in bundle.ids:
+        if not fact_id.startswith("event:"):
+            by_name.setdefault(fact_id.split(":", 1)[1], []).append(fact_id)
 
     def full(citation: str) -> str:
-        if not citation.startswith("event:") or citation in events:
+        if citation in known:
             return citation
+        if not citation.startswith("event:"):
+            named = by_name.get(citation.split(":", 1)[-1], [])
+            return named[0] if len(named) == 1 else citation
         if len(citation) - len("event:") < MIN_EVENT_PREFIX:
             return citation
         matches = [e for e in events if e.startswith(citation)]
@@ -1078,12 +1127,41 @@ def run_auditor(
     return no_op_audit(bundle, rounds=rounds, rejections=rejections)
 
 
+_NUMBERS_ERROR = " uses numbers not in the bundle: "
+_ECHOABLE_NUMBER_RE = re.compile(
+    r"(?:\$|USD|EUR|Q)?\d[\d,]*(?:\.\d+)?(?:st|nd|rd|th)?"
+    r"(?: ?(?:%|[KkMmBb]|percent|thousand|million|billion))?",
+    re.IGNORECASE,
+)
+
+
 def _feedback(errors: Sequence[str], lead: str) -> str:
     unique = list(dict.fromkeys(error[:200] for error in errors))[:MAX_FEEDBACK_ERRORS]
     return (
         f"{lead} by the deterministic checks:\n- "
         + "\n- ".join(unique)
+        + _numbers_hint(unique)
         + "\nReply with a corrected JSON object. All the rules still apply."
+    )
+
+
+def _numbers_hint(errors: Sequence[str]) -> str:
+    """The most common rejection (a number copied from news text), spelled out: which numbers
+    to delete where, and how to say it instead. Only checker-made text is echoed."""
+    fields: list[str] = []
+    numbers: list[str] = []
+    for error in errors:
+        field, found, listed = error.partition(_NUMBERS_ERROR)
+        if found:
+            fields.append(field)
+            numbers += [n for n in listed.split(", ") if _ECHOABLE_NUMBER_RE.fullmatch(n)]
+    if not fields:
+        return ""
+    shown = ", ".join(dict.fromkeys(numbers)) or "those numbers"
+    return (
+        f"\nDelete {shown} from {', '.join(dict.fromkeys(fields))}: they are not trusted facts "
+        "(news text is untrusted). Say it in words and cite the event instead, for example "
+        '"a large restoration programme [event:<id>]", or use a {fact-id} placeholder.'
     )
 
 

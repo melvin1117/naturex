@@ -42,6 +42,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from math import ceil
 from typing import Any, Literal, Protocol, cast
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel
@@ -49,11 +50,13 @@ from sqlalchemy import func, text
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlmodel import Session, col, select
 
+from app.agents.article_reader import ArticleCheck, ArticleUnavailable, read_article
 from app.agents.auditor import (
     REASONING_EXCERPT_CHARS,
     AuditEvent,
     AuditorInput,
     AuditResult,
+    EventReading,
     PreviousReport,
     audit_events_from_news,
     build_auditor_input,
@@ -61,13 +64,24 @@ from app.agents.auditor import (
     no_op_audit,
     run_auditor,
 )
-from app.agents.news_scout import NewsScoutAsset, run_news_scout
+from app.agents.news_scout import (
+    FollowUpTopic,
+    NewsScoutAsset,
+    run_followup_search,
+    run_news_scout,
+)
 from app.agents.orchestrator import (
+    INVESTIGATION,
+    MAX_INVESTIGATIONS,
+    PIPELINE_ORDER,
     STEP_NAMES,
+    WHY_CHARS,
     FallbackReason,
     Orchestration,
     Pipeline,
+    ReadArticleArgs,
     RunAborted,
+    SearchNewsArgs,
     Tool,
     orchestrate,
 )
@@ -392,6 +406,90 @@ def news_runner(
     return run
 
 
+class Investigator(Protocol):
+    """The orchestrator's optional follow-ups (live only: never in mock mode)."""
+
+    def search(
+        self,
+        asset: NewsScoutAsset,
+        topic: FollowUpTopic,
+        window: tuple[date, date],
+        llm: LLMClient,
+    ) -> NewsScoutOutput: ...
+
+    def read(
+        self, asset: NewsScoutAsset, url: str, question: str, llm: LLMClient, world_id: UUID
+    ) -> ArticleCheck: ...
+
+
+@dataclass(frozen=True, slots=True)
+class LiveInvestigator:
+    """Tavily search and extract with the News Scout guards, on the run's LLM client."""
+
+    settings: Settings
+
+    def search(
+        self,
+        asset: NewsScoutAsset,
+        topic: FollowUpTopic,
+        window: tuple[date, date],
+        llm: LLMClient,
+    ) -> NewsScoutOutput:
+        return run_followup_search(asset, topic, window, settings=self.settings, llm=llm)
+
+    def read(
+        self, asset: NewsScoutAsset, url: str, question: str, llm: LLMClient, world_id: UUID
+    ) -> ArticleCheck:
+        return read_article(
+            asset, url, question, settings=self.settings, llm=llm, world_id=world_id
+        )
+
+
+def investigator_for(settings: Settings) -> Investigator | None:
+    return None if settings.use_mocks else LiveInvestigator(settings)
+
+
+def signal_window(signal: Signal, today: date) -> tuple[date, date]:
+    """The news window for a signal: two months either side of its months, up to today."""
+
+    def shift(month: str, by: int) -> tuple[int, int]:
+        year, mon = int(month[:4]), int(month[5:7])
+        index = year * 12 + (mon - 1) + by
+        return index // 12, index % 12 + 1
+
+    start_year, start_month = shift(signal.start, -2)
+    end_year, end_month = shift(signal.end, 3)
+    start = date(start_year, start_month, 1)
+    end = min(date(end_year, end_month, 1) - timedelta(days=1), today)
+    return (min(start, end), end)
+
+
+def _months(window: tuple[date, date]) -> str:
+    return f"{window[0]:%Y-%m}..{window[1]:%Y-%m}"
+
+
+def _domain(url: str | None) -> str | None:
+    host = (urlsplit(url or "").hostname or "").removeprefix("www.")
+    return host[:60] or None
+
+
+def _event_labels(item: NewsScoutItem) -> dict[str, Any]:
+    """A kept item as the orchestrator sees it: labels and the site's domain, no text."""
+    return {
+        "event": event_citation_id(item),
+        "date": item.published_at.isoformat() if item.published_at else None,
+        "impact_type": item.impact_type,
+        "direction": item.direction,
+        "severity": item.severity,
+        "source": _domain(item.url),
+    }
+
+
+def _event_view(item: NewsScoutItem) -> dict[str, Any]:
+    """A kept item for the Agent Trace (titles are public news, shown as text)."""
+    return {**_event_labels(item), "title": item.title, "url": safe_url(item.url)}
+
+
 # ----- call recording ---------------------------------------------------------------------------
 
 
@@ -464,7 +562,12 @@ def usage(calls: Sequence[_Recorded], *, agent: str | None = None) -> dict[str, 
     }
 
 
-_TOOL_AGENT = {Tool.NEWS_SCOUT: "news_scout", Tool.AUDITOR: "auditor"}
+_TOOL_AGENT = {
+    Tool.NEWS_SCOUT: "news_scout",
+    Tool.AUDITOR: "auditor",
+    Tool.SEARCH_NEWS: "news_scout",
+    Tool.READ_ARTICLE: "article_reader",
+}
 
 
 # ----- progress ---------------------------------------------------------------------------------
@@ -526,6 +629,7 @@ class RunDeps:
     today: Callable[[], date]
     clock: Callable[[], float] = time.perf_counter
     live: LiveEarthObs | None = None
+    investigator: Investigator | None = None
 
 
 def previous_for_bundle(report: Report | None) -> PreviousReport | None:
@@ -595,6 +699,10 @@ class RunToolbox:
         self.news_events: list[AuditEvent] = []
         self.news_items: list[NewsScoutItem] = []
         """News Scout's kept events, stored with the report (`services.news_events`)."""
+        self.news_ok = False
+        self.investigations: dict[Tool, int] = {}
+        self.readings: dict[str, ArticleCheck] = {}
+        """Read articles by event citation ID, shown to the Auditor with the event."""
         self.evidence_events: list[AuditEvent] = []
         self.audit: AuditResult | None = None
         self.steps: list[dict[str, Any]] = []
@@ -610,10 +718,34 @@ class RunToolbox:
         return _dedupe([*self.news_events, *self.evidence_events])
 
     def offered(self) -> tuple[Tool, ...]:
-        return tuple(t for t in Tool if t is not Tool.FIELD_EVIDENCE or self._evidence)
+        core = [t for t in PIPELINE_ORDER if t is not Tool.FIELD_EVIDENCE or self._evidence]
+        return (*core, *(t for t in (Tool.SEARCH_NEWS, Tool.READ_ARTICLE) if self._may(t)))
 
     def is_done(self, tool: Tool) -> bool:
         return tool in self._done
+
+    def choices(self) -> dict[Tool, list[str]]:
+        return {
+            Tool.SEARCH_NEWS: [signal.id for signal in self.signals],
+            Tool.READ_ARTICLE: self._readable(),
+        }
+
+    def _readable(self) -> list[str]:
+        return [
+            event_citation_id(item)
+            for item in self.news_items
+            if item.url and item.relevant and event_citation_id(item) not in self.readings
+        ]
+
+    def _may(self, tool: Tool) -> bool:
+        """Investigation is offered between the news and the audit, live runs only."""
+        if self._deps.investigator is None or self._llm is None:
+            return False
+        if not (self.is_done(Tool.EARTH_OBS) and self.news_ok) or self.is_done(Tool.AUDITOR):
+            return False
+        if self.investigations.get(tool, 0) >= MAX_INVESTIGATIONS:
+            return False
+        return bool(self.choices()[tool])
 
     def _drain(self) -> list[_Recorded]:
         return self._recorder.drain() if self._recorder else []
@@ -641,7 +773,26 @@ class RunToolbox:
             }
         )
 
-    def call(self, tool: Tool, *, pipeline: Pipeline) -> dict[str, Any]:
+    def plan(self, notes: str | None, reasoning_tokens: int | None, chose: Sequence[str]) -> None:
+        self._record_step(
+            {
+                "step": "plan",
+                "status": "ok",
+                "pipeline": "orchestrator",
+                "output": {
+                    "notes": notes,
+                    "reasoning_tokens": reasoning_tokens,
+                    "chose": [name for name in chose if name in {t.value for t in Tool}],
+                },
+                **usage(self._drain(), agent="orchestrator"),
+            }
+        )
+
+    def call(
+        self, tool: Tool, *, pipeline: Pipeline, args: BaseModel | None = None
+    ) -> dict[str, Any]:
+        if tool in INVESTIGATION:
+            return self._investigate(tool, args, pipeline)
         if tool is Tool.AUDITOR and not self._evidence and not self.is_done(Tool.FIELD_EVIDENCE):
             self._done[Tool.FIELD_EVIDENCE] = "skipped"
             self._record_step(
@@ -801,20 +952,7 @@ class RunToolbox:
         }
 
     def _news(self) -> dict[str, Any]:
-        asset = self._asset
-        lat, lon = asset.centroid_lat, asset.centroid_lon
-        if (lat is None or lon is None) and self.metrics is not None:
-            lat, lon = self.metrics.centroid.lat, self.metrics.centroid.lon
-        if lat is None or lon is None:
-            raise ToolFailed("no_location", retryable=False)
-        scout_asset = NewsScoutAsset(
-            id=asset.id,
-            name=asset.name,
-            centroid_lat=lat,
-            centroid_lon=lon,
-            country=asset.country,
-            ecosystem=self._ecosystem(),
-        )
+        scout_asset = self._scout_asset()
         try:
             output = self._deps.news(scout_asset, self._llm)
         except ToolFailed:
@@ -825,6 +963,7 @@ class RunToolbox:
         events = _dedupe(audit_events_from_news(output.events))
         self.news_events = events
         self.news_items = list(output.events)
+        self.news_ok = not output.news_paused
         relevant = [event for event in events if event.relevant]
         # Counts, categories and our own query text only: article text never reaches the
         # orchestrator (T72).
@@ -851,7 +990,127 @@ class RunToolbox:
                 for s in output.searches
             ],
             **({"funnel": output.funnel.model_dump()} if output.funnel else {}),
+            # Labels of each kept item (no title, summary or URL), so the orchestrator can
+            # choose one to read.
+            **({"kept": [_event_labels(i) for i in output.events]} if output.events else {}),
         }
+
+    def _scout_asset(self) -> NewsScoutAsset:
+        asset = self._asset
+        lat, lon = asset.centroid_lat, asset.centroid_lon
+        if (lat is None or lon is None) and self.metrics is not None:
+            lat, lon = self.metrics.centroid.lat, self.metrics.centroid.lon
+        if lat is None or lon is None:
+            raise ToolFailed("no_location", retryable=False)
+        return NewsScoutAsset(
+            id=asset.id,
+            name=asset.name,
+            centroid_lat=lat,
+            centroid_lon=lon,
+            country=asset.country,
+            ecosystem=self._ecosystem(),
+        )
+
+    # --- investigation (optional; the orchestrator decides) ---
+
+    def _investigate(
+        self, tool: Tool, args: BaseModel | None, pipeline: Pipeline
+    ) -> dict[str, Any]:
+        """One follow-up. A failure is recorded and returned to the model, never fatal."""
+        self.investigations[tool] = self.investigations.get(tool, 0) + 1
+        start = self._deps.clock()
+        why = " ".join(str(getattr(args, "why", "")).split())[:WHY_CHARS]
+        error: str | None = None
+        seen: dict[str, Any] = {}
+        trace: dict[str, Any] = {}
+        try:
+            if isinstance(args, SearchNewsArgs):
+                seen, trace = self._search_news(args)
+            elif isinstance(args, ReadArticleArgs):
+                seen, trace = self._read_article(args)
+            else:
+                raise ToolFailed("invalid_arguments", retryable=False)
+        except (ToolFailed, ArticleUnavailable) as exc:
+            error = exc.code
+        except LLMError as exc:
+            log.warning("investigation %s failed: %s", tool.value, type(exc).__name__)
+            error = "llm_error"
+        self._record_step(
+            {
+                "step": STEP_NAMES[tool],
+                "status": "ok" if error is None else "failed",
+                "tool": tool.value,
+                "pipeline": pipeline,
+                "attempts": 1,
+                "latency_ms": int((self._deps.clock() - start) * 1000),
+                "error": error,
+                "output": {"tool": tool.value, "why": why, **trace},
+                **usage(self._drain(), agent=_TOOL_AGENT.get(tool)),
+            }
+        )
+        if error is not None:
+            return {"status": "failed", "error": error}
+        return {"status": "ok", **seen}
+
+    def _search_news(self, args: SearchNewsArgs) -> tuple[dict[str, Any], dict[str, Any]]:
+        investigator, llm = self._deps.investigator, self._llm
+        signal = next((s for s in self.signals if s.id == args.signal), None)
+        if investigator is None or llm is None or signal is None:
+            raise ToolFailed("not_available", retryable=False)
+        window = signal_window(signal, self.as_of)
+        try:
+            output = investigator.search(self._scout_asset(), args.topic, window, llm)
+        except ToolFailed:
+            raise
+        except Exception as exc:
+            log.warning("follow-up search failed: %s", type(exc).__name__)
+            raise ToolFailed("search_error") from exc
+        known = {event_citation_id(item) for item in self.news_items}
+        new = [item for item in output.events if event_citation_id(item) not in known]
+        if new:
+            self.news_items = [*self.news_items, *new]
+            self.news_events = _dedupe(audit_events_from_news(self.news_items))
+        seen = {
+            "signal": signal.id,
+            "topic": args.topic,
+            "window": _months(window),
+            "results": sum(s.results for s in output.searches),
+            "new_kept": [_event_labels(item) for item in new],
+            "dropped_off_site": output.dropped_off_site,
+            **({"news_paused": True} if output.news_paused else {}),
+        }
+        trace = {
+            "signal": signal.id,
+            "signal_text": signal.text,
+            "topic": args.topic,
+            "window": {"start": window[0].isoformat(), "end": window[1].isoformat()},
+            "searches": [s.model_dump() for s in output.searches],
+            **({"funnel": output.funnel.model_dump()} if output.funnel else {}),
+            "found": [_event_view(item) for item in new],
+            "already_known": len(output.events) - len(new),
+        }
+        return seen, trace
+
+    def _read_article(self, args: ReadArticleArgs) -> tuple[dict[str, Any], dict[str, Any]]:
+        investigator, llm = self._deps.investigator, self._llm
+        item = next(
+            (i for i in self.news_items if event_citation_id(i) == args.event and i.url), None
+        )
+        if investigator is None or llm is None or item is None or item.url is None:
+            raise ToolFailed("not_available", retryable=False)
+        check = investigator.read(
+            self._scout_asset(), item.url, args.question, llm, self._spec.world_id
+        )
+        self.readings[args.event] = check
+        seen = {"event": args.event, **check.labels()}
+        trace = {
+            "event": args.event,
+            "title": item.title,
+            "published_at": item.published_at.isoformat() if item.published_at else None,
+            **check.to_json(),
+            "url": safe_url(check.url),
+        }
+        return seen, trace
 
     def _ecosystem(self) -> Ecosystem:
         m = self.metrics
@@ -873,9 +1132,24 @@ class RunToolbox:
             "positive": sum(1 for event in validated if event.direction == 1),
         }
 
+    def _with_reading(self, event: AuditEvent) -> AuditEvent:
+        check = self.readings.get(event.citation_id)
+        if check is None:
+            return event
+        reading = EventReading(
+            names_site=check.names_site,
+            answers=check.answers,
+            quote_checked=check.quote_checked,
+            question=check.question,
+            month=check.month,
+            finding=check.finding,
+            quote=check.quote,
+        )
+        return event.model_copy(update={"reading": reading})
+
     def _auditor(self) -> dict[str, Any]:
         metrics, _ = self._bound_metrics()
-        events = self.events
+        events = [self._with_reading(event) for event in self.events]
         base = self._rate(events)
         with self._deps.session_factory() as session:
             previous = previous_for_bundle(
@@ -943,6 +1217,7 @@ def _audit_case(
             "impact_type": event.impact_type,
             "direction": event.direction,
             "severity": event.severity,
+            **({"read": event.reading.model_dump()} if event.reading else {}),
         }
     return {
         "base_health": str(bundle.base_health),
@@ -1016,6 +1291,8 @@ class RatingRunner:
     evidence: EvidenceProvider = field(default_factory=NoFieldEvidence)
     today: Callable[[], date] = field(default=lambda: datetime.now(UTC).date())
     max_pending: int = MAX_PENDING_RUNS
+    investigator: Investigator | None = None
+    """The orchestrator's optional follow-ups (Tavily search and extract); None turns them off."""
     _slots: threading.BoundedSemaphore = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -1193,6 +1470,7 @@ class RatingRunner:
                 evidence=self.evidence,
                 today=self.today,
                 live=self.live_metrics,
+                investigator=self.investigator,
             )
             toolbox = RunToolbox(
                 spec,
@@ -1847,6 +2125,7 @@ def build_runner(
         news=news_runner(settings),
         live_metrics=build_live_earth_obs(settings, session_factory),
         evidence=DbEvidenceProvider(session_factory),
+        investigator=investigator_for(settings),
     )
 
 

@@ -11,6 +11,8 @@ import {
   auditCase,
   auditChecks,
   newsFunnel,
+  runFollowUps,
+  runPlan,
   runSearches,
   runSignals,
   runVision,
@@ -21,6 +23,7 @@ import {
 
 import { ActorChip, ActorIcon } from "./actor";
 import { SiteVisionView } from "./site-vision";
+import { FollowUpDetail, PlanDetail } from "./trace-followup";
 
 const STATUS: Record<string, string> = {
   ok: "done",
@@ -245,6 +248,26 @@ function InspectorDetail({
   step: string;
   siteKey?: string | null;
 }) {
+  const plan = node.id === "plan" ? runPlan(trace) : null;
+  if (plan)
+    return (
+      <Section title="The plan">
+        <PlanDetail plan={plan} />
+      </Section>
+    );
+  const followUpIndex = /^investigate-(\d+)/.exec(node.id)?.[1];
+  const followUp =
+    followUpIndex == null ? null : runFollowUps(trace)[Number(followUpIndex)];
+  if (followUp)
+    return (
+      <Section
+        title={
+          followUp.kind === "search" ? "The follow-up search" : "The article"
+        }
+      >
+        <FollowUpDetail followUp={followUp} />
+      </Section>
+    );
   const vision = runVision(trace);
   if (node.id === "vision" && vision && !vision.error)
     return (

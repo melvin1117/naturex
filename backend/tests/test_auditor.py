@@ -29,8 +29,10 @@ from app.agents.auditor import (
     AuditorFlagType,
     AuditorInput,
     AuditResult,
+    EventReading,
     PreviousReport,
     ScoreInputs,
+    _feedback,
     apply_audit,
     audit_events_from_news,
     auditor_messages,
@@ -1119,6 +1121,45 @@ def test_a_shortened_event_id_is_expanded_when_it_is_unambiguous() -> None:
     ).citations == ["event:94"]
 
 
+def test_a_fact_cited_under_the_wrong_family_is_repaired_only_when_unambiguous() -> None:
+    output = AuditorOutput(
+        **_case(
+            verdict="Water is unstable [metric:water_stability] [metric:landcover.built].",
+            citations=["metric:water_stability", "metric:made_up", "score:base_health"],
+        )
+    )
+
+    fixed = full_event_ids(output, BUNDLE)
+
+    assert "[score:water_stability]" in fixed.verdict
+    assert fixed.citations == ["score:water_stability", "metric:made_up", "score:base_health"]
+
+
+def test_a_read_article_reaches_the_auditor_with_checked_labels_and_fenced_text() -> None:
+    reading = EventReading(
+        names_site=True,
+        answers="partly",
+        quote_checked=True,
+        question="Did it happen here, and when?",
+        month="2023-05",
+        finding="Pollution was reported in the canals.",
+        quote="Vecinos denunciaron descargas en los canales.",
+    )
+    event = BUNDLE.events[0].model_copy(update={"reading": reading})
+    bundle = BUNDLE.model_copy(update={"events": (event,)})
+
+    text = bundle.render()
+    meta = next(line for line in text.splitlines() if line.startswith("<event "))
+    assert 'article_read="true" names_site="true" answers="partly"' in meta
+    assert 'article_month="2023-05"' in meta
+    fenced = text.split("<untrusted_content>")[1].split("</untrusted_content>")[0]
+    assert "article_quote: Vecinos denunciaron" in fenced
+    assert "article_finding: Pollution was reported" in fenced
+    # The checked month may be repeated; the quote's text never reaches the trusted lines.
+    assert any("2023-05" in line for line in bundle.trusted_lines())
+    assert not any("Vecinos" in line for line in bundle.trusted_lines())
+
+
 def test_a_long_hypothesis_name_is_cut_not_refused() -> None:
     long = "Mangrove clearing for a coastal road " + "and tourism fill " * 6
     output = AuditorOutput(
@@ -1161,3 +1202,19 @@ def test_bookkeeping_is_done_by_code_not_refused() -> None:
     assert EVENT in tidy.citations and "metric:landcover.built" in tidy.citations
     assert check_audit(tidy, BUNDLE) == []
     assert tidy_answer(output.model_copy(update={"citations": ["x"]}), BUNDLE).citations == ["x"]
+
+
+def test_a_number_rejection_says_which_numbers_to_delete_and_how_to_say_it() -> None:
+    note = _feedback(
+        [
+            "summary_md uses numbers not in the bundle: 17,000, $2.7M",
+            "key_changes[2] uses numbers not in the bundle: 17,000, <b>9</b>",
+            "flags[0] cites an unknown ID",
+        ],
+        "Your answer was rejected",
+    )
+
+    assert "Delete 17,000, $2.7M from summary_md, key_changes[2]" in note
+    assert "<b>" not in note.split("Delete", 1)[1]
+    assert "[event:<id>]" in note
+    assert "Delete" not in _feedback(["flags[0] cites an unknown ID"], "Rejected")

@@ -54,9 +54,18 @@ export function EvidenceChip({ evidence }: { evidence: EvidenceRef }) {
         <span className="line-clamp-2 block text-[13px] leading-snug text-machine-ink">
           {evidence.label}
         </span>
-        {(evidence.value || evidence.date) && (
+        {(evidence.value || evidence.date || evidence.read) && (
           <span className="block text-[11px] leading-snug text-machine-muted">
-            {[evidence.date, evidence.value].filter(Boolean).join(" · ")}
+            {[
+              evidence.date,
+              evidence.value,
+              evidence.read &&
+                (evidence.read.namesSite
+                  ? "article read: names the site"
+                  : "article read: site not named"),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </span>
         )}
       </span>

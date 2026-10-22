@@ -226,7 +226,62 @@ export type Search = {
 };
 
 export function runSearches(trace: RunTrace): Search[] {
-  const raw = out(stepNamed(trace, "news")).searches;
+  return searchesOf(out(stepNamed(trace, "news")).searches);
+}
+
+export type Found = {
+  event: string;
+  title: string | null;
+  url: string | null;
+  date: string | null;
+  impactType: string;
+  direction: number;
+  severity: number;
+  source: string | null;
+};
+
+type FollowUpBase = {
+  index: number;
+  why: string;
+  status: string;
+  error: string | null;
+  latencyMs: number | null;
+  step: Step;
+};
+
+export type SearchFollowUp = FollowUpBase & {
+  kind: "search";
+  signal: string;
+  signalText: string;
+  topic: string;
+  window: { start: string; end: string } | null;
+  searches: Search[];
+  found: Found[];
+  alreadyKnown: number;
+};
+
+export type ReadFollowUp = FollowUpBase & {
+  kind: "read";
+  event: string;
+  title: string | null;
+  url: string | null;
+  publishedAt: string | null;
+  question: string;
+  namesSite: boolean;
+  modelNamesSite: boolean;
+  month: string | null;
+  answers: string | null;
+  finding: string;
+  quote: string;
+  quoteChecked: boolean;
+  charsRead: number;
+  extractMs: number;
+  credits: number;
+};
+
+export type FollowUp = SearchFollowUp | ReadFollowUp;
+
+function searchesOf(raw: unknown): Search[] {
   if (!Array.isArray(raw)) return [];
   return raw.map((s: Output) => ({
     query: String(s.query ?? ""),
@@ -238,6 +293,136 @@ export function runSearches(trace: RunTrace): Search[] {
   }));
 }
 
+/** Super's optional follow-ups between the news and the audit, in the order it ran them. */
+export function runFollowUps(trace: RunTrace): FollowUp[] {
+  return trace.steps
+    .filter((s) => s.step === "investigate")
+    .map((step, index): FollowUp => {
+      const o = out(step);
+      const base: FollowUpBase = {
+        index,
+        why: String(o.why ?? ""),
+        status: step.status,
+        error: step.error ?? null,
+        latencyMs: step.latency_ms ?? null,
+        step,
+      };
+      if ((step.tool ?? o.tool) === "read_article")
+        return {
+          ...base,
+          kind: "read",
+          event: String(o.event ?? ""),
+          title: (o.title as string | null) ?? null,
+          url: (o.url as string | null) ?? null,
+          publishedAt: (o.published_at as string | null) ?? null,
+          question: String(o.question ?? ""),
+          namesSite: Boolean(o.names_site),
+          modelNamesSite: Boolean(o.model_names_site),
+          month: (o.month as string | null) ?? null,
+          answers: (o.answers as string | null) ?? null,
+          finding: String(o.finding ?? ""),
+          quote: String(o.quote ?? ""),
+          quoteChecked: Boolean(o.quote_checked),
+          charsRead: num(o.chars_read),
+          extractMs: num(o.extract_ms),
+          credits: num(o.credits),
+        };
+      const window = o.window as Output | undefined;
+      const found = Array.isArray(o.found) ? (o.found as Output[]) : [];
+      return {
+        ...base,
+        kind: "search",
+        signal: String(o.signal ?? ""),
+        signalText: String(o.signal_text ?? ""),
+        topic: String(o.topic ?? ""),
+        window: window
+          ? { start: String(window.start), end: String(window.end) }
+          : null,
+        searches: searchesOf(o.searches),
+        found: found.map((f) => ({
+          event: String(f.event ?? ""),
+          title: (f.title as string | null) ?? null,
+          url: (f.url as string | null) ?? null,
+          date: (f.date as string | null) ?? null,
+          impactType: String(f.impact_type ?? ""),
+          direction: num(f.direction),
+          severity: num(f.severity),
+          source: (f.source as string | null) ?? null,
+        })),
+        alreadyKnown: num(o.already_known),
+      };
+    });
+}
+
+export type Plan = {
+  notes: string | null;
+  reasoningTokens: number | null;
+  chose: string[];
+  model: string | null;
+  latencyMs: number;
+  costUsd: number;
+  tokensIn: number;
+  tokensOut: number;
+};
+
+/** Super's one thinking turn: what it weighed and which tools it chose next. */
+export function runPlan(trace: RunTrace): Plan | null {
+  const step = stepNamed(trace, "plan");
+  if (!step) return null;
+  const o = out(step);
+  const calls = ownCalls(step, "orchestrator");
+  return {
+    notes: (o.notes as string | null) ?? null,
+    reasoningTokens:
+      o.reasoning_tokens == null ? null : num(o.reasoning_tokens),
+    chose: Array.isArray(o.chose) ? o.chose.map(String) : [],
+    model: calls.at(-1)?.model ?? null,
+    latencyMs: calls.reduce((n, c) => n + (c.latency_ms ?? 0), 0),
+    costUsd: calls.reduce((n, c) => n + num(c.cost_usd), 0),
+    tokensIn: calls.reduce((n, c) => n + (c.prompt_tokens ?? 0), 0),
+    tokensOut: calls.reduce((n, c) => n + (c.completion_tokens ?? 0), 0),
+  };
+}
+
+const TOPIC_LABEL: Record<string, string> = {
+  fire: "fire",
+  drought: "drought",
+  flood: "floods",
+  pollution: "pollution",
+  clearing: "clearing or construction",
+  restoration: "restoration",
+};
+
+export function topicLabel(topic: string): string {
+  return TOPIC_LABEL[topic] ?? topic;
+}
+
+/** "Mar–Aug 2026", or "Nov 2024–Mar 2025" across a year. */
+export function monthRange(start: string, end: string): string {
+  const [sy, sm] = [Number(start.slice(0, 4)), Number(start.slice(5, 7))];
+  const [ey, em] = [Number(end.slice(0, 4)), Number(end.slice(5, 7))];
+  if (!sy || !sm || !ey || !em) return `${start}–${end}`;
+  return sy === ey
+    ? `${MONTHS[sm - 1]}–${MONTHS[em - 1]} ${ey}`
+    : `${MONTHS[sm - 1]} ${sy}–${MONTHS[em - 1]} ${ey}`;
+}
+
+const ANSWERS: Record<string, string> = {
+  yes: "answers the question",
+  partly: "partly answers it",
+  no: "doesn't answer it",
+};
+
+export function readVerdict(f: ReadFollowUp): string {
+  return [
+    f.namesSite ? "names the site" : "doesn't name the site",
+    f.month ? `event in ${f.month}` : null,
+    f.answers ? (ANSWERS[f.answers] ?? f.answers) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 export type EvidenceRef = {
   id: string;
   kind: "fact" | "image" | "news" | "evidence" | "unknown";
@@ -246,6 +431,8 @@ export type EvidenceRef = {
   url: string | null;
   date: string | null;
   direction: number | null;
+  /** Set when the run had the full article read (an investigation follow-up). */
+  read?: { namesSite: boolean; answers: string; month: string | null } | null;
 };
 
 const FACT_LABEL: Record<string, string> = {
@@ -319,6 +506,7 @@ function evidenceRef(id: string, evidence: Output): EvidenceRef {
       date: null,
       direction: null,
     };
+  const read = item.read as Output | undefined;
   return {
     id,
     kind: item.kind === "evidence" ? "evidence" : "news",
@@ -327,6 +515,13 @@ function evidenceRef(id: string, evidence: Output): EvidenceRef {
     url: (item.url as string | null) ?? null,
     date: (item.published_at as string | null) ?? null,
     direction: item.direction == null ? null : num(item.direction),
+    read: read
+      ? {
+          namesSite: Boolean(read.names_site),
+          answers: String(read.answers ?? ""),
+          month: (read.month as string | null) ?? null,
+        }
+      : null,
   };
 }
 
@@ -484,6 +679,8 @@ export type Receipt = {
   savedPct: number | null;
   models: ModelShare[];
   searches: number;
+  /** Pages opened with Tavily Extract during the follow-ups. */
+  reads: number;
   credits: number;
 };
 
@@ -505,7 +702,12 @@ export function costReceipt(trace: RunTrace): Receipt {
       : models.reduce((n, m) => n + m.costUsd, 0);
   for (const m of models) m.share = total > 0 ? m.costUsd / total : 0;
   const baseline = trace.baseline ? num(trace.baseline.cost_usd) : null;
-  const searches = runSearches(trace);
+  const followUps = runFollowUps(trace);
+  const searches = [
+    ...runSearches(trace),
+    ...followUps.flatMap((f) => (f.kind === "search" ? f.searches : [])),
+  ];
+  const reads = followUps.filter((f) => f.kind === "read" && f.status === "ok");
   return {
     totalUsd: total,
     baselineUsd: baseline,
@@ -516,7 +718,10 @@ export function costReceipt(trace: RunTrace): Receipt {
         : null,
     models,
     searches: searches.length,
-    credits: searches.reduce((n, s) => n + s.credits, 0),
+    reads: reads.length,
+    credits:
+      searches.reduce((n, s) => n + s.credits, 0) +
+      reads.reduce((n, f) => n + (f.kind === "read" ? f.credits : 0), 0),
   };
 }
 
@@ -632,6 +837,28 @@ export function runStory(trace: RunTrace): StoryLine[] {
     });
   }
 
+  const plan = runPlan(trace);
+  const followUps = runFollowUps(trace);
+  if (plan || followUps.length) {
+    const who = modelLabel(plan?.model);
+    const thought = plan?.reasoningTokens
+      ? ` (${plan.reasoningTokens.toLocaleString("en-US")} reasoning tokens)`
+      : "";
+    const parts = followUps.map((f) =>
+      f.kind === "search"
+        ? `searched local news for ${topicLabel(f.topic)}${f.window ? ` in ${monthRange(f.window.start, f.window.end)}` : ""} (${f.status === "ok" ? `${f.found.length} new` : "failed"})`
+        : `had an article read (${f.status === "ok" ? readVerdict(f) : "it couldn't be read"})`,
+    );
+    lines.push({
+      key: "followup",
+      actor: "super",
+      text: parts.length
+        ? `${who} compared the satellite signals with the news${thought} and followed up: ${parts.join("; ")}.`
+        : `${who} compared the satellite signals with the news${thought} and found nothing to follow up.`,
+      details: followUps.map((f) => `Why: ${f.why}`),
+    });
+  }
+
   const evidence = stepNamed(trace, "evidence");
   if (evidence?.status === "ok") {
     const o = out(evidence);
@@ -722,12 +949,23 @@ const TOOL_TITLE: Record<string, string> = {
   earth_obs: "Satellite metrics",
   valuation: "Ecosystem value",
   news: "Local news",
+  plan: "Plan the follow-up",
+  investigate: "Follow up",
   evidence: "Field evidence",
   audit: "The audit",
 };
 
+const CHOSE: Record<string, string> = {
+  search_news: "search the news again",
+  read_article: "read an article",
+  auditor: "go to the audit",
+  field_evidence: "check the field photos",
+};
+
 export function runFlow(trace: RunTrace): FlowNode[] {
   const nodes: FlowNode[] = [];
+  const followUps = runFollowUps(trace);
+  let followUp = 0;
   for (const step of trace.steps) {
     if (!(step.step in TOOL_TITLE) && step.step !== "done") continue;
     const o = out(step);
@@ -745,9 +983,15 @@ export function runFlow(trace: RunTrace): FlowNode[] {
             text: "The fixed pipeline ran it",
             latencyMs: null,
           }
-        : null;
+        : step.step === "investigate"
+          ? {
+              actor: "super" as Actor,
+              text: "Nemotron 3 Super chose it in its plan",
+              latencyMs: null,
+            }
+          : null;
     const base: FlowNode = {
-      id: step.step,
+      id: step.step === "investigate" ? `investigate-${followUp}` : step.step,
       actor: "code",
       title: TOOL_TITLE[step.step] ?? "Sealed",
       summary: "",
@@ -888,6 +1132,87 @@ export function runFlow(trace: RunTrace): FlowNode[] {
             ]
           : []),
       ];
+    } else if (step.step === "plan") {
+      const plan = runPlan(trace);
+      base.actor = "super";
+      base.decision = null;
+      base.summary = plan?.chose.length
+        ? `thought it through · chose to ${plan.chose.map((c) => CHOSE[c] ?? c).join(", then ")}`
+        : "thought it through";
+      base.latencyMs = plan?.latencyMs ?? null;
+    } else if (step.step === "investigate") {
+      const f = followUps[followUp];
+      followUp += 1;
+      if (f?.kind === "search") {
+        base.actor = "tavily";
+        base.title = `Search again: ${topicLabel(f.topic)}`;
+        base.summary =
+          f.status === "ok"
+            ? `${f.window ? `${monthRange(f.window.start, f.window.end)} · ` : ""}${f.found.length} new · ${f.alreadyKnown} already known`
+            : `failed (${f.error ?? "error"})`;
+        base.children = [
+          ...f.searches.map((s, i) => ({
+            ...base,
+            id: `${base.id}-search-${i}`,
+            title:
+              s.language && s.language !== "en"
+                ? `Search (${LANGUAGE[s.language] ?? s.language})`
+                : "Search",
+            summary: `“${s.query}” · ${s.error ? "failed" : `${s.results} results`}`,
+            status: s.error ? "failed" : "ok",
+            latencyMs: s.latencyMs,
+            decision: null,
+            children: [],
+          })),
+          ...ownCalls(step, "news_scout").map((c, i) =>
+            callNode(
+              `${base.id}-classify-${i}`,
+              c,
+              "Sort the articles",
+              `${f.found.length} new on this site`,
+            ),
+          ),
+        ];
+      } else if (f?.kind === "read") {
+        base.actor = "tavily";
+        base.title = "Read an article";
+        base.summary =
+          f.status === "ok"
+            ? readVerdict(f)
+            : `couldn't be read (${f.error ?? "error"})`;
+        base.children =
+          f.status === "ok"
+            ? [
+                {
+                  ...base,
+                  id: `${base.id}-extract`,
+                  title: "Open the page",
+                  summary: `${f.charsRead.toLocaleString("en-US")} characters, ranked for the question`,
+                  latencyMs: f.extractMs,
+                  decision: null,
+                  children: [],
+                },
+                ...ownCalls(step, "article_reader").map((c, i) =>
+                  callNode(
+                    `${base.id}-reader-${i}`,
+                    c,
+                    "Answer the question",
+                    f.answers ? (ANSWERS[f.answers] ?? f.answers) : "",
+                  ),
+                ),
+                {
+                  ...base,
+                  id: `${base.id}-check`,
+                  actor: "code" as Actor,
+                  title: "Check the answer",
+                  summary: `${f.namesSite ? "place confirmed" : "place not confirmed"} · ${f.quoteChecked ? "quote found on the page" : "no quote found on the page"}`,
+                  latencyMs: null,
+                  decision: null,
+                  children: [],
+                },
+              ]
+            : [];
+      }
     } else if (step.step === "evidence") {
       base.summary =
         step.status === "skipped"
@@ -899,7 +1224,11 @@ export function runFlow(trace: RunTrace): FlowNode[] {
       base.summary = "The report enters the hash-chained Nature Ledger";
       base.latencyMs = null;
     }
-    const own = calls.filter((c) => c.agent !== "orchestrator");
+    // The plan step's cost is the thinking turn itself; elsewhere the choosing turn is shown
+    // as the decision, not counted in the step.
+    const own = calls.filter(
+      (c) => step.step === "plan" || c.agent !== "orchestrator",
+    );
     base.costUsd = own.reduce((n, c) => n + num(c.cost_usd), 0);
     base.tokensIn = own.reduce((n, c) => n + (c.prompt_tokens ?? 0), 0);
     base.tokensOut = own.reduce((n, c) => n + (c.completion_tokens ?? 0), 0);
@@ -960,10 +1289,11 @@ export function runTimeline(trace: RunTrace): {
       ...calls.filter((c) => c.agent === "orchestrator"),
     ].reverse()) {
       const s = Math.max(0, cursor - (c.latency_ms ?? 0));
+      const thinking = step.step === "plan";
       add(actorOf(c.model), {
         id: `${step.step}-plan-${c.id}`,
-        label: `chose ${step.tool ?? step.step}`,
-        detail: `${modelLabel(c.model)} · ${seconds(c.latency_ms)}`,
+        label: thinking ? "plan (thinking)" : `chose ${step.tool ?? step.step}`,
+        detail: `${modelLabel(c.model)}${thinking && c.completion_tokens ? ` · ${c.completion_tokens.toLocaleString("en-US")} out` : ""} · ${seconds(c.latency_ms)}`,
         startMs: s,
         endMs: cursor,
         status: c.status,
@@ -993,6 +1323,49 @@ export function runTimeline(trace: RunTrace): {
           endMs: end,
           status: c.status,
         });
+    } else if (step.step === "plan") {
+      continue;
+    } else if (step.step === "investigate") {
+      const o = out(step);
+      if (o.tool === "read_article") {
+        add("tavily", {
+          id: `extract-${step.ts}`,
+          label: "open the page",
+          detail: `Tavily Extract · ${seconds(num(o.extract_ms))}`,
+          startMs: start,
+          endMs: start + num(o.extract_ms),
+          status: step.status,
+        });
+        for (const c of ownCalls(step, "article_reader"))
+          add(actorOf(c.model), {
+            id: `reader-${c.id}`,
+            label: "read the article",
+            detail: `${modelLabel(c.model)} · ${(c.prompt_tokens ?? 0).toLocaleString("en-US")} in · ${seconds(c.latency_ms)}`,
+            startMs: Math.max(start, end - (c.latency_ms ?? 0)),
+            endMs: end,
+            status: c.status,
+          });
+      } else {
+        searchesOf(o.searches).forEach((s, i) =>
+          add("tavily", {
+            id: `followup-${step.ts}-${i}`,
+            label: `search: ${topicLabel(String(o.topic ?? ""))}`,
+            detail: `“${s.query}” · ${s.results} results · ${seconds(s.latencyMs)}`,
+            startMs: start,
+            endMs: start + s.latencyMs,
+            status: s.error ? "failed" : "ok",
+          }),
+        );
+        for (const c of ownCalls(step, "news_scout"))
+          add(actorOf(c.model), {
+            id: `followup-${c.id}`,
+            label: "sort articles",
+            detail: `${modelLabel(c.model)} · ${(c.prompt_tokens ?? 0).toLocaleString("en-US")} in · ${seconds(c.latency_ms)}`,
+            startMs: Math.max(start, end - (c.latency_ms ?? 0)),
+            endMs: end,
+            status: c.status,
+          });
+      }
     } else if (step.step === "audit") {
       let at = start;
       ownCalls(step, "auditor").forEach((c, i) => {

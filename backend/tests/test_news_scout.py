@@ -17,6 +17,7 @@ import pytest
 from app.agents.news_scout import (
     ARTICLE_CHAR_LIMIT,
     DATA_RULE,
+    FOLLOW_UP_TOPICS,
     PROMPT_VERSION,
     GeocodedPlace,
     NewsArticle,
@@ -37,6 +38,9 @@ from app.agents.news_scout import (
     _redact_injection,
     _regions,
     build_queries,
+    followup_query,
+    names_the_site,
+    run_followup_search,
     run_news_scout,
 )
 from app.config import Settings
@@ -1450,3 +1454,116 @@ def test_mock_fixture_output_reports_no_dropped_articles() -> None:
     )
 
     assert (result.dropped_off_site, result.locality_unverified) == (0, False)
+
+
+# ----- investigation follow-ups -----------------------------------------------------------------
+
+XOCHIMILCO = GeocodedPlace(
+    label="Xochimilco, México",
+    place_names=("Xochimilco", "Ciudad de México"),
+    country="México",
+    regions=("Ciudad de México",),
+)
+WINDOW = (date(2025, 1, 1), date(2025, 6, 30))
+
+
+def test_followup_query_is_dated_and_local_where_the_language_is_known() -> None:
+    mx = replace(ASSET, ecosystem=Ecosystem.WETLAND)
+    query = followup_query(mx, XOCHIMILCO, "fire", WINDOW)
+
+    assert query.text == "Xochimilco incendio OR quema"
+    assert (query.topic, query.language, query.country) == ("general", "es", "mexico")
+    assert (query.start_date, query.end_date) == WINDOW
+
+    english = followup_query(PENNEKAMP, MONROE_FL, "pollution", WINDOW)
+    assert english.text == "John Pennekamp Florida pollution OR sewage OR spill OR contamination"
+    assert (english.topic, english.language) == ("news", None)
+    assert set(FOLLOW_UP_TOPICS) == {
+        "fire",
+        "drought",
+        "flood",
+        "pollution",
+        "clearing",
+        "restoration",
+    }
+
+
+def test_a_dated_query_sends_start_and_end_dates_instead_of_a_time_range() -> None:
+    sent: list[dict[str, Any]] = []
+
+    def post(_url: str, *, json_payload: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
+        sent.append(dict(json_payload))
+        return {"results": []}
+
+    search = TavilyNewsSearch("tvly-test", http_post=post)
+    search.search(
+        followup_query(ASSET, XOCHIMILCO, "drought", WINDOW), max_results=5, lookback_days=600
+    )
+    search.search(SearchQuery("Xochimilco"), max_results=5, lookback_days=30)
+
+    assert (sent[0]["start_date"], sent[0]["end_date"]) == ("2025-01-01", "2025-06-30")
+    assert "time_range" not in sent[0]
+    assert sent[1]["time_range"] == "month" and "start_date" not in sent[1]
+
+
+def test_followup_search_uses_the_same_guards_classifier_and_gate() -> None:
+    on_site = NewsArticle(
+        title="Incendio en la zona chinampera de Xochimilco",
+        url="https://example.com/mx/xochimilco-incendio",
+        published_at=date(2025, 3, 20),
+        content="Bomberos controlaron un incendio de pastizal en Xochimilco, Ciudad de México.",
+    )
+    elsewhere = NewsArticle(
+        title="Incendio forestal en Jalisco",
+        url="https://example.com/mx/jalisco",
+        published_at=date(2025, 3, 21),
+        content="Un incendio afectó un bosque en Jalisco.",
+    )
+    search = FakeNewsSearch([on_site, elsewhere])
+    llm = FakeLLM(
+        NewsScoutClassificationOutput(
+            events=[
+                relevant(1, impact_type="fire", direction=-1),
+                relevant(2, impact_type="fire", direction=-1),
+            ]
+        )
+    )
+
+    result = run_followup_search(
+        ASSET,
+        "fire",
+        WINDOW,
+        settings=Settings(_env_file=None, use_mocks=False),
+        llm=llm,
+        geocoder=FakeGeocoder(XOCHIMILCO),
+        news_search=search,
+        cache=NewsScoutCache(),
+        today=lambda: date(2026, 10, 22),
+    )
+
+    assert search.queries == ["Xochimilco incendio OR quema"]
+    assert [e.url for e in result.events] == [on_site.url]
+    assert result.dropped_off_site == 1
+    assert [s.query for s in result.searches] == ["Xochimilco incendio OR quema"]
+    assert llm.calls[0]["agent"] == "news_scout"
+
+
+def test_followup_search_never_runs_in_mock_mode() -> None:
+    search = FakeNewsSearch([])
+    result = run_followup_search(
+        ASSET,
+        "fire",
+        WINDOW,
+        settings=Settings(_env_file=None, use_mocks=True),
+        llm=FakeLLM(NewsScoutClassificationOutput(events=[])),
+        geocoder=FakeGeocoder(),
+        news_search=search,
+    )
+
+    assert result == NewsScoutOutput(events=[])
+    assert search.queries == []
+
+
+def test_names_the_site_uses_the_locality_gate() -> None:
+    assert names_the_site("Xochimilco Wetland", XOCHIMILCO, "Un incendio en Xochimilco ayer.")
+    assert not names_the_site("Xochimilco Wetland", XOCHIMILCO, "Un incendio en Jalisco ayer.")

@@ -200,6 +200,9 @@ class SearchQuery:
     """ISO 639-1 code of a non-English query; Tavily boosts results in that language."""
     country: str | None = None
     """Tavily country name to boost (`general` topic only)."""
+    start_date: date | None = None
+    """With `end_date`: only results published in this window (an investigation follow-up)."""
+    end_date: date | None = None
 
 
 class Geocoder(Protocol):
@@ -425,9 +428,13 @@ class TavilyNewsSearch:
             payload["language"] = query.language
         if query.country and query.topic == "general":
             payload["country"] = query.country
-        time_range = _time_range(lookback_days)
-        if time_range is not None:
-            payload["time_range"] = time_range
+        if query.start_date and query.end_date:
+            payload["start_date"] = query.start_date.isoformat()
+            payload["end_date"] = query.end_date.isoformat()
+        else:
+            time_range = _time_range(lookback_days)
+            if time_range is not None:
+                payload["time_range"] = time_range
 
         response = self._http_post(
             TAVILY_SEARCH_URL,
@@ -516,6 +523,69 @@ def build_queries(asset: NewsScoutAsset, place: GeocodedPlace) -> list[SearchQue
     return list(unique.values())
 
 
+FollowUpTopic = Literal["fire", "drought", "flood", "pollution", "clearing", "restoration"]
+"""What an investigation search looks for (the orchestrator picks one; code writes the query)."""
+FOLLOW_UP_TOPICS: dict[str, tuple[str, str]] = {
+    "fire": ("fire OR wildfire OR burning", "incendio OR quema"),
+    "drought": ("drought OR low water OR dried up", "sequía OR estiaje OR desecación"),
+    "flood": ("flood OR flooding OR hurricane OR storm", "inundación OR huracán OR tormenta"),
+    "pollution": (
+        "pollution OR sewage OR spill OR contamination",
+        "contaminación OR aguas residuales OR derrame",
+    ),
+    "clearing": (
+        "clearing OR deforestation OR construction OR encroachment",
+        "tala OR deforestación OR construcción OR invasión OR relleno",
+    ),
+    "restoration": (
+        "restoration OR reforestation OR cleanup OR protection",
+        "restauración OR reforestación OR limpieza OR protección",
+    ),
+}
+
+
+def followup_query(
+    asset: NewsScoutAsset, place: GeocodedPlace, topic: FollowUpTopic, window: tuple[date, date]
+) -> SearchQuery:
+    """One dated query: in the local language where we know it (local press covers small sites
+    best), otherwise English news."""
+    start, end = window
+    core = _query_name(asset.name)
+    english, spanish = FOLLOW_UP_TOPICS[topic]
+    local = LOCAL_LANGUAGE.get((asset.country or "").upper())
+    if local is not None:
+        language, country = local
+        return SearchQuery(
+            " ".join(f"{core} {spanish}".split()),
+            topic="general",
+            language=language,
+            country=country,
+            start_date=start,
+            end_date=end,
+        )
+    region = place.regions[0] if place.regions else ""
+    return SearchQuery(
+        " ".join(f"{core} {region} {english}".split()), start_date=start, end_date=end
+    )
+
+
+def resolve_place(
+    asset: NewsScoutAsset, settings: Settings, geocoder: Geocoder | None = None
+) -> GeocodedPlace:
+    """The asset's place (cached reverse geocode), or a fallback label when it fails."""
+    active = geocoder or NominatimGeocoder(settings.nominatim_user_agent)
+    try:
+        return active.reverse(asset.centroid_lat, asset.centroid_lon)
+    except (httpx.HTTPError, ValidationError, ValueError, LookupError):
+        return GeocodedPlace(label=_fallback_place(asset))
+
+
+def names_the_site(asset_name: str, place: GeocodedPlace, text: str) -> bool:
+    """Code's locality check (the same gate as for search results) on a piece of text."""
+    article = NewsArticle(title=None, url="", published_at=None, content=text)
+    return _on_site(article, _gate_terms(asset_name, place))
+
+
 def clear_news_scout_caches() -> None:
     _DEFAULT_RESULT_CACHE.clear()
     _DEFAULT_NOMINATIM_CACHE.clear()
@@ -545,7 +615,74 @@ def run_news_scout(
     cached = result_cache.get(cache_key)
     if cached is not None:
         return cached
+    return _scout(
+        asset,
+        lambda place: build_queries(asset, place),
+        settings=settings,
+        llm=llm,
+        geocoder=geocoder,
+        news_search=news_search,
+        credits=credits,
+        lookback_days=lookback_days,
+        today=today,
+        result_cache=result_cache,
+        cache_key=cache_key,
+    )
 
+
+def run_followup_search(
+    asset: NewsScoutAsset,
+    topic: FollowUpTopic,
+    window: tuple[date, date],
+    *,
+    settings: Settings,
+    llm: StructuredLLM,
+    geocoder: Geocoder | None = None,
+    news_search: NewsSearch | None = None,
+    cache: NewsScoutCache | None = None,
+    credits: CreditGuard | None = None,
+    today: Callable[[], date] = lambda: datetime.now(UTC).date(),
+) -> NewsScoutOutput:
+    """One investigation search: a topic the orchestrator chose, in the dated window of a
+    satellite signal. Code writes the query; the results go through the same guards, classifier
+    and locality gate as every other search."""
+    if settings.use_mocks:
+        return NewsScoutOutput(events=[])
+    start, end = window
+    result_cache = cache or _DEFAULT_RESULT_CACHE
+    cache_key = f"{_cache_key(asset, 0)}:followup:{topic}:{start}:{end}"
+    cached = result_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    return _scout(
+        asset,
+        lambda place: [followup_query(asset, place, topic, window)],
+        settings=settings,
+        llm=llm,
+        geocoder=geocoder,
+        news_search=news_search,
+        credits=credits,
+        lookback_days=max(1, (today() - start).days),
+        today=today,
+        result_cache=result_cache,
+        cache_key=cache_key,
+    )
+
+
+def _scout(
+    asset: NewsScoutAsset,
+    queries_for: Callable[[GeocodedPlace], list[SearchQuery]],
+    *,
+    settings: Settings,
+    llm: StructuredLLM,
+    geocoder: Geocoder | None,
+    news_search: NewsSearch | None,
+    credits: CreditGuard | None,
+    lookback_days: int,
+    today: Callable[[], date],
+    result_cache: NewsScoutCache,
+    cache_key: str,
+) -> NewsScoutOutput:
     if news_search is None and credits is None:
         credits = shared_credits(settings.tavily_api_key)
     if credits is not None and not credits.allows(settings.tavily_min_credits_left):
@@ -568,7 +705,7 @@ def run_news_scout(
         degraded = True
         log.warning("News Scout has no geocoded place names; gating on the asset name only")
 
-    found, searches = _search_all(active_search, build_queries(asset, place), lookback_days)
+    found, searches = _search_all(active_search, queries_for(place), lookback_days)
     degraded = degraded or any(record.error for record in searches)
 
     unique = _dedupe_articles(found)

@@ -17,7 +17,7 @@ from decimal import Decimal
 from functools import partial
 from types import SimpleNamespace
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 import httpx
 import openai
@@ -30,6 +30,7 @@ from sqlmodel import Session, col, func, select
 
 from app import mocks
 from app.agents import orchestrator
+from app.agents.article_reader import ArticleCheck
 from app.agents.auditor import ScoreInputs, audit_events_from_news
 from app.agents.orchestrator import (
     EarthObsArgs,
@@ -60,7 +61,7 @@ from app.models import (
 from app.models import WorldEvent as WorldEventRow
 from app.routers.runs import get_rating_runner
 from app.sandbox import _delete_world_rows, create_world, ensure_live_world
-from app.schemas import NewsScoutOutput, RatingRunStatus
+from app.schemas import NewsScoutItem, NewsScoutOutput, NewsSearchRecord, RatingRunStatus
 from app.seed import seed
 from app.services import rating_runs
 from app.services.diff import audited_step, diff_reports
@@ -77,8 +78,10 @@ from app.services.rating_runs import (
     global_runs_queued,
     load_cached_metrics,
     news_runner,
+    signal_window,
 )
 from app.tools.earth_obs import EarthObsMetrics, ScenarioName, load_site_metrics
+from app.tools.signals import Signal
 from tests.conftest import alembic_cfg, requires_db
 from tests.test_auditor import answer, quiet_answer, raw
 from tests.test_llm import SUPER, ULTRA, FakeTransport, MemoryCallLog, reply, settings
@@ -161,6 +164,7 @@ def harness(
     metrics_loader: Callable[[AssetInfo, ScenarioName], EarthObsMetrics] = load_cached_metrics,
     max_pending: int = 16,
     spent: str = "0",
+    investigator: Any = None,
     **overrides: Any,
 ) -> Harness:
     cfg = settings(**{"use_mocks": False, **overrides})
@@ -182,6 +186,7 @@ def harness(
         metrics_loader=metrics_loader,
         today=lambda: RATING_DATE,
         max_pending=max_pending,
+        investigator=investigator,
     )
     return Harness(runner, transport, log, made)
 
@@ -316,6 +321,12 @@ def test_tools_take_no_ids_and_bind_the_scenario() -> None:
         ("earth_obs", "{}", {Tool.EARTH_OBS}, FallbackReason.DUPLICATE_CALL),
         ("field_evidence", "{}", set(), FallbackReason.TOOL_UNAVAILABLE),
         ("shell", "{}", set(), FallbackReason.UNKNOWN_TOOL),
+        (
+            "search_news",
+            '{"signal": "signal:x", "topic": "fire", "why": "A fire?"}',
+            {Tool.EARTH_OBS},
+            FallbackReason.WRONG_ORDER,
+        ),
         (None, "{}", set(), FallbackReason.UNKNOWN_TOOL),
     ],
 )
@@ -560,6 +571,16 @@ def test_news_reaches_the_orchestrator_as_counts_only(db: Connection, site: Site
         "locality_unverified": False,
         "ecosystem": "wetland",
         "searches": [],
+        "kept": [
+            {
+                "event": EVENT,
+                "date": "2026-09-12",
+                "impact_type": "encroachment",
+                "direction": -1,
+                "severity": 4,
+                "source": "example.com",
+            }
+        ],
     }
     text = json.dumps([r["messages"] for r in orchestrator_requests])
     item = FIXTURE[0]
@@ -746,7 +767,7 @@ def test_fixed_pipeline_resumes_where_the_model_stopped(db: Connection, site: Si
 
 
 @requires_db
-def test_eight_steps_exceeded_falls_back(
+def test_step_cap_exceeded_falls_back(
     db: Connection, site: Site, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(orchestrator, "MAX_STEPS", 2)
@@ -758,7 +779,7 @@ def test_eight_steps_exceeded_falls_back(
     assert run["orchestrator"]["model_turns"] == 2
     assert orchestrator.MAX_STEPS == 2
     monkeypatch.undo()
-    assert orchestrator.MAX_STEPS == 8
+    assert orchestrator.MAX_STEPS == 12
 
 
 @requires_db
@@ -1484,3 +1505,259 @@ def test_mock_scenario_run_report_states_it_is_simulated(
     assert body["summary_source"] == "fallback"
     assert "simulated Time Machine scenario" in body["summary_md"]
     assert "not an observation" in body["summary_md"]
+
+
+# ----- investigation (Super's optional follow-ups) ----------------------------------------------
+
+SIGNAL = "signal:greenness_2026_04"
+FIRE = NewsScoutItem(
+    id=str(uuid5(NAMESPACE_URL, "https://example.com/mx/xochimilco-incendio")),
+    relevant=True,
+    impact_type="fire",
+    direction=-1,
+    severity=3,
+    summary="A grass fire burned in the chinampa area.",
+    published_at=date(2026, 5, 2),
+    title="Incendio en la zona chinampera de Xochimilco",
+    url="https://example.com/mx/xochimilco-incendio",
+)
+FIRE_EVENT = f"event:{FIRE.id}"
+
+
+class FakeInvestigator:
+    def __init__(self, *, fail_search: bool = False) -> None:
+        self.fail_search = fail_search
+        self.searches: list[tuple[str, tuple[date, date]]] = []
+        self.reads: list[tuple[str, str]] = []
+
+    def search(
+        self, asset: Any, topic: str, window: tuple[date, date], llm: Any
+    ) -> NewsScoutOutput:
+        self.searches.append((topic, window))
+        if self.fail_search:
+            raise httpx.ConnectError("tavily down")
+        return NewsScoutOutput(
+            events=[FIXTURE[0], FIRE],
+            searches=[
+                NewsSearchRecord(
+                    query="Xochimilco incendio OR quema",
+                    topic="general",
+                    language="es",
+                    depth="advanced",
+                    results=4,
+                    latency_ms=900,
+                    credits=2,
+                )
+            ],
+        )
+
+    def read(self, asset: Any, url: str, question: str, llm: Any, world_id: UUID) -> ArticleCheck:
+        self.reads.append((url, question))
+        return ArticleCheck(
+            url=url,
+            question=question,
+            names_site=True,
+            model_names_site=True,
+            month="2026-04",
+            answers="yes",
+            finding="A grass fire burned in the chinampa area.",
+            quote="Bomberos controlaron un incendio de pastizal en Xochimilco",
+            quote_checked=True,
+            chars_read=1800,
+            extract_ms=700,
+            credits=0.2,
+        )
+
+
+def investigated_answer() -> Any:
+    """The canned audit without base health's old value (the fire event changes it)."""
+    audit = answer(
+        summary_md=f"Encroachment news [{EVENT}] and a reported fire [{FIRE_EVENT}] weigh on "
+        "the site [score:base_health]."
+    )
+    audit["citations"] = [*audit["citations"], FIRE_EVENT]
+    return reply(json.dumps(audit), prompt_tokens=2000, completion_tokens=400)
+
+
+def investigating_script() -> list[Any]:
+    return [
+        turn(call("earth_obs")),
+        turn(call("valuation")),
+        turn(call("news_scout")),
+        turn(
+            call(
+                "search_news",
+                {"signal": SIGNAL, "topic": "fire", "why": "Greenness moved in April; a fire?"},
+            )
+        ),
+        turn(
+            call(
+                "read_article",
+                {
+                    "event": FIRE_EVENT,
+                    "question": "Did the fire reach the wetland, and when?",
+                    "why": "It would explain the signal.",
+                },
+            )
+        ),
+        turn(call("auditor")),
+        investigated_answer(),
+    ]
+
+
+def _tool_names(request: dict[str, Any]) -> list[str]:
+    return [tool["function"]["name"] for tool in request.get("tools") or []]
+
+
+@requires_db
+def test_super_investigates_between_the_news_and_the_audit(db: Connection, site: Site) -> None:
+    investigator = FakeInvestigator()
+    h = harness(db, *investigating_script(), investigator=investigator)
+    run_id = h.runner.start(site.world_id, site.asset_id)
+
+    tool_requests = [r for r in h.transport.requests if r.get("tools")]
+    assert "search_news" not in _tool_names(tool_requests[0])
+    offered = tool_requests[3]["tools"]
+    search_spec = next(t for t in offered if t["function"]["name"] == "search_news")
+    params = search_spec["function"]["parameters"]
+    assert params["properties"]["signal"]["enum"] == [SIGNAL, "signal:greenness_last_12m"]
+    assert params["required"] == ["signal", "topic", "why"]
+    read_spec = next(t for t in offered if t["function"]["name"] == "read_article")
+    assert read_spec["function"]["parameters"]["properties"]["event"]["enum"] == [EVENT]
+
+    # The planning turn (the first with investigation tools) thinks; the others don't.
+    planning = tool_requests[3]
+    assert planning["extra_body"] is None and planning["max_tokens"] == orchestrator.PLAN_MAX_TOKENS
+    assert "Now offered: search_news (signals: " in planning["messages"][-1]["content"]
+    assert all(r["extra_body"] is not None for r in tool_requests[:3] + tool_requests[4:])
+
+    # Code turned the signal (2026-04..06) into a window two months either side, up to today.
+    assert investigator.searches == [("fire", (date(2026, 2, 1), date(2026, 8, 31)))]
+    assert investigator.reads == [(FIRE.url, "Did the fire reach the wetland, and when?")]
+
+    # Super saw labels only: no title, summary or URL of what was found or read.
+    searched = json.loads(tool_requests[4]["messages"][-1]["content"])
+    assert searched["new_kept"] == [
+        {
+            "event": FIRE_EVENT,
+            "date": "2026-05-02",
+            "impact_type": "fire",
+            "direction": -1,
+            "severity": 3,
+            "source": "example.com",
+        }
+    ]
+    read = json.loads(tool_requests[5]["messages"][-1]["content"])
+    assert read == {
+        "status": "ok",
+        "event": FIRE_EVENT,
+        "names_site": True,
+        "month": "2026-04",
+        "answers": "yes",
+        "quote_checked": True,
+    }
+    text = json.dumps([r["messages"] for r in tool_requests])
+    for untrusted in (FIRE.title, FIRE.summary, FIRE.url, "Bomberos"):
+        assert untrusted and untrusted not in text
+
+    # The Auditor sees the new event, with the reading's checked labels and fenced text.
+    audit_prompt = json.dumps(h.transport.requests[-1]["messages"])
+    assert f'id=\\"{FIRE_EVENT}\\"' in audit_prompt
+    assert 'article_read=\\"true\\" names_site=\\"true\\"' in audit_prompt
+    assert "article_quote: Bomberos" in audit_prompt
+
+    trace = run_status(db, site.world_id, run_id)
+    assert trace.status == "succeeded" and trace.pipeline == "orchestrator"
+    report = run_report(db, site.world_id, run_id)
+    run = (report.auditor_json or {})["run"]
+    plan = next(s for s in run["steps"] if s["step"] == "plan")
+    assert plan["output"]["chose"] == ["search_news"]
+    assert [c["agent"] for c in plan["llm_calls"]] == ["orchestrator"]
+    investigations = [s for s in run["steps"] if s["step"] == "investigate"]
+    assert [s["tool"] for s in investigations] == ["search_news", "read_article"]
+    assert investigations[0]["output"]["why"] == "Greenness moved in April; a fire?"
+    assert investigations[0]["output"]["found"][0]["title"] == FIRE.title
+    assert investigations[1]["output"]["quote_checked"] is True
+    # The new event is priced and stored with the run's news.
+    assert {e.url for e in _tavily_events(db, site)} == {FIXTURE[0].url, FIRE.url}
+
+
+@requires_db
+def test_investigation_is_bound_to_the_run_and_capped(db: Connection, site: Site) -> None:
+    search = {"signal": SIGNAL, "topic": "drought", "why": "Check the dry season."}
+    h = harness(
+        db,
+        turn(call("earth_obs")),
+        turn(call("valuation")),
+        turn(call("news_scout")),
+        turn(call("search_news", {**search, "signal": "signal:made_up"})),
+        turn(call("search_news", search)),
+        turn(call("search_news", {**search, "topic": "fire"})),
+        turn(call("search_news", {**search, "topic": "flood"})),
+        investigated_answer(),
+        investigator=FakeInvestigator(),
+    )
+    run_id = h.runner.start(site.world_id, site.asset_id)
+
+    run = (run_report(db, site.world_id, run_id).auditor_json or {})["run"]
+    assert run["orchestrator"]["violations"] == [
+        {"code": "invalid_arguments", "tool": "search_news"},
+        {"code": "tool_unavailable", "tool": "search_news"},
+    ]
+    assert run["orchestrator"]["fallback_reason"] == "tool_unavailable"
+    names = [s["step"] for s in run["steps"]]
+    assert names.count("investigate") == 2
+    # The fixed pipeline finished the rating and never investigated.
+    assert names[names.index("fallback") :] == ["fallback", "evidence", "audit"]
+
+
+@requires_db
+def test_a_failed_follow_up_is_recorded_and_the_run_goes_on(db: Connection, site: Site) -> None:
+    h = harness(
+        db,
+        turn(call("earth_obs")),
+        turn(call("valuation")),
+        turn(call("news_scout")),
+        turn(call("search_news", {"signal": SIGNAL, "topic": "fire", "why": "A fire?"})),
+        turn(call("auditor")),
+        raw(),
+        investigator=FakeInvestigator(fail_search=True),
+    )
+    run_id = h.runner.start(site.world_id, site.asset_id)
+
+    tool_requests = [r for r in h.transport.requests if r.get("tools")]
+    assert json.loads(tool_requests[-1]["messages"][-1]["content"]) == {
+        "status": "failed",
+        "error": "search_error",
+    }
+    status = run_status(db, site.world_id, run_id)
+    assert status.status == "succeeded" and not status.degraded
+    report = run_report(db, site.world_id, run_id)
+    step = next(s for s in report.auditor_json["run"]["steps"] if s["step"] == "investigate")
+    assert (step["status"], step["error"]) == ("failed", "search_error")
+    assert not any("investigate" in (f.get("type") or "") for f in report.flags or [])
+
+
+@requires_db
+def test_runs_without_an_investigator_offer_only_the_rating_steps(
+    db: Connection, site: Site
+) -> None:
+    h = harness(db, *happy_script())
+    h.runner.start(site.world_id, site.asset_id)
+
+    for request in [r for r in h.transport.requests if r.get("tools")]:
+        assert set(_tool_names(request)) <= {t.value for t in orchestrator.PIPELINE_ORDER}
+
+
+def test_signal_windows_cover_two_months_either_side_up_to_today() -> None:
+    def signal(start: str, end: str) -> Signal:
+        return Signal("signal:x", "greenness_anomaly", -1, start, end, "x", "strong")
+
+    assert signal_window(signal("2025-01", "2025-01"), date(2026, 1, 1)) == (
+        date(2024, 11, 1),
+        date(2025, 3, 31),
+    )
+    assert signal_window(signal("2026-09", "2026-10"), date(2026, 10, 22)) == (
+        date(2026, 7, 1),
+        date(2026, 10, 22),
+    )

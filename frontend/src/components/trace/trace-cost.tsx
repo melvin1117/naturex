@@ -101,7 +101,10 @@ export function TraceCost({ receipt }: { receipt: Receipt }) {
                   <td className="py-2.5 pr-3">
                     <ActorChip actor="tavily" />
                   </td>
-                  <td className="py-2.5 pr-3 text-right">{receipt.searches}</td>
+                  <td className="py-2.5 pr-3 text-right">
+                    {receipt.searches}
+                    {receipt.reads > 0 && ` + ${receipt.reads} read`}
+                  </td>
                   <td className="py-2.5 pr-3 text-right text-machine-muted">
                     {receipt.credits} credits
                   </td>

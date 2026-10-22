@@ -123,8 +123,10 @@ function TraceBody({
             />
           )}
           <span className="tabular">
-            {calls} model calls · {receipt.searches} web searches ·{" "}
-            {seconds(done?.latency_ms ?? timeline.totalMs)} ·{" "}
+            {calls} model calls · {receipt.searches} web searches
+            {receipt.reads > 0 &&
+              ` · ${receipt.reads} page${receipt.reads === 1 ? "" : "s"} read`}{" "}
+            · {seconds(done?.latency_ms ?? timeline.totalMs)} ·{" "}
             <span className="text-machine-ink">{usd(receipt.totalUsd, 3)}</span>
             {receipt.savedPct
               ? ` (${receipt.savedPct}% less than Ultra alone)`
