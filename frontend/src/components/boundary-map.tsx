@@ -105,7 +105,7 @@ export function BoundaryMap({
   return (
     <div
       ref={setElement}
-      className={cn("absolute inset-0", className)}
+      className={cn("absolute inset-0 isolate", className)}
       data-boundary-map={view ? "" : undefined}
     >
       {view && (
