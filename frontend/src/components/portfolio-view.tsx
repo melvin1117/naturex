@@ -26,10 +26,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { AssetCard, HoldingOut, PortfolioOut } from "@/lib/api/types";
-import { outlineRings } from "@/lib/boundary-map";
 import { useAssets, usePortfolio, useWorld } from "@/lib/hooks";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
-import { siteImageUrl } from "@/lib/market-cards";
+import { siteIcon } from "@/lib/market-cards";
 import type { Grade } from "@/lib/prototype/data";
 import { GRADE_ORDER, int } from "@/lib/prototype/format";
 import {
@@ -284,18 +283,6 @@ function HoldingCard({
       </dl>
     </li>
   );
-}
-
-/**
- * What a stake's thumbnail shows, as on its Marketplace card: the site's satellite thumbnail,
- * else its cover photo, else its boundary on satellite imagery (#212); null for the leaf.
- */
-function siteIcon(card: AssetCard | undefined) {
-  if (!card) return null;
-  const src = card.site_key ? null : siteImageUrl(null, card.cover_image_url);
-  const outline = outlineRings(card.outline);
-  if (!card.site_key && !src && outline.length === 0) return null;
-  return { siteKey: card.site_key ?? null, src, outline };
 }
 
 /** A boundary map stands in for at least one stake's thumbnail: its credit goes below. */

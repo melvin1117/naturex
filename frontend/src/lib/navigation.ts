@@ -31,6 +31,7 @@ export const APP_NAV: Record<AppKey, NavItem[]> = {
   ],
   steward: [
     { href: "/steward", label: "Community home" },
+    { href: "/steward/listings", label: "Listings" },
     { href: "/steward/list", label: "List land", tour: "nav-list" },
   ],
   admin: [

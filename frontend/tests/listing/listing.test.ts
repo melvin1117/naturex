@@ -277,7 +277,7 @@ const err = (
   );
 
 describe("listingFailure: every T58 error code", () => {
-  it("409 listing_limit_reached points to the community home", () => {
+  it("409 listing_limit_reached points to the Listings page", () => {
     const f = listingFailure(err(409, "listing_limit_reached"));
     expect(f.limitReached).toBe(true);
     expect(f.title).toMatch(/Too many listings/);

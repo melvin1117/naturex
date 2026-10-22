@@ -354,7 +354,7 @@ describe("creating a listing", () => {
     );
   });
 
-  it("409 listing_limit_reached links to the community home", async () => {
+  it("409 listing_limit_reached links to the Listings page", async () => {
     setup({
       "POST /assets": () =>
         json({ detail: "listing_limit_reached" }, { status: 409 }),
@@ -365,8 +365,8 @@ describe("creating a listing", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Too many listings in progress");
     expect(
-      within(alert).getByRole("link", { name: "Community home" }),
-    ).toHaveAttribute("href", `/steward?community=${SELVA.id}`);
+      within(alert).getByRole("link", { name: "See your listings" }),
+    ).toHaveAttribute("href", `/steward/listings?community=${SELVA.id}`);
   });
 });
 
