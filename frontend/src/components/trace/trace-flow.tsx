@@ -13,12 +13,14 @@ import {
   newsFunnel,
   runSearches,
   runSignals,
+  runVision,
   seconds,
   usd,
   withoutCitations,
 } from "@/lib/trace-view";
 
 import { ActorChip, ActorIcon } from "./actor";
+import { SiteVisionView } from "./site-vision";
 
 const STATUS: Record<string, string> = {
   ok: "done",
@@ -112,9 +114,11 @@ function NodeButton({
 export function TraceFlow({
   trace,
   nodes,
+  siteKey,
 }: {
   trace: RunTrace;
   nodes: FlowNode[];
+  siteKey?: string | null;
 }) {
   const [selected, setSelected] = useState<FlowNode | null>(
     nodes.find((n) => n.step === "audit") ?? nodes[0] ?? null,
@@ -167,7 +171,7 @@ export function TraceFlow({
         aria-live="polite"
       >
         {selected ? (
-          <Inspector trace={trace} node={selected} />
+          <Inspector trace={trace} node={selected} siteKey={siteKey} />
         ) : (
           <p className="text-sm text-machine-muted">
             Choose a step to see what went in and what came out.
@@ -187,7 +191,15 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Inspector({ trace, node }: { trace: RunTrace; node: FlowNode }) {
+function Inspector({
+  trace,
+  node,
+  siteKey,
+}: {
+  trace: RunTrace;
+  node: FlowNode;
+  siteKey?: string | null;
+}) {
   const step = node.step || node.id;
   return (
     <div>
@@ -212,7 +224,12 @@ function Inspector({ trace, node }: { trace: RunTrace; node: FlowNode }) {
         {node.costUsd > 0 && <Row label="Cost" value={usd(node.costUsd, 5)} />}
         {node.decision && <Row label="Chosen by" value={node.decision.text} />}
       </dl>
-      <InspectorDetail trace={trace} node={node} step={step} />
+      <InspectorDetail
+        trace={trace}
+        node={node}
+        step={step}
+        siteKey={siteKey}
+      />
     </div>
   );
 }
@@ -221,11 +238,20 @@ function InspectorDetail({
   trace,
   node,
   step,
+  siteKey,
 }: {
   trace: RunTrace;
   node: FlowNode;
   step: string;
+  siteKey?: string | null;
 }) {
+  const vision = runVision(trace);
+  if (node.id === "vision" && vision && !vision.error)
+    return (
+      <Section title="Five years apart">
+        <SiteVisionView siteKey={siteKey} vision={vision} />
+      </Section>
+    );
   if (step === "earth_obs" || node.id.startsWith("signal-")) {
     const signals = runSignals(trace);
     return (

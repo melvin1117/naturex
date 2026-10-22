@@ -599,6 +599,62 @@ def test_a_rating_run_stores_its_news_once_and_alerts_nobody(db: Connection, sit
 
 
 @requires_db
+def test_vision_reads_the_images_in_the_satellite_step_and_reaches_the_auditor(
+    db: Connection, site: Site
+) -> None:
+    view = {"water": "lagoon", "vegetation": "green", "built_or_bare": "a road"}
+    seen = {
+        "image_1": view,
+        "image_2": view,
+        "changes": [
+            {"kind": "clearing", "where": "north", "confidence": "high", "note": "edge cleared"}
+        ],
+    }
+    first, *rest = happy_script()
+    h = harness(
+        db,
+        first,
+        reply(json.dumps(seen)),
+        *rest,
+        site_vision_live=True,
+        model_multimodal="nvidia/Nemotron-3.5-Super-VL",
+    )
+    run_id = h.runner.start(site.world_id, site.asset_id)
+
+    with sessions(db)() as session:
+        trace = rating_runs.get_run_trace(session, site.world_id, run_id)
+    assert trace is not None and trace.status is RatingRunStatus.SUCCEEDED
+    earth = next(s for s in trace.steps if s.step == "earth_obs")
+    assert earth.output is not None
+    vision = earth.output["vision"]
+    assert vision["before"]["water"] == "lagoon" and vision["changes"][0]["id"] == "image:1"
+    assert [c.agent for c in earth.llm_calls] == ["orchestrator", "site_vision"]
+    auditor = [r for r in h.transport.requests if "Audit this rating bundle" in str(r["messages"])]
+    assert auditor and "image:1 = clearing, north (high confidence)" in str(auditor[0]["messages"])
+
+
+@requires_db
+def test_a_failed_image_reading_never_fails_the_run(db: Connection, site: Site) -> None:
+    first, *rest = happy_script()
+    h = harness(
+        db,
+        first,
+        reply("not json at all"),
+        reply("still not json"),
+        *rest,
+        site_vision_live=True,
+        model_multimodal="nvidia/Nemotron-3.5-Super-VL",
+    )
+    run_id = h.runner.start(site.world_id, site.asset_id)
+
+    with sessions(db)() as session:
+        trace = rating_runs.get_run_trace(session, site.world_id, run_id)
+    assert trace is not None and trace.status is RatingRunStatus.SUCCEEDED
+    earth = next(s for s in trace.steps if s.step == "earth_obs")
+    assert earth.output is not None and earth.output["vision"] == {"error": "LLMError"}
+
+
+@requires_db
 def test_mock_news_is_never_stored(db: Connection, site: Site) -> None:
     cfg = settings(use_mocks=True)
     runner = RatingRunner(

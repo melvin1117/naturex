@@ -5,6 +5,7 @@ import {
   auditCase,
   auditChecks,
   caseEvidence,
+  changeLabel,
   citationLabel,
   costReceipt,
   modelLabel,
@@ -14,11 +15,13 @@ import {
   runSignals,
   runStory,
   runTimeline,
+  runVision,
   withoutCitations,
 } from "@/lib/trace-view";
 
 import celestunJson from "./fixtures/run-celestun.json";
 import sumideroJson from "./fixtures/run-sumidero.json";
+import visionJson from "./fixtures/run-xochimilco-vision.json";
 
 // Real runs recorded on Oct 22, 2026 (live Token Factory and Tavily, demo sites).
 const celestun = celestunJson as unknown as RunTrace;
@@ -169,5 +172,29 @@ describe("checks and cost", () => {
     expect(r.baselineUsd).toBeGreaterThan(r.totalUsd);
     expect(r.savedPct).toBeGreaterThan(0);
     expect(r.credits).toBe(8);
+  });
+});
+
+describe("vision (a run with Nemotron 3.5 Super VL, Oct 22)", () => {
+  const vision = visionJson as unknown as RunTrace;
+
+  it("reads the before/after comparison from the satellite step", () => {
+    const v = runVision(vision)!;
+    expect(v.model).toMatch(/Nemotron-3\.5-Super-VL/);
+    expect(v.before?.water).toBeTruthy();
+    expect(v.changes[0]!.id).toBe("image:1");
+    expect(runVision(celestun)).toBeNull();
+  });
+
+  it("puts it in the story, the flow and the timeline", () => {
+    const story = runStory(vision);
+    expect(story.map((l) => l.key)).toContain("vision");
+    expect(story.find((l) => l.key === "vision")!.actor).toBe("vision");
+    const earth = runFlow(vision).find((n) => n.step === "earth_obs")!;
+    expect(earth.children[0]).toMatchObject({ id: "vision", actor: "vision" });
+    expect(earth.children[0]!.title).toBe("Compare the images");
+    const lanes = runTimeline(vision).lanes.map((l) => l.actor);
+    expect(lanes).toContain("vision");
+    expect(changeLabel("vegetation_loss")).toBe("less vegetation");
   });
 });

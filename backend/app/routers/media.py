@@ -53,6 +53,16 @@ def get_thumbnail(site_key: str) -> FileResponse:
     return _file(site_key, "thumbnail")
 
 
+@router.get(
+    "/{site_key}/before.webp",
+    response_class=FileResponse,
+    responses={**_binary("image/webp", "True-colour view five years earlier"), **_NOT_FOUND},
+)
+def get_before(site_key: str) -> FileResponse:
+    """The thumbnail's view in the first year of the 5-year window (the vision model's "before")."""
+    return _file(site_key, "before")
+
+
 @router.get("/{site_key}/images.json", response_model=SiteImages, responses=_NOT_FOUND)
 def get_site_images(site_key: str, response: Response) -> SiteImages:
     """Overlay bounds, palette and legend, thumbnail metadata, date windows and attributions."""

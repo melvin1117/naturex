@@ -7,7 +7,8 @@ export const DEMO_SITES = [
   { key: "restoration_forest", name: "Sumidero Canyon Restoration Forest" },
 ] as const;
 
-export type DemoSiteFile = "overlay.png" | "thumbnail.webp" | "images.json";
+export type DemoSiteFile =
+  "overlay.png" | "thumbnail.webp" | "before.webp" | "images.json";
 
 /** Same-origin URL through the `/api` proxy (next.config.ts); the backend serves the files. */
 export function demoSiteMediaUrl(siteKey: string, file: DemoSiteFile): string {

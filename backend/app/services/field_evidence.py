@@ -9,7 +9,7 @@
 - **Analysis** (`EvidenceAnalyzer`): when both geotag checks pass, the image model labels the
   photo on a worker thread, never inside a request or a transaction. `ai_mode`: until Token
   Factory's data terms are confirmed no uploaded photo goes to a real model in any world, so
-  MiniCPM-V runs only with `FIELD_EVIDENCE_AI_LIVE=true` (`off` otherwise: stored and
+  the vision model runs only with `FIELD_EVIDENCE_AI_LIVE=true` (`off` otherwise: stored and
   geotag-checked, `not_run`, never validated); `USE_MOCKS=true` runs a fake model in-process.
   Code then decides (`evidence_verdict`); a validated photo gets an `events` row
   (`source='evidence'`) in the same transaction, written by code from its labels. An analysis

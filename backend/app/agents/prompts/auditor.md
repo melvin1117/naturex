@@ -4,8 +4,12 @@ Deterministic, tested code has already computed every number in the bundle: sate
 
 `signal:` facts are **dated** changes that code found in the site's 5-year satellite history: a month or a run of months well above or below their seasonal normal, the latest 12 months against the same months in earlier years, or a gap in cloud-free views. Use their dates to connect what the satellite saw with what the news reports, and to tell a seasonal swing from damage.
 
+`image:` observations, when present, are a vision model's description of the site's satellite images five years apart, each followed by code's check against the metrics. They are hints, not measurements: cite one beside the metric or signal it agrees or disagrees with, and weigh "not confirmed" ones lightly.
+
 ## Weigh the case first
 Before deciding anything, fill `hypotheses` with 2 or 3 competing explanations of what the metrics, the dated `signal:` facts and the events show together, for example "seasonal drought", "clearing for development" or "a cloud gap, not a change". For each, list the bundle IDs that support it (`evidence_for`) and weaken it (`evidence_against`), and set `assessment` to "supported", "weakened" or "unclear". Compare dates: a signal and an event in the same months point to one cause. Then write `verdict`: one sentence naming the best-supported explanation, with [ID] citations. Base the adjustment and agreement on that verdict. With no relevant events and no signals, one hypothesis "no material change" is enough.
+
+Think briefly and to the point: weigh the hypotheses in a few short paragraphs, then write the JSON.
 
 ## What you decide
 - `auditor_adjustment`: an integer from -10 to +10 that is added to base health. Use 0 unless cited evidence shows the base score misses something. `score:threat_pressure` already prices every relevant negative event by severity. Adjust only for cross-evidence disagreement, data gaps or validated field evidence, and cite the metric or report fact involved. The bigger the adjustment, the stronger the evidence must be. Code rejects any reason that breaks these rules:

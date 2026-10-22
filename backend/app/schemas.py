@@ -708,7 +708,8 @@ class FieldEvidenceOut(BaseModel):
     max_photos: int
     validated: int
     ai_analysis: AiAnalysisMode = Field(
-        description="What reads the photos: model (MiniCPM-V on Nebius Token Factory, only "
+        description="What reads the photos: model (Nemotron 3.5 Super VL on Nebius Token "
+        "Factory, only "
         "with FIELD_EVIDENCE_AI_LIVE), mock (USE_MOCKS: a fake model, nothing sent) or off "
         "(no photo is sent to a model, so none is validated)."
     )

@@ -1,7 +1,7 @@
 """Field evidence perception (T40, dev-spec §7.6, ADR-0003): what a field photo shows.
 
-MiniCPM-V (`Tier.PERCEPTION`, the one vision model on Token Factory; no Nemotron model reads
-images) looks at the photo's **re-encoded JPEG** (no metadata, so no location reaches the model)
+Nemotron 3.5 Super VL (`Tier.PERCEPTION`, ADR-0003's vision model) looks at the photo's
+**re-encoded JPEG** (no metadata, so no location reaches the model)
 and answers with **labels only**: land cover, disturbance signs, water clarity, authenticity
 concerns and whether the image holds text aimed at a model. The schema has no number and no
 free-text field, so nothing the model writes can become a metric, a score or report prose.
@@ -62,7 +62,7 @@ READ_PROMPT = (
 
 
 class PhotoReading(BaseModel):
-    """MiniCPM-V's answer for one photo: labels and booleans, nothing else."""
+    """The vision model's answer for one photo: labels and booleans, nothing else."""
 
     model_config = ConfigDict(extra="forbid")
 

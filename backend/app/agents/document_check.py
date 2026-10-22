@@ -1,6 +1,6 @@
 """AI document check (T71, ADR-0006 §2 and §5): an untrusted heuristic for the reviewer.
 
-MiniCPM-V (`Tier.PERCEPTION`, ADR-0003's one vision model) reads each document's **sanitised
+Nemotron 3.5 Super VL (`Tier.PERCEPTION`, ADR-0003's vision model) reads each document's **sanitised
 PNG preview**, never the original bytes, and returns the holder name, parcel ID, place, area
 and issue date with verbatim excerpts. Nemotron Nano (`Tier.FAST`) then says, per document,
 whether the holder name matches the listing's community and the place its reverse-geocoded
@@ -155,7 +155,7 @@ class AreaReading(BaseModel):
 
 
 class DocumentReading(BaseModel):
-    """MiniCPM-V's answer for one preview."""
+    """The vision model's answer for one preview."""
 
     readable: bool
     holder_name: FieldReading

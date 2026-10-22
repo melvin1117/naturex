@@ -22,10 +22,10 @@ Budget: about $25–50 of Token Factory credit per account, with the demo key ne
 | News Scout (classification, reasoning off) | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | 0.06 / 0.24 | Lightning |
 | Auditor (deep reasoning, capped) | `nvidia/Nemotron-3-Ultra-550b-a55b` | 1.00 / 3.00 | Super, report flagged `degraded_model` |
 | Copilot (streamed chat, tools) | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | 0.06 / 0.24 | Lightning |
-| Field Evidence: perception only | `openbmb/MiniCPM-V-4_5` (vision, JSON mode) | 0.66 / 1.11 | Code checks only (EXIF GPS/date) |
+| Vision: satellite before/after, field photos, documents (perception only) | `nvidia/Nemotron-3.5-Super-VL` (strict `json_schema`, thinking off); was `openbmb/MiniCPM-V-4_5` until Oct 22 | 0.30 / 0.90 | Code checks only (EXIF GPS/date, metrics) |
 | Copilot retrieval (embeddings) | `Qwen/Qwen3-Embedding-8B` with `dimensions=1024` | 0.01 / – | – |
 
-Field Evidence splits **seeing from judging**. MiniCPM-V describes the photo, code checks that the GPS and date fall inside the polygon and recent window, and the Nemotron Ultra Auditor decides what the evidence means for the rating.
+Vision splits **seeing from judging**. The vision model describes the image, code checks it (a photo's GPS and date against the polygon and recent window; a satellite change against the measured metrics), and the Nemotron Ultra Auditor decides what the evidence means for the rating.
 
 Estimated cost: ≈ $0.035 per full rating, ≈ $0.0002 per photo, ≈ $0.0003 per Copilot answer. Repeat Time Machine ratings are cached per `(asset, data_version, events)`, so judging doesn't re-spend.
 
@@ -72,10 +72,15 @@ Estimated cost: ≈ $0.035 per full rating, ≈ $0.0002 per photo, ≈ $0.0003 p
 
 **Update (T26, 2026-10-07):** the Auditor's JSON call runs with thinking **off**. On the full audit task (about 2,500 prompt tokens), Ultra with thinking on spent its whole 3,000-token cap reasoning and returned truncated JSON on both attempts; with thinking off it returned a valid audit in about 2 s for under $0.005 per call. Details in [dev-spec §7.7](../specs/dev-spec.md).
 
+**Update (2026-10-22): Ultra reasons again, and Nemotron reads images.**
+- **Auditor:** thinking is back **on**, with the JSON schema in the prompt only (no `response_format`) and Pydantic validation, `max_tokens=16000`. With thinking on, a strict `json_schema` made Nemotron run to the token cap; `reasoning_budget` and `reasoning_effort` are ignored by Token Factory. Ultra reasoned for 3,000–6,800 tokens and passed every check on its first answer on all three demo sites, at $0.021–0.034 per rating. Later calls keep thinking off with strict JSON: a broken thinking answer is asked again that way; a rejected one goes back once for a fix, then to Super, then to the no-op.
+- **Vision:** `nvidia/Nemotron-3.5-Super-VL` is now served, so it replaces MiniCPM-V for every image (rule #1: a non-NVIDIA model only where no Nemotron model can do the job). Spike on the two prompt-injection fixtures, 3 runs each, strict `json_schema`, thinking off: **6/6 valid on the first attempt** in 0.7–1.6 s, every document field read correctly, the planted instructions flagged every time, ≈ $0.0004–0.0006 per image. One caveat: a schema with `maxItems` on a free-text list or an extra enum field could make it loop on whitespace until the cap, so the site-vision schema keeps lists uncapped and caps them in code.
+- **Embeddings** stay on Qwen3-Embedding-8B: still no NVIDIA embedding model on Token Factory.
+
 ## Consequences
 - The backend stays a small CPU-only container with no GPU and no model weights, so every hosting option ranked in [dev-spec §21](../specs/dev-spec.md) works: Nebius Serverless, Azure Container Apps (team-approved credits), or Hugging Face Spaces / Render.
 - Model IDs live in `.env` (`MODEL_*`), so swapping a model is a config change. `make check-keys` warns if a configured ID isn't served.
-- The Agent Trace drawer and the README must show which model handled each step, including the two non-NVIDIA ones.
+- The Agent Trace drawer and the README must show which model handled each step, including the non-NVIDIA one (embeddings).
 - Photo evidence (T40) is now cheap and feasible, but stays "only if ahead".
 
 ## Alternatives considered

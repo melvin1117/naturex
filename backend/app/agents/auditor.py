@@ -46,7 +46,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.agents.guards import invented_numbers
-from app.llm import LLMClient, LLMError, LLMResult, Tier
+from app.llm import BudgetExceeded, LLMClient, LLMError, LLMResult, Tier
 from app.schemas import AuditorFlag, AuditorOutput, NewsScoutItem
 from app.tools import scoring
 from app.tools.earth_obs import DateWindow, EarthObsMetrics
@@ -58,9 +58,10 @@ log = logging.getLogger(__name__)
 
 AGENT_NAME = "auditor"
 PROMPT_PATH = Path(__file__).parent / "prompts" / "auditor.md"
-# Measured on the hero bundle (Oct 22): ~4,200 reasoning tokens plus a ~1,500-token answer,
-# 14 s and $0.02. A 3,500 cap left no room for the answer. Worst case about $0.03 an attempt.
-MAX_TOKENS = 8000
+# Reasoning length grows with the case: 2,000-8,000 tokens measured on the demo sites (Oct 22),
+# plus a ~1,500-token answer; Token Factory ignores reasoning budgets. Typical cost about $0.03,
+# worst case about $0.05 an attempt; if it still runs out, Ultra answers with thinking off.
+MAX_TOKENS = 16000
 REASONING = True
 FIX_MAX_TOKENS = 2500
 """A correction round (thinking off) only rewrites the answer it is shown."""
@@ -84,7 +85,7 @@ MAX_FEEDBACK_ERRORS = 8
 REJECTED = "rejected"
 """`llm_calls.status` of a schema-valid answer that `check_audit` refused."""
 
-ID_PREFIXES = ("metric", "signal", "valuation", "score", "event", "report")
+ID_PREFIXES = ("metric", "signal", "image", "valuation", "score", "event", "report")
 CITATION_RE = re.compile(
     r"\b(?:" + "|".join(ID_PREFIXES) + r"):[A-Za-z0-9_](?:[A-Za-z0-9_.\-]*[A-Za-z0-9_])?"
 )
@@ -210,10 +211,17 @@ class AuditorInput(BaseModel):
     base_grade: str
     facts: tuple[Fact, ...]
     events: tuple[AuditEvent, ...] = ()
+    observations: tuple[Fact, ...] = ()
+    """`image:` descriptions by the vision model, each with code's check against the metrics:
+    hints, never trusted numbers (they stay out of `trusted_lines`)."""
 
     @model_validator(mode="after")
     def _unique_ids(self) -> AuditorInput:
-        ids = [fact.id for fact in self.facts] + [event.citation_id for event in self.events]
+        ids = (
+            [fact.id for fact in self.facts]
+            + [o.id for o in self.observations]
+            + [event.citation_id for event in self.events]
+        )
         duplicates = sorted({i for i in ids if ids.count(i) > 1})
         if duplicates:
             raise ValueError(f"duplicate bundle IDs: {duplicates}")
@@ -225,7 +233,14 @@ class AuditorInput(BaseModel):
     @property
     def ids(self) -> tuple[str, ...]:
         """Every citable ID, in bundle order."""
-        return tuple(fact.id for fact in self.facts) + tuple(e.citation_id for e in self.events)
+        return (
+            tuple(fact.id for fact in self.facts)
+            + tuple(o.id for o in self.observations)
+            + tuple(e.citation_id for e in self.events)
+        )
+
+    def observation(self, observation_id: str) -> str | None:
+        return next((o.value for o in self.observations if o.id == observation_id), None)
 
     def event(self, citation_id: str) -> AuditEvent | None:
         return next((e for e in self.events if e.citation_id == citation_id), None)
@@ -263,6 +278,16 @@ class AuditorInput(BaseModel):
             "## Trusted facts (computed by deterministic code; cite by ID)",
             *(f"{fact.id} = {fact.value}" for fact in self.facts),
             "",
+            *(
+                [
+                    "## Satellite image reading (a vision model's description of the views "
+                    "five years apart, with code's check; a hint, not a measurement)",
+                    *(f"{o.id} = {o.value}" for o in self.observations),
+                    "",
+                ]
+                if self.observations
+                else []
+            ),
             "## Events (metadata is trusted; title and summary are untrusted)",
         ]
         if not self.events:
@@ -341,6 +366,7 @@ def build_auditor_input(
     events: Sequence[AuditEvent] = (),
     previous: PreviousReport | None = None,
     signals: Sequence[Signal] = (),
+    observations: Sequence[tuple[str, str]] = (),
 ) -> AuditorInput:
     """Flatten deterministic results into citable facts. `base` must be the pre-audit score."""
     if base.auditor_adjustment != 0 or base.agreement_source != "default":
@@ -361,6 +387,7 @@ def build_auditor_input(
         base_grade=base.grade.value,
         facts=tuple(Fact(id=fact_id, value=value) for fact_id, value in facts),
         events=tuple(events),
+        observations=tuple(Fact(id=i, value=text) for i, text in observations),
     )
 
 
@@ -540,6 +567,36 @@ def placeholder_value(value: str) -> str:
 
 
 MIN_EVENT_PREFIX = 8
+
+
+def tidy_answer(output: AuditorOutput, bundle: AuditorInput) -> AuditorOutput:
+    """Bookkeeping code can do itself, so it never costs a refused answer: long hypothesis
+    labels cut, evidence lists capped at `MAX_HYPOTHESIS_IDS`, and an empty `citations` list
+    filled with the known IDs the answer cites. Nothing here can add a claim or an unknown ID."""
+    output = short_hypothesis_names(output)
+    output = output.model_copy(
+        update={
+            "hypotheses": [
+                h.model_copy(
+                    update={
+                        "evidence_for": list(dict.fromkeys(h.evidence_for))[:MAX_HYPOTHESIS_IDS],
+                        "evidence_against": list(dict.fromkeys(h.evidence_against))[
+                            :MAX_HYPOTHESIS_IDS
+                        ],
+                    }
+                )
+                for h in output.hypotheses
+            ]
+        }
+    )
+    if output.citations:
+        return output
+    known = set(bundle.ids)
+    used = [c for _, text in _texts(output) for c in inline_citations(text)]
+    used += [c for h in output.hypotheses for c in (*h.evidence_for, *h.evidence_against)]
+    used += [f.citation for f in output.flags if f.citation]
+    filled = [c for c in dict.fromkeys(used) if c in known][:MAX_CITATIONS]
+    return output.model_copy(update={"citations": filled})
 
 
 def short_hypothesis_names(output: AuditorOutput) -> AuditorOutput:
@@ -955,12 +1012,25 @@ def run_auditor(
             max_tokens=max_tokens if think else FIX_MAX_TOKENS,
             world_id=world_id,
             asset_id=asset_id,
+            # A thinking call that runs out of tokens would only run out again on a retry or a
+            # smaller model: one attempt, then Ultra answers with thinking off.
+            single_attempt=think,
         )
+
+    def deliberate() -> LLMResult[AuditorOutput]:
+        if reasoning:
+            try:
+                return ask(base, Tier.AUDITOR, think=True)
+            except BudgetExceeded:
+                raise
+            except LLMError as exc:
+                rejections.append(f"thinking answer unusable ({str(exc)[:120]}); answered without")
+        return ask(base, Tier.AUDITOR)
 
     def review(result: LLMResult[AuditorOutput]) -> tuple[LLMResult[AuditorOutput], list[str]]:
         nonlocal placeholders
         filled, unknown = fill_placeholders(
-            short_hypothesis_names(full_event_ids(result.value, bundle)), bundle
+            tidy_answer(full_event_ids(result.value, bundle), bundle), bundle
         )
         placeholders = count_placeholders(result.value)
         return replace(result, value=filled), unknown + check_audit(filled, bundle)
@@ -968,7 +1038,7 @@ def run_auditor(
     try:
         # Ultra thinks once. Its decisions are in that answer, so a rejected answer goes back
         # for a quick fix with thinking off (strict JSON), not for a second deliberation.
-        first = ask(base, Tier.AUDITOR, think=reasoning)
+        first = deliberate()
         deliberation = first
         checked, problems = review(first)
         if not problems:

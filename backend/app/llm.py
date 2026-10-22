@@ -50,6 +50,7 @@ PRICES_PER_M: dict[str, tuple[Decimal, Decimal]] = {
     "nvidia/Nemotron-3_5-Lightning": (Decimal("0.06"), Decimal("0.24")),
     "nvidia/nemotron-3-super-120b-a12b": (Decimal("0.30"), Decimal("0.90")),
     "nvidia/Nemotron-3-Ultra-550b-a55b": (Decimal("1.00"), Decimal("3.00")),
+    "nvidia/Nemotron-3.5-Super-VL": (Decimal("0.30"), Decimal("0.90")),
     "openbmb/MiniCPM-V-4_5": (Decimal("0.658"), Decimal("1.11")),
     "Qwen/Qwen3-Embedding-8B": (Decimal("0.01"), Decimal("0")),
 }
@@ -57,7 +58,8 @@ PRICES_PER_M: dict[str, tuple[Decimal, Decimal]] = {
 CHARS_PER_TOKEN = 2
 # Prompt tokens reserved per image part, instead of counting its base64 characters (a 1600 px
 # preview would reserve over a million "tokens"). MiniCPM-V 4.5 encodes an image of up to
-# 1.8 MP in at most about 640 tokens (9 slices + a thumbnail, 64 each); this leaves 3x margin.
+# 1.8 MP in at most about 640 tokens (9 slices + a thumbnail, 64 each); Nemotron 3.5 Super VL
+# used about 1,000 prompt tokens for a 1600 px preview plus its instructions (Oct 22).
 IMAGE_PROMPT_TOKENS = 2_048
 # Postgres advisory-lock key that serialises budget reservations across processes.
 BUDGET_LOCK_KEY = 0x4E584C4C
@@ -81,7 +83,7 @@ FALLBACK: dict[Tier, tuple[Tier, ...]] = {
     Tier.ORCHESTRATOR: (Tier.ORCHESTRATOR, Tier.FAST),
     Tier.FAST: (Tier.FAST,),
     Tier.EMBED: (Tier.EMBED,),
-    Tier.PERCEPTION: (Tier.PERCEPTION,),  # no other vision model on Token Factory to fall to
+    Tier.PERCEPTION: (Tier.PERCEPTION,),  # one vision model (ADR-0003); code checks its labels
 }
 # `doc_chunks.embedding` is vector(1024); Qwen3-Embedding-8B returns exactly this many numbers
 # with `dimensions=1024` (ADR-0003).
@@ -348,11 +350,13 @@ class LLMClient:
         max_tokens: int = 1024,
         world_id: UUID | None = None,
         asset_id: UUID | None = None,
+        single_attempt: bool = False,
     ) -> LLMResult[T]:
-        """A Pydantic-validated JSON answer. The schema is sent both in `response_format`
-        and in the prompt (T02: both together are the most reliable), except with reasoning
-        on: Token Factory's strict `json_schema` then lets Nemotron write past `max_tokens`
-        without closing the JSON (spike, Oct 22), so the prompt alone carries the schema."""
+        """A Pydantic-validated JSON answer. The schema is sent both in `response_format` and in
+        the prompt (T02: both together are the most reliable), except with reasoning on: Token
+        Factory's strict `json_schema` then lets Nemotron write past `max_tokens` without closing
+        the JSON (spike, Oct 22), so the prompt alone carries the schema. `single_attempt` makes
+        one call on `tier` (no retry, no fallback tier), for a caller with its own fallback."""
         json_schema = schema.model_json_schema()
         full = [
             *messages,
@@ -379,6 +383,7 @@ class LLMClient:
             max_tokens=max_tokens,
             world_id=world_id,
             asset_id=asset_id,
+            single_attempt=single_attempt,
             **({} if reasoning else {"response_format": response_format}),
         )
 
@@ -544,11 +549,13 @@ class LLMClient:
         max_tokens: int,
         world_id: UUID | None,
         asset_id: UUID | None,
+        single_attempt: bool = False,
         **request: Any,
     ) -> LLMResult[T]:
         failures: list[str] = []
         budget = Decimal(str(self._settings.llm_budget_usd))
-        for attempt, attempt_tier in enumerate(self._attempts(tier), start=1):
+        tiers = [tier] if single_attempt else self._attempts(tier)
+        for attempt, attempt_tier in enumerate(tiers, start=1):
             model = self.model_for(attempt_tier)
             reserve = _reserve_usd(model, messages, max_tokens)
             planned = CallRecord(

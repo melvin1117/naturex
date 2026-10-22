@@ -27,16 +27,18 @@ from app.tools.earth_obs import DATA_DIR, DateWindow, LandcoverClass, load_site_
 IMAGES_DIR = DATA_DIR / "images"
 SITE_KEY_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 
-ImageKind = Literal["overlay", "thumbnail", "sidecar"]
+ImageKind = Literal["overlay", "thumbnail", "sidecar", "before"]
 _SUFFIX: dict[ImageKind, str] = {
     "overlay": "overlay.png",
     "thumbnail": "thumbnail.webp",
+    "before": "before.webp",
     "sidecar": "images.json",
 }
 MEDIA_TYPES: dict[ImageKind, str] = {
     "overlay": "image/png",
     "thumbnail": "image/webp",
     "sidecar": "application/json",
+    "before": "image/webp",
 }
 
 OVERLAY_MAX_PX = 1024

@@ -44,8 +44,8 @@ export const ACTOR: Record<
     kind: "model",
   },
   vision: {
-    name: "Vision model",
-    role: "Reads images",
+    name: "Nemotron 3.5 Super VL",
+    role: "Reads satellite images and describes what changed",
     kind: "model",
   },
   embed: {
@@ -166,6 +166,56 @@ export function runSignals(trace: RunTrace): Signal[] {
   return Array.isArray(signals) ? (signals as Signal[]) : [];
 }
 
+export type VisionChange = {
+  id: string;
+  kind: string;
+  where: string;
+  confidence: string;
+  note: string;
+  agrees: boolean | null;
+  check: string;
+};
+
+export type Vision = {
+  model: string | null;
+  overall: string;
+  before: Record<string, string> | null;
+  after: Record<string, string> | null;
+  changes: VisionChange[];
+  error: string | null;
+};
+
+/** The vision model's before/after reading of the site's satellite views, if it ran. */
+export function runVision(trace: RunTrace): Vision | null {
+  const v = out(stepNamed(trace, "earth_obs")).vision as Output | undefined;
+  if (!v) return null;
+  return {
+    model: (v.model as string | null) ?? null,
+    overall: String(v.overall ?? "unclear"),
+    before: (v.before as Record<string, string> | null) ?? null,
+    after: (v.after as Record<string, string> | null) ?? null,
+    changes: Array.isArray(v.changes) ? (v.changes as VisionChange[]) : [],
+    error: (v.error as string | null) ?? null,
+  };
+}
+
+const CHANGE_LABEL: Record<string, string> = {
+  clearing: "clearing",
+  new_structures: "new structures",
+  road: "a road",
+  vegetation_loss: "less vegetation",
+  water_loss: "less water",
+  water_gain: "more water",
+  regrowth: "regrowth",
+  burn_scar: "a burn scar",
+  flooding: "flooding",
+  no_clear_change: "no clear change",
+};
+
+export function changeLabel(kind: string): string {
+  return CHANGE_LABEL[kind] ?? kind.replaceAll("_", " ");
+}
+
 export type Search = {
   query: string;
   language: string | null;
@@ -190,7 +240,7 @@ export function runSearches(trace: RunTrace): Search[] {
 
 export type EvidenceRef = {
   id: string;
-  kind: "fact" | "news" | "evidence" | "unknown";
+  kind: "fact" | "image" | "news" | "evidence" | "unknown";
   label: string;
   value: string | null;
   url: string | null;
@@ -245,6 +295,16 @@ function evidenceRef(id: string, evidence: Output): EvidenceRef {
       kind: "unknown",
       label: citationLabel(id),
       value: null,
+      url: null,
+      date: null,
+      direction: null,
+    };
+  if (item.kind === "image")
+    return {
+      id,
+      kind: "image",
+      label: "Satellite image reading",
+      value: (item.value as string | null) ?? null,
       url: null,
       date: null,
       direction: null,
@@ -515,6 +575,26 @@ export function runStory(trace: RunTrace): StoryLine[] {
     });
   }
 
+  const vision = runVision(trace);
+  const visionCall = ownCalls(earth, "site_vision").findLast(
+    (c) => c.status === "ok",
+  );
+  if (vision && !vision.error) {
+    const confirmed = vision.changes.filter((c) => c.agrees).length;
+    const real = vision.changes.filter((c) => c.kind !== "no_clear_change");
+    lines.push({
+      key: "vision",
+      actor: "vision",
+      text: real.length
+        ? `${modelLabel(visionCall?.model ?? vision.model)} compared the site's satellite views five years apart and described ${real.length} change${real.length === 1 ? "" : "s"}; code confirmed ${confirmed} against the data.`
+        : `${modelLabel(visionCall?.model ?? vision.model)} compared the site's satellite views five years apart and saw no clear change, which code checked against the data.`,
+      details: vision.changes.map(
+        (c) =>
+          `${changeLabel(c.kind)} (${c.where}, ${c.confidence}): ${c.note} — ${c.check}`,
+      ),
+    });
+  }
+
   const valuation = stepNamed(trace, "valuation");
   if (valuation?.status === "ok") {
     const o = out(valuation);
@@ -686,6 +766,20 @@ export function runFlow(trace: RunTrace): FlowNode[] {
         (s) => s.kind === "greenness_anomaly",
       ).length;
       base.summary = `${num(o.area_ha)} ha · ${dated} dated change${dated === 1 ? "" : "s"}`;
+      const vision = runVision(trace);
+      const seeing = ownCalls(step, "site_vision");
+      const visionNodes = seeing.length
+        ? [
+            callNode(
+              "vision",
+              seeing.at(-1)!,
+              "Compare the images",
+              vision?.error
+                ? "the reading failed; the run went on without it"
+                : `${vision?.overall ?? "unclear"} · ${vision?.changes.filter((c) => c.agrees).length ?? 0} change(s) confirmed by code`,
+            ),
+          ]
+        : [];
       base.children = signals.map((s, i) => ({
         ...base,
         id: `signal-${i}`,
@@ -701,6 +795,7 @@ export function runFlow(trace: RunTrace): FlowNode[] {
         decision: null,
         children: [],
       }));
+      base.children = [...visionNodes, ...base.children];
     } else if (step.step === "valuation") {
       base.summary = `${money(num(o.value_low))}–${money(num(o.value_high))} a year`;
     } else if (step.step === "news") {
@@ -912,6 +1007,15 @@ export function runTimeline(trace: RunTrace): {
         at += c.latency_ms ?? 0;
       });
     } else if (step.status === "ok") {
+      for (const c of ownCalls(step, "site_vision"))
+        add(actorOf(c.model), {
+          id: `vision-${c.id}`,
+          label: "compare images",
+          detail: `${modelLabel(c.model)} · ${(c.prompt_tokens ?? 0).toLocaleString("en-US")} in · ${seconds(c.latency_ms)}`,
+          startMs: Math.max(start, end - (c.latency_ms ?? 0)),
+          endMs: end,
+          status: c.status,
+        });
       add("code", {
         id: `${step.step}-code`,
         label: TOOL_TITLE[step.step]!.toLowerCase(),

@@ -31,7 +31,7 @@ const AI_NOTICE: Record<
 > = {
   model: {
     title: "An AI model labels your photos",
-    body: "Photos that pass the location and date checks are read by an image model (MiniCPM-V on Nebius Token Factory). It sees the photo without its location data and only labels what it shows; code decides whether it counts.",
+    body: "Photos that pass the location and date checks are read by an image model (Nemotron 3.5 Super VL on Nebius Token Factory). It sees the photo without its location data and only labels what it shows; code decides whether it counts.",
   },
   mock: {
     title: "Demo mode: a stand-in model labels photos",

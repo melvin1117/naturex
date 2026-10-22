@@ -72,14 +72,20 @@ export function RunTracePage({ runId }: { runId: string }) {
         ) : !trace.data ? (
           <MachineRowsSkeleton label="Loading the trace…" />
         ) : (
-          <TraceBody trace={trace.data} />
+          <TraceBody trace={trace.data} siteKey={asset.data?.site_key} />
         )}
       </div>
     </div>
   );
 }
 
-function TraceBody({ trace }: { trace: RunTrace }) {
+function TraceBody({
+  trace,
+  siteKey,
+}: {
+  trace: RunTrace;
+  siteKey: string | null | undefined;
+}) {
   const story = useMemo(() => runStory(trace), [trace]);
   const flow = useMemo(() => runFlow(trace), [trace]);
   const timeline = useMemo(() => runTimeline(trace), [trace]);
@@ -152,7 +158,7 @@ function TraceBody({ trace }: { trace: RunTrace }) {
           <TraceStory lines={story} />
         </TabsContent>
         <TabsContent value="flow">
-          <TraceFlow trace={trace} nodes={flow} />
+          <TraceFlow trace={trace} nodes={flow} siteKey={siteKey} />
         </TabsContent>
         <TabsContent value="timeline">
           <TraceTimeline totalMs={timeline.totalMs} lanes={timeline.lanes} />

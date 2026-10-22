@@ -258,8 +258,8 @@ export const MODELS = {
     price: [1, 3],
   },
   vision: {
-    name: "MiniCPM-V (photo perception)",
-    id: "openbmb/MiniCPM-V",
-    price: [0.1, 0.3],
+    name: "Nemotron 3.5 Super VL",
+    id: "nvidia/Nemotron-3.5-Super-VL",
+    price: [0.3, 0.9],
   },
 } as const;

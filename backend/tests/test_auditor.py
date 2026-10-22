@@ -43,9 +43,10 @@ from app.agents.auditor import (
     run_auditor,
     short_hypothesis_names,
     system_prompt,
+    tidy_answer,
 )
 from app.config import get_settings
-from app.llm import DbCallLog, LLMClient
+from app.llm import THINKING_OFF, DbCallLog, LLMClient
 from app.models import LlmCall
 from app.schemas import AuditorOutput, NewsScoutItem
 from app.tools.earth_obs import load_site_metrics
@@ -366,10 +367,13 @@ POST_INVALID = {
 
 @pytest.mark.parametrize("bad", SCHEMA_INVALID.values(), ids=SCHEMA_INVALID.keys())
 def test_schema_violations_retry_then_fall_back_then_no_op(bad: dict[str, Any]) -> None:
-    result, transport = run(raw(**bad), raw(**bad), raw(**bad), raw(**bad))
+    result, transport = run(*(raw(**bad) for _ in range(5)))
 
-    # LLMClient: Ultra, Ultra retry, Super, Nano; nothing passes the schema.
-    assert models(transport) == [ULTRA, ULTRA, SUPER, NANO]
+    # One thinking attempt on Ultra, then LLMClient without thinking: Ultra, Ultra retry,
+    # Super, Nano; nothing passes the schema.
+    assert models(transport) == [ULTRA, ULTRA, ULTRA, SUPER, NANO]
+    assert transport.requests[0]["extra_body"] is None  # the thinking call
+    assert all(r["extra_body"] == THINKING_OFF for r in transport.requests[1:])
     assert result.fallback and result.degraded and result.source == "fallback"
     assert result.output.auditor_adjustment == 0
     assert [f.type for f in result.output.flags] == ["auditor_unavailable"]
@@ -777,10 +781,12 @@ def test_ultra_outage_falls_back_through_llm_client() -> None:
         "down", response=httpx.Response(503, request=REQUEST), body=None
     )
 
-    result, transport = run(outage, outage, raw())
+    result, transport = run(outage, outage, outage, raw())
 
-    assert models(transport) == [ULTRA, ULTRA, SUPER]
-    assert result.source == "super" and result.degraded and result.rounds == 1
+    # The thinking attempt, then Ultra twice without thinking, then Super.
+    assert models(transport) == [ULTRA, ULTRA, ULTRA, SUPER]
+    assert result.source == "super" and result.degraded and result.rounds == 2
+    assert result.rejections[0].startswith("thinking answer unusable")
 
 
 def test_nano_answer_that_fails_has_no_lower_tier() -> None:
@@ -788,10 +794,12 @@ def test_nano_answer_that_fails_has_no_lower_tier() -> None:
         "down", response=httpx.Response(503, request=REQUEST), body=None
     )
 
-    result, transport = run(outage, outage, outage, raw(citations=["x"]), raw(citations=["y"]))
+    result, transport = run(
+        outage, outage, outage, outage, raw(citations=["x"]), raw(citations=["y"])
+    )
 
-    assert models(transport) == [ULTRA, ULTRA, SUPER, NANO, NANO]
-    assert result.fallback and result.rounds == 2
+    assert models(transport) == [ULTRA, ULTRA, ULTRA, SUPER, NANO, NANO]
+    assert result.fallback and result.rounds == 3
 
 
 def test_budget_exhaustion_returns_the_no_op_without_calling_a_model() -> None:
@@ -1129,3 +1137,27 @@ def test_a_long_hypothesis_name_is_cut_not_refused() -> None:
     name = short_hypothesis_names(output).hypotheses[0].name
 
     assert len(name) <= 80 and name.endswith("…") and name.startswith("Mangrove clearing")
+
+
+def test_bookkeeping_is_done_by_code_not_refused() -> None:
+    many = [EVENT, *[f"metric:landcover.{k}" for k in ("trees", "water", "built", "grass")]]
+    output = AuditorOutput(
+        **_case(
+            citations=[],
+            hypotheses=[
+                {
+                    "name": "clearing",
+                    "evidence_for": many * 3,
+                    "evidence_against": [],
+                    "assessment": "supported",
+                }
+            ],
+        )
+    )
+
+    tidy = tidy_answer(output, BUNDLE)
+
+    assert len(tidy.hypotheses[0].evidence_for) == len(set(many))
+    assert EVENT in tidy.citations and "metric:landcover.built" in tidy.citations
+    assert check_audit(tidy, BUNDLE) == []
+    assert tidy_answer(output.model_copy(update={"citations": ["x"]}), BUNDLE).citations == ["x"]

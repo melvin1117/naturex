@@ -3881,6 +3881,53 @@
         }
       }
     },
+    "/media/demo-sites/{site_key}/before.webp": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Before",
+        "description": "The thumbnail's view in the first year of the 5-year window (the vision model's \"before\").",
+        "operationId": "get_before_media_demo_sites__site_key__before_webp_get",
+        "parameters": [
+          {
+            "name": "site_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Site Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "True-colour view five years earlier",
+            "content": {
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown demo site"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/media/demo-sites/{site_key}/images.json": {
       "get": {
         "tags": [
@@ -5556,7 +5603,7 @@
           "verdict": {
             "type": "string",
             "title": "Verdict",
-            "description": "One sentence naming the best-supported explanation, ending with [ID] citations; numbers only as {ID} placeholders.",
+            "description": "One sentence (under 400 characters) naming the best-supported explanation, ending with [ID] citations; numbers only as {ID} placeholders.",
             "default": ""
           },
           "auditor_adjustment": {
@@ -6533,7 +6580,7 @@
               "off"
             ],
             "title": "Ai Analysis",
-            "description": "What reads the photos: model (MiniCPM-V on Nebius Token Factory, only with FIELD_EVIDENCE_AI_LIVE), mock (USE_MOCKS: a fake model, nothing sent) or off (no photo is sent to a model, so none is validated)."
+            "description": "What reads the photos: model (Nemotron 3.5 Super VL on Nebius Token Factory, only with FIELD_EVIDENCE_AI_LIVE), mock (USE_MOCKS: a fake model, nothing sent) or off (no photo is sent to a model, so none is validated)."
           },
           "confidence": {
             "$ref": "#/components/schemas/ConfidenceEffectOut"

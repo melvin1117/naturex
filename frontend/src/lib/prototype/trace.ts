@@ -169,7 +169,7 @@ export function buildRun(args: {
       latencyMs: jitter(2400, 500),
       costUsd: cost(MODELS.vision, vIn, vOut),
       detail:
-        "A non-NVIDIA vision model describes each photo (ADR-0003); code checks GPS and date fall inside the boundary; the Auditor decides what it means.",
+        "Nemotron 3.5 Super VL describes each photo (ADR-0003); code checks GPS and date fall inside the boundary; the Auditor decides what it means.",
       output: {
         photos: args.photos,
         inside_boundary: args.photos,

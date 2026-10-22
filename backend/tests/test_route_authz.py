@@ -72,6 +72,7 @@ PUBLIC: dict[tuple[str, str], str] = {
     ("GET", "/readyz"): "readiness probe",
     ("GET", "/media/demo-sites/{site_key}/overlay.png"): "curated public imagery, no world data",
     ("GET", "/media/demo-sites/{site_key}/thumbnail.webp"): "curated public imagery",
+    ("GET", "/media/demo-sites/{site_key}/before.webp"): "curated public imagery",
     ("GET", "/media/demo-sites/{site_key}/images.json"): "curated public imagery",
 }
 

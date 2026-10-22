@@ -71,6 +71,7 @@ from app.agents.orchestrator import (
     Tool,
     orchestrate,
 )
+from app.agents.site_vision import SiteVision, read_site_change, site_images
 from app.config import Settings, get_settings
 from app.events import lock_world_publisher, publish
 from app.llm import PRICES_PER_M, CallLog, CallRecord, LLMClient, LLMError, LLMResult, cost_usd
@@ -590,6 +591,7 @@ class RunToolbox:
         self.is_wetland: bool | None = None
         self.valuation: SiteRating | None = None
         self.signals: list[Signal] = []
+        self.vision: SiteVision | None = None
         self.news_events: list[AuditEvent] = []
         self.news_items: list[NewsScoutItem] = []
         """News Scout's kept events, stored with the report (`services.news_events`)."""
@@ -735,6 +737,7 @@ class RunToolbox:
                 raise ToolFailed("no_baseline", retryable=False) from exc
         self.metrics, self.is_wetland = metrics, wetland
         self.signals = find_signals(metrics)
+        vision = self._read_images(metrics)
         return {
             "data_version": metrics.data_version,
             "scenario": metrics.scenario,
@@ -746,7 +749,30 @@ class RunToolbox:
             "mock": is_mock_metrics(metrics),
             # Dated changes found by code in the 5-year history (`tools.signals`).
             "signals": [signal.to_json() for signal in self.signals],
+            **({"vision": vision} if vision else {}),
         }
+
+    def _read_images(self, metrics: EarthObsMetrics) -> dict[str, Any] | None:
+        """The vision model's before/after reading of a demo site (optional: a failure is
+        recorded in the output and the run goes on without it)."""
+        if not self._deps.settings.site_vision_live or self._llm is None:
+            return None
+        images = site_images(self._asset.site_key)
+        if images is None:
+            return None
+        try:
+            self.vision = read_site_change(
+                images,
+                metrics=metrics,
+                llm=self._llm,
+                ecosystem=self._ecosystem().value,
+                world_id=self._spec.world_id,
+                asset_id=self._spec.asset_id,
+            )
+        except (LLMError, ValueError, OSError) as exc:
+            log.warning("site vision failed for a rating run: %s", type(exc).__name__)
+            return {"error": type(exc).__name__}
+        return self.vision.to_json()
 
     def _bound_metrics(self) -> tuple[EarthObsMetrics, bool]:
         if self.metrics is None or self.is_wetland is None:
@@ -865,6 +891,7 @@ class RunToolbox:
                 events=events,
                 previous=previous,
                 signals=self.signals,
+                observations=[(c.id, c.text()) for c in self.vision.changes] if self.vision else (),
             )
         except ValueError as exc:
             raise ToolFailed("bundle_invalid", retryable=False) from exc
@@ -901,7 +928,12 @@ def _audit_case(
             continue
         event = bundle.event(citation)
         if event is None:
-            evidence[citation] = {"kind": "fact", "value": bundle.fact(citation)}
+            seen = bundle.observation(citation)
+            evidence[citation] = (
+                {"kind": "image", "value": seen}
+                if seen is not None
+                else {"kind": "fact", "value": bundle.fact(citation)}
+            )
             continue
         evidence[citation] = {
             "kind": event.source,

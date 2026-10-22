@@ -1365,6 +1365,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/media/demo-sites/{site_key}/before.webp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Before
+         * @description The thumbnail's view in the first year of the 5-year window (the vision model's "before").
+         */
+        get: operations["get_before_media_demo_sites__site_key__before_webp_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media/demo-sites/{site_key}/images.json": {
         parameters: {
             query?: never;
@@ -2089,7 +2109,7 @@ export interface components {
             hypotheses?: components["schemas"]["AuditorHypothesis"][];
             /**
              * Verdict
-             * @description One sentence naming the best-supported explanation, ending with [ID] citations; numbers only as {ID} placeholders.
+             * @description One sentence (under 400 characters) naming the best-supported explanation, ending with [ID] citations; numbers only as {ID} placeholders.
              * @default
              */
             verdict: string;
@@ -2531,7 +2551,7 @@ export interface components {
             validated: number;
             /**
              * Ai Analysis
-             * @description What reads the photos: model (MiniCPM-V on Nebius Token Factory, only with FIELD_EVIDENCE_AI_LIVE), mock (USE_MOCKS: a fake model, nothing sent) or off (no photo is sent to a model, so none is validated).
+             * @description What reads the photos: model (Nemotron 3.5 Super VL on Nebius Token Factory, only with FIELD_EVIDENCE_AI_LIVE), mock (USE_MOCKS: a fake model, nothing sent) or off (no photo is sent to a model, so none is validated).
              * @enum {string}
              */
             ai_analysis: "model" | "mock" | "off";
@@ -7917,6 +7937,44 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Marketplace thumbnail WebP */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/webp": string;
+                };
+            };
+            /** @description Unknown demo site */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_before_media_demo_sites__site_key__before_webp_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description True-colour view five years earlier */
             200: {
                 headers: {
                     [name: string]: unknown;

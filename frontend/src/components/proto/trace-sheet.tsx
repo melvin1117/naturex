@@ -213,9 +213,9 @@ export function TraceSheet() {
                 ],
                 ["Auditor", MODELS.auditor, "Deep reasoning on, capped"],
                 [
-                  "Field evidence (photos)",
+                  "Vision (satellite, photos, documents)",
                   MODELS.vision,
-                  "Describes photos only",
+                  "Describes images; code checks them",
                 ],
               ].map(([role, model, note]) => {
                 const m = model as (typeof MODELS)[keyof typeof MODELS];
