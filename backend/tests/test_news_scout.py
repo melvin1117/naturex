@@ -19,6 +19,7 @@ from app.agents.news_scout import (
     DATA_RULE,
     FOLLOW_UP_TOPICS,
     PROMPT_VERSION,
+    TAVILY_EXCLUDED_DOMAINS,
     GeocodedPlace,
     NewsArticle,
     NewsScoutAsset,
@@ -107,7 +108,7 @@ def articles_from_tavily(name: str) -> list[NewsArticle]:
         assert json_payload["include_raw_content"] is False
         assert json_payload["search_depth"] == "advanced"
         assert json_payload["chunks_per_source"] == 3
-        assert "facebook.com" in json_payload["exclude_domains"]
+        assert json_payload["exclude_domains"] == list(TAVILY_EXCLUDED_DOMAINS)
         assert json_payload["include_answer"] is False
         assert headers["Authorization"] == "Bearer tvly-test"
         return fixture(name)

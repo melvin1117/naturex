@@ -86,7 +86,7 @@ from app.agents.orchestrator import (
     orchestrate,
 )
 from app.agents.site_vision import SiteVision, read_site_change, site_images
-from app.config import Settings, get_settings
+from app.config import Settings
 from app.events import lock_world_publisher, publish
 from app.llm import PRICES_PER_M, CallLog, CallRecord, LLMClient, LLMError, LLMResult, cost_usd
 from app.market.anchoring import reanchor_on_rerate
@@ -2044,11 +2044,27 @@ def get_run(
     )
 
 
+BASELINE_MODEL = "nvidia/Nemotron-3-Ultra-550b-a55b"
+"""The cost receipt's "all on the biggest model" price when a run has no Auditor-tier call."""
+
+
+def baseline_model_for(calls: Sequence[Mapping[str, Any]]) -> str:
+    """The model the run's Auditor tier ran on (the largest Nemotron it used), read from the
+    run itself so a trace prices the same on every server, whatever its MODEL_* settings."""
+    for call in calls:
+        model = call.get("model")
+        if call.get("tier") == "auditor" and isinstance(model, str) and model in PRICES_PER_M:
+            return model
+    return BASELINE_MODEL
+
+
 def model_usage(
-    calls: Sequence[Mapping[str, Any]], *, baseline_model: str
+    calls: Sequence[Mapping[str, Any]], *, baseline_model: str | None = None
 ) -> tuple[list[ModelUsage], CostBaseline | None]:
     """Group a run's recorded calls by model, and price its text-model tokens on
-    `baseline_model` (embeddings and image reading have no text-model equivalent)."""
+    `baseline_model` (by default `baseline_model_for`; embeddings and image reading have no
+    text-model equivalent)."""
+    baseline_model = baseline_model or baseline_model_for(calls)
     grouped: dict[str, list[Mapping[str, Any]]] = {}
     for call in calls:
         grouped.setdefault(str(call.get("model") or "unknown"), []).append(call)
@@ -2109,7 +2125,7 @@ def get_run_trace(session: Session, world_id: UUID, run_id: UUID) -> RunTraceOut
         stored.get("totals"),
     )
     calls = [c for payload, _ in spans for c in payload.get("llm_calls", []) or []]
-    models, baseline = model_usage(calls, baseline_model=get_settings().model_auditor)
+    models, baseline = model_usage(calls)
     return RunTraceOut(
         totals=RunTraceTotals.model_validate(totals) if isinstance(totals, dict) else None,
         models=models,
