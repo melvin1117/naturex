@@ -6,7 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
 import { toast } from "sonner";
 
-import { CopyIcon, useCopy } from "@/components/account-id";
+import { CopyIcon, useCopy, type CopyState } from "@/components/account-id";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -44,6 +44,9 @@ function AccountMenuContent() {
   const me = world?.me;
   const signInLink = useRef<HTMLAnchorElement>(null);
   const focusSignIn = useRef(false);
+  // Here rather than in the item, so "Copied" keeps its timer and announcement once the menu
+  // closes (the item unmounts with it).
+  const { state: copyState, copy } = useCopy(me?.id ?? "");
 
   // The menu (and its trigger) is gone after sign-out: keep focus in the header.
   useEffect(() => {
@@ -86,87 +89,96 @@ function AccountMenuContent() {
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="max-w-48 gap-2 pl-1"
-          aria-label={`Account: ${me.name}`}
-        >
-          {/* Initials as generated content, so the button's visible text matches its name. */}
-          <span
-            aria-hidden="true"
-            data-initials={initials(me.name)}
-            className="grid size-7 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground before:content-[attr(data-initials)]"
-          />
-          <span className="hidden min-w-0 truncate sm:inline">{me.name}</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64 rounded-2xl p-1.5">
-        <DropdownMenuLabel className="font-normal">
-          <span className="block truncate text-sm font-medium">{me.name}</span>
-          {me.email && (
-            <span className="block truncate text-xs text-muted-foreground">
-              {me.email}
-            </span>
-          )}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="font-normal">
-          <span className="block text-xs text-muted-foreground">
-            Account ID, to join a community as a steward
-          </span>
-          <code
-            translate="no"
-            className="mt-0.5 block truncate font-mono text-xs select-all"
-          >
-            {me.id}
-          </code>
-        </DropdownMenuLabel>
-        <CopyAccountIdItem id={me.id} />
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          disabled={signOut.isPending}
-          onSelect={() => void onSignOut()}
-        >
-          <LogOut aria-hidden="true" />
-          {signOut.isPending ? "Signing out…" : "Sign out"}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-/**
- * "Copy account ID", confirmed on the item itself (a check and "Copied" for a moment, announced
- * politely) rather than a toast; the menu stays open so the confirmation can be seen.
- */
-function CopyAccountIdItem({ id }: { id: string }) {
-  const { state, copy } = useCopy(id);
-  return (
     <>
-      <DropdownMenuItem
-        data-state-copy={state}
-        onSelect={(event) => {
-          event.preventDefault();
-          void copy();
-        }}
-      >
-        <CopyIcon copied={state === "copied"} />
-        {state === "copied"
-          ? "Copied"
-          : state === "failed"
-            ? "Couldn't copy. Select the ID above"
-            : "Copy account ID"}
-      </DropdownMenuItem>
-      <span aria-live="polite" className="sr-only">
-        {state === "copied"
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="max-w-48 gap-2 pl-1"
+            aria-label={`Account: ${me.name}`}
+          >
+            {/* Initials as generated content, so the button's visible text matches its name. */}
+            <span
+              aria-hidden="true"
+              data-initials={initials(me.name)}
+              className="grid size-7 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground before:content-[attr(data-initials)]"
+            />
+            <span className="hidden min-w-0 truncate sm:inline">{me.name}</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64 rounded-2xl p-1.5">
+          <DropdownMenuLabel className="font-normal">
+            <span className="block truncate text-sm font-medium">
+              {me.name}
+            </span>
+            {me.email && (
+              <span className="block truncate text-xs text-muted-foreground">
+                {me.email}
+              </span>
+            )}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="font-normal">
+            <span className="block text-xs text-muted-foreground">
+              Account ID, to join a community as a steward
+            </span>
+            <code
+              translate="no"
+              className="mt-0.5 block truncate font-mono text-xs select-all"
+            >
+              {me.id}
+            </code>
+          </DropdownMenuLabel>
+          <CopyAccountIdItem state={copyState} onCopy={copy} />
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            disabled={signOut.isPending}
+            onSelect={() => void onSignOut()}
+          >
+            <LogOut aria-hidden="true" />
+            {signOut.isPending ? "Signing out…" : "Sign out"}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {/* Outside the menu: a role="menu" may only own menu items, groups and separators. */}
+      <span aria-live="polite" className="sr-only" data-copy-status="">
+        {copyState === "copied"
           ? "Account ID copied."
-          : state === "failed"
+          : copyState === "failed"
             ? "Couldn't copy your account ID. Select it above and copy it yourself."
             : ""}
       </span>
     </>
+  );
+}
+
+/**
+ * "Copy account ID", confirmed on the item itself (a check and "Copied" for a moment; the
+ * account menu announces it politely) rather than a toast. The menu stays open so the
+ * confirmation can be seen.
+ */
+function CopyAccountIdItem({
+  state,
+  onCopy,
+}: {
+  state: CopyState;
+  onCopy: () => Promise<void>;
+}) {
+  return (
+    <DropdownMenuItem
+      data-state-copy={state}
+      onSelect={(event) => {
+        event.preventDefault();
+        void onCopy();
+      }}
+    >
+      <CopyIcon copied={state === "copied"} />
+      {state === "copied"
+        ? "Copied"
+        : state === "failed"
+          ? "Couldn't copy. Select the ID above"
+          : "Copy account ID"}
+    </DropdownMenuItem>
   );
 }

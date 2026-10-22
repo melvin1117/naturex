@@ -199,6 +199,35 @@ function setup(
   });
 }
 
+const MENU_CHILD_ROLES = new Set([
+  "menuitem",
+  "menuitemcheckbox",
+  "menuitemradio",
+  "group",
+  "separator",
+  "none",
+  "presentation",
+]);
+
+/**
+ * axe's aria-required-children for role="menu": every child is a menu item, a group or a
+ * separator, or a plain container (a label) with no ARIA of its own; no live region inside.
+ */
+function expectOnlyMenuChildren(menu: HTMLElement) {
+  expect(menu.querySelector("[aria-live]")).toBeNull();
+  for (const child of Array.from(menu.children)) {
+    const role = child.getAttribute("role");
+    if (role) {
+      expect(MENU_CHILD_ROLES, `role="${role}" in the menu`).toContain(role);
+    } else {
+      const aria = child
+        .getAttributeNames()
+        .filter((name) => name.startsWith("aria-"));
+      expect(aria, `${child.tagName} in the menu`).toEqual([]);
+    }
+  }
+}
+
 describe("creating a community", () => {
   const created = {
     id: "99999999-9999-4999-8999-999999999999",
@@ -413,10 +442,15 @@ describe("creating a community", () => {
     expect(
       await within(menu).findByRole("menuitem", { name: "Copied" }),
     ).toBeVisible();
-    expect(within(menu).getByText("Account ID copied.")).toHaveAttribute(
-      "aria-live",
-      "polite",
-    );
+    // Announced from outside the menu (aria-required-children: a menu owns only items,
+    // groups and separators), so it's still there once the menu closes.
+    const status = screen.getByText("Account ID copied.");
+    expect(status).toHaveAttribute("aria-live", "polite");
+    expect(menu.contains(status)).toBe(false);
+    expectOnlyMenuChildren(menu);
+    fireEvent.keyDown(menu, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    expect(screen.getByText("Account ID copied.")).toBeInTheDocument();
   });
 
   it("checks the name before sending", async () => {
