@@ -23,7 +23,7 @@ Week 1 ended with 3 of 17 tasks done (T04, T06, T07). **The Oct 23 freeze and Oc
 | D3 | T02 Token Factory spike → T09 LLM client → T10 live AI summary → T12 bare report page |
 | PD | P01 brief → P02 flows → P03 wireframes + P04 design system → P05 hi-fi key screens |
 
-Pick tasks from [task-map.html](./task-map.html) (🟢 = every dependency done). Weeks 2–4 below keep their content. Anything not done by its Friday gate rolls into the next sprint, and the next *Should* item is cut first.
+Pick tasks from the task map (`make task-map-latest`, then open `tasks/task-map.html`; 🟢 = every dependency done). Weeks 2–4 below keep their content. Anything not done by its Friday gate rolls into the next sprint, and the next *Should* item is cut first.
 
 ## Re-plan (Tue Oct 6): real accounts, roles and two apps ([ADR-0005](../docs/adr/0005-accounts-roles-and-two-apps.md))
 The judge tour is a showcase; the product needs real flows. New tasks **T54–T68** (#97–#111), all *Must*. The quarterly revenue split (D4, T41, already merged) also becomes *Must*.
@@ -185,4 +185,4 @@ Since ADR-0005, two more chains converge on T46: accounts (T54 → T56 → T68 �
 1. GitHub handles for each role (for CODEOWNERS and assignment)?
 2. Which design tool: Figma (free Starter plan) or Penpot (open source)?
 3. Does anyone attend a Builders & Brews city event (City Winner prize, extra credits)?
-4. ~~Where to track tasks~~ Decided: GitHub Issues + the generated task map (`tasks/task-map.html`), with the Project board mirroring status (`make board`).
+4. ~~Where to track tasks~~ Decided: GitHub Issues + the generated task map (published to the `task-map` branch, [ADR-0007](../docs/adr/0007-publish-task-map-outside-main.md)), with the Project board mirroring status (`make board`).

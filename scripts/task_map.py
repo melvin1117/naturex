@@ -3,15 +3,19 @@
 
 Reads task dependencies from tasks/todo.md and live status from GitHub issues
 (closed = done; open with an assignee = picked). Writes:
-  tasks/task-map.html  for people (open in a browser)
-  tasks/task-map.json  for AI agents (see "suggestions")
+  task-map.html  for people (open in a browser)
+  task-map.json  for AI agents (see "suggestions")
+into tasks/ (git-ignored) or --out-dir. The task-map workflow publishes them to the
+`task-map` branch, never to main (ADR-0007); `make task-map-latest` downloads them.
 
 Usage:
   python3 scripts/task_map.py                       # live sync via `gh` (gh auth login)
   python3 scripts/task_map.py --issues-json f.json  # offline, from saved issue data
+  python3 scripts/task_map.py --out-dir DIR         # write somewhere other than tasks/
+  python3 scripts/task_map.py --check               # offline: validate todo.md, write nothing
 
-Files are only rewritten when task data changes, so scheduled syncs don't create
-empty commits. Standard library only.
+Files are only rewritten when task data or this script changes (both are in
+"data_hash"), so scheduled syncs don't publish empty updates. Standard library only.
 """
 
 # ruff: noqa: E501, UP017  (long lines are the HTML/CSS template; timezone.utc keeps Python 3.9 working)
@@ -32,8 +36,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 TODO = ROOT / "tasks" / "todo.md"
-OUT_HTML = ROOT / "tasks" / "task-map.html"
-OUT_JSON = ROOT / "tasks" / "task-map.json"
+OUT_DIR = ROOT / "tasks"
 REPO = "melvin1117/naturex"
 ROLES = ["PD", "D1", "D2", "D3"]
 PRIORITY_RANK = {"Must": 0, "Should": 1, "Could": 2}
@@ -43,11 +46,13 @@ HEADING = re.compile(
     r"(?P<size>XS|S|M|L) · (?P<prio>Must|Should|Could)",
     re.M,
 )
+TASK_HEADING = re.compile(r"^### [TP]\d\d\b")
 
 
 def parse_todo(text: str) -> dict[str, dict[str, Any]]:
     """Extract id, title, issue, owner roles, priority, week and deps for every task."""
     tasks: dict[str, dict[str, Any]] = {}
+    errors: list[str] = []
     week = 0
     blocks = re.split(r"\n(?=## |### )", text)
     for block in blocks:
@@ -57,6 +62,11 @@ def parse_todo(text: str) -> dict[str, dict[str, Any]]:
             continue
         m = HEADING.match(block)
         if not m:
+            if TASK_HEADING.match(block):
+                errors.append(f"Heading doesn't match the expected format: {block.splitlines()[0]}")
+            continue
+        if m.group("id") in tasks:
+            errors.append(f"Duplicate task id {m.group('id')}: {block.splitlines()[0]}")
             continue
         deps_match = re.search(r"\*\*Deps:\*\* ([^·\n]+)", block)
         owner_text = m.group("owner")
@@ -72,8 +82,10 @@ def parse_todo(text: str) -> dict[str, dict[str, Any]]:
             "week": week,
             "deps": re.findall(r"[TP]\d\d", deps_match.group(1) if deps_match else ""),
         }
+    if errors:
+        sys.exit("Invalid todo.md:\n  " + "\n  ".join(errors))
     if not tasks:
-        sys.exit(f"No tasks found in {TODO}; has the heading format changed?")
+        sys.exit("No tasks found in todo.md; has the heading format changed?")
     unknown = {d for t in tasks.values() for d in t["deps"] if d not in tasks}
     if unknown:
         sys.exit(f"Unknown dependencies in todo.md: {sorted(unknown)}")
@@ -119,6 +131,12 @@ def fetch_issues(issues_json: Path | None) -> dict[int, dict[str, Any]]:
         }
         for i in raw
     }
+
+
+def generator_hash() -> str:
+    """Git blob hash of this script, so a template change always republishes the map."""
+    content = Path(__file__).read_bytes()
+    return hashlib.sha1(b"blob %d\0" % len(content) + content, usedforsecurity=False).hexdigest()
 
 
 def build(tasks: dict[str, dict[str, Any]], issues: dict[int, dict[str, Any]]) -> dict[str, Any]:
@@ -202,6 +220,7 @@ def build(tasks: dict[str, dict[str, Any]], issues: dict[int, dict[str, Any]]) -
         "critical_path": critical,
         "suggestions": suggestions,
         "counts": counts,
+        "generator": generator_hash(),
     }
     data["data_hash"] = hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:16]
     return data
@@ -325,7 +344,7 @@ table.picks td {{ padding:8px 14px; border-bottom:1px solid var(--border); }}
 </style></head><body>
 <header>
   <h1>🌿 NatureX task map</h1>
-  <div class="muted">Synced from GitHub issues {generated_at} · source: <code>tasks/todo.md</code> + issue status · regenerate: <code>make task-map</code></div>
+  <div class="muted">Synced from GitHub issues {generated_at} · source: <code>tasks/todo.md</code> + issue status · published to the <code>task-map</code> branch · download: <code>make task-map-latest</code> · regenerate locally: <code>make task-map</code></div>
   <div class="stats">
     <span class="stat">✅ Done <b>{c["done"]}</b>/{total}</span><span class="stat">🔨 In progress <b>{c["in_progress"]}</b></span>
     <span class="stat">⚠️ Picked early <b>{c["picked_early"]}</b></span><span class="stat">🟢 Ready <b>{c["ready"]}</b></span>
@@ -367,19 +386,40 @@ def main() -> None:
     parser.add_argument(
         "--force", action="store_true", help="rewrite files even if task data is unchanged"
     )
+    parser.add_argument(
+        "--todo", type=Path, default=TODO, help="task list to read (default: tasks/todo.md)"
+    )
+    parser.add_argument(
+        "--out-dir", type=Path, default=OUT_DIR, help="where to write the map (default: tasks/)"
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="offline: parse todo.md and build the map with every issue open; write nothing",
+    )
     args = parser.parse_args()
 
-    data = build(parse_todo(TODO.read_text()), fetch_issues(args.issues_json))
-    if not args.force and OUT_JSON.exists():
+    tasks = parse_todo(args.todo.read_text())
+    if args.check:
+        data = build(tasks, {})
+        render_html(data, "check")
+        print(f"todo.md OK: {len(tasks)} tasks, {data['counts']['ready']} with no dependencies.")
+        return
+
+    data = build(tasks, fetch_issues(args.issues_json))
+    out_json = args.out_dir / "task-map.json"
+    out_html = args.out_dir / "task-map.html"
+    if not args.force and out_json.exists():
         try:
-            if json.loads(OUT_JSON.read_text()).get("data_hash") == data["data_hash"]:
+            if json.loads(out_json.read_text()).get("data_hash") == data["data_hash"]:
                 print("Task map unchanged.")
                 return
         except json.JSONDecodeError:
             pass
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    OUT_JSON.write_text(json.dumps({"generated_at": generated_at, **data}, indent=2) + "\n")
-    OUT_HTML.write_text(render_html(data, generated_at))
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    out_json.write_text(json.dumps({"generated_at": generated_at, **data}, indent=2) + "\n")
+    out_html.write_text(render_html(data, generated_at))
     c = data["counts"]
     print(
         f"Task map updated: {c['done']} done, {c['in_progress']} in progress, "

@@ -1,8 +1,11 @@
-# Keeps tasks/task-map.html and tasks/task-map.json in sync with GitHub issues,
-# so `git pull` always shows which tasks are done, picked, ready or blocked.
-# Status comes from issues (closed = done, assignee = picked); see scripts/task_map.py.
-# The commit is pushed straight to main by the workflow token. That works while
-# the repo is private (rulesets aren't enforced); add a bypass if that changes.
+# Publishes the task map (task-map.html for people, task-map.json for agents) generated from
+# GitHub issues; see scripts/task_map.py (closed = done, assignee = picked) and ADR-0007.
+#
+# The map lives on the orphan branch `task-map`, never on main: the `protect-main` ruleset only
+# accepts PRs that pass the required checks, so the workflow can't push there, and we don't want a
+# bypass. Each publish force-pushes one commit with only the generated files
+# (scripts/task_map_publish.sh). Read it with `make task-map-latest` or
+# `git show origin/task-map:task-map.json`.
 name: task-map
 
 on:
@@ -13,43 +16,56 @@ on:
     paths:
       - tasks/todo.md
       - scripts/task_map.py
+      - scripts/task_map_publish.sh
+      - .github/workflows/task-map.yml
+  pull_request:
   schedule:
     - cron: "17 6 * * *"
   workflow_dispatch:
 
-concurrency:
-  group: task-map
-  cancel-in-progress: false
-
-permissions:
-  contents: write
-  issues: read
+permissions: {}
 
 jobs:
-  sync:
-    name: task-map / sync
+  # Runs on every PR (seconds): a PR that breaks the todo.md format fails here, before it can
+  # stop the map from publishing.
+  check:
+    name: task-map / check
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate tasks/todo.md
+        run: python3 scripts/task_map.py --check
+
+  publish:
+    name: task-map / publish
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: task-map-publish
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      issues: read
     steps:
       - name: Check out main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
+          persist-credentials: false
 
-      - name: Regenerate the task map
+      # Reads the published map, regenerates it and pushes only if it changed. The token is used
+      # only inside this step, as an HTTP header in the script's environment (see the script).
+      - name: Publish to the task-map branch
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/task_map.py
-
-      - name: Commit if changed
-        run: |
-          if [ -z "$(git status --porcelain -- tasks/task-map.html tasks/task-map.json)" ]; then
-            echo "No change."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898900+github-actions[bot]@users.noreply.github.com"
-          git add tasks/task-map.html tasks/task-map.json
-          git commit -m "chore(tasks): sync task map [skip ci]"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          TASK_MAP_TOKEN: ${{ github.token }}
+        run: scripts/task_map_publish.sh "https://github.com/${GITHUB_REPOSITORY}.git" "$RUNNER_TEMP/task-map"
