@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import type { MyCommunity } from "@/lib/api/types";
 import { loginHref } from "@/lib/auth";
 import {
-  stewardHomeHref,
+  listingsHref,
   type ListingFailure,
   type PolygonProblem,
 } from "@/lib/listing";
@@ -70,7 +70,7 @@ export function FailureAlert({
         <p>{failure.message}</p>
         {failure.limitReached && (
           <Button asChild variant="outline" size="sm" className="mt-2">
-            <Link href={stewardHomeHref(community.id)}>Community home</Link>
+            <Link href={listingsHref(community.id)}>See your listings</Link>
           </Button>
         )}
         {failure.signIn && (

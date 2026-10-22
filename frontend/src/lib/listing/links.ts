@@ -11,6 +11,11 @@ export function listingHref(
   return `/steward/list?${params.toString()}`;
 }
 
+/** The Steward app's Listings page (#233): every listing, by where it stands. */
+export function listingsHref(communityId: string | null): string {
+  return withCommunity("/steward/listings", communityId);
+}
+
 export function stewardHomeHref(communityId: string | null): string {
   return withCommunity("/steward", communityId);
 }

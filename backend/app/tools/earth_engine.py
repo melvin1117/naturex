@@ -4,7 +4,9 @@ precompute (`scripts/precompute_sites.py`) and live ratings of new listings (T60
 Every number comes from the same code on both paths: `compute_polygon_metrics` runs the
 Earth Engine reductions, and the pure helpers below (`land_cover_shares`, `ndvi_summary`,
 `forest_loss_areas`, `biomass_values`, `mangrove_share`, `assemble_metrics`, `round_metrics`)
-turn their `getInfo()` results into the cached-metrics JSON. The pure helpers are unit-tested
+turn their `getInfo()` results into the cached-metrics JSON. `land_cover_labels` renders the
+land-cover overlay (the same Dynamic World mode as the metric) for the precompute's demo-site
+images (T35) and live-rated listings (#231). The pure helpers are unit-tested
 on fixtures; nothing in the test suite calls Earth Engine.
 
 Importing this module imports the Earth Engine client library (no network); the API imports it
@@ -13,6 +15,7 @@ lazily, only when live Earth Engine is on (`EARTH_ENGINE_LIVE=true`).
 
 from __future__ import annotations
 
+import io
 import json
 import math
 import threading
@@ -24,6 +27,13 @@ from typing import Any, cast
 import ee
 
 from app.tools.geometry import validate_polygon
+from app.tools.site_images import (
+    DW_NO_DATA,
+    DYNAMIC_WORLD_ATTRIBUTION,
+    LandCoverLabels,
+    PixelGrid,
+    overlay_png_from_labels,
+)
 
 DATA_VERSION = "2026Q3"
 END_DATE = "2026-10-01"
@@ -55,10 +65,7 @@ CLASSES = [
 NATURAL_CLASSES = {"water", "trees", "grass", "flooded_vegetation", "shrub_and_scrub"}
 
 ATTRIBUTIONS = {
-    "dynamic_world": (
-        "Dynamic World: This dataset is produced for the Dynamic World Project by Google "
-        "in partnership with National Geographic Society and the World Resources Institute."
-    ),
+    "dynamic_world": DYNAMIC_WORLD_ATTRIBUTION,
     "sentinel_2": "Contains modified Copernicus Sentinel data 2021-2026.",
     "cloud_score_plus": (
         "Cloud Score+: Pasquarella, V. J., Brown, C. F., Czerwinski, W., & Rucklidge, "
@@ -680,6 +687,41 @@ def compute_polygon_metrics(
     )
 
 
+# ----- the land-cover overlay (T35 demo sites, #231 live listings) ----------------------------
+
+
+def compute_png(image: ee.Image, grid: PixelGrid) -> bytes:
+    """One `computePixels` round trip: ``image`` on ``grid`` as PNG bytes."""
+    data = ee.data.computePixels({"expression": image, "fileFormat": "PNG", "grid": grid.ee_grid()})
+    if not isinstance(data, bytes):
+        raise RuntimeError("computePixels did not return PNG bytes.")
+    return data
+
+
+def land_cover_labels(aoi: ee.Geometry, grid: PixelGrid) -> LandCoverLabels:
+    """The Dynamic World mode over the land-cover metric's window (`dw_mode`, `START_12M` to
+    `END_DATE`), clipped to ``aoi``, on ``grid``: one byte per pixel, `DW_NO_DATA` outside."""
+    from PIL import Image
+
+    labels = (
+        dw_mode(aoi, ee.Date(START_12M), ee.Date(END_DATE))
+        .clip(aoi)
+        .unmask(DW_NO_DATA, False)
+        .toUint8()
+    )
+    with Image.open(io.BytesIO(compute_png(labels, grid))) as image:
+        if image.size != (grid.width, grid.height):
+            raise RuntimeError(f"Overlay is {image.size}, expected {grid.width}x{grid.height}.")
+        raw = image.getchannel(0).tobytes()
+    return LandCoverLabels(raw, grid.width, grid.height, START_12M, END_DATE)
+
+
+def dw_overlay_png(aoi: ee.Geometry, grid: PixelGrid) -> bytes:
+    """The land-cover overlay PNG (indexed, transparent outside the polygon)."""
+    grid_labels = land_cover_labels(aoi, grid)
+    return overlay_png_from_labels(grid_labels.labels, grid_labels.width, grid_labels.height)
+
+
 # ----- the live client (T60) ------------------------------------------------------------------
 
 
@@ -708,3 +750,8 @@ class EarthEngineApi:
     ) -> dict[str, Any]:
         self._ensure_initialised()
         return compute_polygon_metrics(geojson, site_key=site_key, checkpoint=checkpoint)
+
+    def land_cover_labels(self, geojson: Mapping[str, Any], grid: PixelGrid) -> LandCoverLabels:
+        """A listing's land-cover overlay labels (#231), with the same per-request deadline."""
+        self._ensure_initialised()
+        return land_cover_labels(ee.Geometry(geometry_from_feature(geojson)), grid)

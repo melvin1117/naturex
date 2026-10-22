@@ -38,7 +38,11 @@ import type { ApiError } from "@/lib/api/errors";
 import type { AssetDetail, SiteImages } from "@/lib/api/types";
 import { boundaryLatLngs, chartPrices, newsItems } from "@/lib/asset-detail";
 import { outlineRings } from "@/lib/boundary-map";
-import { demoSiteMediaUrl } from "@/lib/demo-site-images";
+import {
+  assetLandCover,
+  NO_OVERLAY_NOTE,
+  type AssetLandCover,
+} from "@/lib/land-cover-overlay";
 import {
   useAsset,
   useAssetPrices,
@@ -46,7 +50,6 @@ import {
   useSiteImages,
 } from "@/lib/hooks";
 import { countryName, siteImageUrl } from "@/lib/market-cards";
-import type { LatLng } from "@/lib/prototype/data";
 import {
   GRADE_LABEL,
   ha,
@@ -150,6 +153,7 @@ function AssetLoaded({
   const reports = useAssetReports(asset.id);
   const prices = useAssetPrices(asset.id);
   const images = useSiteImages(asset.site_key);
+  const landCover = assetLandCover(asset, images.data);
 
   const latest = useMemo(
     () => (asset.latest_report ? reportFacts(asset.latest_report) : null),
@@ -330,10 +334,14 @@ function AssetLoaded({
               <LandPanel
                 polygon={polygon}
                 label={asset.name}
-                overlay={overlayFor(asset.site_key, images.data)}
+                overlay={landCover?.overlay ?? null}
                 landcover={latest.landcover}
                 simulated={latest.simulated}
-                caption={images.data && overlayCaption(images.data)}
+                caption={
+                  landCover
+                    ? overlayCaption(landCover)
+                    : !asset.site_key && NO_OVERLAY_NOTE
+                }
               />
               <EvidenceTimelinePanel
                 facts={latest}
@@ -423,32 +431,20 @@ function AssetLoaded({
           communityId={asset.community_id ?? null}
         />
       </div>
-      <DataAttribution facts={latest} images={images.data} />
+      <DataAttribution
+        facts={latest}
+        images={images.data}
+        landCover={landCover}
+      />
     </>
   );
 }
 
-function overlayFor(
-  siteKey: string | null | undefined,
-  images: SiteImages | undefined,
-): { url: string; bounds: [LatLng, LatLng] } | null {
-  const bounds = images?.overlay.bounds;
-  if (!siteKey || !bounds) return null;
-  return {
-    url: demoSiteMediaUrl(siteKey, "overlay.png"),
-    bounds: [
-      [bounds[0][0], bounds[0][1]],
-      [bounds[1][0], bounds[1][1]],
-    ],
-  };
-}
-
-function overlayCaption(images: SiteImages) {
-  const { start, end } = images.overlay.date_window;
+function overlayCaption({ dateWindow, note }: AssetLandCover) {
   return (
     <>
-      Overlay: Dynamic World land-cover mode, {start} to {end}.{" "}
-      {images.scenario_note}
+      Overlay: Dynamic World land-cover mode, {dateWindow.start} to{" "}
+      {dateWindow.end}.{note && ` ${note}`}
     </>
   );
 }
@@ -528,14 +524,16 @@ function PricePanel({
 function DataAttribution({
   facts,
   images,
+  landCover,
 }: {
   facts: ReportFacts | null;
   images: SiteImages | undefined;
+  landCover: AssetLandCover | null;
 }) {
   const lines = [
     ...new Set([
       ...(facts?.attributions ?? []),
-      ...(images?.overlay.attributions ?? []),
+      ...(landCover?.attributions ?? []),
       ...(images?.thumbnail?.attributions ?? []),
       IMAGERY_ATTRIBUTION,
     ]),

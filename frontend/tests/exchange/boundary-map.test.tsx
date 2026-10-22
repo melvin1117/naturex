@@ -50,6 +50,10 @@ describe("a card without a precomputed thumbnail", () => {
     ).toBeInTheDocument();
     expect(within(link).getByText(IMAGERY_ATTRIBUTION)).toBeVisible();
     const imgs = tiles(container);
+    // Its credit (z-10) stays inside the map's own stacking context (#232).
+    expect(container.querySelector("[data-boundary-map]")).toHaveClass(
+      "isolate",
+    );
     expect(imgs.length).toBeGreaterThan(0);
     expect(imgs.length).toBeLessThanOrEqual(6);
     for (const img of imgs) {

@@ -10,6 +10,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AssetView } from "@/components/proto/asset-view";
 import type { AssetDetail } from "@/lib/api/types";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
+import { NO_OVERLAY_NOTE } from "@/lib/land-cover-overlay";
 
 import { FakeEventSource, json, sequence } from "../lib/helpers";
 import asset from "./fixtures/asset.json";
@@ -182,6 +183,84 @@ describe("AssetView", () => {
     const map = container.querySelector("[data-boundary-map]")!;
     expect(hero.contains(map)).toBe(true);
     expect(map.querySelectorAll("img").length).toBeGreaterThan(0);
+  });
+
+  it("shows a live-rated listing's own land-cover overlay and its credits (#231)", async () => {
+    const overlay = {
+      version: "abc123-1792650000",
+      media_type: "image/png",
+      width: 1024,
+      height: 946,
+      bounds: {
+        south: 19.2802,
+        west: -99.1056,
+        north: 19.2945,
+        east: -99.0892,
+      },
+      crs: "EPSG:3857",
+      dataset_id: "GOOGLE/DYNAMICWORLD/V1",
+      method: "Per-pixel mode of the Dynamic World V1 label",
+      date_window: { start: "2025-10-01", end: "2026-10-01" },
+      attributions: [
+        "Dynamic World: This dataset is produced for the Dynamic World Project by Google.",
+        "Contains modified Copernicus Sentinel data 2025-2026.",
+      ],
+    };
+    const { container } = renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /assets/${ID}`]: () =>
+          json({ ...ASSET, site_key: null, land_cover_overlay: overlay }),
+      }),
+    );
+    expect(
+      await screen.findByText(
+        "Overlay: Dynamic World land-cover mode, 2025-10-01 to 2026-10-01.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("switch", { name: "Dynamic World overlay" }),
+    ).toBeChecked();
+    expect(screen.queryByText(NO_OVERLAY_NOTE)).toBeNull();
+    const sources = screen.getByRole("region", {
+      name: /^Data behind this page/,
+    });
+    expect(
+      within(sources).getByText(
+        "Contains modified Copernicus Sentinel data 2025-2026.",
+      ),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        container.querySelector(
+          'img[alt="Xochimilco Wetland land-cover overlay"]',
+        ),
+      ).toHaveAttribute(
+        "src",
+        `/api/assets/${ID}/overlay.png?v=abc123-1792650000`,
+      ),
+    );
+  });
+
+  it("says why a listing without a live rating has no land-cover overlay (#231)", async () => {
+    const { container } = renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /assets/${ID}`]: () =>
+          json({ ...ASSET, site_key: null, land_cover_overlay: null }),
+      }),
+    );
+    expect(await screen.findByText(NO_OVERLAY_NOTE)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("switch", { name: "Dynamic World overlay" }),
+    ).toBeNull();
+    expect(screen.queryByText(/Overlay: Dynamic World/)).toBeNull();
+    expect(
+      screen.getByRole("region", { name: "Xochimilco Wetland map" }),
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector('img[alt$="land-cover overlay"]'),
+    ).toBeNull();
   });
 
   it("shows the cover photo in the hero of a listing that has one", async () => {

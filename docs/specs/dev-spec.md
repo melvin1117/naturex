@@ -521,6 +521,20 @@ create table live_rating_requests (    -- quotas: per account per day and global
 create index on live_rating_requests (user_id, created_at);
 create index on live_rating_requests (created_at);
 create index on live_rating_requests (run_id);
+
+-- Live land-cover overlays (#231, migration 0026): one per live-rated listing, deleted with it.
+create table asset_overlays (
+  asset_id uuid primary key, world_id uuid not null,
+  geometry_sha256 varchar(64) not null check (length(geometry_sha256) = 64),
+  data_version text not null,          -- with geometry_sha256: the boundary it was rendered for
+  png bytea not null check (octet_length(png) between 1 and 300000),
+  width smallint not null, height smallint not null,   -- 1..1024
+  south float8 not null, west float8 not null, north float8 not null, east float8 not null,
+  date_start date not null, date_end date not null,    -- the Dynamic World mode's window
+  created_at timestamptz default now(),
+  foreign key (world_id, asset_id) references assets (world_id, id) on delete cascade
+);
+create index on asset_overlays (world_id);
 ```
 
 ## 6. API (FastAPI)
@@ -550,6 +564,7 @@ create index on live_rating_requests (run_id);
 | `GET /assets` | Marketplace list (latest price, grade, trend, `trading`, `outline`): `listed` and `suspended` assets only (T58); a listed asset awaiting its IPO shows `trading: false` and no price (T59). `outline` is the boundary's exterior rings simplified to ≤ 64 corners, stored with the area (`assets.outline`, migration 0023) and empty for curated sites; also on community listings' cards and `GET /assets/{id}`, for the card and hero maps (#212) |
 | `GET /assets/{id}` | Asset detail + latest report + recent events (other statuses: the listing's community and admins only, 404 otherwise; T58); a listing under review also carries `latest_run_id` (T33) |
 | `GET /assets/outlines` | `{outlines: [{id, name, rings}], truncated}`: the world's public sites' boundaries simplified on the server (≤ 200 corners each, ≤ 300 sites) for the listing map's outlines and overlap hint; T36 decides on save (T33) |
+| `GET /assets/{id}/overlay.png` | A live-rated listing's Dynamic World land-cover overlay PNG (#231; metadata in the detail's `land_cover_overlay`): visibility as `GET /assets/{id}`, `public, max-age=86400` for listed assets (versioned `?v=`), else `private, no-store`; 404 `overlay_not_found` without one. Demo sites use `/media/demo-sites/{site_key}/overlay.png` |
 | `GET /places/search?q=` | `{results: [{label, lat, lon, bbox}], attribution}`: up to 5 places by name (2–120 chars) for the listing map's search (#215), from OpenStreetMap Nominatim with `NOMINATIM_USER_AGENT`, on submit only (no search-as-you-type), sharing the process's 1 request/s slot with News Scout and cached for a day; signed-in only (`use_own_account`); identical searches in flight share one request, and failures aren't cached; 422 `place_query_too_short` (under 2 characters besides spaces); 429 `place_search_rate_limited` (`Retry-After: 60`) past `PLACE_SEARCHES_PER_USER_PER_MINUTE` (20) per account per minute, 429 `place_search_busy` (`Retry-After: 1`) when the slot is more than 2 s away, 503 `place_search_unavailable` when Nominatim fails |
 | `POST /assets/{id}/evidence` | Upload one geotagged photo; the body is the file (`Content-Type` JPEG or PNG, ≤ 10 MB, ≤ 5 per listing), inspected in a worker; EXIF GPS and date checked against the listing in code, then only a re-encoded JPEG without metadata is stored → 201 with its checks; the image model labels it in the background (steward/owner `MANAGE_LISTING`: investors 403, other worlds 404; 409 `photo_limit_reached`, `photo_duplicate`, `listing_closed`; 429 per account; T40, §7.6). Audio post-hackathon |
 | `GET /assets/{id}/evidence` · `…/evidence/{photo_id}` · `…/evidence/{photo_id}/image` · `DELETE …/evidence/{photo_id}` | The listing's photos with each one's checks and the deterministic confidence effect (current → projected, and `listing_min`, the gate's 70.0); one photo (the upload's `Location`); the re-encoded JPEG (no EXIF); delete the photo with its evidence event (the next rating stops counting it). Community members and same-world admins read (404 otherwise); stewards delete (T40) |
@@ -878,6 +893,8 @@ Demo sites: run offline once and store to `data/demo_sites/*.json` (method, site
 - **Live check (2026-10-19, real service account):** a 49.1 ha square south of the `mangrove_mx` site (SW corner 20.925, −90.325; not overlapping it): **12.2 s** live, **81 ms** from the cache. Land cover trees 31 %, flooded vegetation 26 %, shrub 23 %, grass 19 % (natural 100 %); NDVI mean 0.679, Sen's slope +0.010/yr (p 0.026); 63 cloud-free scenes in 12 months, 59/60 clear months; water change 0, forest loss 0 ha; ESA CCI biomass 12.5 t/ha (GEDI 1.5); mangrove share 0.589; SOC 66.7 t C/ha; 9 datasets with attributions; the metrics pass the polygon check. Consistent with the neighbouring curated mangrove site.
 
 **As built (T35): map images.** `scripts/precompute_sites.py --images` renders, per demo site, a Dynamic World land-cover overlay (indexed PNG, official palette, transparent outside the polygon, 1024 px long side, exact polygon bounds in EPSG:3857) and a 640×400 Sentinel-2 true-colour thumbnail (Cloud Score+ masked 12-month median, polygon outline, WebP) into `data/demo_sites/images/`, with a sidecar `<site>.images.json` (bounds `[[south, west], [north, east]]`, palette, legend, date window, attributions). Images are **baseline only**: scenarios have no per-pixel map. `--images --check` verifies them offline (byte-identical output isn't guaranteed). Method and sizes in [ADR-0004](../adr/0004-earth-observation.md).
+
+**As built (#231): live overlays.** A listing rated with live Earth Engine gets the same overlay from its rating run (`services/land_cover_overlays.py`): once its live metrics are known (live world, live metrics of a new polygon; never mocks, demo sandboxes or scenarios), the run renders the polygon's Dynamic World mode over the land-cover metric's date window with the shared code (`tools/earth_engine.land_cover_labels`, `tools/site_images.overlay_png_from_labels`, also used by the precompute) and stores it in `asset_overlays` (migration 0026: one row per asset with its bounds, size, date window, boundary hash and data version; ≤ 1024 px, ≤ 300 KB, halved until it fits). It renders alongside the other steps on its own worker (one at a time per process, at most four queued) and the run waits at most 60 s for it before sealing the report; a failure or timeout is logged without secrets (the exception type, plus an Earth Engine error's message) and never fails the rating. A re-rating renders again only for a new boundary or data version, replacing the row; a row for another boundary is never served. `GET /assets/{asset_id}/overlay.png` serves it (asset visibility as the detail; `public, max-age=86400` for listed assets with the versioned URL `?v=`, else `private, no-store`; 404 `overlay_not_found` without one) and `AssetDetail.land_cover_overlay` carries its version, bounds (`south`/`west`/`north`/`east`), date window and attributions. With mocks or Earth Engine off nothing is rendered and the asset page says "Land-cover overlay appears after a live satellite rating." over the boundary map.
 
 ### 7.3 Valuation engine (deterministic)
 ```

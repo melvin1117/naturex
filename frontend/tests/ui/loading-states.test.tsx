@@ -199,6 +199,7 @@ describe("route loading states", () => {
       "/steward/assets/x/ipo",
       "/steward/community",
       "/steward/list",
+      "/steward/listings",
     ]);
   });
 
@@ -235,6 +236,7 @@ describe("route loading states", () => {
     ["/admin", "Time Machine"],
     ["/admin/verifications", "Verifications"],
     ["/portfolio", "Your stakes"],
+    ["/steward/listings", "Listings"],
   ])("%s draws its real heading", (route, heading) => {
     const { Loading } = LOADERS.find((l) => l.route === route)!;
     render(<Loading />, { wrapper: Shell });
@@ -267,6 +269,7 @@ describe("RouteSkeleton", () => {
     ["/admin/verifications", "queue"],
     ["/admin/verifications/abc", "review"],
     ["/steward/list", "page"],
+    ["/steward/listings", "listings"],
   ])("draws %s's shape with the gate's label", (path, shape) => {
     nav.pathname = path;
     render(<RouteSkeleton label="Checking your session…" />, {

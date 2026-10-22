@@ -354,7 +354,7 @@ describe("creating a listing", () => {
     );
   });
 
-  it("409 listing_limit_reached links to the community home", async () => {
+  it("409 listing_limit_reached links to the Listings page", async () => {
     setup({
       "POST /assets": () =>
         json({ detail: "listing_limit_reached" }, { status: 409 }),
@@ -365,8 +365,8 @@ describe("creating a listing", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Too many listings in progress");
     expect(
-      within(alert).getByRole("link", { name: "Community home" }),
-    ).toHaveAttribute("href", `/steward?community=${SELVA.id}`);
+      within(alert).getByRole("link", { name: "See your listings" }),
+    ).toHaveAttribute("href", `/steward/listings?community=${SELVA.id}`);
   });
 });
 
@@ -725,6 +725,15 @@ describe("resuming", () => {
     expect(await bodyOf(backend, `PATCH /assets/${ASSET_ID}`)).toEqual({
       description: "Mangroves we restore.",
     });
+  });
+
+  it("opens a draft on its details from the Listings page's Edit details", async () => {
+    nav.search = `community=${SELVA.id}&asset=${ASSET_ID}&step=details`;
+    setup({ [ASSET]: () => json(asset()) });
+    expect(await screen.findByLabelText("Site name")).toHaveValue(
+      "Laguna Verde",
+    );
+    expect(screen.queryByText("Ready to rate")).toBeNull();
   });
 
   it("an edit the backend finds unchanged (400 no_changes) still moves on", async () => {
@@ -1429,6 +1438,26 @@ describe("the full-screen map (#215)", () => {
     expect(
       await screen.findByRole("button", { name: "Full screen" }),
     ).toBeVisible();
+  });
+
+  it("keeps the map's panes and controls in their own stacking context, under the header (#232)", async () => {
+    setup();
+    await fillDetails();
+    const box = await screen.findByRole("searchbox", {
+      name: "Search for a place",
+    });
+    const stage = box.closest(".nx-map-stage") as HTMLElement;
+    // Leaflet panes and the z-[1000] controls can't escape an isolated stage.
+    expect(stage).toHaveClass("isolate", "relative");
+    expect(stage).not.toHaveClass("fixed");
+    expect(stage).toContainElement(
+      screen.getByRole("button", { name: "Full screen" }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Full screen" }));
+    // Full screen lifts the whole stage above the sticky header (z-40).
+    expect(stage).toHaveClass("isolate", "fixed", "inset-0", "z-50");
+    expect(stage).not.toHaveClass("relative");
   });
 
   it("keeps Tab within the map's controls", async () => {

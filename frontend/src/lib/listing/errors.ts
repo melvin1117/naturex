@@ -116,7 +116,7 @@ export function listingFailure(error: ApiError): ListingFailure {
         ...base,
         title: "Too many listings in progress",
         message:
-          "Your community already has as many listings in progress (drafts, ratings and ones waiting for evidence) as it can. Withdraw one from the community home, or finish it, then try again.",
+          "Your community already has as many listings in progress (drafts, ratings and ones waiting for evidence) as it can. Withdraw one on the Listings page, or finish it, then try again.",
         limitReached: true,
       };
     case "metrics_unavailable":

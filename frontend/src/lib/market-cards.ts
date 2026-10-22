@@ -86,6 +86,27 @@ export function siteImageUrl(
   }
 }
 
+export interface SiteIcon {
+  siteKey: string | null;
+  src: string | null;
+  outline: LonLatRing[];
+}
+
+/**
+ * What a site's small thumbnail shows, as on its Marketplace card: the site's satellite
+ * thumbnail, else its cover photo, else its boundary on satellite imagery (#212); null for a
+ * placeholder (no boundary yet).
+ */
+export function siteIcon(
+  card: Pick<AssetCard, "site_key" | "cover_image_url" | "outline"> | undefined,
+): SiteIcon | null {
+  if (!card) return null;
+  const src = card.site_key ? null : siteImageUrl(null, card.cover_image_url);
+  const outline = outlineRings(card.outline);
+  if (!card.site_key && !src && outline.length === 0) return null;
+  return { siteKey: card.site_key ?? null, src, outline };
+}
+
 export function countryName(code: string | null): string | null {
   if (!code) return null;
   try {
