@@ -750,4 +750,11 @@ describe("sandbox banner", () => {
       expect(screen.getByRole("region")).toHaveTextContent(NOTICE),
     );
   });
+
+  it("doesn't call the live marketplace scripted (#216)", async () => {
+    setup(<DemoBar />, WORLD);
+    const bar = await screen.findByRole("region", { name: "Demo mode" });
+    expect(bar).toHaveTextContent("the marketplace is live");
+    expect(bar).not.toHaveTextContent("Prototype with scripted data");
+  });
 });

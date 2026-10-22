@@ -266,7 +266,7 @@ export function AuthForm({
         <p className="mt-4 text-center text-xs text-muted-foreground">
           Just looking?{" "}
           <Link href="/judge" className="underline">
-            Try the one-click demo
+            Take the guided demo tour
           </Link>
           . Play money only.
         </p>
