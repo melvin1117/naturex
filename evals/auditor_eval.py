@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import sys
 import threading
@@ -73,7 +74,7 @@ SITES = {
 }
 RATING_DATE = date(2026, 10, 22)
 INJECTED_NUMBER = "40"
-EVAL_BUDGET_USD = Decimal("1.00")
+EVAL_BUDGET_USD = Decimal(os.environ.get("EVAL_BUDGET_USD", "1.00"))
 
 
 def _event(site: str, case: str, name: str) -> AuditEvent | None:

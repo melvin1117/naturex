@@ -160,6 +160,11 @@ def main() -> None:
         print("\nFix the ❌/⬜ lines above, then run `make check-keys` again.")
         sys.exit(1)
     print("\nAll required keys work. Copy the model IDs you need into MODEL_* in .env.")
+    print(
+        f"LLM_BUDGET_USD={get_settings().llm_budget_usd} caps this database only. The Token "
+        "Factory credit is shared by every environment: check the account total in the "
+        "Token Factory console before a live demo or an eval run."
+    )
 
 
 if __name__ == "__main__":
