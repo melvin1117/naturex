@@ -6,6 +6,14 @@ Built for the **Nebius × NVIDIA Global AI Hackathon**, *Best Apps & Agents* tra
 
 > **Status:** foundations in progress: backend walking skeleton, market engine and frontend skeleton (route stubs).
 
+### Run everything locally
+Needs Docker, `uv`, Node 22 and Corepack. One command starts Postgres, applies migrations, and runs the API (:8000) and the web app (:3000); Ctrl-C stops both.
+```bash
+cp .env.example .env    # first time only; add keys for live services
+make dev                # uses .env as is (USE_MOCKS=true: mock agents and data)
+make dev LIVE=1         # real services: Token Factory models, Tavily, Earth Engine (needs keys)
+```
+
 ### Quick start (backend)
 ```bash
 cp .env.example .env    # add your keys, then: make check-keys
