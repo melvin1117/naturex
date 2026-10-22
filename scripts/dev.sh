@@ -14,6 +14,10 @@ api_port="${API_PORT:-8000}"
 web_port="${WEB_PORT:-3000}"
 
 export ENVIRONMENT="${ENVIRONMENT:-development}"
+# The API's CSRF check only accepts writes from the web app's own origin (default :3000).
+if [ "$web_port" != "3000" ] && [ -z "${ALLOWED_ORIGINS:-}" ]; then
+  export ALLOWED_ORIGINS="http://localhost:$web_port"
+fi
 if [ "${LIVE:-0}" = "1" ]; then
   export USE_MOCKS=false
   export EARTH_ENGINE_LIVE=true
@@ -44,13 +48,17 @@ api_pid=$!
 web_pid=$!
 
 stop() {
+  local status="${1:-0}"
   trap - INT TERM HUP EXIT
   echo "Stopping the API and the web app..."
   kill -TERM -- "-$api_pid" "-$web_pid" 2>/dev/null || true
   wait 2>/dev/null || true
-  exit 0
+  exit "$status"
 }
-trap stop INT TERM HUP EXIT
+trap 'stop 130' INT
+trap 'stop 143' TERM
+trap 'stop 129' HUP
+trap 'stop $?' EXIT
 
 echo "API  http://localhost:$api_port/healthz  (ENVIRONMENT=$ENVIRONMENT, USE_MOCKS=${USE_MOCKS:-from .env})"
 echo "Web  http://localhost:$web_port  (Ctrl-C to stop both)"
