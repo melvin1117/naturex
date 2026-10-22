@@ -414,6 +414,8 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 - [x] `rerate_all` scheduled quarterly (`.github/workflows/rerate-all.yml`, safe without secrets)
 - Handoff to T43: `GET /admin/time-machine` (`available` (false outside a sandbox: hide the controls), current/next quarter, timeline, presets), `POST /admin/simulate/quarter {period}` (per-asset before/after health, grade, price, alerts, payout) and `POST /admin/simulate/event {asset_id, preset}`; reset is `POST /world/reset`. See dev-spec §9 "As built (T38)" and §8 (re-anchoring).
 
+- Follow-up #201: "Next quarter" runs in the background: `POST /admin/simulate/quarter` answers 202 with a `quarter_jobs` job (one queued/running per world, 409 `quarter_job_running` otherwise) and `GET /admin/simulate/quarter/{job_id}` returns its status and per-asset results; a job whose process died is taken over on the next poll or start (lease + heartbeat) and resumed through the monitor claims without re-rating or paying twice (migration 0025). The T43 panel polls the job, fills the result table as sites settle, follows a running job after a reload and offers "Finish <quarter>" for a failed or stopped one. Event presets stay synchronous (one asset, one run).
+
 **Verify:** `make test`; manual encroachment gives grade A → BBB and an alert · **Deps:** T27, T16, T29, T41, T68, T75 · **Files:** `backend/app/routers/admin.py`, `jobs/*.py`, `.github/workflows/news-sweep.yml`
 
 > **Notes from T13 (decided in its review):**

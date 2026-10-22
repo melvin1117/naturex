@@ -10,7 +10,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TimeMachinePanel } from "@/components/time-machine/time-machine-screen";
 import { WorldProvider } from "@/components/world-provider";
-import type { WorldOut } from "@/lib/api/types";
+import type { QuarterJob, SimulateQuarter, WorldOut } from "@/lib/api/types";
 import { createDataLayer } from "@/lib/data-layer";
 
 import { stubBrowserApis } from "../exchange/render";
@@ -20,6 +20,7 @@ import {
   fakeBackend,
   FakeEventSource,
   json,
+  sequence,
   WORLD,
 } from "../lib/helpers";
 import {
@@ -28,8 +29,11 @@ import {
   EVENT,
   FOREST,
   HERO,
+  JOB_ID,
   LIVE_ADMIN_WORLD,
   QUARTER,
+  quarterJob,
+  QUEUED_JOB,
   sentAlert,
   STATE,
 } from "./fixtures";
@@ -74,6 +78,22 @@ const conflict =
   (detail: string, status = 409) =>
   () =>
     json({ detail }, { status });
+
+const JOB_ROUTE = `GET /admin/simulate/quarter/${JOB_ID}`;
+
+/** `POST /admin/simulate/quarter` answers 202 with the queued job (#201). */
+const accepted = () => json(QUEUED_JOB, { status: 202 });
+
+/** A quarter run as a job: the POST is accepted, and reading the job finds `result`. */
+function quarterRoutes(
+  result: SimulateQuarter = QUARTER,
+  job: Partial<QuarterJob> = {},
+): Routes {
+  return {
+    "POST /admin/simulate/quarter": accepted,
+    [JOB_ROUTE]: () => json(quarterJob(result, job)),
+  };
+}
 
 async function nextQuarterButton() {
   return screen.findByRole("button", { name: "Next quarter: Q4 2026" });
@@ -190,9 +210,7 @@ describe("TimeMachinePanel", () => {
   });
 
   it("asks before running a quarter, and Cancel sends nothing", async () => {
-    const backend = renderPanel({
-      "POST /admin/simulate/quarter": () => json(QUARTER),
-    });
+    const backend = renderPanel(quarterRoutes());
     fireEvent.click(await nextQuarterButton());
     const dialog = await screen.findByRole("dialog", {
       name: "Move this sandbox to Q4 2026?",
@@ -204,11 +222,22 @@ describe("TimeMachinePanel", () => {
     expect(backend.calls("POST /admin/simulate/quarter")).toBe(0);
   });
 
-  it("runs the quarter with live progress, then the per-site results and alerts", async () => {
+  it("runs the quarter in the background with live progress, then the per-site results and alerts", async () => {
     let finish: (r: Response) => void = () => {};
     const backend = renderPanel({
       "POST /admin/simulate/quarter": () =>
         new Promise<Response>((resolve) => (finish = resolve)),
+      // The first read finds the job running with one site settled; the next poll, done.
+      [JOB_ROUTE]: sequence(
+        () =>
+          json(
+            quarterJob(
+              { ...QUARTER, assets: [QUARTER.assets[0]!] },
+              { status: "running", finished_at: null },
+            ),
+          ),
+        () => json(quarterJob()),
+      ),
     });
     await confirmQuarter();
 
@@ -245,19 +274,33 @@ describe("TimeMachinePanel", () => {
       ),
     ).toBeInTheDocument();
 
-    await act(async () => finish(json(QUARTER)));
+    await act(async () => finish(accepted()));
     expect(
       await bodyOf(
         backend.requests.find((r) => r.url.endsWith("/admin/simulate/quarter")),
       ),
     ).toEqual({ period: "2026Q4" });
 
-    const result = await screen.findByRole("region", {
+    // While the job runs, the sites it already settled show.
+    const partial = await screen.findByRole("region", {
       name: "Quarter result",
     });
+    expect(partial).toHaveAttribute("aria-busy", "true");
+    expect(within(partial).getAllByRole("row")).toHaveLength(2);
     expect(
-      screen.getByText("Q4 2026: 1 done, 1 skipped.", { selector: "p" }),
+      screen.getByRole("button", { name: "Running the quarter…" }),
+    ).toBeInTheDocument();
+
+    expect(
+      await screen.findByText(
+        "Q4 2026: 1 done, 1 skipped.",
+        { selector: "p" },
+        { timeout: 5_000 },
+      ),
     ).toHaveAttribute("role", "status");
+    expect(backend.calls(JOB_ROUTE)).toBe(2);
+    const result = screen.getByRole("region", { name: "Quarter result" });
+    expect(result).not.toHaveAttribute("aria-busy");
     expect(
       within(result).getByRole("heading", {
         level: 3,
@@ -293,7 +336,7 @@ describe("TimeMachinePanel", () => {
     expect(
       backend.requests.some((r) => r.url.includes("/admin/alerts?ids=alert-1")),
     ).toBe(true);
-  });
+  }, 10_000);
 
   it.each([
     ["quarter_mismatch", "The quarter already moved"],
@@ -414,22 +457,24 @@ describe("TimeMachinePanel", () => {
   });
 
   it("shows an early stop and an unpaid skipped site", async () => {
-    renderPanel({
-      "POST /admin/simulate/quarter": () =>
-        json({
+    renderPanel(
+      quarterRoutes(
+        {
           ...QUARTER,
           stopped: "rating_busy",
           assets: [
-            QUARTER.assets[0],
+            QUARTER.assets[0]!,
             {
-              ...QUARTER.assets[1],
+              ...QUARTER.assets[1]!,
               status: "stopped",
               detail: "rating_busy",
               payout: null,
             },
           ],
-        }),
-    });
+        },
+        { status: "stopped" },
+      ),
+    );
     await confirmQuarter();
     expect(
       await screen.findByText(/Stopped early: every rating worker was busy/),
@@ -441,14 +486,13 @@ describe("TimeMachinePanel", () => {
   });
 
   it("says when a quarter sent no alerts", async () => {
-    renderPanel({
-      "POST /admin/simulate/quarter": () =>
-        json({
-          ...QUARTER,
-          alerts: 0,
-          assets: QUARTER.assets.map((a) => ({ ...a, alert_ids: [] })),
-        }),
-    });
+    renderPanel(
+      quarterRoutes({
+        ...QUARTER,
+        alerts: 0,
+        assets: QUARTER.assets.map((a) => ({ ...a, alert_ids: [] })),
+      }),
+    );
     await confirmQuarter();
     expect(await screen.findByText(/No alerts were sent/)).toBeInTheDocument();
   });
@@ -555,7 +599,23 @@ describe("TimeMachinePanel", () => {
 
   it("counts only the runs that started, then what a replay skipped and found done", async () => {
     const run = pending();
-    renderPanel({ "POST /admin/simulate/quarter": run.route });
+    const replay = {
+      ...QUARTER,
+      replayed: true,
+      assets_rerated: 0,
+      assets: [
+        {
+          ...QUARTER.assets[0]!,
+          status: "already_done" as const,
+          alert_ids: [],
+        },
+        QUARTER.assets[1]!,
+      ],
+    };
+    renderPanel({
+      "POST /admin/simulate/quarter": run.route,
+      [JOB_ROUTE]: () => json(quarterJob(replay)),
+    });
     await confirmQuarter();
     await waitFor(() => expect(FakeEventSource.instances).not.toHaveLength(0));
     act(() => {
@@ -572,19 +632,7 @@ describe("TimeMachinePanel", () => {
     expect(
       screen.getByText("Re-rating sites: 1 started, 0 done."),
     ).toBeInTheDocument();
-    await act(async () =>
-      run.finish(
-        json({
-          ...QUARTER,
-          replayed: true,
-          assets_rerated: 0,
-          assets: [
-            { ...QUARTER.assets[0], status: "already_done", alert_ids: [] },
-            QUARTER.assets[1],
-          ],
-        }),
-      ),
-    );
+    await act(async () => run.finish(accepted()));
     expect(
       await screen.findByText(
         "Q4 2026 (replayed): 0 done, 1 skipped, 1 already done.",
@@ -597,18 +645,17 @@ describe("TimeMachinePanel", () => {
 
   it("asks for more than 50 alerts in parallel batches and shows them all", async () => {
     const ids = Array.from({ length: 60 }, (_, i) => `alert-${i}`);
-    const backend = renderPanel({
-      "POST /admin/simulate/quarter": () =>
-        json({
-          ...QUARTER,
-          alerts: ids.length,
-          assets: [
-            { ...QUARTER.assets[0], alert_ids: ids.slice(0, 40) },
-            // An id listed twice is asked for once.
-            { ...QUARTER.assets[1], alert_ids: [...ids.slice(40), "alert-0"] },
-          ],
-        }),
-    });
+    const backend = renderPanel(
+      quarterRoutes({
+        ...QUARTER,
+        alerts: ids.length,
+        assets: [
+          { ...QUARTER.assets[0]!, alert_ids: ids.slice(0, 40) },
+          // An id listed twice is asked for once.
+          { ...QUARTER.assets[1]!, alert_ids: [...ids.slice(40), "alert-0"] },
+        ],
+      }),
+    );
     await confirmQuarter();
     const phone = await screen.findByRole("list", { name: "Alerts sent" });
     expect(within(phone).getAllByRole("listitem")).toHaveLength(60);
@@ -646,7 +693,10 @@ describe("TimeMachinePanel", () => {
 
   it("disables Reset while a quarter runs", async () => {
     const run = pending();
-    renderPanel({ "POST /admin/simulate/quarter": run.route });
+    renderPanel({
+      "POST /admin/simulate/quarter": run.route,
+      [JOB_ROUTE]: () => json(quarterJob()),
+    });
     const reset = await screen.findByRole("button", { name: "Reset the demo" });
     expect(reset).toBeEnabled();
     await confirmQuarter();
@@ -654,7 +704,7 @@ describe("TimeMachinePanel", () => {
     expect(reset).toHaveAccessibleDescription(
       "Available once the running quarter or event finishes.",
     );
-    await act(async () => run.finish(json(QUARTER)));
+    await act(async () => run.finish(accepted()));
     await waitFor(() => expect(reset).toBeEnabled());
   });
 
@@ -691,6 +741,7 @@ describe("TimeMachinePanel", () => {
     const eventRun = pending();
     renderPanel({
       "POST /admin/simulate/quarter": quarterRun.route,
+      [JOB_ROUTE]: () => json(quarterJob()),
       "POST /admin/simulate/event": eventRun.route,
     });
     await confirmQuarter();
@@ -700,7 +751,8 @@ describe("TimeMachinePanel", () => {
     expect(quarter).toBeEnabled();
     fireEvent.click(quarter);
     expect(screen.queryByRole("dialog")).toBeNull();
-    await act(async () => quarterRun.finish(json(QUARTER)));
+    await act(async () => quarterRun.finish(accepted()));
+    await screen.findByRole("region", { name: "Quarter result" });
 
     await confirmEvent();
     const inject = await screen.findByRole("button", {
@@ -732,5 +784,190 @@ describe("TimeMachinePanel", () => {
     ).toBeVisible();
     expect(screen.queryByRole("button", { name: /Next quarter/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Reset/ })).toBeNull();
+  });
+
+  describe("a quarter running as a job (#201)", () => {
+    const AT_Q4 = {
+      ...STATE,
+      step: 1,
+      current: STATE.timeline[1]!,
+      next: STATE.timeline[2]!,
+    };
+
+    it("follows a quarter already running in this sandbox", async () => {
+      const backend = renderPanel({
+        "GET /admin/time-machine": () =>
+          json({
+            ...AT_Q4,
+            quarter_job: { id: JOB_ID, status: "running", period: "2026Q4" },
+          }),
+        [JOB_ROUTE]: () =>
+          json(quarterJob(QUARTER, { status: "running", finished_at: null })),
+      });
+      expect(
+        await screen.findByRole("button", { name: "Running the quarter…" }),
+      ).toHaveAttribute("aria-disabled", "true");
+      expect(
+        await screen.findByText("Re-rating sites: 2 of 2 done."),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/you can leave this page and come back/),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Reset the demo" }),
+      ).toBeDisabled();
+      expect(backend.calls("POST /admin/simulate/quarter")).toBe(0);
+    });
+
+    it("shows the sandbox's last quarter after a reload and offers to finish it", async () => {
+      renderPanel({
+        "GET /admin/time-machine": () =>
+          json({
+            ...AT_Q4,
+            quarter_job: { id: JOB_ID, status: "done", period: "2026Q4" },
+          }),
+        [JOB_ROUTE]: () =>
+          json(
+            quarterJob({
+              ...QUARTER,
+              assets: [
+                QUARTER.assets[0]!,
+                {
+                  ...QUARTER.assets[1]!,
+                  status: "failed",
+                  detail: "run_in_progress",
+                  payout: null,
+                },
+              ],
+            }),
+          ),
+      });
+      expect(
+        await screen.findByRole("region", { name: "Quarter result" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Finish Q4 2026" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Next quarter: Q1 2027" }),
+      ).toBeEnabled();
+    });
+
+    it("says a queued job is waiting for a worker", async () => {
+      renderPanel({
+        "POST /admin/simulate/quarter": accepted,
+        [JOB_ROUTE]: () => json(QUEUED_JOB),
+      });
+      await confirmQuarter();
+      expect(
+        await screen.findByText(/Queued: the quarter starts as soon/),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("region", { name: "Quarter result" }),
+      ).toBeNull();
+    });
+
+    it("explains a second start and follows the quarter already running", async () => {
+      let running = false;
+      const backend = renderPanel({
+        "GET /admin/time-machine": () =>
+          json(
+            running
+              ? {
+                  ...AT_Q4,
+                  quarter_job: {
+                    id: JOB_ID,
+                    status: "running",
+                    period: "2026Q4",
+                  },
+                }
+              : STATE,
+          ),
+        "POST /admin/simulate/quarter": () => {
+          running = true;
+          return json(
+            { detail: "quarter_job_running" },
+            {
+              status: 409,
+              headers: { Location: `/admin/simulate/quarter/${JOB_ID}` },
+            },
+          );
+        },
+        [JOB_ROUTE]: () =>
+          json(quarterJob(QUARTER, { status: "running", finished_at: null })),
+      });
+      await confirmQuarter();
+      expect(
+        await screen.findByText("A quarter is already running"),
+      ).toBeInTheDocument();
+      expect(
+        await screen.findByRole("button", { name: "Running the quarter…" }),
+      ).toBeInTheDocument();
+      await waitFor(() => expect(backend.calls(JOB_ROUTE)).toBeGreaterThan(0));
+    });
+
+    it("explains a job that failed and finishes the quarter on request", async () => {
+      const failed = quarterJob(
+        { ...QUARTER, assets: [QUARTER.assets[0]!] },
+        { status: "failed", error: "job_failed:RuntimeError" },
+      );
+      const backend = renderPanel({
+        "GET /admin/time-machine": () =>
+          json({
+            ...AT_Q4,
+            quarter_job: { id: JOB_ID, status: "running", period: "2026Q4" },
+          }),
+        "POST /admin/simulate/quarter": accepted,
+        [JOB_ROUTE]: sequence(
+          () => json(failed),
+          () => json(failed),
+          () => json(quarterJob({ ...QUARTER, replayed: true })),
+        ),
+      });
+      expect(
+        await screen.findByText("The quarter stopped before it finished"),
+      ).toBeInTheDocument();
+      const rows = within(
+        screen.getByRole("region", { name: "Quarter result" }),
+      ).getAllByRole("row");
+      expect(rows).toHaveLength(2); // the one site it settled
+      // The state still names the job running until it refetches: what the job says wins.
+      const finish = await screen.findByRole("button", {
+        name: "Finish Q4 2026",
+      });
+
+      fireEvent.click(finish);
+
+      await waitFor(() =>
+        expect(backend.calls("POST /admin/simulate/quarter")).toBe(1),
+      );
+      expect(
+        await bodyOf(
+          backend.requests.find((r) =>
+            r.url.endsWith("/admin/simulate/quarter"),
+          ),
+        ),
+      ).toEqual({ period: "2026Q4" });
+    });
+
+    it("offers to finish a quarter stopped early, not a finished one", async () => {
+      renderPanel(
+        quarterRoutes(
+          { ...QUARTER, stopped: "llm_budget_exhausted" },
+          { status: "stopped" },
+        ),
+      );
+      await confirmQuarter();
+      expect(
+        await screen.findByRole("button", { name: "Finish Q4 2026" }),
+      ).toBeInTheDocument();
+    });
+
+    it("doesn't offer to finish a quarter that finished", async () => {
+      renderPanel(quarterRoutes());
+      await confirmQuarter();
+      await screen.findByRole("region", { name: "Quarter result" });
+      expect(screen.queryByRole("button", { name: /^Finish/ })).toBeNull();
+    });
   });
 });

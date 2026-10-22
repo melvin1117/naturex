@@ -12,6 +12,10 @@ paid through T41's `pay_quarter` (T75's `pay_period`), labelled `<period>-<data_
 Machine versions (new polygons) are `skipped` but still paid: the quarter passes for them too
 (no other skip is paid).
 
+**In the background (#201).** The API runs a quarter as a job (`services.quarter_jobs`): the
+request moves the world and answers 202, and a worker runs `run_quarter` and records each asset's
+result as it settles. `next_quarter` does both in the caller's thread (tests, scripts).
+
 **Sandboxes only.** Like a reset, the Time Machine refuses the protected worlds (the template
 and the live world) with `time_machine_sandbox_only`.
 
@@ -19,7 +23,8 @@ and the live world) with `time_machine_sandbox_only`.
 next quarter advances the world (`worlds.time_machine_step`, a conditional update, so two
 concurrent requests advance it once); its current quarter replays it. Re-rates and payouts are
 T75's claims (`monitor_runs`, jobs `rerate_all` / `payout`, period `tm-<data_version>`), so a
-replay re-rates only what failed and never pays twice.
+replay re-rates only what failed and never pays twice. An asset whose latest report already
+carries the quarter's version isn't re-rated again (a job that died after the run sealed).
 
 **Event presets** (fire, encroachment, drought, restoration, protection) apply one preset's
 deltas to one asset's current metrics (a curated site's own scripted encroachment or
@@ -39,7 +44,7 @@ when the next asset could pass `LLM_BUDGET_USD` or `MONITOR_JOB_BUDGET_USD`; a p
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -47,7 +52,7 @@ from typing import Any, Literal, Protocol
 from uuid import UUID
 
 from pydantic import ValidationError
-from sqlalchemy import update
+from sqlalchemy import func, update
 from sqlmodel import Session, col, select
 
 from app.ledger import append
@@ -107,6 +112,10 @@ NO_VERSION = "no_time_machine_version"
 NO_METRICS = "no_current_metrics"
 SANDBOX_ONLY = "time_machine_sandbox_only"
 EVENT_NOT_RECORDED = "event_not_recorded"
+INTERRUPTED = "interrupted"
+"""A claim released by `recover_claims`: its job's process died before settling it."""
+ALREADY_RATED = "already_rated"
+"""A re-rate claim settled because the quarter's report was already sealed (an interrupted job)."""
 PAYABLE_SKIPS = frozenset({NO_VERSION, NO_METRICS})
 """Skipped re-rates whose quarter is still paid: the asset just has no Time Machine version."""
 STOPS = monitoring.RATE_LIMITED | {"rating_busy"}
@@ -322,27 +331,36 @@ def _refuse_protected(world_id: UUID) -> None:
 # --- next quarter -------------------------------------------------------------------------------
 
 
+def quarter_target(step: int, period: str, spec: ScenarioSpec) -> tuple[int, bool]:
+    """Where `period` takes a world at `step`: (its next step, False) or (`step`, True) for a
+    replay of the current quarter. Raises TimeMachineRefused otherwise."""
+    if 0 < step < len(spec.timeline) and spec.timeline[step].period == period:
+        return step, True
+    if step + 1 >= len(spec.timeline):
+        later = period > spec.timeline[-1].period  # `YYYYQn` sorts in time order
+        raise TimeMachineRefused("timeline_end" if later else "quarter_mismatch")
+    if spec.timeline[step + 1].period != period:
+        raise TimeMachineRefused("quarter_mismatch")
+    return step + 1, False
+
+
 def _move_to(session: Session, world_id: UUID, period: str, spec: ScenarioSpec) -> tuple[int, bool]:
     """Advance the world to `period` if it's the next quarter, or replay it if it's the current
     one. Returns (step, replayed); commits. Raises TimeMachineRefused otherwise."""
     for _ in range(2):  # a concurrent advance makes the second pass a replay
         step = world_step(session, world_id)
-        if step > 0 and step < len(spec.timeline) and spec.timeline[step].period == period:
+        target, replayed = quarter_target(step, period, spec)
+        if replayed:
             session.commit()
             return step, True
-        if step + 1 >= len(spec.timeline):
-            later = period > spec.timeline[-1].period  # `YYYYQn` sorts in time order
-            raise TimeMachineRefused("timeline_end" if later else "quarter_mismatch")
-        if spec.timeline[step + 1].period != period:
-            raise TimeMachineRefused("quarter_mismatch")
         moved = session.execute(
             update(World)
             .where(col(World.id) == world_id, col(World.time_machine_step) == step)
-            .values(time_machine_step=step + 1)
+            .values(time_machine_step=target)
         )
         session.commit()
         if moved.rowcount == 1:  # type: ignore[attr-defined]
-            return step + 1, False
+            return target, False
     raise TimeMachineRefused("quarter_mismatch")
 
 
@@ -375,7 +393,8 @@ def next_quarter(
     runs_per_hour: int,
     spec: ScenarioSpec | None = None,
 ) -> QuarterOutcome:
-    """Advance the world to `period` (or replay it) and re-rate and pay every listed asset.
+    """Advance the world to `period` (or replay it) and re-rate and pay every listed asset, in
+    the caller's thread (the API runs it as a background job instead: `services.quarter_jobs`).
 
     `runs_per_hour` is the world's usual run cap; the quarter's runs may exceed it by the
     number of listed assets, so one quarter always fits."""
@@ -384,24 +403,87 @@ def next_quarter(
     with session_factory() as session:
         step, replayed = _move_to(session, world_id, period, spec)
         assets = [(asset.id, asset.name) for asset in listed_assets(session, world_id)]
+    return run_quarter(
+        session_factory,
+        runner,
+        world_id=world_id,
+        step=step,
+        replayed=replayed,
+        assets=assets,
+        spend=spend,
+        llm_budget_usd=llm_budget_usd,
+        job_cap_usd=job_cap_usd,
+        run_cap=runs_per_hour + len(assets),
+        spec=spec,
+    )
+
+
+def run_quarter(
+    session_factory: SessionFactory,
+    runner: Runner,
+    *,
+    world_id: UUID,
+    step: int,
+    replayed: bool,
+    assets: Sequence[tuple[UUID, str]],
+    spend: Spend,
+    llm_budget_usd: Decimal,
+    job_cap_usd: Decimal,
+    run_cap: int,
+    spec: ScenarioSpec,
+    job_spent: Callable[[], Decimal] | None = None,
+    before_payout: Callable[[AssetOutcome], None] | None = None,
+    on_asset: Callable[[AssetOutcome], None] | None = None,
+) -> QuarterOutcome:
+    """Re-rate and pay `assets` (id, name) for the world's quarter at `step`, which the world
+    already reached. `run_cap` is the per-world hourly run cap for the quarter's runs.
+    `job_spent` is what this quarter has spent so far, for `job_cap_usd` (default: the global
+    spend since this call began). `before_payout` sees each asset once its re-rate settled
+    (it may raise to stop before paying it); `on_asset` once its payout settled too."""
+    _refuse_protected(world_id)
     version = timeline_version(spec, step)
     outcome = QuarterOutcome(step, version, replayed)
     budget = Budget(llm_budget_usd, job_cap_usd, RERATE_ESTIMATE_USD)
     at_start = spend()
-    cap = runs_per_hour + len(assets)
     for asset_id, name in assets:
         result = AssetOutcome(asset_id, name)
         if outcome.stopped is None:
-            outcome.stopped = budget_stop(budget, spent_total=spend(), spent_at_start=at_start)
+            total = spend()
+            mine = job_spent() if job_spent is not None else total - at_start
+            outcome.stopped = budget_stop(budget, spent_total=total, spent_at_start=total - mine)
         if outcome.stopped is None:
-            _rerate(session_factory, runner, world_id, version, spec, cap, result)
+            _rerate(session_factory, runner, world_id, version, spec, run_cap, result)
             if result.detail in STOPS:  # every later asset would be refused
                 outcome.stopped = result.detail
         else:
             result.status, result.detail = "stopped", outcome.stopped
+        if before_payout is not None:
+            before_payout(result)
         _settle_payout(session_factory, world_id, version, result)
         outcome.assets.append(result)
+        if on_asset is not None:
+            on_asset(result)
     return outcome
+
+
+def recover_claims(session: Session, world_id: UUID, version: ScenarioVersion) -> int:
+    """Mark the quarter's `running` re-rate and payout claims in this world `failed`
+    (`interrupted`), so the next pass retries them at once instead of after T75's
+    `CLAIM_STALE_AFTER`. Only for a quarter job that failed or was taken over from a dead
+    process: one quarter job per world, so every running claim of its period was that job's.
+    Never pays twice (payouts are unique per quarter) nor re-rates twice (`_rerate` finds a
+    re-rate sealed before the crash). Returns how many claims it released; the caller commits."""
+    released = session.execute(
+        update(MonitorRun)
+        .where(
+            col(MonitorRun.world_id) == world_id,
+            col(MonitorRun.period) == claim_period(version),
+            col(MonitorRun.job).in_((RERATE, PAYOUT)),
+            col(MonitorRun.status) == "running",
+        )
+        .values(status="failed", detail=INTERRUPTED, updated_at=func.now())
+    )
+    return int(released.rowcount)  # type: ignore[attr-defined]
 
 
 def _rerate(
@@ -423,6 +505,16 @@ def _rerate(
         ).one()
         report = latest_report(session, world_id, result.asset_id)
         result.before = rating_view(session, world_id, result.asset_id, report)
+        sealed = result.before
+        if sealed is not None and sealed.data_version == version.data_version:
+            # Sealed before its claim was settled (an interrupted job): applying the quarter
+            # again would apply its deltas twice.
+            run_id = _report_run_id(report)
+            finish(session, RERATE, period, result.asset_id, "done", ALREADY_RATED, run_id)
+            result.status, result.run_id = "already_done", run_id
+            result.before, result.after = None, sealed
+            result.alert_ids = _alert_ids(session, world_id, report_id=sealed.report_id)
+            return
         try:
             metrics, reason = _quarter_metrics(session, world_id, asset, report, version, spec)
         except ValueError:  # deterministic: a retry would fail the same way
@@ -454,6 +546,15 @@ def _rerate(
     result.run_id = run_id
     result.status = _OUTCOME[status]
     result.detail = None if status == "done" else detail
+
+
+def _report_run_id(report: Report | None) -> UUID | None:
+    """The rating run that sealed `report`, from its stored run record (T27)."""
+    run = ((report.auditor_json or {}).get("run") if report else None) or {}
+    try:
+        return UUID(str(run["run_id"]))
+    except (KeyError, ValueError):
+        return None
 
 
 def _rerate_claim(session: Session, period: str, asset_id: UUID) -> MonitorRun | None:

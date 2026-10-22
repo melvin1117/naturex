@@ -1,5 +1,6 @@
 import type {
   AssetCard,
+  QuarterJob,
   SentAlert,
   SimulateEvent,
   SimulateQuarter,
@@ -166,6 +167,39 @@ export const QUARTER: SimulateQuarter = {
     },
   ],
 };
+
+export const JOB_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+
+/** `result` as a quarter job (#201), `done` unless `overrides` say otherwise. */
+export function quarterJob(
+  result: SimulateQuarter = QUARTER,
+  overrides: Partial<QuarterJob> = {},
+): QuarterJob {
+  return {
+    ...result,
+    id: JOB_ID,
+    status: "done",
+    error: null,
+    asset_count: result.assets.length,
+    created_at: "2026-10-21T10:00:00Z",
+    updated_at: "2026-10-21T10:00:05Z",
+    finished_at: "2026-10-21T10:00:05Z",
+    ...overrides,
+  };
+}
+
+/** The job as `POST /admin/simulate/quarter` answers it: queued, nothing settled yet. */
+export const QUEUED_JOB: QuarterJob = quarterJob(
+  {
+    ...QUARTER,
+    assets_rerated: 0,
+    assets_skipped: 0,
+    payouts: 0,
+    alerts: 0,
+    assets: [],
+  },
+  { status: "queued", asset_count: null, finished_at: null },
+);
 
 export const EVENT: SimulateEvent = {
   event: {

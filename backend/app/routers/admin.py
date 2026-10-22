@@ -1,23 +1,25 @@
 """Time Machine, event injection, and call log. Tamper demo lives on the ledger router.
 
-The Time Machine (`GET /admin/time-machine`, `POST /admin/simulate/quarter`) and event injection
-(`POST /admin/simulate/event`) are operator actions: admins only, in their own world
-(`Action.OPERATE`; a demo admin persona operates only its sandbox). Their logic is
-`app/services/time_machine.py` (T38). `GET /admin/alerts` shows the operator the alerts a
-simulation sent (T43). The agent trace is a read (`Action.BROWSE`, ADR-0005 §3
-matrix row 1).
+The Time Machine (`GET /admin/time-machine`, `POST /admin/simulate/quarter` and its job,
+`GET /admin/simulate/quarter/{job_id}`) and event injection (`POST /admin/simulate/event`) are
+operator actions: admins only, in their own world (`Action.OPERATE`; a demo admin persona
+operates only its sandbox). Their logic is `app/services/time_machine.py` (T38) and
+`app/services/quarter_jobs.py` (#201: a quarter runs in the background). `GET /admin/alerts`
+shows the operator the alerts a simulation sent (T43). The agent trace is a read
+(`Action.BROWSE`, ADR-0005 §3 matrix row 1).
 """
 
 from __future__ import annotations
 
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Annotated, Any, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlmodel import Session, col, func, select
 
 from app.authz import (
@@ -31,27 +33,31 @@ from app.authz import (
     denied,
     require,
 )
+from app.config import Settings
 from app.deps import CurrentWorld, SessionDep, SettingsDep
 from app.llm import DbCallLog
-from app.models import Alert, AlertRecipient, Asset, LlmCall
+from app.models import QUARTER_JOB_ACTIVE, Alert, AlertRecipient, Asset, LlmCall, QuarterJob
 from app.schemas import (
     AlertKindOut,
     AssetRatingOut,
     EventOut,
     EventPresetOut,
+    QuarterJobOut,
+    QuarterJobRef,
+    QuarterJobStatus,
     SentAlertOut,
     SimulatedAssetOut,
     SimulateEventRequest,
     SimulateEventResponse,
     SimulateQuarterRequest,
-    SimulateQuarterResponse,
     TimeMachineOut,
     TimeMachineQuarter,
     TraceOut,
     TraceStep,
 )
-from app.services import time_machine
+from app.services import quarter_jobs, time_machine
 from app.services.alerts import NEWS_ALERT_SEVERITY
+from app.services.quarter_jobs import QuarterContext, QuarterJobRunning, QuarterJobs
 from app.services.rating_runs import (
     AssetNotRateable,
     RunError,
@@ -60,7 +66,7 @@ from app.services.rating_runs import (
     RunRateLimited,
     default_runner,
 )
-from app.tools.scenarios import ScenarioVersion
+from app.tools.scenarios import ScenarioVersion, load_scenario_spec, timeline_version
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -88,14 +94,21 @@ def trace_target(
     return WorldRef(world_id) if asset_id is None else asset_ref_in(session, world_id, asset_id)
 
 
+QUARTER_WORKERS = 2
+"""Quarter jobs running at once in this process (others wait, heartbeating, in the pool)."""
+
+
 @dataclass(frozen=True, slots=True)
 class TimeMachineEnv:
     """What the Time Machine runs with: sessions, the API's rating runner (its runs execute
-    inline in the request, under the runner's shared concurrency slots) and the LLM spend."""
+    inline in the calling thread, under the runner's shared concurrency slots), the LLM spend
+    and the quarter jobs (`jobs`: inline by default, so a test's quarter is done when its
+    request returns)."""
 
     session_factory: Callable[[], Session]
     runner: time_machine.Runner
     spend: Callable[[], Decimal]
+    jobs: QuarterJobs = field(default_factory=QuarterJobs)
 
 
 _env: TimeMachineEnv | None = None
@@ -103,8 +116,9 @@ _env_lock = threading.Lock()
 
 
 def get_time_machine_env() -> TimeMachineEnv:
-    """The process-wide Time Machine environment (runs execute in the request's thread, on the
-    API's runner, so they count against the same `MAX_PENDING_RUNS` as `POST /assets/{id}/rate`)."""
+    """The process-wide Time Machine environment: presets run in the request's thread and
+    quarters on a small job pool, all on the API's runner, so their runs count against the same
+    `MAX_PENDING_RUNS` as `POST /assets/{id}/rate`."""
     global _env
     with _env_lock:
         if _env is None:
@@ -117,8 +131,22 @@ def get_time_machine_env() -> TimeMachineEnv:
                 session_factory=session_factory,
                 runner=default_runner(),
                 spend=DbCallLog(session_factory).spent_usd,
+                jobs=QuarterJobs(
+                    executor=ThreadPoolExecutor(
+                        max_workers=QUARTER_WORKERS, thread_name_prefix="time-machine"
+                    ),
+                    heartbeat_s=quarter_jobs.HEARTBEAT_EVERY_S,
+                ),
             )
         return _env
+
+
+def shutdown_time_machine() -> None:
+    """At API shutdown: stop the quarter jobs' heartbeat and drop queued jobs (if the
+    environment was ever created); an unfinished job is resumed by the next poll."""
+    with _env_lock:
+        if _env is not None:
+            _env.jobs.shutdown()
 
 
 TimeMachineEnvDep = Annotated[TimeMachineEnv, Depends(get_time_machine_env)]
@@ -138,6 +166,67 @@ def _simulated_version(version: ScenarioVersion) -> str:
     if version.data_version is None:
         raise RuntimeError(f"{version.period} is not a simulated version")
     return version.data_version
+
+
+def _quarter_context(env: TimeMachineEnv, settings: Settings) -> QuarterContext:
+    return QuarterContext(
+        session_factory=env.session_factory,
+        runner=env.runner,
+        spend=env.spend,
+        llm_budget_usd=Decimal(str(settings.llm_budget_usd)),
+        job_cap_usd=Decimal(str(settings.monitor_job_budget_usd)),
+        runs_per_hour=settings.rating_runs_per_world_per_hour,
+    )
+
+
+_JOB_STATUSES: dict[str, QuarterJobStatus] = {
+    "queued": "queued",
+    "running": "running",
+    "done": "done",
+    "stopped": "stopped",
+    "failed": "failed",
+}
+
+
+def _job_status(value: str) -> QuarterJobStatus:
+    """A stored status (the table's CHECK constraint allows only these)."""
+    return _JOB_STATUSES[value]
+
+
+def _job_location(job_id: UUID) -> str:
+    return f"/admin/simulate/quarter/{job_id}"
+
+
+def _job_out(job: QuarterJob) -> QuarterJobOut:
+    """The job as stored: every number is a stored row's, nothing is recomputed."""
+    version = timeline_version(load_scenario_spec(), job.step)
+    assets = [SimulatedAssetOut.model_validate(item) for item in job.assets]
+
+    def count(status: str) -> int:
+        return sum(1 for asset in assets if asset.status == status)
+
+    return QuarterJobOut(
+        id=job.id,
+        status=_job_status(job.status),
+        error=job.error,
+        asset_count=None if job.planned is None else len(job.planned),
+        created_at=job.created_at,
+        updated_at=job.updated_at,
+        finished_at=job.finished_at,
+        step=job.step,
+        period=version.period,
+        scenario=version.scenario,
+        data_version=_simulated_version(version),
+        payout_label=time_machine.payout_label(version),
+        replayed=job.replayed,
+        assets_rerated=count("rerated"),
+        assets_failed=count("failed"),
+        assets_skipped=count("skipped"),
+        payouts=sum(1 for asset in assets if asset.payout == "paid"),
+        alerts=sum(len(asset.alert_ids) for asset in assets),
+        stopped=job.stopped,
+        assets=assets,
+    )
 
 
 def _refuse_outside_sandbox(world_id: UUID) -> None:
@@ -201,6 +290,7 @@ def get_time_machine(
     `time_machine_sandbox_only`."""
     at = time_machine.state(session, world.id)
     available = time_machine.available(world.id)
+    latest = quarter_jobs.latest_job(session, world.id)
     return TimeMachineOut(
         available=available,
         unavailable_reason=None if available else time_machine.SANDBOX_ONLY,
@@ -221,20 +311,25 @@ def get_time_machine(
             for preset in time_machine.presets()
         ],
         local_jobs=settings.local_jobs,
+        quarter_job=None
+        if latest is None
+        else QuarterJobRef(id=latest.id, status=_job_status(latest.status), period=latest.period),
     )
 
 
 @router.post(
     "/simulate/quarter",
-    response_model=SimulateQuarterResponse,
+    response_model=QuarterJobOut,
+    status_code=status.HTTP_202_ACCEPTED,
     dependencies=[OPERATE],
     responses={
         **ADMIN_ONLY_RESPONSE,
         409: {
             "description": "`quarter_mismatch` (not the world's next or current quarter; see "
             "`GET /admin/time-machine`), `timeline_end` (reset the demo to start again), "
-            "`time_machine_sandbox_only` (not a sandbox: the live world) or "
-            "`local_jobs_disabled` (`LOCAL_JOBS=false`)"
+            "`time_machine_sandbox_only` (not a sandbox: the live world), "
+            "`local_jobs_disabled` (`LOCAL_JOBS=false`) or `quarter_job_running` (the world "
+            "already runs a quarter; Location: that job)"
         },
     },
 )
@@ -244,59 +339,69 @@ def simulate_quarter(
     session: SessionDep,
     settings: SettingsDep,
     env: TimeMachineEnvDep,
-) -> SimulateQuarterResponse:
-    """Advance the world to the next Time Machine quarter (or replay the current one): re-rate
-    every listed asset with that quarter's scenario, re-anchor prices, alert and pay the
-    quarter's revenue (T38). Runs inline, so the answer is what actually happened; progress also
-    streams as `rating_progress` events (trigger `time_machine`)."""
+    actor: OptionalActor,
+    response: Response,
+) -> QuarterJobOut:
+    """Advance the world to the next Time Machine quarter (or replay the current one), then
+    re-rate every listed asset with that quarter's scenario, re-anchor prices, alert and pay the
+    quarter's revenue in the background (T38, #201). Answers 202 with the job (Location: `GET
+    /admin/simulate/quarter/{job_id}`) once the world has moved; poll it for each asset's result.
+    Progress also streams as `rating_progress` events (trigger `time_machine`)."""
     _refuse_outside_sandbox(world.id)
     if not settings.local_jobs:
         raise HTTPException(status.HTTP_409_CONFLICT, "local_jobs_disabled")
     world_id = world.id
-    session.commit()  # end the read transaction: the runs use their own sessions
+    session.commit()  # end the read transaction: the job uses its own sessions
     try:
-        outcome = time_machine.next_quarter(
-            env.session_factory,
-            env.runner,
-            world_id=world_id,
-            period=body.period,
-            spend=env.spend,
-            llm_budget_usd=Decimal(str(settings.llm_budget_usd)),
-            job_cap_usd=Decimal(str(settings.monitor_job_budget_usd)),
-            runs_per_hour=settings.rating_runs_per_world_per_hour,
+        job = env.jobs.start(
+            _quarter_context(env, settings),
+            world_id,
+            body.period,
+            requested_by=actor.user_id if actor else None,
         )
+    except QuarterJobRunning as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "quarter_job_running",
+            headers={"Location": _job_location(exc.job_id)},
+        ) from exc
     except time_machine.TimeMachineRefused as exc:
         raise _run_error(exc) from exc
-    version = outcome.version
-    return SimulateQuarterResponse(
-        step=outcome.step,
-        period=version.period,
-        scenario=version.scenario,
-        data_version=_simulated_version(version),
-        payout_label=time_machine.payout_label(version),
-        replayed=outcome.replayed,
-        assets_rerated=outcome.count("rerated"),
-        assets_failed=outcome.count("failed"),
-        assets_skipped=outcome.count("skipped"),
-        payouts=outcome.payouts,
-        alerts=outcome.alerts,
-        stopped=outcome.stopped,
-        assets=[
-            SimulatedAssetOut(
-                asset_id=asset.asset_id,
-                name=asset.name,
-                status=asset.status,
-                detail=asset.detail,
-                run_id=asset.run_id,
-                before=_rating_out(asset.before),
-                after=_rating_out(asset.after),
-                alert_ids=asset.alert_ids,
-                payout=asset.payout,
-                payout_detail=asset.payout_detail,
-            )
-            for asset in outcome.assets
-        ],
-    )
+    response.headers["Location"] = _job_location(job.id)
+    stored = quarter_jobs.get_job(session, world_id, job.id)
+    if stored is None:  # a sandbox reset deleted it already
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
+    return _job_out(stored)
+
+
+@router.get(
+    "/simulate/quarter/{job_id}",
+    response_model=QuarterJobOut,
+    dependencies=[OPERATE],
+    responses={**ADMIN_ONLY_RESPONSE, 404: {"description": "Not a quarter job of this world"}},
+)
+def get_quarter_job(
+    job_id: UUID,
+    world: CurrentWorld,
+    session: SessionDep,
+    settings: SettingsDep,
+    env: TimeMachineEnvDep,
+) -> QuarterJobOut:
+    """A quarter job of the caller's world and each asset's result so far (#201). With
+    `LOCAL_JOBS=true` this read also heals an active job: one whose process died (no heartbeat
+    for `JOB_STALE_AFTER`) is taken over and resumed (the claims make it finish without
+    re-rating or paying twice), one that settled nothing for `JOB_STUCK_AFTER` is failed."""
+    job = quarter_jobs.get_job(session, world.id, job_id)
+    if job is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
+    if settings.local_jobs and job.status in QUARTER_JOB_ACTIVE:
+        session.commit()
+        if env.jobs.heal(_quarter_context(env, settings), job_id):
+            session.expire_all()
+            job = quarter_jobs.get_job(session, world.id, job_id)
+            if job is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
+    return _job_out(job)
 
 
 @router.post(

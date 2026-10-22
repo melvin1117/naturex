@@ -3327,7 +3327,7 @@
           "admin"
         ],
         "summary": "Simulate Quarter",
-        "description": "Advance the world to the next Time Machine quarter (or replay the current one): re-rate\nevery listed asset with that quarter's scenario, re-anchor prices, alert and pay the\nquarter's revenue (T38). Runs inline, so the answer is what actually happened; progress also\nstreams as `rating_progress` events (trigger `time_machine`).",
+        "description": "Advance the world to the next Time Machine quarter (or replay the current one), then\nre-rate every listed asset with that quarter's scenario, re-anchor prices, alert and pay the\nquarter's revenue in the background (T38, #201). Answers 202 with the job (Location: `GET\n/admin/simulate/quarter/{job_id}`) once the world has moved; poll it for each asset's result.\nProgress also streams as `rating_progress` events (trigger `time_machine`).",
         "operationId": "simulate_quarter_admin_simulate_quarter_post",
         "requestBody": {
           "content": {
@@ -3340,12 +3340,12 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SimulateQuarterResponse"
+                  "$ref": "#/components/schemas/QuarterJobOut"
                 }
               }
             }
@@ -3354,7 +3354,57 @@
             "description": "Not allowed: `admin_only`"
           },
           "409": {
-            "description": "`quarter_mismatch` (not the world's next or current quarter; see `GET /admin/time-machine`), `timeline_end` (reset the demo to start again), `time_machine_sandbox_only` (not a sandbox: the live world) or `local_jobs_disabled` (`LOCAL_JOBS=false`)"
+            "description": "`quarter_mismatch` (not the world's next or current quarter; see `GET /admin/time-machine`), `timeline_end` (reset the demo to start again), `time_machine_sandbox_only` (not a sandbox: the live world), `local_jobs_disabled` (`LOCAL_JOBS=false`) or `quarter_job_running` (the world already runs a quarter; Location: that job)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/simulate/quarter/{job_id}": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Quarter Job",
+        "description": "A quarter job of the caller's world and each asset's result so far (#201). With\n`LOCAL_JOBS=true` this read also heals an active job: one whose process died (no heartbeat\nfor `JOB_STALE_AFTER`) is taken over and resumed (the claims make it finish without\nre-rating or paying twice), one that settled nothing for `JOB_STUCK_AFTER` is failed.",
+        "operationId": "get_quarter_job_admin_simulate_quarter__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuarterJobOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: `admin_only`"
+          },
+          "404": {
+            "description": "Not a quarter job of this world"
           },
           "422": {
             "description": "Validation Error",
@@ -8391,6 +8441,190 @@
         "title": "PublicCheckOut",
         "description": "A check's name and result only: the public panel never shows the values."
       },
+      "QuarterJobOut": {
+        "properties": {
+          "step": {
+            "type": "integer",
+            "title": "Step"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          },
+          "data_version": {
+            "type": "string",
+            "title": "Data Version"
+          },
+          "payout_label": {
+            "type": "string",
+            "title": "Payout Label",
+            "description": "The payouts' `quarter_label`, e.g. `2026Q4-sim-1`."
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed",
+            "description": "True when the world was already at this quarter."
+          },
+          "assets_rerated": {
+            "type": "integer",
+            "title": "Assets Rerated"
+          },
+          "assets_failed": {
+            "type": "integer",
+            "title": "Assets Failed"
+          },
+          "assets_skipped": {
+            "type": "integer",
+            "title": "Assets Skipped"
+          },
+          "payouts": {
+            "type": "integer",
+            "title": "Payouts"
+          },
+          "alerts": {
+            "type": "integer",
+            "title": "Alerts"
+          },
+          "stopped": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stopped",
+            "description": "`llm_budget_exhausted`, `job_budget_exhausted` or a rate limit: later assets weren't re-rated; replay the quarter to finish them."
+          },
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/SimulatedAssetOut"
+            },
+            "type": "array",
+            "title": "Assets"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "stopped",
+              "failed"
+            ],
+            "title": "Status",
+            "description": "`queued`, `running`, `done` (every asset settled; some may have failed: replay to retry them), `stopped` (see `stopped`; replay to finish) or `failed` (see `error`; replay to finish)."
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Why the job itself failed (`job_failed:<Exception>`)."
+          },
+          "asset_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Count",
+            "description": "The listed assets the quarter re-rates; null until it starts."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "step",
+          "period",
+          "scenario",
+          "data_version",
+          "payout_label",
+          "replayed",
+          "assets_rerated",
+          "assets_failed",
+          "assets_skipped",
+          "payouts",
+          "alerts",
+          "assets",
+          "id",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "QuarterJobOut",
+        "description": "A `Next quarter` running in the background (#201): `POST /admin/simulate/quarter`\nanswers 202 with it, `GET /admin/simulate/quarter/{job_id}` reads it. `assets` grows as each\nasset's re-rate and payout settle; the totals count those assets."
+      },
+      "QuarterJobRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "stopped",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "period"
+        ],
+        "title": "QuarterJobRef"
+      },
       "QuoteOut": {
         "properties": {
           "asset_id": {
@@ -9706,92 +9940,6 @@
         ],
         "title": "SimulateQuarterRequest"
       },
-      "SimulateQuarterResponse": {
-        "properties": {
-          "step": {
-            "type": "integer",
-            "title": "Step"
-          },
-          "period": {
-            "type": "string",
-            "title": "Period"
-          },
-          "scenario": {
-            "type": "string",
-            "title": "Scenario"
-          },
-          "data_version": {
-            "type": "string",
-            "title": "Data Version"
-          },
-          "payout_label": {
-            "type": "string",
-            "title": "Payout Label",
-            "description": "The payouts' `quarter_label`, e.g. `2026Q4-sim-1`."
-          },
-          "replayed": {
-            "type": "boolean",
-            "title": "Replayed",
-            "description": "True when the world was already at this quarter."
-          },
-          "assets_rerated": {
-            "type": "integer",
-            "title": "Assets Rerated"
-          },
-          "assets_failed": {
-            "type": "integer",
-            "title": "Assets Failed"
-          },
-          "assets_skipped": {
-            "type": "integer",
-            "title": "Assets Skipped"
-          },
-          "payouts": {
-            "type": "integer",
-            "title": "Payouts"
-          },
-          "alerts": {
-            "type": "integer",
-            "title": "Alerts"
-          },
-          "stopped": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stopped",
-            "description": "`llm_budget_exhausted`, `job_budget_exhausted` or a rate limit: later assets weren't re-rated; replay the quarter to finish them."
-          },
-          "assets": {
-            "items": {
-              "$ref": "#/components/schemas/SimulatedAssetOut"
-            },
-            "type": "array",
-            "title": "Assets"
-          }
-        },
-        "type": "object",
-        "required": [
-          "step",
-          "period",
-          "scenario",
-          "data_version",
-          "payout_label",
-          "replayed",
-          "assets_rerated",
-          "assets_failed",
-          "assets_skipped",
-          "payouts",
-          "alerts",
-          "assets"
-        ],
-        "title": "SimulateQuarterResponse",
-        "description": "What a Time Machine quarter actually did, per listed asset."
-      },
       "SimulatedAssetOut": {
         "properties": {
           "asset_id": {
@@ -10228,6 +10376,17 @@
             "type": "boolean",
             "title": "Local Jobs",
             "description": "False: `Next quarter` is off (`LOCAL_JOBS=false`)."
+          },
+          "quarter_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuarterJobRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The world's latest `Next quarter` job (#201), so a reloaded panel follows a running one; null before the first."
           }
         },
         "type": "object",

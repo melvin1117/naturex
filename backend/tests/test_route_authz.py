@@ -43,6 +43,7 @@ from app.models import (
     CommunityRole,
     Holding,
     Order,
+    QuarterJob,
     Report,
     SessionKind,
     StreamEventType,
@@ -170,6 +171,7 @@ def test_admin_routes_are_operator_only() -> None:
     actions = route_actions(app)
     assert actions[("GET", "/admin/time-machine")] == {Action.OPERATE}
     assert actions[("POST", "/admin/simulate/quarter")] == {Action.OPERATE}
+    assert actions[("GET", "/admin/simulate/quarter/{job_id}")] == {Action.OPERATE}
     assert actions[("POST", "/admin/simulate/event")] == {Action.OPERATE}
     assert actions[("POST", "/admin/tamper-demo")] == {Action.TAMPER_DEMO}
     assert actions[("POST", "/orders")] == {Action.TRADE}
@@ -281,6 +283,7 @@ class Objects:
     community: UUID
     owner: UUID
     alert: UUID
+    quarter_job: UUID
 
 
 def objects(session: Session, world: World) -> Objects:
@@ -318,7 +321,11 @@ def objects(session: Session, world: World) -> Objects:
     assert alert is not None
     session.commit()
     owner = persona(session, world.id, "rosa").id
-    return Objects(world, asset.id, report, run, asset.community_id, owner, alert.id)
+    # #201: a finished Time Machine quarter of this world.
+    job = QuarterJob(world_id=world.id, period="2026Q4", step=1, replayed=False, status="done")
+    session.add(job)
+    session.commit()
+    return Objects(world, asset.id, report, run, asset.community_id, owner, alert.id, job.id)
 
 
 # (method, path) → (the persona who could do it in its own world, its request body)
@@ -342,6 +349,8 @@ OBJECT_ROUTES: dict[tuple[str, str], tuple[str, Callable[[Objects], Any] | None]
     ("GET", "/assets/{asset_id}/prices"): ("arjun", None),
     ("GET", "/assets/{asset_id}/quote"): ("arjun", None),
     ("POST", "/assets/{asset_id}/rate"): ("admin", None),
+    # #201: a Time Machine quarter job, read (and resumed) by its world's admins only.
+    ("GET", "/admin/simulate/quarter/{job_id}"): ("admin", None),
     ("GET", "/reports/{report_id}"): ("arjun", None),
     ("GET", "/reports/{report_id}/diff/{prev}"): ("arjun", None),
     ("GET", "/ledger/{asset_id}"): ("arjun", None),
@@ -508,6 +517,7 @@ def fill(path: str, o: Objects) -> str:
         "document_id": o.report,
         "photo_id": o.report,  # any ID: the asset in the path decides the world
         "alert_id": o.alert,
+        "job_id": o.quarter_job,
     }
     return re.sub(r"\{([^}]+)\}", lambda m: str(values[m.group(1)]), path)
 

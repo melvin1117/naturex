@@ -628,6 +628,59 @@ class MonitorRun(SQLModel, table=True):
     updated_at: datetime = _created_at()
 
 
+QUARTER_JOB_ACTIVE = ("queued", "running")
+
+
+class QuarterJob(SQLModel, table=True):
+    """A Time Machine "Next quarter" running in the background (#201, dev-spec §9).
+
+    The request moves the world and records the job; a worker re-rates and pays each listed asset
+    through T75's `monitor_runs` claims and appends each settled asset's result to `assets`. At
+    most one queued or running job per world (`uq_quarter_jobs_active_world`). `lease` names the
+    attempt that may write; a job whose `heartbeat_at` went stale (its process died) is taken
+    over with a new lease and resumed."""
+
+    __tablename__ = "quarter_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued','running','done','stopped','failed')",
+            name="ck_quarter_jobs_status",
+        ),
+        CheckConstraint("step >= 1", name="ck_quarter_jobs_step"),
+        Index(
+            "uq_quarter_jobs_active_world",
+            "world_id",
+            unique=True,
+            postgresql_where=text("status IN ('queued', 'running')"),
+        ),
+        Index("ix_quarter_jobs_world_id_created_at", "world_id", "created_at"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    world_id: UUID = Field(foreign_key="worlds.id")
+    period: str
+    step: int = Field(sa_type=SmallInteger)
+    replayed: bool
+    status: str = "queued"
+    stopped: str | None = None  # a budget or rate-limit stop (`llm_budget_exhausted`…)
+    error: str | None = None  # why the job itself failed (`job_failed:<Exception>`)
+    # The listed assets the job re-rates, fixed when it first runs: [{"asset_id", "name"}].
+    planned: list[dict[str, Any]] | None = Field(default=None, sa_column=Column(JSONB))
+    # Each settled asset's result, in order (`SimulatedAssetOut` as JSON).
+    assets: list[dict[str, Any]] = Field(
+        default_factory=list,
+        sa_column=Column(JSONB, nullable=False, server_default=text("'[]'::jsonb")),
+    )
+    requested_by: UUID | None = None
+    lease: UUID | None = None
+    # When the job first ran: its spend (`MONITOR_JOB_BUDGET_USD`) counts from here, on resume too.
+    started_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    heartbeat_at: datetime = _created_at()
+    created_at: datetime = _created_at()
+    updated_at: datetime = _created_at()
+    finished_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+
+
 class ChunkSource(StrEnum):
     REPORT = "report"
     EVENT = "event"

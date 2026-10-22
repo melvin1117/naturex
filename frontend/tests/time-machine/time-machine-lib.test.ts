@@ -6,10 +6,14 @@ import {
   eventFailure,
   eventOutcomeText,
   healthText,
+  isJobActive,
+  jobFailure,
   MAX_ALERT_IDS,
+  needsReplay,
   priceText,
   mergeSentAlerts,
   quarterFailure,
+  quarterJobProgressText,
   quarterOutcomeText,
   quarterProgressText,
   ratingChange,
@@ -19,7 +23,14 @@ import {
   type QuarterRun,
 } from "@/lib/time-machine";
 
-import { EVENT, QUARTER, sentAlert, STATE } from "./fixtures";
+import {
+  EVENT,
+  QUARTER,
+  quarterJob,
+  QUEUED_JOB,
+  sentAlert,
+  STATE,
+} from "./fixtures";
 
 const error = (
   code: string | null,
@@ -55,6 +66,11 @@ describe("failures", () => {
     expect(eventFailure(error("run_in_progress")).refresh).toBe(false);
     expect(eventFailure(error("event_not_recorded", 503)).refresh).toBe(true);
     expect(eventFailure(error("time_machine_sandbox_only")).refresh).toBe(true);
+    // A second start (#201): the state refetches and names the running job.
+    expect(quarterFailure(error("quarter_job_running"))).toMatchObject({
+      title: "A quarter is already running",
+      refresh: true,
+    });
   });
 
   it("never refetches for limits, busy raters or the budget", () => {
@@ -237,5 +253,62 @@ describe("eventOutcomeText", () => {
     expect(healthText(81.25)).toBe("81.3");
     expect(priceText(null)).toBe("—");
     expect(priceText(23.1)).toBe("$23.10");
+  });
+});
+
+describe("quarter jobs (#201)", () => {
+  const names = new Map([["asset-a", "Xochimilco Wetland"]]);
+  const running = quarterJob(
+    { ...QUARTER, assets: [QUARTER.assets[0]!] },
+    { status: "running", asset_count: 2, finished_at: null },
+  );
+
+  it("knows a queued or running job from a finished one", () => {
+    expect(isJobActive(QUEUED_JOB)).toBe(true);
+    expect(isJobActive(running)).toBe(true);
+    for (const status of ["done", "stopped", "failed"] as const) {
+      expect(isJobActive(quarterJob(QUARTER, { status }))).toBe(false);
+    }
+    expect(isJobActive(null)).toBe(false);
+  });
+
+  it("words a running job's progress, live runs first", () => {
+    expect(quarterJobProgressText(undefined, new Map(), names)).toBe(
+      "Starting the re-rates…",
+    );
+    expect(quarterJobProgressText(QUEUED_JOB, new Map(), names)).toMatch(
+      /^Queued: /,
+    );
+    expect(quarterJobProgressText(running, new Map(), names)).toBe(
+      "Re-rating sites: 1 of 2 done.",
+    );
+    expect(
+      quarterJobProgressText(
+        running,
+        new Map([["a", { assetId: "asset-a", done: true }]]),
+        names,
+      ),
+    ).toBe("Re-rating sites: 1 started, 1 done. Latest: Xochimilco Wetland.");
+  });
+
+  it("offers a replay only for a finished job that left work behind", () => {
+    expect(needsReplay(undefined)).toBe(false);
+    expect(needsReplay(running)).toBe(false);
+    expect(needsReplay(quarterJob())).toBe(false);
+    expect(needsReplay(quarterJob(QUARTER, { status: "failed" }))).toBe(true);
+    expect(needsReplay(quarterJob(QUARTER, { status: "stopped" }))).toBe(true);
+    const failedSite = {
+      ...QUARTER,
+      assets: [{ ...QUARTER.assets[0]!, status: "failed" as const }],
+    };
+    expect(needsReplay(quarterJob(failedSite))).toBe(true);
+  });
+
+  it("explains only a job that failed itself", () => {
+    expect(jobFailure(quarterJob())).toBeNull();
+    expect(jobFailure(quarterJob(QUARTER, { status: "stopped" }))).toBeNull();
+    expect(
+      jobFailure(quarterJob(QUARTER, { status: "failed" }))?.message,
+    ).toMatch(/Nothing is re-rated or paid twice/);
   });
 });
