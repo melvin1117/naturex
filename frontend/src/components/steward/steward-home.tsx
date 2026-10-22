@@ -140,7 +140,7 @@ function Home({ summary }: { summary: CommunitySummary }) {
             <Button asChild variant="outline">
               <Link href={manageHref}>
                 <ListChecks aria-hidden="true" />
-                Listings
+                Listings{" "}
                 {unfinished && (
                   <span className="tabular rounded-full bg-lime/40 px-2 py-0.5 text-xs text-lime-ink">
                     {unfinished}
