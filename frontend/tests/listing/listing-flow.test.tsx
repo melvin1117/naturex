@@ -727,6 +727,15 @@ describe("resuming", () => {
     });
   });
 
+  it("opens a draft on its details from the Listings page's Edit details", async () => {
+    nav.search = `community=${SELVA.id}&asset=${ASSET_ID}&step=details`;
+    setup({ [ASSET]: () => json(asset()) });
+    expect(await screen.findByLabelText("Site name")).toHaveValue(
+      "Laguna Verde",
+    );
+    expect(screen.queryByText("Ready to rate")).toBeNull();
+  });
+
   it("an edit the backend finds unchanged (400 no_changes) still moves on", async () => {
     nav.search = `community=${SELVA.id}&asset=${ASSET_ID}`;
     const backend = setup({
