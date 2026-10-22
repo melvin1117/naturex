@@ -42,17 +42,32 @@ fi
 
 prefix() { awk -v tag="$1" '{ print tag " " $0; fflush() }'; }
 
-(cd backend && PYTHONUNBUFFERED=1 uv run uvicorn app.main:app --reload --port "$api_port" 2>&1 | prefix "[api]") &
+# Run the servers' own binaries, not through `uv run` / `pnpm exec`: a wrapper forwards the stop
+# signal on top of the one sent to the process group, and two SIGTERMs at once can deadlock
+# uvicorn's reloader in its signal handler, leaving the port held. `make migrate` synced the venv.
+(cd backend && PYTHONUNBUFFERED=1 .venv/bin/python -m uvicorn app.main:app --reload --port "$api_port" 2>&1 | prefix "[api]") &
 api_pid=$!
-(cd frontend && BACKEND_URL="http://localhost:$api_port" pnpm exec next dev --port "$web_port" 2>&1 | prefix "[web]") &
+(cd frontend && BACKEND_URL="http://localhost:$api_port" node_modules/.bin/next dev --port "$web_port" 2>&1 | prefix "[web]") &
 web_pid=$!
+
+running() { kill -0 -- "-$api_pid" 2>/dev/null || kill -0 -- "-$web_pid" 2>/dev/null; }
 
 stop() {
   local status="${1:-0}"
   trap - INT TERM HUP EXIT
   echo "Stopping the API and the web app..."
-  kill -TERM -- "-$api_pid" "-$web_pid" 2>/dev/null || true
-  wait 2>/dev/null || true
+  kill -TERM -- "-$api_pid" 2>/dev/null || true
+  kill -TERM -- "-$web_pid" 2>/dev/null || true
+  local waited=0
+  while running && [ "$waited" -lt 20 ]; do
+    sleep 0.5
+    waited=$((waited + 1))
+  done
+  if running; then
+    echo "A server didn't stop in 10 s; forcing it." >&2
+    kill -KILL -- "-$api_pid" 2>/dev/null || true
+    kill -KILL -- "-$web_pid" 2>/dev/null || true
+  fi
   exit "$status"
 }
 trap 'stop 130' INT

@@ -23,7 +23,7 @@ migrate:
 # LIVE=1 uses real services (USE_MOCKS=false, EARTH_ENGINE_LIVE=true). Ports: API_PORT, WEB_PORT.
 .PHONY: dev
 dev:
-	LIVE=$(LIVE) ./scripts/dev.sh
+	LIVE=$(or $(LIVE),$(live)) ./scripts/dev.sh
 
 # T01: check your .env keys work (Token Factory, Tavily, Earth Engine); spends no credits
 .PHONY: check-keys
