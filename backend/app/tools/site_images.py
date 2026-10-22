@@ -90,6 +90,21 @@ TRANSPARENT_INDEX = len(DW_CLASSES)
 """Palette index for pixels outside the polygon; fully transparent via the tRNS chunk."""
 
 OSM_ATTRIBUTION = "© OpenStreetMap contributors"
+DYNAMIC_WORLD_ATTRIBUTION = (
+    "Dynamic World: This dataset is produced for the Dynamic World Project by Google "
+    "in partnership with National Geographic Society and the World Resources Institute."
+)
+SENTINEL_2_IMAGE_ATTRIBUTION = "Contains modified Copernicus Sentinel data 2025-2026."
+OVERLAY_ATTRIBUTIONS = (DYNAMIC_WORLD_ATTRIBUTION, SENTINEL_2_IMAGE_ATTRIBUTION)
+"""Credits shown with every land-cover overlay (Dynamic World is derived from Sentinel-2)."""
+OVERLAY_DATASET_ID = "GOOGLE/DYNAMICWORLD/V1"
+OVERLAY_BAND = "label"
+OVERLAY_METHOD = (
+    "Per-pixel mode of the Dynamic World V1 label over the date window (the "
+    "same mode as the landcover metrics), clipped to the polygon and sampled "
+    "nearest-neighbour onto a Web Mercator grid; outside the polygon is "
+    "transparent."
+)
 SCENARIO_NOTE = (
     "Images show the observed baseline only. Time Machine scenarios shift land-cover "
     "fractions by scripted deltas without a per-pixel map, so no scenario overlay exists."
@@ -349,6 +364,46 @@ def encode_indexed_png(
             _chunk(b"IEND", b""),
         ]
     )
+
+
+DW_NO_DATA = 255
+"""What the Earth Engine label image holds outside the polygon (``unmask(255)``)."""
+
+
+@dataclass(frozen=True)
+class LandCoverLabels:
+    """A polygon's Dynamic World mode on a pixel grid, as Earth Engine returned it (#231)."""
+
+    labels: bytes
+    """Row-major, one byte per pixel: a class index, or ``DW_NO_DATA`` outside the polygon."""
+    width: int
+    height: int
+    date_start: str
+    date_end: str
+    """The mode's date window (ISO dates, end exclusive), the land-cover metric's."""
+
+
+def overlay_png_from_labels(labels: bytes, width: int, height: int) -> bytes:
+    """The overlay PNG from a row-major Dynamic World label grid (one byte per pixel: a class
+    index, or ``DW_NO_DATA`` outside the polygon, which becomes transparent). Shared by the
+    demo-site precompute (T35) and live ratings (#231)."""
+    if len(labels) != width * height:
+        raise ValueError(f"Expected {width}x{height} labels, got {len(labels)} bytes.")
+    unexpected = set(labels) - set(range(len(DW_CLASSES))) - {DW_NO_DATA}
+    if unexpected:
+        raise ValueError(f"Unexpected Dynamic World labels {sorted(unexpected)}.")
+    pixels = labels.replace(bytes([DW_NO_DATA]), bytes([TRANSPARENT_INDEX]))
+    return encode_indexed_png(pixels, width, height, palette_rgba(DW_PALETTE))
+
+
+def halve_labels(labels: bytes, width: int, height: int) -> tuple[bytes, int, int]:
+    """Nearest-neighbour downsample by two (every other row and column), for an overlay over
+    its byte budget. The grid still spans the same bounds, with pixels twice as large."""
+    if len(labels) != width * height:
+        raise ValueError(f"Expected {width}x{height} labels, got {len(labels)} bytes.")
+    out_w, out_h = max(1, (width + 1) // 2), max(1, (height + 1) // 2)
+    rows = (labels[row * width : (row + 1) * width : 2] for row in range(0, height, 2))
+    return b"".join(rows), out_w, out_h
 
 
 @dataclass(frozen=True)

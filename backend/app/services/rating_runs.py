@@ -85,6 +85,7 @@ from app.schemas import (
 from app.services.alerts import alert_on_rerate
 from app.services.earth_obs_live import (
     EARTH_ENGINE_BUSY,
+    LIVE_SITE_KEY_PREFIX,
     LiveEarthObs,
     LiveMetricsError,
     LiveQuota,
@@ -92,6 +93,7 @@ from app.services.earth_obs_live import (
     refund_live_rating,
 )
 from app.services.field_evidence import DbEvidenceProvider
+from app.services.land_cover_overlays import LiveOverlays, OverlayJob, build_live_overlays
 from app.services.lifecycle import is_public
 from app.services.listings import apply_rating_result, lock_asset, note_rating_failure
 from app.services.listings import audience as listing_audience
@@ -510,6 +512,7 @@ class RunDeps:
     today: Callable[[], date]
     clock: Callable[[], float] = time.perf_counter
     live: LiveEarthObs | None = None
+    overlays: LiveOverlays | None = None
 
 
 def previous_for_bundle(report: Report | None) -> PreviousReport | None:
@@ -580,6 +583,7 @@ class RunToolbox:
         self.steps: list[dict[str, Any]] = []
         self.flags: list[dict[str, str]] = []
         self.failed: list[str] = []
+        self.overlay: OverlayJob | None = None
 
     @property
     def scenario(self) -> ScenarioName:
@@ -716,6 +720,7 @@ class RunToolbox:
             except ValueError as exc:
                 raise ToolFailed("no_baseline", retryable=False) from exc
         self.metrics, self.is_wetland = metrics, wetland
+        self._start_overlay(metrics)
         return {
             "data_version": metrics.data_version,
             "scenario": metrics.scenario,
@@ -726,6 +731,30 @@ class RunToolbox:
             "wetland": wetland,
             "mock": is_mock_metrics(metrics),
         }
+
+    def _start_overlay(self, metrics: EarthObsMetrics) -> None:
+        """Render the listing's land-cover overlay alongside the rating (#231): live world, live
+        Earth Engine metrics of a new polygon only (never mocks, a demo site or a scenario)."""
+        overlays, geojson = self._deps.overlays, self._asset.geojson
+        if (
+            overlays is None
+            or self.overlay is not None
+            or geojson is None
+            or self._spec.world_id != LIVE_WORLD_ID
+            or self._asset.site_key is not None
+            or self._spec.metrics is not None
+            or self.scenario != "baseline"
+            or metrics.simulated
+            or not metrics.site_key.startswith(LIVE_SITE_KEY_PREFIX)
+        ):
+            return
+        self.overlay = overlays.start(self._spec.world_id, self._spec.asset_id, geojson)
+
+    def wait_for_overlay(self) -> None:
+        """Before the report is sealed, so the page shows the overlay with the new rating. A
+        failed or slow render never fails the rating (`OverlayJob.wait` never raises)."""
+        if self.overlay is not None:
+            self.overlay.wait()
 
     def _bound_metrics(self) -> tuple[EarthObsMetrics, bool]:
         if self.metrics is None or self.is_wetland is None:
@@ -879,6 +908,8 @@ class RatingRunner:
     metrics_loader: MetricsLoader = load_cached_metrics
     live_metrics: LiveEarthObs | None = None
     """Live Earth Engine for new polygons (T60); None when `EARTH_ENGINE_LIVE` is off."""
+    live_overlays: LiveOverlays | None = None
+    """Land-cover overlays of live-rated listings (#231); None when live Earth Engine is off."""
     evidence: EvidenceProvider = field(default_factory=NoFieldEvidence)
     today: Callable[[], date] = field(default=lambda: datetime.now(UTC).date())
     max_pending: int = MAX_PENDING_RUNS
@@ -1059,6 +1090,7 @@ class RatingRunner:
                 evidence=self.evidence,
                 today=self.today,
                 live=self.live_metrics,
+                overlays=self.live_overlays,
             )
             toolbox = RunToolbox(
                 spec,
@@ -1076,6 +1108,7 @@ class RatingRunner:
                 asset_id=spec.asset_id,
                 no_llm_reason=no_llm_reason or FallbackReason.LLM_UNAVAILABLE,
             )
+            toolbox.wait_for_overlay()
             self._store(spec, toolbox, orchestration, progress, recorder, started)
         except RunAborted as exc:
             self._fail(progress, exc.code, started)
@@ -1660,13 +1693,15 @@ def build_runner(
     settings: Settings, session_factory: Callable[[], Session], executor: Executor
 ) -> RatingRunner:
     """A production runner on `executor` (the API's thread pool; T75's jobs run inline)."""
+    live = build_live_earth_obs(settings, session_factory)
     return RatingRunner(
         session_factory=session_factory,
         settings=settings,
         executor=executor,
         llm_factory=_production_llm(settings, session_factory),
         news=news_runner(settings),
-        live_metrics=build_live_earth_obs(settings, session_factory),
+        live_metrics=live,
+        live_overlays=build_live_overlays(session_factory, live),
         evidence=DbEvidenceProvider(session_factory),
     )
 

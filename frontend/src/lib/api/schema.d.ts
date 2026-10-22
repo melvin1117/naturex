@@ -335,6 +335,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/{asset_id}/overlay.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Land Cover Overlay
+         * @description The listing's Dynamic World land-cover overlay from its live satellite rating (#231):
+         *     an indexed PNG, transparent outside the boundary, spanning `land_cover_overlay.bounds`.
+         *     404 `overlay_not_found` before a live rating rendered one for the current boundary.
+         */
+        get: operations["get_land_cover_overlay_assets__asset_id__overlay_png_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/communities/{community_id}/assets": {
         parameters: {
             query?: never;
@@ -1888,6 +1910,8 @@ export interface components {
             ipo_at?: string | null;
             /** @description Demo worlds only: a listing waiting in `rating` because its satellite metrics are missing or their live computation failed points to the nearest precomputed demo site, labelled as a cached example (T60). Always null in the live world. */
             cached_example?: components["schemas"]["CachedExample"] | null;
+            /** @description The listing's land-cover overlay from its live satellite rating (#231); null for demo sites (their overlay is precomputed: `site_key`), with mock or no satellite data, or when rendering failed. */
+            land_cover_overlay?: components["schemas"]["LandCoverOverlay"] | null;
             /**
              * Latest Run Id
              * @description A listing under review's latest rating run (follow it with `GET /runs/{id}`), for its community's members and same-world admins, who alone can load it (T33). Null for public (listed or suspended) assets and before any run.
@@ -2798,6 +2822,44 @@ export interface components {
             /** @description Where the listing's verification stands, from the same reading as `blocked_reason` (#216). */
             verification: components["schemas"]["ListingVerificationOut"];
         };
+        /**
+         * LandCoverOverlay
+         * @description A live-rated listing's Dynamic World land-cover overlay (#231), for a Leaflet
+         *     `ImageOverlay`: the PNG at `GET /assets/{asset_id}/overlay.png?v={version}` spans `bounds`
+         *     in Web Mercator, transparent outside the boundary. Same palette and method as the demo
+         *     sites' precomputed overlay (`GET /media/demo-sites/{site_key}/images.json`).
+         */
+        LandCoverOverlay: {
+            /**
+             * Version
+             * @description Changes when the overlay is re-rendered (cache key).
+             */
+            version: string;
+            /**
+             * Media Type
+             * @default image/png
+             * @constant
+             */
+            media_type: "image/png";
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            bounds: components["schemas"]["OverlayBounds"];
+            /**
+             * Crs
+             * @default EPSG:3857
+             * @constant
+             */
+            crs: "EPSG:3857";
+            /** Dataset Id */
+            dataset_id: string;
+            /** Method */
+            method: string;
+            date_window: components["schemas"]["DateWindow"];
+            /** Attributions */
+            attributions: string[];
+        };
         /** LedgerEntryOut */
         LedgerEntryOut: {
             /** Seq */
@@ -3167,6 +3229,20 @@ export interface components {
              * @description The trader's shares of this asset after this fill.
              */
             shares_held: number;
+        };
+        /**
+         * OverlayBounds
+         * @description The overlay's extent in WGS84 degrees (Leaflet's `[[south, west], [north, east]]`).
+         */
+        OverlayBounds: {
+            /** South */
+            south: number;
+            /** West */
+            west: number;
+            /** North */
+            north: number;
+            /** East */
+            east: number;
         };
         /**
          * OverlayImage
@@ -5315,6 +5391,44 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PricePoint"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_land_cover_overlay_assets__asset_id__overlay_png_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Land-cover overlay PNG */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description Not found in the caller's world, or no overlay (yet) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

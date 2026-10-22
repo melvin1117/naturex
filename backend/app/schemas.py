@@ -50,7 +50,7 @@ from app.models import (
     VerificationLevel,
     VerificationMode,
 )
-from app.tools.earth_obs import NdviPoint
+from app.tools.earth_obs import DateWindow, NdviPoint
 from app.tools.field_evidence import (
     AuthenticityConcern,
     DateCheck,
@@ -412,6 +412,33 @@ class CachedExample(BaseModel):
     notice: str
 
 
+class OverlayBounds(BaseModel):
+    """The overlay's extent in WGS84 degrees (Leaflet's `[[south, west], [north, east]]`)."""
+
+    south: float
+    west: float
+    north: float
+    east: float
+
+
+class LandCoverOverlay(BaseModel):
+    """A live-rated listing's Dynamic World land-cover overlay (#231), for a Leaflet
+    `ImageOverlay`: the PNG at `GET /assets/{asset_id}/overlay.png?v={version}` spans `bounds`
+    in Web Mercator, transparent outside the boundary. Same palette and method as the demo
+    sites' precomputed overlay (`GET /media/demo-sites/{site_key}/images.json`)."""
+
+    version: str = Field(description="Changes when the overlay is re-rendered (cache key).")
+    media_type: Literal["image/png"] = "image/png"
+    width: int
+    height: int
+    bounds: OverlayBounds
+    crs: Literal["EPSG:3857"] = "EPSG:3857"
+    dataset_id: str
+    method: str
+    date_window: DateWindow
+    attributions: list[str]
+
+
 class AssetDetail(BaseModel):
     id: UUID
     name: str
@@ -457,6 +484,12 @@ class AssetDetail(BaseModel):
         description="Demo worlds only: a listing waiting in `rating` because its satellite "
         "metrics are missing or their live computation failed points to the nearest precomputed "
         "demo site, labelled as a cached example (T60). Always null in the live world.",
+    )
+    land_cover_overlay: LandCoverOverlay | None = Field(
+        default=None,
+        description="The listing's land-cover overlay from its live satellite rating (#231); "
+        "null for demo sites (their overlay is precomputed: `site_key`), with mock or no "
+        "satellite data, or when rendering failed.",
     )
     latest_run_id: UUID | None = Field(
         default=None,
