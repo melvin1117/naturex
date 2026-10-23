@@ -1,0 +1,598 @@
+<title>WildWorth Copilot Characters</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gloock&family=Hanken+Grotesk:wght@300..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: a casting sheet. One card per character, drawn with the logo's rules (one line weight,
+   forest ink, a single lime accent), so the eight can be compared by scrolling. Characters inherit
+   the theme: ink is currentColor, occluding fills are --chbg, the accent is --chacc. */
+:root{
+  --bg:oklch(0.945 0.011 125);
+  --surface:oklch(0.99 0.005 118);
+  --raised:oklch(0.915 0.016 128);
+  --ink:oklch(0.255 0.045 148);
+  --muted:oklch(0.47 0.035 145);
+  --line:oklch(0.875 0.014 128);
+  --accent-ink:oklch(0.42 0.1 135);
+  --shadow:0 1px 2px oklch(0.3 0.05 145/0.06),0 18px 40px -26px oklch(0.3 0.05 145/0.35);
+
+  --forest:oklch(0.31 0.062 148);
+  --forest-deep:oklch(0.215 0.035 158);
+  --forest-ink:oklch(0.255 0.045 148);
+  --machine-ink:oklch(0.94 0.045 122);
+  --paper:oklch(0.988 0.005 118);
+  --lichen:oklch(0.932 0.012 128);
+  --lime:oklch(0.86 0.135 126);
+  --lime-ink:oklch(0.42 0.1 135);
+
+  --chbg:var(--surface);
+  --chacc:var(--accent-ink);
+
+  --display:"Gloock",Georgia,"Times New Roman",serif;
+  --body:"Hanken Grotesk",system-ui,-apple-system,sans-serif;
+  --mono:"Geist Mono",ui-monospace,Menlo,monospace;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:oklch(0.19 0.028 158);--surface:oklch(0.235 0.034 156);--raised:oklch(0.27 0.036 155);
+    --ink:oklch(0.94 0.035 122);--muted:oklch(0.74 0.04 135);--line:oklch(0.34 0.04 152);
+    --accent-ink:oklch(0.86 0.135 126);
+    --shadow:0 1px 2px oklch(0 0 0/0.3),0 18px 40px -26px oklch(0 0 0/0.7);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:oklch(0.19 0.028 158);--surface:oklch(0.235 0.034 156);--raised:oklch(0.27 0.036 155);
+  --ink:oklch(0.94 0.035 122);--muted:oklch(0.74 0.04 135);--line:oklch(0.34 0.04 152);
+  --accent-ink:oklch(0.86 0.135 126);
+  --shadow:0 1px 2px oklch(0 0 0/0.3),0 18px 40px -26px oklch(0 0 0/0.7);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16.5px/1.6 var(--body);-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+h1,h2,h3,h4,p{margin:0}
+h1,h2,h3{text-wrap:balance}
+a{color:inherit;text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--accent-ink);outline-offset:3px;border-radius:4px}
+.wrap{max-width:1160px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:720px){.wrap{padding-left:max(32px,env(safe-area-inset-left,0px));padding-right:max(32px,env(safe-area-inset-right,0px))}}
+.label{font:500 11.5px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+/* grounds: each sets the character's ink, fill and accent */
+.g-surface{background:var(--surface);color:var(--ink);--chbg:var(--surface);--chacc:var(--accent-ink)}
+.g-bg{background:var(--bg);color:var(--ink);--chbg:var(--bg);--chacc:var(--accent-ink)}
+.g-paper{background:var(--paper);color:var(--forest-ink);--chbg:var(--paper);--chacc:var(--lime-ink)}
+.g-lichen{background:var(--lichen);color:var(--forest-ink);--chbg:var(--lichen);--chacc:var(--lime-ink)}
+.g-forest{background:var(--forest);color:var(--paper);--chbg:var(--forest);--chacc:var(--lime)}
+.g-machine{background:var(--forest-deep);color:var(--machine-ink);--chbg:var(--forest-deep);--chacc:var(--lime)}
+
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:color-mix(in oklch,var(--bg) 86%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line);--chbg:var(--bg)}
+.top .wrap{display:flex;align-items:center;gap:24px;height:52px}
+.top .who{font:500 12px var(--mono);letter-spacing:.04em;white-space:nowrap}
+.top nav{display:flex;gap:16px;overflow-x:auto;scrollbar-width:none;font-size:14px;min-width:0}
+.top nav::-webkit-scrollbar{display:none}
+.top nav a{display:flex;align-items:center;gap:6px;text-decoration:none;color:var(--muted);white-space:nowrap}
+.top nav a:hover{color:var(--ink)}
+.top nav svg{width:22px;height:22px;color:var(--ink)}
+
+.hero{padding-block:72px 8px}
+.hero h1{font:400 clamp(44px,7.4vw,96px)/.95 var(--display);letter-spacing:-.03em;margin-top:18px}
+.hero .lede{font-size:clamp(17px,1.9vw,20px);line-height:1.5;max-width:62ch;margin-top:20px}
+.lineup{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:40px}
+.lineup a{position:relative;display:grid;justify-items:center;gap:8px;padding:24px 12px 18px;border-radius:24px;text-decoration:none;box-shadow:var(--shadow);transition:transform .4s var(--ease)}
+.lineup a:hover{transform:translateY(-3px)}
+.lineup svg{width:min(124px,100%);height:auto;aspect-ratio:1}
+.lineup b{font:400 26px/1 var(--display)}
+.lineup span{font-size:13px;opacity:.8}
+.lineup i{position:absolute;top:12px;left:12px;font:500 10px/1 var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase;padding:6px 8px;border-radius:99px;background:var(--lime);color:var(--forest-ink)}
+.rulesbar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
+.rulesbar div{border-top:2px solid var(--ink);padding-top:12px}
+.rulesbar b{display:block;font:600 15px var(--body);margin-bottom:4px}
+.rulesbar span{font-size:14px;color:var(--muted)}
+
+section{padding-block:88px 0;scroll-margin-top:64px}
+.group{padding-block:96px 0}
+.group h2{font:400 clamp(32px,4.4vw,52px)/1 var(--display);letter-spacing:-.02em;margin-top:8px}
+.group p{margin-top:10px;max-width:62ch;color:var(--muted)}
+.group+section{padding-top:40px}
+.ccard{background:var(--surface);border-radius:36px;overflow:hidden;box-shadow:var(--shadow)}
+.chero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)}
+.stages{display:grid;grid-template-rows:minmax(0,1fr) auto}
+.cstage{position:relative;display:grid;place-items:center;min-height:400px;padding:48px 24px 72px}
+.cstage .reactor{display:block;width:min(270px,100%)}
+.cstage svg.big{width:100%;height:auto;aspect-ratio:1;display:block}
+.cstage .tag{position:absolute;top:18px;left:18px;font:500 11px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;padding:8px 12px;border-radius:99px;background:var(--raised);color:var(--muted)}
+.cstage .tag.rec{background:var(--lime);color:var(--forest-ink)}
+.acts{position:absolute;left:0;right:0;bottom:16px;display:flex;justify-content:center;gap:6px;flex-wrap:wrap;padding-inline:12px}
+.acts button{font:500 12.5px var(--body);padding:7px 12px;border-radius:99px;border:1px solid oklch(0.85 0.02 128);background:var(--paper);color:var(--forest-ink);cursor:pointer}
+.acts button:hover{border-color:var(--forest-ink)}
+.acts button[aria-pressed="true"]{background:var(--forest);border-color:var(--forest);color:var(--paper)}
+.minis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+.minis>div{display:grid;place-items:center;padding:18px;position:relative;min-height:150px}
+.minis svg{width:104px;height:104px}
+.minis small{position:absolute;left:12px;bottom:9px;font:500 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;opacity:.7}
+.chead{padding:40px 40px 36px;display:grid;gap:16px;align-content:start;border-left:1px solid var(--line)}
+.chead .lockup{display:flex;align-items:center;gap:14px}
+.chead .lockup .av{width:64px;height:64px}
+.chead .lockup b{font:400 64px/.9 var(--display);letter-spacing:-.03em}
+.chead .lockup small{display:block;font:500 11px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-top:8px}
+.chead .one{font:400 clamp(22px,2.4vw,28px)/1.2 var(--display);color:var(--accent-ink)}
+.traits{display:flex;flex-wrap:wrap;gap:6px}
+.traits span{font:500 12.5px var(--body);padding:5px 11px;border-radius:99px;background:var(--raised)}
+.chead p{font-size:15.5px}
+.chead .say{font:400 19px/1.35 var(--display);padding:14px 16px;border-radius:14px;background:var(--bg)}
+.chead .note{font-size:14.5px;padding:12px 14px;border-radius:12px;border:1px dashed var(--line)}
+
+.row3{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1.2fr);border-top:1px solid var(--line)}
+.row3>div{padding:26px 28px;min-width:0}
+.row3>div+div{border-left:1px solid var(--line)}
+.exprs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:14px}
+.exprs figure{margin:0;display:grid;justify-items:center;gap:6px;padding:10px 4px;border-radius:16px}
+.exprs svg{width:100%;max-width:92px;height:auto;aspect-ratio:1}
+.exprs figcaption{font:500 10.5px var(--mono);letter-spacing:.04em;text-transform:uppercase;opacity:.75;text-align:center}
+.icons{display:grid;gap:16px;margin-top:14px}
+.icons .ln{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.icons figure{margin:0;display:grid;justify-items:center;gap:6px}
+.icons figcaption{font:500 10px var(--mono);color:var(--muted)}
+.tile{display:grid;place-items:center;border-radius:22%;box-shadow:0 0 0 1px var(--line)}
+.chat{margin-top:14px;border-radius:20px;padding:16px;display:grid;gap:10px;font-size:14px;line-height:1.45}
+.chat .q{justify-self:end;max-width:85%;padding:10px 14px;border-radius:16px 16px 4px 16px;background:var(--forest);color:var(--paper)}
+.chat .a{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start}
+.chat .a .av{width:38px;height:38px}
+.chat .bub{padding:11px 14px;border-radius:16px 16px 16px 4px;background:var(--paper)}
+.chat .who{font:600 12.5px var(--body);margin-bottom:3px;display:flex;justify-content:space-between;gap:8px}
+.chat .who span{font:500 10px var(--mono);color:oklch(0.47 0.035 145);text-transform:uppercase;letter-spacing:.05em}
+.cite{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.cite span{font:500 10.5px var(--mono);padding:3px 8px;border-radius:99px;background:var(--lichen);color:var(--lime-ink)}
+.pros{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border-top:1px solid var(--line)}
+.pros>div{background:var(--surface);padding:22px 28px}
+.pros h4{font:600 14px var(--body);margin-bottom:8px}
+.pros ul{margin:0;padding-left:1.1em;display:grid;gap:6px;font-size:14.5px}
+
+.cmp{overflow-x:auto;border-radius:24px;box-shadow:var(--shadow);background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:14.5px}
+th,td{text-align:left;padding:14px 16px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+th{font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td .who{display:flex;align-items:center;gap:10px;font:400 22px var(--display)}
+td .who svg{width:40px;height:40px}
+.dots{font:600 14px var(--body);letter-spacing:2px;color:var(--accent-ink);white-space:nowrap}
+.top3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+.top3 div{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:center;padding:16px 18px;border-radius:20px;box-shadow:var(--shadow)}
+.top3 svg{width:72px;height:72px}
+.top3 b{display:block;font:400 22px/1.1 var(--display)}
+.top3 span{font-size:14px;opacity:.85}
+.rules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+.rules div{border-top:2px solid var(--ink);padding-top:12px}
+.rules b{display:block;font:600 15px var(--body);margin-bottom:4px}
+.rules span{font-size:14px;color:var(--muted)}
+.h2{font:400 clamp(36px,5.4vw,64px)/1 var(--display);letter-spacing:-.02em}
+.sh{display:grid;gap:14px;margin-bottom:28px}
+footer{padding-block:88px 110px;font-size:13.5px;color:var(--muted)}
+
+/* ---------- motion: idle loops live only inside .anim; reactions on the hero stage ---------- */
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.cstage svg.big{animation:bob 3.6s ease-in-out infinite}
+.anim .eyes{transform-box:fill-box;transform-origin:center;animation:blink 5s infinite}
+@keyframes blink{0%,94%,100%{transform:scaleY(1)}96.5%{transform:scaleY(.12)}}
+.anim .lead .eyes{animation-delay:1.2s}
+@keyframes dot{0%,24%{transform:scale(0)}32%{transform:scale(1.35)}38%,100%{transform:scale(1)}}
+@keyframes rise{0%,8%{stroke-dashoffset:100}28%,100%{stroke-dashoffset:0}}
+@keyframes flapL{to{transform:rotate(-16deg)}}
+@keyframes flapR{to{transform:rotate(16deg)}}
+/* Bea */
+.anim .bea-wl{transform-box:fill-box;transform-origin:100% 100%;animation:flapL .32s ease-in-out infinite alternate}
+.anim .bea-wr{transform-box:fill-box;transform-origin:0% 100%;animation:flapR .32s ease-in-out infinite alternate}
+.anim .bea-read{stroke-dasharray:100;animation:rise 4.5s var(--ease) infinite}
+.anim .bea-dot{transform-box:fill-box;transform-origin:center;animation:dot 4.5s var(--ease) infinite}
+/* Axo */
+.anim .axo-gl{transform-box:fill-box;transform-origin:100% 50%;animation:swayL 2.6s ease-in-out infinite}
+.anim .axo-gr{transform-box:fill-box;transform-origin:0% 50%;animation:swayR 2.6s ease-in-out infinite}
+@keyframes swayL{50%{transform:rotate(7deg)}}
+@keyframes swayR{50%{transform:rotate(-7deg)}}
+.anim .axo-new{stroke-dasharray:100;animation:regrow 5s var(--ease) infinite}
+@keyframes regrow{0%,10%{stroke-dashoffset:100}45%,100%{stroke-dashoffset:0}}
+.anim .axo-newdot{transform-box:fill-box;transform-origin:center;animation:dotLate 5s var(--ease) infinite}
+@keyframes dotLate{0%,42%{transform:scale(0)}50%{transform:scale(1.35)}56%,100%{transform:scale(1)}}
+/* Pip */
+.anim .pip-body{animation:hop 3.2s var(--ease) infinite}
+@keyframes hop{0%,58%,100%{transform:translateY(0)}68%{transform:translateY(-13px)}78%{transform:translateY(0)}83%{transform:translateY(-3px)}88%{transform:translateY(0)}}
+.anim .pip-pad{stroke-dasharray:100;animation:pad 3.2s var(--ease) infinite}
+@keyframes pad{0%,77%{stroke-dashoffset:0}78%{stroke-dashoffset:100}96%,100%{stroke-dashoffset:0}}
+/* Burl */
+.anim .burl-sprout{transform-box:fill-box;transform-origin:50% 100%;animation:sprout 3s ease-in-out infinite}
+@keyframes sprout{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(7deg)}}
+/* Glim */
+.anim .glim-fly{animation:fly 3.4s ease-in-out infinite}
+@keyframes fly{0%,100%{transform:translate(0,0)}25%{transform:translate(3px,-6px)}50%{transform:translate(-2px,-2px)}75%{transform:translate(-4px,-7px)}}
+.anim .glim-wl{transform-box:fill-box;transform-origin:100% 100%;animation:flapL .22s ease-in-out infinite alternate}
+.anim .glim-wr{transform-box:fill-box;transform-origin:0% 100%;animation:flapR .22s ease-in-out infinite alternate}
+.anim .glim-halo{transform-box:fill-box;transform-origin:center;animation:glow 2.2s ease-in-out infinite}
+@keyframes glow{0%,100%{opacity:.12;transform:scale(.85)}50%{opacity:.6;transform:scale(1.15)}}
+.anim .glim-trail{animation:trail 1.6s linear infinite}
+@keyframes trail{to{stroke-dashoffset:-16}}
+/* Orbi */
+.anim .orbi-craft{transform-box:fill-box;transform-origin:50% 50%;animation:tilt 4s ease-in-out infinite}
+@keyframes tilt{0%,100%{transform:rotate(-4deg) translateY(0)}50%{transform:rotate(4deg) translateY(-4px)}}
+.anim .orbi-beam{animation:beam 2.4s ease-in-out infinite}
+@keyframes beam{0%,100%{opacity:.25}50%{opacity:1}}
+.anim .orbi-dot{transform-box:fill-box;transform-origin:center;animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(1.4)}}
+/* Otto */
+.anim .otto-float{animation:float 3s ease-in-out infinite}
+@keyframes float{50%{transform:translateY(3px)}}
+.anim .otto-peb{animation:toss 3.6s var(--ease) infinite}
+@keyframes toss{0%,55%,100%{transform:translateY(0)}68%{transform:translateY(-24px)}80%{transform:translateY(0)}}
+/* Wade */
+.anim .wade-head{transform-box:fill-box;transform-origin:50% 100%;animation:tiltHead 5s ease-in-out infinite}
+@keyframes tiltHead{0%,38%,100%{transform:rotate(0)}48%,72%{transform:rotate(-10deg)}}
+.anim .wade-rip{transform-box:fill-box;transform-origin:center;animation:ripple 2.6s ease-out infinite}
+.anim .wade-rip.r2{animation-delay:1.3s}
+@keyframes ripple{0%{transform:scale(.3);opacity:1}100%{transform:scale(1.5);opacity:0}}
+/* Sprig */
+.anim .sprig-body{transform-box:fill-box;transform-origin:50% 100%;animation:sway 4s ease-in-out infinite}
+@keyframes sway{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}}
+.anim .sprig-leaves{transform-box:fill-box;transform-origin:50% 100%;animation:rustle 1.8s ease-in-out infinite}
+@keyframes rustle{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+/* reactions, played on the hero stage */
+.reactor.up{animation:reactUp .75s var(--ease)}
+.reactor.down{animation:reactDown .6s ease}
+@keyframes reactUp{0%{transform:none}30%{transform:translateY(-16px) scale(1.03,.97)}60%{transform:translateY(0) scale(.97,1.03)}100%{transform:none}}
+@keyframes reactDown{0%,100%{transform:none}20%{transform:translateX(-7px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
+
+/* icon pack style, matching the brand guidelines */
+.gl{display:block;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.gl .af{fill:var(--chacc);stroke:currentColor;stroke-width:1.4}
+.gl .as{stroke:var(--chacc)}
+.gl .f{fill:currentColor;stroke:none}
+
+@media (max-width:980px){
+  .chero,.row3{grid-template-columns:minmax(0,1fr)}
+  .chead{border-left:0;border-top:1px solid var(--line);padding:28px 24px}
+  .row3>div+div{border-left:0;border-top:1px solid var(--line)}
+  .rulesbar{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .top3{grid-template-columns:minmax(0,1fr)}
+  .cstage{min-height:320px}
+}
+@media (max-width:640px){
+  section{padding-block:68px 0}
+  .pros,.rules,.rulesbar{grid-template-columns:minmax(0,1fr)}
+  .chead .lockup b{font-size:52px}
+  .exprs{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+
+<div class="top"><div class="wrap">
+  <span class="who">WildWorth · the Copilot character</span>
+  <nav aria-label="Characters" id="nav"></nav>
+</div></div>
+
+<main class="wrap">
+  <header class="hero">
+    <p class="label">For the team · 23 Oct 2026 · replaces “Copilot”</p>
+    <h1>Who answers when you ask why?</h1>
+    <p class="lede">Nine characters for the assistant that explains a site's rating: Sprig, the gentle tree you asked for, the first four, and four new ones. All are drawn by the logo's rules and all move. Each has an idle loop, blinks, and reacts when a rating changes. Try the Downgrade and Upgrade buttons on each card.</p>
+    <div class="lineup anim" id="lineup"></div>
+    <div class="rulesbar">
+      <div><b>One line weight</b><span>Every stroke is the same weight with round ends, like the logo's line.</span></div>
+      <div><b>Ink only</b><span>Forest ink on light grounds, paper on dark. No pinks, browns or blush.</span></div>
+      <div><b>One lime accent</b><span>Lime-ink on light, lime on dark. Each character's accent means something.</span></div>
+      <div><b>Motion that means something</b><span>The lime part is what moves: it draws, glows or rises, like the logo's reading.</span></div>
+    </div>
+  </header>
+
+  <div id="cards"></div>
+
+  <section id="compare">
+    <div class="sh"><p class="label">Compare</p><h2 class="h2">All nine, side by side</h2></div>
+    <div class="cmp"><table>
+      <thead><tr><th>Character</th><th>Ties to the story</th><th>Works on every site</th><th>Cute</th><th>Credible in a report</th><th>Low risk</th></tr></thead>
+      <tbody id="cmpRows"></tbody>
+    </table></div>
+    <div class="top3 anim" id="top3"></div>
+    <div class="rules">
+      <div><b>Numbers stay sober</b><span>The character changes how things are said, never what the numbers are. Every figure comes from the formulas and the Record.</span></div>
+      <div><b>Always cites</b><span>Each answer ends with its evidence: Record entries, news dates, the satellite quarter.</span></div>
+      <div><b>Never sells</b><span>No invest, returns or buy, ever. In the Agent Trace the character is labelled as the model it runs on.</span></div>
+    </div>
+  </section>
+</main>
+
+<footer><div class="wrap">
+  <p>Original characters drawn for WildWorth in the brand's line style. None imitates an existing character. Numbers in the chat samples are the example from docs/design/ux-writing.md. Animations stop for anyone who prefers reduced motion. Sandbox, play money only.</p>
+</div></footer>
+
+<script>
+(function(){
+  var SW=6, uid=0;
+  var INK='stroke="currentColor" stroke-width="'+SW+'" stroke-linecap="round" stroke-linejoin="round"';
+  var FILL='style="fill:var(--chbg)"', ACC='style="stroke:var(--chacc)"', ACCF='style="fill:var(--chacc)"';
+
+  /* Shared face, in line: dot eyes (grouped so they can blink) and a stroked mouth. */
+  function face(e,cx,cy,dx,s,mw){
+    s=s||1;mw=mw||1;var eyes="",brows="",o="",w=6.5*s*mw;
+    [cx-dx,cx+dx].forEach(function(x){
+      if(e==="happy"){eyes+='<path d="M'+(x-4.6*s)+' '+(cy+1.6*s)+' Q'+x+' '+(cy-4.6*s)+' '+(x+4.6*s)+' '+(cy+1.6*s)+'" fill="none" '+INK+'/>';}
+      else{var r=(e==="alert"?5.4:4.3)*s,ox=e==="think"?2.4*s:0,oy=e==="think"?-2.4*s:0;
+        eyes+='<circle cx="'+(x+ox)+'" cy="'+(cy+oy)+'" r="'+r+'" fill="currentColor"/>';}
+      if(e==="alert"){var l=x<cx;brows+='<path d="M'+(x-4.5*s)+' '+(cy-(l?9:12)*s)+' L'+(x+4.5*s)+' '+(cy-(l?12:9)*s)+'" fill="none" '+INK+' stroke-width="'+(SW*.7)+'"/>';}
+    });
+    o='<g class="eyes">'+eyes+'</g>'+brows;
+    if(e==="neutral")o+='<path d="M'+(cx-w)+' '+(cy+10*s)+' Q'+cx+' '+(cy+15.5*s)+' '+(cx+w)+' '+(cy+10*s)+'" fill="none" '+INK+'/>';
+    if(e==="think")o+='<path d="M'+(cx-3*s)+' '+(cy+12.5*s)+' L'+(cx+4.5*s)+' '+(cy+11.5*s)+'" fill="none" '+INK+'/>'+
+      '<circle cx="'+(cx+dx+15*s)+'" cy="'+(cy-15*s)+'" r="'+(2*s)+'" fill="currentColor"/><circle cx="'+(cx+dx+21*s)+'" cy="'+(cy-21*s)+'" r="'+(2.7*s)+'" fill="currentColor"/>';
+    if(e==="alert")o+='<circle cx="'+cx+'" cy="'+(cy+13*s)+'" r="'+(3.2*s)+'" fill="none" '+INK+' stroke-width="'+(SW*.75)+'"/>';
+    if(e==="happy")o+='<path d="M'+(cx-w-1.5*s)+' '+(cy+9*s)+' Q'+cx+' '+(cy+19*s)+' '+(cx+w+1.5*s)+' '+(cy+9*s)+'" fill="none" '+INK+'/>';
+    return o;
+  }
+
+  /* ---------- the first four ---------- */
+  function bea(e){var id="bc"+(uid++),al=e==="alert";
+    var ant=al?'M51 38 L45 14M69 38 L75 14':'M52 38 Q47 24 41 19M68 38 Q73 24 79 19',tips=al?[[45,14],[75,14]]:[[41,19],[79,19]];
+    return '<path d="'+ant+'" fill="none" '+INK+'/>'+tips.map(function(t){return '<circle cx="'+t[0]+'" cy="'+t[1]+'" r="4.2" fill="currentColor"/>';}).join("")+
+      '<g class="bea-wl"><ellipse cx="37" cy="44" rx="16" ry="10.5" transform="rotate(-28 37 44)" '+FILL+' '+INK+'/></g>'+
+      '<g class="bea-wr"><ellipse cx="83" cy="44" rx="16" ry="10.5" transform="rotate(28 83 44)" '+FILL+' '+INK+'/></g>'+
+      '<defs><clipPath id="'+id+'"><circle cx="60" cy="70" r="30"/></clipPath></defs>'+
+      '<circle cx="60" cy="70" r="33" '+FILL+' '+INK+'/>'+
+      '<g clip-path="url(#'+id+')"><path d="M33 89 L41 99 L49 88 L57 99 L65 88 L72 99" fill="none" '+INK+'/>'+
+      '<path class="bea-read" pathLength="100" d="M72 99 L83 85" fill="none" '+INK+' '+ACC+'/></g><circle class="bea-dot" cx="83" cy="85" r="4.6" '+ACCF+'/>'+
+      '<path d="M55 104 L60 111 L65 104" fill="none" '+INK+'/>'+face(e,60,62,12,1);}
+
+  function axo(e){var lift=e==="alert"?-4:e==="happy"?-2:0,gl="",gr="";
+    var L=[[29,52,11,36],[26,63,7,61],[29,74,11,88]];
+    L.forEach(function(p,i){
+      gl+='<path d="M'+p[0]+' '+(p[1]+lift)+' Q'+((p[0]+p[2])/2)+' '+(p[1]+lift-5)+' '+p[2]+' '+(p[3]+lift)+'" fill="none" '+INK+'/><circle cx="'+p[2]+'" cy="'+(p[3]+lift)+'" r="4" fill="currentColor"/>';
+      var q=[120-p[0],p[1],120-p[2],p[3]],acc=i===0;
+      gr+='<path'+(acc?' class="axo-new" pathLength="100"':'')+' d="M'+q[0]+' '+(q[1]+lift)+' Q'+((q[0]+q[2])/2)+' '+(q[1]+lift-5)+' '+q[2]+' '+(q[3]+lift)+'" fill="none" '+INK+(acc?' '+ACC:'')+'/><circle'+(acc?' class="axo-newdot"':'')+' cx="'+q[2]+'" cy="'+(q[3]+lift)+'" r="'+(acc?5:4)+'" '+(acc?ACCF:'fill="currentColor"')+'/>';
+    });
+    return '<g class="axo-gl">'+gl+'</g><g class="axo-gr">'+gr+'</g><path d="M44 92 q0 7 -6 8M76 92 q0 7 6 8" fill="none" '+INK+'/>'+
+      '<ellipse cx="60" cy="'+(64+lift)+'" rx="35" ry="28" '+FILL+' '+INK+'/>'+face(e,60,60+lift,16,1,1.7);}
+
+  function pip(e){var j=e==="happy"?-6:0;
+    return '<path class="pip-pad" pathLength="100" d="M16 106 H86 L100 97" fill="none" '+INK+' '+ACC+'/><circle cx="100" cy="97" r="4.6" '+ACCF+'/>'+
+      '<g class="pip-body"><circle cx="41" cy="'+(50+j)+'" r="14" '+FILL+' '+INK+'/><circle cx="79" cy="'+(50+j)+'" r="14" '+FILL+' '+INK+'/>'+
+      '<path d="M30 '+(98+j)+' q-8 0 -10 5M90 '+(98+j)+' q8 0 10 5" fill="none" '+INK+'/>'+
+      '<ellipse cx="60" cy="'+(80+j)+'" rx="38" ry="25" '+FILL+' '+INK+'/>'+face(e,60,48+j,19,1.2,1.5)+'</g>';}
+
+  function burl(e){var sp=e==="happy"?1.18:e==="alert"?.8:1;
+    return '<g transform="translate(60 36) scale('+sp+') translate(-60 -36)"><g class="burl-sprout">'+
+      '<path d="M60 36 Q60 26 62 18" fill="none" '+INK+'/>'+
+      '<path d="M61 24 C53 14 42 16 41 24 C48 28 55 28 61 24 Z" '+ACCF+'/>'+
+      '<path d="M62 20 C68 11 78 11 79 18 C73 22 67 22 62 20 Z" '+ACCF+'/></g></g>'+
+      '<rect x="28" y="38" width="64" height="66" rx="15" '+FILL+' '+INK+'/>'+
+      '<ellipse cx="60" cy="40" rx="32" ry="9" '+FILL+' '+INK+'/>'+
+      '<ellipse cx="60" cy="40" rx="18" ry="4.6" fill="none" stroke="currentColor" stroke-width="2.6" opacity=".5"/>'+
+      '<path d="M37 58 Q35 76 38 94M83 58 Q85 76 82 94" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" opacity=".45"/>'+
+      face(e,60,70,12,.95);}
+
+  /* ---------- four new ones ---------- */
+  /* Glim: a firefly whose tail is the lime reading; its flight path is the WildWorth zigzag. */
+  function glim(e){var al=e==="alert";
+    var ant=al?'M53 32 L48 10M67 32 L72 10':'M53 32 Q49 18 43 14M67 32 Q71 18 77 14',tips=al?[[48,10],[72,10]]:[[43,14],[77,14]];
+    return '<path class="glim-trail" d="M4 98 L12 108 L20 96 L28 108 L36 96" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1 7" opacity=".4"/>'+
+      '<g class="glim-fly"><path d="'+ant+'" fill="none" '+INK+'/>'+tips.map(function(t){return '<circle cx="'+t[0]+'" cy="'+t[1]+'" r="4" fill="currentColor"/>';}).join("")+
+      '<g class="glim-wl"><ellipse cx="38" cy="44" rx="18" ry="9" transform="rotate(-32 38 44)" '+FILL+' '+INK+'/></g>'+
+      '<g class="glim-wr"><ellipse cx="82" cy="44" rx="18" ry="9" transform="rotate(32 82 44)" '+FILL+' '+INK+'/></g>'+
+      '<circle class="glim-halo" cx="60" cy="88" r="24" fill="none" stroke-width="3" '+ACC+'/>'+
+      '<ellipse class="glim-tail" cx="60" cy="88" rx="15" ry="16" '+ACCF+' '+INK+'/>'+
+      '<circle cx="60" cy="54" r="24" '+FILL+' '+INK+'/>'+face(e,60,52,9,.85)+'</g>';}
+
+  /* Orbi: a small satellite; its scan beam ends in the logo's lime dot. */
+  function orbi(e){var al=e==="alert";
+    return '<g class="orbi-beam"><path d="M52 86 L40 106M68 86 L80 106" fill="none" '+INK+' '+ACC+'/></g><circle class="orbi-dot" cx="60" cy="108" r="5.5" '+ACCF+'/>'+
+      '<g class="orbi-craft">'+
+      '<path d="M34 60 H40M80 60 H86" fill="none" '+INK+'/>'+
+      '<rect x="7" y="48" width="27" height="24" rx="4" '+FILL+' '+INK+'/><path d="M16 48v24M25 48v24M7 60h27" fill="none" stroke="currentColor" stroke-width="2.4" opacity=".45"/>'+
+      '<rect x="86" y="48" width="27" height="24" rx="4" '+FILL+' '+INK+'/><path d="M95 48v24M104 48v24M86 60h27" fill="none" stroke="currentColor" stroke-width="2.4" opacity=".45"/>'+
+      '<path d="M60 38 V'+(al?18:24)+'" fill="none" '+INK+'/><circle cx="60" cy="'+(al?15:21)+'" r="4.4" fill="currentColor"/>'+
+      '<rect x="40" y="38" width="40" height="46" rx="13" '+FILL+' '+INK+'/>'+face(e,60,56,9,.85)+'</g>';}
+
+  /* Otto: an otter afloat, holding his favourite stone: the lime dot. */
+  function otto(e){var waves="M4 104";for(var i=0;i<8;i++){waves+=" q7 -6 14 0";}
+    return '<g class="otto-float">'+
+      '<path d="M33 104 Q29 82 44 72 H76 Q91 82 87 104 Z" '+FILL+'/><path d="M33 104 Q29 82 44 72M87 104 Q91 82 76 72" fill="none" '+INK+'/>'+
+      '<circle cx="37" cy="34" r="7.5" '+FILL+' '+INK+'/><circle cx="83" cy="34" r="7.5" '+FILL+' '+INK+'/>'+
+      '<ellipse cx="60" cy="52" rx="29" ry="25" '+FILL+' '+INK+'/>'+
+      '<ellipse cx="60" cy="52.6" rx="3.6" ry="2.3" fill="currentColor"/>'+
+      '<path d="M45 58 L32 56M45 62 L32 64M75 58 L88 56M75 62 L88 64" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity=".55"/>'+
+      face(e,60,46,12,.9)+
+      '<g class="otto-peb"><ellipse cx="60" cy="86" rx="9.5" ry="7.5" '+ACCF+' '+INK+'/></g>'+
+      '<path d="M47 82 q5 -2 7 4M73 82 q-5 -2 -7 4" fill="none" '+INK+'/></g>'+
+      '<path d="'+waves+'" fill="none" '+INK+'/>';}
+
+  /* Wade: a heron who stands still and watches; the lime ripple spreads when something changes. */
+  function wade(e){var up=e==="happy"?-4:0;
+    return '<ellipse class="wade-rip" cx="58" cy="106" rx="13" ry="3.4" fill="none" stroke-width="3" '+ACC+'/>'+
+      '<ellipse class="wade-rip r2" cx="58" cy="106" rx="13" ry="3.4" fill="none" stroke-width="3" '+ACC+'/>'+
+      '<path d="M58 84 V106" fill="none" '+INK+'/><path d="M63 84 L71 93 L63 97" fill="none" '+INK+'/>'+
+      '<path d="M40 74 L28 80" fill="none" '+INK+'/>'+
+      '<path d="M60 66 Q50 56 60 '+(46+up)+'" fill="none" '+INK+'/>'+
+      '<ellipse cx="58" cy="74" rx="21" ry="12" '+FILL+' '+INK+'/>'+
+      '<g class="wade-head"><path d="M55 '+(24+up)+' Q46 '+(15+up)+' 37 '+(17+up)+'" fill="none" '+INK+'/>'+
+      '<circle cx="60" cy="'+(34+up)+'" r="14" '+FILL+' '+INK+'/>'+face(e,60,31+up,6,.7)+
+      '<path d="M53.5 '+(37+up)+' L60 '+(58+up)+' L66.5 '+(37+up)+' Z" '+FILL+'/><path d="M54.6 '+(41+up)+' L60 '+(58+up)+' L65.4 '+(41+up)+'" fill="none" '+INK+'/></g>';}
+
+  /* Sprig: an original young sapling. Roots are the WildWorth zigzag; the lime leaves are the reading,
+     growing on an upgrade and drooping on a downgrade. Deliberately a sapling, not a bark-faced giant. */
+  function sprig(e){var al=e==="alert",hp=e==="happy";
+    var lt=hp?'translate(60 50) scale(1.16) translate(-60 -50)':al?'translate(60 50) scale(.84) translate(-60 -50)':'';
+    var spread=al?52:40;
+    var arms=hp?'M41 74 Q28 66 24 52M79 74 Q92 66 96 52':al?'M41 76 Q30 82 26 90M79 76 Q90 82 94 90':'M41 76 Q30 74 26 64M79 76 Q90 74 94 64';
+    var twigs=hp?'M31 66 L23 64M89 66 L97 64':al?'M31 81 L25 78M89 81 L95 78':'M31 72 L24 74M89 72 L96 74';
+    var leaf='M60 50 C52 38 54 25 60 18 C66 25 68 38 60 50 Z';
+    return '<path d="M26 102 L34 110 L42 100 L50 110 L58 100 L66 110 L74 100 L82 110 L90 102" fill="none" '+INK+'/>'+
+      '<g class="sprig-body"><path d="'+arms+'" fill="none" '+INK+'/><path d="'+twigs+'" fill="none" '+INK+' stroke-width="'+(SW*.75)+'"/>'+
+      '<g'+(lt?' transform="'+lt+'"':'')+'><g class="sprig-leaves">'+
+        '<path d="'+leaf+'" transform="rotate(-'+spread+' 60 50)" '+ACCF+' '+INK+' stroke-width="3"/>'+
+        '<path d="'+leaf+'" transform="rotate('+spread+' 60 50)" '+ACCF+' '+INK+' stroke-width="3"/>'+
+        '<path d="'+leaf+'" '+ACCF+' '+INK+' stroke-width="3"/></g></g>'+
+      '<rect x="40" y="48" width="40" height="56" rx="18" '+FILL+' '+INK+'/>'+
+      '<path d="M47 86 Q45 91 47 96M73 86 Q75 91 73 96" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity=".4"/>'+
+      face(e,60,70,9.5,.85)+'</g>';}
+
+  function svg(fn,e,cls,label){return '<svg viewBox="0 0 120 120" class="'+(cls||"")+'" role="img" aria-label="'+label+'">'+fn(e)+'</svg>';}
+  function avatar(fn,label){return '<svg viewBox="0 0 120 120" class="av" role="img" aria-label="'+label+'"><circle cx="60" cy="60" r="56" '+FILL+' stroke="currentColor" stroke-width="5"/><g transform="translate(14 16) scale(.77)">'+fn("neutral")+'</g></svg>';}
+
+  /* 24-px icons in the brand pack's style: 1.75 stroke, one accent */
+  var ICON={
+    bea:'<ellipse cx="7.8" cy="7.4" rx="3.6" ry="2.3" transform="rotate(-28 7.8 7.4)"/><ellipse cx="16.2" cy="7.4" rx="3.6" ry="2.3" transform="rotate(28 16.2 7.4)"/><circle cx="12" cy="14" r="6.4"/><path d="M7 16.3l1.6 2 1.6-2.3 1.6 2.3 1.6-2.3"/><path class="as" d="M13.4 16l2.4-2.8" stroke-width="2"/><circle class="f" cx="10" cy="12.2" r=".95"/><circle class="f" cx="14" cy="12.2" r=".95"/>',
+    axo:'<path d="M5.2 10 2.6 7.6M4.8 13H2M5.2 16l-2.6 2.4M19.2 13H22M18.8 16l2.6 2.4"/><path class="as" d="M18.8 10l2.6-2.4" stroke-width="2"/><ellipse cx="12" cy="13" rx="6.8" ry="5.4"/><circle class="f" cx="9.4" cy="12.4" r="1"/><circle class="f" cx="14.6" cy="12.4" r="1"/><path d="M9.2 15.2q2.8 1.7 5.6 0"/>',
+    pip:'<path class="as" d="M3 21h14l3.5-2.5" stroke-width="2"/><path d="M4.5 16.4c0-3.9 3.4-6.4 7.5-6.4s7.5 2.5 7.5 6.4c0 1.4-1.2 2.1-2.7 2.1H7.2c-1.5 0-2.7-.7-2.7-2.1z"/><circle cx="8.4" cy="8.6" r="2.8"/><circle cx="15.6" cy="8.6" r="2.8"/><circle class="f" cx="8.4" cy="8.6" r=".9"/><circle class="f" cx="15.6" cy="8.6" r=".9"/><path d="M9.4 14.6q2.6 1.5 5.2 0"/>',
+    burl:'<path d="M12 9V5.2"/><path class="as" d="M12 6.4c-.9-1.8-2.8-2.4-4.3-1.8.4 1.7 2.3 2.4 4.3 1.8zM12 5.8c.8-1.5 2.4-2 3.7-1.4-.3 1.4-1.8 2-3.7 1.4z" stroke-width="1.6"/><rect x="5.5" y="9" width="13" height="12" rx="3"/><path d="M6 10.6c1.3.8 3.5 1.2 6 1.2s4.7-.4 6-1.2" opacity=".6"/><circle class="f" cx="9.8" cy="15" r="1"/><circle class="f" cx="14.2" cy="15" r="1"/><path d="M10.8 18h2.4"/>',
+    glim:'<ellipse cx="7.6" cy="7.4" rx="3.6" ry="1.9" transform="rotate(-32 7.6 7.4)"/><ellipse cx="16.4" cy="7.4" rx="3.6" ry="1.9" transform="rotate(32 16.4 7.4)"/><circle class="af" cx="12" cy="17.6" r="3.4"/><circle cx="12" cy="10.6" r="4.4"/><circle class="f" cx="10.4" cy="10.4" r=".85"/><circle class="f" cx="13.6" cy="10.4" r=".85"/>',
+    orbi:'<rect x="8.6" y="5" width="6.8" height="7.6" rx="2.2"/><rect x="2.4" y="6.6" width="4.6" height="4.2" rx=".7"/><rect x="17" y="6.6" width="4.6" height="4.2" rx=".7"/><path d="M7 8.7h1.6M15.4 8.7H17"/><path class="as" d="M10.3 14.4 8 19M13.7 14.4 16 19" stroke-width="1.9"/><circle class="af" cx="12" cy="20.2" r="1.7"/><circle class="f" cx="10.8" cy="8.4" r=".75"/><circle class="f" cx="13.2" cy="8.4" r=".75"/>',
+    otto:'<circle cx="6.9" cy="5.9" r="1.7"/><circle cx="17.1" cy="5.9" r="1.7"/><ellipse cx="12" cy="10.4" rx="6.2" ry="5.3"/><circle class="f" cx="9.7" cy="9.6" r=".85"/><circle class="f" cx="14.3" cy="9.6" r=".85"/><ellipse class="f" cx="12" cy="11.7" rx="1.2" ry=".8"/><circle class="af" cx="12" cy="17.6" r="2.2"/><path d="M2.5 21.4q1.6-1.3 3.2 0t3.2 0M15.1 21.4q1.6-1.3 3.2 0t3.2 0"/>',
+    sprig:'<path class="af" d="M12 10C10.4 8 10.6 5.2 12 3.6 13.4 5.2 13.6 8 12 10z"/><path class="af" d="M11.6 10.2C9.4 10.1 7.6 8.6 7.2 6.6 9.3 6.4 11.1 7.9 11.6 10.2z"/><path class="af" d="M12.4 10.2c2.2-.1 4-1.6 4.4-3.6-2.1-.2-3.9 1.3-4.4 3.6z"/><rect x="8.6" y="10.2" width="6.8" height="9.6" rx="3"/><path d="M8.6 14.6 6 13M15.4 14.6 18 13"/><path d="M4.5 21.6l1.6-1.4 1.6 1.4 1.6-1.4 1.6 1.4 1.6-1.4 1.6 1.4 1.6-1.4 1.6 1.4 1.6-1.4 1.6 1.4" stroke-width="1.5"/><circle class="f" cx="10.9" cy="13.6" r=".8"/><circle class="f" cx="13.1" cy="13.6" r=".8"/>',
+    wade:'<path d="M9.8 3.4C8.6 2.2 7 2 5.6 2.6"/><circle cx="12" cy="6" r="3.2"/><path d="M10.9 9.1 12 12.4l1.1-3.3"/><ellipse cx="11.5" cy="15" rx="4.6" ry="2.6"/><path d="M11.5 17.6v3"/><path class="as" d="M7.4 21.4h8.2" stroke-width="1.9"/><circle class="f" cx="10.9" cy="5.6" r=".7"/><circle class="f" cx="13.1" cy="5.6" r=".7"/>'
+  };
+  function gl(k,px){return '<svg class="gl" width="'+px+'" height="'+px+'" viewBox="0 0 24 24" aria-hidden="true">'+ICON[k]+'</svg>';}
+
+  var Q="Why did Xochimilco drop to BBB?";
+  var REACT=" Downgrade: a short shake and worried eyes. Upgrade: a hop and a smile.";
+  var CH=[
+    {k:"sprig",fn:sprig,name:"Sprig",kind:"The sapling",isReq:true,
+     one:"A gentle little tree who says a lot in very few words.",
+     traits:["Gentle","Brave","Few words","Growing"],
+     why:"The gentle-tree spirit you asked for, made our own. A sapling stands for land that is coming back, and trees are the carbon in every rating. Sprig speaks in short, warm lines, and never uses a catchphrase.",
+     tie:"Sprig stands on the WildWorth zigzag: its roots are the logo's line. The leaves are the only lime: they grow on an upgrade and droop on a downgrade, so the reading lives on its head.",
+     motion:"Sways gently on its roots while the lime leaves rustle. Blinks slowly.",
+     say:"“Small tree. Big memory. Ask me.”",
+     ans:"Northern edge. Cleared. Forty hectares. The news saw it. The satellites too. Score: 74.2, now 63.8. That's BBB.",
+     pros:["The gentle tree personality you liked, without borrowing anyone's character","Leaves as the reading make upgrades and downgrades instantly visible","Works on every site; trees are part of every rating"],
+     watch:["Keep it clearly a sapling: no bark face, brow ridge, tall humanoid body or repeated catchphrase","Short lines must still carry the numbers and sources"]},
+    {k:"bea",fn:bea,name:"Bea",kind:"The bee",rec:true,
+     one:"The bee who never sent an invoice, finally speaking up.",
+     traits:["Busy","Cheerful","Exact","Never overclaims"],
+     why:"Your pitch opens with “The bees never sent an invoice.” Bea is that bee. A bee belongs on every site: wetland, mangrove or forest.",
+     tie:"Her stripe is the WildWorth zigzag, and its last stroke rises in lime to the dot, exactly like the logo. She wears the brand.",
+     motion:"Wings flutter. Every few seconds her stripe redraws and the lime stroke rises to the dot, the logo's own animation.",
+     say:"“Bzz. I've visited every flower here. Let me show you what I saw.”",
+     ans:"Bzz. Two local news reports and the satellites agree: about 40 ha at the northern edge were cleared for an industrial site. That pulled the Health score from 74.2 to 63.8, so the grade fell to BBB.",
+     pros:["Ties straight to the pitch's first line","Works on every kind of site","Carries the logo's line and its animation on her body"],
+     watch:["Keep “Bzz” to greetings, not every line","Bee mascots are common; the zigzag stripe is what makes her ours"]},
+    {k:"axo",fn:axo,name:"Axo",kind:"The axolotl",
+     one:"The hero site's famous resident, always smiling, always healing.",
+     traits:["Calm","Hopeful","Patient","Gentle"],
+     why:"Axolotls live wild only in Xochimilco, and they regrow lost limbs. That is the Health score's whole idea: land that can renew itself.",
+     tie:"One gill is lime: the one that grew back. It's the only colour on Axo, and it tells the healing story.",
+     motion:"Gills sway like they're underwater. The lime gill slowly regrows, then its tip pops on.",
+     say:"“I've lived here a long time. The water's cleaner than last year. Want to see?”",
+     ans:"The northern edge lost about 40 ha of wetland to construction. I've seen this water heal before. For now the Health score moved from 74.2 to 63.8, which makes it BBB.",
+     pros:["The most recognisable and the most loved","The healing story matches the score","A strong face for the video"],
+     watch:["A cultural symbol of Mexico City with a Nahuatl name: ask Mexican teammates first","Tied to one site; odd on a mangrove or forest"]},
+    {k:"pip",fn:pip,name:"Pip",kind:"The frog",
+     one:"The first to notice when something's wrong.",
+     traits:["Alert","Honest","A bit dramatic","Quick"],
+     why:"Frogs are an indicator species. They breathe through their skin, so they show trouble in a wetland first. A natural voice for WildWatch alerts.",
+     tie:"Pip sits on the logo's rising line: the lily pad is the lime stroke and dot, so the reading is literally under Pip's feet.",
+     motion:"Hops on the spot. When Pip lands, the lily-pad line redraws like the logo.",
+     say:"“Ribbit. Something changed at the northern edge. Here's what I found.”",
+     ans:"Ribbit. Something changed at the northern edge: about 40 ha cleared, reported twice in the local news and seen from orbit. Health score 74.2 → 63.8. Grade: BBB.",
+     pros:["Real science behind the character","Perfect for alerts and WildWatch","Short name, easy in any language"],
+     watch:["Can feel jumpy on calm screens","Frog mascots are crowded in apps and games"]},
+    {k:"burl",fn:burl,name:"Burl",kind:"The old stump",
+     one:"An old stump that remembers every year, growing again.",
+     traits:["Slow","Wise","Few words","Kind"],
+     why:"A burl is the gnarled knot on an old tree. Burl has stood on the land for years and remembers all five years of satellite record.",
+     tie:"The rings on top are the Record. The sprout is the only lime: the land healing, growing taller on an upgrade.",
+     motion:"Stays still, the way old trees do. Only the lime sprout sways in the wind.",
+     say:"“Five years ago, more water. Then the road came. Now, healing.”",
+     ans:"Northern edge. Forty hectares, cleared. The news saw it. The satellites saw it. Score 74.2, now 63.8. BBB.",
+     pros:["Closest to the few-words charm you liked","Its memory matches the five-year record","Calm enough for report screens"],
+     watch:["Terse answers can feel cold for Rosa","Least cute of the four at small sizes"]},
+    {k:"glim",fn:glim,name:"Glim",kind:"The firefly",isNew:true,
+     one:"Lights up only when it finds something real.",
+     traits:["Curious","Bright","Gentle","Evidence-first"],
+     why:"Fireflies need dark, wet, healthy habitat, so they vanish when land is damaged. Glim's glow is the brand's lime reading, made alive.",
+     tie:"The glowing tail is the only lime: it shines when Glim has evidence. Its flight trail behind is the WildWorth zigzag.",
+     motion:"Drifts along a dotted zigzag trail. The tail glows and dims, and a halo of light breathes around it.",
+     say:"“I light up when I find something real.”",
+     ans:"Found it. Two local news reports and the satellites light up the same spot: about 40 ha cleared at the northern edge. Health score 74.2 → 63.8, so the grade is now BBB.",
+     pros:["The most on-brand: lime literally means the reading","Beautiful on the dark machine layer and in the video","Works on every site"],
+     watch:["The glow is softer on light screens, where lime turns to lime-ink","“Firefly” is also Adobe's AI brand, so never call it that; Glim is the name"]},
+    {k:"orbi",fn:orbi,name:"Orbi",kind:"The satellite",isNew:true,
+     one:"Passes over every site and reports what changed.",
+     traits:["Precise","Friendly","Steady","Sees the big picture"],
+     why:"The satellite record is the product's main witness. Orbi makes the machine friendly and shows judges exactly where the data comes from.",
+     tie:"The scan beam is lime and ends in the logo's dot: the reading taken from orbit.",
+     motion:"A slow orbit wobble. The scan beam sweeps down to the lime dot and pulses.",
+     say:"“I pass over every five days. Here's what changed.”",
+     ans:"Scanning… The northern edge changed between my Q2 and Q3 passes: about 40 ha cleared, and two local news reports confirm it. Health score 74.2 → 63.8. Grade: BBB.",
+     pros:["Explains the data source without a slide","Tech judges at NVIDIA and Nebius will get it at once","Works on every site; calm enough for reports"],
+     watch:["More gadget than nature, so less warm for Rosa","Can make the AI feel like the brand; keep the sober voice rules"]},
+    {k:"otto",fn:otto,name:"Otto",kind:"The otter",isNew:true,
+     one:"Keeps the important stones, and shows you each one.",
+     traits:["Playful","Warm","Curious","Loyal"],
+     why:"Otters live where water is clean and fish are plenty; they're a classic sign of a healthy wetland. The warmest choice for communities.",
+     tie:"Otters keep a favourite stone. Otto's is the lime dot from the logo, the reading, held close to his chest.",
+     motion:"Bobs gently on the water and tosses his lime stone up and catches it.",
+     say:"“I keep the important stones. Want to see this one?”",
+     ans:"Okay, here's the stone I found. About 40 ha at the northern edge were cleared, the news covered it twice, and the satellites saw it too. The score went from 74.2 to 63.8, so it's BBB for now.",
+     pros:["The warmest, cuddliest of the eight","The stone is a great metaphor for evidence","Lovely in the steward app"],
+     watch:["Otter.ai is a well-known AI assistant with an otter mascot: a real clash for an AI helper","Water animal; less natural on a forest site"]},
+    {k:"wade",fn:wade,name:"Wade",kind:"The heron",isNew:true,
+     one:"Stands perfectly still, and notices everything.",
+     traits:["Patient","Observant","Calm","Precise"],
+     why:"Herons stand still for a long time and spot the smallest movement. That's WildWatch: patient monitoring that speaks up when something changes.",
+     tie:"The lime ripple under Wade's foot is the reading spreading out. It pulses when something changes.",
+     motion:"Stands on one leg and tilts his head to look. Lime ripples spread from his foot.",
+     say:"“I've been standing here a while. I notice things.”",
+     ans:"I watched the northern edge. About 40 ha were cleared; two news reports and the satellite record agree. The Health score fell from 74.2 to 63.8. That's BBB.",
+     pros:["Calm and credible enough for reports","A natural face for WildWatch alerts","Elegant in line, matches the logo's thin, tall rhythm"],
+     watch:["Less cuddly than the others","Tall shape is harder to read as a small avatar"]}
+  ];
+  var EX=[["neutral","Hello"],["think","Thinking"],["alert","Downgrade"],["happy","Upgrade"]];
+  var CITE=["Record · entry 14","News · 12 Sep 2026","News · 14 Sep 2026","Satellite · Q3 2026"];
+  function byK(k){return CH.filter(function(x){return x.k===k;})[0];}
+
+  document.getElementById("nav").innerHTML=CH.map(function(c){return '<a href="#'+c.k+'">'+avatar(c.fn,c.name)+c.name+'</a>';}).join("")+'<a href="#compare">Compare</a>';
+  document.getElementById("lineup").innerHTML=CH.map(function(c){return '<a href="#'+c.k+'" class="'+(c.rec?'g-forest':'g-surface')+'">'+(c.isNew?'<i>New</i>':c.isReq?'<i>Requested</i>':'')+svg(c.fn,"happy","",c.name+", "+c.kind)+'<b>'+c.name+'</b><span>'+c.kind+(c.rec?' · recommended':'')+'</span></a>';}).join("");
+
+  function card(c){
+    return '<section id="'+c.k+'"><article class="ccard">'+
+      '<div class="chero"><div class="stages"><div class="cstage g-lichen anim" data-k="'+c.k+'"><span class="tag'+(c.rec?' rec':'')+'">'+(c.rec?'Recommended':c.isNew?'New · '+c.kind:c.isReq?'Requested · '+c.kind:c.kind)+'</span>'+
+        '<span class="reactor">'+svg(c.fn,"neutral","big",c.name+", "+c.kind)+'</span>'+
+        '<div class="acts" role="group" aria-label="Show '+c.name+'\'s reactions"><button type="button" data-e="neutral" aria-pressed="true">Hello</button><button type="button" data-e="alert" aria-pressed="false">Downgrade</button><button type="button" data-e="happy" aria-pressed="false">Upgrade</button></div></div>'+
+        '<div class="minis"><div class="g-forest anim">'+svg(c.fn,"happy","",c.name+" on forest")+'<small>On forest</small></div><div class="g-paper">'+avatar(c.fn,c.name+" avatar").replace('class="av"','class="av" style="width:88px;height:88px"')+'<small>Avatar</small></div></div></div>'+
+      '<div class="chead"><div class="lockup g-surface">'+avatar(c.fn,c.name+" avatar")+'<div><b>'+c.name+'</b><small>'+c.kind+' · your field guide in WildWorth</small></div></div>'+
+        '<p class="one">'+c.one+'</p><div class="traits">'+c.traits.map(function(t){return '<span>'+t+'</span>';}).join("")+'</div><p>'+c.why+'</p>'+
+        '<p class="note"><b>Brand tie:</b> '+c.tie+'</p><p class="note"><b>Motion:</b> '+c.motion+REACT+'</p><p class="say">'+c.say+'</p></div></div>'+
+      '<div class="row3">'+
+        '<div><p class="label">Expressions</p><div class="exprs">'+EX.map(function(x){return '<figure class="g-bg">'+svg(c.fn,x[0],"",c.name+", "+x[1])+'<figcaption>'+x[1]+'</figcaption></figure>';}).join("")+'</div></div>'+
+        '<div><p class="label">Icon</p><div class="icons"><div class="ln">'+[16,24,32].map(function(s){return '<figure class="g-surface">'+gl(c.k,s)+'<figcaption>'+s+'</figcaption></figure>';}).join("")+'</div>'+
+          '<div class="ln"><figure><span class="tile g-paper" style="width:52px;height:52px">'+gl(c.k,30)+'</span><figcaption>On light</figcaption></figure><figure><span class="tile g-machine" style="width:52px;height:52px">'+gl(c.k,30)+'</span><figcaption>On dark</figcaption></figure></div></div></div>'+
+        '<div><p class="label">Answering “'+Q+'”</p><div class="chat g-lichen"><div class="q">'+Q+'</div><div class="a">'+avatar(c.fn,c.name)+'<div class="bub"><p class="who">'+c.name+'<span>From the Record</span></p><p>'+c.ans+'</p><div class="cite">'+CITE.map(function(t){return '<span>'+t+'</span>';}).join("")+'</div></div></div></div></div>'+
+      '</div>'+
+      '<div class="pros"><div><h4>Strengths</h4><ul>'+c.pros.map(function(p){return '<li>'+p+'</li>';}).join("")+'</ul></div><div><h4>Watch</h4><ul>'+c.watch.map(function(p){return '<li>'+p+'</li>';}).join("")+'</ul></div></div>'+
+    '</article></section>';}
+  var first=CH.filter(function(c){return !c.isNew&&!c.isReq;}),fresh=CH.filter(function(c){return c.isNew;}),req=CH.filter(function(c){return c.isReq;});
+  document.getElementById("cards").innerHTML=
+    '<div class="group"><p class="label">Your request</p><h2>Sprig, the gentle tree</h2><p>An original sapling with the same warm, few-words spirit. Drawn so it cannot be mistaken for any existing character.</p></div>'+req.map(card).join("")+
+    '<div class="group"><p class="label">The first four</p><h2>Bea, Axo, Pip and Burl</h2><p>From the last round, now animated.</p></div>'+first.map(card).join("")+
+    '<div class="group"><p class="label">Four new ones</p><h2>Glim, Orbi, Otto and Wade</h2><p>Each picks a different part of the product to personify: the evidence, the satellite, the stewards, and the watching.</p></div>'+fresh.map(card).join("");
+
+  /* reactions: re-draw the hero in the chosen expression and play a hop or a shake */
+  document.getElementById("cards").addEventListener("click",function(ev){
+    var b=ev.target.closest(".acts button");if(!b)return;
+    var st=b.closest(".cstage"),c=byK(st.dataset.k),e=b.dataset.e,r=st.querySelector(".reactor");
+    r.innerHTML=svg(c.fn,e,"big",c.name+", "+(e==="alert"?"downgrade":e==="happy"?"upgrade":"hello"));
+    r.classList.remove("up","down");void r.offsetWidth;if(e==="happy")r.classList.add("up");if(e==="alert")r.classList.add("down");
+    st.querySelectorAll(".acts button").forEach(function(x){x.setAttribute("aria-pressed",x===b?"true":"false");});
+  });
+
+  var CMP=[["sprig","●●●○","●●●○","●●●●","●●●○","●●●○"],["bea","●●●●","●●●●","●●●●","●●●○","●●●●"],["axo","●●●○","●●○○","●●●●","●●●○","●●○○"],["pip","●●○○","●●●○","●●●○","●●●○","●●●●"],["burl","●●○○","●●●●","●●○○","●●●●","●●●●"],
+    ["glim","●●●○","●●●●","●●●●","●●●●","●●●○"],["orbi","●●●○","●●●●","●●●○","●●●●","●●●●"],["otto","●●○○","●●●○","●●●●","●●●○","●○○○"],["wade","●●●○","●●●○","●●○○","●●●●","●●●●"]];
+  document.getElementById("cmpRows").innerHTML=CMP.map(function(r){var c=byK(r[0]);
+    return '<tr><td><span class="who">'+avatar(c.fn,c.name)+c.name+(c.isNew?' <span class="label" style="font-size:10px">new</span>':'')+'</span></td>'+r.slice(1).map(function(d){var n=(d.match(/●/g)||[]).length;return '<td class="dots" aria-label="'+n+' of 4">'+d+'</td>';}).join("")+'</tr>';}).join("");
+  var TOP=[["bea","g-forest","1 · Bea","Ties to the pitch, works everywhere, wears the logo."],["glim","g-machine","2 · Glim","The most on-brand: lime glow is the reading."],["orbi","g-surface","3 · Orbi","Shows the machine and where the data comes from."]];
+  document.getElementById("top3").innerHTML=TOP.map(function(t){var c=byK(t[0]);return '<div class="'+t[1]+'">'+svg(c.fn,"happy","",c.name)+'<p><b>'+t[2]+'</b><span>'+t[3]+'</span></p></div>';}).join("");
+})();
+</script>

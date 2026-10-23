@@ -1,0 +1,1100 @@
+<title>WildWorth Brand Guidelines</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gloock&family=Hanken+Grotesk:wght@300..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: a brand book. Numbered chapters in one editorial column; the logo, icons and colour
+   are shown on fixed "printed" grounds (paper, forest, machine) so they look the same in either theme. */
+:root{
+  --bg:oklch(0.945 0.011 125);
+  --surface:oklch(0.99 0.005 118);
+  --raised:oklch(0.915 0.016 128);
+  --ink:oklch(0.255 0.045 148);
+  --muted:oklch(0.47 0.035 145);
+  --line:oklch(0.875 0.014 128);
+  --accent-ink:oklch(0.42 0.1 135);
+  --warn-ink:oklch(0.5 0.13 42);
+  --shadow:0 1px 2px oklch(0.3 0.05 145/0.06),0 18px 40px -26px oklch(0.3 0.05 145/0.35);
+
+  --forest:oklch(0.31 0.062 148);
+  --forest-deep:oklch(0.215 0.035 158);
+  --forest-ink:oklch(0.255 0.045 148);
+  --machine-ink:oklch(0.94 0.045 122);
+  --machine-muted:oklch(0.74 0.045 135);
+  --machine-line:oklch(0.34 0.04 152);
+  --paper:oklch(0.988 0.005 118);
+  --lichen:oklch(0.932 0.012 128);
+  --lime:oklch(0.86 0.135 126);
+  --lime-ink:oklch(0.42 0.1 135);
+  --clay:oklch(0.66 0.13 48);
+  --clay-ink:oklch(0.5 0.13 42);
+
+  --display:"Gloock",Georgia,"Times New Roman",serif;
+  --body:"Hanken Grotesk",system-ui,-apple-system,sans-serif;
+  --mono:"Geist Mono",ui-monospace,Menlo,monospace;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:oklch(0.19 0.028 158);--surface:oklch(0.235 0.034 156);--raised:oklch(0.27 0.036 155);
+    --ink:oklch(0.94 0.035 122);--muted:oklch(0.74 0.04 135);--line:oklch(0.34 0.04 152);
+    --accent-ink:oklch(0.86 0.135 126);--warn-ink:oklch(0.77 0.12 52);
+    --shadow:0 1px 2px oklch(0 0 0/0.3),0 18px 40px -26px oklch(0 0 0/0.7);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:oklch(0.19 0.028 158);--surface:oklch(0.235 0.034 156);--raised:oklch(0.27 0.036 155);
+  --ink:oklch(0.94 0.035 122);--muted:oklch(0.74 0.04 135);--line:oklch(0.34 0.04 152);
+  --accent-ink:oklch(0.86 0.135 126);--warn-ink:oklch(0.77 0.12 52);
+  --shadow:0 1px 2px oklch(0 0 0/0.3),0 18px 40px -26px oklch(0 0 0/0.7);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16.5px/1.6 var(--body);-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+h1,h2,h3,h4,h5,p{margin:0}
+h1,h2,h3{text-wrap:balance}
+a{color:inherit;text-underline-offset:3px;text-decoration-thickness:1px}
+:focus-visible{outline:2px solid var(--accent-ink);outline-offset:3px;border-radius:4px}
+.wrap{max-width:1160px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:720px){.wrap{padding-left:max(32px,env(safe-area-inset-left,0px));padding-right:max(32px,env(safe-area-inset-right,0px))}}
+.label{font:500 11.5px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono);font-size:.86em}
+.small{font-size:14px}
+section{padding-block:104px 0;scroll-margin-top:64px}
+.chap{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 22px;align-items:baseline;margin-bottom:36px}
+.chap .no{font:400 clamp(40px,6vw,72px)/.95 var(--display);color:var(--accent-ink);font-variant-numeric:tabular-nums}
+.chap h2{font:400 clamp(40px,6vw,72px)/.98 var(--display);letter-spacing:-.02em}
+.chap p{grid-column:2;font-size:clamp(17px,1.9vw,20px);line-height:1.5;max-width:62ch}
+.h3{font:400 clamp(24px,2.8vw,32px)/1.1 var(--display);letter-spacing:-.01em}
+.stack16{display:grid;gap:16px}
+.panel{background:var(--surface);border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+.panel .ph{padding:28px 28px 0;display:grid;gap:6px}
+.panel .ph p{font-size:15px;color:var(--muted);max-width:72ch}
+.cols2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border-top:1px solid var(--line);margin-top:24px}
+.cols2>div,.cols3>div{background:var(--surface);padding:24px 28px;min-width:0}
+.cols3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border-top:1px solid var(--line);margin-top:24px}
+.cols2 h4,.cols3 h4{font:600 14.5px var(--body);margin-bottom:8px}
+ul.list{margin:0;padding-left:1.1em;display:grid;gap:7px;font-size:15px}
+.on-paper{background:var(--paper);color:var(--forest-ink)}
+.on-forest{background:var(--forest);color:var(--paper)}
+.on-lime{background:var(--lime);color:var(--forest-ink)}
+.on-machine{background:var(--forest-deep);color:var(--machine-ink)}
+.on-lichen{background:var(--lichen);color:var(--forest-ink)}
+
+/* nav */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:color-mix(in oklch,var(--bg) 86%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:24px;height:52px}
+.top .who{display:flex;align-items:center;gap:8px;font:500 12px var(--mono);letter-spacing:.04em;white-space:nowrap}
+.top .who svg{width:22px;height:22px}
+.top nav{display:flex;gap:18px;overflow-x:auto;scrollbar-width:none;font-size:14px;min-width:0}
+.top nav::-webkit-scrollbar{display:none}
+.top nav a{text-decoration:none;color:var(--muted);white-space:nowrap}
+.top nav a:hover{color:var(--ink)}
+
+/* lockups */
+.lk{display:inline-flex;align-items:center;gap:.28em;line-height:1}
+.lk svg{display:block;flex:none;width:1.05em;height:1.05em}
+.wm{display:inline-flex;align-items:baseline;white-space:nowrap}
+.wm .w1{font:400 1em/1 var(--display);letter-spacing:-.025em}
+.wm .w2{font:300 .9em/1 var(--body);letter-spacing:-.045em;margin-left:.02em}
+.stk{display:inline-grid;justify-items:center;gap:.24em;line-height:1}
+.stk svg{width:1.5em;height:1.5em;display:block}
+
+/* cover */
+.cover{margin-top:40px;border-radius:36px;overflow:hidden;position:relative;background:var(--forest);color:var(--paper);padding:clamp(28px,5vw,64px);display:grid;gap:28px;min-height:520px;align-content:space-between}
+.cover .meta{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font:500 11.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;opacity:.8}
+.cover .lk{font-size:clamp(56px,11vw,148px)}
+.cover .tag{font:400 clamp(28px,4vw,48px)/1.05 var(--display);color:var(--lime);margin-top:18px}
+.cover .sub{font-size:clamp(16px,1.8vw,19px);max-width:52ch;margin-top:14px;opacity:.9}
+.cover .foot{display:flex;flex-wrap:wrap;gap:10px 28px;font-size:13.5px;opacity:.85}
+.toc{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
+.toc a{display:grid;gap:4px;padding:16px 18px;border-radius:18px;background:var(--surface);text-decoration:none;box-shadow:var(--shadow);transition:transform .4s var(--ease)}
+.toc a:hover{transform:translateY(-2px)}
+.toc b{font:400 21px/1.1 var(--display)}
+.toc span{font-size:13px;color:var(--muted)}
+.toc i{font:500 11px var(--mono);font-style:normal;color:var(--accent-ink)}
+
+/* story */
+.timeline{display:grid}
+.beat{display:grid;grid-template-columns:150px 28px minmax(0,1fr);gap:0 18px}
+.beat .when{font:500 13px/1.3 var(--mono);color:var(--muted);text-align:right;padding-top:6px}
+.beat .rail{position:relative;display:flex;justify-content:center}
+.beat .rail::before{content:"";position:absolute;top:0;bottom:0;width:2px;background:var(--line)}
+.beat:first-child .rail::before{top:14px}
+.beat:last-child .rail::before{bottom:calc(100% - 14px)}
+.beat .rail i{position:relative;width:14px;height:14px;margin-top:8px;border-radius:99px;background:var(--surface);box-shadow:inset 0 0 0 2.5px var(--ink)}
+.beat.key .rail i{background:var(--lime);box-shadow:inset 0 0 0 2.5px var(--forest-ink)}
+.beat .body{padding-bottom:32px;max-width:70ch}
+.beat h3{font:400 25px/1.2 var(--display)}
+.beat p{margin-top:6px}
+.quote{font:400 clamp(26px,3vw,34px)/1.2 var(--display)}
+.src{font-size:12.5px;color:var(--muted);margin-top:6px}
+
+/* platform */
+.plat{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;background:var(--line);border-radius:24px;overflow:hidden;box-shadow:var(--shadow)}
+.plat>div{background:var(--surface);padding:26px;display:grid;align-content:start;gap:10px}
+.plat .w2{grid-column:span 2}.plat .w3{grid-column:span 3}.plat .w6{grid-column:span 6}
+.plat .say{font:400 22px/1.25 var(--display)}
+.plat .big .say{font-size:clamp(28px,3.6vw,44px);line-height:1.08}
+.traits{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
+.traits div{background:var(--surface);border-radius:20px;padding:20px;box-shadow:var(--shadow);display:grid;gap:8px;align-content:start}
+.traits b{font:400 24px/1.1 var(--display)}
+.traits p{font-size:14px}
+.traits .not{color:var(--muted)}
+.princ{margin-top:16px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.princ div{border-top:2px solid var(--ink);padding-top:12px}
+.princ b{display:block;font:600 15px var(--body);margin-bottom:4px}
+.princ span{font-size:14px;color:var(--muted)}
+
+/* name */
+.namerules{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.okno{display:grid;gap:8px;margin-top:12px}
+.okno div{display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;align-items:baseline;font-size:16px;padding:10px 12px;border-radius:12px;background:var(--bg)}
+.okno .y{color:var(--accent-ink);font-weight:700}
+.okno .n{color:var(--warn-ink);font-weight:700}
+.sentences{display:grid;gap:10px;margin-top:12px}
+.sentences div{padding:13px 15px;border-radius:14px;background:var(--bg);font-size:15px;line-height:1.45}
+.sentences small{display:block;font:500 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.sentences .down{background:color-mix(in oklch,var(--clay) 13%,var(--surface))}
+
+/* logo */
+.stage{position:relative;display:grid;place-items:center;min-height:420px;padding:64px 24px}
+.stage .lk{font-size:clamp(54px,9vw,124px)}
+.stage .cap{position:absolute;left:20px;bottom:18px;font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;opacity:.7}
+.replay{position:absolute;right:18px;bottom:16px;font:500 12px var(--mono);letter-spacing:.04em;padding:8px 12px;border-radius:99px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer;opacity:.8}
+.replay:hover{opacity:1}
+.anat{display:grid;grid-template-columns:auto minmax(0,1fr);gap:28px;align-items:center}
+.anat svg.big{width:220px;height:220px;display:block;max-width:100%}
+.anat ol{margin:0;padding-left:1.15em;display:grid;gap:9px;font-size:15px}
+.living{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:32px;align-items:center;padding:34px 30px}
+.living .lm{width:150px;height:150px;display:block}
+.living .score{font:300 64px/1 var(--body);font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.living .gchip{display:inline-grid;place-items:center;min-width:70px;height:42px;padding:0 14px;border-radius:99px;font:600 21px var(--body);margin-left:12px;vertical-align:14px}
+.living .glab{font:400 24px var(--display);margin-top:8px}
+.living label{display:block;margin-top:18px;font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--machine-muted)}
+.living input{width:100%;margin-top:8px;accent-color:oklch(0.86 0.135 126)}
+.living .ticks{display:flex;justify-content:space-between;font:500 11px var(--mono);color:var(--machine-muted);margin-top:2px}
+.living p.n{margin-top:14px;font-size:14px;color:oklch(0.8 0.04 135);max-width:58ch}
+.lockgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid var(--line)}
+.lockgrid>div{display:grid;place-items:center;min-height:190px;padding:32px 14px;position:relative}
+.lockgrid .lk{font-size:38px}
+.lockgrid .stk{font-size:30px}
+.lockgrid small,.dont small{position:absolute;left:14px;bottom:11px;font:500 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;opacity:.7}
+.lockgrid.v{grid-template-columns:repeat(4,minmax(0,1fr))}
+.sizes{display:flex;flex-wrap:wrap;align-items:flex-end;gap:22px 28px;padding:26px 28px 30px;border-top:1px solid var(--line)}
+.sizes figure{margin:0;display:grid;justify-items:center;gap:8px}
+.sizes figcaption{font:500 10.5px var(--mono);color:var(--muted)}
+.tile{display:grid;place-items:center;border-radius:22%;background:var(--forest);color:var(--paper)}
+.sites{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--line)}
+.sites figure{margin:0;padding:30px 20px;display:grid;justify-items:center;gap:12px;border-right:1px solid var(--line);text-align:center}
+.sites figure:last-child{border-right:0}
+.sites svg{width:96px;height:96px;color:var(--ink)}
+.sites b{font:400 20px/1.15 var(--display)}
+.gpill{display:inline-flex;align-items:center;gap:6px;font:600 13px var(--body);padding:4px 10px;border-radius:99px;font-variant-numeric:tabular-nums}
+.dontgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border-top:1px solid var(--line)}
+.dont{position:relative;display:grid;place-items:center;min-height:170px;padding:28px 12px 40px;background:var(--paper);color:var(--forest-ink);overflow:hidden}
+.dont .lk{font-size:30px}
+.dont .x{position:absolute;top:10px;right:12px;font:600 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--clay-ink)}
+.copyrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:20px 28px 26px;border-top:1px solid var(--line)}
+.btn{font:500 14px var(--body);padding:9px 16px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--forest);border-color:var(--forest);color:var(--paper)}
+
+/* seal */
+.seals{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr)}
+.seals>div{display:grid;place-items:center;min-height:300px;padding:36px 20px;position:relative}
+.seals svg{width:210px;height:210px;max-width:100%}
+.seals>div:not(:first-child) svg{width:146px;height:146px}
+.seals small{position:absolute;left:16px;bottom:12px;font:500 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;opacity:.65}
+
+/* colour */
+.sw{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:24px 28px 0}
+.sw>div{border-radius:16px;overflow:hidden;background:var(--bg)}
+.sw i{display:block;height:84px}
+.sw p{padding:10px 12px;font-size:13px;display:grid;gap:2px}
+.sw p b{font-size:14.5px}
+.sw p code{font:400 11px var(--mono);color:var(--muted);overflow-wrap:anywhere}
+.sw h4{grid-column:1/-1;font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:8px}
+.prop{display:flex;height:56px;border-radius:14px;overflow:hidden;margin:20px 28px 0}
+.prop span{display:grid;place-items:center;font:500 11px var(--mono);min-width:0;overflow:hidden;white-space:nowrap}
+.ramp{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));margin:16px 28px 28px;border-radius:14px;overflow:hidden}
+.ramp span{display:grid;gap:2px;align-content:end;height:84px;padding:9px;font:600 14px var(--body)}
+.ramp small{font:500 10.5px var(--mono);opacity:.85}
+.pairs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:24px 28px 28px}
+.pairs>div{border-radius:16px;padding:16px;display:grid;gap:6px;min-height:118px;align-content:space-between}
+.pairs .s{font:400 22px/1.1 var(--display)}
+.pairs .r{display:flex;justify-content:space-between;gap:8px;font:500 11.5px var(--mono)}
+
+/* type */
+.spec{display:grid;grid-template-columns:210px minmax(0,1fr);gap:24px;padding:24px 28px;border-top:1px solid var(--line);align-items:center}
+.spec .role{display:grid;gap:4px}
+.spec .role b{font:600 15px var(--body)}
+.spec .role span{font-size:13px;color:var(--muted)}
+.spec .smp{min-width:0;overflow-wrap:anywhere}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th,td{text-align:left;padding:13px 16px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+th{font:500 11px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+
+/* icons */
+.gl{display:block;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.gl .af{fill:var(--lime);stroke:currentColor;stroke-width:1.4}
+.gl .as{stroke:var(--lime-ink)}
+.gl .f{fill:currentColor;stroke:none}
+.on-machine .gl .as{stroke:var(--lime)}
+.isheet{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:4px;padding:20px}
+.isheet h4{grid-column:1/-1;font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;opacity:.7;margin:10px 0 0 6px}
+.isheet figure{margin:0;display:grid;justify-items:center;gap:7px;padding:12px 4px;text-align:center;line-height:1.25}
+.isheet figcaption{font-size:12.5px}
+.isheet small{font:500 10px var(--mono);opacity:.6;overflow-wrap:anywhere;max-width:100%}
+.isizes{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px 26px;margin-top:14px}
+.isizes figure{margin:0;display:grid;justify-items:center;gap:6px}
+.isizes figcaption{font:500 10.5px var(--mono);color:var(--muted)}
+.igrid{display:block;width:168px;height:168px;max-width:100%}
+
+/* features */
+.feat td:first-child{width:64px}
+.feat .ic{display:grid;place-items:center;width:44px;height:44px;border-radius:13px;background:var(--paper);color:var(--forest-ink);box-shadow:0 0 0 1px var(--line)}
+.feat .nm{font:400 21px/1.15 var(--display)}
+.feat .was{font-size:13px;color:var(--muted)}
+.feat .chg{font:500 10.5px var(--mono);letter-spacing:.05em;text-transform:uppercase;padding:4px 8px;border-radius:99px;white-space:nowrap}
+.chg.new{background:var(--lime);color:var(--forest-ink)}
+.chg.keep{background:var(--raised);color:var(--muted)}
+.feat .ui{font-size:13.5px}
+.apps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.apps>div{border-radius:24px;padding:24px;display:grid;gap:10px;align-content:start;box-shadow:var(--shadow)}
+.apps .hdr{display:flex;align-items:center;gap:10px;height:48px;padding:0 14px;border-radius:12px;font-size:14px;min-width:0}
+.apps .hdr .lk{font-size:20px}
+.apps .hdr .app{padding-left:10px;border-left:1px solid currentColor;opacity:.7;white-space:nowrap}
+.apps .was{font-size:12.5px;opacity:.7}
+.apps h3{font:400 30px/1 var(--display)}
+.apps p{font-size:14.5px}
+
+/* voice */
+.voices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.voices>div{border-radius:24px;padding:26px;display:grid;gap:12px;align-content:start;box-shadow:var(--shadow)}
+.voices h3{font:400 28px/1.1 var(--display)}
+.voices .ex{padding:12px 14px;border-radius:12px;font-size:15px;line-height:1.45}
+.on-paper .ex{background:var(--lichen)}
+.on-machine .ex{background:oklch(0.26 0.038 156)}
+.lines{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border-top:1px solid var(--line);margin-top:24px}
+.lines>div{background:var(--surface);padding:24px 28px;display:grid;gap:8px;align-content:start}
+.lines .ctx{font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.lines .line{font:400 clamp(22px,2.4vw,30px)/1.15 var(--display);letter-spacing:-.01em}
+.lines .why{font-size:14px;color:var(--muted)}
+.vocab td:nth-child(2){color:var(--accent-ink);font-weight:600}
+.vocab td:nth-child(3){color:var(--warn-ink)}
+
+/* motion */
+.moves{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.moves>div{background:var(--surface);border-radius:20px;padding:20px;box-shadow:var(--shadow);display:grid;gap:8px;align-content:start}
+.moves b{font:400 24px/1.1 var(--display)}
+.moves p{font-size:14px}
+.moves .t{font:500 11px var(--mono);color:var(--accent-ink)}
+.bar{height:6px;border-radius:9px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent-ink);border-radius:9px}
+
+/* applications */
+.mocks{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;padding:24px 28px 28px}
+.mock{border-radius:20px;overflow:hidden;background:var(--lichen);color:var(--forest-ink);box-shadow:0 0 0 1px oklch(0.3 0.05 145/0.08)}
+.sandbox{background:var(--forest);color:var(--paper);font:500 11.5px var(--body);padding:7px 16px;display:flex;justify-content:space-between;gap:12px}
+.appbar{display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;background:color-mix(in oklch,var(--paper) 80%,var(--lichen));border-bottom:1px solid oklch(0.885 0.014 128);font-size:14px;min-width:0}
+.appbar .lk{font-size:22px}
+.appbar .app{padding-left:12px;border-left:1px solid oklch(0.85 0.02 128);color:oklch(0.47 0.035 145);white-space:nowrap}
+.appbar nav{display:flex;gap:4px;margin-left:auto;min-width:0;overflow:hidden}
+.appbar nav span{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;white-space:nowrap;font-size:13px}
+.appbar nav span.on{background:var(--paper);box-shadow:0 1px 3px oklch(0.3 0.05 145/0.12)}
+.rcardm{margin:18px;padding:22px;border-radius:24px;background:var(--paper);display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:center;box-shadow:0 10px 30px -14px oklch(0.3 0.05 145/0.25)}
+.rcardm .seal svg{width:104px;height:104px;color:var(--forest-ink);display:block}
+.rcardm .k{font:500 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:oklch(0.47 0.035 145)}
+.rcardm h5{font:400 30px/1.05 var(--display);letter-spacing:-.01em;margin-top:4px}
+.rcardm .gr{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;font-size:14px}
+.rcardm .val{margin-top:10px;font-size:13px;color:oklch(0.47 0.035 145);font-variant-numeric:tabular-nums}
+.svc{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12.5px;color:oklch(0.47 0.035 145)}
+.svc span{display:flex;align-items:center;gap:5px}
+.illus{font:500 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:oklch(0.47 0.035 145);padding:0 18px 16px}
+.phone{background:linear-gradient(160deg,oklch(0.42 0.06 160),oklch(0.26 0.04 200));padding:28px 16px;display:grid;align-content:center;gap:10px}
+.phone .time{font:300 52px/1 var(--body);color:oklch(0.98 0.01 120);text-align:center;font-variant-numeric:tabular-nums}
+.phone .date{font-size:13px;color:oklch(0.92 0.02 120);text-align:center;margin-bottom:8px}
+.notif{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;padding:13px 14px;border-radius:18px;background:oklch(0.97 0.006 120/0.92);color:var(--forest-ink);font-size:13.5px;line-height:1.35}
+.notif .ic{width:34px;height:34px;border-radius:9px;background:var(--forest);color:var(--paper);display:grid;place-items:center}
+.notif .ic svg{width:24px;height:24px}
+.notif b{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:2px}
+.notif b span{font-weight:400;color:oklch(0.47 0.035 145)}
+.endcard{aspect-ratio:16/9;max-width:100%;border-radius:20px;background:var(--forest-deep);color:var(--machine-ink);display:grid;place-items:center;align-content:center;gap:16px;position:relative;overflow:hidden;padding:24px}
+.endcard .lk{font-size:clamp(40px,6vw,76px)}
+.endcard .t{font:400 clamp(18px,2.2vw,28px)/1.1 var(--display);color:var(--lime)}
+.endcard .s{position:absolute;bottom:12px;left:0;right:0;text-align:center;font:500 10.5px var(--mono);letter-spacing:.05em;color:var(--machine-muted);padding-inline:16px}
+.share{aspect-ratio:1200/630;max-width:100%;border-radius:20px;background:var(--forest);color:var(--paper);display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:16px;padding:clamp(18px,3vw,32px);position:relative;overflow:hidden}
+.share .lk{font-size:clamp(22px,2.6vw,32px)}
+.share h5{font:400 clamp(26px,3.6vw,46px)/1.02 var(--display);letter-spacing:-.02em;margin-top:12px}
+.share .seal svg{width:clamp(80px,11vw,140px);height:clamp(80px,11vw,140px);display:block;color:var(--paper)}
+.share .k{font:500 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;opacity:.75;margin-top:8px}
+.duo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:0 28px 28px}
+.tabbar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:oklch(0.86 0.012 130);font-size:12.5px;overflow:hidden}
+.tabbar .tab{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:9px 9px 0 0;min-width:0}
+.tabbar .tab.on{background:var(--lichen)}
+.tabbar .tab span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabbar svg{width:16px;height:16px;flex:none}
+
+/* checklist */
+.check{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.check label{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:start;padding:16px 18px;border-radius:16px;background:var(--surface);box-shadow:var(--shadow);font-size:15px;cursor:pointer}
+.check input{margin-top:4px;width:18px;height:18px;accent-color:oklch(0.42 0.1 135)}
+footer{padding-block:96px 120px;font-size:13.5px;color:var(--muted)}
+footer ol{margin:10px 0 0;padding-left:1.2em;display:grid;gap:5px}
+.toast{min-height:1.4em;font-size:13.5px;color:var(--accent-ink)}
+
+/* motion */
+.ww-ink{stroke-dasharray:100;stroke-dashoffset:0}
+.ww-read{stroke-dasharray:100;stroke-dashoffset:0}
+.ww-dot{transform-box:fill-box;transform-origin:center}
+.play .ww-ink{animation:draw 1.1s var(--ease) both}
+.play .ww-read{animation:draw .55s var(--ease) 1s both}
+.play .ww-dot{animation:pop .5s var(--ease) 1.45s both}
+@keyframes draw{from{stroke-dashoffset:100}}
+@keyframes pop{0%{transform:scale(0)}60%{transform:scale(1.3)}100%{transform:scale(1)}}
+
+@media (max-width:980px){
+  .toc{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .plat{grid-template-columns:minmax(0,1fr)}
+  .plat .w2,.plat .w3,.plat .w6{grid-column:auto}
+  .traits,.moves{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .princ{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .namerules,.cols2,.voices,.lines,.check,.mocks,.duo{grid-template-columns:minmax(0,1fr)}
+  .cols3,.apps{grid-template-columns:minmax(0,1fr)}
+  .lockgrid,.lockgrid.v,.dontgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .seals,.sites{grid-template-columns:minmax(0,1fr)}
+  .sites figure{border-right:0;border-bottom:1px solid var(--line)}
+  .sites figure:last-child{border-bottom:0}
+  .living{grid-template-columns:auto auto;justify-content:start}
+  .living>div:last-child{grid-column:1/-1}
+  .sw{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pairs{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stage{min-height:300px}
+}
+@media (max-width:640px){
+  section{padding-block:76px 0}
+  .chap{grid-template-columns:minmax(0,1fr);gap:6px}
+  .chap p{grid-column:1}
+  .toc,.traits,.moves,.princ,.pairs{grid-template-columns:minmax(0,1fr)}
+  .lockgrid,.lockgrid.v,.dontgrid{grid-template-columns:minmax(0,1fr)}
+  .anat{grid-template-columns:minmax(0,1fr)}
+  .living .lm{width:116px;height:116px}
+  .living{gap:20px}
+  .spec{grid-template-columns:minmax(0,1fr);gap:12px}
+  .ramp{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .beat{grid-template-columns:70px 22px minmax(0,1fr);gap:0 10px}
+  .beat .when{font-size:11.5px}
+  .rcardm{grid-template-columns:minmax(0,1fr)}
+  .appbar nav{display:none}
+  .share{aspect-ratio:auto;grid-template-columns:minmax(0,1fr)}
+  .cover{min-height:0}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+
+<div class="top"><div class="wrap">
+  <span class="who"><span id="navMark"></span>WildWorth · brand guidelines</span>
+  <nav aria-label="Chapters">
+    <a href="#story">Story</a><a href="#platform">Platform</a><a href="#name">Name</a><a href="#logo">Logo</a><a href="#proof">Proof of Life</a><a href="#colour">Colour</a><a href="#type">Type</a><a href="#icons">Icons</a><a href="#features">Feature names</a><a href="#voice">Voice</a><a href="#motion">Motion</a><a href="#use">In use</a><a href="#checklist">Checklist</a>
+  </nav>
+</div></div>
+
+<main class="wrap">
+
+<!-- COVER -->
+<header class="cover">
+  <div class="meta"><span>Brand guidelines · v1.0</span><span>23 Oct 2026</span></div>
+  <div>
+    <span class="lk play" data-lock="ww" id="coverLock"></span>
+    <p class="tag">Worth more wild.</p>
+    <p class="sub">The AI rating agency for living nature. Satellites and local news, read by Nemotron agents, so keeping land alive can pay more than destroying it.</p>
+  </div>
+  <div class="foot"><span>Applies to: the product, Devpost, the video, social</span><span>Built on DESIGN.md and ux-writing.md</span><span>Sandbox · play money only</span></div>
+</header>
+<nav class="toc" aria-label="Contents" id="toc"></nav>
+
+<!-- 01 STORY -->
+<section id="story">
+  <div class="chap"><span class="no">01</span><h2>The story</h2><p>Every claim below is from the project's own docs or a cited source. Tell it in this order: the place, the problem, the failed attempt, the missing piece, and what we built.</p></div>
+  <div class="timeline">
+    <div class="beat key"><div class="when">The spark</div><div class="rail"><i></i></div><div class="body">
+      <h3>A wetland near Mexico City, hemmed in by factories</h3>
+      <p>A documentary showed a community's wetland under industrial pressure and claimed wetlands may be worth tens of thousands of dollars per acre per year in services nobody pays for. That case became the hero site and the opening of the video.</p>
+      <p class="src">Source: pm-spec §6, dev-spec §7.3. Our engine is more cautious than the film, and says so.</p>
+    </div></div>
+    <div class="beat"><div class="when">The insight</div><div class="rail"><i></i></div><div class="body">
+      <p class="quote">“The bees never sent an invoice.”</p>
+      <p>Markets only see nature once it's dead: timber, minerals, land for factories. A community protecting a wetland gets one tempting offer: sell once.</p>
+      <p class="src">Source: one-pager.</p>
+    </div></div>
+    <div class="beat"><div class="when">Sep 2023</div><div class="rail"><i></i></div><div class="body">
+      <h3>Wall Street tried to list nature</h3>
+      <p>The NYSE filed a rule to list Natural Asset Companies. Each would have published an Ecological Performance Report, the same report this product generates.</p>
+      <p class="src">Source: <a href="https://www.federalregister.gov/documents/2023/10/04/2023-22041/self-regulatory-organizations-new-york-stock-exchange-llc-notice-of-filing-of-proposed-rule-change">Federal Register, Oct 2023</a>.</p>
+    </div></div>
+    <div class="beat"><div class="when">Jan 2024</div><div class="rail"><i></i></div><div class="body">
+      <h3>…and pulled back</h3>
+      <p>The rule was withdrawn after opposition about who controls the land and whether the values could be trusted.</p>
+      <p class="src">Source: <a href="https://www.thecorporatecounsel.net/blog/2024/01/nyse-withdraws-natural-asset-company-listing-proposal.html">The Corporate Counsel, Jan 2024</a>.</p>
+    </div></div>
+    <div class="beat key"><div class="when">The gap</div><div class="rail"><i></i></div><div class="body">
+      <h3>The missing piece was the rating</h3>
+      <p>“The bottleneck is cheap, credible, continuous measurement” (pm-spec §1). It also has to belong to the community, and anyone has to be able to check it.</p>
+    </div></div>
+    <div class="beat"><div class="when">What we built</div><div class="rail"><i></i></div><div class="body">
+      <h3>A rating agency for living land</h3>
+      <p>Nemotron agents read five years of satellite record and the local news. Tested formulas set the grade. The Auditor may move it by at most ±10, only with cited evidence. Every rating is sealed into a hash-chained record. The community keeps its land; supporters back it with play money.</p>
+    </div></div>
+    <div class="beat key"><div class="when">The name</div><div class="rail"><i></i></div><div class="body">
+      <h3>WildWorth: wild land has worth</h3>
+      <p>The name is the argument in two words. It has a quiet second layer: in old English place names, <i>-worth</i> meant an enclosed homestead (Tamworth, Kenilworth). A WildWorth site is wild, and it is someone's home.</p>
+    </div></div>
+    <div class="beat"><div class="when">The hero site</div><div class="rail"><i></i></div><div class="body">
+      <h3>Xochimilco</h3>
+      <p>The last remnant of the lakes of the Valley of Mexico, and the only wild home of the axolotl, a salamander that regrows its own limbs. Aldo Leopold defined what our Health score measures: land health is the land's capacity for self-renewal.</p>
+      <p class="src">Sources: <a href="https://en.wikipedia.org/wiki/Lake_Xochimilco">Lake Xochimilco</a>; Leopold, “The Land Ethic”, <i>A Sand County Almanac</i> (1949).</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- 02 PLATFORM -->
+<section id="platform">
+  <div class="chap"><span class="no">02</span><h2>Brand platform</h2><p>What WildWorth believes, promises and sounds like. Every later rule in this book follows from this page.</p></div>
+  <div class="plat">
+    <div class="w6 big"><p class="label">Belief</p><p class="say">Keeping nature alive should pay more than destroying it.</p></div>
+    <div class="w3"><p class="label">Purpose</p><p class="say">Give living land a credible value while it is still alive.</p></div>
+    <div class="w3"><p class="label">Promise</p><p class="say">Measured, not claimed.</p><p class="muted">Every number has a range, a confidence score and its evidence one click away.</p></div>
+    <div class="w2"><p class="label">Positioning</p><p>A rating agency first, an exchange second. Never a casino, never a crypto pitch.</p></div>
+    <div class="w2"><p class="label">Audience</p><p>Communities who keep land (Rosa), supporters who back it (Arjun), and judges seeing it cold.</p></div>
+    <div class="w2"><p class="label">Proof</p><p>Satellite record, local news, tested formulas, a capped AI adjustment, and a tamper-evident record.</p></div>
+  </div>
+  <div class="traits">
+    <div><b>Credible</b><p>Ranges, confidence and sources on every number.</p><p class="not">Not stiff or bureaucratic.</p></div>
+    <div><b>Alive</b><p>The logo and the scores move when the land changes.</p><p class="not">Not decorative or restless.</p></div>
+    <div><b>Plain-spoken</b><p>Short sentences, everyday words, what happened then why.</p><p class="not">Not cute, not hype.</p></div>
+    <div><b>Open</b><p>Shows the machine: every model call, formula and record entry.</p><p class="not">Not a black box.</p></div>
+  </div>
+  <div class="princ">
+    <div><b>Understandable in one pass</b><span>A newcomer gets each screen without the tour.</span></div>
+    <div><b>Numbers carry their honesty</b><span>Range and confidence, always.</span></div>
+    <div><b>Show the machine</b><span>Inspect the AI's work, don't assert it.</span></div>
+    <div><b>Rating agency, not casino</b><span>Calm, credible, clearly a sandbox.</span></div>
+    <div><b>Stewards are the protagonists</b><span>The story is the land and its people.</span></div>
+  </div>
+</section>
+
+<!-- 03 NAME -->
+<section id="name">
+  <div class="chap"><span class="no">03</span><h2>The name</h2><p>One word, two capitals. Say it the way you'd say “wild” and “worth”.</p></div>
+  <div class="namerules">
+    <div class="panel" style="padding:26px 28px">
+      <h3 class="h3">How to write it</h3>
+      <div class="okno">
+        <div><span class="y">✓</span><span><b>WildWorth</b> in running text, titles and the UI</span></div>
+        <div><span class="n">✕</span><span>Wild Worth · Wildworth · Wild-Worth · WILDWORTH in body text</span></div>
+        <div><span class="n">✕</span><span>WW as an abbreviation, or a possessive inside the logo</span></div>
+        <div><span class="y">✓</span><span><b>WildWorth</b> plus a descriptor when the context is cold: “WildWorth · nature ratings”</span></div>
+        <div><span class="y">✓</span><span>The sandbox line on first mention in any public place: “Sandbox · play money only”</span></div>
+      </div>
+    </div>
+    <div class="panel" style="padding:26px 28px">
+      <h3 class="h3">How it sounds in a sentence</h3>
+      <div class="sentences">
+        <div><small>Report · sober</small>WildWorth rates Xochimilco Wetland <b>A · 77.6 · Strong health</b>.</div>
+        <div class="down"><small>Alert · sober</small><b>WildWorth lowered Xochimilco Wetland to BBB</b>: encroachment reported at the northern edge (12 Sep 2026).</div>
+        <div><small>Steward · warm</small>Your wetland's first Proof of Life is in. It rates A.</div>
+        <div><small>Word of mouth</small>“Check what it's worth on WildWorth.”</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 04 LOGO -->
+<section id="logo">
+  <div class="chap"><span class="no">04</span><h2>The logo</h2><p>Two Ws drawn as one line, with the last stroke rising to the land's Health score. It reads as ripples on a wetland, as sedge in the wind and as a value line. The logo is a reading, not a picture.</p></div>
+  <div class="stack16">
+    <div class="panel">
+      <div class="stage on-forest">
+        <span class="lk" data-lock="ww" id="stageLock"></span>
+        <span class="cap">The line draws, then the reading rises</span>
+        <button class="replay" type="button" id="replay">Replay</button>
+      </div>
+      <div class="cols2" style="margin-top:0;border-top:0">
+        <div>
+          <p class="label">Anatomy</p>
+          <div class="anat" style="margin-top:14px">
+            <div id="anatFig" style="color:var(--ink)"></div>
+            <ol>
+              <li><b>Two Ws, one line.</b> Wild and Worth, drawn without lifting the pen.</li>
+              <li><b>The shape</b> is water, grass and a value line at once. No leaf, no price tag.</li>
+              <li><b>The reading</b> is the last stroke. Its height is the site's Health score.</li>
+              <li><b>The dot</b> is today's reading, where the line stops.</li>
+            </ol>
+          </div>
+        </div>
+        <div>
+          <p class="label">Construction</p>
+          <div class="anat" style="margin-top:14px">
+            <div id="gridFig" style="color:var(--ink)"></div>
+            <ul class="list">
+              <li>100-unit square. Stroke 7.5 units, round caps and joins.</li>
+              <li>The reading's end travels from y 80 (score 0) to y 16 (score 100). The band is shaded.</li>
+              <li>Clear space: one W height (½ the mark) on every side.</li>
+              <li>Mark to wordmark gap: 0.28 × the wordmark's size.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="living on-machine">
+        <svg class="lm" id="liveMark" viewBox="0 0 100 100" aria-hidden="true"></svg>
+        <svg class="lm" id="liveSeal" viewBox="0 0 100 100" aria-hidden="true"></svg>
+        <div>
+          <p class="label" style="color:var(--machine-muted)">A living logo · drag to re-rate</p>
+          <div style="margin-top:8px"><span class="score" id="liveScore">77.6</span><span class="gchip" id="liveGrade">A</span></div>
+          <p class="glab" id="liveLabel">Strong health</p>
+          <label for="liveRange">Health score</label>
+          <input id="liveRange" type="range" min="0" max="100" step="0.1" value="77.6" aria-describedby="liveLabel">
+          <div class="ticks" aria-hidden="true"><span>0 · D</span><span>30 · C</span><span>50 · BB</span><span>70 · A</span><span>90 · AAA</span></div>
+          <p class="n">The master logo always shows 77.6, the hero site's target. On a site page, the mark and its Proof of Life seal show that site's real score in its grade colour.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><h3 class="h3">Lockups</h3><p>Horizontal is the default. Stacked is for square and centred frames. Use the mark alone only where the name is already on screen.</p></div>
+      <div class="lockgrid" style="margin-top:24px">
+        <div class="on-paper"><span class="lk" data-lock="ww" data-read="lime-ink"></span><small>Horizontal · primary</small></div>
+        <div class="on-paper"><span class="stk" data-stack="lime-ink"></span><small>Stacked</small></div>
+        <div class="on-paper"><span class="lk" data-mark="lime-ink" style="font-size:64px"></span><small>Mark only</small></div>
+        <div class="on-paper"><span class="lk" style="font-size:40px"><span class="wm"><span class="w1">Wild</span><span class="w2">Worth</span></span></span><small>Wordmark only</small></div>
+      </div>
+      <div class="lockgrid v">
+        <div class="on-forest"><span class="lk" data-lock="ww"></span><small>On forest</small></div>
+        <div class="on-machine"><span class="lk" data-lock="ww"></span><small>On machine</small></div>
+        <div class="on-lime"><span class="lk" data-lock="ww" data-read="forest"></span><small>On lime</small></div>
+        <div class="on-lichen"><span class="lk" data-lock="ww" data-read="lime-ink"></span><small>On lichen</small></div>
+      </div>
+      <div class="sizes" id="sizes"></div>
+      <div class="cols2" style="margin-top:0">
+        <div><h4>Colour of the parts</h4><ul class="list">
+          <li>The line and wordmark take the ground's ink: forest on light, paper on dark.</li>
+          <li>The reading is lime on dark grounds, lime-ink on light, forest on lime.</li>
+          <li>On a site, the reading takes that site's grade colour.</li>
+        </ul></div>
+        <div><h4>Small sizes</h4><ul class="list">
+          <li>Below 24 px, use the single W: one W with the same reading stroke, no dot.</li>
+          <li>Minimum: 16 px mark, 72 px wide horizontal lockup.</li>
+          <li>App icon: the single W on a forest tile with 22% corner radius.</li>
+        </ul></div>
+      </div>
+      <div class="sites" id="sites"></div>
+      <div class="ph" style="padding-top:28px"><h3 class="h3">Don't</h3></div>
+      <div class="dontgrid" id="donts" style="margin-top:20px"></div>
+      <div class="copyrow">
+        <button class="btn primary" type="button" id="copyMark">Copy mark SVG</button>
+        <button class="btn" type="button" id="copyFav">Copy favicon SVG</button>
+        <span class="toast" id="copied" role="status"></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 PROOF OF LIFE -->
+<section id="proof">
+  <div class="chap"><span class="no">05</span><h2>Proof of Life</h2><p>Every quarter, WildWorth issues a Proof of Life for each site: its rating report and seal. The seal is a ring of 100 dots, one per point of health, lit up to the score, with the grade and the quarter in the centre.</p></div>
+  <div class="panel">
+    <div class="seals">
+      <div class="on-machine"><span id="sealBig"></span><small>On the machine layer</small></div>
+      <div class="on-paper"><span id="sealPaper"></span><small>On paper, grade colour</small></div>
+      <div class="on-forest"><span id="sealDown"></span><small>After a downgrade</small></div>
+    </div>
+    <div class="cols2" style="margin-top:0">
+      <div><h4>Use it</h4><ul class="list">
+        <li>On the report header, the share card and the steward's home.</li>
+        <li>Always with the site's name and the quarter.</li>
+        <li>“Ecological Performance Report” stays as the subtitle, so finance readers see the lineage.</li>
+        <li>Old seals stay in the Record; a new seal never overwrites one.</li>
+      </ul></div>
+      <div><h4>Never</h4><ul class="list">
+        <li>Abbreviate it to “PoL”: it reads as crypto.</li>
+        <li>Use it as the company name or as a slogan on its own.</li>
+        <li>Pair it with heartbeat lines or a date held up to camera.</li>
+        <li>Issue a seal without its evidence one click away.</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- 06 COLOUR -->
+<section id="colour">
+  <div class="chap"><span class="no">06</span><h2>Colour</h2><p>The palette from DESIGN.md, with one job per colour. Lime means “the reading”. Dark green means “the AI is showing its work”. Clay means pressure, always with an arrow and words.</p></div>
+  <div class="stack16">
+    <div class="panel">
+      <div class="sw" id="swatches"></div>
+      <div class="prop" id="proportion" role="img" aria-label="Colour proportions: lichen 55%, paper 20%, forest 15%, machine 6%, lime 3%, clay 1%"></div>
+      <p class="small muted" style="padding:10px 28px 0">Rough proportion on a typical screen. Lime stays rare so it always means something.</p>
+      <div class="ramp" id="ramp" role="img" aria-label="Grade ramp from AAA deep green through olive and mustard to D brick"></div>
+      <div class="cols3" style="margin-top:0">
+        <div><h4>The grade ramp</h4><p class="small">Greens to olive to mustard to clay. A ramp, never a traffic light. A grade always comes with its letter and, on first mention, its score and label.</p></div>
+        <div><h4>Direction</h4><p class="small">Never colour alone. Up and down carry ▲ ▼ and a signed number, or the words “up” and “down”.</p></div>
+        <div><h4>Data colours</h4><p class="small">Land-cover bars and map layers keep Dynamic World's own class colours, so legends match the imagery.</p></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3 class="h3">Text pairs, with their contrast</h3><p>Ratios are calculated on this page from the colour values. WCAG AA needs 4.5:1 for body text and 3:1 for large text and icons.</p></div>
+      <div class="pairs" id="pairs"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 07 TYPE -->
+<section id="type">
+  <div class="chap"><span class="no">07</span><h2>Typography</h2><p>Serif for names, sans for numbers, mono for the machine. All three are free (OFL) on Google Fonts.</p></div>
+  <div class="panel">
+    <div class="spec" style="border-top:0"><div class="role"><b>Display · Gloock 400</b><span>Wordmark “Wild”, page titles, site names, grade verdicts · 40–104 px · −0.025em</span></div><div class="smp" style="font:400 clamp(38px,5.4vw,64px)/1 var(--display);letter-spacing:-.025em">Xochimilco Wetland</div></div>
+    <div class="spec"><div class="role"><b>Verdict · Gloock 400</b><span>28–40 px · 1.1</span></div><div class="smp" style="font:400 clamp(26px,3vw,36px)/1.1 var(--display)">A · Strong health</div></div>
+    <div class="spec"><div class="role"><b>Numerals · Hanken Grotesk 300</b><span>Wordmark “Worth”, scores, values · tabular figures · −0.03em</span></div><div class="smp" style="font:300 clamp(30px,3.6vw,44px)/1 var(--body);letter-spacing:-.03em;font-variant-numeric:tabular-nums">77.6 · $9.8M–$13.4M /yr</div></div>
+    <div class="spec"><div class="role"><b>UI and body · Hanken Grotesk 400/500</b><span>14–17 px · 1.55 · prose capped at 65ch</span></div><div class="smp">Back this site · Encroachment reported at the northern edge.</div></div>
+    <div class="spec"><div class="role"><b>Label · Hanken Grotesk 500</b><span>12 px · sentence case</span></div><div class="smp" style="font:500 12px var(--body)">Confidence 87% · Updated 12 Sep 2026</div></div>
+    <div class="spec"><div class="role"><b>Machine · Geist Mono 400</b><span>Hashes, model IDs, the seal stamp · 11–13 px</span></div><div class="smp mono">nvidia/nemotron-3-super · 1,284 tokens · 2.3 s</div></div>
+    <div class="tw" style="border-top:1px solid var(--line)"><table>
+      <thead><tr><th>Step</th><th>Size</th><th>Use</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">display-xl</td><td class="mono">88–104</td><td>Cover and judge landing title</td></tr>
+        <tr><td class="mono">display</td><td class="mono">64</td><td>Page titles</td></tr>
+        <tr><td class="mono">title</td><td class="mono">32–40</td><td>Site names on cards, drawer titles, verdicts</td></tr>
+        <tr><td class="mono">numeral</td><td class="mono">32–64</td><td>Scores and values, light weight</td></tr>
+        <tr><td class="mono">body</td><td class="mono">16</td><td>Everything you read</td></tr>
+        <tr><td class="mono">small · label</td><td class="mono">12–14</td><td>Metadata, chips, captions</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- 08 ICONS -->
+<section id="icons">
+  <div class="chap"><span class="no">08</span><h2>Icons</h2><p>One family for every WildWorth feature and ecosystem service. Same metrics as Lucide, so they sit next to the generic UI icons (close, menu, chevrons) the app already uses.</p></div>
+  <div class="stack16">
+    <div class="panel">
+      <div class="isheet on-paper" id="iconsLight"></div>
+      <div class="isheet on-machine" id="iconsDark"></div>
+    </div>
+    <div class="panel">
+      <div class="cols3" style="margin-top:0;border-top:0">
+        <div><h4>Grid and stroke</h4><svg class="igrid" id="iconGrid" viewBox="0 0 24 24" aria-label="Icon grid with the WildWatch icon"></svg><p class="small" style="margin-top:10px">24 px grid, 2 px padding, 1.75 px stroke, round caps and joins.</p></div>
+        <div><h4>One accent</h4><ul class="list">
+          <li>Each icon lights exactly one part: what the feature reads or confirms.</li>
+          <li>Filled lime keeps an ink outline, so it passes on light grounds.</li>
+          <li>Accent strokes are lime-ink on light, lime on dark.</li>
+          <li>Never recolour the accent to show state; state lives in text and the grade colour.</li>
+        </ul></div>
+        <div><h4>Sizes and labels</h4><div class="isizes" id="iconSizes"></div><ul class="list" style="margin-top:14px">
+          <li>Legible from 16 px. Below 20 px, drop interior detail rather than thin the stroke.</li>
+          <li>Icons in navigation always have a text label; icon-only buttons need an accessible name.</li>
+          <li>Ship as React components under <span class="mono">components/icons/</span> with Lucide's props.</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 09 FEATURES -->
+<section id="features">
+  <div class="chap"><span class="no">09</span><h2>Feature names</h2><p>Name only what a judge should be able to repeat. Everything else stays plain, and follows the softened market vocabulary in ux-writing.md.</p></div>
+  <div class="stack16">
+    <div class="panel"><div class="tw"><table class="feat">
+      <thead><tr><th></th><th>Name in the UI</th><th>Feature</th><th>Status</th><th>How it appears</th></tr></thead>
+      <tbody id="featRows"></tbody>
+    </table></div></div>
+    <h3 class="h3" style="margin-top:24px">The three apps</h3>
+    <div class="apps" id="apps"></div>
+    <p class="small muted">Routes stay as they are (<span class="mono">/</span>, <span class="mono">/steward</span>, <span class="mono">/admin</span>); only the names people read change. “Exchange” goes because it suggests a real securities exchange.</p>
+  </div>
+</section>
+
+<!-- 10 VOICE -->
+<section id="voice">
+  <div class="chap"><span class="no">10</span><h2>Voice</h2><p>One brand, two voices, chosen by the surface. Short sentences everywhere. Say what happened, then why, then what to do next.</p></div>
+  <div class="stack16">
+    <div class="voices">
+      <div class="on-machine">
+        <p class="label" style="color:var(--machine-muted)">Ratings, reports, trace, the Record</p>
+        <h3>The rating voice</h3>
+        <p>Precise, evidence-led, understated. Ranges and confidence always shown. No exclamation marks.</p>
+        <div class="ex">Health score fell from 74.2 to 63.8 after a reported 40 ha industrial expansion (source: 12 Sep 2026).</div>
+        <div class="ex">Auditor adjusted −6.0 (cited: event #3, greenness trend).</div>
+      </div>
+      <div class="on-paper">
+        <p class="label">Communities, listing, the tour, onboarding</p>
+        <h3>The steward voice</h3>
+        <p>Warm and plain. Celebrates the people who keep the land, and stays honest about uncertainty.</p>
+        <div class="ex">Draw the boundary of the land your community protects. We'll check the shape and area as you go.</div>
+        <div class="ex">Your wetland's first Proof of Life is in. It rates A, and here's what would lift it.</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3 class="h3">Lines that carry the brand</h3></div>
+      <div class="lines">
+        <div><p class="ctx">Tagline</p><p class="line">Worth more wild.</p><p class="why">The argument in three words. Alternates: “What living land is worth.” · “Alive is worth more.”</p></div>
+        <div><p class="ctx">Hero · judge landing</p><p class="line">The bees never sent an invoice. WildWorth works out what they're worth.</p><p class="why">The team's best line, turned into what the product does.</p></div>
+        <div><p class="ctx">Video · the rating lands</p><p class="line">Every quarter, WildWorth issues a Proof of Life.</p><p class="why">Said once, over the seal.</p></div>
+        <div><p class="ctx">Video close</p><p class="line">Keeping nature alive should pay more than destroying it.</p><p class="why">The belief, over the end card.</p></div>
+      </div>
+    </div>
+    <div class="panel"><div class="tw"><table class="vocab">
+      <thead><tr><th>Concept</th><th>Say</th><th>Don't say</th></tr></thead>
+      <tbody>
+        <tr><td>What the land provides</td><td>worth, value, services</td><td>returns, profit, yield to you</td></tr>
+        <tr><td>Supporting a site</td><td>back this site, your stakes</td><td>invest, buy now, opportunity</td></tr>
+        <tr><td>The money</td><td>play money, sandbox balance</td><td>funds, deposit, withdraw, wallet</td></tr>
+        <tr><td>Listing launch</td><td>opening offer, open to supporters</td><td>IPO (outside the trade panel)</td></tr>
+        <tr><td>The AI's role</td><td>reads, classifies, explains, audits</td><td>the AI valued your land</td></tr>
+        <tr><td>Wild</td><td>alive and able to renew itself</td><td>untouched by people</td></tr>
+        <tr><td>Any number</td><td>$9.8M–$13.4M /yr · mid $11.7M · 87% confidence</td><td>a single value on its own</td></tr>
+      </tbody>
+    </table></div></div>
+  </div>
+</section>
+
+<!-- 11 MOTION -->
+<section id="motion">
+  <div class="chap"><span class="no">11</span><h2>Motion</h2><p>Every animation means something. Each plays once, ends on the real value, and is replaced by the final frame when someone prefers reduced motion.</p></div>
+  <div class="moves">
+    <div><b>Draw</b><p>Something is being measured: the logo line, a boundary, a chart.</p><div class="bar"><i style="width:100%"></i></div><p class="t">900–1100 ms</p></div>
+    <div><b>Rise</b><p>A reading arrived: the logo's last stroke, the seal's dots lighting up.</p><div class="bar"><i style="width:50%"></i></div><p class="t">550 ms, after the draw</p></div>
+    <div><b>Count</b><p>A number changed: score, value range, balance.</p><div class="bar"><i style="width:70%"></i></div><p class="t">600–900 ms</p></div>
+    <div><b>Stamp</b><p>A verdict was issued: the grade reveal and grade change.</p><div class="bar"><i style="width:45%"></i></div><p class="t">520 ms, once</p></div>
+  </div>
+  <p class="small muted" style="margin-top:14px">Easing everywhere: <span class="mono">cubic-bezier(.16,1,.3,1)</span>, the app's <span class="mono">--nx-ease-out</span>. The logo animates only when a rating lands and in the video's last frame, never on hover or as a loader.</p>
+</section>
+
+<!-- 12 IN USE -->
+<section id="use">
+  <div class="chap"><span class="no">12</span><h2>In use</h2><p>The product's light theme, the video and the share card. Values are the pitch targets from the one-pager, shown as illustrations.</p></div>
+  <div class="panel">
+    <div class="mocks">
+      <div class="mock">
+        <div class="sandbox"><span>Sandbox · play money only</span><span>Arjun · supporter</span></div>
+        <div class="appbar"><span class="lk" data-lock="ww" data-read="lime-ink"></span><span class="app">Ratings</span><nav aria-hidden="true" id="mockNav"></nav></div>
+        <div class="rcardm">
+          <span class="seal" id="mockSeal"></span>
+          <div>
+            <p class="k">Proof of Life · Q3 2026</p>
+            <h5>Xochimilco Wetland</h5>
+            <div class="gr"><span class="gpill" id="mockGrade">A</span><b style="font-variant-numeric:tabular-nums">77.6</b><span>Strong health</span></div>
+            <p class="val">Worth range $9.8M–$13.4M /yr · mid $11.7M · 87% confidence</p>
+            <div class="svc" id="mockSvc"></div>
+          </div>
+        </div>
+        <p class="illus">Illustrative values</p>
+      </div>
+      <div class="mock phone">
+        <p class="time">9:41</p>
+        <p class="date">Thursday 12 September</p>
+        <div class="notif"><span class="ic" id="notif1"></span><div><b>WildWatch <span>now</span></b>Xochimilco Wetland lowered A → BBB. Encroachment reported at the northern edge. See the evidence.</div></div>
+        <div class="notif"><span class="ic" id="notif2"></span><div><b>WildWorth <span>2 h ago</span></b>New Proof of Life for Celestún Mangrove: AA, no change.</div></div>
+      </div>
+    </div>
+    <div class="duo">
+      <div class="endcard"><span class="lk" data-lock="ww" id="endLock"></span><p class="t">Worth more wild.</p><p class="s">Built on NVIDIA Nemotron via Nebius Token Factory · Sandbox · play money only</p></div>
+      <div class="share">
+        <div><span class="lk" data-lock="ww"></span><h5>Xochimilco Wetland rates A</h5><p class="k">Proof of Life · Q3 2026 · Sandbox</p></div>
+        <span class="seal" id="shareSeal"></span>
+      </div>
+    </div>
+    <div class="mock" style="margin:0 28px 28px">
+      <div class="tabbar" id="tabs"></div>
+      <p class="illus" style="padding-top:12px">Each site's tab carries its own single-W mark: the favicon is the reading</p>
+    </div>
+  </div>
+</section>
+
+<!-- 13 CHECKLIST -->
+<section id="checklist">
+  <div class="chap"><span class="no">13</span><h2>Before you ship</h2><p>Run through this for any screen, frame or post that carries the brand. Ticks stay in your browser only.</p></div>
+  <div class="check" id="check"></div>
+</section>
+
+</main>
+
+<footer><div class="wrap">
+  <p class="label">Sources</p>
+  <ol>
+    <li>Project docs: PRODUCT.md, DESIGN.md, docs/design/ux-writing.md, docs/one-pager.md, docs/specs/pm-spec.md §1 and §6, docs/specs/dev-spec.md §7.3.</li>
+    <li>NYSE Natural Asset Companies filing: <a href="https://www.federalregister.gov/documents/2023/10/04/2023-22041/self-regulatory-organizations-new-york-stock-exchange-llc-notice-of-filing-of-proposed-rule-change">Federal Register, 4 Oct 2023</a>; withdrawal: <a href="https://www.thecorporatecounsel.net/blog/2024/01/nyse-withdraws-natural-asset-company-listing-proposal.html">The Corporate Counsel, Jan 2024</a>.</li>
+    <li>Aldo Leopold, “The Land Ethic”, <i>A Sand County Almanac</i> (1949).</li>
+    <li>Xochimilco and the axolotl: <a href="https://en.wikipedia.org/wiki/Lake_Xochimilco">Lake Xochimilco</a>.</li>
+  </ol>
+  <p style="margin-top:20px">WildWorth brand guidelines v1.0. The mark, seal and icons are original drawings for this project. Fonts are free (OFL). Run a trademark search on the name before any public launch. Sandbox, play money only: nothing here is a real security or investment.</p>
+</div></footer>
+
+<script>
+(function(){
+  var GRADES=[
+    [90,"AAA","Exceptional health",0.43,0.1,152,"#fff"],
+    [80,"AA","Very strong health",0.5,0.115,146,"#fff"],
+    [70,"A","Strong health",0.54,0.12,138,"#fff"],
+    [60,"BBB","Good health",0.66,0.13,120,"oklch(0.255 0.045 148)"],
+    [50,"BB","Moderate health, some pressure",0.7,0.13,92,"oklch(0.255 0.045 148)"],
+    [40,"B","Under pressure",0.67,0.13,66,"oklch(0.255 0.045 148)"],
+    [30,"C","Serious pressure",0.56,0.14,46,"#fff"],
+    [-1,"D","Critical",0.52,0.16,30,"#fff"]
+  ];
+  function ok(L,c,h){return "oklch("+L+" "+c+" "+h+")";}
+  function grade(s){for(var i=0;i<GRADES.length;i++){var g=GRADES[i];if(s>=g[0])return {g:g[1],label:g[2],bg:ok(g[3],g[4],g[5]),fg:g[6]};}}
+  var C={lime:"oklch(0.86 0.135 126)","lime-ink":"oklch(0.42 0.1 135)",forest:"oklch(0.31 0.062 148)",accent:"var(--accent-ink)"};
+  var MASTER=77.6;
+  var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function clamp(s){return Math.max(0,Math.min(100,s));}
+
+  /* ---------- the mark: two Ws as one line; the last stroke ends at the Health score ---------- */
+  function peakY(s){return 80-clamp(s)/100*64;}
+  var BIG=[[6,24],[17,76],[28,42],[39,76],[50,24],[61,76],[72,42],[83,76]];
+  var SMALL=[[10,24],[30,78],[50,40],[70,78]];
+  function wwInner(s,read,small){
+    var P=small?SMALL:BIG,last=P[P.length-1],end=[small?90:94,peakY(s)],sw=small?11:7.5;
+    var d="M"+P.map(function(p){return p[0]+" "+p[1];}).join(" L");
+    return '<path class="ww-ink" pathLength="100" d="'+d+'" fill="none" stroke="currentColor" stroke-width="'+sw+'" stroke-linecap="round" stroke-linejoin="round"/>'+
+      '<path class="ww-read" pathLength="100" d="M'+last[0]+' '+last[1]+' L'+end[0]+' '+end[1].toFixed(2)+'" fill="none" style="stroke:'+read+'" stroke-width="'+sw+'" stroke-linecap="round"/>'+
+      (small?'':'<circle class="ww-dot" cx="'+end[0]+'" cy="'+end[1].toFixed(2)+'" r="6" style="fill:'+read+'"/>');
+  }
+  function wwSvg(s,read,o){o=o||{};var sz=o.size?' width="'+o.size+'" height="'+o.size+'"':'';
+    return '<svg viewBox="0 0 100 100"'+sz+(o.style?' style="'+o.style+'"':'')+' role="img" aria-label="'+(o.label===undefined?"WildWorth mark":o.label)+'">'+wwInner(s,read||C.lime,o.small)+'</svg>';}
+  function setWW(svg,s){var y=peakY(s).toFixed(2),r=svg.querySelector(".ww-read"),d=svg.querySelector(".ww-dot");
+    if(r)r.setAttribute("d","M83 76 L94 "+y);if(d)d.setAttribute("cy",y);}
+  function wordmark(){return '<span class="wm"><span class="w1">Wild</span><span class="w2">Worth</span></span>';}
+
+  /* ---------- Proof of Life seal ---------- */
+  function sealInner(s,o){o=o||{};var lit=o.lit||C.lime,n=Math.round(clamp(s)),g=grade(s),dots="";
+    for(var i=0;i<100;i++){var a=(i/100)*2*Math.PI-Math.PI/2,x=50+42*Math.cos(a),y=50+42*Math.sin(a);
+      dots+='<circle cx="'+x.toFixed(2)+'" cy="'+y.toFixed(2)+'" r="1.9" fill="'+(i<n?lit:"currentColor")+'"'+(i<n?'':' opacity=".2"')+'/>';}
+    return dots+'<text x="50" y="35" text-anchor="middle" font-family="Geist Mono, monospace" font-size="5.6" letter-spacing=".9" fill="currentColor" opacity=".75">PROOF OF LIFE</text>'+
+      '<text x="50" y="72" text-anchor="middle" font-family="Geist Mono, monospace" font-size="6.4" letter-spacing=".5" fill="currentColor" opacity=".85">'+(o.q||"Q3 2026")+'</text>'+
+      '<text x="50" y="59" text-anchor="middle" font-family="Gloock, Georgia, serif" font-size="'+(g.g.length>2?20:24)+'" fill="currentColor">'+g.g+'</text>';}
+  function sealSvg(s,o){var g=grade(s);return '<svg viewBox="0 0 100 100" role="img" aria-label="Proof of Life seal, grade '+g.g+', score '+s+'">'+sealInner(s,o)+'</svg>';}
+
+  /* ---------- render lockups ---------- */
+  document.querySelectorAll('[data-lock="ww"]').forEach(function(el){
+    el.innerHTML=wwSvg(MASTER,C[el.dataset.read||"lime"],{label:"WildWorth logo"})+wordmark();});
+  document.querySelectorAll('[data-stack]').forEach(function(el){el.innerHTML=wwSvg(MASTER,C[el.dataset.stack],{label:"WildWorth logo, stacked"})+wordmark();});
+  document.querySelectorAll('[data-mark]').forEach(function(el){el.innerHTML=wwSvg(MASTER,C[el.dataset.mark]);});
+  document.getElementById("navMark").innerHTML=wwSvg(MASTER,C.accent,{small:true,label:""});
+
+  function play(el){el.classList.remove("play");void el.offsetWidth;el.classList.add("play");}
+  if(!reduce){["coverLock","stageLock","endLock"].forEach(function(id){play(document.getElementById(id));});}
+  document.getElementById("replay").addEventListener("click",function(){play(document.getElementById("stageLock"));});
+
+  /* contents */
+  var TOC=[["01","Story","Where the brand comes from","story"],["02","Platform","Belief, promise, personality","platform"],["03","Name","How to write and say it","name"],["04","Logo","Mark, lockups, sizes, misuse","logo"],
+    ["05","Proof of Life","The quarterly seal","proof"],["06","Colour","Palette, ramp, contrast","colour"],["07","Type","Three faces, one scale","type"],["08","Icons","The WildWorth pack","icons"],
+    ["09","Feature names","What to call things","features"],["10","Voice","Two voices, one brand","voice"],["11","Motion","Four moves","motion"],["12","In use","Product, video, social","use"]];
+  document.getElementById("toc").innerHTML=TOC.map(function(t){return '<a href="#'+t[3]+'"><i>'+t[0]+'</i><b>'+t[1]+'</b><span>'+t[2]+'</span></a>';}).join("");
+
+  /* anatomy + construction */
+  document.getElementById("anatFig").innerHTML=wwSvg(MASTER,C.accent,{label:"WildWorth mark"}).replace("<svg",'<svg class="big"');
+  (function(){var g="";for(var i=0;i<=100;i+=10){g+='<path d="M'+i+' 0V100M0 '+i+'H100" stroke="currentColor" stroke-width=".3" opacity=".22"/>';}
+    var fig='<svg class="big" viewBox="-4 -4 108 108" role="img" aria-label="Construction grid for the WildWorth mark">'+g+
+      '<rect x="88" y="16" width="12" height="64" fill="oklch(0.86 0.135 126)" opacity=".28"/>'+
+      '<path d="M88 16H100M88 80H100" stroke="currentColor" stroke-width=".6" stroke-dasharray="2 1.5"/>'+
+      '<text x="99" y="13" text-anchor="end" font-family="Geist Mono, monospace" font-size="4.2" fill="currentColor">100</text>'+
+      '<text x="99" y="87" text-anchor="end" font-family="Geist Mono, monospace" font-size="4.2" fill="currentColor">0</text>'+
+      wwInner(MASTER,C.accent)+'</svg>';
+    document.getElementById("gridFig").innerHTML=fig;})();
+
+  /* living reading */
+  var lm=document.getElementById("liveMark"),ls=document.getElementById("liveSeal");
+  lm.innerHTML=wwInner(MASTER,C.lime);lm.style.color="var(--machine-ink)";ls.style.color="var(--machine-ink)";
+  var rng=document.getElementById("liveRange"),sc=document.getElementById("liveScore"),gc=document.getElementById("liveGrade"),lb=document.getElementById("liveLabel");
+  function upd(){var s=parseFloat(rng.value),g=grade(s);sc.textContent=s.toFixed(1);gc.textContent=g.g;gc.style.background=g.bg;gc.style.color=g.fg;lb.textContent=g.label;
+    setWW(lm,s);lm.querySelector(".ww-read").style.stroke=g.bg;lm.querySelector(".ww-dot").style.fill=g.bg;
+    ls.innerHTML=sealInner(s,{lit:g.bg});rng.setAttribute("aria-valuetext",s.toFixed(1)+", grade "+g.g+", "+g.label);}
+  rng.addEventListener("input",upd);upd();
+
+  /* sizes */
+  document.getElementById("sizes").innerHTML=[16,20,24,32,48,64].map(function(s){var small=s<24;
+    return '<figure><span style="color:var(--ink);display:block">'+wwSvg(MASTER,C.accent,{size:s,small:small,label:"WildWorth mark at "+s+" pixels"})+'</span><figcaption>'+s+' px'+(small?' · single W':'')+'</figcaption></figure>';}).join("")+
+    '<figure><span class="tile" style="width:72px;height:72px">'+wwSvg(MASTER,C.lime,{size:46,small:true,label:"App icon"})+'</span><figcaption>App icon</figcaption></figure>'+
+    '<figure><span class="tile" style="width:44px;height:44px;border-radius:99px">'+wwSvg(MASTER,C.lime,{size:28,small:true,label:"Avatar"})+'</span><figcaption>Avatar</figcaption></figure>';
+
+  /* site marks (illustrative) */
+  var SITES=[["Xochimilco Wetland",77.6],["Celestún Mangrove",84.2],["Restoration Forest",55.0]];
+  document.getElementById("sites").innerHTML=SITES.map(function(x){var g=grade(x[1]);
+    return '<figure>'+wwSvg(x[1],g.bg,{label:x[0]+" mark at "+x[1]})+'<b>'+x[0]+'</b><span class="gpill" style="background:'+g.bg+';color:'+g.fg+'">'+g.g+' · '+x[1].toFixed(1)+'</span><span class="label">Illustrative</span></figure>';}).join("");
+
+  /* don'ts, drawn */
+  var L=function(st,read,extra){return '<span class="lk" style="'+(st||"")+'">'+wwSvg(MASTER,read||C["lime-ink"],{label:""})+(extra||wordmark())+'</span>';};
+  var LEAF='<svg viewBox="0 0 24 24" style="width:.7em;height:.7em;margin-left:-.1em" aria-hidden="true"><path d="M4 20C4 10 10 4 20 4c0 10-6 16-16 16z" fill="oklch(0.6 0.15 140)"/></svg>';
+  var DONTS=[
+    [L("transform:scaleX(1.45)"),"Stretch or squash it"],
+    [L("transform:rotate(-12deg)"),"Rotate it"],
+    ['<span class="lk" style="color:oklch(0.6 0.15 140)">'+wwSvg(MASTER,"oklch(0.55 0.2 25)",{label:""})+wordmark()+'</span>',"Recolour the line or the reading"],
+    [L("",null,wordmark()+LEAF),"Add a leaf, globe or dollar sign"],
+    [L("filter:drop-shadow(0 4px 3px oklch(0 0 0/.45))"),"Add shadows, glows or gradients"],
+    [L("",null,'<span class="wm"><span style="font:700 1em/1 Arial,sans-serif;letter-spacing:0">WildWorth</span></span>'),"Retype the wordmark"],
+    [L("",C["lime-ink"],'<span class="wm"><span class="w1">Wild</span><span class="w2">Worth</span></span><span style="font:600 .45em var(--body);margin-left:.4em;color:var(--clay-ink)">▲ 12%</span>'),"Use the reading as a price"],
+    ['<span style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,oklch(0.6 0.1 140),oklch(0.6 0.1 140) 8px,oklch(0.75 0.12 90) 8px,oklch(0.75 0.12 90) 16px)"></span><span class="lk" style="position:relative;color:var(--paper)">'+wwSvg(MASTER,C.lime,{label:""})+wordmark()+'</span>',"Place it on busy grounds without a tile"]
+  ];
+  document.getElementById("donts").innerHTML=DONTS.map(function(d){return '<div class="dont">'+d[0]+'<span class="x">✕ Don\'t</span><small>'+d[1]+'</small></div>';}).join("");
+
+  /* copy SVG */
+  function standalone(small){var read=C["lime-ink"],ink="oklch(0.255 0.045 148)";
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="'+(small?32:256)+'" height="'+(small?32:256)+'" style="color:'+ink+'">'+wwInner(MASTER,read,small).replace(/ class="[^"]*"/g,"").replace(/ pathLength="100"/g,"")+'</svg>';}
+  var toast=document.getElementById("copied");
+  function copy(text,what){function done(){toast.textContent=what+" copied.";}
+    function fallback(){var t=document.createElement("textarea");t.value=text;t.setAttribute("readonly","");t.style.position="fixed";t.style.opacity="0";document.body.appendChild(t);t.select();
+      try{document.execCommand("copy");done();}catch(e){toast.textContent="Copy blocked here. Select the text instead.";}document.body.removeChild(t);}
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done,fallback);}else{fallback();}}
+  document.getElementById("copyMark").addEventListener("click",function(){copy(standalone(false),"Mark SVG");});
+  document.getElementById("copyFav").addEventListener("click",function(){copy(standalone(true),"Favicon SVG");});
+
+  /* seals */
+  document.getElementById("sealBig").innerHTML=sealSvg(MASTER,{lit:C.lime});
+  document.getElementById("sealPaper").innerHTML=sealSvg(MASTER,{lit:grade(MASTER).bg});
+  document.getElementById("sealDown").innerHTML=sealSvg(63.8,{lit:C.lime,q:"Q4 2026"});
+
+  /* ---------- colour: values, hex and contrast computed from OKLCH ---------- */
+  function toLinear(L,c,h){var hr=h*Math.PI/180,a=c*Math.cos(hr),b=c*Math.sin(hr);
+    var l_=L+0.3963377774*a+0.2158037573*b,m_=L-0.1055613458*a-0.0638541728*b,s_=L-0.0894841775*a-1.2914855480*b;
+    var l=l_*l_*l_,m=m_*m_*m_,s=s_*s_*s_;
+    return [4.0767416621*l-3.3077115913*m+0.2309699292*s,-1.2684380046*l+2.6097574011*m-0.3413193965*s,-0.0041960863*l-0.7034186147*m+1.7076147010*s].map(function(v){return Math.min(1,Math.max(0,v));});}
+  function hex(lin){return "#"+lin.map(function(v){var c=v<=0.0031308?12.92*v:1.055*Math.pow(v,1/2.4)-0.055;return ("0"+Math.round(c*255).toString(16)).slice(-2);}).join("").toUpperCase();}
+  function lum(lin){return 0.2126*lin[0]+0.7152*lin[1]+0.0722*lin[2];}
+  function ratio(a,b){var x=lum(a),y=lum(b);return (Math.max(x,y)+0.05)/(Math.min(x,y)+0.05);}
+  var P={
+    lichen:[0.932,0.012,128],paper:[0.988,0.005,118],raised:[0.905,0.018,128],border:[0.885,0.014,128],
+    ink:[0.255,0.045,148],forest:[0.31,0.062,148],muted:[0.47,0.035,145],
+    lime:[0.86,0.135,126],limeink:[0.42,0.1,135],clay:[0.66,0.13,48],clayink:[0.5,0.13,42],
+    machine:[0.215,0.035,158],mraised:[0.26,0.038,156],mink:[0.94,0.045,122],mmuted:[0.74,0.045,135],
+    lilac:[0.79,0.075,312],sky:[0.72,0.08,232]};
+  var SW=[
+    ["Core"],["Forest ink","ink","forest-ink","All text on light. There is no pure black."],["Forest","forest","forest","The line, primary buttons, the demo bar"],["Lichen ground","lichen","lichen-ground","The page"],["Paper","paper","card","Cards and content surfaces"],
+    ["Signal"],["Lime","lime","lime","The reading: last stroke, lit dots, live"],["Lime ink","limeink","lime-ink","Text-safe lime: positive deltas, passes"],["Clay","clay","clay","Pressure: downgrades, alerts"],["Clay ink","clayink","clay-ink","Text-safe clay"],
+    ["Machine layer"],["Machine","machine","machine","Agent Trace, the Record, the seal"],["Machine raised","mraised","machine-raised","Panels on the machine layer"],["Machine ink","mink","machine-ink","Text on dark"],["Machine muted","mmuted","machine-muted","Secondary text on dark"],
+    ["Supporting"],["Forest muted","muted","forest-muted","Secondary text on light"],["Lichen raised","raised","lichen-raised","Bands, map ground"],["Sky","sky","sky","Water layers and the flood service only"],["Lilac","lilac","lilac","Second chart series only"]
+  ];
+  document.getElementById("swatches").innerHTML=SW.map(function(s){if(s.length===1)return '<h4>'+s[0]+'</h4>';var v=P[s[1]];
+    return '<div><i style="background:'+ok(v[0],v[1],v[2])+';box-shadow:inset 0 0 0 1px oklch(0.3 0.05 145/0.08)"></i><p><b>'+s[0]+'</b><code>--'+s[2]+'</code><code>'+ok(v[0],v[1],v[2])+' · '+hex(toLinear(v[0],v[1],v[2]))+'</code><span>'+s[3]+'</span></p></div>';}).join("");
+  var PROP=[["Lichen",55,"lichen","ink"],["Paper",20,"paper","ink"],["Forest",15,"forest","mink"],["Machine",6,"machine","mink"],["Lime",3,"lime","ink"],["Clay",1,"clay","ink"]];
+  document.getElementById("proportion").innerHTML=PROP.map(function(p){var b=P[p[2]],f=P[p[3]];return '<span style="flex:'+p[1]+';background:'+ok(b[0],b[1],b[2])+';color:'+ok(f[0],f[1],f[2])+'">'+(p[1]>=6?p[0]+' '+p[1]+'%':'')+'</span>';}).join("");
+  document.getElementById("ramp").innerHTML=GRADES.map(function(g){return '<span style="background:'+ok(g[3],g[4],g[5])+';color:'+g[6]+'">'+g[1]+'<small>'+(g[0]<0?"< 30":"≥ "+g[0])+'</small></span>';}).join("");
+  var WHITE=[1,1,1];
+  var PAIRS=[["Body text","ink","lichen"],["Body text on cards","ink","paper"],["Secondary text","muted","paper"],["Positive delta","limeink","paper"],["Downgrade text","clayink","paper"],["Text on forest","paper","forest"],
+    ["Text on the machine layer","mink","machine"],["Secondary on machine","mmuted","machine"],["Forest ink on lime","ink","lime"]];
+  document.getElementById("pairs").innerHTML=PAIRS.map(function(p){var f=P[p[1]],b=P[p[2]],r=ratio(toLinear(f[0],f[1],f[2]),toLinear(b[0],b[1],b[2]));
+    var verdict=r>=4.5?"AA text":r>=3?"AA large only":"Fails";
+    return '<div style="background:'+ok(b[0],b[1],b[2])+';color:'+ok(f[0],f[1],f[2])+';box-shadow:inset 0 0 0 1px oklch(0.3 0.05 145/0.1)"><p class="s">'+p[0]+'</p><p class="r"><span>'+r.toFixed(1)+':1</span><span>'+verdict+'</span></p></div>';}).join("");
+
+  /* ---------- icons (24 grid) ---------- */
+  var GL={
+    proof:'<circle cx="12" cy="12" r="8.6" stroke-dasharray="0.1 3.05"/><path class="as" d="M8.6 12.3l2.3 2.3 4.6-4.8" stroke-width="2"/>',
+    health:'<path d="M3.8 16.5a8.2 8.2 0 0 1 16.4 0"/><path d="M6.3 10.6l1 .9M12 8.3v1.3M17.7 10.6l-1 .9" stroke-width="1.5"/><path class="as" d="M12 16.5l3.6-4.6" stroke-width="2.2"/><circle class="f" cx="12" cy="16.5" r="1.6"/>',
+    worth:'<path d="M3 12h18" opacity=".4"/><path d="M8 8v8M16 8v8" stroke-width="1.5"/><path class="as" d="M8 12h8" stroke-width="3.4"/><circle class="f" cx="12" cy="12" r="1.2"/>',
+    wildwatch:'<path d="M2.6 12S6 5.8 12 5.8 21.4 12 21.4 12 18 18.2 12 18.2 2.6 12 2.6 12z"/><circle class="af" cx="12" cy="12" r="3"/>',
+    record:'<rect x="2.5" y="8.5" width="5.4" height="7" rx="1.2"/><rect x="9.3" y="8.5" width="5.4" height="7" rx="1.2"/><rect class="af" x="16.1" y="8.5" width="5.4" height="7" rx="1.2"/><path d="M7.9 12h1.4M14.7 12h1.4"/>',
+    trace:'<circle cx="5" cy="5.5" r="2"/><circle cx="12" cy="12" r="2"/><circle class="af" cx="19" cy="18.5" r="2"/><path d="M6.5 6.9l4 3.7M13.5 13.4l4 3.7"/><path d="M5 9.5V20h6" opacity=".45"/>',
+    auditor:'<circle cx="10.5" cy="10.5" r="6.6"/><path d="M15.5 15.5 21 21"/><path class="as" d="M7.8 10.7l1.9 1.9 3.6-3.7" stroke-width="2"/>',
+    news:'<path d="M4 5h11v14H6a2 2 0 0 1-2-2z"/><path d="M15 9h4v8a2 2 0 0 1-2 2h-2"/><path d="M7 9h5M7 12h5M7 15h3"/><circle class="af" cx="19" cy="5" r="2.3"/>',
+    satellite:'<g transform="rotate(-45 13 11)"><rect x="10.5" y="8" width="5" height="6" rx="1"/><rect x="3.5" y="9.2" width="5" height="3.6" rx=".6"/><rect x="17.5" y="9.2" width="5" height="3.6" rx=".6"/><path d="M8.5 11h2M15.5 11h2"/></g><path class="as" d="M3.5 15.5a5 5 0 0 0 5 5M3.5 19a1.6 1.6 0 0 0 1.5 1.5" stroke-width="1.9"/>',
+    live:'<path d="M4.4 7.5a9.5 9.5 0 0 0 0 9M19.6 7.5a9.5 9.5 0 0 1 0 9" opacity=".5"/><circle cx="12" cy="12" r="5.6"/><circle class="af" cx="12" cy="12" r="2.6"/>',
+    time:'<path d="M4.6 12a7.4 7.4 0 1 0 2.2-5.3"/><path class="as" d="M4 4.2v3.6h3.6" stroke-width="2"/><path d="M12 8.2V12l2.8 1.7"/>',
+    list:'<path d="M4 9.2 9 4.6l8 2 3 6-3.4 6.8-8-1-4.6-4.5z"/><circle class="af" cx="9" cy="4.6" r="2.4"/>',
+    evidence:'<path d="M3 8.5h3.5L8 6h8l1.5 2.5H21V19H3z"/><circle class="af" cx="12" cy="13.5" r="3.3"/>',
+    verify:'<path d="M12 2.8l2.3 1.7 2.9-.1.9 2.7 2.3 1.8-.9 2.7.9 2.7-2.3 1.8-.9 2.7-2.9-.1L12 21.2l-2.3-1.7-2.9.1-.9-2.7-2.3-1.8.9-2.7-.9-2.7 2.3-1.8.9-2.7 2.9.1z"/><path class="as" d="M8.7 12.2l2.2 2.2 4.4-4.5" stroke-width="2"/>',
+    offer:'<rect x="3.5" y="10" width="10.5" height="10" rx="1.6"/><path class="as" d="M10 14 20 4M14.2 4H20v5.8" stroke-width="2"/>',
+    back:'<path d="M5 21h14"/><path d="M12 21V5"/><path class="af" d="M12 4.5h6.8l-1.6 2.6 1.6 2.6H12z"/>',
+    stakes:'<path d="M12 3.2 20.8 8 12 12.8 3.2 8z"/><path d="M3.2 12.2 12 17l8.8-4.8"/><path class="as" d="M3.2 16.2 12 21l8.8-4.8" stroke-width="2"/>',
+    fund:'<circle class="af" cx="12" cy="7" r="2.7"/><circle cx="5.3" cy="10.2" r="2"/><circle cx="18.7" cy="10.2" r="2"/><path d="M3 20c.5-3.6 4.5-5.6 9-5.6s8.5 2 9 5.6"/>',
+    ask:'<path d="M4 4.6h16v10.6h-8.6L7 19.2v-4H4z"/><path d="M8 8.6h7M8 11.6h4.5"/><circle class="af" cx="17" cy="11.7" r="1.7"/>',
+    alerts:'<path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14z"/><path d="M10 20.6a2 2 0 0 0 4 0"/><circle class="af" cx="18.4" cy="5.6" r="2.6"/>',
+    recovery:'<path d="M3 19.5h4.2v-4h4.2v-4h4.2v-4H20"/><path class="as" d="M15.6 3.8H20v4.4" stroke-width="2"/>',
+    tour:'<circle cx="12" cy="12" r="8.6"/><path class="af" d="M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z"/>',
+    sites:'<rect x="3.5" y="3.5" width="7.5" height="7.5" rx="1.8"/><rect x="13" y="3.5" width="7.5" height="7.5" rx="1.8"/><rect x="3.5" y="13" width="7.5" height="7.5" rx="1.8"/><rect class="af" x="13" y="13" width="7.5" height="7.5" rx="1.8"/>',
+    sandbox:'<rect x="3.5" y="3.5" width="17" height="17" rx="3.2" stroke-dasharray="2.6 2.6"/><circle class="af" cx="12" cy="12" r="3.2"/>',
+    carbon:'<circle cx="5" cy="12" r="2.3"/><circle cx="19" cy="12" r="2.3"/><circle class="af" cx="12" cy="12" r="3.5"/><path d="M7.3 12h1.2M15.5 12h1.2"/>',
+    water:'<path d="M12 3s6.5 7 6.5 11.5a6.5 6.5 0 0 1-13 0C5.5 10 12 3 12 3z"/><path class="as" d="M9 15a3 3 0 0 0 3 3" stroke-width="2"/>',
+    flood:'<path d="M3 8.5c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0M3 13.5c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0"/><path class="as" d="M3 19.5h18" stroke-width="2.6"/>',
+    habitat:'<path d="M3.5 12.5c1 5 4.5 7.5 8.5 7.5s7.5-2.5 8.5-7.5z"/><path d="M6 15.5h12" opacity=".45"/><ellipse class="af" cx="12" cy="9" rx="2.7" ry="3.3"/>',
+    recreation:'<path d="M3 14.5h18l-2.4 4H5.4z"/><path d="M6.5 14.5V9h11v5.5"/><path d="M5 9h14"/><path class="as" d="M2.5 21.5c2-1 4-1 6 0s4 1 6 0 4-1 6 0" stroke-width="1.9"/>'
+  };
+  function gl(k,px){return '<svg class="gl" width="'+(px||28)+'" height="'+(px||28)+'" viewBox="0 0 24 24" aria-hidden="true">'+GL[k]+'</svg>';}
+  var ICONS=[
+    ["The rating",[["proof","Proof of Life"],["health","Health score"],["worth","Worth range"],["wildwatch","WildWatch"],["record","The Record"],["verify","Verified land"]]],
+    ["Communities and supporters",[["list","List your land"],["evidence","Field evidence"],["offer","Opening offer"],["back","Back this site"],["stakes","Your stakes"],["fund","Community fund"],["recovery","Recovery plan"],["sites","Rated sites"]]],
+    ["Ecosystem services",[["carbon","Carbon"],["water","Water"],["flood","Flood protection"],["habitat","Habitat"],["recreation","Recreation"]]],
+    ["Help and the sandbox",[["ask","Ask about this site"],["alerts","Alerts"],["tour","Guided tour"],["time","Time Machine"],["sandbox","Sandbox"]]]
+  ];
+  var MACHINE=[["The machine layer",[["trace","Agent Trace"],["satellite","Satellite record"],["news","News Scout"],["auditor","Auditor"],["live","Live"],["record","The Record"]]]];
+  function sheet(groups){return groups.map(function(g){return '<h4>'+g[0]+'</h4>'+g[1].map(function(i){return '<figure>'+gl(i[0])+'<figcaption>'+i[1]+'</figcaption><small>'+i[0]+'</small></figure>';}).join("");}).join("");}
+  document.getElementById("iconsLight").innerHTML=sheet(ICONS);
+  document.getElementById("iconsDark").innerHTML=sheet(MACHINE);
+  (function(){var g="";for(var i=0;i<=24;i+=2){g+='<path d="M'+i+' 0V24M0 '+i+'H24" stroke="currentColor" stroke-width=".05" opacity=".35"/>';}
+    var el=document.getElementById("iconGrid");el.style.color="var(--ink)";
+    el.innerHTML=g+'<rect x="2" y="2" width="20" height="20" fill="none" stroke="oklch(0.86 0.135 126)" stroke-width=".12" stroke-dasharray=".5 .4"/><g class="gl" style="stroke-width:1.75">'+GL.wildwatch+'</g>';})();
+  document.getElementById("iconSizes").innerHTML=[16,20,24,32].map(function(s){return '<figure><span style="color:var(--ink)">'+gl("proof",s)+'</span><figcaption>'+s+'</figcaption></figure>';}).join("")+
+    [16,24].map(function(s){return '<figure><span style="color:var(--ink)">'+gl("wildwatch",s)+'</span><figcaption>'+s+'</figcaption></figure>';}).join("");
+
+  /* ---------- feature names ---------- */
+  var FEATS=[
+    ["proof","Proof of Life","Each quarter's rating report, with its seal","new","Proof of Life · Q3 2026 · Ecological Performance Report"],
+    ["health","Health score","The 0–100 score behind every grade","keep","A · 77.6 · Strong health"],
+    ["worth","Worth range","The low, mid and high value per year","new","Worth range $9.8M–$13.4M /yr · mid $11.7M"],
+    ["wildwatch","WildWatch","Daily news sweeps and quarterly satellite checks, and the alerts they raise","new","WildWatch · encroachment at the northern edge"],
+    ["record","The Record","The hash-chained ledger (was Nature Ledger)","new","Verify the Record · Record broken at entry 14"],
+    ["recovery","Recovery plan","Steps for a site that isn't eligible yet or was downgraded (was stewardship plan)","new","Recovery plan · 4 actions, starting at the northern edge"],
+    ["verify","Verified land","The listing's ownership checks and badge","new","Verified land · How this listing was verified"],
+    ["trace","Agent Trace","Every model call, formula and step","keep","Open the Agent Trace"],
+    ["auditor","Auditor","The model that may move a score by ±10 with evidence","keep","Auditor adjusted −6.0 (cited: event #3)"],
+    ["news","News Scout","Finds and classifies local news","keep","News Scout found 3 events near the site"],
+    ["ask","Ask about this site","Answers from the site's own record (was Copilot)","new","Ask about this site"],
+    ["sites","Rated sites","The marketplace page","new","Rated sites · 3 sites"],
+    ["back","Back this site","Buying units, outside the trade panel","keep","Back this site"],
+    ["stakes","Your stakes","The portfolio page","keep","Your stakes · $10,000 play money"],
+    ["offer","Opening offer","The IPO","keep","Opened 5 Oct at $10.00 per unit"],
+    ["fund","Community fund","The community's wallet","keep","Community fund · from supporters"],
+    ["time","Time Machine","The sandbox's narrator: next quarter, inject events","keep","Time Machine · next quarter"]
+  ];
+  document.getElementById("featRows").innerHTML=FEATS.map(function(f){
+    return '<tr><td><span class="ic">'+gl(f[0],24)+'</span></td><td><span class="nm">'+f[1]+'</span></td><td><span class="was">'+f[2]+'</span></td><td><span class="chg '+f[3]+'">'+(f[3]==="new"?"New name":"Kept")+'</span></td><td class="ui">'+f[4]+'</td></tr>';}).join("");
+  var APPS=[
+    ["on-paper","Ratings","Was: Exchange","Open to everyone. Browse rated sites, read each Proof of Life, back a site with play money.","Rated sites · Your stakes · Ask about this site"],
+    ["on-lichen","Communities","Was: Steward","For the people who keep the land. List land, add field evidence, open to supporters, see the community fund.","Home · List your land · Recovery plan"],
+    ["on-machine","Control room","Kept","For platform admins. The Time Machine, land checks and the Record.","Time Machine · Verified land · The Record"]
+  ];
+  document.getElementById("apps").innerHTML=APPS.map(function(a){var dark=a[0]==="on-machine";
+    return '<div class="'+a[0]+'"><div class="hdr" style="background:'+(dark?'oklch(0.26 0.038 156)':'var(--paper)')+'"><span class="lk">'+wwSvg(MASTER,dark?C.lime:C["lime-ink"],{label:""})+wordmark()+'</span><span class="app">'+a[1]+'</span></div>'+
+      '<p class="was">'+a[2]+'</p><h3>'+a[1]+'</h3><p>'+a[3]+'</p><p class="was">Nav: '+a[4]+'</p></div>';}).join("");
+
+  /* ---------- mockups ---------- */
+  var xg=grade(MASTER);
+  document.getElementById("mockNav").innerHTML='<span class="on">'+gl("sites",16)+'Rated sites</span><span>'+gl("stakes",16)+'Your stakes</span><span>'+gl("ask",16)+'Ask</span>';
+  document.getElementById("mockSeal").innerHTML=sealSvg(MASTER,{lit:xg.bg});
+  var mg=document.getElementById("mockGrade");mg.style.background=xg.bg;mg.style.color=xg.fg;
+  document.getElementById("mockSvc").innerHTML=[["water","Water"],["flood","Flood"],["carbon","Carbon"],["habitat","Habitat"],["recreation","Recreation"]].map(function(s){return '<span>'+gl(s[0],16)+s[1]+'</span>';}).join("");
+  document.getElementById("notif1").innerHTML=wwSvg(63.8,C.lime,{small:true,label:""});
+  document.getElementById("notif2").innerHTML=wwSvg(84.2,C.lime,{small:true,label:""});
+  document.getElementById("shareSeal").innerHTML=sealSvg(MASTER,{lit:C.lime});
+  document.getElementById("tabs").innerHTML=SITES.map(function(x,i){var g=grade(x[1]);
+    return '<div class="tab'+(i===0?' on':'')+'"><span style="color:oklch(0.255 0.045 148);display:flex">'+wwSvg(x[1],g.bg,{size:16,small:true,label:""})+'</span><span>'+x[0]+' · WildWorth</span></div>';}).join("");
+
+  /* ---------- checklist (per-viewer only) ---------- */
+  var CHECK=["The name is written WildWorth, one word, two capitals.","The logo's reading shows a real score, or the master 77.6.","Lime appears only for the reading, live states and confirmations.",
+    "Every number shows its range and confidence.","Grades show letter, score and label on first mention.","Direction uses ▲ ▼ or words, not colour alone.",
+    "No invest, returns, profit or opportunity anywhere.","“Sandbox · play money only” is visible on first mention.","Proof of Life is written in full, with a site and a quarter.",
+    "Icons come from the WildWorth pack, with a text label in navigation.","Text pairs pass 4.5:1 (see Colour).","Motion plays once and respects reduced motion."];
+  var saved={};try{saved=JSON.parse(localStorage.getItem("ww-check")||"{}");}catch(e){}
+  document.getElementById("check").innerHTML=CHECK.map(function(c,i){return '<label for="ck'+i+'"><input type="checkbox" id="ck'+i+'"'+(saved[i]?' checked':'')+'><span>'+c+'</span></label>';}).join("");
+  document.getElementById("check").addEventListener("change",function(e){if(!e.target.id)return;saved[e.target.id.slice(2)]=e.target.checked;try{localStorage.setItem("ww-check",JSON.stringify(saved));}catch(err){}});
+})();
+</script>
