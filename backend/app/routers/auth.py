@@ -33,6 +33,7 @@ from app.auth import (
     start_session,
 )
 from app.authz import Action, require
+from app.channel import NOT_IN_SANDBOX, in_sandbox, session_cookie
 from app.config import rate_limit_secret, secure_cookies
 from app.deps import (
     AUTH_REQUIRED,
@@ -122,11 +123,13 @@ def _throttle(
         )
 
 
-def _set_session_cookie(response: Response, token: str, settings: SettingsDep) -> None:
+def _set_session_cookie(
+    response: Response, token: str, settings: SettingsDep, name: str = SESSION_COOKIE
+) -> None:
     # SameSite=Lax needs the browser to see one site: the frontend proxies /api/* to this
     # backend (next.config.ts; T20). Don't switch to SameSite=None; browsers block it.
     response.set_cookie(
-        SESSION_COOKIE,
+        name,
         token,
         max_age=int(ABSOLUTE_TIMEOUT.total_seconds()),
         path="/",
@@ -136,14 +139,27 @@ def _set_session_cookie(response: Response, token: str, settings: SettingsDep) -
     )
 
 
-def _clear_session_cookie(response: Response, settings: SettingsDep) -> None:
+def _clear_session_cookie(
+    response: Response, settings: SettingsDep, name: str = SESSION_COOKIE
+) -> None:
     response.delete_cookie(
-        SESSION_COOKIE,
+        name,
         path="/",
         httponly=True,
         samesite="lax",
         secure=secure_cookies(settings),
     )
+
+
+def _real_app_only(request: Request) -> None:
+    """Accounts are the real app's: a sandbox has personas, never a sign-up or a sign-in."""
+    if in_sandbox(request):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, NOT_IN_SANDBOX)
+
+
+_NOT_IN_SANDBOX: dict[int | str, dict[str, Any]] = {
+    403: {"description": f"`{NOT_IN_SANDBOX}`: called through `/sandbox`"}
+}
 
 
 def _sign_in(
@@ -160,7 +176,7 @@ def _sign_in(
     "/auth/register",
     response_model=MeOut,
     status_code=status.HTTP_201_CREATED,
-    responses={409: {"description": EMAIL_UNAVAILABLE}},
+    responses={409: {"description": EMAIL_UNAVAILABLE}, **_NOT_IN_SANDBOX},
 )
 def register(
     body: RegisterIn,
@@ -174,6 +190,7 @@ def register(
     A taken email returns a generic 409; without email verification that reveals the email
     exists, a risk ADR-0005 accepts. No permission depends on the email.
     """
+    _real_app_only(request)
     _throttle(request, session, settings, AuthAttemptKind.REGISTER, body.email)
     live = ensure_live_world(session)
     try:
@@ -188,7 +205,7 @@ def register(
 @router.post(
     "/auth/login",
     response_model=MeOut,
-    responses={401: {"description": LOGIN_FAILED}},
+    responses={401: {"description": LOGIN_FAILED}, **_NOT_IN_SANDBOX},
 )
 def login(
     body: LoginIn,
@@ -198,6 +215,7 @@ def login(
     settings: SettingsDep,
 ) -> MeOut:
     """Sign in with email and password. Every failure is the same generic 401."""
+    _real_app_only(request)
     _throttle(request, session, settings, AuthAttemptKind.LOGIN, body.email)
     live = ensure_live_world(session)
     user = authenticate(session, live.id, body.email, body.password.get_secret_value())
@@ -208,10 +226,12 @@ def login(
 
 @router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(request: Request, session: SessionDep, settings: SettingsDep) -> Response:
-    """End this session now: the row is deleted and the cookie cleared. Always succeeds."""
-    end_session(session, request.cookies.get(SESSION_COOKIE))
+    """End this session now: the row is deleted and the cookie cleared. Always succeeds.
+    Through `/sandbox` it ends the demo session and leaves a real account's session alone."""
+    cookie = session_cookie(request)
+    end_session(session, request.cookies.get(cookie))
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
-    _clear_session_cookie(response, settings)
+    _clear_session_cookie(response, settings, cookie)
     _no_store(response)
     return response
 

@@ -12,6 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from sqlmodel import Session
 
+from app.channel import SandboxChannelMiddleware
 from app.config import (
     Settings,
     document_fingerprint_secret,
@@ -140,6 +141,8 @@ app.add_middleware(
     CsrfMiddleware,
     allowed_origins=[item.strip() for item in settings.allowed_origins.split(",") if item.strip()],
 )
+# Added last, so it runs first: every other layer sees the path without `/sandbox`.
+app.add_middleware(SandboxChannelMiddleware)
 
 app.include_router(auth.router)
 app.include_router(demo.router)

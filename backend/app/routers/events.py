@@ -17,8 +17,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, R
 from sqlmodel import Session
 
 from app import events as event_bus
-from app.auth import SESSION_COOKIE
 from app.authz import Action, WorldRef, authorizes, enforce, lazy_actor, require
+from app.channel import session_cookie
 from app.db import get_session
 from app.deps import (
     CurrentWorld,
@@ -48,7 +48,7 @@ def stream_access(request: Request, response: Response, session: StreamSessionDe
     world = current_world(request, response, session, principal)
     actor = None if principal is None else lazy_actor(session, principal)
     enforce(actor, Action.BROWSE, WorldRef(world.id))
-    token = request.cookies.get(SESSION_COOKIE)
+    token = request.cookies.get(session_cookie(request))
     auth = (
         None
         if principal is None or token is None

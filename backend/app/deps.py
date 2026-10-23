@@ -15,7 +15,8 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request, Response, status
 from sqlmodel import Session
 
-from app.auth import SESSION_COOKIE, Principal, prune_auth_data, resolve_session
+from app.auth import Principal, prune_auth_data, resolve_session
+from app.channel import in_sandbox, session_cookie
 from app.config import Settings, get_settings
 from app.db import get_session
 from app.middleware import SAFE_METHODS
@@ -81,11 +82,17 @@ def _touch(session: Session, world: World) -> None:
 
 
 def optional_principal(request: Request, session: SessionDep) -> Principal | None:
-    """The signed-in principal from the `nx_session` cookie, or None (ADR-0005 §1).
+    """The signed-in principal from the channel's session cookie, or None (ADR-0005 §1).
 
-    Unknown, expired and revoked sessions all resolve to None; expired rows are deleted.
+    The real app reads `nx_session`; the sandbox channel (`/sandbox/*`, `app.channel`) reads
+    `nx_demo` and serves demo sessions only. Unknown, expired and revoked sessions all resolve
+    to None; expired rows are deleted.
     """
-    return resolve_session(session, request.cookies.get(SESSION_COOKIE))
+    principal = resolve_session(session, request.cookies.get(session_cookie(request)))
+    sandbox = in_sandbox(request)
+    if principal is not None and sandbox and principal.session_kind is not SessionKind.DEMO:
+        return None
+    return principal
 
 
 def current_principal(
