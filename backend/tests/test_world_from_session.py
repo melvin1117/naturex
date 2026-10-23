@@ -50,7 +50,9 @@ from tests.worlds import mock_time_machine_env, sign_in, start_demo
 
 PASSWORD = "correct horse battery"
 # Unsafe routes that stay open to anonymous callers: signing in, and signing out (a no-op).
-OPEN_UNSAFE = {"/auth/register", "/auth/login", "/auth/logout"}
+# Session-creating routes anyone may call; `/demo/start` is the no-sign-up demo (T55), limited
+# per IP and by the hourly world cap (tests/test_demo_sessions.py).
+OPEN_UNSAFE = {"/auth/register", "/auth/login", "/auth/logout", "/demo/start"}
 
 
 @pytest.fixture

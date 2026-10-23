@@ -89,6 +89,7 @@ class AuthAttemptKind(StrEnum):
     LOGIN = "login"
     REGISTER = "register"
     DOCUMENT_UPLOAD = "document_upload"  # T69: verification uploads per account
+    DEMO_START = "demo_start"  # new demo sandboxes per IP (POST /demo/start)
 
 
 class AssetStatus(StrEnum):

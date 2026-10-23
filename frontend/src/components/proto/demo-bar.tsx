@@ -1,10 +1,12 @@
 "use client";
 
 import { FlaskConical, Map as MapIcon, RotateCcw } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "cn";
 
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Dialog,
   DialogClose,
@@ -16,7 +18,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useTour } from "@/components/proto/tour";
-import { useWorld } from "@/lib/hooks";
+import type { DemoPersona } from "@/lib/api/types";
+import { useSwitchPersona, useWorld } from "@/lib/hooks";
 import { usePrototype } from "@/lib/prototype/store";
 import { PERSONAS, type PersonaKey } from "@/lib/prototype/world";
 
@@ -32,10 +35,139 @@ const ORDER: PersonaKey[] = ["steward", "investor", "admin"];
  */
 export function DemoBar() {
   const session = useWorld();
-  const signedIn = session.world?.me != null;
+  const pathname = usePathname();
+  const me = session.world?.me;
   const known = session.status === "ready" || session.status === "error";
-  if (signedIn || !known) return <SandboxNotice />;
+  // The story at /judge is full screen and says it's play money itself.
+  if (pathname === "/judge") return null;
+  if (me?.persona) return <DemoSessionBar persona={me.persona} />;
+  if (me != null || !known) return <SandboxNotice />;
   return <DemoControls />;
+}
+
+const SESSION_PERSONAS: {
+  key: DemoPersona;
+  name: string;
+  role: string;
+  home: string;
+}[] = [
+  { key: "rosa", name: "Rosa", role: "community steward", home: "/steward" },
+  { key: "arjun", name: "Arjun", role: "supporter", home: "/" },
+  { key: "admin", name: "Admin", role: "platform admin", home: "/admin" },
+];
+
+/**
+ * A no-sign-up demo session (T55, T65): who you're acting as in your private sandbox, switched
+ * instantly (`POST /demo/persona`), "Reset my demo" (`POST /world/reset`) and the way back to
+ * the story.
+ */
+function DemoSessionBar({ persona }: { persona: DemoPersona }) {
+  const router = useRouter();
+  const switcher = useSwitchPersona();
+  const { resetWorld, isResetting } = useWorld();
+  const switchTo = async (p: (typeof SESSION_PERSONAS)[number]) => {
+    if (p.key === persona || switcher.isPending) return;
+    const world = await switcher.mutate(p.key);
+    if (world) router.push(p.home);
+  };
+  return (
+    <div
+      role="region"
+      aria-label="Demo mode"
+      className="bg-primary text-primary-foreground"
+    >
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 text-sm sm:px-6">
+        <p className="flex min-w-0 items-center gap-2">
+          <FlaskConical
+            className="size-4 shrink-0 text-lime"
+            aria-hidden="true"
+          />
+          <span className="font-medium">Your private sandbox.</span>
+          <span className="hidden text-primary-foreground/75 md:inline">
+            Live AI, play money. Nothing here is a real investment.
+          </span>
+        </p>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <span className="hidden text-primary-foreground/75 lg:inline">
+            Acting as
+          </span>
+          <ToggleGroup
+            type="single"
+            value={persona}
+            onValueChange={(v) => {
+              const next = SESSION_PERSONAS.find((p) => p.key === v);
+              if (next) void switchTo(next);
+            }}
+            disabled={switcher.isPending}
+            aria-label="Act as"
+            className="rounded-full bg-primary-foreground/10 p-0.5"
+          >
+            {SESSION_PERSONAS.map((p) => (
+              <ToggleGroupItem
+                key={p.key}
+                value={p.key}
+                aria-label={`${p.name}, ${p.role}`}
+                className="h-7 rounded-full px-3 text-[13px] font-medium text-primary-foreground/80 hover:bg-transparent hover:text-primary-foreground data-[state=on]:bg-lime data-[state=on]:text-foreground"
+              >
+                {p.name}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <Button
+            asChild
+            size="sm"
+            variant="ghost"
+            className="text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+          >
+            <Link href="/judge">
+              <MapIcon aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">The story</span>
+            </Link>
+          </Button>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={isResetting}
+                className="text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+              >
+                <RotateCcw aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">Reset my demo</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="rounded-3xl">
+              <DialogHeader>
+                <DialogTitle>Reset your sandbox?</DialogTitle>
+                <DialogDescription>
+                  Listings, stakes, Time Machine changes and Copilot history go
+                  back to the starting world. You stay who you are now.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline">Keep my demo</Button>
+                </DialogClose>
+                <DialogClose asChild>
+                  <Button onClick={() => void resetWorld()}>
+                    Reset my demo
+                  </Button>
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+      {switcher.error && (
+        <p
+          role="alert"
+          className="mx-auto max-w-7xl px-4 pb-2 text-sm text-lime sm:px-6"
+        >
+          Couldn&apos;t switch just now. Try again.
+        </p>
+      )}
+    </div>
+  );
 }
 
 function SandboxNotice() {
@@ -59,7 +191,6 @@ function SandboxNotice() {
 function DemoControls() {
   const { world, setPersona, reset } = usePrototype();
   const router = useRouter();
-  const pathname = usePathname();
   const tour = useTour();
 
   function switchTo(p: PersonaKey) {
@@ -120,15 +251,17 @@ function DemoControls() {
               </button>
             ))}
           </div>
-          {!tour.active && pathname !== "/judge" && (
+          {!tour.active && (
             <Button
+              asChild
               size="sm"
               variant="ghost"
               className="text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
-              onClick={() => tour.start()}
             >
-              <MapIcon aria-hidden="true" />
-              <span className="sr-only sm:not-sr-only">Guided tour</span>
+              <Link href="/judge">
+                <MapIcon aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">The story</span>
+              </Link>
             </Button>
           )}
           <Dialog>

@@ -7,9 +7,11 @@ sessions, a private sandbox for a demo session.
 from __future__ import annotations
 
 from fastapi import APIRouter
+from sqlmodel import Session
 
 from app.auth import Principal
 from app.authz import Action, DenyReason, denied, require
+from app.config import Settings
 from app.deps import (
     AUTH_REQUIRED,
     CurrentPrincipal,
@@ -29,8 +31,13 @@ router = APIRouter(prefix="/world", tags=["world"])
 def _world_out(
     session: SessionDep, settings: SettingsDep, world: World, principal: Principal | None
 ) -> WorldOut:
-    personas, assets = world_contents(session, world.id)
     user = session.get(User, principal.user_id) if principal is not None else None
+    return world_out(session, settings, world, user)
+
+
+def world_out(session: Session, settings: Settings, world: World, user: User | None) -> WorldOut:
+    """`GET /world`'s body for `world` as seen by `user` (None: anonymous)."""
+    personas, assets = world_contents(session, world.id)
     return WorldOut(
         id=world.id,
         label=world.label,

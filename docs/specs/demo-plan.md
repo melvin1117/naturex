@@ -1,6 +1,6 @@
 # NatureX — Demo & Judge Experience Plan
 
-> Reference notes for later; nothing here is built yet. Related: [pm-spec.md](./pm-spec.md) · [dev-spec.md](./dev-spec.md) · [one-pager.md](../one-pager.md) · [diagrams.html](../diagrams.html)
+> Related: [pm-spec.md](./pm-spec.md) · [dev-spec.md](./dev-spec.md) · [one-pager.md](../one-pager.md) · [diagrams.html](../diagrams.html). The judge story (§3) is built; the video (§4) is not yet.
 
 **Core idea: build the guided tour once, use it twice.** Judges click through it live, and the YouTube video is a recording of the same tour, so the two never drift apart.
 
@@ -22,6 +22,26 @@
 ---
 
 ## 3. Judge Mode: "Story Mode"
+
+> **As built (Oct 22): the story at `/judge`.** One full-screen story on the hero wetland, on live satellite imagery, then the judge's own sandbox. Every part is skippable ("Skip to your sandbox", or Esc). It opens on the problem and lets a bar at the bottom carry the argument: **land health → rating → price a unit → community fund**.
+> 1. **Opening:** the map flies from Mexico City to the wetland, then draws its boundary. *This wetland is alive. Keeping it that way pays its community nothing.*
+> 2. **Measure:** the wetland's recorded real run, step by step on the map:
+>    - Super plans the work;
+>    - Earth Engine's land cover sweeps in under a scan line, with five years of greenness;
+>    - Tavily's real news items appear;
+>    - Super VL's views five years apart slide across the map (then draggable);
+>    - Ultra gives its verdict, with its citations checked by code.
+>
+>    Health and grade fill the bar.
+> 3. **Fund:** the rating sets the price. Arjun backs 100 units, and the fund counts up: the community is paid without selling.
+> 4. **Watch:** a simulated encroachment appears on the north edge. The bar drops to BBB, the price falls and Arjun gets an alert. A simulated restoration takes it back up to AA.
+> 5. **Trust:** a five-entry Nature Ledger. Try to edit the downgrade into an AA: the chain shows where it broke.
+> 6. **Your turn:** each choice starts a no-sign-up demo session (`POST /demo/start`) and lands in the right app: rate the wetland live (as Rosa, opening its Agent Trace), back a community (as Arjun), move time forward (as the admin), or run a community. The demo bar then switches persona in the same sandbox (`POST /demo/persona`) and links back to the story.
+>
+> Every number comes from `GET /story`: the product's own rating, market and ledger code over committed data. Simulated steps are labelled. The AI steps quote the recorded run, which is labelled with its date. In the sandbox, ratings run live.
+>
+> The sections below are the original plan, kept for reference; the scripted 10-chapter tour (§3.3) still exists but is no longer linked from `/judge`.
+
 ### 3.1 Judge landing `/judge` (no sign-up)
 > The product has real accounts and two apps, Steward and Exchange ([ADR-0005](../adr/0005-accounts-roles-and-two-apps.md)). Judge mode is a fast way *into* those real flows, not a separate product.
 

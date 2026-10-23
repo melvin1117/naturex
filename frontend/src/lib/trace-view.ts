@@ -743,7 +743,11 @@ function languages(searches: Search[]): string {
   return ` (${local.length} in ${names.join(" and ")})`;
 }
 
-export function runStory(trace: RunTrace): StoryLine[] {
+/** `showCost: false` (a no-sign-up demo session) tells the run without what it cost. */
+export function runStory(
+  trace: RunTrace,
+  { showCost = true }: { showCost?: boolean } = {},
+): StoryLine[] {
   const lines: StoryLine[] = [];
   const earth = stepNamed(trace, "earth_obs");
   const orchestrated = trace.steps.some((s) =>
@@ -898,7 +902,9 @@ export function runStory(trace: RunTrace): StoryLine[] {
     lines.push({
       key: "seal",
       actor: "ledger",
-      text: `The report was sealed in the Nature Ledger. The run took ${seconds(done.latency_ms)} and cost ${usd(receipt.totalUsd, 3)} in model calls${receipt.savedPct ? `, ${receipt.savedPct}% less than running every call on Ultra` : ""}.`,
+      text: showCost
+        ? `The report was sealed in the Nature Ledger. The run took ${seconds(done.latency_ms)} and cost ${usd(receipt.totalUsd, 3)} in model calls${receipt.savedPct ? `, ${receipt.savedPct}% less than running every call on Ultra` : ""}.`
+        : `The report was sealed in the Nature Ledger. The run took ${seconds(done.latency_ms)}.`,
       details: [],
     });
   }

@@ -270,6 +270,8 @@ RATE_LIMITS = {
     AuthAttemptKind.REGISTER: RateLimit(5, timedelta(hours=1)),
     # The default; the upload route passes DOCUMENT_UPLOADS_PER_HOUR (T69).
     AuthAttemptKind.DOCUMENT_UPLOAD: RateLimit(20, timedelta(hours=1)),
+    # A judge rarely needs more than a couple; a shared office network may hold a few judges.
+    AuthAttemptKind.DEMO_START: RateLimit(20, timedelta(hours=1)),
 }
 # Longest a request waits for a bucket's lock; each waiter holds a pooled connection.
 LOCK_TIMEOUT_MS = 2000

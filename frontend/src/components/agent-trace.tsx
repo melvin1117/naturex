@@ -30,6 +30,7 @@ import {
   useAssetReports,
   useAssets,
   useRunTrace,
+  useShowCost,
   useWorldTrace,
 } from "@/lib/hooks";
 import { date } from "@/lib/prototype/format";
@@ -152,6 +153,7 @@ export function RunTraceView({ runId }: { runId: string }) {
 }
 
 function RunTraceBody({ trace }: { trace: RunTrace }) {
+  const showCost = useShowCost();
   const rows = traceRows(trace);
   const totals = traceTotals(trace);
   if (rows.length === 0)
@@ -160,7 +162,7 @@ function RunTraceBody({ trace }: { trace: RunTrace }) {
         This run hasn&apos;t recorded any steps yet.
       </p>
     );
-  const story = runStory(trace);
+  const story = runStory(trace, { showCost });
   const audit = auditCase(trace);
   return (
     <>
@@ -173,7 +175,8 @@ function RunTraceBody({ trace }: { trace: RunTrace }) {
         href={`/trace/${trace.run_id}`}
         className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-lime underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-lime focus-visible:outline-none"
       >
-        Open the full trace: flow, timeline, reasoning, checks and cost
+        Open the full trace: flow, timeline, reasoning, checks
+        {showCost ? " and cost" : ""}
         <ArrowRight className="size-4" aria-hidden="true" />
       </Link>
       {story.length > 0 && (
@@ -186,7 +189,7 @@ function RunTraceBody({ trace }: { trace: RunTrace }) {
           ["Model calls", String(totals.llmCalls)],
           ["Tokens", tokens(totals.tokens)],
           ["Time", seconds(totals.durationMs)],
-          ["Cost", `$${totals.costUsd.toFixed(4)}`],
+          ...(showCost ? [["Cost", `$${totals.costUsd.toFixed(4)}`]] : []),
         ].map(([k, v]) => (
           <div key={k} className="rounded-2xl bg-machine-raised px-3 py-2.5">
             <dt className="text-[11px] text-machine-muted">{k}</dt>
@@ -212,6 +215,7 @@ function RunTraceBody({ trace }: { trace: RunTrace }) {
 }
 
 function RealStepRow({ row }: { row: TraceRow }) {
+  const showCost = useShowCost();
   const [open, setOpen] = useState(false);
   const Icon = ICON[row.kind];
   const detail = row.output || row.error || row.calls.length > 0;
@@ -237,7 +241,7 @@ function RealStepRow({ row }: { row: TraceRow }) {
             {tokens(row.tokensIn)} in · {tokens(row.tokensOut)} out
           </span>
         )}
-        {row.costUsd > 0 && <span>${row.costUsd.toFixed(5)}</span>}
+        {showCost && row.costUsd > 0 && <span>${row.costUsd.toFixed(5)}</span>}
         {row.attempts !== null && row.attempts > 1 && (
           <span>{row.attempts} attempts</span>
         )}

@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     llm_budget_usd: float = 20.0
     # Cap on new demo sandbox worlds per hour (T55's POST /demo/start), so the DB can't be filled.
     sandbox_max_new_worlds_per_hour: int = 300
+    # Model spend allowed per demo sandbox, a hidden guardrail under LLM_BUDGET_USD: past it the
+    # sandbox's runs and Copilot fall back to their fixed or recorded results (0 = no sandbox AI).
+    sandbox_llm_budget_usd: float = Field(default=0.5, ge=0)
+    # ...and all sandboxes together per rolling hour, so opening many sandboxes (no sign-up)
+    # can't drain LLM_BUDGET_USD; about 60 live tours an hour fit.
+    sandbox_llm_budget_per_hour_usd: float = Field(default=3.0, ge=0)
+    # New demo sandboxes per client IP per hour (POST /demo/start). The client IP needs
+    # TRUSTED_PROXY_HOPS set from the real deployment (T20): at 0 behind the Next.js /api
+    # rewrite, every visitor shares one bucket.
+    demo_starts_per_ip_per_hour: int = Field(default=20, ge=1)
     # Create the live world at startup if `make seed` hasn't (ADR-0005 §2); requests never do.
     live_world_on_startup: bool = True
     event_stream_max_concurrent: int = 40

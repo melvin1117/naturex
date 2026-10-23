@@ -13,7 +13,7 @@ import {
   gauges,
   modelRows,
 } from "@/lib/control-room";
-import { useAiUsage, useWorld } from "@/lib/hooks";
+import { useAiUsage, useShowCost, useWorld } from "@/lib/hooks";
 import { ACTOR, seconds, usd } from "@/lib/trace-view";
 
 import { ActorIcon } from "./actor";
@@ -48,28 +48,45 @@ function Meter({
   );
 }
 
-function GaugeRow({ g, scope }: { g: Gauges; scope: string }) {
+function GaugeRow({
+  g,
+  scope,
+  showCost,
+}: {
+  g: Gauges;
+  scope: string;
+  showCost: boolean;
+}) {
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      <section className="rounded-3xl bg-machine-raised p-5">
-        <h2 className="text-sm text-machine-muted">Model spend, whole demo</h2>
-        <p className="tabular mt-1 text-2xl text-machine-ink">
-          {usd(g.spentUsd, 2)}
-          <span className="text-base text-machine-muted">
-            {" "}
-            of a {usd(g.budgetUsd, 0)} cap
-          </span>
-        </p>
-        <Meter
-          value={g.spent}
-          label="Share of the model budget spent"
-          tone={g.spent > 0.8 ? "clay" : "lime"}
-        />
-        <p className="mt-2 text-xs text-machine-muted">
-          Every visitor together. At the cap, live steps stop and cached results
-          show instead.
-        </p>
-      </section>
+    <div
+      className={cn(
+        "grid gap-4",
+        showCost ? "sm:grid-cols-3" : "sm:grid-cols-2",
+      )}
+    >
+      {showCost && (
+        <section className="rounded-3xl bg-machine-raised p-5">
+          <h2 className="text-sm text-machine-muted">
+            Model spend, whole demo
+          </h2>
+          <p className="tabular mt-1 text-2xl text-machine-ink">
+            {usd(g.spentUsd, 2)}
+            <span className="text-base text-machine-muted">
+              {" "}
+              of a {usd(g.budgetUsd, 0)} cap
+            </span>
+          </p>
+          <Meter
+            value={g.spent}
+            label="Share of the model budget spent"
+            tone={g.spent > 0.8 ? "clay" : "lime"}
+          />
+          <p className="mt-2 text-xs text-machine-muted">
+            Every visitor together. At the cap, live steps stop and cached
+            results show instead.
+          </p>
+        </section>
+      )}
       <section className="rounded-3xl bg-machine-raised p-5">
         <h2 className="text-sm text-machine-muted">{scope}</h2>
         <p className="tabular mt-1 text-2xl text-machine-ink">
@@ -77,7 +94,7 @@ function GaugeRow({ g, scope }: { g: Gauges; scope: string }) {
           <span className="text-base text-machine-muted"> model calls</span>
         </p>
         <p className="tabular mt-1 text-sm text-machine-ink/90">
-          {usd(g.worldUsd, 3)} ·{" "}
+          {showCost && `${usd(g.worldUsd, 3)} · `}
           {g.sentBack === 0
             ? "no answer sent back"
             : `${g.sentBack} answer${g.sentBack === 1 ? "" : "s"} sent back by code`}
@@ -136,7 +153,7 @@ function Outcomes({ row }: { row: ModelRow }) {
   );
 }
 
-function ModelCard({ row }: { row: ModelRow }) {
+function ModelCard({ row, showCost }: { row: ModelRow; showCost: boolean }) {
   const s = row.stats;
   return (
     <li className="grid gap-4 rounded-3xl bg-machine-raised p-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
@@ -157,13 +174,19 @@ function ModelCard({ row }: { row: ModelRow }) {
         </p>
         <p className="mt-1 text-xs leading-relaxed text-machine-muted">
           Why this model: {row.why}. {row.reasoning}.
-          {row.price[0] > 0 &&
+          {showCost &&
+            row.price[0] > 0 &&
             ` $${row.price[0]} in / $${row.price[1]} out per 1M tokens.`}
         </p>
       </div>
       {s ? (
         <div className="min-w-0 space-y-3">
-          <dl className="tabular grid grid-cols-3 gap-3 text-sm">
+          <dl
+            className={cn(
+              "tabular grid gap-3 text-sm",
+              showCost ? "grid-cols-3" : "grid-cols-2",
+            )}
+          >
             <div>
               <dt className="text-xs text-machine-muted">Calls</dt>
               <dd className="text-machine-ink">{s.calls}</dd>
@@ -178,18 +201,20 @@ function ModelCard({ row }: { row: ModelRow }) {
                 </span>
               </dd>
             </div>
-            <div>
-              <dt className="text-xs text-machine-muted">Cost</dt>
-              <dd className="text-machine-ink">
-                {usd(Number(s.cost_usd), 4)}
-                {row.share > 0 && (
-                  <span className="text-machine-muted">
-                    {" "}
-                    · {Math.round(row.share * 100)}%
-                  </span>
-                )}
-              </dd>
-            </div>
+            {showCost && (
+              <div>
+                <dt className="text-xs text-machine-muted">Cost</dt>
+                <dd className="text-machine-ink">
+                  {usd(Number(s.cost_usd), 4)}
+                  {row.share > 0 && (
+                    <span className="text-machine-muted">
+                      {" "}
+                      · {Math.round(row.share * 100)}%
+                    </span>
+                  )}
+                </dd>
+              </div>
+            )}
           </dl>
           <p className="tabular text-xs text-machine-muted">
             {s.prompt_tokens.toLocaleString("en-US")} tokens in ·{" "}
@@ -210,6 +235,7 @@ function ModelCard({ row }: { row: ModelRow }) {
  * spend against its cap and the Tavily credits left. Reads `GET /admin/ai-usage`. */
 export function ControlRoom() {
   const usage = useAiUsage();
+  const showCost = useShowCost();
   // Sandboxes carry the demo personas; the live world has none.
   const sandbox = (useWorld().world?.personas.length ?? 0) > 0;
   const scope = sandbox ? "Your demo" : "The live market";
@@ -235,7 +261,7 @@ export function ControlRoom() {
           <MachineRowsSkeleton label="Loading the model usage…" />
         ) : (
           <>
-            <GaugeRow g={g} scope={scope} />
+            <GaugeRow g={g} scope={scope} showCost={showCost} />
             {g.calls === 0 && (
               <p className="rounded-2xl bg-machine-raised px-5 py-4 text-sm text-machine-ink/90">
                 Nothing has run here yet. Rate a site (the tour&apos;s third
@@ -253,7 +279,7 @@ export function ControlRoom() {
               </h2>
               <ul className="mt-3 space-y-3">
                 {rows.map((row) => (
-                  <ModelCard key={row.model} row={row} />
+                  <ModelCard key={row.model} row={row} showCost={showCost} />
                 ))}
                 <li className="grid gap-4 rounded-3xl bg-machine-raised p-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
                   <div className="flex items-start gap-3">

@@ -136,6 +136,108 @@
         }
       }
     },
+    "/demo/start": {
+      "post": {
+        "tags": [
+          "demo"
+        ],
+        "summary": "Start Demo",
+        "description": "Start a demo: a private sandbox and a session as `persona`, with no sign-up.\n\nA browser that already has a demo session keeps its sandbox and only switches to `persona`,\nso returning to the story never loses what the judge did. Otherwise a new sandbox is made\nfrom the template; any other session this browser held (a real account's) is ended here.",
+        "operationId": "start_demo_demo_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoStartIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`persona_not_found`: the sandbox has no such persona"
+          },
+          "429": {
+            "description": "`too_many_attempts`: this IP started too many sandboxes, or `demo_busy`: every new sandbox for this hour is taken (see `Retry-After`)"
+          },
+          "503": {
+            "description": "`auth_busy`: the rate-limit check is busy; retry shortly"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/demo/persona": {
+      "post": {
+        "tags": [
+          "demo"
+        ],
+        "summary": "Switch Persona",
+        "description": "Act as another persona in the same sandbox: the old session ends and a new one starts.\n\nDemo sessions only (403 `demo_session_only` for a real account, which has one identity).",
+        "operationId": "switch_persona_demo_persona_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoPersonaIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`auth_required`: no session"
+          },
+          "404": {
+            "description": "`persona_not_found`: the sandbox has no such persona"
+          },
+          "403": {
+            "description": "Not allowed: `demo_session_only`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/communities": {
       "post": {
         "tags": [
@@ -4356,6 +4458,28 @@
         }
       }
     },
+    "/story": {
+      "get": {
+        "tags": [
+          "story"
+        ],
+        "summary": "Get Story",
+        "description": "Everything the `/judge` story shows about the hero wetland: its land, its ratings as it\nis, damaged and restored (simulated), one supporter's backing and a tamper-evident record.",
+        "operationId": "get_story_story_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/healthz": {
       "get": {
         "summary": "Healthz",
@@ -6532,6 +6656,43 @@
         "title": "DecidedListingItem",
         "description": "A listing whose current run was decided (#211): the run, with its decision and documents."
       },
+      "DemoPersonaIn": {
+        "properties": {
+          "persona": {
+            "type": "string",
+            "enum": [
+              "rosa",
+              "arjun",
+              "mia",
+              "admin"
+            ],
+            "title": "Persona"
+          }
+        },
+        "type": "object",
+        "required": [
+          "persona"
+        ],
+        "title": "DemoPersonaIn"
+      },
+      "DemoStartIn": {
+        "properties": {
+          "persona": {
+            "type": "string",
+            "enum": [
+              "rosa",
+              "arjun",
+              "mia",
+              "admin"
+            ],
+            "title": "Persona",
+            "description": "Who to act as first; switch with `POST /demo/persona`.",
+            "default": "rosa"
+          }
+        },
+        "type": "object",
+        "title": "DemoStartIn"
+      },
       "DiffReason": {
         "properties": {
           "source": {
@@ -8159,6 +8320,24 @@
             "type": "string",
             "format": "uuid",
             "title": "World Id"
+          },
+          "persona": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "rosa",
+                  "arjun",
+                  "mia",
+                  "admin"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Persona",
+            "description": "The demo persona this session acts as (`rosa`, `arjun`, `mia`, `admin`), or null for a real account."
           }
         },
         "type": "object",
@@ -10845,6 +11024,456 @@
         ],
         "title": "SiteViews",
         "description": "A live-rated listing's Sentinel-2 true-colour views five years apart, for the before/after\nslider: `GET /assets/{asset_id}/views/before.webp?v={version}` (the first year of the 5-year\nwindow) and `.../after.webp?v={version}` (the latest 12 months), each `width`\u00d7`height` on the\nsame grid spanning `bounds`, the boundary drawn on top. As the demo sites' precomputed\n`before.webp` and `thumbnail.webp`, which the vision model compares too."
+      },
+      "StoryBacking": {
+        "properties": {
+          "units": {
+            "type": "integer",
+            "title": "Units"
+          },
+          "fill_price": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fill Price"
+          },
+          "paid": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Paid"
+          },
+          "to_community": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "To Community",
+            "description": "The part paid into the community's fund."
+          }
+        },
+        "type": "object",
+        "required": [
+          "units",
+          "fill_price",
+          "paid",
+          "to_community"
+        ],
+        "title": "StoryBacking"
+      },
+      "StoryImage": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "Under the API base, e.g. `/media/demo-sites/...`."
+          },
+          "bounds": {
+            "$ref": "#/components/schemas/OverlayBounds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "bounds"
+        ],
+        "title": "StoryImage"
+      },
+      "StoryImages": {
+        "properties": {
+          "overlay": {
+            "$ref": "#/components/schemas/StoryImage",
+            "description": "Dynamic World land cover, latest 12 months."
+          },
+          "before": {
+            "$ref": "#/components/schemas/StoryImage",
+            "description": "Sentinel-2 true colour, first year of five."
+          },
+          "after": {
+            "$ref": "#/components/schemas/StoryImage",
+            "description": "Sentinel-2 true colour, latest 12 months."
+          },
+          "legend": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/StoryLegendEntry"
+            },
+            "type": "object",
+            "title": "Legend"
+          },
+          "attributions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Attributions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "overlay",
+          "before",
+          "after",
+          "legend",
+          "attributions"
+        ],
+        "title": "StoryImages"
+      },
+      "StoryLand": {
+        "properties": {
+          "ndvi": {
+            "items": {
+              "$ref": "#/components/schemas/NdviPoint"
+            },
+            "type": "array",
+            "title": "Ndvi"
+          },
+          "water_change": {
+            "type": "number",
+            "title": "Water Change",
+            "description": "Percent change in surface water (JRC)."
+          },
+          "ndvi_window": {
+            "$ref": "#/components/schemas/DateWindow"
+          },
+          "attributions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Attributions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ndvi",
+          "water_change",
+          "ndvi_window",
+          "attributions"
+        ],
+        "title": "StoryLand"
+      },
+      "StoryLedger": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/StoryLedgerEntry"
+            },
+            "type": "array",
+            "title": "Entries"
+          },
+          "verified": {
+            "type": "boolean",
+            "title": "Verified"
+          },
+          "head": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Head"
+          },
+          "tampered_seq": {
+            "type": "integer",
+            "title": "Tampered Seq"
+          },
+          "tampered_field": {
+            "type": "string",
+            "title": "Tampered Field"
+          },
+          "tampered_from": {
+            "type": "string",
+            "title": "Tampered From"
+          },
+          "tampered_to": {
+            "type": "string",
+            "title": "Tampered To"
+          },
+          "tampered_verified": {
+            "type": "boolean",
+            "title": "Tampered Verified"
+          },
+          "broken_at": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broken At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entries",
+          "verified",
+          "head",
+          "tampered_seq",
+          "tampered_field",
+          "tampered_from",
+          "tampered_to",
+          "tampered_verified",
+          "broken_at"
+        ],
+        "title": "StoryLedger",
+        "description": "A Nature Ledger chain built and verified by `app.ledger`, then verified again after one\nentry is edited without re-hashing."
+      },
+      "StoryLedgerEntry": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "hash": {
+            "type": "string",
+            "title": "Hash"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seq",
+          "kind",
+          "label",
+          "hash"
+        ],
+        "title": "StoryLedgerEntry"
+      },
+      "StoryLegendEntry": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "color": {
+            "type": "string",
+            "title": "Color"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "color"
+        ],
+        "title": "StoryLegendEntry"
+      },
+      "StoryMarket": {
+        "properties": {
+          "total_units": {
+            "type": "integer",
+            "title": "Total Units"
+          },
+          "retained_pct": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Retained Pct"
+          },
+          "opening_price": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Opening Price"
+          },
+          "offered_units": {
+            "type": "integer",
+            "title": "Offered Units"
+          },
+          "backing": {
+            "$ref": "#/components/schemas/StoryBacking"
+          },
+          "price_after_downgrade": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Price After Downgrade"
+          },
+          "price_after_restoration": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Price After Restoration"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_units",
+          "retained_pct",
+          "opening_price",
+          "offered_units",
+          "backing",
+          "price_after_downgrade",
+          "price_after_restoration"
+        ],
+        "title": "StoryMarket",
+        "description": "Play money only: the opening offer, one supporter's order and the re-anchored price."
+      },
+      "StoryOut": {
+        "properties": {
+          "site": {
+            "$ref": "#/components/schemas/StorySite"
+          },
+          "images": {
+            "$ref": "#/components/schemas/StoryImages"
+          },
+          "land": {
+            "$ref": "#/components/schemas/StoryLand"
+          },
+          "ratings": {
+            "items": {
+              "$ref": "#/components/schemas/StoryRating"
+            },
+            "type": "array",
+            "title": "Ratings",
+            "description": "Baseline, then encroachment, then restoration."
+          },
+          "market": {
+            "$ref": "#/components/schemas/StoryMarket"
+          },
+          "ledger": {
+            "$ref": "#/components/schemas/StoryLedger"
+          }
+        },
+        "type": "object",
+        "required": [
+          "site",
+          "images",
+          "land",
+          "ratings",
+          "market",
+          "ledger"
+        ],
+        "title": "StoryOut",
+        "description": "The judge story's data: one demo site, its real measurements and every number the story\nshows, computed by the product's own tested functions (`app.services.story`)."
+      },
+      "StoryRating": {
+        "properties": {
+          "scenario": {
+            "type": "string",
+            "enum": [
+              "baseline",
+              "restoration",
+              "encroachment",
+              "fire",
+              "drought",
+              "protection"
+            ],
+            "title": "Scenario"
+          },
+          "simulated": {
+            "type": "boolean",
+            "title": "Simulated",
+            "description": "A Time Machine scenario, not an observation."
+          },
+          "health": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Health"
+          },
+          "grade": {
+            "type": "string",
+            "title": "Grade"
+          },
+          "confidence": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Confidence"
+          },
+          "value_low": {
+            "type": "integer",
+            "title": "Value Low"
+          },
+          "value_mid": {
+            "type": "integer",
+            "title": "Value Mid"
+          },
+          "value_high": {
+            "type": "integer",
+            "title": "Value High"
+          },
+          "fair_value_per_unit": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fair Value Per Unit"
+          },
+          "landcover": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Landcover"
+          },
+          "natural_fraction": {
+            "type": "number",
+            "title": "Natural Fraction"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scenario",
+          "simulated",
+          "health",
+          "grade",
+          "confidence",
+          "value_low",
+          "value_mid",
+          "value_high",
+          "fair_value_per_unit",
+          "landcover",
+          "natural_fraction"
+        ],
+        "title": "StoryRating",
+        "description": "`rate_site` on one version of the land: computed by code, never by a model."
+      },
+      "StorySite": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "place": {
+            "type": "string",
+            "title": "Place"
+          },
+          "community": {
+            "type": "string",
+            "title": "Community"
+          },
+          "area_ha": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Area Ha"
+          },
+          "boundary": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Boundary",
+            "description": "The exterior ring as `[lat, lon]` pairs."
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "place",
+          "community",
+          "area_ha",
+          "boundary"
+        ],
+        "title": "StorySite"
       },
       "StreamEvent": {
         "properties": {

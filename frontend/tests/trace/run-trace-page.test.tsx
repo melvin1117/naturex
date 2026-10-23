@@ -1,15 +1,22 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   RecordedTracePage,
   RunTracePage,
 } from "@/components/trace/run-trace-page";
+import { EvalResults } from "@/components/trace/eval-results";
 import { VerdictStrip } from "@/components/trace/verdict-strip";
 import type { RecordedRun, ReportOut } from "@/lib/api/types";
 
 import { renderExchange, stubBrowserApis } from "../exchange/render";
-import { json } from "../lib/helpers";
+import { json, WORLD } from "../lib/helpers";
 import celestun from "./fixtures/run-celestun.json";
 import recorded from "./fixtures/recorded-mangrove.json";
 
@@ -227,5 +234,66 @@ describe("a demo site's recorded run", () => {
       name: "What happened in this run",
     });
     expect(within(story).getByText(/followed up/)).toBeVisible();
+  });
+});
+
+describe("in a no-sign-up demo session", () => {
+  const demoWorld = {
+    ...WORLD,
+    label: "visitor",
+    me: {
+      id: "55555555-5555-4555-8555-555555555555",
+      name: "Rosa",
+      email: null,
+      kind: "persona" as const,
+      is_admin: false,
+      world_id: WORLD.id,
+      persona: "rosa" as const,
+    },
+  };
+
+  it("tells the run without a single price", async () => {
+    const { layer } = renderExchange(<RunTracePage runId={celestun.run_id} />, {
+      "GET /world": () => json(demoWorld),
+      [`GET /runs/${celestun.run_id}/trace`]: () => json(celestun),
+      [`GET /assets/${celestun.asset_id}`]: () =>
+        json({ id: celestun.asset_id, name: "Ría Celestún Mangrove" }),
+    });
+    await screen.findByRole("heading", {
+      name: "How Ría Celestún Mangrove was rated",
+    });
+    await waitFor(() =>
+      expect(layer.session.getSnapshot().world?.me?.persona).toBe("rosa"),
+    );
+
+    expect(screen.getByText(/6 model calls · 4 web searches/)).toBeVisible();
+    expect(screen.queryByText(/less than Ultra/)).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Cost" })).toBeNull();
+    const story = screen.getByRole("list", {
+      name: "What happened in this run",
+    });
+    expect(
+      within(story).getByText(/sealed in the Nature Ledger/),
+    ).toBeVisible();
+    // Model spend is gone; the land's own ecosystem value ($…M a year) stays.
+    expect(story.textContent).not.toMatch(/in model calls|less than running/);
+  });
+
+  it("publishes the evals without prices", async () => {
+    const demo = renderExchange(<EvalResults />, {
+      "GET /world": () => json(demoWorld),
+    });
+    await waitFor(() =>
+      expect(demo.layer.session.getSnapshot().world?.me).not.toBeNull(),
+    );
+    expect(screen.queryByText("Cost per audit")).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: /^Cost/ })).toBeNull();
+    demo.unmount();
+
+    const signedOut = renderExchange(<EvalResults />);
+    await waitFor(() =>
+      expect(signedOut.layer.session.getSnapshot().world).not.toBeNull(),
+    );
+    expect(screen.getByText("Cost per audit")).toBeVisible();
   });
 });

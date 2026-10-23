@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 
-import { JudgeLanding } from "@/components/proto/judge-landing";
+import { JudgeStory } from "@/components/story/judge-story";
 
-export const metadata: Metadata = { title: "Try the demo" };
+export const metadata: Metadata = {
+  title: "Why NatureX · try it, no sign-up",
+};
 
 export default function JudgePage() {
-  return <JudgeLanding />;
+  return <JudgeStory />;
 }
