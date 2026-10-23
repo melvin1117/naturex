@@ -51,6 +51,7 @@ import {
   useSiteImages,
 } from "@/lib/hooks";
 import { countryName, siteImageUrl } from "@/lib/market-cards";
+import { beforeAfterViews } from "@/lib/site-views";
 import {
   GRADE_LABEL,
   ha,
@@ -356,7 +357,7 @@ function AssetLoaded({
                 facts={latest}
                 news={news}
                 runId={asset.latest_report?.run_id ?? null}
-                siteKey={asset.site_key}
+                views={beforeAfterViews(asset)}
                 recorded={recorded.data}
               />
             </TabsContent>
@@ -445,6 +446,7 @@ function AssetLoaded({
         facts={latest}
         images={images.data}
         landCover={landCover}
+        views={asset.site_views?.attributions}
       />
     </>
   );
@@ -535,16 +537,20 @@ function DataAttribution({
   facts,
   images,
   landCover,
+  views,
 }: {
   facts: ReportFacts | null;
   images: SiteImages | undefined;
   landCover: AssetLandCover | null;
+  /** A live listing's before/after views (`site_views`). */
+  views?: string[];
 }) {
   const lines = [
     ...new Set([
       ...(facts?.attributions ?? []),
       ...(landCover?.attributions ?? []),
       ...(images?.thumbnail?.attributions ?? []),
+      ...(views ?? []),
       IMAGERY_ATTRIBUTION,
     ]),
   ];

@@ -19,7 +19,7 @@ import io
 import json
 import math
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -28,10 +28,13 @@ import ee
 
 from app.tools.geometry import validate_polygon
 from app.tools.site_images import (
+    CLOUD_SCORE_PLUS_ATTRIBUTION,
     DW_NO_DATA,
     DYNAMIC_WORLD_ATTRIBUTION,
+    SENTINEL_2_FIVE_YEAR_ATTRIBUTION,
     LandCoverLabels,
     PixelGrid,
+    VisParams,
     overlay_png_from_labels,
 )
 
@@ -66,12 +69,8 @@ NATURAL_CLASSES = {"water", "trees", "grass", "flooded_vegetation", "shrub_and_s
 
 ATTRIBUTIONS = {
     "dynamic_world": DYNAMIC_WORLD_ATTRIBUTION,
-    "sentinel_2": "Contains modified Copernicus Sentinel data 2021-2026.",
-    "cloud_score_plus": (
-        "Cloud Score+: Pasquarella, V. J., Brown, C. F., Czerwinski, W., & Rucklidge, "
-        "W. J. (2023). Comprehensive quality assessment of optical satellite imagery "
-        "using weakly supervised video learning."
-    ),
+    "sentinel_2": SENTINEL_2_FIVE_YEAR_ATTRIBUTION,
+    "cloud_score_plus": CLOUD_SCORE_PLUS_ATTRIBUTION,
     "jrc": (
         "JRC Global Surface Water: EC JRC/Google; Pekel et al. (2016), High-resolution "
         "mapping of global surface water and its long-term changes, Nature."
@@ -722,6 +721,69 @@ def dw_overlay_png(aoi: ee.Geometry, grid: PixelGrid) -> bytes:
     return overlay_png_from_labels(grid_labels.labels, grid_labels.width, grid_labels.height)
 
 
+# ----- the true-colour views (T35 demo sites, live listings) ----------------------------------
+
+THUMBNAIL_VIS = VisParams(bands=("B4", "B3", "B2"), min=0, max=2500, gamma=1.1)
+THUMBNAIL_OUTLINE = "#ffffff"
+THUMBNAIL_OUTLINE_PX = 2
+THUMBNAIL_WEBP_QUALITY = 82
+_SUPERSAMPLE = 4
+AFTER_WINDOW = (START_12M, END_DATE)
+"""The latest 12 months: the demo sites' thumbnail and a live listing's "after" view."""
+BEFORE_WINDOW = (START_5Y, f"{int(START_5Y[:4]) + 1}{START_5Y[4:]}")
+"""The first year of the 5-year window: the vision model's "before", against `AFTER_WINDOW`."""
+
+
+def true_colour_webp(
+    rings: Sequence[Sequence[Sequence[float]]], grid: PixelGrid, start: str, end: str
+) -> bytes:
+    """A median Sentinel-2 true-colour composite over ``start``..``end`` (scenes masked where
+    Cloud Score+ is below `CLOUD_SCORE_THRESHOLD`) on ``grid``, with each ``(lon, lat)`` ring
+    drawn on top as an anti-aliased outline, as WebP."""
+    from PIL import Image, ImageDraw
+
+    (south, west), (north, east) = grid.bounds()
+    region = ee.Geometry.Rectangle([west, south, east, north], None, False)
+    cs_plus = ee.ImageCollection("GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED")
+    composite = (
+        ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+        .filterBounds(region)
+        .filterDate(start, end)
+        .linkCollection(cs_plus, ["cs_cdf"])
+        .map(lambda image: image.updateMask(image.select("cs_cdf").gte(CLOUD_SCORE_THRESHOLD)))
+        .select(list(THUMBNAIL_VIS.bands))
+        .median()
+        .visualize(
+            bands=list(THUMBNAIL_VIS.bands),
+            min=THUMBNAIL_VIS.min,
+            max=THUMBNAIL_VIS.max,
+            gamma=THUMBNAIL_VIS.gamma,
+        )
+    )
+    with Image.open(io.BytesIO(compute_png(composite, grid))) as fetched:
+        rgb = fetched.convert("RGBA")
+    if rgb.size != (grid.width, grid.height):
+        raise RuntimeError(f"Thumbnail is {rgb.size}, expected {grid.width}x{grid.height}.")
+    # Draw the outline on a supersampled layer and downsample it, for an anti-aliased line.
+    k = _SUPERSAMPLE
+    layer = Image.new("RGBA", (grid.width * k, grid.height * k), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    for ring in rings:
+        pixels = (grid.to_pixel(float(point[0]), float(point[1])) for point in ring)
+        draw.line(
+            [(x * k, y * k) for x, y in pixels],
+            fill=THUMBNAIL_OUTLINE,
+            width=THUMBNAIL_OUTLINE_PX * k,
+            joint="curve",
+        )
+    layer = layer.resize((grid.width, grid.height), Image.Resampling.LANCZOS)
+    out = io.BytesIO()
+    Image.alpha_composite(rgb, layer).convert("RGB").save(
+        out, "WEBP", quality=THUMBNAIL_WEBP_QUALITY, method=6
+    )
+    return out.getvalue()
+
+
 # ----- the live client (T60) ------------------------------------------------------------------
 
 
@@ -755,3 +817,15 @@ class EarthEngineApi:
         """A listing's land-cover overlay labels (#231), with the same per-request deadline."""
         self._ensure_initialised()
         return land_cover_labels(ee.Geometry(geometry_from_feature(geojson)), grid)
+
+    def true_colour_webp(
+        self,
+        rings: Sequence[Sequence[Sequence[float]]],
+        grid: PixelGrid,
+        start: str,
+        end: str,
+    ) -> bytes:
+        """A listing's true-colour view (`true_colour_webp`), with the same per-request
+        deadline."""
+        self._ensure_initialised()
+        return true_colour_webp(rings, grid, start, end)

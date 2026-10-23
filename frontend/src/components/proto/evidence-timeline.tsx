@@ -20,7 +20,6 @@ import { ChartTooltip, ndviSummary } from "@/components/proto/charts";
 import { Panel } from "@/components/proto/report-panels";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { DEMO_SITES, demoSiteMediaUrl } from "@/lib/demo-site-images";
 import type { RecordedRun } from "@/lib/api/types";
 import {
   type EvidenceTimeline,
@@ -33,6 +32,7 @@ import {
 import { date } from "@/lib/prototype/format";
 import { useRunTrace } from "@/lib/hooks";
 import type { ReportFacts } from "@/lib/report-facts";
+import type { BeforeAfterViews } from "@/lib/site-views";
 import {
   type Vision,
   changeLabel,
@@ -248,13 +248,14 @@ export function EvidenceTimelinePanel({
   facts,
   news,
   runId,
-  siteKey,
+  views,
   recorded,
 }: {
   facts: ReportFacts;
   news: NewsItem[];
   runId: string | null | undefined;
-  siteKey: string | null | undefined;
+  /** The site's views five years apart (`beforeAfterViews`), if it has them. */
+  views: BeforeAfterViews | null;
   /** A demo site's recorded run, used when this world has no run of its own. */
   recorded?: RecordedRun | null;
 }) {
@@ -279,7 +280,6 @@ export function EvidenceTimelinePanel({
   const vision = run ? runVision(run) : null;
   const [all, setAll] = useState(false);
   const entries = all ? timeline.entries : timeline.entries.slice(-SHOWN);
-  const demo = DEMO_SITES.some((s) => s.key === siteKey);
   const label = facts.trendLabel;
 
   return (
@@ -370,9 +370,9 @@ export function EvidenceTimelinePanel({
           </p>
         )}
       </Panel>
-      {demo && siteKey && (
+      {views && (
         <BeforeAfterPanel
-          siteKey={siteKey}
+          views={views}
           vision={vision}
           recordedOn={fromRecording ? recorded?.recorded_on : undefined}
         />
@@ -383,11 +383,11 @@ export function EvidenceTimelinePanel({
 
 /** The site's Sentinel-2 views five years apart, under one slider, with the vision reading. */
 function BeforeAfterPanel({
-  siteKey,
+  views,
   vision,
   recordedOn,
 }: {
-  siteKey: string;
+  views: BeforeAfterViews;
   vision: Vision | null;
   /** Set when the reading comes from the site's recorded run. */
   recordedOn?: string;
@@ -400,13 +400,13 @@ function BeforeAfterPanel({
       <div className="relative aspect-[16/10] overflow-hidden rounded-2xl bg-muted">
         {/* eslint-disable-next-line @next/next/no-img-element -- same-origin media proxy */}
         <img
-          src={demoSiteMediaUrl(siteKey, "thumbnail.webp")}
+          src={views.after}
           alt="The site in the latest 12 months"
           className="absolute inset-0 size-full object-cover"
         />
         {/* eslint-disable-next-line @next/next/no-img-element -- same-origin media proxy */}
         <img
-          src={demoSiteMediaUrl(siteKey, "before.webp")}
+          src={views.before}
           alt="The site five years earlier"
           className="absolute inset-0 size-full object-cover"
           style={{ clipPath: `inset(0 ${100 - at}% 0 0)` }}
@@ -459,7 +459,7 @@ function BeforeAfterPanel({
       )}
       <p className="mt-3 text-xs text-muted-foreground">
         Sentinel-2 true-colour composites with the site&apos;s outline. Contains
-        modified Copernicus Sentinel data 2021–2026.
+        modified Copernicus Sentinel data {views.years}.
       </p>
     </Panel>
   );

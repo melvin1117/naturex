@@ -99,6 +99,14 @@ DYNAMIC_WORLD_ATTRIBUTION = (
 SENTINEL_2_IMAGE_ATTRIBUTION = "Contains modified Copernicus Sentinel data 2025-2026."
 OVERLAY_ATTRIBUTIONS = (DYNAMIC_WORLD_ATTRIBUTION, SENTINEL_2_IMAGE_ATTRIBUTION)
 """Credits shown with every land-cover overlay (Dynamic World is derived from Sentinel-2)."""
+CLOUD_SCORE_PLUS_ATTRIBUTION = (
+    "Cloud Score+: Pasquarella, V. J., Brown, C. F., Czerwinski, W., & Rucklidge, "
+    "W. J. (2023). Comprehensive quality assessment of optical satellite imagery "
+    "using weakly supervised video learning."
+)
+SENTINEL_2_FIVE_YEAR_ATTRIBUTION = "Contains modified Copernicus Sentinel data 2021-2026."
+VIEW_ATTRIBUTIONS = (SENTINEL_2_FIVE_YEAR_ATTRIBUTION, CLOUD_SCORE_PLUS_ATTRIBUTION)
+"""Credits shown with a live listing's before/after views (cloud-masked with Cloud Score+)."""
 OVERLAY_DATASET_ID = "GOOGLE/DYNAMICWORLD/V1"
 OVERLAY_BAND = "label"
 OVERLAY_METHOD = (

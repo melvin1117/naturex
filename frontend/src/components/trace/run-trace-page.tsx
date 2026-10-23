@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { RunTrace } from "@/lib/api/types";
 import type { ApiError } from "@/lib/api/errors";
 import { useAsset, useRecordedRun, useRunTrace } from "@/lib/hooks";
+import { beforeAfterViews, type BeforeAfterViews } from "@/lib/site-views";
 import { date } from "@/lib/prototype/format";
 import {
   auditCase,
@@ -45,7 +46,7 @@ export function RunTracePage({ runId }: { runId: string }) {
     <TraceShell
       assetId={trace.data?.asset_id}
       name={asset.data?.name}
-      siteKey={asset.data?.site_key}
+      views={asset.data ? beforeAfterViews(asset.data) : null}
       trace={trace.data}
       error={trace.error}
       retry={trace.refetch}
@@ -68,7 +69,7 @@ export function RecordedTracePage({ assetId }: { assetId: string }) {
     <TraceShell
       assetId={assetId}
       name={asset.data?.name}
-      siteKey={asset.data?.site_key}
+      views={asset.data ? beforeAfterViews(asset.data) : null}
       trace={trace}
       recordedOn={recorded.data?.recorded_on}
       error={recorded.error ?? asset.error ?? null}
@@ -82,7 +83,7 @@ export function RecordedTracePage({ assetId }: { assetId: string }) {
 function TraceShell({
   assetId,
   name,
-  siteKey,
+  views,
   trace,
   recordedOn,
   error,
@@ -92,7 +93,7 @@ function TraceShell({
 }: {
   assetId: string | undefined;
   name: string | undefined;
-  siteKey: string | null | undefined;
+  views?: BeforeAfterViews | null;
   trace: RunTrace | undefined;
   recordedOn?: string;
   error: ApiError | null;
@@ -153,7 +154,7 @@ function TraceShell({
         ) : !trace ? (
           <MachineRowsSkeleton label="Loading the trace…" />
         ) : (
-          <TraceBody trace={trace} siteKey={siteKey} recordedOn={recordedOn} />
+          <TraceBody trace={trace} views={views} recordedOn={recordedOn} />
         )}
       </div>
     </div>
@@ -162,11 +163,11 @@ function TraceShell({
 
 function TraceBody({
   trace,
-  siteKey,
+  views,
   recordedOn,
 }: {
   trace: RunTrace;
-  siteKey: string | null | undefined;
+  views?: BeforeAfterViews | null;
   recordedOn?: string;
 }) {
   const story = useMemo(() => runStory(trace), [trace]);
@@ -254,7 +255,7 @@ function TraceBody({
           <TraceStory lines={story} />
         </TabsContent>
         <TabsContent value="flow">
-          <TraceFlow trace={trace} nodes={flow} siteKey={siteKey} />
+          <TraceFlow trace={trace} nodes={flow} views={views} />
         </TabsContent>
         <TabsContent value="timeline">
           <TraceTimeline totalMs={timeline.totalMs} lanes={timeline.lanes} />

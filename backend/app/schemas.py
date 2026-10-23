@@ -497,6 +497,23 @@ class LandCoverOverlay(BaseModel):
     attributions: list[str]
 
 
+class SiteViews(BaseModel):
+    """A live-rated listing's Sentinel-2 true-colour views five years apart, for the before/after
+    slider: `GET /assets/{asset_id}/views/before.webp?v={version}` (the first year of the 5-year
+    window) and `.../after.webp?v={version}` (the latest 12 months), each `width`×`height` on the
+    same grid spanning `bounds`, the boundary drawn on top. As the demo sites' precomputed
+    `before.webp` and `thumbnail.webp`, which the vision model compares too."""
+
+    version: str = Field(description="Changes when the views are re-rendered (cache key).")
+    media_type: Literal["image/webp"] = "image/webp"
+    width: int
+    height: int
+    bounds: OverlayBounds
+    before: DateWindow
+    after: DateWindow
+    attributions: list[str]
+
+
 class AssetDetail(BaseModel):
     id: UUID
     name: str
@@ -548,6 +565,12 @@ class AssetDetail(BaseModel):
         description="The listing's land-cover overlay from its live satellite rating (#231); "
         "null for demo sites (their overlay is precomputed: `site_key`), with mock or no "
         "satellite data, or when rendering failed.",
+    )
+    site_views: SiteViews | None = Field(
+        default=None,
+        description="The listing's before/after views from its live satellite rating; null for "
+        "demo sites (their views are precomputed: `site_key`), with mock or no satellite data, "
+        "or when rendering failed.",
     )
     latest_run_id: UUID | None = Field(
         default=None,
