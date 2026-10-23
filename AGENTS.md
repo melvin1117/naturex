@@ -64,6 +64,7 @@ Load the matching skill before starting; `using-agent-skills` picks one if unsur
 | Debugging | `debugging-and-error-recovery`, `browser-testing-with-devtools` |
 | Review before merge | `code-review-and-quality`, `security-and-hardening`, `code-simplification` |
 | Decisions and docs | `documentation-and-adrs` (ADRs go in `docs/adr/`) |
+| Launch teaser video | `brag-slim` (not the 3-minute demo video) |
 | Git and CI | `git-workflow-and-versioning`, `ci-cd-and-automation` |
 
 Update skills only with `scripts/sync-skills.sh`; never edit them in place.

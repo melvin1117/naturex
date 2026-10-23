@@ -19,6 +19,7 @@ ADDY_SHA=2686b620fc1fed2e8f60c704839c766b8594c6b6
 IMPECCABLE_SHA=9d715cc4f5564a990ca8345abfdd5df6dc9b41c8
 VERCEL_SHA=063bee94c3f4df8453406c830b0a7df0f2860278
 SUPABASE_SHA=551274ed2fe97c8fea1325f7ceb05803a542f8df
+BRAG_SHA=069432cac935ed1895859df201c31436c07fb74e
 
 fetch() { # fetch <owner/repo> <sha> <dir>
   git init -q "$3"
@@ -37,6 +38,7 @@ fetch addyosmani/agent-skills "$ADDY_SHA" "$TMP/addy"
 fetch pbakaus/impeccable "$IMPECCABLE_SHA" "$TMP/impeccable"
 fetch vercel-labs/agent-skills "$VERCEL_SHA" "$TMP/vercel"
 fetch supabase/agent-skills "$SUPABASE_SHA" "$TMP/supabase"
+fetch latent-spaces/brag "$BRAG_SHA" "$TMP/brag"
 
 mkdir -p "$SKILLS" "$AGENTS_DIR/licenses" "$CLAUDE_SKILLS"
 
@@ -66,7 +68,9 @@ cp "$TMP/supabase/LICENSE" "$AGENTS_DIR/licenses/supabase-agent-skills.LICENSE"
 # Drop packaging files no skill uses
 rm -f "$SKILLS"/vercel-react-best-practices/{README.md,metadata.json} "$SKILLS"/supabase*/CHANGELOG.md
 
-# Personal, optional skills (e.g. brag) are NOT vendored; see docs/ai-setup.md.
+# latent-spaces/brag: brag-slim only (one SKILL.md, no bundled assets or music); the full brag stays optional per person
+copy_skill "$TMP/brag/skills/brag-slim" brag-slim
+cp "$TMP/brag/LICENSE" "$AGENTS_DIR/licenses/brag.LICENSE"
 
 # Claude Code: mirror every shared skill via symlink, but use impeccable's Claude-specific build
 find "$CLAUDE_SKILLS" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
