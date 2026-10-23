@@ -83,8 +83,11 @@ export type OpenSandbox = {
 };
 
 /** Open the visitor's sandbox as a step's persona and go to its screen (`POST /demo/start`:
- * a browser that has one keeps it and only switches who it acts as). */
-export function useOpenSandbox(): OpenSandbox {
+ * a browser that has one keeps it and only switches who it acts as). `onOpened` runs once the
+ * navigation starts, e.g. to close the menu the steps sit in. */
+export function useOpenSandbox({
+  onOpened,
+}: { onOpened?: () => void } = {}): OpenSandbox {
   const router = useRouter();
   const start = useStartDemo();
   const [busy, setBusy] = useState<string | null>(null);
@@ -96,6 +99,8 @@ export function useOpenSandbox(): OpenSandbox {
     try {
       await start.mutateAsync(step.persona);
       router.push(sandboxHref(step.path));
+      setBusy(null);
+      onOpened?.();
     } catch (e) {
       setError({ key: step.key, text: startError(toApiError(e).code) });
       setBusy(null);

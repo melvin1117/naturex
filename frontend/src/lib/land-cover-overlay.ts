@@ -19,9 +19,14 @@ export type AssetLandCover = {
   note?: string;
 };
 
-/** Same-origin URL through the `/api` proxy; `version` changes when the overlay is re-rendered. */
-export function assetOverlayUrl(assetId: string, version: string): string {
-  return `/api/assets/${encodeURIComponent(assetId)}/overlay.png?v=${encodeURIComponent(version)}`;
+/** Same-origin URL through the `/api` proxy (`/api/sandbox` in the sandbox); `version` changes
+ * when the overlay is re-rendered. */
+export function assetOverlayUrl(
+  assetId: string,
+  version: string,
+  apiBase = "/api",
+): string {
+  return `${apiBase}/assets/${encodeURIComponent(assetId)}/overlay.png?v=${encodeURIComponent(version)}`;
 }
 
 function sidecarBounds(
@@ -52,6 +57,7 @@ function liveBounds({
 export function assetLandCover(
   asset: Pick<AssetDetail, "id" | "site_key" | "land_cover_overlay">,
   images: SiteImages | undefined,
+  apiBase = "/api",
 ): AssetLandCover | null {
   if (asset.site_key) {
     if (!images) return null;
@@ -69,7 +75,7 @@ export function assetLandCover(
   if (!live) return null;
   return {
     overlay: {
-      url: assetOverlayUrl(asset.id, live.version),
+      url: assetOverlayUrl(asset.id, live.version, apiBase),
       bounds: liveBounds(live.bounds),
     },
     dateWindow: live.date_window,

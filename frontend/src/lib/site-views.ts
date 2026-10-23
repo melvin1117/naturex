@@ -13,6 +13,7 @@ export interface BeforeAfterViews {
  * `/assets/{id}/views/{before,after}.webp`); null when it has neither. */
 export function beforeAfterViews(
   asset: Pick<AssetDetail, "id" | "site_key" | "site_views">,
+  apiBase = "/api",
 ): BeforeAfterViews | null {
   const key = asset.site_key;
   if (key && DEMO_SITES.some((s) => s.key === key))
@@ -23,7 +24,7 @@ export function beforeAfterViews(
     };
   const views = asset.site_views;
   if (!views) return null;
-  const base = `/api/assets/${encodeURIComponent(asset.id)}/views`;
+  const base = `${apiBase}/assets/${encodeURIComponent(asset.id)}/views`;
   const v = `?v=${encodeURIComponent(views.version)}`;
   return {
     before: `${base}/before.webp${v}`,

@@ -8,7 +8,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import NextLink from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { SandboxFlow, useOpenSandbox } from "@/components/sandbox/sandbox-flow";
 import { Button } from "@/components/ui/button";
@@ -79,7 +79,8 @@ function SandboxBar({ persona }: { persona: DemoPersona }) {
   const router = useRouter();
   const switcher = useSwitchPersona();
   const { resetWorld, isResetting } = useWorld();
-  const guide = useOpenSandbox();
+  const [guideOpen, setGuideOpen] = useState(false);
+  const guide = useOpenSandbox({ onOpened: () => setGuideOpen(false) });
   const switchTo = async (key: SwitchablePersona) => {
     if (key === persona || switcher.isPending) return;
     const world = await switcher.mutate(key);
@@ -110,7 +111,8 @@ function SandboxBar({ persona }: { persona: DemoPersona }) {
             · live AI, play money
           </span>
         </p>
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+        {/* Below lg the switcher takes its own row, each persona over its role. */}
+        <div className="order-last flex w-full items-center gap-1.5 lg:order-none lg:ml-auto lg:w-auto">
           <span className="hidden text-primary-foreground/75 2xl:inline">
             Acting as
           </span>
@@ -123,7 +125,7 @@ function SandboxBar({ persona }: { persona: DemoPersona }) {
             }}
             disabled={switcher.isPending}
             aria-label="Act as"
-            className="rounded-full bg-primary-foreground/10 p-0.5"
+            className="w-full rounded-full bg-primary-foreground/10 p-0.5 lg:w-auto"
           >
             {SWITCHABLE.map((key) => {
               const p = SANDBOX_PERSONAS[key];
@@ -132,17 +134,23 @@ function SandboxBar({ persona }: { persona: DemoPersona }) {
                   key={key}
                   value={key}
                   aria-label={`${p.name} (${p.role})`}
-                  className="h-7 rounded-full px-3 text-[13px] font-medium text-primary-foreground/80 hover:bg-transparent hover:text-primary-foreground data-[state=on]:bg-lime data-[state=on]:text-foreground"
+                  className="h-auto min-h-7 flex-1 rounded-full px-3 py-1 text-[13px] font-medium text-primary-foreground/80 hover:bg-transparent hover:text-primary-foreground data-[state=on]:bg-lime data-[state=on]:text-foreground lg:h-7 lg:flex-none lg:py-0"
                 >
-                  {p.name}
-                  <span className="hidden font-normal opacity-75 lg:inline">
-                    ({p.role})
+                  <span className="flex flex-col items-center leading-tight lg:flex-row lg:gap-1">
+                    <span>{p.name}</span>
+                    <span className="text-[10.5px] font-normal opacity-75 lg:text-[13px]">
+                      <span className="hidden lg:inline">(</span>
+                      {p.role}
+                      <span className="hidden lg:inline">)</span>
+                    </span>
                   </span>
                 </ToggleGroupItem>
               );
             })}
           </ToggleGroup>
-          <Popover>
+        </div>
+        <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
+          <Popover open={guideOpen} onOpenChange={setGuideOpen}>
             <PopoverTrigger asChild>
               <Button size="sm" variant="ghost" className={ON_BAR}>
                 <Compass aria-hidden="true" />

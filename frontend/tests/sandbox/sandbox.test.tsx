@@ -5,12 +5,17 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Link from "@/components/app-link";
+import { AccountMenu } from "@/components/account-menu";
 import { DemoBar } from "@/components/proto/demo-bar";
 import { TourProvider } from "@/components/proto/tour";
 import { SandboxGate } from "@/components/sandbox/sandbox-gate";
 import { WorldProvider } from "@/components/world-provider";
 import type { WorldOut } from "@/lib/api/types";
 import { createDataLayer, type DataLayer } from "@/lib/data-layer";
+import { useApiBase } from "@/lib/hooks";
+import { assetOverlayUrl } from "@/lib/land-cover-overlay";
+import { beforeAfterViews } from "@/lib/site-views";
+import { documentDownloadUrl } from "@/lib/verification";
 import { useRouter } from "@/lib/nav";
 import { PrototypeProvider } from "@/lib/prototype/store";
 import { appPath, isSandboxPath, sandboxHref } from "@/lib/sandbox";
@@ -58,10 +63,14 @@ function demoWorld(persona: "rosa" | "arjun" | "admin" | null): WorldOut {
   };
 }
 
-function setup(ui: ReactNode, routes: Parameters<typeof fakeBackend>[0]) {
+function setup(
+  ui: ReactNode,
+  routes: Parameters<typeof fakeBackend>[0],
+  baseUrl = BASE,
+) {
   const backend = fakeBackend(routes);
   const layer = createDataLayer({
-    baseUrl: BASE,
+    baseUrl,
     fetch: backend.fetch,
     createEventSource: createFakeEventSource,
   });
@@ -160,6 +169,51 @@ describe("the sandbox's URL space", () => {
   });
 });
 
+describe("files the browser fetches itself", () => {
+  it("come from the same channel as the page's data", async () => {
+    function Urls() {
+      const base = useApiBase();
+      const views = beforeAfterViews(
+        {
+          id: "a1",
+          site_key: null,
+          site_views: {
+            version: "v1",
+            before: { start: "2021-01-01", end: "2021-12-31" },
+            after: { start: "2025-10-01", end: "2026-09-30" },
+          } as never,
+        },
+        base,
+      );
+      return (
+        <>
+          <img alt="after" src={views?.after} />
+          <img alt="overlay" src={assetOverlayUrl("a1", "v1", base)} />
+          <a href={documentDownloadUrl("a1", "d1", base)}>Download</a>
+        </>
+      );
+    }
+    setup(
+      <Urls />,
+      { "GET /sandbox/world": () => json(demoWorld("rosa")) },
+      `${BASE}/sandbox`,
+    );
+
+    expect(screen.getByRole("img", { name: "after" })).toHaveAttribute(
+      "src",
+      "/api/sandbox/assets/a1/views/after.webp?v=v1",
+    );
+    expect(screen.getByRole("img", { name: "overlay" })).toHaveAttribute(
+      "src",
+      "/api/sandbox/assets/a1/overlay.png?v=v1",
+    );
+    expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute(
+      "href",
+      "/api/sandbox/assets/a1/documents/d1",
+    );
+  });
+});
+
 describe("the sandbox bar", () => {
   it("says who's who, switches persona and stays in the sandbox", async () => {
     const { backend } = setup(<DemoBar />, {
@@ -202,6 +256,46 @@ describe("the sandbox bar", () => {
         name: "What you can do in your sandbox",
       }),
     ).toHaveTextContent("Move time forward");
+  });
+
+  it("closes the guide once a step opens, ready for the next one", async () => {
+    const { backend } = setup(<DemoBar />, {
+      "GET /world": () => json(demoWorld("rosa")),
+      "POST /demo/start": () => json(demoWorld("admin")),
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "What to try" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Move time forward/ }),
+    );
+
+    await waitFor(() =>
+      expect(nav.push).toHaveBeenCalledWith("/sandbox/admin"),
+    );
+    expect(backend.calls("POST /demo/start")).toBe(1);
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("list", { name: "What you can do in your sandbox" }),
+      ).not.toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "What to try" }));
+    expect(
+      await screen.findByRole("button", { name: /List land/ }),
+    ).toBeEnabled();
+  });
+
+  it("lets the visitor leave the sandbox instead of signing out", async () => {
+    setup(<AccountMenu />, { "GET /world": () => json(demoWorld("arjun")) });
+    const trigger = await screen.findByRole("button", {
+      name: "Account: arjun",
+    });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+    expect(
+      await screen.findByRole("menuitem", { name: /Leave the sandbox/ }),
+    ).toHaveAttribute("href", "/");
+    expect(screen.getByText("Supporter in your sandbox")).toBeVisible();
+    expect(
+      screen.queryByRole("menuitem", { name: /Sign out/ }),
+    ).not.toBeInTheDocument();
   });
 });
 

@@ -4,6 +4,7 @@ import { Download, FileText } from "lucide-react";
 
 import { Spinner } from "@/components/ui/spinner";
 import type { ListingDocument } from "@/lib/api/types";
+import { useApiBase } from "@/lib/hooks";
 import { date } from "@/lib/prototype/format";
 import {
   DOC_TYPE_LABEL,
@@ -46,6 +47,7 @@ function DocumentPreview({
   document: ListingDocument;
 }) {
   const preview = useDocumentPreview(assetId, document);
+  const apiBase = useApiBase();
   const label = DOC_TYPE_LABEL[document.doc_type];
   return (
     <figure className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -86,7 +88,7 @@ function DocumentPreview({
           {documentFacts(document)} · uploaded {date(document.created_at)}
         </p>
         <a
-          href={documentDownloadUrl(assetId, document.id)}
+          href={documentDownloadUrl(assetId, document.id, apiBase)}
           download
           aria-label={`Download the original ${label.toLowerCase()}`}
           className="inline-flex items-center gap-1.5 text-xs font-medium underline underline-offset-4"

@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { RunTrace } from "@/lib/api/types";
 import type { ApiError } from "@/lib/api/errors";
 import {
+  useApiBase,
   useAsset,
   useRecordedRun,
   useRunTrace,
@@ -47,11 +48,12 @@ const TAB =
 export function RunTracePage({ runId }: { runId: string }) {
   const trace = useRunTrace(runId);
   const asset = useAsset(trace.data?.asset_id);
+  const apiBase = useApiBase();
   return (
     <TraceShell
       assetId={trace.data?.asset_id}
       name={asset.data?.name}
-      views={asset.data ? beforeAfterViews(asset.data) : null}
+      views={asset.data ? beforeAfterViews(asset.data, apiBase) : null}
       trace={trace.data}
       error={trace.error}
       retry={trace.refetch}
@@ -63,6 +65,7 @@ export function RunTracePage({ runId }: { runId: string }) {
  * visitors who haven't rated the site themselves. Labelled "Recorded" with its date. */
 export function RecordedTracePage({ assetId }: { assetId: string }) {
   const asset = useAsset(assetId);
+  const apiBase = useApiBase();
   const recorded = useRecordedRun(asset.data?.site_key);
   const trace = useMemo(
     () =>
@@ -74,7 +77,7 @@ export function RecordedTracePage({ assetId }: { assetId: string }) {
     <TraceShell
       assetId={assetId}
       name={asset.data?.name}
-      views={asset.data ? beforeAfterViews(asset.data) : null}
+      views={asset.data ? beforeAfterViews(asset.data, apiBase) : null}
       trace={trace}
       recordedOn={recorded.data?.recorded_on}
       error={recorded.error ?? asset.error ?? null}

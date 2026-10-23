@@ -762,10 +762,15 @@ describe("play-money framing without a demo bar", () => {
     ["anonymous", WORLD],
     ["signed in", SIGNED_IN_WORLD],
   ] as const)("the real app shows no demo bar %s", async (_who, world) => {
-    const { backend } = setup(<DemoBar />, world);
+    const { backend } = setup(<DemoBar />, world, [], {
+      "POST /auth/logout": () => new Response(null, { status: 204 }),
+    });
     await waitFor(() => expect(backend.calls("GET /world")).toBe(1));
     expect(screen.queryByRole("region")).not.toBeInTheDocument();
     expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    // A real account is never signed out by the leftover-demo cleanup.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(backend.calls("POST /auth/logout")).toBe(0);
   });
 
   it("leaves the scripted prototype demo", async () => {

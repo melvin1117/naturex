@@ -90,6 +90,10 @@ function loaded(img: HTMLImageElement): Promise<void> {
 
 const CLAY = "oklch(0.66 0.13 48)";
 const LIME = "oklch(0.86 0.135 126)";
+/** The width of the committed Sentinel-2 views (backend `site_images.THUMBNAIL_WIDTH`). */
+const VIEW_WIDTH_PX = 640;
+/** The map's `zoomSnap`. */
+const ZOOM_SNAP = 0.25;
 
 /**
  * The story's stage: Esri satellite imagery with the wetland's own layers from `GET /story`
@@ -98,9 +102,6 @@ const LIME = "oklch(0.86 0.135 126)";
  * The story moves the map, so map interaction is off; the before/after divider is draggable
  * (pointer or arrow keys).
  */
-/** The width of the committed Sentinel-2 views (backend `site_images.THUMBNAIL_WIDTH`). */
-const VIEW_WIDTH_PX = 640;
-
 export const StoryMap = forwardRef(function StoryMap(
   { story, reducedMotion, inset }: Props,
   ref: ForwardedRef<StoryMapHandle>,
@@ -147,7 +148,7 @@ export const StoryMap = forwardRef(function StoryMap(
         boxZoom: false,
         keyboard: false,
         touchZoom: false,
-        zoomSnap: 0.25,
+        zoomSnap: ZOOM_SNAP,
       }).setView(site.getCenter(), 11);
       L.tileLayer(IMAGERY_URL, {
         maxZoom: 19,
@@ -199,10 +200,10 @@ export const StoryMap = forwardRef(function StoryMap(
      * screen pixel: any closer and 10 m Sentinel-2 pixels smear next to the sharp basemap. */
     const nativeZoom = (bounds: [LatLng, LatLng], widthPx: number) => {
       const map = layers.current.map!;
-      const shown =
-        map.latLngToContainerPoint(bounds[1]).x -
-        map.latLngToContainerPoint(bounds[0]).x;
-      return map.getZoom() + Math.log2(widthPx / Math.max(1, shown));
+      // Unrounded world pixels at zoom 0, then rounded down to the snap: never enlarged.
+      const atZero = map.project(bounds[1], 0).x - map.project(bounds[0], 0).x;
+      const zoom = Math.log2(widthPx / Math.max(atZero, 1e-9));
+      return Math.floor(zoom / ZOOM_SNAP) * ZOOM_SNAP;
     };
     /** Container pixels an overlay covers (the map is still while it's shown). */
     const rectOf = (bounds: [LatLng, LatLng]) => {

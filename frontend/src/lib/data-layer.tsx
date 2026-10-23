@@ -29,6 +29,8 @@ import type { SessionBootstrap, World } from "./session";
 import { SANDBOX_API_BASE } from "./sandbox";
 
 export interface DataLayer {
+  /** Where `api` sends requests: `/api`, or `/api/sandbox` for the visitor's sandbox. */
+  baseUrl: string;
   api: ApiClient;
   session: SessionBootstrap;
   cache: QueryCache;
@@ -136,6 +138,7 @@ export function createDataLayer(
   const session = createBrowserSession(baseUrl, options.fetch);
   const fetch = options.fetch;
   return {
+    baseUrl,
     api: createApi({ baseUrl, fetch, session }),
     session,
     cache: new QueryCache(),
@@ -164,6 +167,7 @@ export function getSandboxDataLayer(): DataLayer {
 /** The tab-wide layer: shares `api` and `browserSession` with non-React code. */
 export function getBrowserDataLayer(): DataLayer {
   browserLayer ??= {
+    baseUrl: "/api",
     api: browserApi,
     session: browserSession,
     cache: new QueryCache(),

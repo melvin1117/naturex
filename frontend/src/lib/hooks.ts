@@ -651,10 +651,18 @@ export function useSwitchPersona(): MutationResult<DemoPersona, WorldOut> {
   });
 }
 
+/** Another persona's answers never show: reset even when no provider is listening (the
+ * sandbox's layer started from `/judge`), and when the viewer stayed the same (a reset). */
 function afterDemoSwitch({ session, cache }: DataLayer, world: WorldOut) {
-  const before = viewerKey(session.getSnapshot().world);
   session.set(world);
-  if (viewerKey(world) === before) cache.reset();
+  cache.reset();
+}
+
+/** The same-origin path of this tab's API (`/api`, or `/api/sandbox` in the sandbox), for URLs
+ * the browser fetches itself (images, downloads): they must carry the same channel's cookie. */
+export function useApiBase(): string {
+  const { baseUrl } = useDataLayer();
+  return new URL(baseUrl, "http://same-origin").pathname.replace(/\/$/, "");
 }
 
 /** Whether to show model spend in dollars. Not in a no-sign-up demo session: a judge sees what
