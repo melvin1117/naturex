@@ -350,6 +350,9 @@ OBJECT_ROUTES: dict[tuple[str, str], tuple[str, Callable[[Objects], Any] | None]
     ("GET", "/assets/{asset_id}/reports"): ("arjun", None),
     # #231: a live-rated listing's land-cover overlay (none in a sandbox: 404 in its own world).
     ("GET", "/assets/{asset_id}/overlay.png"): ("arjun", None),
+    # A live-rated listing's before/after views (none in a sandbox either).
+    ("GET", "/assets/{asset_id}/views/before.webp"): ("arjun", None),
+    ("GET", "/assets/{asset_id}/views/after.webp"): ("arjun", None),
     ("GET", "/assets/{asset_id}/prices"): ("arjun", None),
     ("GET", "/assets/{asset_id}/quote"): ("arjun", None),
     ("POST", "/assets/{asset_id}/rate"): ("admin", None),
@@ -412,6 +415,8 @@ OWN_WORLD_STATUS: dict[tuple[str, str], tuple[int, str | None]] = {
     ("GET", "/assets/{asset_id}/evidence/{photo_id}/image"): (404, "photo_not_found"),
     # Only live ratings render one (#231).
     ("GET", "/assets/{asset_id}/overlay.png"): (404, "overlay_not_found"),
+    ("GET", "/assets/{asset_id}/views/before.webp"): (404, "views_not_found"),
+    ("GET", "/assets/{asset_id}/views/after.webp"): (404, "views_not_found"),
 }
 # Object IDs that travel in a body or query instead of the path: (persona, body, query), built
 # from the other world's objects. The path, if templated, is filled from the caller's own world.
