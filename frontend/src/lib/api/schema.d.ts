@@ -3359,7 +3359,7 @@ export interface components {
              * Persona
              * @description The demo persona this session acts as (`rosa`, `arjun`, `mia`, `admin`), or null for a real account.
              */
-            persona?: string | null;
+            persona?: ("rosa" | "arjun" | "mia" | "admin") | null;
         };
         /**
          * MetricChange
@@ -5356,6 +5356,13 @@ export interface operations {
             };
             /** @description `too_many_attempts`: this IP started too many sandboxes, or `demo_busy`: every new sandbox for this hour is taken (see `Retry-After`) */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `auth_busy`: the rate-limit check is busy; retry shortly */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

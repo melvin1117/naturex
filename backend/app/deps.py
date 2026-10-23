@@ -40,8 +40,8 @@ _last_auth_prune: datetime | None = None
 def prune_stale_worlds_now_and_then(session: Session) -> None:
     """Prune stale sandbox worlds at most every PRUNE_EVERY per process; never fail the request.
 
-    Runs on the session-creating paths (register and login today, T55's `POST /demo/start`
-    next), never on anonymous reads. Never touches the template or the live world.
+    Runs on the session-creating paths (register, login and `POST /demo/start`), never on
+    anonymous reads. Never touches the template or the live world.
     """
     global _last_prune
     now = datetime.now(UTC)

@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Iterator
 from decimal import Decimal
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app.db import get_session
 from app.ledger import GENESIS_HASH, entry_hash
 from app.main import app
 from app.models import LedgerKind
@@ -14,9 +18,20 @@ from app.services.story import STORY_AS_OF, build_story
 from app.tools.earth_obs import load_site_metrics
 from app.tools.scoring import is_wetland_from_landcover
 
+FRONTEND_FIXTURE = Path(__file__).parents[2] / "frontend/tests/story/story.json"
+
+
+def no_database() -> Iterator[None]:
+    raise AssertionError("GET /story must not open a database session")
+    yield
+
 
 def test_the_story_is_public_cacheable_and_needs_no_database() -> None:
-    response = TestClient(app).get("/story")
+    app.dependency_overrides[get_session] = no_database
+    try:
+        response = TestClient(app).get("/story")
+    finally:
+        del app.dependency_overrides[get_session]
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "public, max-age=3600"
@@ -82,3 +97,8 @@ def test_the_land_is_measured_not_invented() -> None:
     assert story.site.area_ha == Decimal("206.70")
     assert story.site.boundary[0] == story.site.boundary[-1]  # a closed ring of [lat, lon]
     assert any("Dynamic World" in a for a in story.images.attributions)
+
+
+def test_the_frontend_fixture_is_todays_story() -> None:
+    # The story's UI tests run on this snapshot; refresh it from `GET /story` when this fails.
+    assert json.loads(FRONTEND_FIXTURE.read_text()) == TestClient(app).get("/story").json()

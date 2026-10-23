@@ -1554,6 +1554,9 @@ class LoginIn(BaseModel):
         return email
 
 
+DemoPersona = Literal["rosa", "arjun", "mia", "admin"]
+
+
 class MeOut(BaseModel):
     """The signed-in account. Never includes the password hash."""
 
@@ -1565,15 +1568,12 @@ class MeOut(BaseModel):
     kind: UserKind
     is_admin: bool
     world_id: UUID
-    persona: str | None = Field(
+    persona: DemoPersona | None = Field(
         default=None,
         validation_alias="persona_key",
         description="The demo persona this session acts as (`rosa`, `arjun`, `mia`, `admin`), "
         "or null for a real account.",
     )
-
-
-DemoPersona = Literal["rosa", "arjun", "mia", "admin"]
 
 
 class DemoStartIn(BaseModel):

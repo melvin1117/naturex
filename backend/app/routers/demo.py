@@ -14,6 +14,8 @@ same sandbox; "Reset my demo" (`POST /world/reset`) restores it and keeps the se
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlmodel import select
 
@@ -21,6 +23,7 @@ from app.auth import (
     SESSION_COOKIE,
     TOO_MANY_ATTEMPTS,
     AttemptsBusy,
+    RateLimit,
     bucket_key,
     client_ip,
     consume_attempt,
@@ -83,7 +86,12 @@ def _throttle(request: Request, session: SessionDep, settings: SettingsDep) -> N
     )
     key = bucket_key(rate_limit_secret(settings), AuthBucket.IP, ip)
     try:
-        retry_after = consume_attempt(session, AuthAttemptKind.DEMO_START, [(AuthBucket.IP, key)])
+        retry_after = consume_attempt(
+            session,
+            AuthAttemptKind.DEMO_START,
+            [(AuthBucket.IP, key)],
+            limit=RateLimit(settings.demo_starts_per_ip_per_hour, timedelta(hours=1)),
+        )
     except AttemptsBusy:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -107,6 +115,7 @@ def _throttle(request: Request, session: SessionDep, settings: SettingsDep) -> N
             "description": f"`{TOO_MANY_ATTEMPTS}`: this IP started too many sandboxes, or "
             f"`{DEMO_BUSY}`: every new sandbox for this hour is taken (see `Retry-After`)"
         },
+        503: {"description": f"`{AUTH_BUSY}`: the rate-limit check is busy; retry shortly"},
     },
 )
 def start_demo(

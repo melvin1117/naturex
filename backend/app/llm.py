@@ -27,6 +27,7 @@ import math
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Protocol
@@ -35,11 +36,11 @@ from uuid import UUID
 import openai
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import func, text
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.config import Settings
-from app.models import LlmCall
-from app.worlds import is_sandbox_world
+from app.models import Asset, LlmCall
+from app.worlds import PROTECTED_WORLDS, is_sandbox_world
 
 log = logging.getLogger(__name__)
 
@@ -155,14 +156,22 @@ class DbCallLog:
     check-and-reserve atomic across workers. A reservation left behind by a crash keeps
     counting at its worst-case cost (fail closed).
 
-    `sandbox_budget` also caps each demo sandbox's own spend (`SANDBOX_LLM_BUDGET_USD`), checked
-    under the same lock; a sandbox's calls stay counted after "Reset my demo"."""
+    `sandbox_budget` also caps each demo sandbox's own spend (`SANDBOX_LLM_BUDGET_USD`) and
+    `sandboxes_per_hour` every sandbox's spend together over the last hour
+    (`SANDBOX_LLM_BUDGET_PER_HOUR_USD`), so no-sign-up visitors can't drain the budget however
+    many sandboxes they open. Both are checked under the same lock; a sandbox's calls stay counted
+    after "Reset my demo". A call that names only its asset is counted in that asset's world.
+    These limits are internal: callers fall back exactly as at the global cap."""
 
     def __init__(
-        self, session_factory: Callable[[], Session], sandbox_budget: Decimal | None = None
+        self,
+        session_factory: Callable[[], Session],
+        sandbox_budget: Decimal | None = None,
+        sandboxes_per_hour: Decimal | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._sandbox_budget = sandbox_budget
+        self._sandboxes_per_hour = sandboxes_per_hour
 
     def spent_usd(self) -> Decimal:
         with self._session_factory() as session:
@@ -177,32 +186,51 @@ class DbCallLog:
             )
             if spent + call.cost_usd > budget:
                 raise BudgetExceeded(_over_budget(budget, spent, call.cost_usd))
-            if self._sandbox_budget is not None and (
-                call.world_id is not None and is_sandbox_world(call.world_id)
-            ):
-                in_world = Decimal(
-                    session.exec(
-                        select(func.coalesce(func.sum(LlmCall.cost_usd), 0)).where(
-                            LlmCall.world_id == call.world_id
-                        )
-                    ).one()
+            if call.world_id is None and call.asset_id is not None:
+                call = replace(
+                    call,
+                    world_id=session.exec(
+                        select(Asset.world_id).where(col(Asset.id) == call.asset_id)
+                    ).first(),
                 )
-                if in_world + call.cost_usd > self._sandbox_budget:
-                    raise BudgetExceeded(
-                        "sandbox " + _over_budget(self._sandbox_budget, in_world, call.cost_usd)
-                    )
+            if call.world_id is not None and is_sandbox_world(call.world_id):
+                self._check_sandbox(session, call)
             row = _row(call)
             session.add(row)
             session.commit()
             assert row.id is not None
             return row.id
 
+    def _check_sandbox(self, session: Session, call: CallRecord) -> None:
+        def total(*where: Any) -> Decimal:
+            query = select(func.coalesce(func.sum(LlmCall.cost_usd), 0)).where(*where)
+            return Decimal(session.exec(query).one())
+
+        if self._sandbox_budget is not None:
+            in_world = total(col(LlmCall.world_id) == call.world_id)
+            if in_world + call.cost_usd > self._sandbox_budget:
+                raise BudgetExceeded(
+                    "sandbox " + _over_budget(self._sandbox_budget, in_world, call.cost_usd)
+                )
+        if self._sandboxes_per_hour is not None:
+            recent = total(
+                col(LlmCall.world_id).is_not(None),
+                col(LlmCall.world_id).not_in(PROTECTED_WORLDS),
+                col(LlmCall.created_at) > datetime.now(UTC) - timedelta(hours=1),
+            )
+            if recent + call.cost_usd > self._sandboxes_per_hour:
+                raise BudgetExceeded(
+                    "sandboxes " + _over_budget(self._sandboxes_per_hour, recent, call.cost_usd)
+                )
+
     def settle(self, handle: int, call: CallRecord) -> None:
         with self._session_factory() as session:
             row = session.get(LlmCall, handle)
             if row is None:
                 raise LLMError(f"llm_calls row {handle} vanished before settling")
-            for key, value in _row(call).model_dump(exclude={"id", "created_at"}).items():
+            # The world found at reservation stays when the caller named only the asset.
+            keep = {"id", "created_at"} | ({"world_id"} if call.world_id is None else set())
+            for key, value in _row(call).model_dump(exclude=keep).items():
                 setattr(row, key, value)
             session.add(row)
             session.commit()
@@ -720,7 +748,9 @@ def get_llm_client(
     for its progress events (T27); spend is still written to `llm_calls` first.
     """
     call_log: CallLog = DbCallLog(
-        session_factory, sandbox_budget=Decimal(str(settings.sandbox_llm_budget_usd))
+        session_factory,
+        sandbox_budget=Decimal(str(settings.sandbox_llm_budget_usd)),
+        sandboxes_per_hour=Decimal(str(settings.sandbox_llm_budget_per_hour_usd)),
     )
     if wrap_log is not None:
         call_log = wrap_log(call_log)

@@ -171,6 +171,9 @@
           "429": {
             "description": "`too_many_attempts`: this IP started too many sandboxes, or `demo_busy`: every new sandbox for this hour is taken (see `Retry-After`)"
           },
+          "503": {
+            "description": "`auth_busy`: the rate-limit check is busy; retry shortly"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -8321,7 +8324,13 @@
           "persona": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "enum": [
+                  "rosa",
+                  "arjun",
+                  "mia",
+                  "admin"
+                ]
               },
               {
                 "type": "null"

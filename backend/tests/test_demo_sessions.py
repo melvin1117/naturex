@@ -4,6 +4,9 @@ per-sandbox model spend cap (`SANDBOX_LLM_BUDGET_USD`)."""
 from __future__ import annotations
 
 from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -11,18 +14,19 @@ from uuid import UUID, uuid4
 import pytest
 from alembic import command
 from fastapi.testclient import TestClient
-from sqlalchemy import Connection, create_engine, delete
+from sqlalchemy import Connection, create_engine, delete, func
 from sqlmodel import Session, col, select
 
 from app import auth
-from app.auth import SESSION_COOKIE, RateLimit
+from app.auth import SESSION_COOKIE
 from app.config import Settings, get_settings
 from app.db import get_session
 from app.llm import BudgetExceeded, CallRecord, DbCallLog, Tier
 from app.main import app
-from app.models import AuthAttemptKind, LlmCall, SessionKind, UserSession, World
+from app.models import Asset, LlmCall, SessionKind, UserSession, World
 from app.sandbox import create_world, ensure_live_world, is_sandbox, reset_world
 from app.seed import LIVE_WORLD_ID, WORLD_ID, seed
+from app.worlds import PROTECTED_WORLDS
 from tests.conftest import alembic_cfg, requires_db
 from tests.worlds import drop_worlds, sign_in
 
@@ -54,6 +58,23 @@ def client(session: Session) -> Iterator[TestClient]:
     app.dependency_overrides[get_session] = lambda: session
     yield TestClient(app)
     app.dependency_overrides.clear()
+
+
+@contextmanager
+def settings(**overrides: Any) -> Iterator[None]:
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        _env_file=None,
+        allowed_origins="http://testserver",
+        **overrides,
+    )
+    try:
+        yield
+    finally:
+        del app.dependency_overrides[get_settings]
+
+
+def from_one_ip() -> str:
+    return f"10.9.{uuid4().int % 250}.{uuid4().int % 250}"
 
 
 def start(client: TestClient, persona: str = "rosa") -> Any:
@@ -160,7 +181,7 @@ def test_a_real_account_has_one_identity(session: Session, client: TestClient) -
 
 
 @requires_db
-def test_a_real_account_starting_a_demo_leaves_its_session_in_this_browser(
+def test_a_real_account_starting_a_demo_ends_its_session_in_this_browser(
     session: Session, client: TestClient
 ) -> None:
     live = ensure_live_world(session)
@@ -181,43 +202,56 @@ def test_unknown_personas_are_refused(client: TestClient) -> None:
 
 
 @requires_db
-def test_each_ip_may_start_only_so_many_sandboxes(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from datetime import timedelta
-
-    monkeypatch.setitem(
-        auth.RATE_LIMITS, AuthAttemptKind.DEMO_START, RateLimit(2, timedelta(hours=1))
-    )
-    ip = f"10.9.{uuid4().int % 250}.{uuid4().int % 250}"
+def test_each_ip_may_start_only_so_many_sandboxes(client: TestClient) -> None:
+    ip = from_one_ip()
     visitors = [TestClient(app, headers={"X-Forwarded-For": ip}) for _ in range(3)]
-    app.dependency_overrides[get_settings] = lambda: Settings(
-        _env_file=None,  # type: ignore[call-arg]
-        trusted_proxy_hops=1,
-        allowed_origins="http://testserver",
-    )
-    try:
+    with settings(trusted_proxy_hops=1, demo_starts_per_ip_per_hour=2):
         statuses = [start(v).status_code for v in visitors]
-    finally:
-        del app.dependency_overrides[get_settings]
 
     assert statuses == [200, 200, 429]
 
 
 @requires_db
+def test_returning_to_a_demo_costs_no_new_attempt(client: TestClient) -> None:
+    ip = from_one_ip()
+    visitor, neighbour = (TestClient(app, headers={"X-Forwarded-For": ip}) for _ in range(2))
+    with settings(trusted_proxy_hops=1, demo_starts_per_ip_per_hour=1):
+        first = start(visitor, "rosa")
+        again = start(visitor, "arjun")
+        other = start(neighbour)
+
+    assert (first.status_code, again.status_code) == (200, 200)
+    assert again.json()["id"] == first.json()["id"]
+    assert (other.status_code, other.json()["detail"]) == (429, "too_many_attempts")
+
+
+@requires_db
 def test_the_hourly_sandbox_cap_holds_for_everyone(client: TestClient) -> None:
-    app.dependency_overrides[get_settings] = lambda: Settings(
-        _env_file=None,  # type: ignore[call-arg]
-        sandbox_max_new_worlds_per_hour=0,
-        allowed_origins="http://testserver",
-    )
-    try:
+    with settings(sandbox_max_new_worlds_per_hour=0):
         refused = start(client)
-    finally:
-        del app.dependency_overrides[get_settings]
 
     assert (refused.status_code, refused.json()["detail"]) == (429, "demo_busy")
     assert refused.headers["retry-after"] == "600"
+
+
+@requires_db
+def test_a_refused_start_keeps_a_real_accounts_session(
+    session: Session, client: TestClient
+) -> None:
+    live = ensure_live_world(session)
+    person = auth.register_person(session, live.id, "real3@example.org", PASSWORD, "Real")
+    sign_in(client, session, person)
+    real = token_of(client)
+
+    with settings(sandbox_max_new_worlds_per_hour=0):
+        busy = start(client)
+    del client.headers["Origin"]
+    forged = start(client)
+
+    assert busy.status_code == 429
+    assert (forged.status_code, forged.json()["detail"]) == (403, "csrf_origin")
+    assert row(session, real) is not None
+    assert client.get("/world").json()["me"]["id"] == str(person.id)
 
 
 # --- the hidden per-sandbox spend cap ------------------------------------------------------------
@@ -267,6 +301,64 @@ def test_a_sandbox_spends_at_most_its_own_allowance(
     # Protected worlds and unscoped calls only answer to the global budget.
     log.reserve(call(agent, WORLD_ID, "0.006"), plenty)
     log.reserve(call(agent, None, "0.006"), plenty)
+
+
+@requires_db
+def test_a_call_naming_only_its_asset_counts_in_that_assets_sandbox(
+    sandbox_log: tuple[DbCallLog, UUID, str],
+) -> None:
+    log, world_id, agent = sandbox_log
+    plenty = Decimal("1000000")
+    engine = create_engine(get_settings().database_url)
+    with Session(engine) as session:
+        asset_id = session.exec(select(Asset.id).where(col(Asset.world_id) == world_id)).first()
+    assert asset_id is not None
+    by_asset = replace(call(agent, None, "0.006"), asset_id=asset_id)
+
+    handle = log.reserve(by_asset, plenty)
+    log.settle(handle, by_asset)
+    with pytest.raises(BudgetExceeded, match="sandbox"):
+        log.reserve(by_asset, plenty)
+
+    with Session(engine) as session:
+        stored = session.get(LlmCall, handle)
+        assert stored is not None and stored.world_id == world_id
+    engine.dispose()
+
+
+@requires_db
+def test_every_sandbox_together_spends_at_most_the_hourly_allowance(
+    sandbox_log: tuple[DbCallLog, UUID, str],
+) -> None:
+    _, world_id, agent = sandbox_log
+    engine = create_engine(get_settings().database_url)
+    with Session(engine) as session:
+        other = create_world(session).id
+        recent = Decimal(
+            session.exec(
+                select(func.coalesce(func.sum(LlmCall.cost_usd), 0)).where(
+                    col(LlmCall.world_id).is_not(None),
+                    col(LlmCall.world_id).not_in(PROTECTED_WORLDS),
+                    col(LlmCall.created_at) > datetime.now(UTC) - timedelta(hours=1),
+                )
+            ).one()
+        )
+    log = DbCallLog(
+        lambda: Session(engine),
+        sandbox_budget=Decimal("1"),
+        sandboxes_per_hour=recent + Decimal("0.01"),
+    )
+    plenty = Decimal("1000000")
+    try:
+        log.reserve(call(agent, world_id, "0.006"), plenty)
+        # A second sandbox has its own allowance left, but not the hour's.
+        with pytest.raises(BudgetExceeded, match="sandboxes"):
+            log.reserve(call(agent, other, "0.006"), plenty)
+        # Protected worlds only answer to the global budget.
+        log.reserve(call(agent, WORLD_ID, "0.006"), plenty)
+    finally:
+        drop_worlds(engine, [other])
+        engine.dispose()
 
 
 @requires_db
