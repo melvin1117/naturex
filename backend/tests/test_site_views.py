@@ -314,14 +314,14 @@ def test_a_view_over_its_byte_budget_is_never_stored(
 
 
 @requires_db
-def test_mock_ratings_and_sandboxes_never_render(live: Live) -> None:
+def test_mock_ratings_and_sandboxes_that_dont_compute_never_render(live: Live) -> None:
     client = FakeTrueColour()
     views_for(live, client)
     asset_id = live.draft(square(800))  # mock mode in the live world: no live metrics
     rate(live, asset_id)
     assert live.detail(asset_id)["mock"] is True
     w = live.w
-    go_live(w, FakeEarthEngine()).load(square(1_200))
+    go_live(w, FakeEarthEngine(), sandbox_live_ratings_per_day=0).load(square(1_200))
     sandbox_asset = str(lifecycle.draft(w)["id"])
     assert lifecycle.submit(w, sandbox_asset).status_code == 202
     w.executor.run_all()
@@ -329,6 +329,21 @@ def test_mock_ratings_and_sandboxes_never_render(live: Live) -> None:
     assert status_of(w, sandbox_asset)[0] is AssetStatus.LISTED
     assert client.calls == []
     assert stored(live, asset_id) == [] and stored(live, sandbox_asset) == []
+
+
+@requires_db
+def test_a_sandbox_listing_rated_live_gets_its_views_as_in_the_live_world(live: Live) -> None:
+    client = FakeTrueColour()
+    views_for(live, client)
+    w = live.w
+    go_live(w, FakeEarthEngine())
+    sandbox_asset = str(lifecycle.draft(w, geojson=square(800))["id"])
+    assert lifecycle.submit(w, sandbox_asset).status_code == 202
+    w.executor.run_all()
+
+    assert status_of(w, sandbox_asset) == (AssetStatus.LISTED, None)
+    [row] = stored(live, sandbox_asset)
+    assert row.world_id == w.id and client.calls == [(1, *BEFORE), (1, *AFTER)]
 
 
 def toolbox_for(live: Live, asset_id: str, geometry: dict[str, Any], views: LiveSiteViews) -> Any:

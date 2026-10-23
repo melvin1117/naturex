@@ -299,7 +299,7 @@ def test_a_failed_render_never_fails_the_rating(
 
 
 @requires_db
-def test_mock_ratings_and_sandboxes_never_render(live: Live) -> None:
+def test_mock_ratings_and_sandboxes_that_dont_compute_never_render(live: Live) -> None:
     land_cover = FakeLandCover()
     overlays_for(live, land_cover)
     # Mock mode in the live world: no live metrics, so no overlay.
@@ -307,9 +307,10 @@ def test_mock_ratings_and_sandboxes_never_render(live: Live) -> None:
     rate(live, asset_id)
     assert status_of(live.w, asset_id) == (AssetStatus.LISTED, None)
     assert live.detail(asset_id)["mock"] is True
-    # A sandbox listing reusing a polygon computed live: rated, never rendered.
+    # A sandbox listing reusing a polygon computed live, with sandboxes' live ratings off:
+    # rated, never rendered.
     w = live.w
-    go_live(w, FakeEarthEngine()).load(square(1_200))
+    go_live(w, FakeEarthEngine(), sandbox_live_ratings_per_day=0).load(square(1_200))
     sandbox_asset = str(lifecycle.draft(w)["id"])
     assert lifecycle.submit(w, sandbox_asset).status_code == 202
     w.executor.run_all()
@@ -317,6 +318,22 @@ def test_mock_ratings_and_sandboxes_never_render(live: Live) -> None:
     assert status_of(w, sandbox_asset)[0] is AssetStatus.LISTED
     assert land_cover.calls == []
     assert stored(live, asset_id) == [] and stored(live, sandbox_asset) == []
+
+
+@requires_db
+def test_a_sandbox_listing_rated_live_gets_its_overlay_as_in_the_live_world(live: Live) -> None:
+    land_cover = FakeLandCover()
+    overlays_for(live, land_cover)
+    w = live.w
+    go_live(w, FakeEarthEngine())
+    geometry = square(800)
+    sandbox_asset = str(lifecycle.draft(w, geojson=geometry)["id"])
+    assert lifecycle.submit(w, sandbox_asset).status_code == 202
+    w.executor.run_all()
+
+    assert status_of(w, sandbox_asset) == (AssetStatus.LISTED, None)
+    [row] = stored(live, sandbox_asset)
+    assert row.world_id == w.id and land_cover.calls == [geometry_sha256(geometry)]
 
 
 @requires_db

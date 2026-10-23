@@ -475,10 +475,10 @@ def _referenced_tables(model: type[SQLModel]) -> set[str]:
 
 
 def test_the_delete_order_covers_every_world_table_children_first() -> None:
+    # Model calls and counted live ratings outlive resets and prunes, so neither frees a budget.
+    kept = {"llm_calls", "live_rating_requests"}
     world_tables = {
-        t.name
-        for t in SQLModel.metadata.sorted_tables
-        if "world_id" in t.c and t.name != "llm_calls"
+        t.name for t in SQLModel.metadata.sorted_tables if "world_id" in t.c and t.name not in kept
     }
     order = [m.__tablename__ for m in _DELETE_ORDER]
     assert set(order) == world_tables

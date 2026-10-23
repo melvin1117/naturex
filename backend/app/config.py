@@ -126,10 +126,13 @@ class Settings(BaseSettings):
     earth_engine_max_concurrent: int = Field(default=1, ge=1, le=4)
     # Larger polygons are never computed live (409 `live_area_too_large` at submit).
     earth_engine_live_max_ha: float = Field(default=5_000.0, gt=0)
-    # Live-world live ratings (submits that need a computation; cache hits are free; demo
-    # sandboxes never compute), rolling 24 hours.
+    # Live ratings (submits that need a computation; cache hits are free), rolling 24 hours: per
+    # account (a sandbox's personas included), and in total for the live world only.
     live_ratings_per_user_per_day: int = Field(default=2, ge=0)
     live_ratings_global_per_day: int = Field(default=50, ge=0)
+    # Live ratings across all demo sandboxes together, rolling 24 hours: a separate allowance, so
+    # sandboxes never use up the live world's. 0 = sandboxes never compute (cache or fallback).
+    sandbox_live_ratings_per_day: int = Field(default=20, ge=0)
 
     @classmethod
     def settings_customise_sources(

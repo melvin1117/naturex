@@ -868,7 +868,8 @@ class EarthObsCache(SQLModel, table=True):
 
 
 class LiveRatingRequest(SQLModel, table=True):
-    """One counted live Earth Engine rating (T60 quotas): per account per day, and globally.
+    """One counted live Earth Engine rating (T60 quotas): per account per day, and per pool (the
+    live world's, or every demo sandbox's together).
 
     Kept through sandbox resets and prunes (like `llm_calls`), so neither frees quota; rows
     older than two days are pruned when a new one is counted."""
@@ -888,6 +889,8 @@ class LiveRatingRequest(SQLModel, table=True):
         sa_column=Column(BigInteger, primary_key=True, autoincrement=True),
     )
     user_id: UUID
+    world_id: UUID
+    """The submitter's world, which picks the pool. No foreign key: a row outlives its sandbox."""
     geometry_sha256: str = Field(sa_column=Column(String(64), nullable=False))
     run_id: UUID | None = None
     """The rating run it was counted for; refunded if that run never reached Earth Engine."""

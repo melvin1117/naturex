@@ -14,18 +14,20 @@ from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
+from alembic import command
 from fastapi.testclient import TestClient
-from sqlalchemy import Connection, func
+from sqlalchemy import Connection, create_engine, func, text
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, col, select
 
 from app.auth import SESSION_COOKIE, start_session
 from app.communities import create_community
-from app.config import Settings
+from app.config import Settings, get_settings
 from app.main import app
 from app.models import (
     Asset,
     AssetStatus,
+    CommunityMember,
     EarthObsCache,
     LiveRatingRequest,
     Metrics,
@@ -53,6 +55,7 @@ from app.services.earth_obs_live import (
     loggable,
     refund_live_rating,
     reserve_live_rating,
+    world_computes_live,
 )
 from app.services.lifecycle import NO_SATELLITE_METRICS
 from app.services.rating_runs import (
@@ -65,9 +68,9 @@ from app.services.rating_runs import (
 from app.tools import earth_engine as eng
 from app.tools.earth_obs import EarthObsMetrics, is_curated_site, is_mock_metrics
 from app.tools.geometry import geometry_sha256, validate_polygon
-from app.worlds import LIVE_WORLD_ID
+from app.worlds import LIVE_WORLD_ID, WORLD_ID
 from tests import test_lifecycle as lifecycle
-from tests.conftest import requires_db
+from tests.conftest import alembic_cfg, requires_db
 from tests.test_earth_engine import LAND_COVER, ndvi_fixture
 from tests.test_lifecycle import (
     LAT,
@@ -450,6 +453,29 @@ def test_only_a_live_world_listing_run_computes_and_live_replaces_mocks() -> Non
     assert simulated.value.code == "no_cached_metrics"
 
 
+def test_a_sandbox_computes_under_its_own_allowance_and_the_template_never() -> None:
+    fake = FakeEarthEngine()
+    live = memory_service(fake)
+    sandbox = asset_for(POLYGON, world_id=uuid4())
+    assert world_computes_live(LIVE_WORLD_ID, sandboxes=False)
+    assert world_computes_live(sandbox.world_id, sandboxes=True)
+    assert not world_computes_live(sandbox.world_id, sandboxes=False)  # allowance 0
+    assert not world_computes_live(WORLD_ID, sandboxes=True)
+
+    with pytest.raises(ToolFailed) as pending:  # the submit's probe: this run will compute
+        resolve_metrics(load_cached_metrics, sandbox, "baseline", True, live, sandbox_live=True)
+    assert pending.value.code == LIVE_METRICS_PENDING and fake.calls == []
+    template = asset_for(POLYGON, world_id=WORLD_ID)
+    mocked = resolve_metrics(
+        load_cached_metrics, template, "baseline", True, live, compute_live=True, sandbox_live=True
+    )
+    assert is_mock_metrics(mocked) and fake.calls == []
+    computed = resolve_metrics(
+        load_cached_metrics, sandbox, "baseline", False, live, compute_live=True, sandbox_live=True
+    )
+    assert not is_mock_metrics(computed) and len(fake.calls) == 1
+
+
 FOREIGN = [
     pytest.param(lambda d: {**d, "centroid": {"lat": LAT + 1, "lon": LON}}, id="centroid"),
     pytest.param(lambda d: {**d, "area_ha": d["area_ha"] * 1.5}, id="area"),
@@ -520,9 +546,12 @@ def test_live_failures_fail_the_step_without_a_retry() -> None:
 # ----- quotas (DB) ----------------------------------------------------------------------------
 
 
-def quota(user_id: UUID, *, per_user: int = 2, everyone: int = 50) -> LiveQuota:
+def quota(
+    user_id: UUID, *, per_user: int = 2, everyone: int = 50, world_id: UUID = LIVE_WORLD_ID
+) -> LiveQuota:
     return LiveQuota(
         user_id=user_id,
+        world_id=world_id,
         geometry_sha256="a" * 64,
         per_user_per_day=per_user,
         global_per_day=everyone,
@@ -563,6 +592,29 @@ def test_a_global_daily_cap_bounds_every_account_together(session: Session) -> N
 
 
 @requires_db
+def test_sandboxes_share_one_daily_cap_apart_from_the_live_worlds(session: Session) -> None:
+    now = datetime(2026, 10, 19, 12, tzinfo=UTC)
+    first, second, third = uuid4(), uuid4(), uuid4()  # three sandboxes
+
+    def in_sandbox(world_id: UUID) -> LiveQuota:
+        return quota(uuid4(), world_id=world_id, everyone=2)
+
+    reserve_live_rating(session, quota(uuid4(), everyone=1), now - timedelta(hours=2))
+    # The live world is at its cap; the sandboxes' allowance is untouched.
+    reserve_live_rating(session, in_sandbox(first), now - timedelta(hours=1))
+    reserve_live_rating(session, in_sandbox(second), now)
+    with pytest.raises(LiveQuotaExceeded) as capped:  # every sandbox together
+        reserve_live_rating(session, in_sandbox(third), now)
+    assert capped.value.code == LIVE_RATING_GLOBAL_LIMIT
+    assert capped.value.retry_after_s == 23 * 3600
+    with pytest.raises(LiveQuotaExceeded):  # the live world's own cap still holds...
+        reserve_live_rating(session, quota(uuid4(), everyone=1), now)
+    reserve_live_rating(session, quota(uuid4(), everyone=2), now)  # ...and counts only its rows
+    worlds = sorted(map(str, session.exec(select(LiveRatingRequest.world_id)).all()))
+    assert worlds == sorted(map(str, [LIVE_WORLD_ID, LIVE_WORLD_ID, first, second]))
+
+
+@requires_db
 def test_counted_rows_older_than_two_days_are_pruned(session: Session) -> None:
     now = datetime(2026, 10, 19, 12, tzinfo=UTC)
     reserve_live_rating(session, quota(uuid4()), now - timedelta(days=3))
@@ -578,6 +630,39 @@ def test_a_refund_removes_only_its_runs_row(session: Session) -> None:
     reserve_live_rating(session, quota(uuid4()), now, uuid4())
     assert refund_live_rating(session, run_id) and not refund_live_rating(session, run_id)
     assert len(session.exec(select(LiveRatingRequest)).all()) == 1
+
+
+@requires_db
+def test_the_world_migration_backfills_the_live_world_and_downgrades() -> None:
+    """0029: rows from before it were all the live world's; a downgrade drops the sandboxes'
+    rows, which the single pool before it would have counted against the live world."""
+    cfg = alembic_cfg()
+    command.upgrade(cfg, "head")
+    engine = create_engine(get_settings().database_url)
+    add = "INSERT INTO live_rating_requests (user_id, geometry_sha256{}) VALUES (:u, :g{})"
+    live_user, sandbox_user, old_user = uuid4(), uuid4(), uuid4()
+    try:
+        with engine.begin() as c:
+            c.execute(text("DELETE FROM live_rating_requests"))
+            for user, world_id in ((live_user, LIVE_WORLD_ID), (sandbox_user, uuid4())):
+                c.execute(
+                    text(add.format(", world_id", ", :w")),
+                    {"u": user, "g": "a" * 64, "w": world_id},
+                )
+        command.downgrade(cfg, "0028")
+        with engine.begin() as c:
+            kept = c.execute(text("SELECT user_id FROM live_rating_requests")).scalars().all()
+            assert kept == [live_user]
+            c.execute(text(add.format("", "")), {"u": old_user, "g": "b" * 64})
+        command.upgrade(cfg, "head")
+        with engine.connect() as c:
+            worlds = c.execute(text("SELECT DISTINCT world_id FROM live_rating_requests")).scalars()
+            assert list(worlds) == [LIVE_WORLD_ID]
+    finally:
+        command.upgrade(cfg, "head")
+        with engine.begin() as c:
+            c.execute(text("DELETE FROM live_rating_requests"))
+        engine.dispose()
 
 
 # ----- the listing flow, end to end (DB) -------------------------------------------------------
@@ -786,7 +871,96 @@ def test_a_live_listing_never_shows_another_sites_data(live: Live) -> None:
     assert w.session.exec(select(Report).where(Report.asset_id == UUID(asset_id))).first() is None
 
 
-# ----- demo worlds: never live, the "cached example" ----------------------------------------------
+# ----- demo sandboxes: live under their own allowance ---------------------------------------------
+
+
+def rosa(w: World_) -> tuple[User, str]:
+    """The sandbox's Rosa persona and a community she owns (every seeded one)."""
+    persona = w.session.exec(
+        select(User).where(User.world_id == w.id, User.persona_key == "rosa")
+    ).one()
+    community_id = w.session.exec(
+        select(CommunityMember.community_id).where(
+            CommunityMember.world_id == w.id, CommunityMember.user_id == persona.id
+        )
+    ).first()
+    assert community_id is not None
+    return persona, str(community_id)
+
+
+@requires_db
+def test_a_new_sandbox_listing_is_rated_with_its_own_live_metrics(live: Live) -> None:
+    w, fake = live.w, FakeEarthEngine()
+    go_live(w, fake)
+    asset = draft(w)  # in the lifecycle's demo sandbox
+    run_id = submit(w, asset["id"]).json()["run_id"]
+    rows = w.session.exec(select(LiveRatingRequest)).all()
+    assert [(row.world_id, row.user_id) for row in rows] == [(w.id, w.steward.id)]
+    assert fake.calls == []  # counted at submit, computed by the run
+    w.executor.run_all()
+
+    assert status_of(w, asset["id"]) == (AssetStatus.LISTED, None) and len(fake.calls) == 1
+    client = client_as(w, w.steward)
+    steps = client.get(f"/runs/{run_id}").json()["steps"]
+    assert next(step for step in steps if step["step"] == "earth_obs")["status"] == "ok"
+    detail = client.get(f"/assets/{asset['id']}").json()
+    assert detail["mock"] is False and detail["cached_example"] is None
+
+
+@requires_db
+def test_a_sandbox_personas_daily_quota_applies(live: Live) -> None:
+    w = live.w
+    go_live(w, FakeEarthEngine(), live_ratings_per_user_per_day=1)
+    persona, community_id = rosa(w)
+    first = draft(w, persona, community_id=community_id, geojson=square(800))
+    assert submit(w, first["id"], persona).status_code == 202
+    second = draft(w, persona, community_id=community_id, geojson=square(800, lat=LAT + 0.05))
+    refused = submit(w, second["id"], persona)
+    assert (refused.status_code, refused.json()["detail"]) == (429, LIVE_RATING_QUOTA)
+    assert status_of(w, second["id"]) == (AssetStatus.DRAFT, None)  # untouched
+    other = draft(w, geojson=square(800, lat=LAT + 0.1))  # another account of the sandbox
+    assert submit(w, other["id"]).status_code == 202 and counted(w) == 2
+
+
+@requires_db
+def test_the_sandboxes_cap_and_the_live_worlds_never_block_each_other(live: Live) -> None:
+    w = live.w
+    go_live(w, FakeEarthEngine(), live_ratings_global_per_day=1, sandbox_live_ratings_per_day=1)
+    assert live.submit(live.draft()).status_code == 202  # the live world reaches its cap
+    sandbox = draft(w, geojson=square(800, lat=LAT + 0.05))
+    assert submit(w, sandbox["id"]).status_code == 202  # sandboxes have their own allowance
+    late = draft(w, w.owner, geojson=square(800, lat=LAT + 0.1))
+    refused = submit(w, late["id"], w.owner)
+    assert (refused.status_code, refused.json()["detail"]) == (429, LIVE_RATING_GLOBAL_LIMIT)
+    assert status_of(w, late["id"]) == (AssetStatus.DRAFT, None)
+
+    go_live(w, FakeEarthEngine(), live_ratings_global_per_day=2, sandbox_live_ratings_per_day=1)
+    other = live.draft(square(800, lat=LAT + 0.15), user=live.owner)
+    assert live.submit(other, user=live.owner).status_code == 202  # sandbox rows don't count
+    assert counted(w) == 3
+
+
+@requires_db
+def test_a_sandbox_run_that_found_earth_engine_busy_gives_its_live_rating_back(
+    live: Live,
+) -> None:
+    w = live.w
+    service = go_live(w, FakeEarthEngine(), earth_engine_timeout_s=0.1)
+    asset = draft(w)
+    run_id = submit(w, asset["id"]).json()["run_id"]
+    assert counted(w) == 1
+    service._slots.acquire()  # another computation holds the only slot
+    try:
+        w.executor.run_all()
+    finally:
+        service._slots.release()
+    run = client_as(w, w.steward).get(f"/runs/{run_id}").json()
+    assert run["error"] == f"earth_obs_failed:{EARTH_ENGINE_BUSY}"
+    assert status_of(w, asset["id"])[0] is AssetStatus.RATING
+    assert counted(w) == 0  # nothing was computed, so nothing is spent
+
+
+# ----- demo worlds that don't compute: the "cached example" ---------------------------------------
 
 
 def test_distance_is_great_circle_kilometres() -> None:
@@ -809,11 +983,11 @@ def test_the_live_world_never_shows_a_cached_example() -> None:
 
 
 @requires_db
-def test_a_demo_world_never_computes_and_shows_the_nearest_cached_example(
+def test_with_no_sandbox_allowance_a_sandbox_never_computes_and_shows_a_cached_example(
     live: Live,
 ) -> None:
     w, fake = live.w, FakeEarthEngine()
-    go_live(w, fake)
+    go_live(w, fake, sandbox_live_ratings_per_day=0)  # sandboxes as before they computed
     asset = draft(w)  # in the lifecycle's demo sandbox
     assert submit(w, asset["id"]).status_code == 202
     w.executor.run_all()

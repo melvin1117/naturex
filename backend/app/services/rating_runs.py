@@ -112,6 +112,7 @@ from app.services.earth_obs_live import (
     LiveQuota,
     build_live_earth_obs,
     refund_live_rating,
+    world_computes_live,
 )
 from app.services.field_evidence import DbEvidenceProvider
 from app.services.land_cover_overlays import LiveOverlays, OverlayJob, build_live_overlays
@@ -132,7 +133,7 @@ from app.tools.earth_obs import (
 from app.tools.ecosystem import Ecosystem, infer_ecosystem
 from app.tools.geometry import geometry_sha256, metrics_match_polygon
 from app.tools.signals import Signal, find_signals
-from app.worlds import LIVE_WORLD_ID
+from app.worlds import is_sandbox_world
 
 log = logging.getLogger(__name__)
 
@@ -282,6 +283,11 @@ NewsRunner = Callable[[NewsScoutAsset, LLMClient | None], NewsScoutOutput]
 LlmFactory = Callable[[Callable[[CallLog], CallLog]], LLMClient | None]
 
 
+def sandboxes_compute_live(settings: Settings) -> bool:
+    """Whether demo sandboxes compute new polygons live (`SANDBOX_LIVE_RATINGS_PER_DAY` > 0)."""
+    return settings.sandbox_live_ratings_per_day > 0
+
+
 def resolve_metrics(
     loader: MetricsLoader,
     asset: AssetInfo,
@@ -290,11 +296,13 @@ def resolve_metrics(
     live: LiveEarthObs | None = None,
     *,
     compute_live: bool = False,
+    sandbox_live: bool = False,
 ) -> EarthObsMetrics:
     """The run's metrics for the asset: the loader's, else for a new polygon with none (T60)
-    its live Earth Engine metrics when live is on (cached, or computed if `compute_live`),
-    else (with `USE_MOCKS=true` only) `mock_listing_metrics`. Metrics for a new polygon must
-    describe it: never a curated site's, centroid in its convex hull and area within ±10 %
+    its live Earth Engine metrics when live is on (cached, or computed if `compute_live` in a
+    world that computes: the live world, or a sandbox with `sandbox_live`), else (with
+    `USE_MOCKS=true` only) `mock_listing_metrics`. Metrics for a new polygon must describe it:
+    never a curated site's, centroid in its convex hull and area within ±10 %
     (`foreign_metrics`)."""
     try:
         metrics = loader(asset, scenario)
@@ -302,7 +310,8 @@ def resolve_metrics(
         new_polygon = asset.site_key is None and scenario == "baseline"
         if exc.code != NO_CACHED_METRICS or not new_polygon:
             raise
-        metrics = _new_polygon_metrics(asset, exc, use_mocks, live, compute_live)
+        computes = world_computes_live(asset.world_id, sandboxes=sandbox_live)
+        metrics = _new_polygon_metrics(asset, exc, use_mocks, live, computes, compute_live)
     if asset.site_key is None and not _describes_polygon(asset, metrics):
         raise ToolFailed("foreign_metrics", retryable=False)  # never another site's data
     return metrics
@@ -313,6 +322,7 @@ def _new_polygon_metrics(
     missing: ToolFailed,
     use_mocks: bool,
     live: LiveEarthObs | None,
+    world_computes: bool,
     compute_live: bool,
 ) -> EarthObsMetrics:
     lat, lon, area = asset.centroid_lat, asset.centroid_lon, asset.area_ha
@@ -320,10 +330,11 @@ def _new_polygon_metrics(
         cached = live.cached(asset.geojson)  # any world may reuse a computed polygon
         if cached is not None:
             return cached
-        if asset.world_id == LIVE_WORLD_ID:
-            # Live world: rated with its own observations, never mocks. Demo sandboxes never
-            # compute (they would spend the live world's capacity): they fall through to mocks
-            # or `no_cached_metrics`, and the cached example (T60).
+        if world_computes:
+            # The live world, or a sandbox under its own allowance: rated with its own
+            # observations, never mocks. A sandbox that doesn't compute
+            # (`SANDBOX_LIVE_RATINGS_PER_DAY=0`) and the template fall through to mocks or
+            # `no_cached_metrics`, and the cached example (T60).
             if not compute_live:
                 raise ToolFailed(LIVE_METRICS_PENDING, retryable=False)
             try:
@@ -897,6 +908,7 @@ class RunToolbox:
             self._deps.live,
             # Only a listing submit counted the live-rating quota (T60), so only it computes.
             compute_live=self._spec.trigger == "listing",
+            sandbox_live=sandboxes_compute_live(self._deps.settings),
         )
 
     def _earth_obs(self) -> dict[str, Any]:
@@ -970,12 +982,15 @@ class RunToolbox:
 
     def _start_overlay(self, metrics: EarthObsMetrics) -> None:
         """Render the listing's land-cover overlay (#231) and before/after views alongside the
-        rating: live world, live Earth Engine metrics of a new polygon only (never mocks, a demo
-        site or a scenario)."""
+        rating: in a world that computes live (the live world, or a sandbox under its own
+        allowance), live Earth Engine metrics of a new polygon only (never mocks, a demo site or
+        a scenario)."""
         geojson = self._asset.geojson
         if (
             geojson is None
-            or self._spec.world_id != LIVE_WORLD_ID
+            or not world_computes_live(
+                self._spec.world_id, sandboxes=sandboxes_compute_live(self._deps.settings)
+            )
             or self._asset.site_key is not None
             or self._spec.metrics is not None
             or self.scenario != "baseline"
@@ -1646,6 +1661,7 @@ class RatingRunner:
                 "baseline",
                 self.settings.use_mocks,
                 self.live_metrics,
+                sandbox_live=sandboxes_compute_live(self.settings),
             )
         except ToolFailed as exc:
             if exc.code == LIVE_METRICS_PENDING and self.live_metrics is not None:
@@ -1659,12 +1675,19 @@ class RatingRunner:
         return live is None or live.area_allowed(float(asset.area_ha))
 
     def live_quota(self, asset: Asset, user_id: UUID) -> LiveQuota:
-        """The live rating a submit of `asset` by `user_id` counts (T60)."""
+        """The live rating a submit of `asset` by `user_id` counts (T60): against the account,
+        and the live world's allowance or, in a sandbox, every sandbox's together."""
+        sandbox = is_sandbox_world(asset.world_id)
         return LiveQuota(
             user_id=user_id,
+            world_id=asset.world_id,
             geometry_sha256=geometry_sha256(asset.geojson),
             per_user_per_day=self.settings.live_ratings_per_user_per_day,
-            global_per_day=self.settings.live_ratings_global_per_day,
+            global_per_day=(
+                self.settings.sandbox_live_ratings_per_day
+                if sandbox
+                else self.settings.live_ratings_global_per_day
+            ),
         )
 
     def _store(

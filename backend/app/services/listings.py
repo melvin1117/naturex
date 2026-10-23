@@ -482,7 +482,8 @@ class ListingSubmit:
     `metrics_version` is the data version the run's metrics loader has for the listing right
     now (None: nothing), probed by the caller before any lock. `live_quota` is set when the run
     will compute the metrics live on Earth Engine (T60): the submit then counts one live rating
-    for the account and globally, under the runner's global run lock (429 when spent).
+    for the account and for its world's pool (the live world, or all sandboxes together), under
+    the runner's global run lock (429 when spent).
     """
 
     def __init__(
