@@ -1565,6 +1565,25 @@ class MeOut(BaseModel):
     kind: UserKind
     is_admin: bool
     world_id: UUID
+    persona: str | None = Field(
+        default=None,
+        validation_alias="persona_key",
+        description="The demo persona this session acts as (`rosa`, `arjun`, `mia`, `admin`), "
+        "or null for a real account.",
+    )
+
+
+DemoPersona = Literal["rosa", "arjun", "mia", "admin"]
+
+
+class DemoStartIn(BaseModel):
+    persona: DemoPersona = Field(
+        default="rosa", description="Who to act as first; switch with `POST /demo/persona`."
+    )
+
+
+class DemoPersonaIn(BaseModel):
+    persona: DemoPersona
 
 
 class WorldOut(BaseModel):
@@ -2090,3 +2109,109 @@ class ReviewQueueItem(BaseModel):
         "and `notice`). Present when `ai_suggestion_status` is `completed`, and when `failed` "
         "with a stored result; null otherwise.",
     )
+
+
+# ----- the judge story (`GET /story`) --------------------------------------------------------
+
+
+class StorySite(BaseModel):
+    key: str
+    name: str
+    place: str
+    community: str
+    area_ha: Decimal
+    boundary: list[list[float]] = Field(description="The exterior ring as `[lat, lon]` pairs.")
+
+
+class StoryImage(BaseModel):
+    url: str = Field(description="Under the API base, e.g. `/media/demo-sites/...`.")
+    bounds: OverlayBounds
+
+
+class StoryLegendEntry(BaseModel):
+    label: str
+    color: str
+
+
+class StoryImages(BaseModel):
+    overlay: StoryImage = Field(description="Dynamic World land cover, latest 12 months.")
+    before: StoryImage = Field(description="Sentinel-2 true colour, first year of five.")
+    after: StoryImage = Field(description="Sentinel-2 true colour, latest 12 months.")
+    legend: dict[str, StoryLegendEntry]
+    attributions: list[str]
+
+
+class StoryLand(BaseModel):
+    ndvi: list[NdviPoint]
+    water_change: float = Field(description="Percent change in surface water (JRC).")
+    ndvi_window: DateWindow
+    attributions: list[str]
+
+
+class StoryRating(BaseModel):
+    """`rate_site` on one version of the land: computed by code, never by a model."""
+
+    scenario: Literal["baseline", "restoration", "encroachment", "fire", "drought", "protection"]
+    simulated: bool = Field(description="A Time Machine scenario, not an observation.")
+    health: Decimal
+    grade: str
+    confidence: Decimal
+    value_low: int
+    value_mid: int
+    value_high: int
+    fair_value_per_unit: Decimal
+    landcover: dict[str, float]
+    natural_fraction: float
+
+
+class StoryBacking(BaseModel):
+    units: int
+    fill_price: Decimal
+    paid: Decimal
+    to_community: Decimal = Field(description="The part paid into the community's fund.")
+
+
+class StoryMarket(BaseModel):
+    """Play money only: the opening offer, one supporter's order and the re-anchored price."""
+
+    total_units: int
+    retained_pct: Decimal
+    opening_price: Decimal
+    offered_units: int
+    backing: StoryBacking
+    price_after_downgrade: Decimal
+    price_after_restoration: Decimal
+
+
+class StoryLedgerEntry(BaseModel):
+    seq: int
+    kind: str
+    label: str
+    hash: str
+
+
+class StoryLedger(BaseModel):
+    """A Nature Ledger chain built and verified by `app.ledger`, then verified again after one
+    entry is edited without re-hashing."""
+
+    entries: list[StoryLedgerEntry]
+    verified: bool
+    head: str | None
+    tampered_seq: int
+    tampered_field: str
+    tampered_from: str
+    tampered_to: str
+    tampered_verified: bool
+    broken_at: int | None
+
+
+class StoryOut(BaseModel):
+    """The judge story's data: one demo site, its real measurements and every number the story
+    shows, computed by the product's own tested functions (`app.services.story`)."""
+
+    site: StorySite
+    images: StoryImages
+    land: StoryLand
+    ratings: list[StoryRating] = Field(description="Baseline, then encroachment, then restoration.")
+    market: StoryMarket
+    ledger: StoryLedger

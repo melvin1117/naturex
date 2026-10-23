@@ -87,6 +87,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/demo/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Demo
+         * @description Start a demo: a private sandbox and a session as `persona`, with no sign-up.
+         *
+         *     A browser that already has a demo session keeps its sandbox and only switches to `persona`,
+         *     so returning to the story never loses what the judge did. Otherwise a new sandbox is made
+         *     from the template; any other session this browser held (a real account's) is ended here.
+         */
+        post: operations["start_demo_demo_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/demo/persona": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Switch Persona
+         * @description Act as another persona in the same sandbox: the old session ends and a new one starts.
+         *
+         *     Demo sessions only (403 `demo_session_only` for a real account, which has one identity).
+         */
+        post: operations["switch_persona_demo_persona_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/communities": {
         parameters: {
             query?: never;
@@ -1570,6 +1616,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/story": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Story
+         * @description Everything the `/judge` story shows about the hero wetland: its land, its ratings as it
+         *     is, damaged and restored (simulated), one supporter's backing and a tamper-evident record.
+         */
+        get: operations["get_story_story_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -2529,6 +2596,24 @@ export interface components {
              */
             last_decision_at: string;
         };
+        /** DemoPersonaIn */
+        DemoPersonaIn: {
+            /**
+             * Persona
+             * @enum {string}
+             */
+            persona: "rosa" | "arjun" | "mia" | "admin";
+        };
+        /** DemoStartIn */
+        DemoStartIn: {
+            /**
+             * Persona
+             * @description Who to act as first; switch with `POST /demo/persona`.
+             * @default rosa
+             * @enum {string}
+             */
+            persona: "rosa" | "arjun" | "mia" | "admin";
+        };
         /**
          * DiffReason
          * @description Why something changed, from stored data only: the Auditor's cited text, a stored event
@@ -3270,6 +3355,11 @@ export interface components {
              * Format: uuid
              */
             world_id: string;
+            /**
+             * Persona
+             * @description The demo persona this session acts as (`rosa`, `arjun`, `mia`, `admin`), or null for a real account.
+             */
+            persona?: string | null;
         };
         /**
          * MetricChange
@@ -4422,6 +4512,190 @@ export interface components {
             /** Attributions */
             attributions: string[];
         };
+        /** StoryBacking */
+        StoryBacking: {
+            /** Units */
+            units: number;
+            /** Fill Price */
+            fill_price: string;
+            /** Paid */
+            paid: string;
+            /**
+             * To Community
+             * @description The part paid into the community's fund.
+             */
+            to_community: string;
+        };
+        /** StoryImage */
+        StoryImage: {
+            /**
+             * Url
+             * @description Under the API base, e.g. `/media/demo-sites/...`.
+             */
+            url: string;
+            bounds: components["schemas"]["OverlayBounds"];
+        };
+        /** StoryImages */
+        StoryImages: {
+            /** @description Dynamic World land cover, latest 12 months. */
+            overlay: components["schemas"]["StoryImage"];
+            /** @description Sentinel-2 true colour, first year of five. */
+            before: components["schemas"]["StoryImage"];
+            /** @description Sentinel-2 true colour, latest 12 months. */
+            after: components["schemas"]["StoryImage"];
+            /** Legend */
+            legend: {
+                [key: string]: components["schemas"]["StoryLegendEntry"];
+            };
+            /** Attributions */
+            attributions: string[];
+        };
+        /** StoryLand */
+        StoryLand: {
+            /** Ndvi */
+            ndvi: components["schemas"]["NdviPoint"][];
+            /**
+             * Water Change
+             * @description Percent change in surface water (JRC).
+             */
+            water_change: number;
+            ndvi_window: components["schemas"]["DateWindow"];
+            /** Attributions */
+            attributions: string[];
+        };
+        /**
+         * StoryLedger
+         * @description A Nature Ledger chain built and verified by `app.ledger`, then verified again after one
+         *     entry is edited without re-hashing.
+         */
+        StoryLedger: {
+            /** Entries */
+            entries: components["schemas"]["StoryLedgerEntry"][];
+            /** Verified */
+            verified: boolean;
+            /** Head */
+            head: string | null;
+            /** Tampered Seq */
+            tampered_seq: number;
+            /** Tampered Field */
+            tampered_field: string;
+            /** Tampered From */
+            tampered_from: string;
+            /** Tampered To */
+            tampered_to: string;
+            /** Tampered Verified */
+            tampered_verified: boolean;
+            /** Broken At */
+            broken_at: number | null;
+        };
+        /** StoryLedgerEntry */
+        StoryLedgerEntry: {
+            /** Seq */
+            seq: number;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Hash */
+            hash: string;
+        };
+        /** StoryLegendEntry */
+        StoryLegendEntry: {
+            /** Label */
+            label: string;
+            /** Color */
+            color: string;
+        };
+        /**
+         * StoryMarket
+         * @description Play money only: the opening offer, one supporter's order and the re-anchored price.
+         */
+        StoryMarket: {
+            /** Total Units */
+            total_units: number;
+            /** Retained Pct */
+            retained_pct: string;
+            /** Opening Price */
+            opening_price: string;
+            /** Offered Units */
+            offered_units: number;
+            backing: components["schemas"]["StoryBacking"];
+            /** Price After Downgrade */
+            price_after_downgrade: string;
+            /** Price After Restoration */
+            price_after_restoration: string;
+        };
+        /**
+         * StoryOut
+         * @description The judge story's data: one demo site, its real measurements and every number the story
+         *     shows, computed by the product's own tested functions (`app.services.story`).
+         */
+        StoryOut: {
+            site: components["schemas"]["StorySite"];
+            images: components["schemas"]["StoryImages"];
+            land: components["schemas"]["StoryLand"];
+            /**
+             * Ratings
+             * @description Baseline, then encroachment, then restoration.
+             */
+            ratings: components["schemas"]["StoryRating"][];
+            market: components["schemas"]["StoryMarket"];
+            ledger: components["schemas"]["StoryLedger"];
+        };
+        /**
+         * StoryRating
+         * @description `rate_site` on one version of the land: computed by code, never by a model.
+         */
+        StoryRating: {
+            /**
+             * Scenario
+             * @enum {string}
+             */
+            scenario: "baseline" | "restoration" | "encroachment" | "fire" | "drought" | "protection";
+            /**
+             * Simulated
+             * @description A Time Machine scenario, not an observation.
+             */
+            simulated: boolean;
+            /** Health */
+            health: string;
+            /** Grade */
+            grade: string;
+            /** Confidence */
+            confidence: string;
+            /** Value Low */
+            value_low: number;
+            /** Value Mid */
+            value_mid: number;
+            /** Value High */
+            value_high: number;
+            /** Fair Value Per Unit */
+            fair_value_per_unit: string;
+            /** Landcover */
+            landcover: {
+                [key: string]: number;
+            };
+            /** Natural Fraction */
+            natural_fraction: number;
+        };
+        /** StorySite */
+        StorySite: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Place */
+            place: string;
+            /** Community */
+            community: string;
+            /** Area Ha */
+            area_ha: string;
+            /**
+             * Boundary
+             * @description The exterior ring as `[lat, lon]` pairs.
+             */
+            boundary: number[][];
+        };
         /** StreamEvent */
         StreamEvent: {
             /**
@@ -5039,6 +5313,107 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    start_demo_demo_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DemoStartIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldOut"];
+                };
+            };
+            /** @description `persona_not_found`: the sandbox has no such persona */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `too_many_attempts`: this IP started too many sandboxes, or `demo_busy`: every new sandbox for this hour is taken (see `Retry-After`) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    switch_persona_demo_persona_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DemoPersonaIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldOut"];
+                };
+            };
+            /** @description `auth_required`: no session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not allowed: `demo_session_only` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `persona_not_found`: the sandbox has no such persona */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -8572,6 +8947,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_story_story_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoryOut"];
                 };
             };
         };

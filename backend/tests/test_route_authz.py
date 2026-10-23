@@ -68,6 +68,9 @@ PUBLIC: dict[tuple[str, str], str] = {
     ("POST", "/auth/register"): "signing up",
     ("POST", "/auth/login"): "signing in",
     ("POST", "/auth/logout"): "signing out (a no-op without a session)",
+    # No-sign-up demo: anyone may start one, rate limited per IP and capped per hour.
+    ("POST", "/demo/start"): "starting a demo sandbox (no account)",
+    ("GET", "/story"): "the judge story, computed from committed demo data, no world data",
     ("GET", "/healthz"): "liveness probe",
     ("GET", "/readyz"): "readiness probe",
     ("GET", "/media/demo-sites/{site_key}/overlay.png"): "curated public imagery, no world data",

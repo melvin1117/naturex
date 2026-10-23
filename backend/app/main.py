@@ -29,6 +29,7 @@ from app.routers import (
     auth,
     communities,
     copilot,
+    demo,
     events,
     evidence,
     ipo,
@@ -39,6 +40,7 @@ from app.routers import (
     places,
     reports,
     runs,
+    story,
     verification,
     world,
 )
@@ -140,6 +142,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(demo.router)
 app.include_router(communities.router)
 app.include_router(assets.router)
 app.include_router(listings.router)
@@ -157,6 +160,7 @@ app.include_router(world.router)
 app.include_router(media.router)
 app.include_router(places.router)
 app.include_router(runs.router)
+app.include_router(story.router)
 
 
 @app.exception_handler(RequestValidationError)

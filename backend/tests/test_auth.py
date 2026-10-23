@@ -127,7 +127,8 @@ def test_register_login_me_logout(session: Session, client: TestClient) -> None:
     assert signed_in.json()["id"] == body["id"]
     me = client.get("/me")
     assert me.status_code == 200
-    assert set(me.json()) == {"id", "name", "email", "kind", "is_admin", "world_id"}
+    assert set(me.json()) == {"id", "name", "email", "kind", "is_admin", "world_id", "persona"}
+    assert me.json()["persona"] is None
     assert me.headers["cache-control"] == "no-store"
 
 

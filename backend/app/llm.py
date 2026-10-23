@@ -39,6 +39,7 @@ from sqlmodel import Session, select
 
 from app.config import Settings
 from app.models import LlmCall
+from app.worlds import is_sandbox_world
 
 log = logging.getLogger(__name__)
 
@@ -152,10 +153,16 @@ class DbCallLog:
     """`llm_calls` in Postgres, in its own short transactions, so spend is recorded even if
     the caller's transaction later rolls back. A transaction-scoped advisory lock makes
     check-and-reserve atomic across workers. A reservation left behind by a crash keeps
-    counting at its worst-case cost (fail closed)."""
+    counting at its worst-case cost (fail closed).
 
-    def __init__(self, session_factory: Callable[[], Session]) -> None:
+    `sandbox_budget` also caps each demo sandbox's own spend (`SANDBOX_LLM_BUDGET_USD`), checked
+    under the same lock; a sandbox's calls stay counted after "Reset my demo"."""
+
+    def __init__(
+        self, session_factory: Callable[[], Session], sandbox_budget: Decimal | None = None
+    ) -> None:
         self._session_factory = session_factory
+        self._sandbox_budget = sandbox_budget
 
     def spent_usd(self) -> Decimal:
         with self._session_factory() as session:
@@ -170,6 +177,20 @@ class DbCallLog:
             )
             if spent + call.cost_usd > budget:
                 raise BudgetExceeded(_over_budget(budget, spent, call.cost_usd))
+            if self._sandbox_budget is not None and (
+                call.world_id is not None and is_sandbox_world(call.world_id)
+            ):
+                in_world = Decimal(
+                    session.exec(
+                        select(func.coalesce(func.sum(LlmCall.cost_usd), 0)).where(
+                            LlmCall.world_id == call.world_id
+                        )
+                    ).one()
+                )
+                if in_world + call.cost_usd > self._sandbox_budget:
+                    raise BudgetExceeded(
+                        "sandbox " + _over_budget(self._sandbox_budget, in_world, call.cost_usd)
+                    )
             row = _row(call)
             session.add(row)
             session.commit()
@@ -698,7 +719,9 @@ def get_llm_client(
     ``wrap_log`` decorates the Postgres call log, e.g. to also record a rating run's calls
     for its progress events (T27); spend is still written to `llm_calls` first.
     """
-    call_log: CallLog = DbCallLog(session_factory)
+    call_log: CallLog = DbCallLog(
+        session_factory, sandbox_budget=Decimal(str(settings.sandbox_llm_budget_usd))
+    )
     if wrap_log is not None:
         call_log = wrap_log(call_log)
     transport = token_factory_transport(settings)
