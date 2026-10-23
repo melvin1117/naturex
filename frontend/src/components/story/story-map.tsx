@@ -52,19 +52,22 @@ const ease = {
   sine: (t: number) => -(Math.cos(Math.PI * t) - 1) / 2,
 };
 
+/** Animate `frame` from 0 to 1; stops early (without a last frame) once `alive` turns false. */
 function tween(
   ms: number,
   curve: (t: number) => number,
   frame: (v: number) => void,
   instant: boolean,
+  alive: () => boolean = () => true,
 ): Promise<void> {
   if (instant || ms <= 0) {
-    frame(1);
+    if (alive()) frame(1);
     return Promise.resolve();
   }
   return new Promise((resolve) => {
     const start = performance.now();
     const step = (now: number) => {
+      if (!alive()) return resolve();
       const t = Math.min(1, (now - start) / ms);
       frame(curve(t));
       if (t < 1) requestAnimationFrame(step);
@@ -118,6 +121,10 @@ export const StoryMap = forwardRef(function StoryMap(
     const promise = new Promise<void>((r) => (resolve = r));
     ready.current = { promise, resolve };
   }
+  /** Bumped by `reset()`: a sequence started before it stops and removes what it added. */
+  const epoch = useRef(0);
+  /** The flight to the site, shared: a scene that starts mid-flight waits for the same landing. */
+  const arrival = useRef<Promise<void> | null>(null);
   const latest = useRef({ story, reducedMotion, inset });
   useEffect(() => {
     latest.current = { story, reducedMotion, inset };
@@ -157,6 +164,10 @@ export const StoryMap = forwardRef(function StoryMap(
 
   useImperativeHandle(ref, () => {
     const instant = () => latest.current.reducedMotion;
+    const lease = () => {
+      const mine = epoch.current;
+      return () => epoch.current === mine;
+    };
     const ring = () => latest.current.story.site.boundary as LatLng[];
     const padding = () => {
       const { top, right, bottom, left } = latest.current.inset;
@@ -188,11 +199,14 @@ export const StoryMap = forwardRef(function StoryMap(
       return { left: sw.x, top: ne.y, width: ne.x - sw.x, height: sw.y - ne.y };
     };
 
-    return {
-      async flyToSite() {
-        await ready.current!.promise;
-        await wait(600, instant());
-        await flyTo(ring(), 3.2);
+    const api: StoryMapHandle = {
+      flyToSite() {
+        arrival.current ??= (async () => {
+          await ready.current!.promise;
+          await wait(600, instant());
+          await flyTo(ring(), 3.2);
+        })();
+        return arrival.current;
       },
 
       async drawBoundary() {
@@ -232,9 +246,10 @@ export const StoryMap = forwardRef(function StoryMap(
       },
 
       async revealLandCover() {
+        const alive = lease();
         await ready.current!.promise;
         const { L, map } = layers.current;
-        if (!L || !map) return;
+        if (!L || !map || !alive()) return;
         const { images } = latest.current.story;
         const bounds = leafletBounds(images.overlay.bounds);
         const overlay = L.imageOverlay(apiMedia(images.overlay.url), bounds, {
@@ -246,6 +261,10 @@ export const StoryMap = forwardRef(function StoryMap(
         const img = overlay.getElement()!;
         img.style.clipPath = "inset(0 100% 0 0)";
         await loaded(img);
+        if (!alive()) {
+          overlay.remove();
+          return;
+        }
         const rect = rectOf(bounds);
         const scan = document.createElement("div");
         scan.setAttribute("aria-hidden", "true");
@@ -267,14 +286,20 @@ export const StoryMap = forwardRef(function StoryMap(
             scan.style.left = `${rect.left + v * rect.width}px`;
           },
           instant(),
+          alive,
         );
         await tween(
           450,
           ease.out,
           (v) => (scan.style.opacity = `${1 - v}`),
           instant(),
+          alive,
         );
         scan.remove();
+        if (!alive()) {
+          overlay.remove();
+          return;
+        }
         img.style.clipPath = "";
       },
 
@@ -291,12 +316,14 @@ export const StoryMap = forwardRef(function StoryMap(
       },
 
       async sweepViews() {
+        const alive = lease();
         await ready.current!.promise;
         const { L, map } = layers.current;
-        if (!L || !map) return;
+        if (!L || !map || !alive()) return;
         const { images, land } = latest.current.story;
         const bounds = leafletBounds(images.after.bounds);
         await flyTo(bounds, 1.4);
+        if (!alive()) return;
         const before = L.imageOverlay(apiMedia(images.before.url), bounds, {
           opacity: 0,
           alt: "The wetland in the first year of five (Sentinel-2)",
@@ -310,8 +337,26 @@ export const StoryMap = forwardRef(function StoryMap(
         layers.current.after = after;
         const afterImg = after.getElement()!;
         afterImg.style.clipPath = "inset(0 0 0 100%)";
+        const abandon = () => {
+          before.remove();
+          after.remove();
+          layers.current.divider?.remove();
+          if (layers.current.before === before) {
+            layers.current.before = undefined;
+            layers.current.after = undefined;
+            layers.current.divider = undefined;
+          }
+        };
         await Promise.all([loaded(before.getElement()!), loaded(afterImg)]);
-        await tween(1100, ease.out, (v) => before.setOpacity(v), instant());
+        if (!alive()) return abandon();
+        await tween(
+          1100,
+          ease.out,
+          (v) => before.setOpacity(v),
+          instant(),
+          alive,
+        );
+        if (!alive()) return abandon();
 
         const rect = rectOf(bounds);
         const divider = document.createElement("div");
@@ -337,9 +382,11 @@ export const StoryMap = forwardRef(function StoryMap(
           divider.style.left = `${rect.left + x * rect.width}px`;
         };
         place(1);
-        await tween(3600, ease.sine, (v) => place(1 - v), instant());
+        await tween(3600, ease.sine, (v) => place(1 - v), instant(), alive);
         await wait(500, instant());
-        await tween(1500, ease.inOut, (v) => place(0.5 * v), instant());
+        if (!alive()) return abandon();
+        await tween(1500, ease.inOut, (v) => place(0.5 * v), instant(), alive);
+        if (!alive()) return abandon();
         const handle = divider.querySelector("button")!;
         handle.addEventListener("pointerdown", (e) => {
           handle.setPointerCapture(e.pointerId);
@@ -349,9 +396,11 @@ export const StoryMap = forwardRef(function StoryMap(
           const up = () => {
             handle.removeEventListener("pointermove", move);
             handle.removeEventListener("pointerup", up);
+            handle.removeEventListener("pointercancel", up);
           };
           handle.addEventListener("pointermove", move);
           handle.addEventListener("pointerup", up);
+          handle.addEventListener("pointercancel", up);
         });
         handle.addEventListener("keydown", (e) => {
           if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
@@ -383,9 +432,10 @@ export const StoryMap = forwardRef(function StoryMap(
       },
 
       async markNorthEdge(mark) {
+        const alive = lease();
         await ready.current!.promise;
         const { L, map } = layers.current;
-        if (!L || !map) return;
+        if (!L || !map || !alive()) return;
         if (mark === null) {
           layers.current.edge?.remove();
           layers.current.edge = undefined;
@@ -431,6 +481,7 @@ export const StoryMap = forwardRef(function StoryMap(
       },
 
       reset() {
+        epoch.current += 1;
         const s = layers.current;
         s.landCover?.remove();
         s.before?.remove();
@@ -438,15 +489,20 @@ export const StoryMap = forwardRef(function StoryMap(
         s.divider?.remove();
         s.edge?.remove();
         s.landCover = s.before = s.after = s.divider = s.edge = undefined;
-        if (s.map) void flyTo(ring(), 1.2);
+        arrival.current = (async () => {
+          await ready.current!.promise;
+          await flyTo(ring(), 1.2);
+        })();
+        void arrival.current.then(() => api.drawBoundary());
       },
     };
+    return api;
   }, []);
 
   return (
     <div
       ref={container}
-      role="img"
+      role="region"
       aria-label={`Satellite map of ${story.site.name}, ${story.site.place}`}
       className="absolute inset-0 isolate bg-machine [&_.leaflet-control-attribution]:!bg-machine/70 [&_.leaflet-control-attribution]:!text-[10px] [&_.leaflet-control-attribution]:!text-machine-muted [&_.leaflet-control-attribution_a]:!text-machine-ink [&_.leaflet-tile]:!h-[256.5px] [&_.leaflet-tile]:!w-[256.5px]"
     />

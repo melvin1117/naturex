@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "cn";
 
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Dialog,
   DialogClose,
@@ -39,8 +40,7 @@ export function DemoBar() {
   const known = session.status === "ready" || session.status === "error";
   // The story at /judge is full screen and says it's play money itself.
   if (pathname === "/judge") return null;
-  if (me?.persona)
-    return <DemoSessionBar persona={me.persona as DemoPersona} />;
+  if (me?.persona) return <DemoSessionBar persona={me.persona} />;
   if (me != null || !known) return <SandboxNotice />;
   return <DemoControls />;
 }
@@ -91,31 +91,28 @@ function DemoSessionBar({ persona }: { persona: DemoPersona }) {
           <span className="hidden text-primary-foreground/75 lg:inline">
             Acting as
           </span>
-          <div
-            role="radiogroup"
+          <ToggleGroup
+            type="single"
+            value={persona}
+            onValueChange={(v) => {
+              const next = SESSION_PERSONAS.find((p) => p.key === v);
+              if (next) void switchTo(next);
+            }}
+            disabled={switcher.isPending}
             aria-label="Act as"
-            className="flex rounded-full bg-primary-foreground/10 p-0.5"
+            className="rounded-full bg-primary-foreground/10 p-0.5"
           >
             {SESSION_PERSONAS.map((p) => (
-              <button
+              <ToggleGroupItem
                 key={p.key}
-                type="button"
-                role="radio"
-                aria-checked={persona === p.key}
-                disabled={switcher.isPending}
-                onClick={() => void switchTo(p)}
-                className={cn(
-                  "rounded-full px-3 py-1 text-[13px] font-medium transition-colors disabled:cursor-wait",
-                  persona === p.key
-                    ? "bg-lime text-foreground"
-                    : "text-primary-foreground/80 hover:text-primary-foreground",
-                )}
+                value={p.key}
+                aria-label={`${p.name}, ${p.role}`}
+                className="h-7 rounded-full px-3 text-[13px] font-medium text-primary-foreground/80 hover:bg-transparent hover:text-primary-foreground data-[state=on]:bg-lime data-[state=on]:text-foreground"
               >
                 {p.name}
-                <span className="sr-only">, {p.role}</span>
-              </button>
+              </ToggleGroupItem>
             ))}
-          </div>
+          </ToggleGroup>
           <Button
             asChild
             size="sm"

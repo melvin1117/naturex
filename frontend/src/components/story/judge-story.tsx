@@ -204,9 +204,26 @@ function StoryStage({
     // A new stage object per scene, so a sequence started in one scene stops when it's left.
   }, [scene, story, evidence, reduced, go]);
 
+  const panel = useRef<HTMLDivElement>(null);
+  const chainBox = useRef<HTMLDivElement>(null);
+  const [panelH, setPanelH] = useState(420);
+  const [chainH, setChainH] = useState(112);
+  useEffect(() => {
+    const observer = new ResizeObserver(() => {
+      if (panel.current)
+        setPanelH(panel.current.getBoundingClientRect().bottom);
+      if (chainBox.current)
+        setChainH(
+          window.innerHeight - chainBox.current.getBoundingClientRect().top,
+        );
+    });
+    if (panel.current) observer.observe(panel.current);
+    if (chainBox.current) observer.observe(chainBox.current);
+    return () => observer.disconnect();
+  }, [scene]);
   const inset = wide
     ? { top: 0, right: 0, bottom: 128, left: 520 }
-    : { top: 420, right: 0, bottom: 112, left: 0 };
+    : phoneInset(panelH, chainH);
 
   const restart = () => {
     setChainState(EMPTY_CHAIN);
@@ -225,7 +242,10 @@ function StoryStage({
         className="pointer-events-none absolute inset-0 z-[401] bg-[linear-gradient(180deg,rgb(14_28_22/0.5)_0%,transparent_45%,transparent_70%,rgb(14_28_22/0.75)_100%)] min-[900px]:bg-[linear-gradient(90deg,rgb(14_28_22/0.94)_0,rgb(14_28_22/0.82)_420px,rgb(14_28_22/0.3)_560px,transparent_760px),linear-gradient(0deg,rgb(14_28_22/0.6)_0,transparent_220px)]"
       />
 
-      <div className="absolute inset-x-0 top-0 bottom-auto z-[500] flex max-h-[54vh] flex-col rounded-b-3xl bg-machine/95 px-4 pt-4 pb-1 shadow-[0_16px_40px_-20px_rgba(0,0,0,0.7)] min-[900px]:inset-y-7 min-[900px]:right-auto min-[900px]:left-7 min-[900px]:max-h-none min-[900px]:w-[470px] min-[900px]:rounded-none min-[900px]:bg-transparent min-[900px]:p-0 min-[900px]:shadow-none">
+      <div
+        ref={panel}
+        className="absolute inset-x-0 top-0 bottom-auto z-[500] flex max-h-[54vh] flex-col rounded-b-3xl bg-machine/95 px-4 pt-4 pb-1 shadow-[0_16px_40px_-20px_rgba(0,0,0,0.7)] min-[900px]:inset-y-7 min-[900px]:right-auto min-[900px]:left-7 min-[900px]:max-h-none min-[900px]:w-[470px] min-[900px]:rounded-none min-[900px]:bg-transparent min-[900px]:p-0 min-[900px]:shadow-none"
+      >
         <div className="flex items-center gap-4">
           <span className="font-serif text-[26px] leading-none tracking-tight">
             NatureX
@@ -251,7 +271,6 @@ function StoryStage({
         <div
           ref={heading}
           tabIndex={-1}
-          aria-live="polite"
           className="machine-scroll mt-6 flex-1 overflow-y-auto pr-1 pb-4 outline-none"
         >
           {scene === 0 && <Opening stage={stage} />}
@@ -292,12 +311,27 @@ function StoryStage({
       )}
 
       {scene > 0 && scene < LAST && (
-        <div className="pointer-events-none absolute inset-x-3 bottom-3 z-[500] flex justify-center min-[900px]:bottom-7 min-[900px]:left-[540px]">
+        <div
+          ref={chainBox}
+          className="pointer-events-none absolute inset-x-3 bottom-3 z-[500] flex justify-center min-[900px]:bottom-7 min-[900px]:left-[540px]"
+        >
           <StoryChain chain={chain} reducedMotion={reduced} />
         </div>
       )}
     </main>
   );
+}
+
+/** On a phone the map sits between the story panel and the chain; keep at least `MIN_MAP` px of
+ * it for framing the site, else Leaflet would fly to its maximum zoom. */
+const MIN_MAP = 160;
+function phoneInset(panelBottom: number, chainHeight: number) {
+  const height = typeof window === "undefined" ? 844 : window.innerHeight;
+  const bottom = Math.max(0, chainHeight);
+  const room = height - panelBottom - bottom - 80;
+  const top =
+    room >= MIN_MAP ? panelBottom : Math.max(0, height - bottom - 80 - MIN_MAP);
+  return { top, right: 0, bottom, left: 0 };
 }
 
 // ----- building blocks --------------------------------------------------------------------------
@@ -474,13 +508,15 @@ function useSequence(run: () => Promise<void>, start: boolean) {
 
 // ----- the scenes -------------------------------------------------------------------------------
 
+/** Fly to the site (or wait for a flight already under way), then draw its boundary. */
+async function arrive(stage: Stage) {
+  await stage.map.current?.flyToSite();
+  if (stage.alive()) await stage.map.current?.drawBoundary();
+}
+
 function Opening({ stage }: { stage: Stage }) {
-  const { story, map } = stage;
-  const run = useCallback(async () => {
-    await map.current?.flyToSite();
-    if (!stage.alive()) return;
-    await map.current?.drawBoundary();
-  }, [map, stage]);
+  const { story } = stage;
+  const run = useCallback(() => arrive(stage), [stage]);
   useSequence(run, true);
   const area = Math.round(Number(story.site.area_ha));
   return (
@@ -511,6 +547,7 @@ function Measure({ stage }: { stage: Stage }) {
   const run = useCallback(async () => {
     const s = stage;
     const at = (n: number) => s.alive() && (setStep(n), true);
+    await arrive(stage);
     if (!at(1)) return;
     await pause(1400, s);
     if (!at(2)) return;
@@ -532,6 +569,9 @@ function Measure({ stage }: { stage: Stage }) {
     await pause(500, s);
     at(6);
   }, [stage, map, baseline]);
+  // A visitor who moved on mid-flight sees the boundary as soon as the map lands.
+  const land = useCallback(() => arrive(stage), [stage]);
+  useSequence(land, true);
   useSequence(run, step > 0);
 
   const cover = baseline.landcover;
@@ -1133,6 +1173,7 @@ function YourTurn({ story, onReplay }: { story: Story; onReplay: () => void }) {
               type="button"
               onClick={() => void open(s)}
               disabled={busy !== null}
+              aria-busy={busy === s.key || undefined}
               aria-describedby={
                 error?.key === s.key ? `err-${s.key}` : undefined
               }
@@ -1142,17 +1183,13 @@ function YourTurn({ story, onReplay }: { story: Story; onReplay: () => void }) {
                 aria-hidden="true"
                 className="grid size-9 place-items-center rounded-xl bg-machine-line text-lime"
               >
-                {busy === s.key ? (
-                  <Spinner
-                    className="size-4"
-                    aria-label="Opening your sandbox"
-                  />
-                ) : (
-                  s.icon
-                )}
+                {busy === s.key ? <Spinner className="size-4" /> : s.icon}
               </span>
               <span>
                 <b className="block font-semibold">{s.title}</b>
+                {busy === s.key && (
+                  <span className="sr-only">Opening your sandbox…</span>
+                )}
                 <span className="text-[13.5px] text-machine-muted">
                   {s.body}
                 </span>

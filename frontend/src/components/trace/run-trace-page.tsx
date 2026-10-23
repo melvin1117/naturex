@@ -10,7 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { RunTrace } from "@/lib/api/types";
 import type { ApiError } from "@/lib/api/errors";
-import { useAsset, useRecordedRun, useRunTrace } from "@/lib/hooks";
+import {
+  useAsset,
+  useRecordedRun,
+  useRunTrace,
+  useShowCost,
+} from "@/lib/hooks";
 import { beforeAfterViews, type BeforeAfterViews } from "@/lib/site-views";
 import { date } from "@/lib/prototype/format";
 import {
@@ -170,7 +175,8 @@ function TraceBody({
   views?: BeforeAfterViews | null;
   recordedOn?: string;
 }) {
-  const story = useMemo(() => runStory(trace), [trace]);
+  const showCost = useShowCost();
+  const story = useMemo(() => runStory(trace, { showCost }), [trace, showCost]);
   const flow = useMemo(() => runFlow(trace), [trace]);
   const timeline = useMemo(() => runTimeline(trace), [trace]);
   const verdict = useMemo(() => auditCase(trace), [trace]);
@@ -215,11 +221,19 @@ function TraceBody({
             {calls} model calls · {receipt.searches} web searches
             {receipt.reads > 0 &&
               ` · ${receipt.reads} page${receipt.reads === 1 ? "" : "s"} read`}{" "}
-            · {seconds(done?.latency_ms ?? timeline.totalMs)} ·{" "}
-            <span className="text-machine-ink">{usd(receipt.totalUsd, 3)}</span>
-            {receipt.savedPct
-              ? ` (${receipt.savedPct}% less than Ultra alone)`
-              : ""}
+            · {seconds(done?.latency_ms ?? timeline.totalMs)}
+            {showCost && (
+              <>
+                {" "}
+                ·{" "}
+                <span className="text-machine-ink">
+                  {usd(receipt.totalUsd, 3)}
+                </span>
+                {receipt.savedPct
+                  ? ` (${receipt.savedPct}% less than Ultra alone)`
+                  : ""}
+              </>
+            )}
           </span>
           <Link
             href="/ai"
@@ -247,9 +261,11 @@ function TraceBody({
           <TabsTrigger value="checks" className={TAB}>
             Checks
           </TabsTrigger>
-          <TabsTrigger value="cost" className={TAB}>
-            Cost
-          </TabsTrigger>
+          {showCost && (
+            <TabsTrigger value="cost" className={TAB}>
+              Cost
+            </TabsTrigger>
+          )}
         </TabsList>
         <TabsContent value="story" className="max-w-3xl">
           <TraceStory lines={story} />
@@ -266,9 +282,11 @@ function TraceBody({
         <TabsContent value="checks">
           <TraceChecks funnel={funnel} checks={checks} />
         </TabsContent>
-        <TabsContent value="cost">
-          <TraceCost receipt={receipt} />
-        </TabsContent>
+        {showCost && (
+          <TabsContent value="cost">
+            <TraceCost receipt={receipt} />
+          </TabsContent>
+        )}
       </Tabs>
     </>
   );

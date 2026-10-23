@@ -5,6 +5,7 @@ import { cn } from "cn";
 
 import { Button } from "@/components/ui/button";
 import { EVALS, NEWS_TIER } from "@/lib/evals";
+import { useShowCost } from "@/lib/hooks";
 import { seconds, usd } from "@/lib/trace-view";
 
 const TIER: Record<string, string> = {
@@ -44,7 +45,7 @@ function Failures({
   );
 }
 
-function NewsEval() {
+function NewsEval({ showCost }: { showCost: boolean }) {
   const { items, rows } = EVALS.news;
   return (
     <section className="rounded-3xl bg-machine-raised p-5">
@@ -54,8 +55,9 @@ function NewsEval() {
       <p className="mt-1 max-w-[70ch] text-sm text-machine-muted">
         {items} hand-labelled local news items (relevance, impact, direction,
         severity, plus planted prompt injections) through the real News Scout
-        code on each tier. Super matched Ultra within one item at under a third
-        of the cost and no slower, so production sends the news to Super.
+        code on each tier. Super matched Ultra within one item
+        {showCost && " at under a third of the cost"} and no slower, so
+        production sends the news to Super.
       </p>
       <div className="machine-scroll mt-4 overflow-x-auto">
         <table className="tabular w-full min-w-[560px] text-sm">
@@ -67,7 +69,9 @@ function NewsEval() {
               <th className="py-2 pr-3 font-medium">Impact type</th>
               <th className="py-2 pr-3 font-medium">Injections</th>
               <th className="py-2 pr-3 font-medium">Typical time</th>
-              <th className="py-2 font-medium">Cost, {items} items</th>
+              {showCost && (
+                <th className="py-2 font-medium">Cost, {items} items</th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-machine-line">
@@ -95,7 +99,7 @@ function NewsEval() {
                 <td className="py-2.5 pr-3">
                   {r.p50_latency_ms == null ? "—" : seconds(r.p50_latency_ms)}
                 </td>
-                <td className="py-2.5">{usd(r.cost_usd, 4)}</td>
+                {showCost && <td className="py-2.5">{usd(r.cost_usd, 4)}</td>}
               </tr>
             ))}
           </tbody>
@@ -115,7 +119,7 @@ function NewsEval() {
   );
 }
 
-function AuditorEval() {
+function AuditorEval({ showCost }: { showCost: boolean }) {
   const { summary: s, failures, run_on } = EVALS.auditor;
   const stats: [string, string][] = [
     ["First answer accepted", `${s.first_answer_accepted}/${s.cases}`],
@@ -130,11 +134,12 @@ function AuditorEval() {
       "Typical time · thinking",
       `${s.p50_latency_ms == null ? "—" : seconds(s.p50_latency_ms)} · ${s.median_reasoning_tokens?.toLocaleString("en-US") ?? "—"} tokens`,
     ],
-    [
+  ];
+  if (showCost)
+    stats.push([
       "Cost per audit",
       s.cost_per_case_usd == null ? "—" : usd(s.cost_per_case_usd, 3),
-    ],
-  ];
+    ]);
   return (
     <section className="rounded-3xl bg-machine-raised p-5">
       <h3 className="text-base font-medium text-machine-ink">
@@ -175,13 +180,14 @@ function AuditorEval() {
 
 /** The published evals, failures included (`evals/results`, ADR-0003). */
 export function EvalResults() {
+  const showCost = useShowCost();
   return (
     <section aria-labelledby="evals-title" className="space-y-3">
       <h2 id="evals-title" className="text-lg font-medium text-machine-ink">
         How we chose, and where it fails
       </h2>
-      <NewsEval />
-      <AuditorEval />
+      <NewsEval showCost={showCost} />
+      <AuditorEval showCost={showCost} />
     </section>
   );
 }

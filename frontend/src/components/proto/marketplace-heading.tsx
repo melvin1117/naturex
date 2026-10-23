@@ -2,7 +2,7 @@
 
 import { Compass } from "lucide-react";
 import Link from "next/link";
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useSyncExternalStore, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useOptionalDataLayer } from "@/lib/data-layer";
@@ -20,11 +20,16 @@ export function MarketplaceHeading({ stats }: { stats?: ReactNode }) {
 /** Whether this tab acts in a demo session; false without a data layer (route skeletons). */
 function useInDemo(): boolean {
   const layer = useOptionalDataLayer();
-  const world = useSyncExternalStore(
-    (listener) => layer?.session.subscribe(listener) ?? (() => undefined),
-    () => layer?.session.getSnapshot().world ?? null,
-    () => null,
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      layer?.session.subscribe(listener) ?? (() => undefined),
+    [layer],
   );
+  const snapshot = useCallback(
+    () => layer?.session.getSnapshot().world ?? null,
+    [layer],
+  );
+  const world = useSyncExternalStore(subscribe, snapshot, () => null);
   return Boolean(world?.me?.persona);
 }
 

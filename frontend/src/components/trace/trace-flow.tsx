@@ -5,6 +5,7 @@ import { useState } from "react";
 import { cn } from "cn";
 
 import type { RunTrace } from "@/lib/api/types";
+import { useShowCost } from "@/lib/hooks";
 import type { BeforeAfterViews } from "@/lib/site-views";
 import {
   ACTOR,
@@ -40,6 +41,7 @@ const STATUS: Record<string, string> = {
 };
 
 function Meta({ node }: { node: FlowNode }) {
+  const showCost = useShowCost();
   const parts = [
     node.latencyMs != null && node.latencyMs > 0
       ? seconds(node.latencyMs)
@@ -47,7 +49,7 @@ function Meta({ node }: { node: FlowNode }) {
     node.tokensIn + node.tokensOut > 0
       ? `${(node.tokensIn + node.tokensOut).toLocaleString("en-US")} tokens`
       : null,
-    node.costUsd > 0 ? usd(node.costUsd, 5) : null,
+    showCost && node.costUsd > 0 ? usd(node.costUsd, 5) : null,
   ].filter(Boolean);
   if (!parts.length) return null;
   return (
@@ -207,6 +209,7 @@ function Inspector({
   node: FlowNode;
   views?: BeforeAfterViews | null;
 }) {
+  const showCost = useShowCost();
   const step = node.step || node.id;
   return (
     <div>
@@ -228,7 +231,9 @@ function Inspector({
             value={`${node.tokensIn.toLocaleString("en-US")} in · ${node.tokensOut.toLocaleString("en-US")} out`}
           />
         )}
-        {node.costUsd > 0 && <Row label="Cost" value={usd(node.costUsd, 5)} />}
+        {showCost && node.costUsd > 0 && (
+          <Row label="Cost" value={usd(node.costUsd, 5)} />
+        )}
         {node.decision && <Row label="Chosen by" value={node.decision.text} />}
       </dl>
       <InspectorDetail trace={trace} node={node} step={step} views={views} />

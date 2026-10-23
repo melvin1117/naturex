@@ -652,6 +652,14 @@ function afterDemoSwitch({ session, cache }: DataLayer, world: WorldOut) {
   if (viewerKey(world) === before) cache.reset();
 }
 
+/** Whether to show model spend in dollars. Not in a no-sign-up demo session: a judge sees what
+ * each model did and how long it took, never prices or the sandbox's hidden allowance. Hidden
+ * until the world is known, so a demo session never flashes a price while it loads. */
+export function useShowCost(): boolean {
+  const { world } = useWorld();
+  return world != null && !world.me?.persona;
+}
+
 /** `POST /assets/{id}/rate`: start a rating run now (a member of its community or an admin);
  * follow it at `/trace/{run_id}`. */
 export function useRateNow(): MutationResult<string, RatingRunAccepted> {
