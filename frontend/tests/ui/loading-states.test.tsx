@@ -187,7 +187,7 @@ const LOADERS = Object.entries(
 
 describe("route loading states", () => {
   it("covers the Marketplace, asset page, portfolio, steward and admin routes", () => {
-    expect(LOADERS.map((l) => l.route).sort()).toEqual([
+    const app = [
       "/",
       "/admin",
       "/admin/verifications",
@@ -200,7 +200,12 @@ describe("route loading states", () => {
       "/steward/community",
       "/steward/list",
       "/steward/listings",
-    ]);
+    ];
+    // ...and each one's twin in the sandbox (`/sandbox/*`).
+    const twins = app.map((r) => (r === "/" ? "/sandbox" : `/sandbox${r}`));
+    expect(LOADERS.map((l) => l.route).sort()).toEqual(
+      [...app, ...twins].sort(),
+    );
   });
 
   it("draws the Marketplace's skeleton only for the Marketplace", () => {
@@ -223,7 +228,9 @@ describe("route loading states", () => {
     (route, Loading) => {
       // A screen folder's pages (`/steward/assets/x/verify`) share its loading state; the
       // opening offer has its own, with the checklist band (#216).
-      const page = route === "/steward/assets/x" ? `${route}/verify` : route;
+      const page = route.endsWith("/steward/assets/x")
+        ? `${route}/verify`
+        : route;
       render(<Loading />, { wrapper: Shell });
       expect(region()).toHaveAttribute("data-skeleton", skeletonKind(page));
       expect(screen.getAllByRole("status")).toHaveLength(1);
