@@ -55,6 +55,7 @@ import type {
   WorldTrace,
 } from "./api/types";
 import {
+  getSandboxDataLayer,
   queryKeys,
   useDataLayer,
   viewerKey,
@@ -622,14 +623,18 @@ async function afterSessionChange(
 
 /**
  * No sign-up (T55): `POST /demo/start` opens a private sandbox and a demo session as `persona`
- * (a browser that already has one keeps its sandbox and only switches persona). The world and
- * cache then follow the new viewer, as after signing in.
+ * (a browser that already has one keeps its sandbox and only switches persona). Always through
+ * the sandbox's layer (`/api/sandbox`, cookie `nx_demo`), wherever it's called from (the story
+ * at `/judge` too), so a real account signed in in this tab stays signed in. The sandbox's world
+ * and cache then follow the new viewer.
  */
 export function useStartDemo(): MutationResult<DemoPersona, WorldOut> {
-  const layer = useDataLayer();
-  return useApiMutation(async (api, persona: DemoPersona) => {
-    const world = await unwrap(api.POST("/demo/start", { body: { persona } }));
-    afterDemoSwitch(layer, world);
+  return useApiMutation(async (_api, persona: DemoPersona) => {
+    const sandbox = getSandboxDataLayer();
+    const world = await unwrap(
+      sandbox.api.POST("/demo/start", { body: { persona } }),
+    );
+    afterDemoSwitch(sandbox, world);
     return world;
   });
 }

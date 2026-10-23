@@ -8,8 +8,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import Link from "@/components/app-link";
+import { useRouter } from "@/lib/nav";
 
 import { Wordmark } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";

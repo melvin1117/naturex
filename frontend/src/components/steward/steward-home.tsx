@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useRef, type ReactNode } from "react";
 import { cn } from "cn";
 

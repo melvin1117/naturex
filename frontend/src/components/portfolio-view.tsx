@@ -1,7 +1,7 @@
 "use client";
 
 import { Leaf, RefreshCwIcon, Sprout, Trees } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { cn } from "cn";
 

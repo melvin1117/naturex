@@ -1,8 +1,9 @@
 "use client";
 
 import { Lock, LogIn, RefreshCwIcon } from "lucide-react";
-import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import Link from "@/components/app-link";
+import { useSearchParams } from "next/navigation";
+import { usePathname } from "@/lib/nav";
 import type { ReactNode } from "react";
 
 import { TradeForm } from "@/components/trade-form";

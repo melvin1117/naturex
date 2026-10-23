@@ -8,7 +8,7 @@ import {
   ExternalLink,
   Users,
 } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useState } from "react";
 import { cn } from "cn";
 

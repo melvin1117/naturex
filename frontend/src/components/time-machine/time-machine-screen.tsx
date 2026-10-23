@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, LockKeyhole } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useCallback, useMemo, useState } from "react";
 
 import {

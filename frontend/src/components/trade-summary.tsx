@@ -1,5 +1,5 @@
 /** The trade panel's quote table and receipt: the API's numbers, formatted, never computed. */
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { cn } from "cn";
 
 import type { OrderOut, QuoteOut } from "@/lib/api/types";

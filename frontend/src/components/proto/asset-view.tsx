@@ -1,8 +1,9 @@
 "use client";
 
 import { ArrowLeft, MapPin } from "lucide-react";
-import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import Link from "@/components/app-link";
+import { useSearchParams } from "next/navigation";
+import { usePathname } from "@/lib/nav";
 import { Suspense, useMemo, useState } from "react";
 
 import { CopilotChat } from "@/components/copilot-chat";

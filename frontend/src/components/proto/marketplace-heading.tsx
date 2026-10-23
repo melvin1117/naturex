@@ -1,39 +1,21 @@
 "use client";
 
-import { Compass } from "lucide-react";
-import Link from "next/link";
-import { useCallback, useSyncExternalStore, type ReactNode } from "react";
+import { Compass, FlaskConical } from "lucide-react";
+import NextLink from "next/link";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { useOptionalDataLayer } from "@/lib/data-layer";
+import { useInSandbox } from "@/lib/nav";
 
 /**
- * The Marketplace's heading row and the invitation to the story (`/judge`), shared by the page
- * and its loading skeleton (#219), so the real text is on screen from the first frame and
- * nothing moves when the sites arrive. `stats` sits beside the heading (the stat strip, or its
- * blocks). A demo session already has the story in its bar, so the invitation hides there.
+ * The Marketplace's heading row and the two ways in for a newcomer: the story (`/judge`) and
+ * their own sandbox (`/sandbox`). Shared by the page and its loading skeleton (#219), so the
+ * real text is on screen from the first frame and nothing moves when the sites arrive. `stats`
+ * sits beside the heading (the stat strip, or its blocks). Inside the sandbox its own bar says
+ * where the visitor is, so the invitation hides there.
  */
 export function MarketplaceHeading({ stats }: { stats?: ReactNode }) {
-  return <Heading stats={stats} inDemo={useInDemo()} />;
-}
-
-/** Whether this tab acts in a demo session; false without a data layer (route skeletons). */
-function useInDemo(): boolean {
-  const layer = useOptionalDataLayer();
-  const subscribe = useCallback(
-    (listener: () => void) =>
-      layer?.session.subscribe(listener) ?? (() => undefined),
-    [layer],
-  );
-  const snapshot = useCallback(
-    () => layer?.session.getSnapshot().world ?? null,
-    [layer],
-  );
-  const world = useSyncExternalStore(subscribe, snapshot, () => null);
-  return Boolean(world?.me?.persona);
-}
-
-function Heading({ stats, inDemo }: { stats?: ReactNode; inDemo: boolean }) {
+  const sandbox = useInSandbox();
   return (
     <>
       <div className="flex flex-wrap items-end justify-between gap-6">
@@ -49,7 +31,7 @@ function Heading({ stats, inDemo }: { stats?: ReactNode; inDemo: boolean }) {
         {stats}
       </div>
 
-      {!inDemo && (
+      {!sandbox && (
         <div className="mt-8 flex flex-wrap items-center gap-3 rounded-3xl bg-lichen px-5 py-3.5 text-sm">
           <Compass className="size-4 text-lime-ink" aria-hidden="true" />
           <span>
@@ -57,9 +39,15 @@ function Heading({ stats, inDemo }: { stats?: ReactNode; inDemo: boolean }) {
             exists on one real wetland, then try everything in your own sandbox.
             No sign-up.
           </span>
-          <div className="ml-auto flex gap-2">
+          <div className="ml-auto flex flex-wrap gap-2">
             <Button size="sm" asChild>
-              <Link href="/judge">See how it works</Link>
+              <NextLink href="/judge">See how it works</NextLink>
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <NextLink href="/sandbox">
+                <FlaskConical aria-hidden="true" />
+                Try it yourself
+              </NextLink>
             </Button>
           </div>
         </div>

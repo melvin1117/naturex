@@ -1,10 +1,12 @@
 "use client";
 
 import { LogOut } from "lucide-react";
-import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import NextLink from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
 import { toast } from "sonner";
+
+import Link from "@/components/app-link";
 
 import { CopyIcon, useCopy, type CopyState } from "@/components/account-id";
 import { Button } from "@/components/ui/button";
@@ -18,7 +20,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { initials, loginHref } from "@/lib/auth";
 import { useSignOut, useWorld } from "@/lib/hooks";
+import { useInSandbox, usePathname } from "@/lib/nav";
 import { usePrototype } from "@/lib/prototype/store";
+import { SANDBOX_PERSONAS, SWITCHABLE } from "@/lib/sandbox-personas";
 
 /**
  * The signed-in account and "Sign out" (T61), or "Sign in" for anonymous visitors. Signing
@@ -41,7 +45,10 @@ function AccountMenuContent() {
   const { status, world } = useWorld();
   const { exitDemo } = usePrototype();
   const signOut = useSignOut();
+  const sandbox = useInSandbox();
   const me = world?.me;
+  const persona = SWITCHABLE.find((k) => k === me?.persona);
+  const role = persona ? SANDBOX_PERSONAS[persona].role : null;
   const signInLink = useRef<HTMLAnchorElement>(null);
   const focusSignIn = useRef(false);
   // Here rather than in the item, so "Copied" keeps its timer and announcement once the menu
@@ -112,6 +119,11 @@ function AccountMenuContent() {
             <span className="block truncate text-sm font-medium">
               {me.name}
             </span>
+            {role && (
+              <span className="block truncate text-xs text-muted-foreground">
+                {role} in your sandbox
+              </span>
+            )}
             {me.email && (
               <span className="block truncate text-xs text-muted-foreground">
                 {me.email}
@@ -132,13 +144,23 @@ function AccountMenuContent() {
           </DropdownMenuLabel>
           <CopyAccountIdItem state={copyState} onCopy={copy} />
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            disabled={signOut.isPending}
-            onSelect={() => void onSignOut()}
-          >
-            <LogOut aria-hidden="true" />
-            {signOut.isPending ? "Signing out…" : "Sign out"}
-          </DropdownMenuItem>
+          {sandbox ? (
+            // Signing out would lose the sandbox; leaving keeps it for the next visit.
+            <DropdownMenuItem asChild>
+              <NextLink href="/">
+                <LogOut aria-hidden="true" />
+                Leave the sandbox
+              </NextLink>
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              disabled={signOut.isPending}
+              onSelect={() => void onSignOut()}
+            >
+              <LogOut aria-hidden="true" />
+              {signOut.isPending ? "Signing out…" : "Sign out"}
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       {/* Outside the menu: a role="menu" may only own menu items, groups and separators. */}

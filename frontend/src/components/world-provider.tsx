@@ -8,10 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import {
   DataLayerProvider,
+  getSandboxDataLayer,
   useDataLayer,
   type DataLayer,
 } from "@/lib/data-layer";
 import { useWorld } from "@/lib/hooks";
+import { useInSandbox } from "@/lib/nav";
 
 /**
  * Provides the data layer and opens the visitor's sandbox world (`GET /world`, once) as soon
@@ -25,11 +27,14 @@ export function WorldProvider({
   dataLayer,
 }: {
   children: ReactNode;
-  /** Tests inject their own; the app uses the tab-wide layer. */
+  /** Tests inject their own; the app uses the tab-wide layer, or in `/sandbox` the sandbox's. */
   dataLayer?: DataLayer;
 }) {
+  const sandbox = useInSandbox();
+  const layer = dataLayer ?? (sandbox ? getSandboxDataLayer() : undefined);
   return (
-    <DataLayerProvider value={dataLayer}>
+    // Crossing into or out of the sandbox swaps the layer, so everything below starts over.
+    <DataLayerProvider key={sandbox ? "sandbox" : "app"} value={layer}>
       <WorldBootstrap />
       {children}
     </DataLayerProvider>

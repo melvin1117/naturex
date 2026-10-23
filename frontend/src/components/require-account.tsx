@@ -1,8 +1,8 @@
 "use client";
 
 import { LockKeyhole, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import Link from "@/components/app-link";
+import { useRouter } from "@/lib/nav";
 import { useEffect, type ReactNode } from "react";
 
 import { RouteSkeleton } from "@/components/page-skeletons";

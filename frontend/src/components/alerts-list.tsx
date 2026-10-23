@@ -1,7 +1,7 @@
 "use client";
 
 import { BellRing, ExternalLink, TriangleAlert } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useEffect, useState } from "react";
 import { cn } from "cn";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { Leaf, Trees } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 
 import { Delta, SiteThumb, Stat } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";

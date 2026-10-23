@@ -6,8 +6,9 @@ import {
   Sprout,
   TriangleAlertIcon,
 } from "lucide-react";
-import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import Link from "@/components/app-link";
+import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "@/lib/nav";
 import {
   createContext,
   Suspense,

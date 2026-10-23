@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, Check } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useState } from "react";
 
 import { AccountIdCopy } from "@/components/account-id";

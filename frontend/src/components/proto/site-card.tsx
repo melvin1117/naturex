@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, MapPin } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { Area, AreaChart, ResponsiveContainer, YAxis } from "recharts";
 import { cn } from "cn";
 

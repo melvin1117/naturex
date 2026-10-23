@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 

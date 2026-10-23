@@ -1,7 +1,7 @@
 "use client";
 
 import { Camera } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 
 import { LoadError } from "@/components/proto/load-error";
 import { Badge } from "@/components/ui/badge";

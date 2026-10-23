@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, Check, Info, LockKeyhole } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useEffect, useRef, type ReactNode } from "react";
 import { cn } from "cn";
 

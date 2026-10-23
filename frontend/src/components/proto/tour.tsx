@@ -1,8 +1,8 @@
 "use client";
 
 import { Cog, Lightbulb, Wand2, X } from "lucide-react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import Link from "@/components/app-link";
+import { usePathname, useRouter } from "@/lib/nav";
 import {
   createContext,
   useCallback,
