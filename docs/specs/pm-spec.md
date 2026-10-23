@@ -79,7 +79,7 @@ Living ecosystems produce enormous value (water filtration, flood protection, ca
 | C2 | I buy / sell shares | Starting balance $10,000 play money; instant fill with small slippage; can't exceed balance/holdings |
 | C3 | I see a live price chart | Price history with markers on report/news events |
 | C4 | IPO proceeds go to community | Community wallet balance increases with each primary-share sale |
-| C5 | Everything is labelled sandbox | Persistent "Sandbox — play money, not a real security" banner |
+| C5 | Everything is labelled sandbox | Every page says play money, not a real security: the footer on every shell, the auth forms, the trade panel and the marketplace heading; inside `/sandbox` the sandbox bar too (no banner on the real app's homepage, [ADR-0007](../adr/0007-sandbox-address.md)) |
 | C6 | Insiders can't trade | Members of an asset's community get 403 `insider_trading_blocked` on that asset's orders; a holder can't be added as a member (409); admins and treasury accounts never trade |
 | C7 | Browsing is open, trading needs an account | Anonymous visitors browse; buy/sell, portfolio and alerts ask them to sign in |
 

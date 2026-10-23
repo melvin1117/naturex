@@ -1,0 +1,1113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brand proposal v2 · names, marks and the design system</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..600&family=Instrument+Serif:ital@0;1&family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400..700,100;1,9..144,400..600,100&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..600&family=Hanken+Grotesk:wght@300..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ground:oklch(0.952 0.011 112); --card:oklch(0.99 0.005 110); --ink:oklch(0.235 0.045 150); --forest:oklch(0.31 0.062 148);
+    --muted:oklch(0.46 0.03 145); --line:oklch(0.885 0.014 125); --lime:oklch(0.86 0.15 124); --lime-ink:oklch(0.42 0.1 135);
+    --clay:oklch(0.62 0.14 45); --clay-ink:oklch(0.5 0.13 40); --water:oklch(0.62 0.08 225);
+    --machine:oklch(0.2 0.03 158); --machine-raised:oklch(0.25 0.035 156); --machine-line:oklch(0.34 0.04 152); --machine-ink:oklch(0.94 0.045 122); --machine-muted:oklch(0.74 0.045 135);
+    --ease:cubic-bezier(.16,1,.3,1);
+    --sbg:var(--card);
+  }
+  *{box-sizing:border-box;margin:0}
+  html{background:var(--ground);color:var(--ink);scroll-behavior:smooth}
+  body{font:400 16.5px/1.6 "Hanken Grotesk",system-ui,sans-serif;font-feature-settings:"ss01"}
+  a{color:inherit;text-underline-offset:3px;text-decoration-thickness:1px}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  .eyebrow{font:500 12px/1.4 "Geist Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .serif{font-family:Newsreader,serif}
+  h1{font:400 clamp(54px,8vw,104px)/.94 Newsreader,serif;letter-spacing:-.035em}
+  h2{font:400 clamp(38px,5vw,60px)/1 Newsreader,serif;letter-spacing:-.03em;margin:10px 0 14px}
+  h3{font:500 24px/1.2 Newsreader,serif;letter-spacing:-.01em}
+  p{max-width:68ch}
+  .lede{font-size:20px;line-height:1.55;color:color-mix(in oklch,var(--ink) 86%,transparent)}
+  .mono{font-family:"Geist Mono",monospace;font-size:.86em}
+  .muted{color:var(--muted)}
+  section{padding-top:96px;scroll-margin-top:56px}
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(270px,1fr))}
+  .card{background:var(--card);border-radius:24px;padding:26px;box-shadow:0 1px 2px oklch(.3 .05 145/.05),0 14px 34px -22px oklch(.3 .05 145/.25)}
+  .card.dark{background:var(--machine);color:var(--machine-ink)}
+  .chip{display:inline-block;font:500 11px/1 "Geist Mono";letter-spacing:.05em;text-transform:uppercase;padding:7px 10px;border-radius:999px;background:oklch(.93 .015 120);color:var(--muted)}
+  .chip.ok{background:color-mix(in oklch,var(--lime) 45%,transparent);color:var(--lime-ink)}
+  .chip.warn{background:color-mix(in oklch,var(--clay) 20%,transparent);color:var(--clay-ink)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .btn{font:500 13px "Hanken Grotesk";color:var(--ink);border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 14px;cursor:pointer}
+  .btn.primary{background:var(--forest);color:var(--card);border-color:var(--forest);padding:11px 20px;font-size:15px}
+  .btn:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--lime-ink);outline-offset:2px}
+  table{width:100%;border-collapse:collapse;font-size:14.5px;background:var(--card)}
+  th,td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font:500 11px/1.4 "Geist Mono";letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .tablewrap{overflow-x:auto;border-radius:20px;box-shadow:0 1px 2px oklch(.3 .05 145/.05)}
+  .dots{letter-spacing:2px;color:var(--lime-ink);white-space:nowrap}
+
+  /* top bar */
+  .top{position:sticky;top:0;z-index:5;background:color-mix(in oklch,var(--ground) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .top .wrap{display:flex;align-items:center;gap:22px;height:54px;overflow-x:auto}
+  .top nav{display:flex;gap:16px;font-size:14px;white-space:nowrap}
+  .top nav a{text-decoration:none;color:var(--muted)} .top nav a:hover{color:var(--ink)}
+  .top .title{font:500 13px "Geist Mono";letter-spacing:.04em;white-space:nowrap}
+
+  /* hero */
+  .hero{padding:88px 0 0}
+  .hero .lede{margin-top:26px}
+  .v1note{margin-top:28px;display:flex;gap:14px;align-items:flex-start;padding:16px 18px;border-radius:16px;background:color-mix(in oklch,var(--clay) 9%,var(--card));font-size:15px;max-width:780px}
+
+  /* story timeline */
+  .timeline{position:relative;margin-top:36px;display:grid;gap:0}
+  .beat{display:grid;grid-template-columns:150px 28px 1fr;gap:0 18px;align-items:start}
+  .beat .when{font:500 13px/1.3 "Geist Mono";color:var(--muted);text-align:right;padding-top:6px}
+  .beat .rail{position:relative;height:100%;display:flex;justify-content:center}
+  .beat .rail::before{content:"";position:absolute;top:0;bottom:0;width:2px;background:var(--line)}
+  .beat:first-child .rail::before{top:14px}
+  .beat:last-child .rail::before{bottom:calc(100% - 14px)}
+  .beat .rail i{position:relative;z-index:1;width:14px;height:14px;margin-top:8px;border-radius:99px;background:var(--card);box-shadow:inset 0 0 0 2.5px var(--forest)}
+  .beat.key .rail i{background:var(--lime);box-shadow:inset 0 0 0 2.5px var(--ink)}
+  .beat .body{padding:0 0 30px}
+  .beat .body h3{font-size:25px}
+  .beat .body p{margin-top:6px}
+  .quote{font:italic 400 26px/1.3 Newsreader,serif;margin-top:8px;max-width:30ch}
+  .src{font-size:12.5px;color:var(--muted);margin-top:6px}
+  .src a{color:var(--muted)}
+
+  /* tests */
+  .tests{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:20px}
+  .tests div{background:var(--card);border-radius:18px;padding:18px}
+  .tests b{display:block;font:500 19px/1.2 Newsreader,serif;margin-bottom:6px}
+  .tests span{font-size:14px;color:var(--muted)}
+
+  /* direction */
+  .dir{margin-top:28px;background:var(--card);border-radius:36px;overflow:hidden;box-shadow:0 1px 2px oklch(.3 .05 145/.05),0 24px 60px -30px oklch(.3 .05 145/.35)}
+  .dir-hero{display:grid;grid-template-columns:1fr 1fr;min-height:440px}
+  .stage{--sbg:var(--card);position:relative;display:grid;place-items:center;padding:56px 32px;background:var(--sbg)}
+  .stage.dark{--sbg:var(--machine);color:var(--machine-ink)}
+  .stage .badge{position:absolute;top:22px;left:22px}
+  .stage .replay{position:absolute;right:20px;bottom:18px}
+  .dir-head{padding:44px 44px 36px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:14px}
+  .dir-head .name{font:500 64px/1 Newsreader,serif;letter-spacing:-.035em}
+  .dir-head .tag{font:italic 400 28px/1.15 Newsreader,serif}
+  .pitch{border-left:3px solid var(--lime-ink);padding:4px 0 4px 16px;font:400 19px/1.45 Newsreader,serif}
+  .meanings{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
+  .meaning{padding:26px 28px;border-right:1px solid var(--line)}
+  .meaning:last-child{border-right:0}
+  .meaning .k{font:500 12px "Geist Mono";letter-spacing:.06em;text-transform:uppercase;color:var(--lime-ink)}
+  .meaning h3{margin:6px 0 8px;font-size:22px}
+  .meaning p{font-size:15px}
+  .row{display:grid;grid-template-columns:1.1fr 1fr;border-top:1px solid var(--line)}
+  .row>div{padding:28px}
+  .row>div+div{border-left:1px solid var(--line)}
+  .says{display:grid;gap:10px;margin-top:12px}
+  .says div{padding:12px 14px;border-radius:12px;background:var(--ground);font-size:15px}
+  .says div b{font-weight:600}
+  .says .down{background:color-mix(in oklch,var(--clay) 10%,var(--card))}
+  .anatomy{display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:center;margin-top:12px}
+  .anatomy ol{padding-left:1.1em;font-size:14.5px;display:grid;gap:6px}
+  .lockups{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
+  .lockups>div{display:grid;place-items:center;gap:14px;padding:30px 18px;min-height:170px;border-right:1px solid var(--line)}
+  .lockups>div:last-child{border-right:0}
+  .lockups .dark{background:var(--machine);color:var(--machine-ink);--sbg:var(--machine)}
+  .lockups .lime{background:var(--lime);--sbg:var(--lime)}
+  .icons{display:flex;align-items:end;gap:12px}
+  .ic{display:grid;place-items:center;background:var(--forest);color:var(--card);border-radius:24%;--sbg:var(--forest)}
+  .appbar{display:flex;align-items:center;gap:10px;height:48px;padding:0 14px;border-radius:12px;background:var(--ground);font-size:14px;width:100%}
+  .appbar .sub{padding-left:10px;border-left:1px solid var(--line);color:var(--muted)}
+  .risks{padding:22px 28px;border-top:1px solid var(--line);background:color-mix(in oklch,var(--ground) 55%,var(--card));font-size:14.5px;display:grid;grid-template-columns:auto 1fr;gap:6px 14px}
+  .risks b{font-weight:600}
+
+  /* living logo */
+  .live{display:grid;grid-template-columns:auto 1fr;gap:26px;align-items:center;padding:28px;border-top:1px solid var(--line);background:var(--machine);color:var(--machine-ink)}
+  .live .readout{font:300 56px/1 "Hanken Grotesk";font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+  .live .gr{display:inline-grid;place-items:center;min-width:64px;height:40px;padding:0 14px;border-radius:999px;font:600 20px "Hanken Grotesk";margin-left:10px;vertical-align:middle}
+  .live .lab{font:italic 400 22px Newsreader,serif;margin-top:8px}
+  .live input[type=range]{width:100%;margin-top:18px;accent-color:oklch(0.86 0.15 124)}
+  .live .ticks{display:flex;justify-content:space-between;font:500 11px "Geist Mono";color:var(--machine-muted);margin-top:4px}
+
+  /* marks */
+  .mk{display:block;flex:none;overflow:visible}
+  .mk .s{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
+  .mk .f{fill:currentColor}
+  .mk .l{fill:var(--lime)}
+  .mk .ls{fill:none;stroke:var(--lime);stroke-linecap:round}
+  .mk .sub{fill:var(--sbg);opacity:.34}
+  .anim .draw{stroke-dasharray:100;stroke-dashoffset:100;animation:draw 1.2s var(--ease) .1s forwards}
+  .anim .rise{transform-box:fill-box;transform-origin:bottom;transform:scaleY(0);animation:rise .9s var(--ease) .1s forwards}
+  .anim .tick{opacity:0;animation:fade .3s var(--ease) forwards}
+  .anim .flood{transform:translateY(22px);opacity:0;animation:flood 1s var(--ease) 1s forwards}
+  .anim .pop{transform-box:fill-box;transform-origin:center;transform:scale(0);animation:pop .52s var(--ease) 1.25s forwards}
+  .anim .fade{opacity:0;animation:fade .6s var(--ease) .9s forwards}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  @keyframes rise{to{transform:none}}
+  @keyframes fade{to{opacity:1}}
+  @keyframes flood{to{transform:none;opacity:1}}
+  @keyframes pop{0%{transform:scale(0)}60%{transform:scale(1.25)}100%{transform:scale(1)}}
+
+  /* compare & set aside */
+  .aside{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:18px}
+  .aside div{background:var(--card);border-radius:18px;padding:18px 20px;font-size:14.5px}
+  .aside b{display:block;font:500 20px/1.2 Newsreader,serif;margin-bottom:4px}
+  .aside .why{color:var(--muted)}
+  .aside .use{margin-top:8px;font-size:13.5px;color:var(--lime-ink);font-weight:500}
+
+  /* features */
+  .gl{display:block;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+  .gl .af{fill:var(--lime);stroke:currentColor;stroke-width:1.4}
+  .gl .as{stroke:var(--lime-ink)}
+  .dark .gl .as,.gl.ondark .as{stroke:var(--lime)}
+  .feats{display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:16px;margin-top:22px}
+  .feat{background:var(--card);border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:12px;box-shadow:0 1px 2px oklch(.3 .05 145/.05),0 14px 34px -22px oklch(.3 .05 145/.25)}
+  .feat .h{display:flex;gap:14px;align-items:center}
+  .tile{display:grid;place-items:center;width:54px;height:54px;border-radius:15px;background:var(--ground)}
+  .tile.dark{background:var(--machine);color:var(--machine-ink)}
+  .feat .now{font-size:13px;color:var(--muted)}
+  .feat .chg{font:500 11px "Geist Mono";letter-spacing:.05em;text-transform:uppercase;color:var(--lime-ink)}
+  .feat .chg.keep{color:var(--muted)}
+  .feat .story{font-size:15px}
+  .feat .ui{font-size:13.5px;padding:10px 12px;border-radius:12px;background:var(--ground)}
+  .feat .ui b{font-weight:600}
+  .keeps{margin-top:18px;font-size:15px}
+
+  /* apps */
+  .apps3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}
+  .apps3 .card{display:flex;flex-direction:column;gap:10px}
+  .apps3 .was{font-size:13px;color:var(--muted)}
+  .apps3 .nm{font:500 34px/1 Newsreader,serif;letter-spacing:-.02em}
+
+  /* decide */
+  .sheet{display:grid;grid-template-columns:1fr 400px;gap:24px;align-items:start;margin-top:22px}
+  fieldset{border:0;padding:0;margin:0 0 22px}
+  legend{font:500 19px/1.2 Newsreader,serif;margin-bottom:10px}
+  .opts{display:flex;flex-wrap:wrap;gap:8px}
+  .opts label{display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:999px;background:var(--card);box-shadow:inset 0 0 0 1px var(--line);cursor:pointer;font-size:14px}
+  .opts input{accent-color:oklch(0.31 0.062 148)}
+  .opts label:has(input:checked){box-shadow:inset 0 0 0 2px var(--forest);background:color-mix(in oklch,var(--lime) 18%,var(--card))}
+  .field{display:grid;gap:6px;margin-bottom:14px;font-size:14px}
+  .field input,.field textarea{font:inherit;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+  .preview{position:sticky;top:72px}
+  .pv{border-radius:18px;overflow:hidden;background:var(--card);box-shadow:0 14px 34px -22px oklch(.3 .05 145/.35)}
+  .pv .bar{display:flex;align-items:center;gap:10px;height:58px;padding:0 16px;border-bottom:1px solid var(--line);--sbg:var(--card)}
+  .pv .body{padding:22px;background:var(--forest);color:var(--card)}
+  .pv .t{font:400 36px/1 Newsreader,serif;letter-spacing:-.02em}
+  .pv .m{margin-top:10px;font-size:14px;opacity:.85}
+  #out{width:100%;min-height:290px;font:400 12.5px/1.5 "Geist Mono";padding:14px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);margin-top:12px}
+
+
+  /* B and C marks */
+  .mk .arc{animation:none}
+  .anim .arc{animation:fillarc 1s var(--ease) 1s both}
+  @keyframes fillarc{from{stroke-dasharray:0 100}}
+  .readings figure{margin:0}
+  /* icon pack */
+  .gl .bg{fill:var(--card)}
+  .dark .gl .bg,.gl.ondark .bg{fill:var(--machine)}
+  .sheet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:4px;padding:20px}
+  .sheet-grid.dark{background:var(--machine);color:var(--machine-ink)}
+  .sheet-grid figure{display:grid;justify-items:center;gap:6px;padding:10px 4px;margin:0;text-align:center;line-height:1.25}
+  .sheet-grid figcaption{font-size:12px}
+  .sheet-grid small{font:500 10.5px "Geist Mono";color:var(--muted);overflow-wrap:anywhere;max-width:100%}
+  .sheet-grid.dark small{color:var(--machine-muted)}
+  .sheet-grid h4{grid-column:1/-1;font:500 11px "Geist Mono";letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:8px 0 0 4px}
+  .sheet-grid.dark h4{color:var(--machine-muted)}
+  /* type */
+  .spec{display:grid;grid-template-columns:220px 1fr;gap:28px;align-items:center;padding:28px;border-bottom:1px solid var(--line)}
+  .spec:last-child{border-bottom:0}
+  .spec .big{font-size:58px;line-height:1;letter-spacing:-.025em}
+  .spec .row2{display:flex;gap:26px;align-items:baseline;margin-top:12px;flex-wrap:wrap}
+  .spec .it{font-style:italic;font-size:28px}
+  .spec .gr{font-size:32px}
+  /* colour */
+  .sw{border-radius:18px;overflow:hidden;background:var(--card);box-shadow:0 1px 2px oklch(.3 .05 145/.06)}
+  .sw .c{height:86px}
+  .sw .t{padding:12px 14px;font-size:14px}
+  .sw .t span{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+  .ramp{display:grid;grid-template-columns:repeat(8,1fr);border-radius:16px;overflow:hidden}
+  .ramp span{display:grid;align-content:end;gap:2px;height:96px;padding:10px;font:600 15px "Hanken Grotesk"}
+  .ramp small{font:500 11px "Geist Mono";opacity:.85}
+  .list{padding-left:1.1em}
+  .list li{margin:.35em 0}
+  /* motion */
+  .demo{display:flex;align-items:center;justify-content:center;gap:28px;height:190px;border-radius:18px;background:var(--forest);color:var(--card);position:relative}
+  .demo .score{font:300 64px/1 "Hanken Grotesk";font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+  .demo .stampg{display:grid;place-items:center;width:96px;height:56px;border-radius:999px;background:oklch(0.54 0.12 138);font:600 30px "Hanken Grotesk";box-shadow:0 0 0 2px oklch(1 0 0/.12)}
+  .demo.go .stampg{animation:stamp .52s var(--ease) .9s both}
+  .demo .band{position:absolute;left:40px;right:40px;bottom:26px;height:8px;border-radius:9px;background:oklch(1 0 0/.14)}
+  .demo .band i{position:absolute;left:46%;width:22%;top:0;bottom:0;border-radius:9px;background:var(--lime);transform-origin:left;transform:scaleX(0)}
+  .demo.go .band i{animation:grow .9s var(--ease) .1s forwards}
+  @keyframes stamp{0%{transform:scale(1.6) rotate(-6deg);opacity:0;filter:blur(6px)}60%{transform:scale(.96) rotate(-2deg);opacity:1;filter:blur(0)}100%{transform:none;opacity:1}}
+  @keyframes grow{to{transform:scaleX(1)}}
+  .bars{height:6px;border-radius:9px;background:var(--forest)}
+  footer{padding:96px 0 110px;font-size:13.5px;color:var(--muted)}
+  footer ol{padding-left:1.2em;display:grid;gap:4px;margin-top:10px}
+
+  @media (max-width:900px){
+    .dir-hero,.row,.meanings,.lockups,.apps3,.sheet,.live,.anatomy{grid-template-columns:1fr}
+    .dir-head{border-left:0;border-top:1px solid var(--line);padding:30px 24px}
+    .dir-head .name{font-size:48px}
+    .meaning,.lockups>div{border-right:0;border-bottom:1px solid var(--line)}
+    .row>div+div{border-left:0;border-top:1px solid var(--line)}
+    .beat{grid-template-columns:72px 22px 1fr;gap:0 10px}
+    .beat .when{font-size:11.5px}
+    .preview{position:static}
+    .stage{padding:64px 18px 56px}
+    .stage .badge{top:16px;left:16px}
+    .stage .lockup .wm{font-size:50px!important}
+    .stage .lockup{gap:12px!important}
+    .stage .lockup svg{width:72px!important;height:72px!important}
+    .risks{grid-template-columns:1fr}
+    .spec{grid-template-columns:1fr}
+    .spec .big{font-size:42px}
+    .ramp{grid-template-columns:repeat(4,1fr)}
+    .lockup .wm{white-space:normal}
+  }
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    .demo *{animation:none!important;transform:none!important;opacity:1!important}
+    .anim *{animation:none!important;stroke-dashoffset:0!important;transform:none!important;opacity:1!important}
+  }
+</style>
+</head>
+<body>
+
+<div class="top"><div class="wrap">
+  <span class="title">Brand proposal v2</span>
+  <nav aria-label="Sections">
+    <a href="#story">The story</a><a href="#tests">The brief</a><a href="#standing">A · Standing</a><a href="#livingstd">B · Living Standard</a><a href="#interest">C · Natural Interest</a><a href="#witness">D · Witness Tree</a><a href="#naturex">E · NatureX</a><a href="#compare">Compare</a><a href="#features">Features</a><a href="#apps">Apps</a><a href="#icons">Icons</a><a href="#type">Type</a><a href="#colour">Colour</a><a href="#motion">Motion</a><a href="#voice">Voice</a><a href="#decide">Decide</a>
+  </nav>
+</div></div>
+
+<div class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">For team decision · 23 Oct 2026 · submission 29 Oct</p>
+  <h1 style="margin-top:14px">A name that carries<br>the <em>argument.</em></h1>
+  <p class="lede">NatureX argues one thing: <b>a living wetland should be worth more than the factory that would replace it</b>, and it proves that with ratings anyone can check. This proposal starts from that argument and from how the team got here. It offers five directions, each a name that can carry the argument on its own and a logo drawn from a real instrument or record, not decoration. It ends with the full system every direction shares: icon pack, typography, colour, motion and voice.</p>
+  <div class="v1note"><span class="chip warn" style="flex:none">v1 retired</span><span>Version 1 (Kept, Quadrat, Lichen, Wildgrade) offered pleasant words with no link to the problem. None of them told a judge why nature is undervalued or what this product fixes. They are listed under <a href="#compare">set aside</a> with the reasons.</span></div>
+</header>
+
+<!-- STORY -->
+<section id="story">
+  <p class="eyebrow">01 · How we got here</p>
+  <h2>The story the name has to tell</h2>
+  <p>Every claim below is from the project's own docs or a cited source (listed at the end).</p>
+  <div class="timeline">
+    <div class="beat key"><div class="when">The spark</div><div class="rail"><i></i></div><div class="body">
+      <h3>A wetland near Mexico City, hemmed in by factories</h3>
+      <p>A documentary showed a community's wetland under industrial pressure and claimed wetlands may be worth <b>$25,000–50,000 per acre per year</b> in services nobody pays for. That case became the hero site and the opening of the video.</p>
+      <p class="src">Source: pm-spec §6 and dev-spec §7.3. Team: add the documentary's title here. Our engine is more cautious: pure inland wetland comes to $34,018/ha/yr, and the hero site $12,915/ha/yr. We report that gap rather than tune it away.</p>
+    </div></div>
+    <div class="beat"><div class="when">The insight</div><div class="rail"><i></i></div><div class="body">
+      <p class="quote">“The bees never sent an invoice.”</p>
+      <p>Markets only see <b>dead</b> nature: timber, minerals, land for factories. A community protecting a wetland gets one tempting offer: <b>sell once</b>.</p>
+      <p class="src">Source: one-pager.</p>
+    </div></div>
+    <div class="beat"><div class="when">Sep 2023</div><div class="rail"><i></i></div><div class="body">
+      <h3>Wall Street tried to list nature</h3>
+      <p>The NYSE filed a rule to list <b>Natural Asset Companies</b>, built with Intrinsic Exchange Group. Every listed company would have had to publish an <b>Ecological Performance Report</b>, the same report this product generates.</p>
+      <p class="src">Sources: <a href="https://www.federalregister.gov/documents/2023/10/04/2023-22041/self-regulatory-organizations-new-york-stock-exchange-llc-notice-of-filing-of-proposed-rule-change">Federal Register, Oct 2023</a>; <a href="https://www.sec.gov/files/rules/sro/nyse/2023/34-98665-ex3.pdf">IEG framework (SEC exhibit)</a>.</p>
+    </div></div>
+    <div class="beat"><div class="when">Jan 2024</div><div class="rail"><i></i></div><div class="body">
+      <h3>…and pulled back</h3>
+      <p>The NYSE withdrew the rule after opposition from 25 state attorneys general and others. The concerns were about who controls the land and whether the values could be trusted.</p>
+      <p class="src">Source: <a href="https://www.thecorporatecounsel.net/blog/2024/01/nyse-withdraws-natural-asset-company-listing-proposal.html">The Corporate Counsel, Jan 2024</a>.</p>
+    </div></div>
+    <div class="beat key"><div class="when">The gap</div><div class="rail"><i></i></div><div class="body">
+      <h3>The missing piece was never the exchange. It was the rating.</h3>
+      <p>“The bottleneck is <b>cheap, credible, continuous measurement</b>” (pm-spec §1). It also has to belong to the community, and anyone has to be able to check it.</p>
+    </div></div>
+    <div class="beat"><div class="when">What we built</div><div class="rail"><i></i></div><div class="body">
+      <h3>An AI rating agency for living land</h3>
+      <p>Nemotron agents read five years of satellite record and the local news, <i>“and what each says about the other”</i>. Tested formulas set the grade. The Auditor may move it by at most ±10, and only with cited evidence. Every rating is sealed in a hash-chained ledger. The community keeps its land; supporters back it with play money.</p>
+      <p class="src">Source: Devpost draft, Oct 22.</p>
+    </div></div>
+    <div class="beat key"><div class="when">The hero site</div><div class="rail"><i></i></div><div class="body">
+      <h3>Xochimilco: the place that already wrote the argument into law</h3>
+      <p>It is the last remnant of the lakes of the Valley of Mexico. It is the only wild home of the <b>axolotl</b>, a critically endangered salamander that regrows its own limbs. And it lies in Mexico City, whose <b>2017 constitution (Article 13)</b> says: <i>“Nature has the right to exist, persist, maintain and regenerate its vital cycles.”</i> Aldo Leopold defined exactly what the Health score measures: <i>“Health is the capacity of the land for self-renewal.”</i></p>
+      <p class="src">Sources: <a href="https://en.wikipedia.org/wiki/Lake_Xochimilco">Lake Xochimilco</a>; Mexico City Constitution, Art. 13; Leopold, <i>A Sand County Almanac</i> (1949).</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- TESTS -->
+<section id="tests">
+  <p class="eyebrow">02 · The brief</p>
+  <h2>Five tests every name must pass</h2>
+  <div class="tests">
+    <div><b>1. Carries the argument</b><span>Without explanation, it hints that living nature has a value the market misses.</span></div>
+    <div><b>2. Sounds like a rating</b><span>A verdict you trust, not a token you trade. “Rating agency first, exchange second.”</span></div>
+    <div><b>3. Belongs to Rosa too</b><span>The community is the protagonist. The name can't read as Wall Street's.</span></div>
+    <div><b>4. Survives a downgrade</b><span>Say it in a sober sentence: “___ lowered Xochimilco to BBB.” Cute names break here.</span></div>
+    <div><b>5. Ownable</b><span>No collision in climate, finance or ratings; no crypto echo.</span></div>
+  </div>
+</section>
+
+<!-- STANDING -->
+<section id="standing">
+  <p class="eyebrow">03 · Direction A · recommended</p>
+  <h2>Standing</h2>
+  <p>One English word that means the land is alive, that it is creditworthy, and that it has a voice, all at once.</p>
+  <article class="dir">
+    <div class="dir-hero">
+      <div class="stage">
+        <span class="chip ok badge">Recommended</span>
+        <div class="lockup anim" data-lock="standing" style="display:flex;align-items:center;gap:20px"></div>
+        <button class="btn replay" type="button" data-replay="standing">Replay</button>
+      </div>
+      <div class="dir-head">
+        <p class="eyebrow">Tagline</p>
+        <p class="tag">Worth more standing.</p>
+        <p class="pitch">“In 1972 a law professor asked whether trees should have standing. In 2017 Mexico City wrote it into its constitution. We built the missing piece: a rating that shows what that standing is worth.”</p>
+        <p class="muted" style="font-size:14px">The 15-second opener for the video and the Devpost page.</p>
+      </div>
+    </div>
+    <div class="meanings">
+      <div class="meaning"><p class="k">Ecology</p><h3>Standing forest, standing water</h3><p>Timber is priced when it falls; a wetland when it's drained and sold. Standing is the state the market ignores, and the state we rate. A wetland is, literally, standing water.</p></div>
+      <div class="meaning"><p class="k">Finance</p><h3>In good standing</h3><p>The plainest credit verdict in English. A grade <i>is</i> a statement of standing. Upgrades and downgrades read naturally: “standing raised”, “standing lowered”.</p></div>
+      <div class="meaning"><p class="k">Law and rights</p><h3>Should trees have standing?</h3><p>Christopher Stone's 1972 essay started the rights-of-nature movement. Standing is the right to be heard. Here, a community's land finally gets a voice that counts in money.</p></div>
+    </div>
+    <div class="row">
+      <div>
+        <p class="eyebrow">The mark · the staff gauge</p>
+        <div class="anatomy">
+          <div id="gaugeAnatomy"></div>
+          <ol>
+            <li><b>The post</b> is the measuring staff hydrologists drive into a wetland to read its water level. It <i>stands</i> in the water.</li>
+            <li><b>The E-pattern ticks</b> are the real “Style E” markings: an instrument, not an illustration.</li>
+            <li><b>The lime waterline</b> is the reading. In the product it sits at the site's actual score.</li>
+            <li><b>Below the line</b> the post fades, as if seen through water.</li>
+          </ol>
+        </div>
+      </div>
+      <div>
+        <p class="eyebrow">Said in the product</p>
+        <div class="says">
+          <div>Xochimilco Wetland · <b>A</b> · in good standing</div>
+          <div class="down"><b>Standing lowered to BBB</b>: encroachment reported at the northern edge (12 Sep 2026).</div>
+          <div>Rosa's cooperative was funded while the wetland kept standing.</div>
+          <div>“Check its standing.” <span class="muted">(what a supporter says to a friend)</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="live" id="liveGauge">
+      <div id="liveMark"></div>
+      <div>
+        <p class="eyebrow" style="color:var(--machine-muted)">Living logo · drag to re-rate</p>
+        <div style="margin-top:8px"><span class="readout" id="liveScore">76.2</span><span class="gr" id="liveGrade">A</span></div>
+        <p class="lab" id="liveLabel">Strong health · in good standing</p>
+        <label class="mono" for="liveRange" style="display:block;margin-top:14px;color:var(--machine-muted)">Health score</label>
+        <input id="liveRange" type="range" min="0" max="100" step="0.1" value="76.2">
+        <div class="ticks"><span>0 · D</span><span>30 · C</span><span>50 · BB</span><span>70 · A</span><span>90 · AAA</span></div>
+        <p style="margin-top:14px;font-size:14px;color:var(--machine-muted)">Each site's page, favicon and share card can show its own reading. The logo is a measurement, so it moves when the land changes.</p>
+      </div>
+    </div>
+    <div class="lockups" id="standingLockups"></div>
+    <div class="risks">
+      <b>Ownable?</b><span>No conflict found in climate, finance or ratings. It's a common word, so register it as a word mark in financial-information services and use a qualified domain (for example standing.earth).</span>
+      <b>Watch</b><span>In the US, “Standing” can echo Standing Rock and its water protectors. That's a respectful resonance, not a conflict. Never borrow it in copy.</span>
+      <b>Type</b><span>Newsreader (headlines, grades, the wordmark), Hanken Grotesk (UI and numbers), Geist Mono (the machine layer).</span>
+    </div>
+  </article>
+</section>
+
+<!-- LIVING STANDARD -->
+<section id="livingstd">
+  <p class="eyebrow">04 · Direction B</p>
+  <h2>Living Standard</h2>
+  <p>The institutional direction. The world's biggest rating agency still carries the word <i>Standard</i>; this name sets one for what is alive.</p>
+  <article class="dir">
+    <div class="dir-hero">
+      <div class="stage">
+        <div class="lockup anim" data-lock="livingstd" style="display:flex;align-items:center;gap:20px"></div>
+        <button class="btn replay" type="button" data-replay="livingstd">Replay</button>
+      </div>
+      <div class="dir-head">
+        <p class="eyebrow">Tagline</p>
+        <p class="tag">The standard for what's alive.</p>
+        <p class="pitch">“Every investor knows the word Standard from Standard &amp; Poor's, which began in 1906 as the Standard Statistics Bureau. For a community near Mexico City, the wetland <i>is</i> its standard of living: the water, the flood protection, the chinampa harvest. We built the rating standard for that.”</p>
+      </div>
+    </div>
+    <div class="meanings">
+      <div class="meaning"><p class="k">Finance</p><h3>A rating standard</h3><p>The vocabulary judges already trust. Standard Statistics (1906) became half of S&amp;P. A rating agency's job is to be the standard others compare against.</p></div>
+      <div class="meaning"><p class="k">People</p><h3>Standard of living</h3><p>The services we value (water supply, flood control, food) are literally the community's standard of living. Destroying the wetland lowers it; that's the argument, in two words.</p></div>
+      <div class="meaning"><p class="k">Horticulture</p><h3>A “standard” is a tree</h3><p>Gardeners call a tree trained on a single upright stem with a round crown a <i>standard</i>. That's the mark: a stem you can measure, a crown that shows the grade.</p></div>
+    </div>
+    <div class="row">
+      <div>
+        <p class="eyebrow">The mark · the standard tree</p>
+        <div class="anatomy">
+          <div id="stdAnatomy"></div>
+          <ol>
+            <li><b>The stem</b> is a measuring rule, ticked like a survey staff.</li>
+            <li><b>The crown</b> is a dial. The lime arc is the site's health score, so the tree fills out as the land heals.</li>
+            <li><b>The ground line</b>: the rating starts from the land itself.</li>
+          </ol>
+        </div>
+      </div>
+      <div>
+        <p class="eyebrow">The crown reads the grade</p>
+        <div id="stdReadings" style="display:flex;gap:18px;flex-wrap:wrap;margin-top:12px"></div>
+        <div class="says" style="margin-top:16px">
+          <div>Xochimilco Wetland meets the <b>A</b> standard.</div>
+          <div class="down"><b>Living Standard lowered Xochimilco to BBB</b>: encroachment at the northern edge.</div>
+        </div>
+      </div>
+    </div>
+    <div class="lockups" id="livingstdLockups"></div>
+    <div class="risks">
+      <b>Ownable?</b><span>No company found under this name in ratings, ESG or climate. But it's a common economic phrase, so search results are crowded and the plain words are hard to register; the mark carries the ownership.</span>
+      <b>Watch</b><span>It leans on S&amp;P's vocabulary. Present it as an homage to rating culture, never as an affiliation.</span>
+    </div>
+  </article>
+</section>
+
+<!-- NATURAL INTEREST -->
+<section id="interest">
+  <p class="eyebrow">05 · Direction C</p>
+  <h2>Natural Interest</h2>
+  <p>The economics direction. It puts Rosa's choice, sell once or keep it alive, into the one financial idea everyone understands.</p>
+  <article class="dir">
+    <div class="dir-hero">
+      <div class="stage">
+        <div class="lockup anim" data-lock="interest" style="display:flex;align-items:center;gap:20px"></div>
+        <button class="btn replay" type="button" data-replay="interest">Replay</button>
+      </div>
+      <div class="dir-head">
+        <p class="eyebrow">Tagline</p>
+        <p class="tag">Live on the interest.</p>
+        <p class="pitch">“Economists call clean water, flood protection and carbon storage the <i>interest</i> that nature's capital pays. Draining a wetland for a factory spends the principal: one payment, gone forever. We rate the interest, so a community can live on it.”</p>
+      </div>
+    </div>
+    <div class="meanings">
+      <div class="meaning"><p class="k">Economics</p><h3>Interest, not principal</h3><p>Natural capital is a stock; ecosystem services are the flow it yields (Costanza; Daily; Helm). “Sell once” spends the stock. A rating of the yearly value measures the interest.</p></div>
+      <div class="meaning"><p class="k">Ownership</p><h3>Having an interest</h3><p>Supporters take an interest in a site: a stake, with play money. The community keeps its interest in its own land: it never sells.</p></div>
+      <div class="meaning"><p class="k">Attention</p><h3>Worth our interest</h3><p>Nature only gets attention when it's being destroyed. A live rating gives a living place the market's interest while it's still alive.</p></div>
+    </div>
+    <div class="row">
+      <div>
+        <p class="eyebrow">The mark · the percent sign</p>
+        <div class="anatomy">
+          <div id="intAnatomy"></div>
+          <ol>
+            <li><b>A percent sign</b>, the symbol of interest, rebuilt from nature.</li>
+            <li><b>The leaf</b> is natural capital: the stock that must stay.</li>
+            <li><b>The drop</b> is what it yields: water, the first service in every wetland's report.</li>
+            <li><b>The lime sprout</b> on the stem is the interest accruing. It unfurls when a quarter's rating lands.</li>
+          </ol>
+        </div>
+      </div>
+      <div>
+        <p class="eyebrow">Said in the product</p>
+        <div class="says">
+          <div>Xochimilco Wetland pays <b>$2.1M–$2.7M a year</b> in natural interest · rated <b>A</b>.</div>
+          <div class="down"><b>Natural Interest lowered Xochimilco to BBB</b>: the encroachment cut the yearly value it pays.</div>
+          <div>Sell the wetland once, or live on its interest every year.</div>
+        </div>
+      </div>
+    </div>
+    <div class="lockups" id="interestLockups"></div>
+    <div class="risks">
+      <b>Ownable?</b><span>No company found under this name in finance or climate.</span>
+      <b>Watch</b><span>“Interest” can read as an investment return, which the project's sandbox rules forbid. Copy must always say the interest is what the <i>land</i> pays to people (its services), never a return to supporters. If that's too fine a line for the demo, choose another direction.</span>
+    </div>
+  </article>
+</section>
+
+<!-- WITNESS TREE -->
+<section id="witness">
+  <p class="eyebrow">06 · Direction D</p>
+  <h2>Witness Tree</h2>
+  <p>The evidence-first direction. The name says the product doesn't just score land; it keeps a record that can be proved later.</p>
+  <article class="dir">
+    <div class="dir-hero">
+      <div class="stage">
+        <div class="lockup anim" data-lock="witness" style="display:flex;align-items:center;gap:20px"></div>
+        <button class="btn replay" type="button" data-replay="witness">Replay</button>
+      </div>
+      <div class="dir-head">
+        <p class="eyebrow">Tagline</p>
+        <p class="tag">Every site has a witness.</p>
+        <p class="pitch">“For centuries, surveyors marked a living tree at each land corner so the boundary could be proved later. They called it a witness tree. We give every site two witnesses, the satellite record and the local news, and an Auditor that listens to both.”</p>
+      </div>
+    </div>
+    <div class="meanings">
+      <div class="meaning"><p class="k">Surveying</p><h3>A tree that proves a boundary</h3><p>Surveyors blazed a bearing tree near each corner marker. If the marker was lost, the tree proved where the line was. Listing a site starts with drawing its boundary.</p></div>
+      <div class="meaning"><p class="k">Evidence</p><h3>Two witnesses</h3><p>The product reads the satellite record and the local news <i>“and what each says about the other”</i>. The Auditor cross-examines both. That's testimony, not a vibe.</p></div>
+      <div class="meaning"><p class="k">Time</p><h3>Rings remember</h3><p>A tree's rings record every year it stood. Five rings in the mark: the five years of satellite record behind each rating.</p></div>
+    </div>
+    <div class="row">
+      <div>
+        <p class="eyebrow">The mark · the blazed rings</p>
+        <div class="anatomy">
+          <div id="witnessAnatomy"></div>
+          <ol>
+            <li><b>Five rings</b>: the five years of satellite record.</li>
+            <li><b>The blaze</b>: the surveyor's mark, cut into the outer ring. Lime, because it is this quarter's reading.</li>
+            <li>The rings are slightly irregular: grown, not drawn with a compass.</li>
+          </ol>
+        </div>
+      </div>
+      <div>
+        <p class="eyebrow">Said in the product</p>
+        <div class="says">
+          <div>Witness Tree rates Xochimilco Wetland <b>A</b>.</div>
+          <div class="down"><b>Witness Tree lowered Xochimilco to BBB</b>, citing satellite loss at the northern edge and two local news reports.</div>
+          <div>“What did the witnesses see?” opens the evidence timeline.</div>
+        </div>
+      </div>
+    </div>
+    <div class="lockups" id="witnessLockups"></div>
+    <div class="risks">
+      <b>Ownable?</b><span>Small existing users: “My Witness Tree” (a faith app) and Witness Tree Media (photo and video for environmental groups). Workable, but less clean than Standing.</span>
+      <b>Watch</b><span>Two words, and “witness” can feel legal or grim. Less warm for Rosa.</span>
+    </div>
+  </article>
+</section>
+
+<!-- NATUREX -->
+<section id="naturex">
+  <p class="eyebrow">07 · Direction E · lowest cost</p>
+  <h2>NatureX, with a reason for the X</h2>
+  <p>Keep the name and stop the X from meaning “crypto”. Give it the product's real job instead.</p>
+  <article class="dir">
+    <div class="dir-hero">
+      <div class="stage dark">
+        <div class="lockup anim" data-lock="naturex" style="display:flex;align-items:center;gap:6px"></div>
+        <button class="btn replay" type="button" data-replay="naturex" style="background:var(--machine-raised);color:var(--machine-ink);border-color:var(--machine-line)">Replay</button>
+      </div>
+      <div class="dir-head">
+        <p class="eyebrow">Tagline</p>
+        <p class="tag">Where the evidence crosses.</p>
+        <p class="pitch">“The X in NatureX is where two records cross: what the satellites saw and what the local news reported. Where they agree, the rating holds. Where they don't, the Auditor asks why.”</p>
+      </div>
+    </div>
+    <div class="meanings">
+      <div class="meaning"><p class="k">The product</p><h3>Two lines, one point</h3><p>One stroke is the five-year greenness curve; the other is the dated news line with its event ticks. The rating lives where they meet.</p></div>
+      <div class="meaning"><p class="k">Surveying</p><h3>Triangulation</h3><p>A position is fixed where two independent sight lines cross. One source is a claim; two crossing sources are a fix.</p></div>
+      <div class="meaning"><p class="k">Cost</p><h3>Nothing to rename</h3><p>Devpost, repo, video and ~72 strings stay. Only the wordmark, favicon and one story line change.</p></div>
+    </div>
+    <div class="lockups" id="naturexLockups"></div>
+    <div class="risks">
+      <b>Ownable?</b><span>No. Naturex is a botanical-extracts company owned by Givaudan, in an adjacent space. Fine for a hackathon; a problem for anything after it.</span>
+      <b>Watch</b><span>Some people will still read “-X” as crypto or hype. The story has to be told every time.</span>
+    </div>
+  </article>
+</section>
+
+<!-- COMPARE -->
+<section id="compare">
+  <p class="eyebrow">08 · Compare</p>
+  <h2>Against the five tests</h2>
+  <div class="tablewrap" style="margin-top:18px"><table>
+    <thead><tr><th>Direction</th><th>1 · Argument</th><th>2 · Sounds like a rating</th><th>3 · Rosa's too</th><th>4 · Downgrade sentence</th><th>5 · Ownable</th><th>Work before 29 Oct</th></tr></thead>
+    <tbody>
+      <tr><td><b>A · Standing</b></td><td class="dots">●●●●</td><td class="dots">●●●●</td><td class="dots">●●●○</td><td>“Standing lowered to BBB” ✓</td><td class="dots">●●●○</td><td>One PR: wordmark, favicon, ~72 strings, video end card</td></tr>
+      <tr><td><b>B · Living Standard</b></td><td class="dots">●●●○</td><td class="dots">●●●●</td><td class="dots">●●●●</td><td>“Living Standard lowered…” ✓</td><td class="dots">●●○○</td><td>One PR</td></tr>
+      <tr><td><b>C · Natural Interest</b></td><td class="dots">●●●●</td><td class="dots">●●○○</td><td class="dots">●●●○</td><td>“Natural Interest lowered…” ✓</td><td class="dots">●●●○</td><td>One PR, plus a copy rule on “interest”</td></tr>
+      <tr><td><b>D · Witness Tree</b></td><td class="dots">●●●○</td><td class="dots">●●●○</td><td class="dots">●●○○</td><td>“Witness Tree lowered…” ✓</td><td class="dots">●●○○</td><td>One PR</td></tr>
+      <tr><td><b>E · NatureX, re-founded</b></td><td class="dots">●●○○</td><td class="dots">●●○○</td><td class="dots">●●○○</td><td>“NatureX lowered…” ✓</td><td class="dots">●○○○</td><td>Wordmark, favicon, one story line</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 style="margin-top:44px">Considered and set aside</h3>
+  <div class="aside">
+    <div><b>Kept · Quadrat · Lichen · Wildgrade</b><span class="why">The v1 names. Pleasant words with no link to the problem: none says why nature is undervalued or what this product fixes.</span></div>
+    <div><b>Tally</b><span class="why">Perfect story: the Exchequer's split hazel sticks were a tamper-proof record for centuries. But TallyPrime is a dominant accounting brand.</span><p class="use">→ Used as the ledger's name (section 07).</p></div>
+    <div><b>Unbilled</b><span class="why">Straight from the bees line, but it reads like invoicing software. The line works better as the hook it already is.</span></div>
+    <div><b>Liveworth</b><span class="why">“Alive” and “live-updating” in one word, but LiveWorth is an existing net-worth app.</span></div>
+    <div><b>Leopold</b><span class="why">He coined “land health”, which is literally our score. Naming a company after a person implies an endorsement we don't have.</span><p class="use">→ Quoted in the Health score instead.</p></div>
+    <div><b>Axolotl · Chinampa</b><span class="why">The hero site's story, not a global brand. These Nahuatl words belong to the people of Xochimilco.</span><p class="use">→ Used with care in the Xochimilco narrative only.</p></div>
+    <div><b>Watermark</b><span class="why">Three meanings: a wetland's high-water mark, a banknote's proof it's genuine, and a fund's high-water mark. But the trademark is crowded, and the staff-gauge story is already Standing's.</span></div>
+    <div><b>Proof of Life</b><span class="why">What a satellite rating really is. But the phrase comes from kidnappings, and “proof of …” echoes crypto.</span><p class="use">→ Works as a line in the video.</p></div>
+    <div><b>Benchmark</b><span class="why">A surveyor's height mark and a finance index. But Benchmark Mineral Intelligence already runs a price-reporting agency.</span></div>
+    <div><b>Evergrade · Holdfast · GroundTruth · Ostrom · Fieldmark</b><span class="why">Existing companies or fatal echoes: Evergrande, Patagonia's Holdfast Collective, an adtech firm, Ostrom Climate Solutions, Fieldmark AI.</span></div>
+  </div>
+  <p class="muted" style="margin-top:14px;font-size:13.5px">All conflict checks are quick web searches, not legal clearance. Run a trademark search (USPTO, EUIPO, WIPO, and IP India) on the chosen name before anything public.</p>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <p class="eyebrow">09 · Feature names</p>
+  <h2>Names that explain the feature</h2>
+  <p>Rename only where a name can carry a real story <i>and</i> say what the feature does. Everything else stays plain. These work with any of the five directions.</p>
+  <div class="feats" id="feats"></div>
+  <p class="keeps"><b>Keep as they are:</b> Time Machine (a sandbox tool, so a memorable name doesn't overclaim), Auditor, News Scout, Live, Opening offer, Your stakes, Community fund, Guided tour, Alerts.</p>
+</section>
+
+<!-- APPS -->
+<section id="apps">
+  <p class="eyebrow">10 · App names</p>
+  <h2>Name each app after what people do in it</h2>
+  <p>“Exchange” goes in every direction. It suggests a real securities exchange, which breaks the play-money rule, and it puts trading before rating.</p>
+  <div class="apps3">
+    <div class="card"><p class="was">Was: Exchange · <span class="mono">/</span></p><p class="nm">Ratings</p><p style="font-size:15px">Open to everyone. Browse rated sites, read reports, ask about a site, back one with play money. A rating agency's front door is its ratings.</p><p class="muted" style="font-size:13.5px">Nav: <b style="color:var(--ink)">Rated sites</b> · Your stakes</p></div>
+    <div class="card"><p class="was">Was: Steward · <span class="mono">/steward</span></p><p class="nm">Community</p><p style="font-size:15px">For owners and stewards. List land, field photos, land documents, open to supporters, the community fund. It matches the roles and words already in the app.</p><p class="muted" style="font-size:13.5px">Nav: <b style="color:var(--ink)">Home</b> · List land</p></div>
+    <div class="card dark"><p class="was" style="color:var(--machine-muted)">Was: Control room · <span class="mono">/admin</span></p><p class="nm">Operations</p><p style="font-size:15px">For platform admins. Time Machine and land rights reviews. Plain and accurate.</p><p style="font-size:13.5px;color:var(--machine-muted)">Nav: Time Machine · <b style="color:var(--machine-ink)">Land rights checks</b></p></div>
+  </div>
+</section>
+
+<!-- ICONS -->
+<section id="icons">
+  <p class="eyebrow">11 · Icon pack</p>
+  <h2>One family, one accent</h2>
+  <p>Every product feature gets an icon from the same family, so they read as one product next to the Lucide icons the app already uses. Each card names the Lucide icon to use if the team prefers to ship standard icons first.</p>
+  <div class="grid g3" style="margin-top:18px;font-size:14.5px">
+    <div class="card" style="padding:18px"><b>Grid and stroke.</b> 24 px grid, 1.75 px stroke, round caps and joins. Identical to Lucide's metrics.</div>
+    <div class="card" style="padding:18px"><b>One accent.</b> Each icon lights exactly one part: what the feature confirms or points at. Filled lime keeps an ink outline, so it passes contrast on light surfaces.</div>
+    <div class="card" style="padding:18px"><b>Two surfaces.</b> Lime-ink accent strokes on light; lime on the dark machine layer (trace, tally, agents).</div>
+  </div>
+  <div class="card" style="margin-top:16px;padding:0;overflow:hidden">
+    <div class="sheet-grid" id="iconSheetLight"></div>
+    <div class="sheet-grid dark" id="iconSheetDark"></div>
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><h3>Sizes</h3><p class="muted" style="font-size:14px;margin-top:4px">Legible from 16 px. Below 20 px, drop interior detail rather than thin the stroke.</p><div id="iconSizes" style="display:flex;flex-wrap:wrap;align-items:end;gap:18px 22px;margin-top:16px"></div></div>
+    <div class="card"><h3>Rules</h3><ul class="list" style="margin-top:10px">
+      <li>Icons always come with a text label in navigation; icon-only buttons need an accessible name.</li>
+      <li>Never recolour the accent to signal state; state lives in text and the grade colour.</li>
+      <li>Agent icons appear only in the trace and tour hints, never as decoration.</li>
+      <li>Ship as an SVG sprite or React components under <span class="mono">components/icons/</span>, with the same props as Lucide.</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- TYPE -->
+<section id="type">
+  <p class="eyebrow">12 · Typography</p>
+  <h2>A reporting serif, a working sans</h2>
+  <p>Keep <b>Hanken Grotesk</b> for UI and numbers (300 weight, tabular figures for scores and money) and <b>Geist Mono</b> for the machine layer (trace, tally, model names). Choose the display serif for headlines, site names and grade verdicts. All are free (OFL).</p>
+  <div class="card" style="margin-top:20px;padding:0">
+    <div class="spec">
+      <div><p class="eyebrow">Current</p><h3 style="margin-top:6px">Instrument Serif</h3><div class="chips" style="margin-top:8px"><span class="chip warn">Generic in 2026</span></div><p class="muted" style="font-size:13.5px;margin-top:10px">Condensed and elegant, but now the default display face of AI landing pages. One weight only.</p></div>
+      <div style="font-family:'Instrument Serif'"><div class="big">Xochimilco Wetland</div><div class="row2"><span class="gr">A · Strong health</span><span class="it">The bees never sent an invoice.</span></div></div>
+    </div>
+    <div class="spec">
+      <div><p class="eyebrow">Recommended</p><h3 style="margin-top:6px">Newsreader</h3><div class="chips" style="margin-top:8px"><span class="chip ok">Report gravitas</span></div><p class="muted" style="font-size:13.5px;margin-top:10px">Built for news and long reading, with optical sizes and a true italic. Reads like a well-set rating report. Used for every wordmark in this proposal.</p></div>
+      <div style="font-family:Newsreader;font-weight:500"><div class="big">Xochimilco Wetland</div><div class="row2"><span class="gr">A · Strong health</span><span class="it" style="font-weight:400">The bees never sent an invoice.</span></div></div>
+    </div>
+    <div class="spec">
+      <div><p class="eyebrow">Warmest</p><h3 style="margin-top:6px">Fraunces (Soft)</h3><p class="muted" style="font-size:13.5px;margin-top:10px">Soft, rounded terminals. Lovely for the Community app; can feel playful on a report.</p></div>
+      <div style="font-family:Fraunces;font-variation-settings:'SOFT' 100;font-weight:500"><div class="big">Xochimilco Wetland</div><div class="row2"><span class="gr">A · Strong health</span><span class="it" style="font-weight:400">The bees never sent an invoice.</span></div></div>
+    </div>
+    <div class="spec">
+      <div><p class="eyebrow">Most sober</p><h3 style="margin-top:6px">Source Serif 4</h3><p class="muted" style="font-size:13.5px;margin-top:10px">Neutral and highly legible, closest to an agency's printed report. Least character.</p></div>
+      <div style="font-family:'Source Serif 4';font-weight:600"><div class="big">Xochimilco Wetland</div><div class="row2"><span class="gr">A · Strong health</span><span class="it" style="font-weight:400">The bees never sent an invoice.</span></div></div>
+    </div>
+  </div>
+  <div class="tablewrap" style="margin-top:16px"><table>
+    <thead><tr><th>Role</th><th>Face</th><th>Sample</th><th>Size · line height</th></tr></thead>
+    <tbody>
+      <tr><td><b>Display</b></td><td>Newsreader 400</td><td style="font:400 40px/1 Newsreader;letter-spacing:-.03em">Worth more standing.</td><td class="mono">64–104 · 0.95</td></tr>
+      <tr><td><b>Grade verdict</b></td><td>Newsreader 600</td><td style="font:600 30px/1 Newsreader">A <span style="font-weight:400;font-style:italic">· Strong health</span></td><td class="mono">28–40 · 1.1</td></tr>
+      <tr><td><b>Numerals</b></td><td>Hanken Grotesk 300, tabular</td><td style="font:300 36px/1 'Hanken Grotesk';letter-spacing:-.03em;font-variant-numeric:tabular-nums">76.2 · $2.1M–$2.7M</td><td class="mono">32–64 · 1.0</td></tr>
+      <tr><td><b>UI and body</b></td><td>Hanken Grotesk 400/500</td><td>Back this site · Encroachment reported at the northern edge.</td><td class="mono">14–17 · 1.55</td></tr>
+      <tr><td><b>Machine</b></td><td>Geist Mono 400</td><td class="mono" style="font-size:13px">nvidia/nemotron-3-super · 1,284 tokens · 2.3 s</td><td class="mono">11–13 · 1.6</td></tr>
+    </tbody>
+  </table></div>
+  <p class="mono muted" style="margin-top:12px">Scale (≈1.25): 12 · 14 · 16 · 20 · 24 · 32 · 40 · 64 · 88 px.</p>
+</section>
+
+<!-- COLOUR -->
+<section id="colour">
+  <p class="eyebrow">13 · Colour</p>
+  <h2>Same palette, one job per colour</h2>
+  <p>The palette stays. What makes it ownable is giving each colour one job, so colour carries information instead of decoration. The health ramp, the same green-to-clay scale satellites use for vegetation, becomes the signature.</p>
+  <div class="grid g3" style="margin-top:20px">
+    <div class="sw"><div class="c" style="background:var(--ground);box-shadow:inset 0 -1px 0 var(--line)"></div><div class="t"><b>Lichen ground</b><span>Page background</span></div></div>
+    <div class="sw"><div class="c" style="background:var(--forest)"></div><div class="t"><b>Forest</b><span>Ink, primary buttons, hero panels</span></div></div>
+    <div class="sw"><div class="c" style="background:var(--lime)"></div><div class="t"><b>Lime: the reading</b><span>The waterline, the arc, the blaze: what is measured now. Confirmations. Nothing decorative.</span></div></div>
+    <div class="sw"><div class="c" style="background:var(--clay)"></div><div class="t"><b>Clay: pressure</b><span>Downgrades, damage, refusals. Always with ▼ and words.</span></div></div>
+    <div class="sw"><div class="c" style="background:var(--machine)"></div><div class="t"><b>Machine</b><span>Only the AI layer: trace, tally, model calls</span></div></div>
+    <div class="sw"><div class="c" style="background:var(--water)"></div><div class="t"><b>Water</b><span>Hydrology layers and the flood service only</span></div></div>
+  </div>
+  <p style="margin-top:28px"><b>Health ramp</b>, with the contrast fix: dark text on BBB, BB and B.</p>
+  <div class="ramp" role="img" aria-label="Grade ramp from AAA deep green to D red clay" style="margin-top:10px">
+    <span style="background:oklch(0.43 0.1 152);color:#fff">AAA<small>≥ 90</small></span><span style="background:oklch(0.5 0.115 146);color:#fff">AA<small>≥ 80</small></span><span style="background:oklch(0.54 0.12 138);color:#fff">A<small>≥ 70</small></span><span style="background:oklch(0.66 0.13 120);color:var(--ink)">BBB<small>≥ 60</small></span><span style="background:oklch(0.7 0.13 92);color:var(--ink)">BB<small>≥ 50</small></span><span style="background:oklch(0.67 0.13 66);color:var(--ink)">B<small>≥ 40</small></span><span style="background:oklch(0.56 0.14 46);color:#fff">C<small>≥ 30</small></span><span style="background:oklch(0.52 0.16 30);color:#fff">D<small>&lt; 30</small></span>
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><h3>Rules</h3><ul class="list" style="margin-top:10px">
+      <li><b>R1</b> Lime means “the reading” or “confirmed”. Remove it from icon tiles and decorative chips.</li>
+      <li><b>R2</b> Dark surfaces are only for the machine layer, so dark always means “the AI is showing its work”.</li>
+      <li><b>R3</b> Clay always comes with ▼ and words. Never alarm red: this is a rating agency, not a siren.</li>
+      <li><b>R4</b> Drop lilac: it has no job, and a fifth accent dilutes the ramp.</li>
+      <li><b>R5</b> Grade badges use dark text on BBB, BB and B.</li>
+    </ul></div>
+    <div class="card dark"><h3>Contrast issues found in the app</h3><ul class="list" style="margin-top:10px">
+      <li>“Not trading yet” badge: white on clay is <b>3.3:1</b>, below the 4.5:1 minimum.</li>
+      <li>BBB/BB with white text is about 2.5–3:1 (fixed by R5).</li>
+      <li>White text over satellite photos depends on the image; always keep the dark scrim behind it.</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- MOTION -->
+<section id="motion">
+  <p class="eyebrow">14 · Motion</p>
+  <h2>Motion that measures</h2>
+  <p>The app's motion tokens (<span class="mono">--nx-ease-out</span>; 160 / 360 / 520 / 900 ms; <span class="mono">nx-stamp</span>, <span class="mono">nx-wash</span>, <span class="mono">nx-flash</span>) stay. Six named moves, each with one meaning, so no animation is decoration.</p>
+  <div class="grid g2" style="margin-top:20px;align-items:start">
+    <div class="tablewrap"><table>
+      <thead><tr><th>Move</th><th>Means</th><th>Where</th><th>Duration</th></tr></thead>
+      <tbody>
+        <tr><td><b>Draw</b></td><td>Something is being measured</td><td>Boundary, chart lines, logo intro</td><td><div class="bars" style="width:100%"></div><span class="mono">900–1400 ms</span></td></tr>
+        <tr><td><b>Count</b></td><td>A number arrived or changed</td><td>Score, value range, balance</td><td><div class="bars" style="width:55%"></div><span class="mono">600–900 ms</span></td></tr>
+        <tr><td><b>Stamp</b></td><td>A verdict was issued</td><td>Grade reveal and grade change</td><td><div class="bars" style="width:38%"></div><span class="mono">520 ms, once</span></td></tr>
+        <tr><td><b>Wash</b></td><td>Your action landed here</td><td>Receipts, new rows</td><td><div class="bars" style="width:100%"></div><span class="mono">1500 ms</span></td></tr>
+        <tr><td><b>Settle</b></td><td>Content arrived</td><td>Panels, sheets, cards</td><td><div class="bars" style="width:26%"></div><span class="mono">360 ms</span></td></tr>
+        <tr><td><b>Pulse</b></td><td>Waiting on you</td><td>Closable corner, Live badge</td><td><div class="bars" style="width:100%"></div><span class="mono">1600 ms loop, max 2</span></td></tr>
+      </tbody>
+    </table></div>
+    <div>
+      <div class="demo go" id="demo"><span class="score" id="demoScore">76.2</span><span class="stampg">A</span><div class="band"><i></i></div></div>
+      <p style="margin-top:10px;display:flex;align-items:center;gap:12px"><button class="btn" type="button" id="demoBtn">Replay</button><span class="muted" style="font-size:13.5px">The rating reveal: the range <b>draws</b>, the score <b>counts</b>, the grade <b>stamps</b>.</span></p>
+    </div>
+  </div>
+  <h3 style="margin-top:36px">The logo moment, per direction</h3>
+  <p class="muted" style="margin-top:4px">Each mark has one meaningful animation, played in the product exactly once per journey (when a rating lands), and in the video's last frame.</p>
+  <div class="tablewrap" style="margin-top:12px"><table>
+    <tbody>
+      <tr><td><b>A · Standing</b></td><td>The waterline rises and settles at the site's score; ripples spread once.</td></tr>
+      <tr><td><b>B · Living Standard</b></td><td>The stem rises, then the crown's arc fills to the score.</td></tr>
+      <tr><td><b>C · Natural Interest</b></td><td>The stem draws, then the lime sprout unfurls when the quarter's rating lands.</td></tr>
+      <tr><td><b>D · Witness Tree</b></td><td>The rings grow outward; each quarter adds one; the blaze is cut last.</td></tr>
+      <tr><td><b>E · NatureX</b></td><td>The satellite line and the news line draw, then meet at the lime point.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted" style="margin-top:12px;font-size:14px">Every move ends on the real value and is fully readable with <span class="mono">prefers-reduced-motion</span> (already handled globally in the app).</p>
+</section>
+
+<!-- VOICE -->
+<section id="voice">
+  <p class="eyebrow">15 · Voice and copy</p>
+  <h2>Two voices, tighter lines</h2>
+  <p>The rules in <span class="mono">docs/design/ux-writing.md</span> stay: a sober rating voice on reports, trace and tally; a warm voice for communities, listing and the tour. Never: <i>returns, profit, opportunity, invest now, guaranteed</i>.</p>
+  <h3 style="margin-top:24px">The hero, per direction</h3>
+  <p class="muted" style="margin-top:4px">Keep the best line in the project, and add a second line that says what the product is.</p>
+  <div class="tablewrap" style="margin-top:12px"><table>
+    <thead><tr><th style="width:22%">Direction</th><th>Hero</th></tr></thead>
+    <tbody>
+      <tr><td><b>A · Standing</b></td><td class="serif" style="font-size:20px">The bees never sent an <i>invoice.</i><br>So we rate what's still standing.</td></tr>
+      <tr><td><b>B · Living Standard</b></td><td class="serif" style="font-size:20px">The bees never sent an <i>invoice.</i><br>So we set the standard for what's alive.</td></tr>
+      <tr><td><b>C · Natural Interest</b></td><td class="serif" style="font-size:20px">The bees never sent an <i>invoice.</i><br>So we rate the interest nature pays.</td></tr>
+      <tr><td><b>D · Witness Tree</b></td><td class="serif" style="font-size:20px">The bees never sent an <i>invoice.</i><br>So we gave the land two witnesses.</td></tr>
+      <tr><td><b>E · NatureX</b></td><td class="serif" style="font-size:20px">The bees never sent an <i>invoice.</i><br>So we cross-check what the land is worth.</td></tr>
+    </tbody>
+  </table></div>
+  <h3 style="margin-top:28px">Copy changes for every direction</h3>
+  <div class="tablewrap" style="margin-top:12px"><table>
+    <thead><tr><th style="width:14%">Where</th><th>Now</th><th>Proposed</th></tr></thead>
+    <tbody>
+      <tr><td>Hero body</td><td>NatureX is an AI rating agency for living land. Nemotron agents read satellite data and local news, rate a site's health and value with honest ranges, and keep watching, so keeping nature alive can pay more than destroying it. <span class="mono">(44 words)</span></td><td>Five years of satellite record and the local news, read by Nemotron agents. Tested formulas set the grade. Ranges show the uncertainty, and the rating keeps watching. <span class="mono">(26 words)</span></td></tr>
+      <tr><td>Main button</td><td>Start the guided tour · “About 7 minutes, 10 chapters, skip any time.”</td><td><b>Watch a wetland get rated</b> · “7 min · skip any time”</td></tr>
+      <tr><td>Persona cards</td><td>Explore as a community steward / an investor / the platform admin</td><td><b>I protect land</b> · <b>I back land</b> · <b>Show me the machine</b></td></tr>
+      <tr><td>Value range</td><td>“mid $33.8M” at the top of the range</td><td>“central estimate (published biome mean)”, or show only the range</td></tr>
+      <tr><td>Downgrade</td><td>Downgraded A → BBB: encroachment reported at the edge of the site</td><td>Keep the structure; use the direction's verb (“Standing lowered…”, “Living Standard lowered…”)</td></tr>
+      <tr><td>Sign-off</td><td>Keeping nature alive should pay more than destroying it.</td><td>Keep for the pitch and the video close; the tagline where space is short.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- DECIDE -->
+<section id="decide">
+  <p class="eyebrow">16 · Decide</p>
+  <h2>Choose, then send it back</h2>
+  <p>Choices update the preview and are saved in this browser. When the team agrees, press <b>Copy decision</b> and paste the text into the chat.</p>
+  <div class="sheet">
+    <form id="form" onsubmit="return false">
+      <fieldset><legend>1 · Name and mark</legend><div class="opts" data-group="dir"></div></fieldset>
+      <fieldset><legend>2 · App names</legend><div class="opts" data-group="apps"></div></fieldset>
+      <fieldset><legend>3 · Feature names to adopt</legend><div class="opts" data-group="feats"></div></fieldset>
+      <fieldset><legend>4 · Icons</legend><div class="opts" data-group="icons"></div></fieldset>
+      <fieldset><legend>5 · Display typeface</legend><div class="opts" data-group="type"></div></fieldset>
+      <fieldset><legend>6 · Colour rules</legend><div class="opts" data-group="rules"></div></fieldset>
+      <fieldset><legend>7 · Copy changes</legend><div class="opts" data-group="copy"></div></fieldset>
+      <fieldset><legend>8 · When</legend><div class="opts" data-group="when"></div></fieldset>
+      <div class="field"><label for="who">Decided by</label><input id="who" placeholder="Names"></div>
+      <div class="field"><label for="doc">Documentary title (for the story)</label><input id="doc" placeholder="The film that started the project"></div>
+      <div class="field"><label for="notes">Notes</label><textarea id="notes" rows="3" placeholder="Anything to change or try"></textarea></div>
+    </form>
+    <div class="preview">
+      <div class="pv"><div class="bar" id="pvBar"></div><div class="body"><p style="font-size:13px;opacity:.8">Mexico · 206.7 ha · Ecological Performance Report v1</p><p class="t" style="margin-top:6px">Xochimilco Wetland</p><p class="m" id="pvLine"></p></div></div>
+      <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="button" id="copy">Copy decision</button><button class="btn" type="button" id="reset">Reset</button><span id="copied" role="status" style="font-size:13.5px;color:var(--lime-ink)"></span></div>
+      <textarea id="out" readonly aria-label="Decision text"></textarea>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p class="eyebrow">Sources</p>
+  <ol>
+    <li>Project docs: <span class="mono">docs/one-pager.md</span>, <span class="mono">docs/specs/pm-spec.md</span> §1 and §6, <span class="mono">docs/specs/dev-spec.md</span> §7.3, <span class="mono">docs/devpost.md</span>.</li>
+    <li>NYSE Natural Asset Companies filing: <a href="https://www.federalregister.gov/documents/2023/10/04/2023-22041/self-regulatory-organizations-new-york-stock-exchange-llc-notice-of-filing-of-proposed-rule-change">Federal Register, 4 Oct 2023</a>; Ecological Performance Reporting Framework: <a href="https://www.sec.gov/files/rules/sro/nyse/2023/34-98665-ex3.pdf">SEC exhibit</a>; withdrawal: <a href="https://www.thecorporatecounsel.net/blog/2024/01/nyse-withdraws-natural-asset-company-listing-proposal.html">The Corporate Counsel, Jan 2024</a>.</li>
+    <li>Christopher D. Stone, “Should Trees Have Standing?”, <i>Southern California Law Review</i> (1972); <a href="https://global.oup.com/academic/product/should-trees-have-standing-9780199736072">OUP edition</a>.</li>
+    <li>Constitución Política de la Ciudad de México (2017), Article 13.</li>
+    <li>Aldo Leopold, “The Land Ethic”, <i>A Sand County Almanac</i> (1949).</li>
+    <li>Exchequer tally sticks: <a href="https://www.parliament.uk/about/living-heritage/building/palace/estatehistory/from-the-parliamentary-collections/fire-of-westminster/tallysticks/">UK Parliament, Tally sticks</a>.</li>
+    <li>Staff gauges: <a href="https://stevenswater.com/products/style-e/">Style E staff gage</a>; <a href="https://www.borealwetlandcentre.com/wetland-hydrology-monitoring">wetland hydrology monitoring</a>.</li>
+    <li>Natural capital as stock and ecosystem services as its flow (“interest”): Costanza et al. (1997, 2014); Daily (1997); Dieter Helm, <i>Natural Capital</i> (2015); <a href="https://seea.un.org/en/content/natural-capital-and-ecosystem-services-faq">UN SEEA FAQ</a>.</li>
+    <li>Standard &amp; Poor's origin (Standard Statistics Bureau, 1906): <a href="https://www.encyclopedia.com/social-sciences-and-law/economics-business-and-labor/businesses-and-occupations/standard-poors-corp">Encyclopedia.com</a>.</li>
+    <li>Xochimilco and the axolotl: <a href="https://en.wikipedia.org/wiki/Lake_Xochimilco">Lake Xochimilco</a>.</li>
+  </ol>
+  <p style="margin-top:22px">A design proposal; nothing here is implemented. Fonts are free (OFL). The marks are original drawings for this project. Sandbox, play money only.</p>
+</footer>
+</div>
+
+<script>
+// ===================== MARKS (64×64) =====================
+const GRADES=[[90,"AAA","Exceptional health"],[80,"AA","Very strong health"],[70,"A","Strong health"],[60,"BBB","Good health"],[50,"BB","Moderate health, some pressure"],[40,"B","Under pressure"],[30,"C","Serious pressure"],[0,"D","Critical"]];
+const GRADE_BG={AAA:"oklch(0.43 0.1 152)",AA:"oklch(0.5 0.115 146)",A:"oklch(0.54 0.12 138)",BBB:"oklch(0.66 0.13 120)",BB:"oklch(0.7 0.13 92)",B:"oklch(0.67 0.13 66)",C:"oklch(0.56 0.14 46)",D:"oklch(0.52 0.16 30)"};
+const gradeOf=v=>GRADES.find(g=>v>=g[0]);
+
+// Standing: a Style-E staff gauge standing in water. `level` 0–100 sets the waterline.
+function gauge(px,{level=38,anim=false,simple=null}={}){
+  const s=simple??px<44, top=4, bot=60, x=23, w=18;
+  const wy=bot-(level/100)*(bot-top-6)-3;
+  let ticks='';
+  if(s){[14,24,34,44].forEach((y,i)=>ticks+=`<rect class="f${anim?' tick':''}" style="animation-delay:${.35+i*.08}s" x="${i%2?x+w-11:x+3}" y="${y}" width="8" height="${px<24?4:3.2}" rx="1"/>`);}
+  else{
+    for(let i=0;i<5;i++){const y0=9+i*10, left=i%2===0, bx=left?x+3:x+w-5.6, px0=left?x+3:x+w-12.4;
+      const d=`animation-delay:${.35+i*.07}s`;
+      ticks+=`<g class="${anim?'tick':''}" style="${d}"><rect class="f" x="${bx}" y="${y0}" width="2.6" height="7.4"/><rect class="f" x="${px0}" y="${y0}" width="9.4" height="2"/><rect class="f" x="${left?px0:px0+3.4}" y="${y0+2.7}" width="6" height="2"/><rect class="f" x="${px0}" y="${y0+5.4}" width="9.4" height="2"/></g>`;}
+  }
+  const sw=s?(px<24?5:4):3;
+  return `<svg class="mk" width="${px}" height="${px}" viewBox="0 0 64 64" aria-hidden="true">
+    <g class="${anim?'rise':''}"><rect class="s" x="${x}" y="${top}" width="${w}" height="${bot-top}" rx="3" stroke-width="${sw}" style="fill:var(--sbg)"/>${ticks}</g>
+    <g class="${anim?'flood':''}" data-water><rect class="sub" x="${x-sw}" y="${wy}" width="${w+sw*2}" height="${bot-wy+sw}"/>
+      <path class="ls" d="M${s?6:3} ${wy}H${s?58:61}" stroke-width="${s?(px<24?6:5):3.4}"/>
+      ${s?'':`<path class="ls" d="M8 ${wy+5.5}q4-2.6 8 0M48 ${wy+5.5}q4-2.6 8 0" stroke-width="1.7" opacity=".75"/>`}</g>
+  </svg>`;
+}
+// Witness Tree: five grown rings, the outer one blazed with a lime mark.
+function wobble(cx,cy,r,amp,seed,a0=0,a1=Math.PI*2){let d='';const n=96;for(let i=0;i<=n;i++){const a=a0+(a1-a0)*i/n;const rr=r+amp*(Math.sin(a*3+seed)*.6+Math.sin(a*5+seed*2)*.4);d+=(i?'L':'M')+(cx+rr*Math.cos(a)).toFixed(2)+' '+(cy+rr*Math.sin(a)).toFixed(2);}return d;}
+function rings(px,{anim=false}={}){
+  const s=px<44, ba=-0.42, gap=.34; let g='';
+  const R=s?[8,16,25]:[5.5,10,14.5,19.5,25.5];
+  R.forEach((r,i)=>{const last=i===R.length-1;const d=last?wobble(32,32,r,.9,i,ba+gap,ba+Math.PI*2-gap):wobble(32,32,r,.7,i*1.7)+'Z';
+    g+=`<path class="s${anim?' draw':''}" pathLength="100" style="animation-delay:${i*.12}s" stroke-width="${s?(px<24?5.5:4.2):(last?3.4:2.2-i*.1)}" d="${d}"/>`;});
+  const bx=32+R[R.length-1]*Math.cos(ba), by=32+R[R.length-1]*Math.sin(ba);
+  g+=`<ellipse class="l${anim?' pop':''}" cx="${bx}" cy="${by}" rx="${s?5.6:4.2}" ry="${s?9:7.6}" transform="rotate(${ba*180/Math.PI} ${bx} ${by})" stroke="currentColor" stroke-width="${s?2.6:2}"/>`;
+  g+=`<circle class="f${anim?' fade':''}" cx="32" cy="32" r="${s?3:2.2}"/>`;
+  return `<svg class="mk" width="${px}" height="${px}" viewBox="0 0 64 64" aria-hidden="true">${g}</svg>`;
+}
+// NatureX: the greenness curve and the dated news line cross at the rating.
+function cross(px,{anim=false}={}){
+  const s=px<44, w=s?(px<24?7:5.5):4.2;
+  return `<svg class="mk" width="${px}" height="${px}" viewBox="0 0 64 64" aria-hidden="true">
+    <path class="s${anim?' draw':''}" pathLength="100" stroke-width="${w}" d="M7 9C17 9 22 22 32 32S47 55 57 55"/>
+    <path class="s${anim?' draw':''}" pathLength="100" style="animation-delay:.25s" stroke-width="${w}" d="M7 55L19 43H25L32 32L39 21H45L57 9"/>
+    ${s?'':`<circle class="f${anim?' fade':''}" cx="19" cy="43" r="2.6"/><circle class="f${anim?' fade':''}" cx="45" cy="21" r="2.6"/>`}
+    <circle class="l${anim?' pop':''}" cx="32" cy="32" r="${s?8:6.4}" stroke="currentColor" stroke-width="${s?3:2.6}"/>
+  </svg>`;
+}
+// Living Standard: a horticultural "standard" whose stem is a rule and whose crown is a dial.
+function standardMark(px,{level=76.2,anim=false}={}){
+  const s=px<44, cy=22;
+  const ticks=s?'':[43,48,53].map((y,i)=>`<path class="s${anim?' tick':''}" style="animation-delay:${.4+i*.08}s" stroke-width="2.4" d="M32 ${y}H${i%2?38:26}"/>`).join('');
+  return `<svg class="mk" width="${px}" height="${px}" viewBox="0 0 64 64" aria-hidden="true">
+    <g class="${anim?'rise':''}"><path class="s" stroke-width="${s?5:3.4}" d="M32 ${cy+16}V58"/>${ticks}</g>
+    <path class="s" stroke-width="${s?4.5:3}" d="M${s?20:22} 58.5H${s?44:42}"/>
+    <circle class="s${anim?' draw':''}" pathLength="100" cx="32" cy="${cy}" r="16" stroke-width="${s?5:3.4}"/>
+    <circle class="arc" pathLength="100" cx="32" cy="${cy}" r="${s?9.5:10.5}" fill="none" stroke="var(--lime)" stroke-width="${s?6:5}" stroke-linecap="round" stroke-dasharray="${level} 100" transform="rotate(-90 32 ${cy})"/>
+    ${s?'':`<circle class="f${anim?' fade':''}" cx="32" cy="${cy}" r="2.4"/>`}
+  </svg>`;
+}
+// Natural Interest: a percent sign rebuilt from a leaf (capital), a drop (its yield) and a sprouting stem (interest).
+function interestMark(px,{anim=false}={}){
+  const s=px<44, w=s?5:3.2;
+  return `<svg class="mk" width="${px}" height="${px}" viewBox="0 0 64 64" aria-hidden="true">
+    <path class="s${anim?' draw':''}" pathLength="100" stroke-width="${s?5.5:3.6}" d="M50 7C43 22 31 38 15 57"/>
+    <path class="s${anim?' fade':''}" stroke-width="${w}" d="M8 27C8 15 15 8 27 8C27 20 20 27 8 27Z"/>
+    ${s?'':`<path class="s${anim?' fade':''}" stroke-width="1.8" d="M11 24 23 12"/>`}
+    <path class="s${anim?' fade':''}" stroke-width="${w}" d="M46 35C46 35 56 45 56 51A10 10 0 0 1 36 51C36 45 46 35 46 35Z"/>
+    <path class="l${anim?' pop':''}" stroke="currentColor" stroke-width="${s?2.6:2}" d="${s?'M34 30C36 21 44 17 52 18C50 26 42 31 34 30Z':'M34.5 30C36.5 23 42.5 19.5 49 20.5C47 27 41 31 34.5 30Z'}"/>
+  </svg>`;
+}
+const BRANDS={
+  standing:{mark:gauge,word:'standing',font:"font:600 104px/1 Newsreader,serif;letter-spacing:-.045em",short:"Standing"},
+  livingstd:{mark:standardMark,word:'<i style="font-weight:400">Living</i> Standard',font:"font:500 78px/1 Newsreader,serif;letter-spacing:-.03em",short:"Living Standard"},
+  interest:{mark:interestMark,word:'Natural <i style="font-weight:400">Interest</i>',font:"font:500 78px/1 Newsreader,serif;letter-spacing:-.03em",short:"Natural Interest"},
+  witness:{mark:rings,word:'Witness <i style="font-weight:400">Tree</i>',font:"font:500 84px/1 Newsreader,serif;letter-spacing:-.035em",short:"Witness Tree"},
+  naturex:{mark:cross,word:'nature',font:"font:600 98px/1 'Hanken Grotesk';letter-spacing:-.055em",short:"NatureX"},
+};
+function lockup(key,size,anim){
+  const b=BRANDS[key], fs=size, m=b.mark(Math.round(fs*(key==='naturex'?.78:key==='standing'?1.3:key==='livingstd'?1.35:.98)),{anim});
+  const word=`<span class="wm" style="${b.font.replace(/\d+px/,fs+'px')}">${b.word}</span>`;
+  return key==='naturex'?`${word}<span style="transform:translateY(${fs*.06}px)">${m}</span>`:`${m}${word}`;
+}
+const LOCK_SIZE={standing:100,witness:82,naturex:100,livingstd:76,interest:76};
+function renderLock(key){const el=document.querySelector(`[data-lock="${key}"]`);el.innerHTML=lockup(key,LOCK_SIZE[key],true);}
+Object.keys(LOCK_SIZE).forEach(renderLock);
+document.querySelectorAll('[data-replay]').forEach(b=>b.addEventListener('click',()=>{const el=document.querySelector(`[data-lock="${b.dataset.replay}"]`);el.innerHTML='';void el.offsetWidth;renderLock(b.dataset.replay);}));
+document.getElementById('gaugeAnatomy').innerHTML=gauge(150);
+document.getElementById('witnessAnatomy').innerHTML=rings(150);
+document.getElementById('stdAnatomy').innerHTML=standardMark(150);
+document.getElementById('intAnatomy').innerHTML=interestMark(150);
+document.getElementById('stdReadings').innerHTML=[[92,'AAA'],[76.2,'A'],[62,'BBB'],[34,'C']].map(([v,g])=>`<figure style="display:grid;justify-items:center;gap:4px">${standardMark(64,{level:v})}<figcaption class="mono" style="font-size:12px">${g} · ${v}</figcaption></figure>`).join('');
+
+function lockupRow(key){
+  const b=BRANDS[key];
+  const small=(sz,dark)=>`<span style="display:flex;align-items:center;gap:${key==='naturex'?3:10}px">${key==='naturex'?'':b.mark(key==='standing'?sz+18:sz+6)}<span style="${b.font.replace(/\d+px/,sz+'px')}">${b.word}</span>${key==='naturex'?b.mark(Math.round(sz*.8)):''}</span>`;
+  const icons=`<div class="icons">${[64,32,16].map(n=>`<div class="ic" style="width:${n}px;height:${n}px;${n===16?'border-radius:4px':''}">${b.mark(Math.round(n*.72))}</div>`).join('')}</div>`;
+  const bar=(app)=>`<div class="appbar" style="--sbg:var(--ground)">${key==='naturex'?'':b.mark(26)}<span style="${b.font.replace(/\d+px/,'22px')}">${b.word}</span>${key==='naturex'?b.mark(20):''}<span class="sub">${app}</span></div>`;
+  return `<div>${small(40)}<span class="eyebrow">Primary</span></div>
+    <div class="dark">${small(34,true)}${icons}<span class="eyebrow" style="color:var(--machine-muted)">On the machine layer · app icon 64 · 32 · 16</span></div>
+    <div style="align-content:center">${bar('Ratings')}${bar('Community')}<span class="eyebrow">In the app header</span></div>`;
+}
+['standing','livingstd','interest','witness','naturex'].forEach(k=>document.getElementById(k+'Lockups').innerHTML=lockupRow(k));
+
+// Living logo
+const liveMark=document.getElementById('liveMark'), range=document.getElementById('liveRange');
+function setLive(v){
+  v=+v; liveMark.innerHTML=`<div style="--sbg:var(--machine)">${gauge(200,{level:v})}</div>`;
+  const g=gradeOf(v); document.getElementById('liveScore').textContent=v.toFixed(1);
+  const gr=document.getElementById('liveGrade'); gr.textContent=g[1]; gr.style.background=GRADE_BG[g[1]]; gr.style.color=['BBB','BB','B'].includes(g[1])?'var(--ink)':'#fff';
+  const standing=v>=60?'in good standing':v>=40?'standing under watch':'standing at risk';
+  document.getElementById('liveLabel').textContent=`${g[2]} · ${standing}`;
+}
+range.addEventListener('input',e=>setLive(e.target.value)); setLive(range.value);
+
+// ===================== FEATURE GLYPHS (24 grid) =====================
+const GL={
+  report:`<path d="M13 21H6V3h8l4 4v5"/><path d="M14 3v4h4"/><path d="M9 10h6M9 13.5h3"/><circle class="af" cx="17" cy="17.5" r="3.6"/><path class="as" d="m15.6 17.5 1 1 2-2" stroke-width="1.5"/>`,
+  health:`<rect x="9" y="3" width="6" height="18" rx="1.4"/><path d="M9 6.5h3M9 9.5h2M9 12.5h3"/><path class="as" d="M3 15.5h18" stroke-width="2.6"/>`,
+  tally:`<g transform="rotate(-32 12 12)"><rect x="1.5" y="8" width="21" height="3.6" rx="1.5"/><rect class="af" x="1.5" y="12.6" width="13.5" height="3.6" rx="1.5"/><path d="M6 6.4v11.4M9.5 6.4v11.4M13 6.4v11.4" stroke-width="1.5"/></g>`,
+  mark:`<circle cx="12" cy="12" r="8.5"/><path class="af" d="M12 12V3.5A8.5 8.5 0 0 1 20.5 12z"/><path d="M12 12 7 16.5" />`,
+  trace:`<path d="M7 7v3M7 14v3"/><circle cx="7" cy="5" r="2"/><circle cx="7" cy="12" r="2"/><circle class="af" cx="7" cy="19" r="2"/><path d="M11.5 5h9M11.5 12h7M11.5 19h8.5"/>`,
+  ask:`<path d="M4 4.5h16V15h-8.5l-4.5 4v-4H4z"/><path d="M7.5 8.5h6M7.5 11.5h4"/><path class="as" d="M16 8.2h1.2v4.4" stroke-width="1.6"/>`,
+  thennow:`<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M6 8l3-3M6 12l6-6M6 16l6-6M8.5 19.5 12 16" opacity=".5"/><path d="M12 2v20"/><circle class="af" cx="12" cy="12" r="2.6"/>`,
+  witnesses:`<path d="M3 20.5h18" opacity=".5"/><path d="M3 16.5c3 0 4.2-6 8-6s4.6 4.4 10 1.6"/><path class="af" d="M16.3 3.2a2.7 2.7 0 0 1 2.7 2.7c0 2.1-2.7 4.5-2.7 4.5s-2.7-2.4-2.7-4.5a2.7 2.7 0 0 1 2.7-2.7z"/><path d="M16.3 10.4v2.3" stroke-width="1.4"/>`,
+};
+const gl=(k,px=28,dark=false)=>`<svg class="gl${dark?' ondark':''}" width="${px}" height="${px}" viewBox="0 0 24 24" aria-hidden="true">${GL[k]}</svg>`;
+
+// v1 glyphs carried into the pack (24 grid)
+Object.assign(GL,{
+  value:`<path d="M4 6h8M6 18h9"/><path class="as" d="M8 12h11" stroke-width="3.2"/><path d="M3 3v18" opacity=".45"/>`,
+  alerts:`<path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14z"/><path d="M10 20.5a2 2 0 0 0 4 0"/><circle class="af" cx="18.3" cy="5.7" r="2.6"/>`,
+  timemachine:`<path d="M19 12A7 7 0 1 1 16.95 7.05"/><path d="M12 8.5V12l2.6 1.6"/><path class="as" d="M17.04 4.41 17.3 7.4l-2.99-.26" stroke-width="2"/>`,
+  live:`<path d="M4.4 7.5a9.5 9.5 0 0 0 0 9M19.6 7.5a9.5 9.5 0 0 1 0 9" opacity=".5"/><circle cx="12" cy="12" r="6"/><circle class="af" cx="12" cy="12" r="2.8"/>`,
+  sites:`<rect x="3.5" y="3.5" width="7.5" height="7.5" rx="1.8"/><rect x="13" y="3.5" width="7.5" height="7.5" rx="1.8"/><rect x="3.5" y="13" width="7.5" height="7.5" rx="1.8"/><rect x="13" y="13" width="7.5" height="7.5" rx="1.8"/><rect class="af" x="14.4" y="5.1" width="4.7" height="2.9" rx="1.45"/>`,
+  offer:`<path d="M18 8.2 17.5 6.3 10 4.5 4 9.5l1 5 5 4.6 8.5-1.2.8-1.9"/><path class="as" d="M11.5 12.2h9.5M18.6 9.5l2.7 2.7-2.7 2.7" stroke-width="2"/>`,
+  stakes:`<path class="af" d="M12 12 17.5 6.5 21.5 11 19 17.5z"/><path d="M3.5 10 9.5 5l8 1.5 4 4.5-2.5 6.5c-3 2-7.5 2.5-10.5 1.5L5 16z"/>`,
+  fund:`<circle cx="12" cy="17" r="4.3"/><path d="M10.4 17h3.2" opacity=".6"/><path class="as" d="M12 12.7V6.8M12 9.2c-.6-2-2.4-3.2-4.6-3.2 0 2.1 1.9 3.4 4.6 3.4M12 8.4c.7-2 2.5-3.1 4.7-3.1 0 2.1-2 3.3-4.7 3.3" stroke-width="1.6"/>`,
+  photos:`<path d="M3 8.5h3.5L8 6h8l1.5 2.5H21V19H3z"/><circle class="af" cx="12" cy="13.5" r="3.4"/>`,
+  landcheck:`<path d="M4 9.5 10 4.5l8 1.8 3 5.7-3.2 6.8-8.8 1.2-5-4.6z"/><path class="as" d="m8.8 12.6 2.4 2.4 4.6-4.8" stroke-width="2.2"/>`,
+  tour:`<path d="M5 19c3.5-5.5-.5-8.5 4.5-10.5S15 9.5 17.5 7" stroke-dasharray="2.2 2.6"/><circle cx="5" cy="19" r="1.8"/><path class="af" d="M18.5 2.5a3 3 0 0 1 3 3c0 2.2-3 5-3 5s-3-2.8-3-5a3 3 0 0 1 3-3z"/>`,
+  reset:`<path d="M4 12a8 8 0 1 0 2.34-5.66L4 8.7"/><path d="M4 4v4.7h4.7"/><circle class="af" cx="12" cy="12" r="2.4"/>`,
+  planner:`<path d="M7.4 12H11m0 0 7.3-6.2M11 12h8M11 12l7.3 6.2"/><circle class="af" cx="5" cy="12" r="2.4"/><circle cx="19.6" cy="4.8" r="1.5"/><circle cx="20.6" cy="12" r="1.5"/><circle cx="19.6" cy="19.2" r="1.5"/>`,
+  newsscout:`<rect x="3" y="4.5" width="12" height="15" rx="1.5"/><path d="M6 8.5h6M6 11.5h6M6 14.5h3"/><path d="m19 17.6 2.5 2.5" stroke-width="2.2"/><circle class="af" cx="16.5" cy="15.1" r="3.3"/>`,
+  auditor:`<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.3 15.3 5.2 5.2" stroke-width="2.2"/><path class="as" d="m7.6 10.6 2 2 3.6-3.8" stroke-width="2"/>`,
+  photoreader:`<path d="M2.5 12s3.5-6.2 9.5-6.2 9.5 6.2 9.5 6.2-3.5 6.2-9.5 6.2S2.5 12 2.5 12z"/><circle class="af" cx="12" cy="12" r="3"/>`,
+  community:`<path d="M3.5 10 9.5 5l8 1.5 4 4.5-2.5 6.5c-3 2-7.5 2.5-10.5 1.5L5 16z"/><path class="as" d="M12 16.3v-4.6M12 13.1c-.5-1.6-1.9-2.5-3.6-2.5 0 1.6 1.5 2.7 3.6 2.7M12 12.3c.6-1.6 2-2.4 3.7-2.4 0 1.7-1.6 2.6-3.7 2.6" stroke-width="1.6"/>`,
+  controls:`<path d="M6 4v16M12 4v16M18 4v16" opacity=".5"/><circle class="bg" cx="6" cy="15" r="2.3"/><circle class="af" cx="12" cy="8.5" r="2.3"/><circle class="bg" cx="18" cy="13" r="2.3"/>`,
+});
+const PACK=[
+  ["Reading a rating",[["report","Ecological Performance Report","FileText"],["health","Health score","Gauge"],["value","Yearly value","ChartNoAxesGantt"],["thennow","Then and now","Columns2"],["witnesses","Two witnesses","ChartSpline"]]],
+  ["Watching it change",[["alerts","Alerts","Bell"],["mark","Mark to nature","RefreshCw"],["timemachine","Time Machine","History"]]],
+  ["The machine layer",[["trace","Agent Trace","ListTree"],["tally","The Tally","Blocks"],["ask","Ask the record","MessageCircleQuestionMark"],["live","Live","Radio"],["planner","Planner (Nemotron 3 Super)","Workflow"],["newsscout","News Scout","Newspaper"],["auditor","Auditor (Nemotron 3 Ultra)","SearchCheck"],["photoreader","Photo reader","Eye"]]],
+  ["Backing a site",[["sites","Rated sites","LayoutGrid"],["offer","Opening offer","DoorOpen"],["stakes","Your stakes","ChartPie"],["fund","Community fund","Sprout"]]],
+  ["Community and trust",[["community","Community app","Users"],["controls","Operations app","SlidersHorizontal"],["photos","Field photos","Camera"],["landcheck","Land rights check","ShieldCheck"],["tour","Guided tour","Route"],["reset","Reset my sandbox","RotateCcw"]]],
+];
+const sheet=dark=>PACK.map(([g,items])=>`<h4>${g}</h4>`+items.map(([k,n,l])=>`<figure>${gl(k,30,dark)}<figcaption>${n}</figcaption><small>Lucide: ${l}</small></figure>`).join('')).join('');
+document.getElementById('iconSheetLight').innerHTML=sheet(false);
+document.getElementById('iconSheetDark').innerHTML=sheet(true);
+document.getElementById('iconSizes').innerHTML=[16,20,24,32,48].map(n=>`<figure style="display:grid;justify-items:center;gap:6px;margin:0">${gl('tally',n)}<small class="mono muted" style="font-size:11px">${n}</small></figure>`).join('')+[16,24,48].map(n=>`<figure style="display:grid;justify-items:center;gap:6px;margin:0">${gl('health',n)}<small class="mono muted" style="font-size:11px">${n}</small></figure>`).join('');
+
+// Motion demo
+const demo=document.getElementById('demo'),demoScore=document.getElementById('demoScore');
+function runDemo(){demo.classList.remove('go');void demo.offsetWidth;demo.classList.add('go');
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches){demoScore.textContent='76.2';return;}
+  const t0=performance.now();(function f(t){const k=Math.min(1,(t-t0)/900),e=1-Math.pow(1-k,4);demoScore.textContent=(76.2*e).toFixed(1);if(k<1)requestAnimationFrame(f);})(t0);}
+document.getElementById('demoBtn').addEventListener('click',runDemo);runDemo();
+
+const FEATURES=[
+  {k:"report",name:"Ecological Performance Report",was:"Ecological Performance Report",change:"Keep (reverses v1)",
+   story:"This is the report the NYSE would have required from every Natural Asset Company. Wall Street's version needed consultants and months; ours is generated in minutes from satellites, for any community. Keeping the exact name tells finance judges we know the lineage.",
+   ui:"Title: <b>Ecological Performance Report · v2 · Q1 2027</b>. Tab and short form: <b>Report</b>. Drop “report card” in the tour."},
+  {k:"health",name:"Health score",was:"Health score",change:"Keep, add its source",
+   story:"Aldo Leopold, 1949: <i>“Health is the capacity of the land for self-renewal.”</i> That's exactly what we measure, and why the score rises when land heals. The hero site, Xochimilco, is home to the axolotl, an animal famous for regrowing itself.",
+   ui:"Tooltip: <b>“The land's capacity for self-renewal” (Aldo Leopold)</b>, then the five formula inputs."},
+  {k:"tally",name:"The Tally",was:"Nature Ledger",change:"Rename",
+   story:"For centuries England's Exchequer recorded every debt on a hazel stick: notches cut across it, then the stick split lengthwise. Each side kept half, and a forged notch couldn't match. Our ledger does the same with hashes. (When the sticks were burned in 1834, they set the Palace of Westminster on fire.)",
+   ui:"Tab: <b>Tally</b>. Button: <b>Check the tally</b>. Tamper demo: <b>“The notches don't match at report v2.”</b>"},
+  {k:"mark",name:"Mark to nature",was:"Re-rating / “Next quarter”",change:"Name the re-rating",
+   story:"Banks <i>mark to market</i>: they revalue assets at today's price. We <b>mark to nature</b>: every quarter each site is revalued at what the satellites and news show today. One phrase tells a finance judge exactly what the quarterly re-rating is.",
+   ui:"Time Machine button: <b>Next quarter · mark to nature</b>. Report footer: <b>Marked to nature 15 Jan 2027</b>."},
+  {k:"trace",name:"Agent Trace",was:"Agent Trace",change:"Keep, add the audit phrase",dark:true,
+   story:"AI-track judges know “trace”. Auditors keep <i>working papers</i>: every step and every piece of evidence behind an opinion, which a regulator can demand. Most rating agencies keep theirs private. We publish ours.",
+   ui:"Panel: <b>Agent Trace</b>. Link on every report: <b>Show the working papers</b>."},
+  {k:"ask",name:"Ask the record",was:"Copilot",change:"Rename",dark:true,
+   story:"It doesn't chat from general knowledge. It answers only from this site's record (reports, news and tally) and footnotes every claim. The name promises exactly that limit. It also drops “Copilot”, which is Microsoft's product name.",
+   ui:"Header button: <b>Ask</b>. Panel: <b>Ask the record · Xochimilco Wetland</b>."},
+  {k:"thennow",name:"Then and now",was:"The five-year satellite slider",change:"Name it",
+   story:"Two satellite views of the same site, five years apart, under one slider. Ecologists call this repeat photography: return to the same spot and compare. It's the most persuasive screen in the product, and it deserves a name a judge can repeat.",
+   ui:"Heading: <b>Then and now · 2021 → 2026</b>, with dates on both sides."},
+  {k:"witnesses",name:"Two witnesses",was:"Greenness timeline with news pinned",change:"Name it",
+   story:"Five years of greenness with the dated changes code found, and the local news pinned on the same line. The agent reads <i>“what each says about the other”</i>. Where they agree, the rating holds; where they don't, the Auditor asks why.",
+   ui:"Heading: <b>Two witnesses: the satellite record and the local news</b>. Plain fallback: <b>Evidence timeline</b>."},
+];
+document.getElementById('feats').innerHTML=FEATURES.map(f=>`
+  <article class="feat">
+    <div class="h"><span class="tile">${gl(f.k)}</span><span class="tile dark">${gl(f.k,28,true)}</span>
+      <div><p class="chg${f.change.startsWith('Keep')?' keep':''}">${f.change}</p><h3>${f.name}</h3><p class="now">Now: ${f.was}</p></div></div>
+    <p class="story">${f.story}</p>
+    <p class="ui">${f.ui}</p>
+  </article>`).join('');
+
+// ===================== DECISION SHEET =====================
+const GROUPS={
+  dir:{type:"radio",items:[["standing","A · Standing (staff gauge)"],["livingstd","B · Living Standard (standard tree)"],["interest","C · Natural Interest (percent sign)"],["witness","D · Witness Tree (blazed rings)"],["naturex","E · NatureX, re-founded (crossing lines)"],["other","Other (notes)"]],def:"standing"},
+  apps:{type:"radio",items:[["new","Ratings · Community · Operations"],["min","Ratings · Steward · Control room"],["keep","Keep Exchange · Steward · Control room"]],def:"new"},
+  feats:{type:"check",items:FEATURES.filter(f=>!f.change.startsWith('Keep')||f.k==='trace'||f.k==='health').map(f=>[f.k,f.name])
+    .concat([["report","Keep “Ecological Performance Report”"]]),def:["report","health","tally","mark","trace","ask","thennow","witnesses"]},
+  icons:{type:"radio",items:[["custom","Custom icon pack"],["mixed","Custom for the machine layer, Lucide elsewhere"],["lucide","Lucide only"]],def:"custom"},
+  type:{type:"radio",items:[["newsreader","Newsreader"],["instrument","Keep Instrument Serif"],["fraunces","Fraunces Soft"],["source","Source Serif 4"]],def:"newsreader"},
+  rules:{type:"check",items:[["R1","R1 lime = the reading"],["R2","R2 dark = machine only"],["R3","R3 clay with ▼ and words"],["R4","R4 drop lilac"],["R5","R5 dark text on BBB/BB/B"]],def:["R1","R2","R3","R4","R5"]},
+  copy:{type:"check",items:[["hero2","Second hero line"],["body","Shorter hero body"],["cta","“Watch a wetland get rated”"],["cards","First-person persona cards"],["mid","Honest central-estimate label"]],def:["hero2","body","cta","cards","mid"]},
+  when:{type:"radio",items:[["now","Before submission (decide by 24 Oct)"],["after","After judging"]],def:"now"},
+};
+const saved=JSON.parse(localStorage.getItem('brand-v3')||'null');
+for(const [g,cfg] of Object.entries(GROUPS)){
+  document.querySelector(`[data-group="${g}"]`).innerHTML=cfg.items.map(([v,l])=>{
+    const on=saved?(cfg.type==='check'?(saved[g]||[]).includes(v):saved[g]===v):(cfg.type==='check'?cfg.def.includes(v):cfg.def===v);
+    return `<label><input type="${cfg.type==='check'?'checkbox':'radio'}" name="${g}" value="${v}"${on?' checked':''}>${l}</label>`;}).join('');
+}
+if(saved)['who','doc','notes'].forEach(id=>document.getElementById(id).value=saved[id]||'');
+const label=(g,v)=>(GROUPS[g].items.find(i=>i[0]===v)||[,v])[1];
+function state(){const s={};for(const [g,cfg] of Object.entries(GROUPS)){const v=[...document.querySelectorAll(`[name="${g}"]:checked`)].map(i=>i.value);s[g]=cfg.type==='check'?v:v[0];}['who','doc','notes'].forEach(id=>s[id]=document.getElementById(id).value.trim());return s;}
+function update(){
+  const s=state();localStorage.setItem('brand-v3',JSON.stringify(s));
+  const key=s.dir==='other'?'standing':s.dir, b=BRANDS[key];
+  const apps=s.apps==='new'?["Ratings","Community","Operations"]:s.apps==='min'?["Ratings","Steward","Control room"]:["Exchange","Steward","Control room"];
+  document.getElementById('pvBar').innerHTML=`${key==='naturex'?'':b.mark(30)}<span style="${b.font.replace(/\d+px/,'24px')}">${b.word}</span>${key==='naturex'?b.mark(22):''}<span style="font-size:14px;color:var(--muted);padding-left:10px;border-left:1px solid var(--line)">${apps[0]}</span>`;
+  const line={standing:"A · 76.2 · Strong health · in good standing",livingstd:"Meets the A standard · 76.2 · Strong health",interest:"A · 76.2 · Strong health · natural interest",witness:"Rated A · 76.2 · Strong health · two witnesses agree",naturex:"A · 76.2 · Strong health · satellite and news agree"}[key];
+  const TYPE_CSS={newsreader:"font-family:Newsreader;font-weight:400",instrument:"font-family:'Instrument Serif';font-weight:400",fraunces:"font-family:Fraunces;font-variation-settings:'SOFT' 100;font-weight:500",source:"font-family:'Source Serif 4';font-weight:600"};
+  document.querySelector('.pv .t').style.cssText=TYPE_CSS[s.type]+';font-size:36px;line-height:1;letter-spacing:-.02em';
+  document.getElementById('pvLine').textContent=`${line} · $2.1M–$2.7M a year · 71% confidence`;
+  const feats=FEATURES.filter(f=>s.feats.includes(f.k)).map(f=>f.change.startsWith('Keep')?`  ${f.name}: keep${f.k==='trace'?' (+ “Show the working papers”)':f.k==='health'?' (+ Leopold tooltip)':''}`:`  ${f.was} → ${f.name}`);
+  document.getElementById('out').value=[
+    'BRAND DECISION (v3)',
+    `Name and mark: ${label('dir',s.dir)}`,
+    `Apps: ${apps.join(' / ')}`,
+    'Feature names:',...(feats.length?feats:['  none']),
+    `Icons: ${label('icons',s.icons)}`,
+    `Display type: ${label('type',s.type)}; UI Hanken Grotesk; machine Geist Mono`,
+    `Colour rules: ${s.rules.join(', ')||'none'}`,
+    `Copy changes: ${s.copy.map(c=>label('copy',c)).join('; ')||'none'}`,
+    `When: ${label('when',s.when)}`,
+    s.doc?`Documentary: ${s.doc}`:null,
+    s.who?`Decided by: ${s.who}`:null,
+    s.notes?`Notes: ${s.notes}`:null,
+  ].filter(Boolean).join('\n');
+}
+document.getElementById('form').addEventListener('input',update);
+document.getElementById('copy').addEventListener('click',async()=>{const t=document.getElementById('out');try{await navigator.clipboard.writeText(t.value);}catch{t.select();document.execCommand('copy');}const c=document.getElementById('copied');c.textContent='Copied. Paste it into the chat.';setTimeout(()=>c.textContent='',4000);});
+document.getElementById('reset').addEventListener('click',()=>{localStorage.removeItem('brand-v3');location.reload();});
+update();
+</script>
+</body>
+</html>
