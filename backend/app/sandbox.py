@@ -37,6 +37,7 @@ from app.models import (
     AlertRecipient,
     Asset,
     AssetOverlay,
+    AssetView,
     Community,
     CommunityMember,
     CopilotQuestion,
@@ -107,6 +108,7 @@ _DELETE_ORDER: tuple[type[SQLModel], ...] = (
     Report,
     Metrics,
     AssetOverlay,  # live land-cover overlays (#231)
+    AssetView,  # live before/after views
     Asset,
     CommunityMember,
     Community,

@@ -226,6 +226,67 @@ describe("AssetView", () => {
     expect(within(trace).queryByRole("button")).toBeNull();
   });
 
+  it("compares a live listing's own views five years apart", async () => {
+    const views = {
+      version: "abc123-1761200000",
+      media_type: "image/webp" as const,
+      width: 640,
+      height: 400,
+      bounds: { south: 19.27, west: -99.11, north: 19.3, east: -99.08 },
+      before: { start: "2021-10-01", end: "2022-10-01" },
+      after: { start: "2025-10-01", end: "2026-10-01" },
+      attributions: ["Contains modified Copernicus Sentinel data 2021-2026."],
+    };
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /assets/${ID}`]: () =>
+          json({ ...ASSET, site_key: null, site_views: views }),
+      }),
+    );
+    expect(
+      await screen.findByRole("img", { name: "The site five years earlier" }),
+    ).toHaveAttribute(
+      "src",
+      `/api/assets/${ID}/views/before.webp?v=abc123-1761200000`,
+    );
+    expect(
+      screen.getByRole("img", { name: "The site in the latest 12 months" }),
+    ).toHaveAttribute(
+      "src",
+      `/api/assets/${ID}/views/after.webp?v=abc123-1761200000`,
+    );
+    expect(
+      screen.getByRole("slider", { name: /Compare the two views/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Copernicus Sentinel data 2021–2026/),
+    ).toBeInTheDocument();
+    // The views' own credits are with the page's data sources.
+    const sources = screen.getByRole("region", {
+      name: /^Data behind this page/,
+    });
+    expect(
+      within(sources).getByText(
+        "Contains modified Copernicus Sentinel data 2021-2026.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("has no before/after views for a listing its rating hasn't rendered them for", async () => {
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        [`GET /assets/${ID}`]: () =>
+          json({ ...ASSET, site_key: null, site_views: null }),
+      }),
+    );
+    await screen.findByRole("region", { name: "Xochimilco Wetland" });
+    expect(
+      screen.queryByRole("img", { name: "The site five years earlier" }),
+    ).toBeNull();
+  });
+
   it("draws the boundary in the hero of a site without a thumbnail", async () => {
     const { container } = renderExchange(
       <AssetView id={ID} />,

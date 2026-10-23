@@ -357,6 +357,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/{asset_id}/views/before.webp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get View Before
+         * @description The listing's true-colour view of the first year of the 5-year window, from its live
+         *     satellite rating (`site_views`). 404 `views_not_found` before a live rating rendered views
+         *     for the current boundary.
+         */
+        get: operations["get_view_before_assets__asset_id__views_before_webp_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{asset_id}/views/after.webp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get View After
+         * @description The listing's true-colour view of the latest 12 months, from its live satellite rating
+         *     (`site_views`). 404 `views_not_found` before a live rating rendered views for the current
+         *     boundary.
+         */
+        get: operations["get_view_after_assets__asset_id__views_after_webp_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/communities/{community_id}/assets": {
         parameters: {
             query?: never;
@@ -2002,6 +2046,8 @@ export interface components {
             cached_example?: components["schemas"]["CachedExample"] | null;
             /** @description The listing's land-cover overlay from its live satellite rating (#231); null for demo sites (their overlay is precomputed: `site_key`), with mock or no satellite data, or when rendering failed. */
             land_cover_overlay?: components["schemas"]["LandCoverOverlay"] | null;
+            /** @description The listing's before/after views from its live satellite rating; null for demo sites (their views are precomputed: `site_key`), with mock or no satellite data, or when rendering failed. */
+            site_views?: components["schemas"]["SiteViews"] | null;
             /**
              * Latest Run Id
              * @description A private listing's latest rating run (follow it with `GET /runs/{id}`): under review, or listed but not launched yet, for its community's members and same-world admins, who alone can load it (T33). Null for public (launched) assets and before any run.
@@ -4346,6 +4392,36 @@ export interface components {
             overlay: components["schemas"]["OverlayImage"];
             thumbnail: components["schemas"]["ThumbnailImage"];
         };
+        /**
+         * SiteViews
+         * @description A live-rated listing's Sentinel-2 true-colour views five years apart, for the before/after
+         *     slider: `GET /assets/{asset_id}/views/before.webp?v={version}` (the first year of the 5-year
+         *     window) and `.../after.webp?v={version}` (the latest 12 months), each `width`×`height` on the
+         *     same grid spanning `bounds`, the boundary drawn on top. As the demo sites' precomputed
+         *     `before.webp` and `thumbnail.webp`, which the vision model compares too.
+         */
+        SiteViews: {
+            /**
+             * Version
+             * @description Changes when the views are re-rendered (cache key).
+             */
+            version: string;
+            /**
+             * Media Type
+             * @default image/webp
+             * @constant
+             */
+            media_type: "image/webp";
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            bounds: components["schemas"]["OverlayBounds"];
+            before: components["schemas"]["DateWindow"];
+            after: components["schemas"]["DateWindow"];
+            /** Attributions */
+            attributions: string[];
+        };
         /** StreamEvent */
         StreamEvent: {
             /**
@@ -5663,6 +5739,82 @@ export interface operations {
                 };
             };
             /** @description Not found in the caller's world, or no overlay (yet) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_view_before_assets__asset_id__views_before_webp_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sentinel-2 true-colour view (WebP) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/webp": string;
+                };
+            };
+            /** @description Not found in the caller's world, or no views (yet) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_view_after_assets__asset_id__views_after_webp_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sentinel-2 true-colour view (WebP) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/webp": string;
+                };
+            };
+            /** @description Not found in the caller's world, or no views (yet) */
             404: {
                 headers: {
                     [name: string]: unknown;

@@ -118,22 +118,27 @@ def current_overlay(
 
 @dataclass
 class OverlayJob:
-    """A render in progress; `wait` never raises."""
+    """A render in progress (an overlay, or `app.services.site_views`' views); `wait` never
+    raises."""
 
     future: Future[bool]
     deadline: float
     clock: Callable[[], float]
+    label: str = "land-cover overlay"
+    _late: bool = field(default=False, init=False, repr=False)
 
     def wait(self) -> bool:
-        """Whether the overlay was stored, waiting at most until the job's deadline. A render
-        that finishes later still stores its overlay."""
+        """Whether the image was stored, waiting at most until the job's deadline. A render
+        that finishes later still stores it."""
         try:
             return self.future.result(timeout=max(0.0, self.deadline - self.clock()))
         except FutureTimeout:
-            log.warning("land-cover overlay still rendering at the rating's deadline")
+            if not self._late:  # once per job, however often the run asks
+                self._late = True
+                log.warning("%s still rendering at the rating's deadline", self.label)
             return False
         except Exception as exc:  # pragma: no cover - `_render` catches everything
-            log.warning("land-cover overlay failed: %s", loggable(exc))
+            log.warning("%s failed: %s", self.label, loggable(exc))
             return False
 
 

@@ -10,9 +10,10 @@ it is on a 3x3 grid of the image, and how sure it is. Code then:
 - hands the result to the Auditor as an `image:` observation, labelled as a description, not a
   measurement.
 
-The images are the committed Sentinel-2 true-colour composites of a demo site: the first year of
-the 5-year window (`before.webp`) and the latest 12 months (`thumbnail.webp`), same grid and
-outline. Public Copernicus data, so nothing private is sent.
+The images are Sentinel-2 true-colour composites of the first year of the 5-year window and the
+latest 12 months, on one grid with the outline drawn: a demo site's committed `before.webp` and
+`thumbnail.webp`, or a live listing's views rendered by its rating (`app.services.site_views`).
+Public Copernicus data, so nothing private is sent.
 """
 
 from __future__ import annotations

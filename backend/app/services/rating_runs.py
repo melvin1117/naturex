@@ -120,6 +120,7 @@ from app.services.listings import apply_rating_result, lock_asset, note_rating_f
 from app.services.listings import audience as listing_audience
 from app.services.news_events import record_news
 from app.services.rating import SiteRating, asset_is_wetland, latest_report, rate_asset, rate_site
+from app.services.site_views import LiveSiteViews, build_live_views, current_views
 from app.tools.earth_obs import (
     EarthObsMetrics,
     ScenarioName,
@@ -649,6 +650,7 @@ class RunDeps:
     live: LiveEarthObs | None = None
     investigator: Investigator | None = None
     overlays: LiveOverlays | None = None
+    views: LiveSiteViews | None = None
 
 
 def previous_for_bundle(report: Report | None) -> PreviousReport | None:
@@ -728,6 +730,7 @@ class RunToolbox:
         self.flags: list[dict[str, str]] = []
         self.failed: list[str] = []
         self.overlay: OverlayJob | None = None
+        self.views: OverlayJob | None = None
 
     @property
     def scenario(self) -> ScenarioName:
@@ -925,18 +928,19 @@ class RunToolbox:
         }
 
     def _read_images(self, metrics: EarthObsMetrics) -> dict[str, Any] | None:
-        """The vision model's before/after reading of a demo site (optional: a failure is
-        recorded in the output and the run goes on without it)."""
+        """The vision model's before/after reading: a demo site's committed images, or a live
+        listing's views rendered by this run (optional: a failure is recorded in the output and
+        the run goes on without it)."""
         if not self._deps.settings.site_vision_live or self._llm is None:
             return None
         if metrics.simulated:
             # A Time Machine scenario scripts the metrics; the images are the real ones, so a
             # code check of one against the other would mean nothing.
             return None
-        images = site_images(self._asset.site_key)
-        if images is None:
-            return None
         try:
+            images = site_images(self._asset.site_key) or self._live_views()
+            if images is None:
+                return None
             self.vision = read_site_change(
                 images,
                 metrics=metrics,
@@ -946,20 +950,31 @@ class RunToolbox:
                 asset_id=self._spec.asset_id,
             )
         except Exception as exc:
-            # Optional: any failure (the model, a call-log write, a file) leaves the
-            # satellite step done and the run going on without the reading.
+            # Optional: any failure (the model, a call-log write, a file, loading a live
+            # listing's views) leaves the satellite step done and the run going on without it.
             log.warning("site vision failed for a rating run: %s", type(exc).__name__)
             return {"error": type(exc).__name__}
         return self.vision.to_json()
 
+    def _live_views(self) -> tuple[bytes, bytes] | None:
+        """A live listing's before/after views: once this run's render is done (bounded by its
+        deadline), or from an earlier rating of the same boundary."""
+        geojson = self._asset.geojson
+        if self._deps.views is None or geojson is None:
+            return None
+        if self.views is not None:
+            self.views.wait()
+        with self._deps.session_factory() as session:
+            views = current_views(session, self._spec.world_id, self._spec.asset_id, geojson)
+            return (views.before_webp, views.after_webp) if views is not None else None
+
     def _start_overlay(self, metrics: EarthObsMetrics) -> None:
-        """Render the listing's land-cover overlay alongside the rating (#231): live world, live
-        Earth Engine metrics of a new polygon only (never mocks, a demo site or a scenario)."""
-        overlays, geojson = self._deps.overlays, self._asset.geojson
+        """Render the listing's land-cover overlay (#231) and before/after views alongside the
+        rating: live world, live Earth Engine metrics of a new polygon only (never mocks, a demo
+        site or a scenario)."""
+        geojson = self._asset.geojson
         if (
-            overlays is None
-            or self.overlay is not None
-            or geojson is None
+            geojson is None
             or self._spec.world_id != LIVE_WORLD_ID
             or self._asset.site_key is not None
             or self._spec.metrics is not None
@@ -968,13 +983,19 @@ class RunToolbox:
             or not metrics.site_key.startswith(LIVE_SITE_KEY_PREFIX)
         ):
             return
-        self.overlay = overlays.start(self._spec.world_id, self._spec.asset_id, geojson)
+        world_id, asset_id = self._spec.world_id, self._spec.asset_id
+        if self._deps.overlays is not None and self.overlay is None:
+            self.overlay = self._deps.overlays.start(world_id, asset_id, geojson)
+        if self._deps.views is not None and self.views is None:
+            self.views = self._deps.views.start(world_id, asset_id, geojson)
 
     def wait_for_overlay(self) -> None:
-        """Before the report is sealed, so the page shows the overlay with the new rating. A
-        failed or slow render never fails the rating (`OverlayJob.wait` never raises)."""
-        if self.overlay is not None:
-            self.overlay.wait()
+        """Before the report is sealed, so the page shows the overlay and views with the new
+        rating. A failed or slow render never fails the rating (`OverlayJob.wait` never
+        raises)."""
+        for job in (self.overlay, self.views):
+            if job is not None:
+                job.wait()
 
     def _bound_metrics(self) -> tuple[EarthObsMetrics, bool]:
         if self.metrics is None or self.is_wetland is None:
@@ -1352,6 +1373,8 @@ class RatingRunner:
     """Live Earth Engine for new polygons (T60); None when `EARTH_ENGINE_LIVE` is off."""
     live_overlays: LiveOverlays | None = None
     """Land-cover overlays of live-rated listings (#231); None when live Earth Engine is off."""
+    live_views: LiveSiteViews | None = None
+    """Before/after views of live-rated listings; None when live Earth Engine is off."""
     evidence: EvidenceProvider = field(default_factory=NoFieldEvidence)
     today: Callable[[], date] = field(default=lambda: datetime.now(UTC).date())
     max_pending: int = MAX_PENDING_RUNS
@@ -1536,6 +1559,7 @@ class RatingRunner:
                 live=self.live_metrics,
                 investigator=self.investigator,
                 overlays=self.live_overlays,
+                views=self.live_views,
             )
             toolbox = RunToolbox(
                 spec,
@@ -2208,6 +2232,7 @@ def build_runner(
         news=news_runner(settings),
         live_metrics=live,
         live_overlays=build_live_overlays(session_factory, live),
+        live_views=build_live_views(session_factory, live),
         evidence=DbEvidenceProvider(session_factory),
         investigator=investigator_for(settings),
     )
