@@ -1,6 +1,6 @@
 import { cn } from "cn";
 
-import { demoSiteMediaUrl } from "@/lib/demo-site-images";
+import type { BeforeAfterViews } from "@/lib/site-views";
 import { type Vision, changeLabel, modelLabel } from "@/lib/trace-view";
 
 const CELLS = [
@@ -78,10 +78,10 @@ function View({
 
 /** The vision model's reading: both views, the cells it pointed at, and code's check. */
 export function SiteVisionView({
-  siteKey,
+  views,
   vision,
 }: {
-  siteKey: string | null | undefined;
+  views?: BeforeAfterViews | null;
   vision: Vision;
 }) {
   const marks = new Map<string, boolean | null>();
@@ -93,14 +93,11 @@ export function SiteVisionView({
   }
   return (
     <div className="space-y-4">
-      {siteKey && (
+      {views && (
         <div className="grid grid-cols-2 gap-2">
+          <View src={views.before} label="Five years earlier" />
           <View
-            src={demoSiteMediaUrl(siteKey, "before.webp")}
-            label="Five years earlier"
-          />
-          <View
-            src={demoSiteMediaUrl(siteKey, "thumbnail.webp")}
+            src={views.after}
             label="Latest 12 months"
             marks={marks}
             whole={whole}

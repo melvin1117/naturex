@@ -31,7 +31,6 @@ GeoJSON, palette, attributions, class shares against the metrics) instead of the
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import math
 import sys
@@ -44,17 +43,20 @@ import ee
 
 from app.config import get_settings
 from app.tools.earth_engine import (
+    AFTER_WINDOW,
     ATTRIBUTIONS,
+    BEFORE_WINDOW,
     CLOUD_SCORE_THRESHOLD,
     DATA_VERSION,
     END_DATE,
-    START_5Y,
     START_12M,
-    compute_png,
+    THUMBNAIL_OUTLINE,
+    THUMBNAIL_VIS,
     compute_polygon_metrics,
     dw_overlay_png,
     geometry_from_feature,
     init_ee,
+    true_colour_webp,
 )
 from app.tools.earth_obs import SCENARIO_DIR, EarthObsMetrics, scenario_path
 from app.tools.scenarios import build_site_scenarios, load_scenario_spec, scenario_document
@@ -72,10 +74,8 @@ from app.tools.site_images import (
     Bounds,
     LegendEntry,
     OverlayImage,
-    PixelGrid,
     SiteImages,
     ThumbnailImage,
-    VisParams,
     check_site_images,
     image_path,
     load_site_geojson,
@@ -193,15 +193,6 @@ def scenario_failures(site_keys: list[str], *, write: bool) -> list[str]:
 
 # --- Images (T35) -------------------------------------------------------------------------
 
-THUMBNAIL_VIS = VisParams(bands=("B4", "B3", "B2"), min=0, max=2500, gamma=1.1)
-THUMBNAIL_OUTLINE = "#ffffff"
-THUMBNAIL_OUTLINE_PX = 2
-THUMBNAIL_WEBP_QUALITY = 82
-_SUPERSAMPLE = 4
-# The vision model's "before": the first year of the 5-year window, against the thumbnail's
-# latest 12 months.
-BEFORE_WINDOW = (START_5Y, "2022-10-01")
-
 
 def _stable_bounds(bounds: Bounds) -> Bounds:
     """Round to 1e-9 degrees (~0.1 mm): Web Mercator trig differs in the last bit across
@@ -259,51 +250,6 @@ def expected_site_images(site_key: str) -> SiteImages:
     )
 
 
-def _thumbnail_webp(
-    ring: list[tuple[float, float]],
-    grid: PixelGrid,
-    start: str = START_12M,
-    end: str = END_DATE,
-) -> bytes:
-    from PIL import Image, ImageDraw
-
-    (south, west), (north, east) = grid.bounds()
-    region = ee.Geometry.Rectangle([west, south, east, north], None, False)
-    cs_plus = ee.ImageCollection("GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED")
-    composite = (
-        ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
-        .filterBounds(region)
-        .filterDate(start, end)
-        .linkCollection(cs_plus, ["cs_cdf"])
-        .map(lambda image: image.updateMask(image.select("cs_cdf").gte(CLOUD_SCORE_THRESHOLD)))
-        .select(list(THUMBNAIL_VIS.bands))
-        .median()
-        .visualize(
-            bands=list(THUMBNAIL_VIS.bands),
-            min=THUMBNAIL_VIS.min,
-            max=THUMBNAIL_VIS.max,
-            gamma=THUMBNAIL_VIS.gamma,
-        )
-    )
-    with Image.open(io.BytesIO(compute_png(composite, grid))) as fetched:
-        rgb = fetched.convert("RGBA")
-    if rgb.size != (grid.width, grid.height):
-        raise RuntimeError(f"Thumbnail is {rgb.size}, expected {grid.width}x{grid.height}.")
-    # Draw the outline on a supersampled layer and downsample it, for an anti-aliased line.
-    k = _SUPERSAMPLE
-    layer = Image.new("RGBA", (grid.width * k, grid.height * k), (0, 0, 0, 0))
-    points = [(x * k, y * k) for x, y in (grid.to_pixel(lon, lat) for lon, lat in ring)]
-    ImageDraw.Draw(layer).line(
-        points, fill=THUMBNAIL_OUTLINE, width=THUMBNAIL_OUTLINE_PX * k, joint="curve"
-    )
-    layer = layer.resize((grid.width, grid.height), Image.Resampling.LANCZOS)
-    out = io.BytesIO()
-    Image.alpha_composite(rgb, layer).convert("RGB").save(
-        out, "WEBP", quality=THUMBNAIL_WEBP_QUALITY, method=6
-    )
-    return out.getvalue()
-
-
 def write_site_images(site_key: str) -> None:
     geojson = load_site_geojson(site_key)
     meta = expected_site_images(site_key)
@@ -312,7 +258,7 @@ def write_site_images(site_key: str) -> None:
     IMAGES_DIR.mkdir(exist_ok=True)
     # The same overlay renderer as live-rated listings (#231).
     overlay = dw_overlay_png(aoi, overlay_grid(bounds))
-    thumbnail = _thumbnail_webp(polygon_ring(geojson), thumbnail_grid(bounds))
+    thumbnail = true_colour_webp([polygon_ring(geojson)], thumbnail_grid(bounds), *AFTER_WINDOW)
     for kind, data in (("overlay", overlay), ("thumbnail", thumbnail)):
         path = image_path(site_key, kind)
         path.write_bytes(data)
@@ -326,8 +272,8 @@ def write_before_image(site_key: str) -> None:
     """The same true-colour view five years earlier (BEFORE_WINDOW), for the vision model's
     before/after comparison. Same grid and outline as the thumbnail."""
     geojson = load_site_geojson(site_key)
-    data = _thumbnail_webp(
-        polygon_ring(geojson), thumbnail_grid(polygon_bounds(geojson)), *BEFORE_WINDOW
+    data = true_colour_webp(
+        [polygon_ring(geojson)], thumbnail_grid(polygon_bounds(geojson)), *BEFORE_WINDOW
     )
     path = image_path(site_key, "before")
     path.write_bytes(data)

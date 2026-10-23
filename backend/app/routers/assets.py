@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections.abc import Collection
 from dataclasses import asdict
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Response, status
@@ -24,7 +24,7 @@ from sqlmodel import Session, col, select
 
 from app.authz import Action, Actor, OptionalActor, asset_ref, require
 from app.deps import CurrentWorld, SessionDep, SettingsDep
-from app.models import Asset, AssetOverlay, AssetStatus, Price, Report
+from app.models import Asset, AssetOverlay, AssetStatus, AssetView, Price, Report
 from app.routers.reports import present_report, recent_events
 from app.schemas import (
     AssetCard,
@@ -37,6 +37,7 @@ from app.schemas import (
     OverlayBounds,
     PricePoint,
     ReportOut,
+    SiteViews,
 )
 from app.services.asset_cards import (
     cards,
@@ -51,10 +52,16 @@ from app.services.land_cover_overlays import current_overlay
 from app.services.lifecycle import is_public
 from app.services.listings import visible_to
 from app.services.rating_runs import assets_with_active_runs, latest_run_id
+from app.services.site_views import current_views
 from app.services.visibility import public_assets
 from app.tools.earth_obs import DateWindow
 from app.tools.geometry import outline_rings
-from app.tools.site_images import OVERLAY_ATTRIBUTIONS, OVERLAY_DATASET_ID, OVERLAY_METHOD
+from app.tools.site_images import (
+    OVERLAY_ATTRIBUTIONS,
+    OVERLAY_DATASET_ID,
+    OVERLAY_METHOD,
+    VIEW_ATTRIBUTIONS,
+)
 
 router = APIRouter(tags=["assets"])
 
@@ -168,6 +175,7 @@ def asset_detail(
         ipo_at=asset.ipo_at,
         cached_example=_cached_example(session, asset, active),
         land_cover_overlay=_land_cover_overlay(session, asset),
+        site_views=_site_views(session, asset),
         # Only for a private listing (under review, or not launched yet), which only its
         # community and admins can load (so public reads never need the caller's roles: T57).
         latest_run_id=(
@@ -178,8 +186,9 @@ def asset_detail(
     )
 
 
-def _overlay_version(overlay: AssetOverlay) -> str:
-    return f"{overlay.geometry_sha256[:12]}-{int(overlay.created_at.timestamp())}"
+def _image_version(image: AssetOverlay | AssetView) -> str:
+    """A rendered image's cache key: its boundary and when it was rendered."""
+    return f"{image.geometry_sha256[:12]}-{int(image.created_at.timestamp())}"
 
 
 def _land_cover_overlay(session: Session, asset: Asset) -> LandCoverOverlay | None:
@@ -187,7 +196,7 @@ def _land_cover_overlay(session: Session, asset: Asset) -> LandCoverOverlay | No
     if overlay is None:
         return None
     return LandCoverOverlay(
-        version=_overlay_version(overlay),
+        version=_image_version(overlay),
         width=overlay.width,
         height=overlay.height,
         bounds=OverlayBounds(
@@ -199,6 +208,23 @@ def _land_cover_overlay(session: Session, asset: Asset) -> LandCoverOverlay | No
             start=overlay.date_start.isoformat(), end=overlay.date_end.isoformat()
         ),
         attributions=list(OVERLAY_ATTRIBUTIONS),
+    )
+
+
+def _site_views(session: Session, asset: Asset) -> SiteViews | None:
+    views = current_views(session, asset.world_id, asset.id, asset.geojson, images="none")
+    if views is None:
+        return None
+    return SiteViews(
+        version=_image_version(views),
+        width=views.width,
+        height=views.height,
+        bounds=OverlayBounds(
+            south=views.south, west=views.west, north=views.north, east=views.east
+        ),
+        before=DateWindow(start=views.before_start.isoformat(), end=views.before_end.isoformat()),
+        after=DateWindow(start=views.after_start.isoformat(), end=views.after_end.isoformat()),
+        attributions=list(VIEW_ATTRIBUTIONS),
     )
 
 
@@ -308,3 +334,60 @@ def get_land_cover_overlay(
             "X-Content-Type-Options": "nosniff",
         },
     )
+
+
+VIEW_RESPONSES: Responses = {
+    200: {
+        "description": "Sentinel-2 true-colour view (WebP)",
+        "content": {"image/webp": {"schema": {"type": "string", "format": "binary"}}},
+    },
+    404: {"description": "Not found in the caller's world, or no views (yet)"},
+}
+
+
+def _view(asset: Asset, views: AssetView | None, which: Literal["before", "after"]) -> Response:
+    if views is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "views_not_found")
+    public = is_public(asset.status, asset.ipo_at)
+    return Response(
+        content=views.before_webp if which == "before" else views.after_webp,
+        media_type="image/webp",
+        headers={
+            "Cache-Control": OVERLAY_PUBLIC_CACHE if public else PRIVATE_NO_STORE,
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get(
+    "/assets/{asset_id}/views/before.webp",
+    response_class=Response,
+    responses=VIEW_RESPONSES,
+    dependencies=[BROWSE_ASSET],
+)
+def get_view_before(
+    asset_id: UUID, world: CurrentWorld, actor: OptionalActor, session: SessionDep
+) -> Response:
+    """The listing's true-colour view of the first year of the 5-year window, from its live
+    satellite rating (`site_views`). 404 `views_not_found` before a live rating rendered views
+    for the current boundary."""
+    asset = world_asset(session, world.id, asset_id, actor)
+    views = current_views(session, world.id, asset.id, asset.geojson, images="before")
+    return _view(asset, views, "before")
+
+
+@router.get(
+    "/assets/{asset_id}/views/after.webp",
+    response_class=Response,
+    responses=VIEW_RESPONSES,
+    dependencies=[BROWSE_ASSET],
+)
+def get_view_after(
+    asset_id: UUID, world: CurrentWorld, actor: OptionalActor, session: SessionDep
+) -> Response:
+    """The listing's true-colour view of the latest 12 months, from its live satellite rating
+    (`site_views`). 404 `views_not_found` before a live rating rendered views for the current
+    boundary."""
+    asset = world_asset(session, world.id, asset_id, actor)
+    views = current_views(session, world.id, asset.id, asset.geojson, images="after")
+    return _view(asset, views, "after")

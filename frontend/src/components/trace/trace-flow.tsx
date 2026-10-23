@@ -5,6 +5,7 @@ import { useState } from "react";
 import { cn } from "cn";
 
 import type { RunTrace } from "@/lib/api/types";
+import type { BeforeAfterViews } from "@/lib/site-views";
 import {
   ACTOR,
   type FlowNode,
@@ -120,11 +121,11 @@ function NodeButton({
 export function TraceFlow({
   trace,
   nodes,
-  siteKey,
+  views,
 }: {
   trace: RunTrace;
   nodes: FlowNode[];
-  siteKey?: string | null;
+  views?: BeforeAfterViews | null;
 }) {
   const [selected, setSelected] = useState<FlowNode | null>(
     nodes.find((n) => n.step === "audit") ?? nodes[0] ?? null,
@@ -177,7 +178,7 @@ export function TraceFlow({
         aria-live="polite"
       >
         {selected ? (
-          <Inspector trace={trace} node={selected} siteKey={siteKey} />
+          <Inspector trace={trace} node={selected} views={views} />
         ) : (
           <p className="text-sm text-machine-muted">
             Choose a step to see what went in and what came out.
@@ -200,11 +201,11 @@ function Row({ label, value }: { label: string; value: string }) {
 function Inspector({
   trace,
   node,
-  siteKey,
+  views,
 }: {
   trace: RunTrace;
   node: FlowNode;
-  siteKey?: string | null;
+  views?: BeforeAfterViews | null;
 }) {
   const step = node.step || node.id;
   return (
@@ -230,12 +231,7 @@ function Inspector({
         {node.costUsd > 0 && <Row label="Cost" value={usd(node.costUsd, 5)} />}
         {node.decision && <Row label="Chosen by" value={node.decision.text} />}
       </dl>
-      <InspectorDetail
-        trace={trace}
-        node={node}
-        step={step}
-        siteKey={siteKey}
-      />
+      <InspectorDetail trace={trace} node={node} step={step} views={views} />
     </div>
   );
 }
@@ -244,12 +240,12 @@ function InspectorDetail({
   trace,
   node,
   step,
-  siteKey,
+  views,
 }: {
   trace: RunTrace;
   node: FlowNode;
   step: string;
-  siteKey?: string | null;
+  views?: BeforeAfterViews | null;
 }) {
   const plan = node.id === "plan" ? runPlan(trace) : null;
   if (plan)
@@ -275,7 +271,7 @@ function InspectorDetail({
   if (node.id === "vision" && vision && !vision.error)
     return (
       <Section title="Five years apart">
-        <SiteVisionView siteKey={siteKey} vision={vision} />
+        <SiteVisionView views={views} vision={vision} />
       </Section>
     );
   if (step === "earth_obs" || node.id.startsWith("signal-")) {
