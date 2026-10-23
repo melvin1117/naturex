@@ -98,6 +98,9 @@ const LIME = "oklch(0.86 0.135 126)";
  * The story moves the map, so map interaction is off; the before/after divider is draggable
  * (pointer or arrow keys).
  */
+/** The width of the committed Sentinel-2 views (backend `site_images.THUMBNAIL_WIDTH`). */
+const VIEW_WIDTH_PX = 640;
+
 export const StoryMap = forwardRef(function StoryMap(
   { story, reducedMotion, inset }: Props,
   ref: ForwardedRef<StoryMapHandle>,
@@ -179,17 +182,27 @@ export const StoryMap = forwardRef(function StoryMap(
     const flyTo = async (
       bounds: Leaflet.LatLngBoundsExpression,
       seconds: number,
+      maxZoom?: number,
     ) => {
       const map = layers.current.map;
       if (!map) return;
       if (instant()) {
-        map.fitBounds(bounds, { ...padding(), animate: false });
+        map.fitBounds(bounds, { ...padding(), maxZoom, animate: false });
         return;
       }
       await new Promise<void>((resolve) => {
         map.once("moveend", () => resolve());
-        map.flyToBounds(bounds, { ...padding(), duration: seconds });
+        map.flyToBounds(bounds, { ...padding(), maxZoom, duration: seconds });
       });
+    };
+    /** The zoom at which an image over `bounds`, `widthPx` wide, shows one image pixel per
+     * screen pixel: any closer and 10 m Sentinel-2 pixels smear next to the sharp basemap. */
+    const nativeZoom = (bounds: [LatLng, LatLng], widthPx: number) => {
+      const map = layers.current.map!;
+      const shown =
+        map.latLngToContainerPoint(bounds[1]).x -
+        map.latLngToContainerPoint(bounds[0]).x;
+      return map.getZoom() + Math.log2(widthPx / Math.max(1, shown));
     };
     /** Container pixels an overlay covers (the map is still while it's shown). */
     const rectOf = (bounds: [LatLng, LatLng]) => {
@@ -322,7 +335,7 @@ export const StoryMap = forwardRef(function StoryMap(
         if (!L || !map || !alive()) return;
         const { images, land } = latest.current.story;
         const bounds = leafletBounds(images.after.bounds);
-        await flyTo(bounds, 1.4);
+        await flyTo(bounds, 1.4, nativeZoom(bounds, VIEW_WIDTH_PX));
         if (!alive()) return;
         const before = L.imageOverlay(apiMedia(images.before.url), bounds, {
           opacity: 0,

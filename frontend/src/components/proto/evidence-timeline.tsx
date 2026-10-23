@@ -397,7 +397,8 @@ function BeforeAfterPanel({
   const changes = reading?.changes.filter((c) => c.kind !== "no_clear_change");
   return (
     <Panel title="Five years apart, seen from above">
-      <div className="relative aspect-[16/10] overflow-hidden rounded-2xl bg-muted">
+      {/* At most the views' own 640 px, so 10 m Sentinel-2 pixels aren't stretched. */}
+      <div className="relative aspect-[16/10] w-full max-w-[640px] overflow-hidden rounded-2xl bg-muted">
         {/* eslint-disable-next-line @next/next/no-img-element -- same-origin media proxy */}
         <img
           src={views.after}
@@ -430,7 +431,7 @@ function BeforeAfterPanel({
         max={100}
         step={1}
         aria-label="Compare the two views: drag to reveal more of the earlier one"
-        className="mt-4"
+        className="mt-4 max-w-[640px]"
       />
       {reading && (
         <div className="mt-4 text-sm">
