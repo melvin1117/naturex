@@ -59,6 +59,10 @@ export type StreamEvent = Schemas["StreamEvent"];
 export type StreamEventType = Schemas["StreamEventType"];
 export type WorldAsset = Schemas["WorldAssetOut"];
 export type WorldOut = Schemas["WorldOut"];
+export type DemoPersona = Schemas["DemoStartIn"]["persona"] & string;
+export type RatingRunAccepted = Schemas["RatingRunAccepted"];
+export type Story = Schemas["StoryOut"];
+export type StoryRating = Schemas["StoryRating"];
 
 // Listing verification (T69 API, T70 screens; ADR-0006).
 export type AiComparison = Schemas["AiComparisonOut"];

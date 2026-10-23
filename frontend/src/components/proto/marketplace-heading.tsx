@@ -2,18 +2,33 @@
 
 import { Compass } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 
-import { useTour } from "@/components/proto/tour";
 import { Button } from "@/components/ui/button";
+import { useOptionalDataLayer } from "@/lib/data-layer";
 
 /**
- * The Marketplace's heading row and tour invitation, shared by the page and its loading
- * skeleton (#219), so the real text is on screen from the first frame and nothing moves when
- * the sites arrive. `stats` sits beside the heading (the stat strip, or its blocks).
+ * The Marketplace's heading row and the invitation to the story (`/judge`), shared by the page
+ * and its loading skeleton (#219), so the real text is on screen from the first frame and
+ * nothing moves when the sites arrive. `stats` sits beside the heading (the stat strip, or its
+ * blocks). A demo session already has the story in its bar, so the invitation hides there.
  */
 export function MarketplaceHeading({ stats }: { stats?: ReactNode }) {
-  const tour = useTour();
+  return <Heading stats={stats} inDemo={useInDemo()} />;
+}
+
+/** Whether this tab acts in a demo session; false without a data layer (route skeletons). */
+function useInDemo(): boolean {
+  const layer = useOptionalDataLayer();
+  const world = useSyncExternalStore(
+    (listener) => layer?.session.subscribe(listener) ?? (() => undefined),
+    () => layer?.session.getSnapshot().world ?? null,
+    () => null,
+  );
+  return Boolean(world?.me?.persona);
+}
+
+function Heading({ stats, inDemo }: { stats?: ReactNode; inDemo: boolean }) {
   return (
     <>
       <div className="flex flex-wrap items-end justify-between gap-6">
@@ -29,20 +44,17 @@ export function MarketplaceHeading({ stats }: { stats?: ReactNode }) {
         {stats}
       </div>
 
-      {!tour.active && (
+      {!inDemo && (
         <div className="mt-8 flex flex-wrap items-center gap-3 rounded-3xl bg-lichen px-5 py-3.5 text-sm">
           <Compass className="size-4 text-lime-ink" aria-hidden="true" />
           <span>
-            <span className="font-medium">New here?</span> The guided tour walks
-            through listing, rating, backing and monitoring in about seven
-            minutes, on a scripted demo world.
+            <span className="font-medium">New here?</span> See why NatureX
+            exists on one real wetland, then try everything in your own sandbox.
+            No sign-up.
           </span>
           <div className="ml-auto flex gap-2">
-            <Button size="sm" variant="ghost" asChild>
-              <Link href="/judge">Judge landing</Link>
-            </Button>
-            <Button size="sm" onClick={tour.start}>
-              Start the tour
+            <Button size="sm" asChild>
+              <Link href="/judge">See how it works</Link>
             </Button>
           </div>
         </div>

@@ -41,13 +41,16 @@ import type {
   PortfolioOut,
   PricePoint,
   QuoteOut,
+  DemoPersona,
   RatingRun,
+  RatingRunAccepted,
   RecordedRun,
   RegisterIn,
   ReportDiff,
   RunTrace,
   ReportOut,
   SiteImages,
+  Story,
   WorldOut,
   WorldTrace,
 } from "./api/types";
@@ -615,6 +618,57 @@ async function afterSessionChange(
     if (world) session.set({ ...world, me });
   }
   if (viewerKey(session.getSnapshot().world) === before) cache.reset();
+}
+
+/**
+ * No sign-up (T55): `POST /demo/start` opens a private sandbox and a demo session as `persona`
+ * (a browser that already has one keeps its sandbox and only switches persona). The world and
+ * cache then follow the new viewer, as after signing in.
+ */
+export function useStartDemo(): MutationResult<DemoPersona, WorldOut> {
+  const layer = useDataLayer();
+  return useApiMutation(async (api, persona: DemoPersona) => {
+    const world = await unwrap(api.POST("/demo/start", { body: { persona } }));
+    afterDemoSwitch(layer, world);
+    return world;
+  });
+}
+
+/** `POST /demo/persona`: act as another persona in the same sandbox (demo sessions only). */
+export function useSwitchPersona(): MutationResult<DemoPersona, WorldOut> {
+  const layer = useDataLayer();
+  return useApiMutation(async (api, persona: DemoPersona) => {
+    const world = await unwrap(
+      api.POST("/demo/persona", { body: { persona } }),
+    );
+    afterDemoSwitch(layer, world);
+    return world;
+  });
+}
+
+function afterDemoSwitch({ session, cache }: DataLayer, world: WorldOut) {
+  const before = viewerKey(session.getSnapshot().world);
+  session.set(world);
+  if (viewerKey(world) === before) cache.reset();
+}
+
+/** `POST /assets/{id}/rate`: start a rating run now (a member of its community or an admin);
+ * follow it at `/trace/{run_id}`. */
+export function useRateNow(): MutationResult<string, RatingRunAccepted> {
+  return useApiMutation((api, assetId: string) =>
+    unwrap(
+      api.POST("/assets/{asset_id}/rate", {
+        params: { path: { asset_id: assetId } },
+      }),
+    ),
+  );
+}
+
+/** The `/judge` story's data (`GET /story`): one site, every number from the product's code. */
+export function useStory(): QueryResult<Story> {
+  return useApiQuery(queryKeys.story(), (api, signal) =>
+    unwrap(api.GET("/story", { signal })),
+  );
 }
 
 /** `POST /auth/login`, then the world and cache follow the new account. */

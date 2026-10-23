@@ -1,0 +1,527 @@
+{
+  "site": {
+    "key": "wetland_mx",
+    "name": "Xochimilco Wetland",
+    "place": "Mexico City",
+    "community": "Xochimilco Wetland Community",
+    "area_ha": "206.70",
+    "boundary": [
+      [19.2811, -99.1048],
+      [19.2802, -99.1028],
+      [19.2805, -99.0995],
+      [19.2812, -99.0964],
+      [19.282, -99.0935],
+      [19.2838, -99.0912],
+      [19.2865, -99.0896],
+      [19.2891, -99.0892],
+      [19.2916, -99.0901],
+      [19.2934, -99.0925],
+      [19.2945, -99.0957],
+      [19.2941, -99.0991],
+      [19.2928, -99.1022],
+      [19.2904, -99.104],
+      [19.2874, -99.105],
+      [19.2842, -99.1056],
+      [19.2811, -99.1048]
+    ]
+  },
+  "images": {
+    "overlay": {
+      "url": "/media/demo-sites/wetland_mx/overlay.png",
+      "bounds": {
+        "south": 19.2802,
+        "west": -99.1056,
+        "north": 19.2945,
+        "east": -99.0892
+      }
+    },
+    "before": {
+      "url": "/media/demo-sites/wetland_mx/before.webp",
+      "bounds": {
+        "south": 19.278412412,
+        "west": -99.112550329,
+        "north": 19.296287412,
+        "east": -99.082249671
+      }
+    },
+    "after": {
+      "url": "/media/demo-sites/wetland_mx/thumbnail.webp",
+      "bounds": {
+        "south": 19.278412412,
+        "west": -99.112550329,
+        "north": 19.296287412,
+        "east": -99.082249671
+      }
+    },
+    "legend": {
+      "water": {
+        "label": "Water",
+        "color": "#419bdf"
+      },
+      "trees": {
+        "label": "Trees",
+        "color": "#397d49"
+      },
+      "grass": {
+        "label": "Grass",
+        "color": "#88b053"
+      },
+      "flooded_vegetation": {
+        "label": "Flooded vegetation",
+        "color": "#7a87c6"
+      },
+      "shrub_and_scrub": {
+        "label": "Shrub and scrub",
+        "color": "#dfc35a"
+      },
+      "built": {
+        "label": "Built area",
+        "color": "#c4281b"
+      }
+    },
+    "attributions": [
+      "Dynamic World: This dataset is produced for the Dynamic World Project by Google in partnership with National Geographic Society and the World Resources Institute.",
+      "Contains modified Copernicus Sentinel data 2025-2026.",
+      "Contains modified Copernicus Sentinel data 2025-2026.",
+      "Cloud Score+: Pasquarella, V. J., Brown, C. F., Czerwinski, W., & Rucklidge, W. J. (2023). Comprehensive quality assessment of optical satellite imagery using weakly supervised video learning."
+    ]
+  },
+  "land": {
+    "ndvi": [
+      {
+        "month": "2021-10",
+        "ndvi": 0.649,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2021-11",
+        "ndvi": 0.6173,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2021-12",
+        "ndvi": 0.5586,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2022-01",
+        "ndvi": 0.4993,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2022-02",
+        "ndvi": 0.4728,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2022-03",
+        "ndvi": 0.4704,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2022-04",
+        "ndvi": 0.4778,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2022-05",
+        "ndvi": 0.5591,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2022-06",
+        "ndvi": 0.5636,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2022-07",
+        "ndvi": 0.6054,
+        "cloud_free_obs": 3
+      },
+      {
+        "month": "2022-08",
+        "ndvi": 0.6676,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2022-09",
+        "ndvi": 0.6842,
+        "cloud_free_obs": 1
+      },
+      {
+        "month": "2022-10",
+        "ndvi": 0.6661,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2022-11",
+        "ndvi": 0.6221,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2022-12",
+        "ndvi": 0.5725,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2023-01",
+        "ndvi": 0.5054,
+        "cloud_free_obs": 7
+      },
+      {
+        "month": "2023-02",
+        "ndvi": 0.4668,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2023-03",
+        "ndvi": 0.4791,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2023-04",
+        "ndvi": 0.5014,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2023-05",
+        "ndvi": 0.5412,
+        "cloud_free_obs": 7
+      },
+      {
+        "month": "2023-06",
+        "ndvi": 0.5958,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2023-07",
+        "ndvi": 0.4849,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2023-08",
+        "ndvi": 0.6455,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2023-09",
+        "ndvi": 0.6546,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2023-10",
+        "ndvi": 0.6387,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2023-11",
+        "ndvi": 0.6162,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2023-12",
+        "ndvi": 0.5572,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2024-01",
+        "ndvi": 0.5037,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2024-02",
+        "ndvi": 0.4682,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2024-03",
+        "ndvi": 0.4629,
+        "cloud_free_obs": 7
+      },
+      {
+        "month": "2024-04",
+        "ndvi": 0.4841,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2024-05",
+        "ndvi": 0.5541,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2024-06",
+        "ndvi": 0.5749,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2024-07",
+        "ndvi": 0.6761,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2024-08",
+        "ndvi": 0.6773,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2024-09",
+        "ndvi": 0.6893,
+        "cloud_free_obs": 3
+      },
+      {
+        "month": "2024-10",
+        "ndvi": 0.6272,
+        "cloud_free_obs": 3
+      },
+      {
+        "month": "2024-11",
+        "ndvi": 0.5988,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2024-12",
+        "ndvi": 0.487,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2025-01",
+        "ndvi": 0.4819,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2025-02",
+        "ndvi": 0.5027,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2025-03",
+        "ndvi": 0.502,
+        "cloud_free_obs": 7
+      },
+      {
+        "month": "2025-04",
+        "ndvi": 0.4835,
+        "cloud_free_obs": 9
+      },
+      {
+        "month": "2025-05",
+        "ndvi": 0.5069,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2025-06",
+        "ndvi": 0.5894,
+        "cloud_free_obs": 3
+      },
+      {
+        "month": "2025-07",
+        "ndvi": 0.6684,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2025-08",
+        "ndvi": 0.6899,
+        "cloud_free_obs": 7
+      },
+      {
+        "month": "2025-09",
+        "ndvi": 0.6505,
+        "cloud_free_obs": 2
+      },
+      {
+        "month": "2025-10",
+        "ndvi": 0.6519,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2025-11",
+        "ndvi": 0.5961,
+        "cloud_free_obs": 8
+      },
+      {
+        "month": "2025-12",
+        "ndvi": 0.5347,
+        "cloud_free_obs": 7
+      },
+      {
+        "month": "2026-01",
+        "ndvi": 0.567,
+        "cloud_free_obs": 6
+      },
+      {
+        "month": "2026-02",
+        "ndvi": 0.5267,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2026-03",
+        "ndvi": 0.4992,
+        "cloud_free_obs": 8
+      },
+      {
+        "month": "2026-04",
+        "ndvi": 0.5754,
+        "cloud_free_obs": 7
+      },
+      {
+        "month": "2026-05",
+        "ndvi": 0.6229,
+        "cloud_free_obs": 4
+      },
+      {
+        "month": "2026-06",
+        "ndvi": 0.6606,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2026-07",
+        "ndvi": 0.6785,
+        "cloud_free_obs": 8
+      },
+      {
+        "month": "2026-08",
+        "ndvi": 0.6752,
+        "cloud_free_obs": 5
+      },
+      {
+        "month": "2026-09",
+        "ndvi": 0.621,
+        "cloud_free_obs": 5
+      }
+    ],
+    "water_change": -6.6,
+    "ndvi_window": {
+      "start": "2021-10-01",
+      "end": "2026-10-01"
+    },
+    "attributions": [
+      "Dynamic World: This dataset is produced for the Dynamic World Project by Google in partnership with National Geographic Society and the World Resources Institute.",
+      "Contains modified Copernicus Sentinel data 2021-2026.",
+      "Cloud Score+: Pasquarella, V. J., Brown, C. F., Czerwinski, W., & Rucklidge, W. J. (2023). Comprehensive quality assessment of optical satellite imagery using weakly supervised video learning.",
+      "JRC Global Surface Water: EC JRC/Google; Pekel et al. (2016), High-resolution mapping of global surface water and its long-term changes, Nature.",
+      "Hansen Global Forest Change: Hansen et al. (2013), High-Resolution Global Maps of 21st-Century Forest Cover Change, Science.",
+      "GEDI L4B: Dubayah et al. (2022), GEDI L4B Gridded Aboveground Biomass Density, Version 2, ORNL DAAC.",
+      "ESA CCI Biomass: Santoro, M.; Cartus, O. (2025), ESA Biomass Climate Change Initiative (Biomass_cci): Global datasets of forest above-ground biomass, v6.0, NERC EDS Centre for Environmental Data Analysis, doi:10.5285/95913ffb6467447ca72c4e9d8cf30501.",
+      "Global Mangrove Watch v3.0 (CC BY 4.0): Bunting et al. (2022), Global Mangrove Extent Change 1996-2020: Global Mangrove Watch Version 3.0, Remote Sensing 14(15), 3657; dataset doi:10.5281/zenodo.6894273.",
+      "SoilGrids 2.0 (CC BY 4.0): ISRIC - World Soil Information; Poggio et al. (2021), SoilGrids 2.0: producing soil information for the globe with quantified spatial uncertainty, SOIL 7, 217-240."
+    ]
+  },
+  "ratings": [
+    {
+      "scenario": "baseline",
+      "simulated": false,
+      "health": "76.2",
+      "grade": "A",
+      "confidence": "71.0",
+      "value_low": 2121067,
+      "value_mid": 2669511,
+      "value_high": 2669511,
+      "fair_value_per_unit": "21.4723",
+      "landcover": {
+        "trees": 0.3574,
+        "water": 0.2484,
+        "grass": 0.1024,
+        "shrub_and_scrub": 0.1011,
+        "flooded_vegetation": 0.0296,
+        "built": 0.1288
+      },
+      "natural_fraction": 0.8389
+    },
+    {
+      "scenario": "encroachment",
+      "simulated": true,
+      "health": "68.8",
+      "grade": "BBB",
+      "confidence": "71.0",
+      "value_low": 1859060,
+      "value_mid": 2465068,
+      "value_high": 2465068,
+      "fair_value_per_unit": "18.9951",
+      "landcover": {
+        "trees": 0.3894,
+        "water": 0.1913,
+        "grass": 0.0788,
+        "shrub_and_scrub": 0.0778,
+        "flooded_vegetation": 0.0536,
+        "built": 0.1928
+      },
+      "natural_fraction": 0.7909
+    },
+    {
+      "scenario": "restoration",
+      "simulated": true,
+      "health": "87.1",
+      "grade": "AA",
+      "confidence": "71.0",
+      "value_low": 2332347,
+      "value_mid": 3018288,
+      "value_high": 3018288,
+      "fair_value_per_unit": "25.7795",
+      "landcover": {
+        "trees": 0.3974,
+        "water": 0.2484,
+        "grass": 0.1024,
+        "shrub_and_scrub": 0.1011,
+        "flooded_vegetation": 0.0696,
+        "built": 0.0648
+      },
+      "natural_fraction": 0.9189
+    }
+  ],
+  "market": {
+    "total_units": 1000000,
+    "retained_pct": "51.00",
+    "opening_price": "21.4723",
+    "offered_units": 490000,
+    "backing": {
+      "units": 100,
+      "fill_price": "21.4938",
+      "paid": "2149.38",
+      "to_community": "2149.38"
+    },
+    "price_after_downgrade": "20.6053",
+    "price_after_restoration": "22.4163"
+  },
+  "ledger": {
+    "entries": [
+      {
+        "seq": 0,
+        "kind": "listing",
+        "label": "Listed by its community",
+        "hash": "5f6c41236007c0dd4354e599237d2d3ce1a1914d0b79756ec17d922f967dd232"
+      },
+      {
+        "seq": 1,
+        "kind": "report",
+        "label": "Rated A \u00b7 76.2",
+        "hash": "e1d3b657efd8dbc9f4f7ff94e9150ef0aa904da5661e1b54f93fab60e14228fc"
+      },
+      {
+        "seq": 2,
+        "kind": "price_anchor",
+        "label": "Opened to supporters",
+        "hash": "8445c1211ca781aa398aa14cbbe9ea7e248cc8985c621e8d04f5ddb4c1f44264"
+      },
+      {
+        "seq": 3,
+        "kind": "report",
+        "label": "Downgraded to BBB \u00b7 68.8",
+        "hash": "aa0c2bb3d7856abca0b5cd6c82f40dc43bd800fdcc86945711994df023b57fa5"
+      },
+      {
+        "seq": 4,
+        "kind": "report",
+        "label": "Upgraded to AA \u00b7 87.1",
+        "hash": "0c41c817b1cd13a32e7be326dab7b5bd5d82c4ec44a2eda254b7c4e9b740ec37"
+      }
+    ],
+    "verified": true,
+    "head": "0c41c817b1cd13a32e7be326dab7b5bd5d82c4ec44a2eda254b7c4e9b740ec37",
+    "tampered_seq": 3,
+    "tampered_field": "grade",
+    "tampered_from": "BBB",
+    "tampered_to": "AA",
+    "tampered_verified": false,
+    "broken_at": 3
+  }
+}

@@ -17,6 +17,7 @@ import { TourProvider } from "@/components/proto/tour";
 import { WorldProvider } from "@/components/world-provider";
 import { createDataLayer } from "@/lib/data-layer";
 import { PrototypeProvider } from "@/lib/prototype/store";
+import story from "./story/story.json";
 
 import {
   BASE,
@@ -83,6 +84,27 @@ function Providers({ children }: { children: ReactNode }) {
   );
 }
 
+function StoryProviders({ children }: { children: ReactNode }) {
+  const backend = fakeBackend({
+    "GET /world": () => json(WORLD),
+    "GET /story": () => json(story),
+    "GET /media/demo-sites/wetland_mx/recorded-run.json": () =>
+      json({ detail: "not_found" }, { status: 404 }),
+  });
+  const layer = createDataLayer({
+    baseUrl: BASE,
+    fetch: backend.fetch,
+    createEventSource: createFakeEventSource,
+  });
+  return (
+    <WorldProvider dataLayer={layer}>
+      <PrototypeProvider>
+        <TourProvider>{children}</TourProvider>
+      </PrototypeProvider>
+    </WorldProvider>
+  );
+}
+
 const noSearch = { searchParams: Promise.resolve({}) };
 
 describe("routes", () => {
@@ -91,13 +113,25 @@ describe("routes", () => {
     ["/portfolio", PortfolioPage, "Your stakes"],
     ["/steward", StewardPage, "Get paid for keeping your land alive"],
     ["/admin", AdminPage, "Time Machine"],
-    ["/judge", JudgePage, "The bees never sent an invoice."],
     ["/dev/ui", DevUiPage, "UI kit"],
     ["404", NotFound, "Page not found"],
   ])("%s renders its heading", (_path, Page, heading) => {
     render(<Page />, { wrapper: Providers });
     expect(
       screen.getByRole("heading", { level: 1, name: heading }),
+    ).toBeInTheDocument();
+  });
+
+  it("/judge tells the story from GET /story", async () => {
+    render(<JudgePage />, { wrapper: StoryProviders });
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Loading the satellite view…",
+    );
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: /This wetland is alive/,
+      }),
     ).toBeInTheDocument();
   });
 
