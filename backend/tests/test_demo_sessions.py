@@ -4,6 +4,7 @@ cap (`SANDBOX_LLM_BUDGET_USD`)."""
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import replace
@@ -14,6 +15,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
+from fastapi import Request, Response
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection, create_engine, delete, func
 from sqlmodel import Session, col, select
@@ -26,10 +28,11 @@ from app.db import get_session
 from app.llm import BudgetExceeded, CallRecord, DbCallLog, Tier
 from app.main import app
 from app.models import Asset, LlmCall, SessionKind, UserSession, World
+from app.routers.events import StreamAccess, stream_access
 from app.sandbox import create_world, ensure_live_world, is_sandbox, reset_world
 from app.seed import LIVE_WORLD_ID, WORLD_ID, seed
 from app.worlds import PROTECTED_WORLDS
-from tests.conftest import alembic_cfg, requires_db
+from tests.conftest import TEST_ORIGIN, alembic_cfg, requires_db
 from tests.worlds import drop_worlds, sign_in
 
 PASSWORD = "correct horse battery"
@@ -332,21 +335,46 @@ def test_the_prefix_is_stripped_and_marked(path: str, seen: str, sandbox: bool) 
         scope = {"type": "http", "path": path, "raw_path": path.encode()}
         await SandboxChannelMiddleware(inner)(scope, None, None)  # type: ignore[arg-type]
 
-    import asyncio
-
     asyncio.run(run())
     assert (got["path"], got["raw_path"]) == (seen, seen.encode())
     assert bool(got.get("naturex.sandbox")) is sandbox
 
 
 def test_uploads_through_the_sandbox_pass_the_csrf_body_check() -> None:
-    # Stripped before the CSRF layer, so `/sandbox/assets/{id}/documents` is still an upload.
+    # Stripped before the CSRF layer, so `/sandbox/assets/{id}/documents` is still an upload: a
+    # PDF body reaches the route (401 without a session) instead of 415 for a non-JSON body.
     res = TestClient(app).post(
         f"/sandbox/assets/{uuid4()}/documents",
         content=b"%PDF-1.4",
-        headers={"Content-Type": "application/pdf"},
+        headers={"Content-Type": "application/pdf", "Origin": TEST_ORIGIN},
     )
-    assert res.status_code != 415
+    assert (res.status_code, res.json()["detail"]) == (401, "auth_required")
+
+
+@requires_db
+def test_the_live_stream_follows_the_channel(session: Session, client: TestClient) -> None:
+    world_id = UUID(start(client, "arjun").json()["id"])
+    token = token_of(client)
+
+    def access(path: str, sandbox: bool) -> StreamAccess:
+        scope: dict[str, Any] = {
+            "type": "http",
+            "method": "GET",
+            "path": path,
+            "query_string": b"",
+            "headers": [(b"cookie", f"{DEMO_COOKIE}={token}".encode())],
+        }
+        if sandbox:
+            scope["naturex.sandbox"] = True
+        return stream_access(Request(scope), Response(), session)
+
+    # Through /sandbox the stream follows the demo session and re-checks it on every poll.
+    inside = access("/events/stream", sandbox=True)
+    assert inside.world_id == world_id
+    assert inside.auth is not None and inside.auth.token == token
+    # The real app's stream never reads the demo cookie.
+    outside = access("/events/stream", sandbox=False)
+    assert outside.world_id == LIVE_WORLD_ID and outside.auth is None
 
 
 # --- the hidden per-sandbox spend cap ------------------------------------------------------------
