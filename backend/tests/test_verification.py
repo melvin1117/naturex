@@ -367,6 +367,7 @@ def test_another_worlds_document_is_not_found(world: World_) -> None:
 def test_who_may_upload(world: World_) -> None:
     hidden = draft(world)
     public = listed(world, geojson=square(900, lat=9.6))
+    lifecycle.launch(world, public["id"])
 
     assert upload(world, hidden["id"], png(), user=world.owner).status_code == 201
     for user, asset, code, detail in (
@@ -1041,6 +1042,7 @@ def test_approving_doesnt_lift_a_moderation_suspension(world: World_) -> None:
 @requires_db
 def test_the_public_panel_shows_results_not_values(world: World_) -> None:
     asset = listed(world)
+    lifecycle.launch(world, asset["id"])  # only a launched listing is public
     before = client_for(world, world.outsider).get(f"/assets/{asset['id']}/verification")
     run = verified(world, asset["id"])
 
@@ -1788,14 +1790,16 @@ def test_after_a_rejection_the_community_uploads_new_documents_and_resubmits(
     assert summary_listing(live, live.steward, asset_id)["next_action"] == "verify"
     old_title = next(d["id"] for d in first["documents"] if d["doc_type"] == "title")
 
-    for user in (live.outsider, live.other_steward, live.admin):
+    # Not launched, so the listing doesn't exist outside its community; admins see it.
+    for user, code, detail in (
+        (live.outsider, 404, "not_found"),
+        (live.other_steward, 404, "not_found"),
+        (live.admin, 403, "members_only"),
+    ):
         refused_upload = upload(live, asset_id, png(310, 310), user=user)
         refused_submit = submit_run(live, asset_id, [old_title], user=user)
-        assert (refused_upload.status_code, refused_upload.json()["detail"]) == (
-            403,
-            "members_only",
-        )
-        assert refused_submit.status_code == 403, refused_submit.text
+        assert (refused_upload.status_code, refused_upload.json()["detail"]) == (code, detail)
+        assert refused_submit.status_code == code, refused_submit.text
     assert stored(live, asset_id) == 2
 
     # The judged documents can't be sent again as they are; uploading the file again can.

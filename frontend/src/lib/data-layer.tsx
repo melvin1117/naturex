@@ -200,6 +200,8 @@ export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
         queue(queryKeys.reports(payload.asset_id));
         queue(queryKeys.ledger(payload.asset_id));
       }
+      // A launch makes a listing public, so it joins the public outlines.
+      if (payload.reason === "ipo") queue(queryKeys.outlines());
     },
     { retain: false },
   );
@@ -237,8 +239,6 @@ export function wireLiveUpdates(cache: QueryCache, events: EventHub) {
       queue(queryKeys.ledger(payload.asset_id));
       // A verification decision (#216) can open or close the opening offer.
       queue(queryKeys.ipoPreviews(payload.asset_id));
-      // A newly listed site joins the public outlines.
-      if (payload.to === "listed") queue(queryKeys.outlines());
     },
     { retain: false },
   );

@@ -48,9 +48,10 @@ from app.services.asset_cards import (
 from app.services.cached_example import cached_example
 from app.services.ipo import is_trading
 from app.services.land_cover_overlays import current_overlay
-from app.services.lifecycle import PUBLIC_STATUSES
+from app.services.lifecycle import is_public
 from app.services.listings import visible_to
 from app.services.rating_runs import assets_with_active_runs, latest_run_id
+from app.services.visibility import public_assets
 from app.tools.earth_obs import DateWindow
 from app.tools.geometry import outline_rings
 from app.tools.site_images import OVERLAY_ATTRIBUTIONS, OVERLAY_DATASET_ID, OVERLAY_METHOD
@@ -92,10 +93,10 @@ def _asset_price(session: Session, asset: Asset, *, latest: bool) -> Decimal | N
 
 @router.get("/assets", response_model=list[AssetCard], dependencies=[BROWSE_WORLD])
 def list_assets(world: CurrentWorld, session: SessionDep) -> list[AssetCard]:
-    """Marketplace cards for the world's public assets: listed and suspended (T58)."""
+    """Marketplace cards for the world's public assets: listed or suspended, and launched."""
     assets = session.exec(
         select(Asset)
-        .where(Asset.world_id == world.id, col(Asset.status).in_(PUBLIC_STATUSES))
+        .where(Asset.world_id == world.id, public_assets())
         .order_by(col(Asset.created_at), col(Asset.name))
     ).all()
     return cards(session, world.id, assets)
@@ -107,13 +108,13 @@ OUTLINES_MAX_SITES = 300
 
 @router.get("/assets/outlines", response_model=AssetOutlines, dependencies=[BROWSE_WORLD])
 def list_outlines(world: CurrentWorld, session: SessionDep, response: Response) -> AssetOutlines:
-    """The boundaries of the world's public sites (listed and suspended), simplified on the
-    server to at most 200 corners each, for the listing map's outlines and overlap hint (T33).
-    Only a hint: T36's overlap check on create and submit is what decides, and it also counts
-    listings under review, which stay private here."""
+    """The boundaries of the world's public sites (listed or suspended, and launched),
+    simplified on the server to at most 200 corners each, for the listing map's outlines and
+    overlap hint (T33). Only a hint: T36's overlap check on create and submit is what decides,
+    and it also counts private listings (under review, or not launched yet)."""
     assets = session.exec(
         select(Asset)
-        .where(Asset.world_id == world.id, col(Asset.status).in_(PUBLIC_STATUSES))
+        .where(Asset.world_id == world.id, public_assets())
         .order_by(col(Asset.created_at), col(Asset.id))
         .limit(OUTLINES_MAX_SITES + 1)
     ).all()
@@ -167,11 +168,11 @@ def asset_detail(
         ipo_at=asset.ipo_at,
         cached_example=_cached_example(session, asset, active),
         land_cover_overlay=_land_cover_overlay(session, asset),
-        # Only for a listing under review, which only its community and admins can load (so
-        # public reads never need the caller's roles: T57).
+        # Only for a private listing (under review, or not launched yet), which only its
+        # community and admins can load (so public reads never need the caller's roles: T57).
         latest_run_id=(
             latest_run_id(session, asset.world_id, asset.id)
-            if asset.status not in PUBLIC_STATUSES and visible_to(actor, asset)
+            if not is_public(asset.status, asset.ipo_at) and visible_to(actor, asset)
             else None
         ),
     )
@@ -225,7 +226,7 @@ def get_asset(
     response: Response,
 ) -> AssetDetail:
     asset = world_asset(session, world.id, asset_id, actor)
-    if asset.status not in PUBLIC_STATUSES:
+    if not is_public(asset.status, asset.ipo_at):
         response.headers["Cache-Control"] = PRIVATE_NO_STORE
     return asset_detail(session, asset, settings, actor)
 
@@ -298,7 +299,7 @@ def get_land_cover_overlay(
     overlay = current_overlay(session, world.id, asset.id, asset.geojson)
     if overlay is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "overlay_not_found")
-    public = asset.status in PUBLIC_STATUSES
+    public = is_public(asset.status, asset.ipo_at)
     return Response(
         content=overlay.png,
         media_type="image/png",

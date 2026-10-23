@@ -152,7 +152,7 @@ describe("wireLiveUpdates", () => {
     unwire();
     release();
   });
-  it("refetches a run on its progress events and a listing on its status (T33)", async () => {
+  it("refetches a run on its progress events, a listing on its status and the outlines on a launch (T33)", async () => {
     const RUN_ID = "88888888-8888-4888-8888-888888888888";
     const backend = fakeBackend({
       "GET /world": () => json(WORLD),
@@ -214,7 +214,17 @@ describe("wireLiveUpdates", () => {
         to: "listed",
       }),
     );
-    await waitFor(() => expect(counts()).toEqual([2, 3, 3, 2]));
+    // Listed isn't public yet: the outlines wait for the launch.
+    await waitFor(() => expect(counts()).toEqual([2, 3, 3, 1]));
+
+    act(() =>
+      source.emit("price_tick", 5, {
+        asset_id: ASSET_ID,
+        price: "1.00",
+        reason: "ipo",
+      }),
+    );
+    await waitFor(() => expect(counts()).toEqual([2, 4, 3, 2]));
     unwire();
     release();
   });

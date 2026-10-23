@@ -193,7 +193,7 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
     // USE_MOCKS: the UI must say the metrics are placeholders.
     await expect(owner.getByText(/^Mock data: this rating used/)).toBeVisible();
     const href = await owner
-      .getByRole("link", { name: "See the public page" })
+      .getByRole("link", { name: "Preview the site page" })
       .getAttribute("href");
     assetId = href?.split("/").pop() ?? "";
     expect(assetId).not.toBe("");

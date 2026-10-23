@@ -16,7 +16,8 @@ from uuid import UUID
 from sqlmodel import Session, col, select
 
 from app.models import Asset, AssetStatus
-from app.services.lifecycle import NO_SATELLITE_METRICS, PUBLIC_STATUSES, RATING_FAILED_PREFIX
+from app.services.lifecycle import NO_SATELLITE_METRICS, RATING_FAILED_PREFIX
+from app.services.visibility import public_assets
 from app.worlds import LIVE_WORLD_ID
 
 EARTH_OBS_FAILED = f"{RATING_FAILED_PREFIX}earth_obs_failed:"
@@ -65,7 +66,7 @@ def cached_example(session: Session, asset: Asset) -> CachedExample | None:
             select(Asset).where(
                 Asset.world_id == asset.world_id,
                 col(Asset.site_key).is_not(None),
-                col(Asset.status).in_(PUBLIC_STATUSES),
+                public_assets(),
             )
         ).all()
     ]

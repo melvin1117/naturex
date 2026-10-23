@@ -8,6 +8,7 @@ import logging
 import random
 from collections.abc import Callable, Mapping
 from concurrent.futures import Executor, Future
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -216,11 +217,18 @@ def test_a_live_rating_stores_and_serves_its_land_cover_overlay(live: Live) -> N
     response = live.client().get(f"/assets/{asset_id}/overlay.png?v={detail['version']}")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
-    assert response.headers["cache-control"] == "public, max-age=86400"
+    # Listed but not launched yet: private to its community, so never cached publicly.
+    assert response.headers["cache-control"] == "private, no-store"
     assert response.headers["x-content-type-options"] == "nosniff"
     image = decode_indexed_png(response.content)
     assert (image.width, image.height) == (row.width, row.height)
     assert set(image.pixels) == {TRANSPARENT_INDEX, TREES}
+    launched = live.w.session.get_one(Asset, UUID(asset_id))
+    launched.ipo_at = datetime.now(UTC)
+    live.w.session.add(launched)
+    live.w.session.commit()
+    response = live.client().get(f"/assets/{asset_id}/overlay.png?v={detail['version']}")
+    assert response.headers["cache-control"] == "public, max-age=86400"
 
 
 @requires_db

@@ -115,7 +115,7 @@ from app.services.earth_obs_live import (
 )
 from app.services.field_evidence import DbEvidenceProvider
 from app.services.land_cover_overlays import LiveOverlays, OverlayJob, build_live_overlays
-from app.services.lifecycle import is_public
+from app.services.lifecycle import GATED_STATUSES
 from app.services.listings import apply_rating_result, lock_asset, note_rating_failure
 from app.services.listings import audience as listing_audience
 from app.services.news_events import record_news
@@ -1439,7 +1439,7 @@ class RatingRunner:
         asset = _world_asset(session, spec.world_id, spec.asset_id)
         if asset is None:
             raise LookupError(f"asset {spec.asset_id} not found in world {spec.world_id}")
-        if on_queue is None and not is_public(asset.status):
+        if on_queue is None and asset.status not in GATED_STATUSES:
             # Listings under review are rated through T58's submit, never re-rated directly.
             draft = asset.status is AssetStatus.DRAFT
             raise AssetNotRateable("asset_is_draft" if draft else "asset_not_listed")

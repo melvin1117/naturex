@@ -551,9 +551,10 @@ class AssetDetail(BaseModel):
     )
     latest_run_id: UUID | None = Field(
         default=None,
-        description="A listing under review's latest rating run (follow it with "
-        "`GET /runs/{id}`), for its community's members and same-world admins, who alone can "
-        "load it (T33). Null for public (listed or suspended) assets and before any run.",
+        description="A private listing's latest rating run (follow it with `GET /runs/{id}`): "
+        "under review, or listed but not launched yet, for its community's members and "
+        "same-world admins, who alone can load it (T33). Null for public (launched) assets "
+        "and before any run.",
     )
 
 

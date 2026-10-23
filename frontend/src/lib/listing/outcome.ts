@@ -77,7 +77,7 @@ export function listingOutcome(
       return outcome(
         "draft",
         "Draft",
-        "Nothing is public until the land is listed.",
+        "Only your community and NatureX admins see this until the land is listed and its opening offer launches.",
         {
           canWithdraw: true,
         },
@@ -128,7 +128,7 @@ export function listingOutcome(
         "Listed",
         asset.trading
           ? "The land is listed and trading is open."
-          : "The land passed the listing gate. Set up the opening offer to let supporters back it.",
+          : "The land passed the listing gate. Set up the opening offer to let supporters back it; until it launches, only your community and NatureX admins see it.",
       );
     case "suspended":
       return outcome(

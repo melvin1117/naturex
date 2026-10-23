@@ -403,6 +403,7 @@ describe("ListedStep", () => {
     reveal: boolean,
     onOpenTrace = vi.fn(),
     summary: () => Response | Promise<Response> = () => json(NEEDS_VERIFYING),
+    site = listed,
   ) {
     const backend = fakeBackend({
       "GET /world": () => json(SIGNED_IN_WORLD),
@@ -416,7 +417,7 @@ describe("ListedStep", () => {
     const view = render(
       <ListedStep
         community={SELVA}
-        asset={listed}
+        asset={site}
         reveal={reveal}
         onOpenTrace={onOpenTrace}
       />,
@@ -449,6 +450,21 @@ describe("ListedStep", () => {
     expect(
       screen.queryByRole("link", { name: /Set up the opening offer/ }),
     ).toBeNull();
+  });
+
+  it.each([
+    ["before its launch: a preview", null, "Preview the site page"],
+    ["once launched: public", "2026-10-20T15:00:00Z", "See the public page"],
+  ])("links to the site page, %s", async (_when, ipoAt, name) => {
+    motion = stubMotion();
+    renderListed(false, vi.fn(), () => json(NEEDS_VERIFYING), {
+      ...listed,
+      ipo_at: ipoAt,
+    });
+    expect(await screen.findByRole("link", { name })).toHaveAttribute(
+      "href",
+      expect.stringContaining(ASSET_ID),
+    );
   });
 
   it("goes straight to the offer once verified", async () => {

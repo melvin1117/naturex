@@ -142,16 +142,17 @@ class _Area:
 
 
 def visible_to(actor: Actor | None, asset: Asset) -> bool:
-    """Listed and suspended assets are public; any other status only to the listing's community
-    members and same-world admins. The rule is the policy's (`authz.can_see`), which already
-    answers 404 to anyone else for every action on the asset; handlers re-check with this."""
+    """Public assets (`lifecycle.is_public`) to anyone; any other only to the listing's
+    community members and same-world admins. The rule is the policy's
+    (`authz.can_see`), which already answers 404 to anyone else for every action on the asset;
+    handlers re-check with this."""
     return can_see(actor, asset_ref_of(asset))
 
 
-def audience(asset: Asset, status: AssetStatus | None = None) -> UUID | None:
-    """Who may receive live events about the asset in `status` (default: its current one):
-    everyone for a public asset, else its community's members and same-world admins."""
-    if is_public(status or asset.status):
+def audience(asset: Asset) -> UUID | None:
+    """Who may receive live events about the asset: everyone for a public asset, else its
+    community's members and same-world admins."""
+    if is_public(asset.status, asset.ipo_at):
         return None
     return asset.community_id or ADMINS_ONLY
 

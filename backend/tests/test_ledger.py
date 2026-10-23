@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Iterator
 from dataclasses import replace
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -321,7 +321,8 @@ def _sandbox_asset(session: Session, client: TestClient, persona_key: str) -> uu
         geojson={"type": "Polygon", "coordinates": []},
         area_ha=Decimal("500.00"),
         primary_shares_remaining=490_000,
-        status=AssetStatus.LISTED,  # public, so its ledger is readable (T58)
+        status=AssetStatus.LISTED,
+        ipo_at=datetime.now(UTC),  # launched, so it's public and its ledger readable (T58)
     )
     session.add(asset)
     session.commit()

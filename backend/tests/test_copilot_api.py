@@ -253,8 +253,15 @@ def _first_community_asset(session: Session, world: World) -> Asset:
 
 
 @requires_db
-def test_a_listing_under_review_is_retrieved_only_by_its_community_and_admins(
-    client: TestClient, session: Session
+@pytest.mark.parametrize(
+    "private",
+    [
+        pytest.param({"status": AssetStatus.NEEDS_EVIDENCE}, id="under-review"),
+        pytest.param({"status": AssetStatus.LISTED, "ipo_at": None}, id="listed-not-launched"),
+    ],
+)
+def test_a_private_listing_is_retrieved_only_by_its_community_and_admins(
+    client: TestClient, session: Session, private: dict[str, Any]
 ) -> None:
     world = create_world(session)
     hidden = _first_community_asset(session, world)
@@ -270,9 +277,7 @@ def test_a_listing_under_review_is_retrieved_only_by_its_community_and_admins(
             severity=3,
         )
     )
-    session.execute(
-        update(Asset).where(col(Asset.id) == hidden.id).values(status=AssetStatus.NEEDS_EVIDENCE)
-    )
+    session.execute(update(Asset).where(col(Asset.id) == hidden.id).values(**private))
     session.commit()
     question = "Was a pipeline route approved through the reserve?"
 

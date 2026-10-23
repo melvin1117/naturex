@@ -177,7 +177,9 @@ export function ListedStep({
           />
         )}
         <Button asChild variant="outline">
-          <Link href={assetHref(asset.id)}>See the public page</Link>
+          <Link href={assetHref(asset.id)}>
+            {asset.ipo_at ? "See the public page" : "Preview the site page"}
+          </Link>
         </Button>
         <Button asChild variant="ghost">
           <Link href={stewardHomeHref(community.id)}>Community home</Link>

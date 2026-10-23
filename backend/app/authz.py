@@ -171,9 +171,10 @@ class AssetRef:
     asset_id: UUID
     community_id: UUID | None
     public: bool
-    """Listed or suspended (T58). A listing under review is visible only to its community and
-    same-world admins; every action on it is `not_found` for anyone else. No default: every
-    loader sets it from the asset's status (`asset_ref_in`, `asset_ref_of`)."""
+    """Listed or suspended, and launched (`lifecycle.is_public`). Any other listing is visible
+    only to its community and same-world admins; every action on it is `not_found` for anyone
+    else. No default: every loader sets it from the asset's status and launch (`asset_ref_in`,
+    `asset_ref_of`)."""
 
 
 @dataclass(frozen=True)
@@ -225,9 +226,10 @@ def _community_of(resource: Resource) -> UUID | None:
 
 
 def can_see(actor: Actor | None, asset: AssetRef) -> bool:
-    """T58's visibility rule, in one place: a public (listed or suspended) asset is visible; a
-    listing under review only to its community's members and same-world admins. Which world a
-    caller may read is `authorize`'s first check, not this one."""
+    """T58's visibility rule, in one place: a public asset (listed or suspended, and launched:
+    `lifecycle.is_public`) is visible; any other listing only to its community's members and
+    same-world admins. Which world a caller may read is `authorize`'s first check, not this
+    one."""
     if asset.public:
         return True
     if actor is None or asset.world_id != actor.world_id:
@@ -485,19 +487,21 @@ def asset_ref(
 def asset_ref_in(session: Session, world_id: UUID, asset_id: UUID) -> AssetRef | None:
     """`asset_ref` for an ID that doesn't come from the path (a request body or query)."""
     found = session.exec(
-        select(Asset.id, Asset.community_id, Asset.status).where(
+        select(Asset.id, Asset.community_id, Asset.status, Asset.ipo_at).where(
             Asset.world_id == world_id, Asset.id == asset_id
         )
     ).first()
     if found is None:
         return None
-    asset_id, community_id, asset_status = found
-    return AssetRef(world_id, asset_id, community_id, public=is_public(AssetStatus(asset_status)))
+    asset_id, community_id, asset_status, ipo_at = found
+    public = is_public(AssetStatus(asset_status), ipo_at)
+    return AssetRef(world_id, asset_id, community_id, public=public)
 
 
 def asset_ref_of(asset: Asset) -> AssetRef:
-    """The policy's view of a loaded asset (its visibility from its status)."""
-    return AssetRef(asset.world_id, asset.id, asset.community_id, public=is_public(asset.status))
+    """The policy's view of a loaded asset (its visibility from its status and launch)."""
+    public = is_public(asset.status, asset.ipo_at)
+    return AssetRef(asset.world_id, asset.id, asset.community_id, public=public)
 
 
 @dataclass(frozen=True)

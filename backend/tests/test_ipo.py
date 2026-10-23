@@ -350,9 +350,10 @@ def test_only_the_owner_previews_or_launches(world: World_) -> None:
     asset = listed(world)
     for user, status_code, detail in [
         (world.steward, 403, "owner_only"),
-        (world.outsider, 403, "owner_only"),
-        (world.other_steward, 403, "owner_only"),
         (world.admin, 403, "owner_only"),
+        # Before its launch the listing doesn't exist for anyone outside its community.
+        (world.outsider, 404, "not_found"),
+        (world.other_steward, 404, "not_found"),
     ]:
         for response in (preview(world, asset["id"], user), launch_ipo(world, asset["id"], user)):
             assert (response.status_code, response.json()["detail"]) == (status_code, detail)
@@ -377,11 +378,12 @@ def test_the_launch_prices_seeds_the_stake_records_and_opens_the_float(world: Wo
     asset = listed(world)
     asset_id = UUID(asset["id"])
     shown = preview(world, asset["id"], total_shares=2_000_000, retained_pct="40").json()
-    card_before = next(
-        c for c in client_as(world, world.outsider).get("/assets").json() if c["id"] == asset["id"]
-    )
-    assert (card_before["trading"], card_before["price"]) == (False, None)
-    detail_before = client_as(world, world.outsider).get(f"/assets/{asset['id']}").json()
+    # Not launched yet: private to its community (and admins), so an outsider sees nothing.
+    outsider = client_as(world, world.outsider)
+    assert asset["id"] not in {c["id"] for c in outsider.get("/assets").json()}
+    assert outsider.get(f"/assets/{asset['id']}").status_code == 404
+    detail_before = client_as(world, world.owner).get(f"/assets/{asset['id']}").json()
+    assert (detail_before["trading"], detail_before["price"]) == (False, None)
     assert (detail_before["total_shares"], detail_before["retained_pct"]) == (None, None)
     assert (detail_before["ipo_at"], detail_before["primary_shares_remaining"]) == (None, 0)
 
@@ -452,7 +454,6 @@ def test_the_launch_prices_seeds_the_stake_records_and_opens_the_float(world: Wo
     assert tick.payload == {"asset_id": asset["id"], "price": shown["ipo_price"], "reason": "ipo"}
     assert_conserved(world.session, asset_id)
 
-    outsider = client_as(world, world.outsider)
     card = next(c for c in outsider.get("/assets").json() if c["id"] == asset["id"])
     assert (card["trading"], card["price"], card["price_change_pct"]) == (
         True,
@@ -576,10 +577,12 @@ def test_orders_need_a_launched_listed_asset(world: World_) -> None:
     asset_id = UUID(asset["id"])
     quote_url = f"/assets/{asset['id']}/quote?side=buy&qty=10"
     refused = buy(world, asset["id"], 10)
-    assert (refused.status_code, refused.json()["detail"]) == (409, "not_trading")
-    # Anonymous visitors read the live world (T73), where this sandbox asset doesn't exist.
+    assert (refused.status_code, refused.json()["detail"]) == (404, "not_found")
+    # Anonymous visitors read the live world (T73), where this sandbox asset doesn't exist; an
+    # outsider in the world doesn't see it either until it launches.
     assert client_as(world, None).get(quote_url).status_code == 404
-    quoted = client_as(world, world.outsider).get(quote_url)
+    assert client_as(world, world.outsider).get(quote_url).status_code == 404
+    quoted = client_as(world, world.steward).get(quote_url)
     assert (quoted.status_code, quoted.json()["detail"]) == (409, "not_trading")
 
     assert launch_ipo(world, asset["id"]).status_code == 201

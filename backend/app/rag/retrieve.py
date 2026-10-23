@@ -32,7 +32,8 @@ def visible_assets(
     """Assets in `world_id` the actor may see: just `asset_id` when given."""
     # Only what visibility and chunk text need: never the (large) boundary GeoJSON.
     columns = [
-        getattr(Asset, name) for name in ("id", "world_id", "name", "status", "community_id")
+        getattr(Asset, name)
+        for name in ("id", "world_id", "name", "status", "ipo_at", "community_id")
     ]
     query = select(Asset).options(load_only(*columns)).where(Asset.world_id == world_id)
     if asset_id is not None:

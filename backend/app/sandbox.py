@@ -68,7 +68,7 @@ from app.models import (
 )
 from app.seed import LIVE_LABEL, LIVE_WORLD_ID, seed
 from app.seed import WORLD_ID as TEMPLATE_WORLD_ID
-from app.services.lifecycle import PUBLIC_STATUSES
+from app.services.visibility import public_assets
 from app.worlds import PROTECTED_WORLDS
 
 log = logging.getLogger(__name__)
@@ -456,7 +456,7 @@ def world_contents(session: Session, world_id: UUID) -> tuple[list[User], list[A
     # Public listings only (T58): drafts and listings under review belong to their community.
     assets = session.exec(
         select(Asset)
-        .where(Asset.world_id == world_id, col(Asset.status).in_(PUBLIC_STATUSES))
+        .where(Asset.world_id == world_id, public_assets())
         .order_by(col(Asset.site_key))
     ).all()
     return list(users), list(assets)

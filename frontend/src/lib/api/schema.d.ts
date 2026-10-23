@@ -231,7 +231,7 @@ export interface paths {
         };
         /**
          * List Assets
-         * @description Marketplace cards for the world's public assets: listed and suspended (T58).
+         * @description Marketplace cards for the world's public assets: listed or suspended, and launched.
          */
         get: operations["list_assets_assets_get"];
         put?: never;
@@ -240,7 +240,7 @@ export interface paths {
          * @description Create a **draft** listing in a community the caller owns or stewards, in the session's
          *     world. Needs `attestation: true`; the polygon must pass T36's checks and not overlap a
          *     submitted listing in the world or one of the community's own drafts. Nothing is public
-         *     until it's listed.
+         *     until it's listed and its opening offer launched (`lifecycle.is_public`).
          */
         post: operations["create_listing_assets_post"];
         delete?: never;
@@ -258,10 +258,10 @@ export interface paths {
         };
         /**
          * List Outlines
-         * @description The boundaries of the world's public sites (listed and suspended), simplified on the
-         *     server to at most 200 corners each, for the listing map's outlines and overlap hint (T33).
-         *     Only a hint: T36's overlap check on create and submit is what decides, and it also counts
-         *     listings under review, which stay private here.
+         * @description The boundaries of the world's public sites (listed or suspended, and launched),
+         *     simplified on the server to at most 200 corners each, for the listing map's outlines and
+         *     overlap hint (T33). Only a hint: T36's overlap check on create and submit is what decides,
+         *     and it also counts private listings (under review, or not launched yet).
          */
         get: operations["list_outlines_assets_outlines_get"];
         put?: never;
@@ -2004,7 +2004,7 @@ export interface components {
             land_cover_overlay?: components["schemas"]["LandCoverOverlay"] | null;
             /**
              * Latest Run Id
-             * @description A listing under review's latest rating run (follow it with `GET /runs/{id}`), for its community's members and same-world admins, who alone can load it (T33). Null for public (listed or suspended) assets and before any run.
+             * @description A private listing's latest rating run (follow it with `GET /runs/{id}`): under review, or listed but not launched yet, for its community's members and same-world admins, who alone can load it (T33). Null for public (launched) assets and before any run.
              */
             latest_run_id?: string | null;
         };

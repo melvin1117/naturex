@@ -85,6 +85,7 @@ from app.services.listings import (
     update_draft,
 )
 from app.services.rating_runs import AssetInfo, AssetNotRateable, RatingRunner, news_runner
+from app.services.visibility import public_assets
 from app.tools.earth_obs import (
     Centroid,
     DateWindow,
@@ -295,8 +296,11 @@ def test_gate_is_read_from_the_sealed_report_snapshot() -> None:
             gate_from_report(broken)
 
 
-def test_only_listed_and_suspended_assets_are_public() -> None:
-    assert {status for status in AssetStatus if is_public(status)} == {S.LISTED, S.SUSPENDED}
+def test_only_launched_listed_and_suspended_assets_are_public() -> None:
+    launched = datetime(2026, 10, 1, tzinfo=UTC)
+    assert {s for s in AssetStatus if is_public(s, launched)} == {S.LISTED, S.SUSPENDED}
+    # Listed but not launched (waiting for verification or its IPO) stays with its community.
+    assert not any(is_public(s, None) for s in AssetStatus)
 
 
 # ----- the service and the API (DB) ---------------------------------------------------------------
@@ -506,6 +510,34 @@ def status_of(w: World_, asset_id: str | UUID) -> tuple[AssetStatus, str | None]
     w.session.expire_all()
     asset = w.session.get_one(Asset, UUID(str(asset_id)))
     return asset.status, asset.status_reason
+
+
+def launch(w: World_, asset_id: str | UUID) -> None:
+    """Open a listed asset on the exchange (its IPO's `ipo_at`): only then is it public."""
+    w.session.expire_all()
+    asset = w.session.get_one(Asset, UUID(str(asset_id)))
+    asset.ipo_at = datetime.now(UTC)
+    w.session.add(asset)
+    w.session.commit()
+
+
+@requires_db
+def test_the_query_filter_and_the_rule_agree_on_who_sees_an_asset(world: World_) -> None:
+    """`public_assets()` is `is_public` in SQL, for every status, launched or not: two encodings
+    of one visibility rule must not drift."""
+    asset_id = UUID(draft(world)["id"])
+    launched = datetime.now(UTC)
+    for status in AssetStatus:
+        for ipo_at in (None, launched):
+            row = world.session.get_one(Asset, asset_id)
+            row.status, row.ipo_at = status, ipo_at
+            world.session.add(row)
+            world.session.flush()
+            found = world.session.exec(
+                select(Asset.id).where(col(Asset.id) == asset_id, public_assets())
+            ).first()
+            assert (found is not None) == is_public(status, ipo_at), (status, ipo_at)
+    world.session.rollback()
 
 
 def submit(w: World_, asset_id: str | UUID, user: User | None = None) -> Any:
@@ -822,17 +854,37 @@ def test_submit_rates_the_listing_and_the_gate_lists_it(world: World_) -> None:
     world.executor.run_all()
 
     assert status_of(world, asset["id"]) == (AssetStatus.LISTED, None)
+    # Listed but not launched: private to its community until its IPO (ADR-0006).
     client = client_as(world, world.outsider)
-    detail = client.get(f"/assets/{asset['id']}").json()
+    assert client.get(f"/assets/{asset['id']}").status_code == 404
+    assert asset["id"] not in {c["id"] for c in client.get("/assets").json()}
+    assert client.get(f"/runs/{run_id}").status_code == 404
+    member = client_as(world, world.steward)
+    detail = member.get(f"/assets/{asset['id']}").json()
     report = detail["latest_report"]
+    hidden = [
+        f"/assets/{asset['id']}/reports",
+        f"/assets/{asset['id']}/prices",
+        f"/assets/{asset['id']}/verification",
+        f"/assets/{asset['id']}/evidence/summary",
+        f"/assets/{asset['id']}/overlay.png",
+        f"/ledger/{asset['id']}",
+        f"/ledger/{asset['id']}/verify",
+        f"/reports/{report['id']}",
+        f"/runs/{run_id}/trace",
+        f"/admin/trace?asset_id={asset['id']}",
+    ]
+    for viewer in (client, client_as(world, None)):
+        for path in hidden:
+            got = viewer.get(path)
+            assert (got.status_code, got.json()["detail"]) == (404, "not_found"), path
+        world_assets = {a["id"] for a in viewer.get("/world").json()["assets"]}
+        assert world_assets and asset["id"] not in world_assets
     assert report["version"] == 1 and report["run_id"] == run_id
     assert report["data_version"].startswith("mock-")
     assert "mock_metrics" in [flag["type"] for flag in report["flags"]]
     assert detail["mock"] is True
-    card = next(c for c in client.get("/assets").json() if c["id"] == asset["id"])
-    assert card["mock"] is True
-    assert all(not c["mock"] for c in client.get("/assets").json() if c["id"] != asset["id"])
-    run = client.get(f"/runs/{run_id}").json()  # public now
+    run = member.get(f"/runs/{run_id}").json()
     assert run["trigger"] == "listing" and run["status"] in {"succeeded", "degraded"}
 
     entries = listing_entries(world, asset["id"])
@@ -858,11 +910,17 @@ def test_submit_rates_the_listing_and_the_gate_lists_it(world: World_) -> None:
         ("rated", "listed"),
     ]
     scopes = [e.audience_community_id for e in events]
-    assert scopes == [world.community_id, world.community_id, None]  # public once listed
+    assert scopes == [world.community_id] * 3  # public only once launched
     # Listed but no IPO yet (T59): no price, so it can't be traded.
     assert detail["price"] is None
     order = client.post("/orders", json={"asset_id": asset["id"], "side": "buy", "qty": 1})
-    assert order.status_code in (401, 409)
+    assert order.status_code == 404
+
+    launch(world, asset["id"])
+    card = next(c for c in client.get("/assets").json() if c["id"] == asset["id"])
+    assert card["mock"] is True
+    assert all(not c["mock"] for c in client.get("/assets").json() if c["id"] != asset["id"])
+    assert client.get(f"/runs/{run_id}").status_code == 200  # public now
 
 
 @requires_db
@@ -1623,6 +1681,12 @@ def test_a_public_asset_never_shows_a_run(world: World_) -> None:
     run_id = submit(world, asset["id"]).json()["run_id"]
     world.executor.run_all()
     assert status_of(world, asset["id"])[0] is AssetStatus.LISTED
+    # Listed but not launched: still private, so its community and admins see the run.
+    for user in (world.steward, world.admin):
+        detail = client_as(world, user).get(f"/assets/{asset['id']}").json()
+        assert detail["latest_run_id"] == run_id
+    assert client_as(world, world.outsider).get(f"/runs/{run_id}").status_code == 404
+    launch(world, asset["id"])
     for user in (world.steward, world.admin, world.outsider):
         detail = client_as(world, user).get(f"/assets/{asset['id']}").json()
         assert detail["latest_run_id"] is None
@@ -1644,6 +1708,9 @@ def test_outlines_show_public_sites_of_the_callers_world_only(
 
     submit(world, asset["id"])
     world.executor.run_all()
+    listed_only = client_as(world, world.outsider).get("/assets/outlines").json()["outlines"]
+    assert asset["id"] not in [o["id"] for o in listed_only]  # not launched: still private
+    launch(world, asset["id"])
     for user in (world.steward, world.outsider):
         body_ = client_as(world, user).get("/assets/outlines").json()
         mine = next(o for o in body_["outlines"] if o["id"] == asset["id"])
@@ -1682,6 +1749,7 @@ def test_a_card_carries_its_stored_boundary_outline(
     assert mine.json()[0]["outline"] == outline
     submit(world, asset["id"])
     world.executor.run_all()
+    launch(world, asset["id"])
     client = client_as(world, world.outsider)
     cards_ = client.get("/assets").json()
     assert next(c for c in cards_ if c["id"] == asset["id"])["outline"] == outline

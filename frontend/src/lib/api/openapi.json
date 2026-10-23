@@ -563,7 +563,7 @@
           "assets"
         ],
         "summary": "List Assets",
-        "description": "Marketplace cards for the world's public assets: listed and suspended (T58).",
+        "description": "Marketplace cards for the world's public assets: listed or suspended, and launched.",
         "operationId": "list_assets_assets_get",
         "responses": {
           "200": {
@@ -587,7 +587,7 @@
           "listings"
         ],
         "summary": "Create Listing",
-        "description": "Create a **draft** listing in a community the caller owns or stewards, in the session's\nworld. Needs `attestation: true`; the polygon must pass T36's checks and not overlap a\nsubmitted listing in the world or one of the community's own drafts. Nothing is public\nuntil it's listed.",
+        "description": "Create a **draft** listing in a community the caller owns or stewards, in the session's\nworld. Needs `attestation: true`; the polygon must pass T36's checks and not overlap a\nsubmitted listing in the world or one of the community's own drafts. Nothing is public\nuntil it's listed and its opening offer launched (`lifecycle.is_public`).",
         "operationId": "create_listing_assets_post",
         "requestBody": {
           "content": {
@@ -634,7 +634,7 @@
           "assets"
         ],
         "summary": "List Outlines",
-        "description": "The boundaries of the world's public sites (listed and suspended), simplified on the\nserver to at most 200 corners each, for the listing map's outlines and overlap hint (T33).\nOnly a hint: T36's overlap check on create and submit is what decides, and it also counts\nlistings under review, which stay private here.",
+        "description": "The boundaries of the world's public sites (listed or suspended, and launched),\nsimplified on the server to at most 200 corners each, for the listing map's outlines and\noverlap hint (T33). Only a hint: T36's overlap check on create and submit is what decides,\nand it also counts private listings (under review, or not launched yet).",
         "operationId": "list_outlines_assets_outlines_get",
         "responses": {
           "200": {
@@ -5362,7 +5362,7 @@
               }
             ],
             "title": "Latest Run Id",
-            "description": "A listing under review's latest rating run (follow it with `GET /runs/{id}`), for its community's members and same-world admins, who alone can load it (T33). Null for public (listed or suspended) assets and before any run."
+            "description": "A private listing's latest rating run (follow it with `GET /runs/{id}`): under review, or listed but not launched yet, for its community's members and same-world admins, who alone can load it (T33). Null for public (launched) assets and before any run."
           }
         },
         "type": "object",
