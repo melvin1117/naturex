@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Bot, MapPin, MessageCircle } from "lucide-react";
+import { ArrowLeft, MapPin, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -24,6 +24,7 @@ import { TradePanel } from "@/components/proto/trade-panel";
 import { VerificationBadge } from "@/components/proto/verification";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RatingTraceCard } from "@/components/trace/rating-trace-card";
 import {
   date,
   GRADE_LABEL,
@@ -325,6 +326,10 @@ export function PrototypeAssetView({ id }: { id: string }) {
 
           <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
             <TradePanel site={site} />
+            <RatingTraceCard
+              onOpen={lastRun ? () => openTrace(lastRun.id) : undefined}
+              tourAnchor="trace-button"
+            />
             <section className="rounded-3xl bg-card p-6 shadow-soft">
               <h2 className="text-base font-semibold">Ask about this site</h2>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -340,16 +345,6 @@ export function PrototypeAssetView({ id }: { id: string }) {
                   <MessageCircle aria-hidden="true" />
                   Open Copilot
                 </Button>
-                {lastRun && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => openTrace(lastRun.id)}
-                  >
-                    <Bot aria-hidden="true" />
-                    How it was rated
-                  </Button>
-                )}
               </div>
             </section>
             {siteAlerts.length > 0 && (

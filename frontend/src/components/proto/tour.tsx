@@ -276,13 +276,14 @@ export const TOUR_STEPS: TourStep[] = [
     chapter: 10,
     chapterTitle: "Under the hood",
     title: "Open the Agent Trace",
-    why: "Judges can see exactly how Nemotron is used, step by step.",
-    tech: "Every model call is logged with model, tokens, latency and cost, and counts against the LLM budget.",
+    why: "Every site shows how the AI rated it, so judges can see exactly how Nemotron is used, step by step.",
+    tech: "Every model call is logged with model, tokens, latency and cost, and counts against the LLM budget. The AI at work page shows them all.",
     route: `/asset/${HERO_ID}`,
     persona: "investor",
     target: "trace-button",
+    onEnter: ensureListed,
     doLabel: "Open the trace",
-    doIt: (c) => c.openTrace(),
+    doIt: () => clickTarget("trace-button"),
   },
 ];
 

@@ -42,7 +42,7 @@ const STEWARD_HOME = APPS.steward.href;
  * The shell header of the Exchange, the Steward app and the control room (T62). Navigation
  * follows the signed-in account's roles (`useAppAccess`); from `lg` down, the pages, the app
  * switcher and the community switcher move into a menu sheet. `tools` holds app-specific
- * buttons (today the prototype's Copilot, Agent Trace and alerts).
+ * buttons (today the Copilot and alerts; the Agent Trace opens from a site's page).
  */
 export function AppHeader({ app, tools }: { app: AppKey; tools?: ReactNode }) {
   const pathname = usePathname();

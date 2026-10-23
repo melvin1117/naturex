@@ -28,6 +28,7 @@ export const APP_NAV: Record<AppKey, NavItem[]> = {
   exchange: [
     { href: "/", label: "Marketplace", tour: "nav-marketplace" },
     { href: "/portfolio", label: "Your stakes", tour: "nav-portfolio" },
+    { href: "/ai", label: "AI at work" },
   ],
   steward: [
     { href: "/steward", label: "Community home" },

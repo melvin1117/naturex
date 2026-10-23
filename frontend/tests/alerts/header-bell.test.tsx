@@ -84,6 +84,8 @@ describe("Header bell, signed in (#199)", () => {
     const bell = await screen.findByRole("button", {
       name: "Alerts, 2 unread",
     });
+    // The Agent Trace opens from a site's page and "AI at work", not the header.
+    expect(screen.queryByRole("button", { name: "Agent Trace" })).toBeNull();
     fireEvent.click(bell);
 
     const popover = await screen.findByRole("dialog", { name: "Your alerts" });
@@ -342,6 +344,7 @@ describe("Header bell, anonymous prototype", () => {
         document.querySelector("[data-tour='alerts-bell']"),
       ).not.toBeDisabled(),
     );
+    expect(screen.queryByRole("button", { name: "Agent Trace" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Add scripted alert" }));
 
     // The scripted bell is unchanged (its visible badge adds to its name).
