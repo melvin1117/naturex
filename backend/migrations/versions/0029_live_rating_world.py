@@ -1,10 +1,14 @@
 """Live ratings in demo sandboxes: `live_rating_requests.world_id`.
 
-Sandboxes now compute new polygons live too, against their own daily allowance
-(`SANDBOX_LIVE_RATINGS_PER_DAY`, every sandbox together), so the live world's
-(`LIVE_RATINGS_GLOBAL_PER_DAY`) counts only its own rows. Each row records the submitter's world,
+Sandboxes now compute new polygons live too, against their own daily allowances (per sandbox,
+`SANDBOX_LIVE_RATINGS_PER_WORLD_PER_DAY`, and every sandbox together,
+`SANDBOX_LIVE_RATINGS_PER_DAY`), so the live world's (`LIVE_RATINGS_GLOBAL_PER_DAY`) counts only
+its own rows. Each row records the submitter's world,
 with no foreign key: rows outlive pruned sandboxes, so a prune never frees quota. Until now only
-the live world counted live ratings, so existing rows are backfilled with its ID.
+the live world counted live ratings, so existing rows are backfilled with its ID, and the column
+keeps that server default for this release: an API process still running the code from before
+0029 (which inserts no `world_id`, and counts the live world only) keeps working after
+`alembic upgrade head`. A later migration drops the default.
 
 Revision ID: 0029
 Revises: 0028
@@ -31,7 +35,6 @@ def upgrade() -> None:
             "world_id", sa.Uuid(), nullable=False, server_default=sa.text(f"'{_LIVE_WORLD_ID}'")
         ),
     )
-    op.alter_column("live_rating_requests", "world_id", server_default=None)
 
 
 def downgrade() -> None:

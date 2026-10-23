@@ -34,7 +34,12 @@ from sqlmodel import Session, col, select
 
 from app.models import AssetView
 from app.services.earth_obs_live import LIVE_DATA_VERSION, LiveEarthObs, loggable
-from app.services.land_cover_overlays import OverlayJob, geometry_bounds
+from app.services.land_cover_overlays import (
+    SANDBOX_RENDERS_MAX_PENDING,
+    OverlayJob,
+    RenderLane,
+    geometry_bounds,
+)
 from app.tools.geometry import geometry_sha256, outline_rings
 from app.tools.site_images import (
     MAX_IMAGE_BYTES,
@@ -236,20 +241,26 @@ class LiveSiteViews:
 
 
 def build_live_views(
-    session_factory: Callable[[], Session], live: LiveEarthObs | None
+    session_factory: Callable[[], Session], live: LiveEarthObs | None, lane: RenderLane = "live"
 ) -> LiveSiteViews | None:
     """Views for live ratings, on the live metrics' Earth Engine client; None when live Earth
-    Engine is off (no render, no network call)."""
+    Engine is off (no render, no network call). The sandboxes' `lane` has its own worker and
+    `SANDBOX_RENDERS_MAX_PENDING`."""
     if live is None:
         return None
     from app.tools.earth_engine import AFTER_WINDOW, BEFORE_WINDOW, EarthEngineApi
 
     if not isinstance(live.client, EarthEngineApi):
         return None
+    sandbox = lane == "sandbox"
     return LiveSiteViews(
         session_factory=session_factory,
         client=live.client,
         before=BEFORE_WINDOW,
         after=AFTER_WINDOW,
         timeout_s=min(VIEWS_TIMEOUT_S, live.timeout_s),
+        max_pending=SANDBOX_RENDERS_MAX_PENDING if sandbox else VIEWS_MAX_PENDING,
+        executor=ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="site-views-sandbox" if sandbox else "site-views"
+        ),
     )

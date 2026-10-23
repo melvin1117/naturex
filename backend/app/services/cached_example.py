@@ -1,8 +1,9 @@
 """The demo-world "cached example" (T60).
 
 In a demo sandbox, a new listing waiting in `rating` for satellite metrics (none: live Earth
-Engine is off or `SANDBOX_LIVE_RATINGS_PER_DAY=0`, or a failed live computation) is pointed by
-`AssetDetail` to the nearest precomputed demo site of the same world, with an explicit notice.
+Engine is off, the sandbox's live rating was refused by a hidden guardrail, or a live
+computation failed) is pointed by `AssetDetail` to the nearest precomputed demo site of the same
+world, with an explicit notice.
 It is shown next to the listing, never as its data: the listing keeps no report and stays in
 `rating`. Never in the live world.
 """

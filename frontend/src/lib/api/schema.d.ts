@@ -484,9 +484,10 @@ export interface paths {
          * @description Submit a draft for rating, or resubmit: a `needs_evidence` listing with new evidence or
          *     newer satellite data, or a `rating` listing whose run failed (at most every 10 minutes).
          *     A new polygon's metrics are computed live on Earth Engine when that is on (T60), in the live
-         *     world and in demo sandboxes alike; such a submit counts against the live-rating quotas (a
-         *     sandbox's against an allowance of its own, shared by all sandboxes), while a polygon already
-         *     computed is free.
+         *     world and in demo sandboxes alike; such a submit counts against the live-rating quotas,
+         *     while a polygon already computed is free. In a sandbox the quotas and the area cap are
+         *     hidden guardrails: past them the submit still succeeds and the run falls back (mocks, or
+         *     the cached example) instead of computing.
          *     The move to `rating`, its ledger entry and the queued run commit together; the run's
          *     sealed report then sets `listed`, `needs_evidence` or `ineligible`. Follow it with
          *     `GET /runs/{run_id}` or `listing_status` events.
@@ -6331,7 +6332,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description `cannot_submit_<status>`, `overlap` (a listing submitted first claims the land), `evidence_required` (needs_evidence with no new evidence or newer data), `metrics_unavailable` (still no metrics for the polygon), `live_area_too_large` (too large to compute its satellite metrics live) or `run_in_progress` (Location: the active run) */
+            /** @description `cannot_submit_<status>`, `overlap` (a listing submitted first claims the land), `evidence_required` (needs_evidence with no new evidence or newer data), `metrics_unavailable` (still no metrics for the polygon), `live_area_too_large` (live world: too large to compute its satellite metrics live) or `run_in_progress` (Location: the active run) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6347,7 +6348,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description `resubmit_cooldown`, `rating_rate_limited`, `rating_global_limit`, or, when the run must compute the polygon's satellite metrics live, `live_rating_quota` (per account per day) or `live_rating_global_limit` (the live world's daily allowance, or in a demo sandbox all sandboxes' together); see Retry-After */
+            /** @description `resubmit_cooldown`, `rating_rate_limited`, `rating_global_limit`, or, in the live world when the run must compute the polygon's satellite metrics live, `live_rating_quota` (per account per day) or `live_rating_global_limit` (the live world's daily allowance); see Retry-After */
             429: {
                 headers: {
                     [name: string]: unknown;

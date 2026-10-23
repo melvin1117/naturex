@@ -133,6 +133,9 @@ class Settings(BaseSettings):
     # Live ratings across all demo sandboxes together, rolling 24 hours: a separate allowance, so
     # sandboxes never use up the live world's. 0 = sandboxes never compute (cache or fallback).
     sandbox_live_ratings_per_day: int = Field(default=20, ge=0)
+    # ...and per sandbox (its personas together; resets and prunes don't free it), so one visitor
+    # can't drain the shared allowance. Past either, a sandbox falls back silently, never a 429.
+    sandbox_live_ratings_per_world_per_day: int = Field(default=3, ge=0)
 
     @classmethod
     def settings_customise_sources(

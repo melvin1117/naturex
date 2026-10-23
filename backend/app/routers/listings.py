@@ -58,7 +58,6 @@ from app.services.listings import (
     RUN_IN_PROGRESS,
     ListingDetails,
     ListingLimitReached,
-    ListingSubmit,
     NoChanges,
     PolygonRejected,
     TooSoon,
@@ -262,15 +261,14 @@ def edit_listing(
             "description": f"`cannot_submit_<status>`, `{OVERLAP}` (a listing submitted first "
             f"claims the land), `{EVIDENCE_REQUIRED}` (needs_evidence with no new evidence or "
             f"newer data), `{METRICS_UNAVAILABLE}` (still no metrics for the polygon), "
-            f"`{LIVE_AREA_TOO_LARGE}` (too large to compute its satellite metrics live) or "
-            f"`{RUN_IN_PROGRESS}` (Location: the active run)"
+            f"`{LIVE_AREA_TOO_LARGE}` (live world: too large to compute its satellite metrics "
+            f"live) or `{RUN_IN_PROGRESS}` (Location: the active run)"
         },
         429: {
             "description": "`resubmit_cooldown`, `rating_rate_limited`, `rating_global_limit`, "
-            "or, when the run must compute the polygon's satellite metrics live, "
-            "`live_rating_quota` (per account per day) or `live_rating_global_limit` (the live "
-            "world's daily allowance, or in a demo sandbox all sandboxes' together); see "
-            "Retry-After"
+            "or, in the live world when the run must compute the polygon's satellite metrics "
+            "live, `live_rating_quota` (per account per day) or `live_rating_global_limit` (the "
+            "live world's daily allowance); see Retry-After"
         },
         503: {"description": "`rating_busy`; see Retry-After"},
     },
@@ -281,19 +279,19 @@ def submit_listing(
     """Submit a draft for rating, or resubmit: a `needs_evidence` listing with new evidence or
     newer satellite data, or a `rating` listing whose run failed (at most every 10 minutes).
     A new polygon's metrics are computed live on Earth Engine when that is on (T60), in the live
-    world and in demo sandboxes alike; such a submit counts against the live-rating quotas (a
-    sandbox's against an allowance of its own, shared by all sandboxes), while a polygon already
-    computed is free.
+    world and in demo sandboxes alike; such a submit counts against the live-rating quotas,
+    while a polygon already computed is free. In a sandbox the quotas and the area cap are
+    hidden guardrails: past them the submit still succeeds and the run falls back (mocks, or
+    the cached example) instead of computing.
     The move to `rating`, its ledger entry and the queued run commit together; the run's
     sealed report then sets `listed`, `needs_evidence` or `ineligible`. Follow it with
     `GET /runs/{run_id}` or `listing_status` events."""
     asset = _listing(session, granted)
     world_id, asset_id = asset.world_id, asset.id
-    probe = runner.metrics_probe(asset)  # before any lock; never computes anything
-    if probe.live_compute and not runner.live_area_allowed(asset):
-        raise _refused(LIVE_AREA_TOO_LARGE)
-    live_quota = runner.live_quota(asset, granted.signed_in.user_id) if probe.live_compute else None
-    hook = ListingSubmit(probe.version, live_quota=live_quota)
+    try:
+        hook = runner.listing_submit(asset, granted.signed_in.user_id)  # never computes anything
+    except TransitionRefused as exc:  # `live_area_too_large`
+        raise _refused(exc.code) from None
     # End the read transaction: the runner uses its own session and waits on run locks.
     session.commit()
     try:

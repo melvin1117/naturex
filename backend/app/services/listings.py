@@ -25,6 +25,7 @@ storing a report take the world row (`FOR NO KEY UPDATE`) → the asset → the 
 from __future__ import annotations
 
 import hashlib
+import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -79,6 +80,8 @@ from app.tools.geometry import (
     thumbnail_outline,
 )
 from app.tools.verification import NOT_VERIFIED
+
+log = logging.getLogger(__name__)
 
 STATUS_REASON_MAX = 200
 MAX_OPEN_LISTINGS = 10
@@ -481,9 +484,10 @@ class ListingSubmit:
 
     `metrics_version` is the data version the run's metrics loader has for the listing right
     now (None: nothing), probed by the caller before any lock. `live_quota` is set when the run
-    will compute the metrics live on Earth Engine (T60): the submit then counts one live rating
-    for the account and for its world's pool (the live world, or all sandboxes together), under
-    the runner's global run lock (429 when spent).
+    would compute the metrics live on Earth Engine (T60): the submit then counts one live rating
+    under the runner's global run lock (`reserve_live_rating`). Spent, that is a 429 in the live
+    world; in a sandbox it is a hidden guardrail: nothing is counted and the run falls back as if
+    sandboxes never computed, rated with `fallback_version` (mocks, or None).
     """
 
     def __init__(
@@ -492,30 +496,41 @@ class ListingSubmit:
         now: datetime | None = None,
         *,
         live_quota: LiveQuota | None = None,
+        fallback_version: str | None = None,
     ) -> None:
         self.metrics_version = metrics_version
         self.now = now
         self.live_quota = live_quota
+        self.fallback_version = fallback_version
 
     def lock(self, session: Session, world_id: UUID, asset_id: UUID) -> None:
         """Called before the runner's publisher lock, keeping the module's lock order."""
         lock_listings(session, world_id)
         lock_asset(session, world_id, asset_id)
 
-    def __call__(self, session: Session, asset: Asset, run_id: UUID) -> None:
-        """Raises TransitionRefused (incl. `overlap`) or TooSoon (`resubmit_cooldown`,
-        `live_rating_quota`, `live_rating_global_limit`)."""
+    def __call__(self, session: Session, asset: Asset, run_id: UUID) -> bool:
+        """Returns whether the run may compute live metrics (its live rating was counted).
+        Raises TransitionRefused (incl. `overlap`) or TooSoon (`resubmit_cooldown`, and in the
+        live world `live_rating_quota` or `live_rating_global_limit`)."""
         now = self.now or datetime.now(UTC)
         locked = lock_asset(session, asset.world_id, asset.id)  # already held: no wait
+        quota, refused = self.live_quota, None
+        if quota is not None:  # counted first: a refusal changes a sandbox's metrics version
+            try:
+                reserve_live_rating(session, quota, now, run_id)
+            except LiveQuotaExceeded as exc:
+                refused = exc
+        fall_back = refused is not None and quota is not None and quota.policy.sandbox
+        version = self.fallback_version if fall_back else self.metrics_version
         needs_evidence = locked.status is AssetStatus.NEEDS_EVIDENCE
         step = transition(
             locked.status,
             ListingEvent.SUBMIT,
             has_new_evidence=needs_evidence and has_new_evidence(session, locked),
             has_newer_metrics=needs_evidence
-            and is_newer_data_version(self.metrics_version, report_data_version(session, locked)),
+            and is_newer_data_version(version, report_data_version(session, locked)),
             current_reason=locked.status_reason,
-            metrics_available=self.metrics_version is not None,
+            metrics_available=version is not None,
         )
         wait = cooldown_remaining(locked.submitted_at, now, RESUBMIT_COOLDOWN)
         if wait:
@@ -530,11 +545,10 @@ class ListingSubmit:
             exclude=locked.id,
         ):
             raise TransitionRefused(OVERLAP)
-        if self.live_quota is not None:
-            try:
-                reserve_live_rating(session, self.live_quota, now, run_id)
-            except LiveQuotaExceeded as exc:
-                raise TooSoon(exc.code, exc.retry_after_s) from exc
+        if refused is not None and not fall_back:
+            raise TooSoon(refused.code, refused.retry_after_s) from refused
+        if refused is not None:
+            log.info("sandbox live rating not counted (%s): the run falls back", refused.code)
         locked.submitted_at = now
         payload = _details_payload(locked, full_geometry=True) if from_draft else {}
         record(
@@ -544,6 +558,7 @@ class ListingSubmit:
             payload={**payload, "run_id": str(run_id)},
             event={"run_id": str(run_id)},
         )
+        return quota is not None and refused is None
 
 
 def apply_rating_result(session: Session, asset: Asset, report: Report) -> Transition | None:

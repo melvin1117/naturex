@@ -26,6 +26,8 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
+from app.worlds import LIVE_WORLD_ID
+
 
 def _utcnow() -> datetime:
     """Timezone-aware now(), required by SQLModel for TIMESTAMPTZ columns."""
@@ -889,8 +891,10 @@ class LiveRatingRequest(SQLModel, table=True):
         sa_column=Column(BigInteger, primary_key=True, autoincrement=True),
     )
     user_id: UUID
-    world_id: UUID
-    """The submitter's world, which picks the pool. No foreign key: a row outlives its sandbox."""
+    world_id: UUID = Field(sa_column_kwargs={"server_default": text(f"'{LIVE_WORLD_ID}'")})
+    """The submitter's world: its own cap and its pool. No foreign key, so a row outlives its
+    sandbox. The server default (the live world) only serves processes from before 0029, which
+    counted the live world alone; a later migration drops it."""
     geometry_sha256: str = Field(sa_column=Column(String(64), nullable=False))
     run_id: UUID | None = None
     """The rating run it was counted for; refunded if that run never reached Earth Engine."""
