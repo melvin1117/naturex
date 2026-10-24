@@ -9,6 +9,7 @@ import { WildWorthMark, type MarkReading } from "./wildworth-mark";
 export function Wordmark({ className }: { className?: string }) {
   return (
     <span
+      translate="no"
       className={cn(
         "inline-flex items-baseline leading-none whitespace-nowrap",
         className,

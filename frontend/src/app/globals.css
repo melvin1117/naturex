@@ -333,29 +333,35 @@
   --bea-ground: var(--color-machine-raised);
 }
 
-/* Bea (docs/design/bea-character.html, "Motion"): small, constant life at rest; one clear
-   reaction when a rating changes. Values from the character sheet. */
+/* Bea (docs/design/bea-character.html, "Motion"): small life at rest; one clear reaction
+   when a rating changes. Values from the character sheet. At rest she settles within 5 s of
+   appearing or changing state (WCAG 2.2.2); thinking and waking loop only while the work runs. */
 .bea-anim .bea-bob {
-  animation: bea-bob 3.6s ease-in-out infinite;
+  animation: bea-bob 3.6s ease-in-out 1;
 }
 .bea-anim .eyes {
   transform-box: fill-box;
   transform-origin: center;
-  animation: bea-blink 5s infinite;
+  animation: bea-blink 5s 1;
 }
 .bea-anim .bea-wl {
   transform-box: fill-box;
   transform-origin: 100% 100%;
-  animation: bea-flap-l 0.32s ease-in-out infinite alternate;
+  animation: bea-flap-l 0.32s ease-in-out 14 alternate;
 }
 .bea-anim .bea-wr {
   transform-box: fill-box;
   transform-origin: 0% 100%;
-  animation: bea-flap-r 0.32s ease-in-out infinite alternate;
+  animation: bea-flap-r 0.32s ease-in-out 14 alternate;
+}
+.bea-anim .s-think .bea-wl,
+.bea-anim .s-think .bea-wr {
+  animation-iteration-count: infinite;
 }
 .bea-anim .s-sleep .bea-wl,
 .bea-anim .s-sleep .bea-wr {
   animation-duration: 2.4s;
+  animation-iteration-count: infinite;
 }
 .bea-anim .s-think .bea-ant {
   transform-box: fill-box;

@@ -14,9 +14,9 @@ import {
 export type { BeaState };
 
 /**
- * Bea, the field guide: ink only, in the logo's line (`currentColor`). At rest her wings
- * flutter, she blinks and (drawn in full) bobs; while thinking her antennae wiggle beside three
- * dots. When she turns to `found` or `downgrade` she reacts once: a hop, or a shake. All of it
+ * Bea, the field guide: ink only, in the logo's line (`currentColor`). When she appears or
+ * changes state her wings flutter, she blinks and (drawn in full) bobs, then she rests within
+ * 5 s (WCAG 2.2.2); while thinking her antennae wiggle beside three dots until the answer comes. When she turns to `found` or `downgrade` she reacts once: a hop, or a shake. All of it
  * stops under `prefers-reduced-motion`. Her wings and body are filled with `--bea-ground`, the
  * surface she sits on (set by `bg-card`, `bg-primary` and the machine layer).
  */
@@ -52,7 +52,13 @@ export function Bea({
       data-state={state}
     >
       {avatar ? (
-        <svg viewBox="0 0 120 120" width={size} height={size} {...a11y}>
+        <svg
+          key={state}
+          viewBox="0 0 120 120"
+          width={size}
+          height={size}
+          {...a11y}
+        >
           <circle
             cx="60"
             cy="60"
@@ -67,6 +73,7 @@ export function Bea({
         </svg>
       ) : (
         <svg
+          key={state}
           viewBox="0 0 120 124"
           width={size}
           height={size}

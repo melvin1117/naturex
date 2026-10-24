@@ -85,4 +85,25 @@ describe("Bea", () => {
     for (const cls of [".bea-anim", ".bea-react-up", ".bea-react-down"])
       expect(reduced).toContain(cls);
   });
+
+  it("settles within 5 s at rest, looping only while she thinks or wakes (WCAG 2.2.2)", () => {
+    const css = readFileSync(
+      join(ROOT, "frontend/src/app/globals.css"),
+      "utf8",
+    );
+    const rule = (selector: string) => {
+      const start = css.indexOf(`${selector} {`);
+      return css.slice(start, css.indexOf("}", start));
+    };
+    expect(rule(".bea-anim .bea-bob")).toContain("3.6s ease-in-out 1;");
+    expect(rule(".bea-anim .eyes")).toContain("5s 1;");
+    // 14 alternating flaps of 0.32 s: 4.48 s, ending at rest.
+    expect(rule(".bea-anim .bea-wl")).toContain(
+      "0.32s ease-in-out 14 alternate",
+    );
+    expect(rule(".bea-anim .bea-wr")).toContain(
+      "0.32s ease-in-out 14 alternate",
+    );
+    expect(rule(".bea-anim .s-think .bea-ant")).toContain("infinite");
+  });
 });
