@@ -339,7 +339,7 @@ def photo_image(photo_id: UUID, granted: CommunityEvidence, session: SessionDep)
         content = evidence.photo_image(session, world_id, asset_id, photo_id)
     except PhotoNotFound:
         raise _missing(PHOTO_NOT_FOUND) from None
-    name = f"naturex-field-photo-{photo_id}.jpg"
+    name = f"wildworth-field-photo-{photo_id}.jpg"
     return Response(
         content=content,
         media_type=MEDIA_JPEG,

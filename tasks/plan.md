@@ -1,9 +1,9 @@
-# Implementation Plan: NatureX (hackathon build)
+# Implementation Plan: WildWorth (hackathon build)
 
 > Task list: [todo.md](./todo.md). Specs: [pm-spec](../docs/specs/pm-spec.md) · [dev-spec](../docs/specs/dev-spec.md) · [demo-plan](../docs/specs/demo-plan.md). **Tasks are tracked in [GitHub Issues](https://github.com/melvin1117/naturex/issues):** 6 module epics (#1–#6) with 77 task sub-issues (#7–#65, plus #97–#111 from ADR-0005 and #113–#115 from ADR-0006), labelled `week:N`, `owner:X`, `size:X`, `priority:X`, `module:X`.
 
 ## Overview
-Build the NatureX PoC in 5 weeks: a community lists land, Nemotron agents rate it from satellite data and news, investors trade play-money shares in a per-visitor sandbox, and ratings update as nature changes. Every Friday has a demo gate from `pm-spec.md` §8. Only the money is simulated; every AI step is real.
+Build the WildWorth PoC in 5 weeks: a community lists land, Nemotron agents rate it from satellite data and news, investors trade play-money shares in a per-visitor sandbox, and ratings update as nature changes. Every Friday has a demo gate from `pm-spec.md` §8. Only the money is simulated; every AI step is real.
 
 **Dates:** Mon Sep 28 → submit **Thu Oct 29** (deadline Fri Oct 30, 10:00 PT). **Feature freeze Fri Oct 23**; the last week (Oct 26–29) is **demo and presentation only**.
 

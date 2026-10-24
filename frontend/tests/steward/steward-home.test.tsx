@@ -1446,7 +1446,7 @@ describe("the next step and what changed (#216)", () => {
     expect(
       JSON.parse(
         window.localStorage.getItem(
-          `naturex:verification-notices:${SIGNED_IN_WORLD.me!.id}`,
+          `wildworth:verification-notices:${SIGNED_IN_WORLD.me!.id}`,
         )!,
       ),
     ).toEqual({ [decided.asset.id]: `run-1:rejected:2026-10-20T15:00:00Z` });

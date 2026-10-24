@@ -451,7 +451,7 @@ def download_document(
         )
     except DocumentNotFound:
         raise _missing("document_not_found") from None
-    name = f"naturex-document-{document.id}.{_EXTENSIONS[document.media_type]}"
+    name = f"wildworth-document-{document.id}.{_EXTENSIONS[document.media_type]}"
     return Response(
         content=content,
         media_type=document.media_type,
@@ -485,7 +485,7 @@ def preview_document(
         raise _missing("document_not_found") from None
     if preview is None:
         raise _missing(NO_PREVIEW)
-    name = f"naturex-document-{document.id}-preview.png"
+    name = f"wildworth-document-{document.id}-preview.png"
     return Response(
         content=preview,
         media_type="image/png",

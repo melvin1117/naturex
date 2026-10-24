@@ -300,7 +300,7 @@ def test_the_worker_reads_gps_and_date_and_strips_every_byte_of_metadata() -> No
         assert found.taken_at == "2026-10-01T09:30:00"
         assert found.preview_png is None and found.photo_jpeg is not None
         stored = found.photo_jpeg
-        assert b"Exif" not in stored and b"NatureX test camera" not in stored
+        assert b"Exif" not in stored and b"WildWorth test camera" not in stored
         with Image.open(io.BytesIO(stored)) as image:
             assert image.format == "JPEG" and max(image.size) == docs.PHOTO_MAX_SIDE
             assert dict(image.getexif()) == {}
@@ -568,7 +568,7 @@ def test_a_steward_uploads_a_photo_and_code_validates_it(
     assert image.headers["x-content-type-options"] == "nosniff"
     with Image.open(io.BytesIO(image.content)) as stored:
         assert dict(stored.getexif()) == {}
-    assert b"NatureX test camera" not in image.content
+    assert b"WildWorth test camera" not in image.content
 
 
 @requires_db

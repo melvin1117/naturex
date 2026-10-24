@@ -43,7 +43,7 @@ def photo(
     if text:
         ImageDraw.Draw(image).text((8, 8), text, fill=(255, 255, 255))
     exif = Image.Exif()
-    exif[MAKE] = "NatureX test camera"
+    exif[MAKE] = "WildWorth test camera"
     if lat is not None and lon is not None:
         gps = exif.get_ifd(GPS_IFD)
         gps[1] = "N" if lat >= 0 else "S"

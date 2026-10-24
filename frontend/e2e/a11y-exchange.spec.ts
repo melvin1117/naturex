@@ -15,7 +15,7 @@ import { closeSessions, newSession, register } from "./session";
 const RUN = `${Date.now().toString(36)}${randomUUID().slice(0, 4)}`;
 const INVESTOR = {
   name: `A11y ${RUN}`,
-  email: `a11y-${RUN}@naturex.test`,
+  email: `a11y-${RUN}@wildworth.test`,
   password: `a11y pw ${RUN}!`,
 };
 const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];

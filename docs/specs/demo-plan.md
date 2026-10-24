@@ -140,7 +140,7 @@ docker compose up           # http://localhost:3000, 3 demo sites preloaded
 Without keys the app runs in clearly labelled **mock mode**. The hosted Judge Mode is always the live version.
 
 ## 6. Devpost "Testing instructions" template
-> **Try it:** https://naturex-demo… (no login needed)
+> **Try it:** https://wildworth-demo… (no login needed)
 > 1. Click **Start judge tour** (~5–7 minutes).
 > 2. Key moments: **Agent Trace** (live Nemotron calls), **Time Machine → Inject encroachment**, and the **Copilot**.
 > 3. Optional: **Rate your own land** runs a live satellite + AI rating (2 per visitor).
