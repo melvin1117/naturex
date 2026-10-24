@@ -334,10 +334,12 @@ export function adminReviewHref(assetId: string): string {
   return `/admin/verifications/${assetId}`;
 }
 
-/** The original file, always served as a download (same-origin `/api` proxy, cookie sent). */
+/** The original file, always served as a download (same-origin `/api` proxy, or `/api/sandbox`
+ * in the sandbox, cookie sent). */
 export function documentDownloadUrl(
   assetId: string,
   documentId: string,
+  apiBase = "/api",
 ): string {
-  return `/api/assets/${assetId}/documents/${documentId}`;
+  return `${apiBase}/assets/${assetId}/documents/${documentId}`;
 }

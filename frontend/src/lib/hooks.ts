@@ -55,6 +55,7 @@ import type {
   WorldTrace,
 } from "./api/types";
 import {
+  getSandboxDataLayer,
   queryKeys,
   useDataLayer,
   viewerKey,
@@ -622,14 +623,18 @@ async function afterSessionChange(
 
 /**
  * No sign-up (T55): `POST /demo/start` opens a private sandbox and a demo session as `persona`
- * (a browser that already has one keeps its sandbox and only switches persona). The world and
- * cache then follow the new viewer, as after signing in.
+ * (a browser that already has one keeps its sandbox and only switches persona). Always through
+ * the sandbox's layer (`/api/sandbox`, cookie `nx_demo`), wherever it's called from (the story
+ * at `/judge` too), so a real account signed in in this tab stays signed in. The sandbox's world
+ * and cache then follow the new viewer.
  */
 export function useStartDemo(): MutationResult<DemoPersona, WorldOut> {
-  const layer = useDataLayer();
-  return useApiMutation(async (api, persona: DemoPersona) => {
-    const world = await unwrap(api.POST("/demo/start", { body: { persona } }));
-    afterDemoSwitch(layer, world);
+  return useApiMutation(async (_api, persona: DemoPersona) => {
+    const sandbox = getSandboxDataLayer();
+    const world = await unwrap(
+      sandbox.api.POST("/demo/start", { body: { persona } }),
+    );
+    afterDemoSwitch(sandbox, world);
     return world;
   });
 }
@@ -646,10 +651,18 @@ export function useSwitchPersona(): MutationResult<DemoPersona, WorldOut> {
   });
 }
 
+/** Another persona's answers never show: reset even when no provider is listening (the
+ * sandbox's layer started from `/judge`), and when the viewer stayed the same (a reset). */
 function afterDemoSwitch({ session, cache }: DataLayer, world: WorldOut) {
-  const before = viewerKey(session.getSnapshot().world);
   session.set(world);
-  if (viewerKey(world) === before) cache.reset();
+  cache.reset();
+}
+
+/** The same-origin path of this tab's API (`/api`, or `/api/sandbox` in the sandbox), for URLs
+ * the browser fetches itself (images, downloads): they must carry the same channel's cookie. */
+export function useApiBase(): string {
+  const { baseUrl } = useDataLayer();
+  return new URL(baseUrl, "http://same-origin").pathname.replace(/\/$/, "");
 }
 
 /** Whether to show model spend in dollars. Not in a no-sign-up demo session: a judge sees what

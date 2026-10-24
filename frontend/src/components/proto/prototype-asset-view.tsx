@@ -1,8 +1,9 @@
 "use client";
 
 import { ArrowLeft, MapPin, MessageCircle } from "lucide-react";
-import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import Link from "@/components/app-link";
+import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "@/lib/nav";
 
 import { Delta, SiteBackdrop, ValueRange } from "@/components/proto/bits";
 import { PriceChart } from "@/components/proto/charts";

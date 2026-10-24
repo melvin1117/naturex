@@ -1,5 +1,5 @@
 import { ArrowRight } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 
 import type { RecordedRun, ReportOut } from "@/lib/api/types";
 import { date } from "@/lib/prototype/format";

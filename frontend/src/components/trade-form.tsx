@@ -1,7 +1,7 @@
 "use client";
 
 import { Info } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useCallback, useId, useRef, useState } from "react";
 
 import { CountTo } from "@/components/live-number";

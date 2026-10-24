@@ -15,12 +15,12 @@ same sandbox; "Reset my demo" (`POST /world/reset`) restores it and keeps the se
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlmodel import select
 
 from app.auth import (
-    SESSION_COOKIE,
     TOO_MANY_ATTEMPTS,
     AttemptsBusy,
     RateLimit,
@@ -30,7 +30,8 @@ from app.auth import (
     end_session,
     start_session,
 )
-from app.authz import Action, DenyReason, denied, require
+from app.authz import Action, DenyReason, require
+from app.channel import DEMO_COOKIE, SANDBOX_PATH_ONLY, in_sandbox
 from app.config import rate_limit_secret
 from app.deps import (
     AUTH_REQUIRED,
@@ -71,11 +72,25 @@ def _act_as(
     world: World,
     user: User,
 ) -> WorldOut:
-    """End this browser's session and start a DEMO session for `user`."""
-    end_session(session, request.cookies.get(SESSION_COOKIE))
-    _set_session_cookie(response, start_session(session, user, SessionKind.DEMO), settings)
+    """End this browser's demo session (if any) and start one for `user` (`nx_demo`); a real
+    account's session in `nx_session` is never touched."""
+    end_session(session, request.cookies.get(DEMO_COOKIE))
+    token = start_session(session, user, SessionKind.DEMO)
+    _set_session_cookie(response, token, settings, DEMO_COOKIE)
     _no_store(response)
     return world_out(session, settings, world, user)
+
+
+def _sandbox_path_only(request: Request) -> None:
+    """Demo sessions live in the sandbox channel (`/sandbox/demo/...`, cookie `nx_demo`), so
+    the real app's pages never turn into a sandbox."""
+    if not in_sandbox(request):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, SANDBOX_PATH_ONLY)
+
+
+_SANDBOX_PATH: dict[int | str, dict[str, Any]] = {
+    403: {"description": f"`{SANDBOX_PATH_ONLY}`: call it as `/sandbox/demo/...`"}
+}
 
 
 def _throttle(request: Request, session: SessionDep, settings: SettingsDep) -> None:
@@ -116,6 +131,7 @@ def _throttle(request: Request, session: SessionDep, settings: SettingsDep) -> N
             f"`{DEMO_BUSY}`: every new sandbox for this hour is taken (see `Retry-After`)"
         },
         503: {"description": f"`{AUTH_BUSY}`: the rate-limit check is busy; retry shortly"},
+        **_SANDBOX_PATH,
     },
 )
 def start_demo(
@@ -130,8 +146,10 @@ def start_demo(
 
     A browser that already has a demo session keeps its sandbox and only switches to `persona`,
     so returning to the story never loses what the judge did. Otherwise a new sandbox is made
-    from the template; any other session this browser held (a real account's) is ended here.
+    from the template. Only through `/sandbox` (cookie `nx_demo`): a real account signed in
+    in this browser stays signed in.
     """
+    _sandbox_path_only(request)
     if principal is not None and principal.session_kind is SessionKind.DEMO:
         world = session.get(World, principal.world_id)
         if world is not None and is_sandbox(world):
@@ -160,7 +178,10 @@ def start_demo(
     responses={
         401: {"description": f"`{AUTH_REQUIRED}`: no session"},
         404: {"description": f"`{PERSONA_NOT_FOUND}`: the sandbox has no such persona"},
-        **denied(DenyReason.DEMO_SESSION_ONLY),
+        403: {
+            "description": f"Not allowed: `{DenyReason.DEMO_SESSION_ONLY.value}`, or "
+            f"`{SANDBOX_PATH_ONLY}` (call it as `/sandbox/demo/persona`)"
+        },
     },
 )
 def switch_persona(
@@ -176,6 +197,7 @@ def switch_persona(
 
     Demo sessions only (403 `demo_session_only` for a real account, which has one identity).
     """
+    _sandbox_path_only(request)
     return _act_as(
         request, response, session, settings, world, _persona(session, world, body.persona)
     )

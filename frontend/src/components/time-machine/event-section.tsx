@@ -1,7 +1,7 @@
 "use client";
 
 import { TriangleAlertIcon, Zap } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useEffect, useState } from "react";
 
 import { Panel } from "@/components/proto/report-panels";

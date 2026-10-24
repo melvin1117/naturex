@@ -1,8 +1,8 @@
 "use client";
 
 import { TriangleAlertIcon } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import Link from "@/components/app-link";
+import { useRouter } from "@/lib/nav";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 

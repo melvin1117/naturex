@@ -1,8 +1,8 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from "@/components/app-link";
+import { usePathname } from "@/lib/nav";
 import { cn } from "cn";
 
 import { LoadingRegion } from "@/components/loading-region";

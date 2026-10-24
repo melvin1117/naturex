@@ -59,6 +59,7 @@ export interface paths {
         /**
          * Logout
          * @description End this session now: the row is deleted and the cookie cleared. Always succeeds.
+         *     Through `/sandbox` it ends the demo session and leaves a real account's session alone.
          */
         post: operations["logout_auth_logout_post"];
         delete?: never;
@@ -102,7 +103,8 @@ export interface paths {
          *
          *     A browser that already has a demo session keeps its sandbox and only switches to `persona`,
          *     so returning to the story never loses what the judge did. Otherwise a new sandbox is made
-         *     from the template; any other session this browser held (a real account's) is ended here.
+         *     from the template. Only through `/sandbox` (cookie `nx_demo`): a real account signed in
+         *     in this browser stays signed in.
          */
         post: operations["start_demo_demo_start_post"];
         delete?: never;
@@ -5213,6 +5215,13 @@ export interface operations {
                     "application/json": components["schemas"]["MeOut"];
                 };
             };
+            /** @description `not_in_sandbox`: called through `/sandbox` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description This email can't be used to create an account */
             409: {
                 headers: {
@@ -5255,6 +5264,13 @@ export interface operations {
             };
             /** @description Email or password is incorrect */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_in_sandbox`: called through `/sandbox` */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5338,6 +5354,13 @@ export interface operations {
                     "application/json": components["schemas"]["WorldOut"];
                 };
             };
+            /** @description `sandbox_path_only`: call it as `/sandbox/demo/...` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description `persona_not_found`: the sandbox has no such persona */
             404: {
                 headers: {
@@ -5399,7 +5422,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not allowed: `demo_session_only` */
+            /** @description Not allowed: `demo_session_only`, or `sandbox_path_only` (call it as `/sandbox/demo/persona`) */
             403: {
                 headers: {
                     [name: string]: unknown;

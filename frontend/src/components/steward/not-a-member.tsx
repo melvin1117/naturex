@@ -1,5 +1,5 @@
 import { ArrowRight, LockKeyhole, Sprout } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 
 import { AccountIdCopy } from "@/components/account-id";
 import { Button } from "@/components/ui/button";

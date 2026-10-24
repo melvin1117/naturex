@@ -1,12 +1,17 @@
 "use client";
 
-import { FlaskConical, Map as MapIcon, RotateCcw } from "lucide-react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { cn } from "cn";
+import {
+  ArrowLeft,
+  Compass,
+  FlaskConical,
+  Map as MapIcon,
+  RotateCcw,
+} from "lucide-react";
+import NextLink from "next/link";
+import { useEffect, useState } from "react";
 
+import { SandboxFlow, useOpenSandbox } from "@/components/sandbox/sandbox-flow";
 import { Button } from "@/components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Dialog,
   DialogClose,
@@ -17,112 +22,157 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { useTour } from "@/components/proto/tour";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { DemoPersona } from "@/lib/api/types";
-import { useSwitchPersona, useWorld } from "@/lib/hooks";
+import { useSignOut, useSwitchPersona, useWorld } from "@/lib/hooks";
+import { useInSandbox, useRouter } from "@/lib/nav";
 import { usePrototype } from "@/lib/prototype/store";
-import { PERSONAS, type PersonaKey } from "@/lib/prototype/world";
-
-export const SANDBOX_NOTICE = "Sandbox: play money, not a real security.";
-
-const ORDER: PersonaKey[] = ["steward", "investor", "admin"];
+import {
+  SANDBOX_PERSONAS,
+  SWITCHABLE,
+  type SwitchablePersona,
+} from "@/lib/sandbox-personas";
 
 /**
- * The prototype's demo bar (persona switcher, Guided tour, Reset my demo) for anonymous
- * visitors. A signed-in account sees only the sandbox notice: switching personas would pretend
- * to change who they are. Until the world says who this is, only the notice shows. T65 makes
- * the demo bar real (demo sessions).
+ * The bar above every page. The real app has none: its homepage stays a homepage. In the
+ * visitor's sandbox (`/sandbox/*`) it says where they are, who they act as (switched
+ * instantly), what to try, how to reset, and the way back to NatureX.
  */
 export function DemoBar() {
-  const session = useWorld();
-  const pathname = usePathname();
-  const me = session.world?.me;
-  const known = session.status === "ready" || session.status === "error";
-  // The story at /judge is full screen and says it's play money itself.
-  if (pathname === "/judge") return null;
-  if (me?.persona) return <DemoSessionBar persona={me.persona} />;
-  if (me != null || !known) return <SandboxNotice />;
-  return <DemoControls />;
+  const sandbox = useInSandbox();
+  const { world } = useWorld();
+  if (!sandbox) return <LeftoverDemoCleanup />;
+  const persona = world?.me?.persona;
+  if (!persona) return null; // the sandbox's own start screen explains itself
+  return <SandboxBar persona={persona} />;
 }
 
-const SESSION_PERSONAS: {
-  key: DemoPersona;
-  name: string;
-  role: string;
-  home: string;
-}[] = [
-  { key: "rosa", name: "Rosa", role: "community steward", home: "/steward" },
-  { key: "arjun", name: "Arjun", role: "supporter", home: "/" },
-  { key: "admin", name: "Admin", role: "platform admin", home: "/admin" },
-];
-
 /**
- * A no-sign-up demo session (T55, T65): who you're acting as in your private sandbox, switched
- * instantly (`POST /demo/persona`), "Reset my demo" (`POST /world/reset`) and the way back to
- * the story.
+ * The real app never acts as a demo persona. A browser may still hold one from before the
+ * sandbox had its own address (a demo session in the real app's cookie) or be in the scripted
+ * prototype demo; end both, so the visitor sees the real app.
  */
-function DemoSessionBar({ persona }: { persona: DemoPersona }) {
+function LeftoverDemoCleanup() {
+  const { world } = useWorld();
+  const { demo, exitDemo } = usePrototype();
+  const signOut = useSignOut();
+  const leftover = Boolean(world?.me?.persona);
+  useEffect(() => {
+    if (demo) exitDemo();
+  }, [demo, exitDemo]);
+  const { mutate } = signOut;
+  useEffect(() => {
+    if (leftover) void mutate();
+  }, [leftover, mutate]);
+  return null;
+}
+
+const ON_BAR =
+  "text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground";
+
+function SandboxBar({ persona }: { persona: DemoPersona }) {
   const router = useRouter();
   const switcher = useSwitchPersona();
   const { resetWorld, isResetting } = useWorld();
-  const switchTo = async (p: (typeof SESSION_PERSONAS)[number]) => {
-    if (p.key === persona || switcher.isPending) return;
-    const world = await switcher.mutate(p.key);
-    if (world) router.push(p.home);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const guide = useOpenSandbox({ onOpened: () => setGuideOpen(false) });
+  const switchTo = async (key: SwitchablePersona) => {
+    if (key === persona || switcher.isPending) return;
+    const world = await switcher.mutate(key);
+    if (world) router.push(SANDBOX_PERSONAS[key].home);
   };
   return (
     <div
       role="region"
-      aria-label="Demo mode"
+      aria-label="Your sandbox"
       className="bg-primary text-primary-foreground"
     >
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 text-sm sm:px-6">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 text-sm sm:px-6">
+        <Button asChild size="sm" variant="ghost" className={`-ml-2 ${ON_BAR}`}>
+          {/* Leaves the sandbox on purpose: plain next/link, never the sandbox prefix. */}
+          <NextLink href="/">
+            <ArrowLeft aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">NatureX</span>
+            <span className="sr-only">, leave the sandbox</span>
+          </NextLink>
+        </Button>
         <p className="flex min-w-0 items-center gap-2">
           <FlaskConical
             className="size-4 shrink-0 text-lime"
             aria-hidden="true"
           />
-          <span className="font-medium">Your private sandbox.</span>
-          <span className="hidden text-primary-foreground/75 md:inline">
-            Live AI, play money. Nothing here is a real investment.
+          <span className="font-medium">Your private sandbox</span>
+          <span className="hidden text-primary-foreground/75 2xl:inline">
+            · live AI, play money
           </span>
         </p>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <span className="hidden text-primary-foreground/75 lg:inline">
+        {/* Below lg the switcher takes its own row, each persona over its role. */}
+        <div className="order-last flex w-full items-center gap-1.5 lg:order-none lg:ml-auto lg:w-auto">
+          <span className="hidden text-primary-foreground/75 2xl:inline">
             Acting as
           </span>
           <ToggleGroup
             type="single"
             value={persona}
             onValueChange={(v) => {
-              const next = SESSION_PERSONAS.find((p) => p.key === v);
-              if (next) void switchTo(next);
+              const key = SWITCHABLE.find((k) => k === v);
+              if (key) void switchTo(key);
             }}
             disabled={switcher.isPending}
             aria-label="Act as"
-            className="rounded-full bg-primary-foreground/10 p-0.5"
+            className="w-full rounded-full bg-primary-foreground/10 p-0.5 lg:w-auto"
           >
-            {SESSION_PERSONAS.map((p) => (
-              <ToggleGroupItem
-                key={p.key}
-                value={p.key}
-                aria-label={`${p.name}, ${p.role}`}
-                className="h-7 rounded-full px-3 text-[13px] font-medium text-primary-foreground/80 hover:bg-transparent hover:text-primary-foreground data-[state=on]:bg-lime data-[state=on]:text-foreground"
-              >
-                {p.name}
-              </ToggleGroupItem>
-            ))}
+            {SWITCHABLE.map((key) => {
+              const p = SANDBOX_PERSONAS[key];
+              return (
+                <ToggleGroupItem
+                  key={key}
+                  value={key}
+                  aria-label={`${p.name} (${p.role})`}
+                  className="h-auto min-h-7 flex-1 rounded-full px-3 py-1 text-[13px] font-medium text-primary-foreground/80 hover:bg-transparent hover:text-primary-foreground data-[state=on]:bg-lime data-[state=on]:text-foreground lg:h-7 lg:flex-none lg:py-0"
+                >
+                  <span className="flex flex-col items-center leading-tight lg:flex-row lg:gap-1">
+                    <span>{p.name}</span>
+                    <span className="text-[10.5px] font-normal opacity-75 lg:text-[13px]">
+                      <span className="hidden lg:inline">(</span>
+                      {p.role}
+                      <span className="hidden lg:inline">)</span>
+                    </span>
+                  </span>
+                </ToggleGroupItem>
+              );
+            })}
           </ToggleGroup>
-          <Button
-            asChild
-            size="sm"
-            variant="ghost"
-            className="text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
-          >
-            <Link href="/judge">
+        </div>
+        <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
+          <Popover open={guideOpen} onOpenChange={setGuideOpen}>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="ghost" className={ON_BAR}>
+                <Compass aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">What to try</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              className="w-[min(26rem,calc(100vw-2rem))] rounded-3xl p-3"
+            >
+              <p className="px-1.5 pt-1 pb-2.5 text-sm text-muted-foreground">
+                NatureX&apos;s loop, step by step. Each step opens its screen as
+                the right person; go anywhere from there.
+              </p>
+              <SandboxFlow sandbox={guide} tone="light" />
+            </PopoverContent>
+          </Popover>
+          <Button asChild size="sm" variant="ghost" className={ON_BAR}>
+            <NextLink href="/judge">
               <MapIcon aria-hidden="true" />
-              <span className="sr-only sm:not-sr-only">The story</span>
-            </Link>
+              <span className="sr-only 2xl:not-sr-only">The story</span>
+            </NextLink>
           </Button>
           <Dialog>
             <DialogTrigger asChild>
@@ -130,10 +180,10 @@ function DemoSessionBar({ persona }: { persona: DemoPersona }) {
                 size="sm"
                 variant="ghost"
                 disabled={isResetting}
-                className="text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+                className={ON_BAR}
               >
                 <RotateCcw aria-hidden="true" />
-                <span className="sr-only sm:not-sr-only">Reset my demo</span>
+                <span className="sr-only 2xl:not-sr-only">Reset</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="rounded-3xl">
@@ -146,11 +196,11 @@ function DemoSessionBar({ persona }: { persona: DemoPersona }) {
               </DialogHeader>
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="outline">Keep my demo</Button>
+                  <Button variant="outline">Keep my sandbox</Button>
                 </DialogClose>
                 <DialogClose asChild>
                   <Button onClick={() => void resetWorld()}>
-                    Reset my demo
+                    Reset my sandbox
                   </Button>
                 </DialogClose>
               </DialogFooter>
@@ -166,142 +216,6 @@ function DemoSessionBar({ persona }: { persona: DemoPersona }) {
           Couldn&apos;t switch just now. Try again.
         </p>
       )}
-    </div>
-  );
-}
-
-function SandboxNotice() {
-  return (
-    <div
-      role="region"
-      aria-label="Sandbox notice"
-      className="bg-primary text-primary-foreground"
-    >
-      <p className="mx-auto flex max-w-7xl items-center gap-2 px-4 py-2 text-sm sm:px-6">
-        <FlaskConical
-          className="size-4 shrink-0 text-lime"
-          aria-hidden="true"
-        />
-        <span className="font-medium">{SANDBOX_NOTICE}</span>
-      </p>
-    </div>
-  );
-}
-
-function DemoControls() {
-  const { world, setPersona, reset } = usePrototype();
-  const router = useRouter();
-  const tour = useTour();
-
-  function switchTo(p: PersonaKey) {
-    setPersona(p);
-    if (!tour.active) router.push(PERSONAS[p].home);
-  }
-
-  return (
-    <div
-      role="region"
-      aria-label="Demo mode"
-      className="bg-primary text-primary-foreground"
-    >
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 text-sm sm:px-6">
-        <p className="flex min-w-0 items-start gap-2">
-          <FlaskConical
-            className="mt-0.5 size-4 shrink-0 text-lime"
-            aria-hidden="true"
-          />
-          <span className="min-w-0">
-            <span className="font-medium">Demo mode · private sandbox.</span>{" "}
-            <span className="text-primary-foreground/75">
-              {SANDBOX_NOTICE}
-              <span className="hidden md:inline">
-                {" "}
-                Personas and the tour use a scripted demo; the marketplace is
-                live.
-              </span>
-            </span>
-          </span>
-        </p>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <span className="hidden text-primary-foreground/75 lg:inline">
-            Viewing as
-          </span>
-          <div
-            role="radiogroup"
-            aria-label="Switch persona"
-            className="flex rounded-full bg-primary-foreground/10 p-0.5"
-            data-tour="persona-switcher"
-          >
-            {ORDER.map((p) => (
-              <button
-                key={p}
-                type="button"
-                role="radio"
-                aria-checked={world.persona === p}
-                onClick={() => switchTo(p)}
-                className={cn(
-                  "rounded-full px-3 py-1 text-[13px] font-medium transition-colors",
-                  world.persona === p
-                    ? "bg-lime text-foreground"
-                    : "text-primary-foreground/80 hover:text-primary-foreground",
-                )}
-              >
-                {PERSONAS[p].name}
-                <span className="sr-only">, {PERSONAS[p].role}</span>
-              </button>
-            ))}
-          </div>
-          {!tour.active && (
-            <Button
-              asChild
-              size="sm"
-              variant="ghost"
-              className="text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
-            >
-              <Link href="/judge">
-                <MapIcon aria-hidden="true" />
-                <span className="sr-only sm:not-sr-only">The story</span>
-              </Link>
-            </Button>
-          )}
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
-              >
-                <RotateCcw aria-hidden="true" />
-                <span className="sr-only sm:not-sr-only">Reset my demo</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="rounded-3xl">
-              <DialogHeader>
-                <DialogTitle>Reset your sandbox?</DialogTitle>
-                <DialogDescription>
-                  Listings, stakes, Time Machine changes and Copilot history go
-                  back to the starting world. You stay on the same persona.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">Keep my demo</Button>
-                </DialogClose>
-                <DialogClose asChild>
-                  <Button
-                    onClick={() => {
-                      tour.stop();
-                      reset();
-                    }}
-                  >
-                    Reset my demo
-                  </Button>
-                </DialogClose>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
     </div>
   );
 }

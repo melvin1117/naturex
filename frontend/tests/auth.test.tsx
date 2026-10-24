@@ -17,7 +17,6 @@ import { AccountMenu } from "@/components/account-menu";
 import { JudgeLanding } from "@/components/proto/judge-landing";
 import { AuthForm } from "@/components/proto/auth-form";
 import { PasswordField } from "@/components/proto/password-field";
-import { DemoBar } from "@/components/proto/demo-bar";
 import { TourProvider } from "@/components/proto/tour";
 import { RequireAccount } from "@/components/require-account";
 import { WorldProvider } from "@/components/world-provider";
@@ -702,27 +701,6 @@ describe("AccountMenu", () => {
       await screen.findByText("Viewer anonymous, cash none"),
     ).toBeVisible();
     await waitFor(() => expect(backend.calls("GET /portfolio")).toBe(2));
-  });
-});
-
-describe("DemoBar", () => {
-  it("shows the persona switcher only without a signed-in account", async () => {
-    setup(<DemoBar />);
-    expect(
-      await screen.findByRole("radiogroup", { name: "Switch persona" }),
-    ).toBeVisible();
-  });
-
-  it("shows a signed-in account only the sandbox notice", async () => {
-    const { backend } = setup(<DemoBar />, {
-      "GET /world": () => json(SIGNED_IN_WORLD),
-    });
-    await waitFor(() => expect(backend.calls("GET /world")).toBe(1));
-    expect(
-      await screen.findByRole("region", { name: "Sandbox notice" }),
-    ).toHaveTextContent("Sandbox: play money, not a real security.");
-    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
-    expect(screen.queryByText(/reset my demo/i)).not.toBeInTheDocument();
   });
 });
 

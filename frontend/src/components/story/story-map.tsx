@@ -90,6 +90,10 @@ function loaded(img: HTMLImageElement): Promise<void> {
 
 const CLAY = "oklch(0.66 0.13 48)";
 const LIME = "oklch(0.86 0.135 126)";
+/** The width of the committed Sentinel-2 views (backend `site_images.THUMBNAIL_WIDTH`). */
+const VIEW_WIDTH_PX = 640;
+/** The map's `zoomSnap`. */
+const ZOOM_SNAP = 0.25;
 
 /**
  * The story's stage: Esri satellite imagery with the wetland's own layers from `GET /story`
@@ -144,7 +148,7 @@ export const StoryMap = forwardRef(function StoryMap(
         boxZoom: false,
         keyboard: false,
         touchZoom: false,
-        zoomSnap: 0.25,
+        zoomSnap: ZOOM_SNAP,
       }).setView(site.getCenter(), 11);
       L.tileLayer(IMAGERY_URL, {
         maxZoom: 19,
@@ -179,17 +183,27 @@ export const StoryMap = forwardRef(function StoryMap(
     const flyTo = async (
       bounds: Leaflet.LatLngBoundsExpression,
       seconds: number,
+      maxZoom?: number,
     ) => {
       const map = layers.current.map;
       if (!map) return;
       if (instant()) {
-        map.fitBounds(bounds, { ...padding(), animate: false });
+        map.fitBounds(bounds, { ...padding(), maxZoom, animate: false });
         return;
       }
       await new Promise<void>((resolve) => {
         map.once("moveend", () => resolve());
-        map.flyToBounds(bounds, { ...padding(), duration: seconds });
+        map.flyToBounds(bounds, { ...padding(), maxZoom, duration: seconds });
       });
+    };
+    /** The zoom at which an image over `bounds`, `widthPx` wide, shows one image pixel per
+     * screen pixel: any closer and 10 m Sentinel-2 pixels smear next to the sharp basemap. */
+    const nativeZoom = (bounds: [LatLng, LatLng], widthPx: number) => {
+      const map = layers.current.map!;
+      // Unrounded world pixels at zoom 0, then rounded down to the snap: never enlarged.
+      const atZero = map.project(bounds[1], 0).x - map.project(bounds[0], 0).x;
+      const zoom = Math.log2(widthPx / Math.max(atZero, 1e-9));
+      return Math.floor(zoom / ZOOM_SNAP) * ZOOM_SNAP;
     };
     /** Container pixels an overlay covers (the map is still while it's shown). */
     const rectOf = (bounds: [LatLng, LatLng]) => {
@@ -322,7 +336,7 @@ export const StoryMap = forwardRef(function StoryMap(
         if (!L || !map || !alive()) return;
         const { images, land } = latest.current.story;
         const bounds = leafletBounds(images.after.bounds);
-        await flyTo(bounds, 1.4);
+        await flyTo(bounds, 1.4, nativeZoom(bounds, VIEW_WIDTH_PX));
         if (!alive()) return;
         const before = L.imageOverlay(apiMedia(images.before.url), bounds, {
           opacity: 0,

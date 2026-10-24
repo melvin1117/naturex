@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, PanelRight } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useId } from "react";
 
 import { Button } from "@/components/ui/button";

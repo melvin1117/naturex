@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, ShieldCheck, ShieldX, X } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import {
   useCallback,
   useEffect,

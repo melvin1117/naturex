@@ -6,7 +6,7 @@ import JudgePage from "@/app/judge/page";
 import { TourProvider } from "@/components/proto/tour";
 import { WorldProvider } from "@/components/world-provider";
 import type { WorldOut } from "@/lib/api/types";
-import { createDataLayer } from "@/lib/data-layer";
+import { createDataLayer, type DataLayer } from "@/lib/data-layer";
 import { PrototypeProvider } from "@/lib/prototype/store";
 
 import {
@@ -30,21 +30,17 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-const WETLAND = "33333333-3333-4333-8333-333333333333";
-const RUN = "44444444-4444-4444-8444-444444444444";
+// The story starts the sandbox through the sandbox's own layer (`/api/sandbox`).
+const sandboxLayer = vi.hoisted(() => ({ current: null as DataLayer | null }));
+vi.mock("@/lib/data-layer", async (original) => ({
+  ...(await original<typeof import("@/lib/data-layer")>()),
+  getSandboxDataLayer: () => sandboxLayer.current!,
+}));
 
 function sandbox(persona: "rosa" | "arjun" | "admin"): WorldOut {
   return {
     ...WORLD,
     label: "visitor",
-    assets: [
-      {
-        id: WETLAND,
-        site_key: story.site.key,
-        name: story.site.name,
-        status: "listed",
-      },
-    ],
     me: {
       id: "55555555-5555-4555-8555-555555555555",
       name: persona,
@@ -59,17 +55,26 @@ function sandbox(persona: "rosa" | "arjun" | "admin"): WorldOut {
 
 type Routes = Parameters<typeof fakeBackend>[0];
 
-function setup(routes: Routes) {
-  const backend = fakeBackend({
+function setup(sandboxRoutes: Routes) {
+  const live = fakeBackend({
     "GET /world": () => json(WORLD),
     "GET /story": () => json(story),
     "GET /media/demo-sites/wetland_mx/recorded-run.json": () =>
       json({ detail: "not_found" }, { status: 404 }),
-    ...routes,
+  });
+  // Anonymous in the sandbox channel until a demo starts: the session's first read.
+  const box = fakeBackend({
+    "GET /sandbox/world": () => json(WORLD),
+    ...sandboxRoutes,
+  });
+  sandboxLayer.current = createDataLayer({
+    baseUrl: `${BASE}/sandbox`,
+    fetch: box.fetch,
+    createEventSource: createFakeEventSource,
   });
   const layer = createDataLayer({
     baseUrl: BASE,
-    fetch: backend.fetch,
+    fetch: live.fetch,
     createEventSource: createFakeEventSource,
   });
   const wrapper = ({ children }: { children: ReactNode }) => (
@@ -80,7 +85,7 @@ function setup(routes: Routes) {
     </WorldProvider>
   );
   render(<JudgePage />, { wrapper });
-  return backend;
+  return { live, box };
 }
 
 async function skipToYourTurn() {
@@ -93,7 +98,9 @@ async function skipToYourTurn() {
 }
 
 async function personasStarted(backend: ReturnType<typeof fakeBackend>) {
-  const starts = backend.requests.filter((r) => r.url.endsWith("/demo/start"));
+  const starts = backend.requests.filter((r) =>
+    r.url.endsWith("/sandbox/demo/start"),
+  );
   return Promise.all(
     starts.map(async (r) => ((await r.json()) as { persona: string }).persona),
   );
@@ -120,61 +127,56 @@ beforeAll(() => {
 beforeEach(() => nav.push.mockReset());
 
 describe("/judge: your turn", () => {
-  it("opens a sandbox as Rosa and follows her live rating", async () => {
-    const backend = setup({
-      "POST /demo/start": () => json(sandbox("rosa")),
-      [`POST /assets/${WETLAND}/rate`]: () =>
-        json(
-          { run_id: RUN, asset_id: WETLAND, status: "queued" },
-          { status: 202 },
-        ),
+  it("opens the visitor's sandbox on the marketplace, as the supporter", async () => {
+    const { live, box } = setup({
+      "POST /sandbox/demo/start": () => json(sandbox("arjun")),
     });
     await skipToYourTurn();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /Rate the wetland, live/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Open my sandbox/ }));
 
-    await waitFor(() => expect(nav.push).toHaveBeenCalledWith(`/trace/${RUN}`));
-    expect(await personasStarted(backend)).toEqual(["rosa"]);
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/sandbox"));
+    expect(await personasStarted(box)).toEqual(["arjun"]);
+    // Never through the real app's API: a real account here stays signed in.
+    expect(live.calls("POST /demo/start")).toBe(0);
+    expect(sandboxLayer.current!.session.getSnapshot().world?.me?.persona).toBe(
+      "arjun",
+    );
   });
 
-  it("sends a running rating's visitor to the site instead", async () => {
-    setup({
-      "POST /demo/start": () => json(sandbox("rosa")),
-      [`POST /assets/${WETLAND}/rate`]: () =>
-        json({ detail: "run_in_progress" }, { status: 409 }),
-    });
+  it("shows the loop as steps, each saying who does it", async () => {
+    setup({});
     await skipToYourTurn();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /Rate the wetland, live/ }),
-    );
-
-    await waitFor(() =>
-      expect(nav.push).toHaveBeenCalledWith(`/asset/${WETLAND}`),
-    );
+    const steps = screen.getByRole("list", {
+      name: "What you can do in your sandbox",
+    });
+    expect(steps).toHaveTextContent("List land");
+    expect(steps).toHaveTextContent("as Rosa (Community steward)");
+    expect(steps).toHaveTextContent("as Arjun (Supporter)");
+    expect(steps).toHaveTextContent("as Admin (NatureX team)");
   });
 
   it.each([
-    [/Back a community/, "arjun", "/"],
-    [/Move time forward/, "admin", "/admin"],
-    [/Run a community/, "rosa", "/steward"],
-  ] as const)("%s starts as %s and opens %s", async (name, persona, home) => {
-    const backend = setup({
-      "POST /demo/start": () => json(sandbox(persona)),
+    [/List land/, "rosa", "/sandbox/steward/list"],
+    [/Check it's theirs/, "admin", "/sandbox/admin/verifications"],
+    [/Back a community/, "arjun", "/sandbox"],
+    [/Move time forward/, "admin", "/sandbox/admin"],
+  ] as const)("%s starts as %s at %s", async (name, persona, path) => {
+    const { box } = setup({
+      "POST /sandbox/demo/start": () => json(sandbox(persona)),
     });
     await skipToYourTurn();
 
     fireEvent.click(screen.getByRole("button", { name }));
 
-    await waitFor(() => expect(nav.push).toHaveBeenCalledWith(home));
-    expect(await personasStarted(backend)).toEqual([persona]);
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith(path));
+    expect(await personasStarted(box)).toEqual([persona]);
   });
 
   it("says plainly when every new sandbox is taken", async () => {
     setup({
-      "POST /demo/start": () =>
+      "POST /sandbox/demo/start": () =>
         json(
           { detail: "demo_busy" },
           { status: 429, headers: { "Retry-After": "600" } },

@@ -719,18 +719,19 @@ describe("when the account changes", () => {
   });
 });
 
-describe("sandbox banner", () => {
-  const NOTICE = "Sandbox: play money, not a real security.";
+describe("play-money framing without a demo bar", () => {
+  const FOOTER = "Nothing here is a real security";
 
   it.each([
     ["Exchange", <ExchangeLayout key="e">{<Page />}</ExchangeLayout>],
     ["Steward", <StewardLayout key="s">{<Page />}</StewardLayout>],
     ["Admin", <AdminLayout key="a">{<Page />}</AdminLayout>],
   ])(
-    "the %s shell is served with the notice and a skip link",
+    "the %s shell says it's play money in its footer, with a skip link",
     (_shell, shell) => {
       const html = renderToString(<RootLayout>{shell}</RootLayout>);
-      expect(html).toContain(NOTICE);
+      expect(html).toContain(FOOTER);
+      expect(html).not.toContain("Demo mode");
       expect(html).toContain('href="#main"');
       expect(html.match(/id="main"/g)).toHaveLength(1);
     },
@@ -751,29 +752,43 @@ describe("sandbox banner", () => {
     expect(html.match(/id="main"/g)).toHaveLength(1);
   });
 
-  it("pages outside the shells get it too", async () => {
-    const page = await LoginPage({ searchParams: Promise.resolve({}) });
+  it("signing up says it's play money too", async () => {
+    const page = await RegisterPage({ searchParams: Promise.resolve({}) });
     const html = renderToString(<RootLayout>{page}</RootLayout>);
-    expect(html).toContain(NOTICE);
-    expect(html).toContain('id="main"');
+    expect(html).toMatch(/[Pp]lay money/);
   });
 
   it.each([
-    ["anonymous", WORLD, false],
-    ["in the scripted demo", WORLD, true],
-    ["signed in", SIGNED_IN_WORLD, false],
-  ] as const)("shows the notice %s", async (_who, world, demo) => {
-    if (demo) window.sessionStorage.setItem("nx-prototype-demo", "1");
-    setup(<DemoBar />, world);
+    ["anonymous", WORLD],
+    ["signed in", SIGNED_IN_WORLD],
+  ] as const)("the real app shows no demo bar %s", async (_who, world) => {
+    const { backend } = setup(<DemoBar />, world, [], {
+      "POST /auth/logout": () => new Response(null, { status: 204 }),
+    });
+    await waitFor(() => expect(backend.calls("GET /world")).toBe(1));
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    // A real account is never signed out by the leftover-demo cleanup.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(backend.calls("POST /auth/logout")).toBe(0);
+  });
+
+  it("leaves the scripted prototype demo", async () => {
+    window.sessionStorage.setItem("nx-prototype-demo", "1");
+    setup(<DemoBar />, WORLD);
     await waitFor(() =>
-      expect(screen.getByRole("region")).toHaveTextContent(NOTICE),
+      expect(window.sessionStorage.getItem("nx-prototype-demo")).toBeNull(),
     );
   });
 
-  it("doesn't call the live marketplace scripted (#216)", async () => {
-    setup(<DemoBar />, WORLD);
-    const bar = await screen.findByRole("region", { name: "Demo mode" });
-    expect(bar).toHaveTextContent("the marketplace is live");
-    expect(bar).not.toHaveTextContent("Prototype with scripted data");
+  it("signs out a demo session left in the real app's cookie", async () => {
+    const leftover: WorldOut = {
+      ...WORLD,
+      me: { ...SIGNED_IN_WORLD.me!, kind: "persona", persona: "arjun" },
+    };
+    const { backend } = setup(<DemoBar />, leftover, [], {
+      "POST /auth/logout": () => new Response(null, { status: 204 }),
+    });
+    await waitFor(() => expect(backend.calls("POST /auth/logout")).toBe(1));
   });
 });

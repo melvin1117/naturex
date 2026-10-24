@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, Repeat2, ShieldCheck } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { cn } from "cn";
 
 import { Button } from "@/components/ui/button";

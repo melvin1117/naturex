@@ -1,8 +1,10 @@
-"""No-sign-up demo sessions (T55): `POST /demo/start`, `POST /demo/persona`, and the hidden
-per-sandbox model spend cap (`SANDBOX_LLM_BUDGET_USD`)."""
+"""No-sign-up demo sessions (T55): the sandbox channel (`/sandbox/*`, cookie `nx_demo`),
+`POST /sandbox/demo/start`, `POST /sandbox/demo/persona`, and the hidden per-sandbox model spend
+cap (`SANDBOX_LLM_BUDGET_USD`)."""
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import replace
@@ -13,21 +15,24 @@ from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
+from fastapi import Request, Response
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection, create_engine, delete, func
 from sqlmodel import Session, col, select
 
 from app import auth
 from app.auth import SESSION_COOKIE
+from app.channel import DEMO_COOKIE, SandboxChannelMiddleware
 from app.config import Settings, get_settings
 from app.db import get_session
 from app.llm import BudgetExceeded, CallRecord, DbCallLog, Tier
 from app.main import app
 from app.models import Asset, LlmCall, SessionKind, UserSession, World
+from app.routers.events import StreamAccess, stream_access
 from app.sandbox import create_world, ensure_live_world, is_sandbox, reset_world
 from app.seed import LIVE_WORLD_ID, WORLD_ID, seed
 from app.worlds import PROTECTED_WORLDS
-from tests.conftest import alembic_cfg, requires_db
+from tests.conftest import TEST_ORIGIN, alembic_cfg, requires_db
 from tests.worlds import drop_worlds, sign_in
 
 PASSWORD = "correct horse battery"
@@ -78,11 +83,11 @@ def from_one_ip() -> str:
 
 
 def start(client: TestClient, persona: str = "rosa") -> Any:
-    return client.post("/demo/start", json={"persona": persona})
+    return client.post("/sandbox/demo/start", json={"persona": persona})
 
 
-def token_of(client: TestClient) -> str:
-    token = client.cookies.get(SESSION_COOKIE)
+def token_of(client: TestClient, cookie: str = DEMO_COOKIE) -> str:
+    token = client.cookies.get(cookie)
     assert token
     return token
 
@@ -111,7 +116,7 @@ def test_one_click_gives_a_private_sandbox_and_a_demo_session(
     stored = row(session, token_of(client))
     assert stored is not None and stored.kind is SessionKind.DEMO
     # The session is the world: GET /world serves that sandbox, never the live world.
-    seen = client.get("/world").json()
+    seen = client.get("/sandbox/world").json()
     assert seen["id"] == body["id"] and seen["me"]["persona"] == "rosa"
 
 
@@ -123,8 +128,8 @@ def test_two_visitors_get_separate_sandboxes(session: Session, client: TestClien
 
     assert first["id"] != second["id"]
     assert UUID(first["id"]) != LIVE_WORLD_ID and UUID(second["id"]) != LIVE_WORLD_ID
-    assert client.get("/world").json()["id"] == first["id"]
-    assert other.get("/world").json()["id"] == second["id"]
+    assert client.get("/sandbox/world").json()["id"] == first["id"]
+    assert other.get("/sandbox/world").json()["id"] == second["id"]
 
 
 @requires_db
@@ -134,14 +139,14 @@ def test_switching_persona_stays_in_the_sandbox_and_revokes_the_old_session(
     world_id = start(client, "rosa").json()["id"]
     old = token_of(client)
 
-    switched = client.post("/demo/persona", json={"persona": "admin"})
+    switched = client.post("/sandbox/demo/persona", json={"persona": "admin"})
 
     assert switched.status_code == 200, switched.text
     assert switched.json()["id"] == world_id
     assert switched.json()["me"]["persona"] == "admin" and switched.json()["me"]["is_admin"]
     assert token_of(client) != old
     assert row(session, old) is None
-    assert client.get("/world").json()["me"]["persona"] == "admin"
+    assert client.get("/sandbox/world").json()["me"]["persona"] == "admin"
 
 
 @requires_db
@@ -162,7 +167,7 @@ def test_starting_again_keeps_the_sandbox_and_only_switches_persona(
 def test_reset_keeps_the_demo_session(session: Session, client: TestClient) -> None:
     world_id = start(client, "arjun").json()["id"]
 
-    reset = client.post("/world/reset")
+    reset = client.post("/sandbox/world/reset")
 
     assert reset.status_code == 200
     assert reset.json()["id"] == world_id and reset.json()["me"]["persona"] == "arjun"
@@ -170,35 +175,88 @@ def test_reset_keeps_the_demo_session(session: Session, client: TestClient) -> N
 
 @requires_db
 def test_a_real_account_has_one_identity(session: Session, client: TestClient) -> None:
-    assert client.post("/demo/persona", json={"persona": "admin"}).status_code == 401
+    assert client.post("/sandbox/demo/persona", json={"persona": "admin"}).status_code == 401
     live = ensure_live_world(session)
     person = auth.register_person(session, live.id, "real@example.org", PASSWORD, "Real")
     sign_in(client, session, person)
 
     refused = client.post("/demo/persona", json={"persona": "admin"})
+    # The sandbox never reads the real account's cookie.
+    unknown = client.post("/sandbox/demo/persona", json={"persona": "admin"})
 
     assert (refused.status_code, refused.json()["detail"]) == (403, "demo_session_only")
+    assert (unknown.status_code, unknown.json()["detail"]) == (401, "auth_required")
 
 
 @requires_db
-def test_a_real_account_starting_a_demo_ends_its_session_in_this_browser(
+def test_a_real_account_trying_the_sandbox_stays_signed_in(
     session: Session, client: TestClient
 ) -> None:
     live = ensure_live_world(session)
     person = auth.register_person(session, live.id, "real2@example.org", PASSWORD, "Real")
     sign_in(client, session, person)
-    real = token_of(client)
+    real = token_of(client, SESSION_COOKIE)
 
     assert start(client, "mia").status_code == 200
 
-    assert row(session, real) is None
-    assert client.get("/world").json()["me"]["persona"] == "mia"
+    assert row(session, real) is not None
+    assert client.get("/sandbox/world").json()["me"]["persona"] == "mia"
+    assert client.get("/world").json()["me"]["id"] == str(person.id)
+
+
+@requires_db
+def test_the_real_app_never_becomes_a_sandbox(client: TestClient) -> None:
+    refused = client.post("/demo/start", json={"persona": "rosa"})
+    assert (refused.status_code, refused.json()["detail"]) == (403, "sandbox_path_only")
+    assert client.cookies.get(SESSION_COOKIE) is None
+
+    sandbox = start(client).json()["id"]
+
+    assert client.get("/sandbox/world").json()["id"] == sandbox
+    live = client.get("/world").json()
+    assert UUID(live["id"]) == LIVE_WORLD_ID and live["me"] is None
+
+
+@requires_db
+def test_accounts_belong_to_the_real_app(session: Session, client: TestClient) -> None:
+    body = {"email": "nobody@example.org", "password": PASSWORD}
+    login = client.post("/sandbox/auth/login", json=body)
+    register = client.post("/sandbox/auth/register", json={**body, "name": "Nobody"})
+
+    assert (login.status_code, login.json()["detail"]) == (403, "not_in_sandbox")
+    assert (register.status_code, register.json()["detail"]) == (403, "not_in_sandbox")
+
+
+@requires_db
+def test_leaving_the_sandbox_signs_out_only_the_demo(session: Session, client: TestClient) -> None:
+    live = ensure_live_world(session)
+    person = auth.register_person(session, live.id, "real4@example.org", PASSWORD, "Real")
+    sign_in(client, session, person)
+    start(client, "arjun")
+    demo = token_of(client)
+
+    assert client.post("/sandbox/auth/logout").status_code == 204
+
+    assert row(session, demo) is None
+    assert client.cookies.get(DEMO_COOKIE) is None
+    assert client.get("/sandbox/world").json()["me"] is None
+    assert client.get("/world").json()["me"]["id"] == str(person.id)
+
+
+@requires_db
+def test_the_sandbox_serves_demo_sessions_only(session: Session, client: TestClient) -> None:
+    live = ensure_live_world(session)
+    person = auth.register_person(session, live.id, "real5@example.org", PASSWORD, "Real")
+    sign_in(client, session, person)
+    client.cookies.set(DEMO_COOKIE, token_of(client, SESSION_COOKIE))
+
+    assert client.get("/sandbox/world").json()["me"] is None
 
 
 @requires_db
 def test_unknown_personas_are_refused(client: TestClient) -> None:
     assert start(client, "someone").status_code == 422
-    assert client.post("/demo/start", json={}).json()["me"]["persona"] == "rosa"
+    assert client.post("/sandbox/demo/start", json={}).json()["me"]["persona"] == "rosa"
 
 
 @requires_db
@@ -241,7 +299,7 @@ def test_a_refused_start_keeps_a_real_accounts_session(
     live = ensure_live_world(session)
     person = auth.register_person(session, live.id, "real3@example.org", PASSWORD, "Real")
     sign_in(client, session, person)
-    real = token_of(client)
+    real = token_of(client, SESSION_COOKIE)
 
     with settings(sandbox_max_new_worlds_per_hour=0):
         busy = start(client)
@@ -252,6 +310,71 @@ def test_a_refused_start_keeps_a_real_accounts_session(
     assert (forged.status_code, forged.json()["detail"]) == (403, "csrf_origin")
     assert row(session, real) is not None
     assert client.get("/world").json()["me"]["id"] == str(person.id)
+
+
+# --- the channel itself ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("path", "seen", "sandbox"),
+    [
+        ("/sandbox/world", "/world", True),
+        ("/sandbox", "/", True),
+        ("/sandbox/", "/", True),
+        ("/sandboxes", "/sandboxes", False),
+        ("/world", "/world", False),
+    ],
+)
+def test_the_prefix_is_stripped_and_marked(path: str, seen: str, sandbox: bool) -> None:
+    got: dict[str, Any] = {}
+
+    async def inner(scope: Any, receive: Any, send: Any) -> None:
+        got.update(scope)
+
+    async def run() -> None:
+        scope = {"type": "http", "path": path, "raw_path": path.encode()}
+        await SandboxChannelMiddleware(inner)(scope, None, None)  # type: ignore[arg-type]
+
+    asyncio.run(run())
+    assert (got["path"], got["raw_path"]) == (seen, seen.encode())
+    assert bool(got.get("naturex.sandbox")) is sandbox
+
+
+def test_uploads_through_the_sandbox_pass_the_csrf_body_check() -> None:
+    # Stripped before the CSRF layer, so `/sandbox/assets/{id}/documents` is still an upload: a
+    # PDF body reaches the route (401 without a session) instead of 415 for a non-JSON body.
+    res = TestClient(app).post(
+        f"/sandbox/assets/{uuid4()}/documents",
+        content=b"%PDF-1.4",
+        headers={"Content-Type": "application/pdf", "Origin": TEST_ORIGIN},
+    )
+    assert (res.status_code, res.json()["detail"]) == (401, "auth_required")
+
+
+@requires_db
+def test_the_live_stream_follows_the_channel(session: Session, client: TestClient) -> None:
+    world_id = UUID(start(client, "arjun").json()["id"])
+    token = token_of(client)
+
+    def access(path: str, sandbox: bool) -> StreamAccess:
+        scope: dict[str, Any] = {
+            "type": "http",
+            "method": "GET",
+            "path": path,
+            "query_string": b"",
+            "headers": [(b"cookie", f"{DEMO_COOKIE}={token}".encode())],
+        }
+        if sandbox:
+            scope["naturex.sandbox"] = True
+        return stream_access(Request(scope), Response(), session)
+
+    # Through /sandbox the stream follows the demo session and re-checks it on every poll.
+    inside = access("/events/stream", sandbox=True)
+    assert inside.world_id == world_id
+    assert inside.auth is not None and inside.auth.token == token
+    # The real app's stream never reads the demo cookie.
+    outside = access("/events/stream", sandbox=False)
+    assert outside.world_id == LIVE_WORLD_ID and outside.auth is None
 
 
 # --- the hidden per-sandbox spend cap ------------------------------------------------------------

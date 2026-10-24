@@ -1,7 +1,7 @@
 "use client";
 
 import { RefreshCwIcon } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";

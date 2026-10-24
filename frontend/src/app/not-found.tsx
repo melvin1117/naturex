@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/app-link";
 
 import { MAIN_ID } from "@/components/shell/skip-link";
 import { Button } from "@/components/ui/button";

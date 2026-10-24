@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, ScrollText } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 
 import { LoadError } from "@/components/proto/load-error";
 import { Spinner } from "@/components/ui/spinner";

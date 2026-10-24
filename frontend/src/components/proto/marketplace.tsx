@@ -1,7 +1,8 @@
 "use client";
 
 import { RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { usePathname } from "@/lib/nav";
 import { useMemo } from "react";
 
 import {

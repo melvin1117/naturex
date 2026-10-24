@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, Info, MapPinOff, Sparkles } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useEffect, useRef, useState } from "react";
 
 import { ErrorAlert, IpoCard, IpoShell } from "@/components/ipo-layout";

@@ -14,7 +14,7 @@ import {
   Undo2,
   Wand2,
 } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "cn";
 

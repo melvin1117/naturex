@@ -4,7 +4,6 @@ import {
   ArrowRight,
   BellRing,
   BrainCircuit,
-  Clock,
   Eye,
   HandCoins,
   Newspaper,
@@ -17,8 +16,6 @@ import {
   Users,
   X,
 } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -35,17 +32,16 @@ import {
   StoryChain,
   type ChainState,
 } from "@/components/story/story-chain";
+import {
+  LOOK_AROUND,
+  SandboxFlow,
+  useOpenSandbox,
+} from "@/components/sandbox/sandbox-flow";
 import { StoryMap, type StoryMapHandle } from "@/components/story/story-map";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import type { DemoPersona, Story } from "@/lib/api/types";
-import { toApiError } from "@/lib/api/errors";
-import {
-  useRateNow,
-  useRecordedRun,
-  useStartDemo,
-  useStory,
-} from "@/lib/hooks";
+import type { Story } from "@/lib/api/types";
+import { useRecordedRun, useStory } from "@/lib/hooks";
 import type { Grade } from "@/lib/prototype/data";
 import { date } from "@/lib/prototype/format";
 import {
@@ -278,7 +274,7 @@ function StoryStage({
           {scene === 2 && <Fund stage={stage} />}
           {scene === 3 && <Watch stage={stage} />}
           {scene === 4 && <Trust stage={stage} />}
-          {scene === LAST && <YourTurn story={story} onReplay={restart} />}
+          {scene === LAST && <YourTurn onReplay={restart} />}
         </div>
       </div>
 
@@ -1057,164 +1053,26 @@ function Trust({ stage }: { stage: Stage }) {
   );
 }
 
-type Start = {
-  key: string;
-  persona: DemoPersona;
-  icon: ReactNode;
-  title: string;
-  body: string;
-  who: string;
-};
-
-const STARTS: Start[] = [
-  {
-    key: "rate",
-    persona: "rosa",
-    icon: <Satellite className="size-4" />,
-    title: "Rate the wetland, live",
-    body: "Watch each AI agent work on it right now.",
-    who: "as Rosa",
-  },
-  {
-    key: "back",
-    persona: "arjun",
-    icon: <HandCoins className="size-4" />,
-    title: "Back a community",
-    body: "Compare rated land, back one, ask the Copilot why.",
-    who: "as Arjun",
-  },
-  {
-    key: "time",
-    persona: "admin",
-    icon: <Clock className="size-4" />,
-    title: "Move time forward",
-    body: "Bring a fire or a restoration and watch ratings react.",
-    who: "as the admin",
-  },
-  {
-    key: "community",
-    persona: "rosa",
-    icon: <Users className="size-4" />,
-    title: "Run a community",
-    body: "List land, verify it, open it to supporters.",
-    who: "as Rosa",
-  },
-];
-
-const HOME: Record<string, string> = {
-  back: "/",
-  time: "/admin",
-  community: "/steward",
-};
-
-function startError(code: string | null | undefined): string {
-  if (code === "too_many_attempts")
-    return "Too many demos from this network this hour. Try again a little later.";
-  if (code === "demo_busy")
-    return "Every new sandbox for this hour is taken. Try again in a few minutes.";
-  if (code === "rating_rate_limited" || code === "rating_global_limit")
-    return "Live ratings are busy right now. Your sandbox is ready; try again in a few minutes.";
-  return "That didn't work. Try again.";
-}
-
-function YourTurn({ story, onReplay }: { story: Story; onReplay: () => void }) {
-  const router = useRouter();
-  const start = useStartDemo();
-  const rate = useRateNow();
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<{ key: string; text: string } | null>(
-    null,
-  );
-
-  const open = async (s: Start) => {
-    if (busy) return;
-    setBusy(s.key);
-    setError(null);
-    try {
-      const world = await start.mutateAsync(s.persona);
-      if (s.key !== "rate") {
-        router.push(HOME[s.key] ?? "/");
-        return;
-      }
-      const wetland = world.assets.find((a) => a.site_key === story.site.key);
-      if (!wetland) {
-        router.push("/steward");
-        return;
-      }
-      try {
-        const run = await rate.mutateAsync(wetland.id);
-        router.push(`/trace/${run.run_id}`);
-      } catch (e) {
-        const code = toApiError(e).code;
-        if (code === "run_in_progress") {
-          router.push(`/asset/${wetland.id}`);
-          return;
-        }
-        setError({ key: s.key, text: startError(code) });
-        setBusy(null);
-      }
-    } catch (e) {
-      setError({ key: s.key, text: startError(toApiError(e).code) });
-      setBusy(null);
-    }
-  };
-
+function YourTurn({ onReplay }: { onReplay: () => void }) {
+  const sandbox = useOpenSandbox();
+  const busy = sandbox.busy === LOOK_AROUND.key;
   return (
     <>
       <Title>Your turn. Everything here is live.</Title>
       <Why>
-        You get a private sandbox with Rosa, Arjun and an admin. No sign-up.
-        Ratings run real Nemotron models on real satellite data and local news.
+        Your own private NatureX, with a community steward, a supporter and the
+        NatureX team in it. Switch between them any time. No sign-up, play money
+        only.
       </Why>
-      <ul className="mt-6 grid gap-2.5">
-        {STARTS.map((s) => (
-          <li key={s.key}>
-            <button
-              type="button"
-              onClick={() => void open(s)}
-              disabled={busy !== null}
-              aria-busy={busy === s.key || undefined}
-              aria-describedby={
-                error?.key === s.key ? `err-${s.key}` : undefined
-              }
-              className="grid w-full grid-cols-[2.25rem_1fr_auto] items-center gap-3.5 rounded-2xl bg-machine-raised px-4 py-3.5 text-left transition-colors hover:bg-machine-line focus-visible:ring-2 focus-visible:ring-lime focus-visible:outline-none disabled:cursor-wait disabled:opacity-60"
-            >
-              <span
-                aria-hidden="true"
-                className="grid size-9 place-items-center rounded-xl bg-machine-line text-lime"
-              >
-                {busy === s.key ? <Spinner className="size-4" /> : s.icon}
-              </span>
-              <span>
-                <b className="block font-semibold">{s.title}</b>
-                {busy === s.key && (
-                  <span className="sr-only">Opening your sandbox…</span>
-                )}
-                <span className="text-[13.5px] text-machine-muted">
-                  {s.body}
-                </span>
-              </span>
-              <span className="font-mono text-[11.5px] text-machine-muted">
-                {s.who}
-              </span>
-            </button>
-            {error?.key === s.key && (
-              <p
-                id={`err-${s.key}`}
-                role="alert"
-                className="mt-1.5 px-1 text-sm text-clay"
-              >
-                {error.text}
-              </p>
-            )}
-          </li>
-        ))}
-      </ul>
-      <p className="mt-4 text-sm text-machine-muted">
-        Switch between Rosa, Arjun and the admin any time from the bar at the
-        top. Play money only.
-      </p>
       <Actions>
+        <Primary
+          onClick={() => void sandbox.open(LOOK_AROUND)}
+          disabled={sandbox.busy !== null}
+        >
+          {busy ? <Spinner aria-hidden="true" /> : null}
+          Open my sandbox
+          {!busy && <ArrowRight aria-hidden="true" />}
+        </Primary>
         <Button
           variant="link"
           className="h-auto px-0 text-machine-muted hover:text-machine-ink"
@@ -1222,13 +1080,16 @@ function YourTurn({ story, onReplay }: { story: Story; onReplay: () => void }) {
         >
           Watch the story again
         </Button>
-        <Link
-          href="/login"
-          className="text-sm text-machine-muted underline-offset-4 hover:text-machine-ink hover:underline"
-        >
-          Sign in to a real account
-        </Link>
       </Actions>
+      {sandbox.error?.key === LOOK_AROUND.key && (
+        <p role="alert" className="mt-2 text-sm text-clay">
+          {sandbox.error.text}
+        </p>
+      )}
+      <h2 className="mt-8 mb-3 text-sm font-medium text-machine-muted">
+        Or start from any step of the loop
+      </h2>
+      <SandboxFlow sandbox={sandbox} />
     </>
   );
 }

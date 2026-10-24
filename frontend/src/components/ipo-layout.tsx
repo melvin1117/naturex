@@ -10,7 +10,7 @@ import {
   RefreshCwIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import type { ReactNode, Ref } from "react";
 import { cn } from "cn";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, CheckCircle2, Info } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { LoadError } from "@/components/proto/load-error";

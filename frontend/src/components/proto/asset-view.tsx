@@ -1,8 +1,9 @@
 "use client";
 
 import { ArrowLeft, MapPin } from "lucide-react";
-import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import Link from "@/components/app-link";
+import { useSearchParams } from "next/navigation";
+import { usePathname } from "@/lib/nav";
 import { Suspense, useMemo, useState } from "react";
 
 import { CopilotChat } from "@/components/copilot-chat";
@@ -45,6 +46,7 @@ import {
   type AssetLandCover,
 } from "@/lib/land-cover-overlay";
 import {
+  useApiBase,
   useAsset,
   useAssetPrices,
   useAssetReports,
@@ -157,7 +159,8 @@ function AssetLoaded({
   const reports = useAssetReports(asset.id);
   const prices = useAssetPrices(asset.id);
   const images = useSiteImages(asset.site_key);
-  const landCover = assetLandCover(asset, images.data);
+  const apiBase = useApiBase();
+  const landCover = assetLandCover(asset, images.data, apiBase);
 
   const latest = useMemo(
     () => (asset.latest_report ? reportFacts(asset.latest_report) : null),
@@ -365,7 +368,7 @@ function AssetLoaded({
                 facts={latest}
                 news={news}
                 runId={asset.latest_report?.run_id ?? null}
-                views={beforeAfterViews(asset)}
+                views={beforeAfterViews(asset, apiBase)}
                 recorded={recorded.data}
               />
             </TabsContent>
