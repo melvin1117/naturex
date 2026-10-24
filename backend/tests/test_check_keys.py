@@ -169,7 +169,7 @@ def test_tavily_rejected_key_fails() -> None:
 
 SERVICE_ACCOUNT = {
     "type": "service_account",
-    "client_email": "naturex@ee-project.iam.gserviceaccount.com",
+    "client_email": "wildworth@ee-project.iam.gserviceaccount.com",
     "private_key": "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n",
 }
 
@@ -178,7 +178,7 @@ def test_earth_engine_accepts_inline_json() -> None:
     result = check_earth_engine(settings(ee_service_account_json=json.dumps(SERVICE_ACCOUNT)))
 
     assert result.status == OK
-    assert "naturex@ee-project.iam.gserviceaccount.com" in result.detail
+    assert "wildworth@ee-project.iam.gserviceaccount.com" in result.detail
 
 
 def test_earth_engine_accepts_a_file_path(tmp_path: Path) -> None:

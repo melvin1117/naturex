@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Set a task's Status on the NatureX Project board and keep the assignee in sync.
+# Set a task's Status on the WildWorth Project board and keep the assignee in sync.
 #   scripts/board_status.sh <issue-number> "<Todo|In progress|In review|Done>"
 # Needs: gh auth login -s project   (the board is a user-level GitHub Project)
 set -euo pipefail

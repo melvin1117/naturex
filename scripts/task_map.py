@@ -291,7 +291,7 @@ def render_html(data: dict[str, Any], generated_at: str) -> str:
 
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NatureX task map</title>
+<title>WildWorth task map</title>
 <style>
 :root {{ --bg:#f5f7f3; --panel:#fff; --border:#dde5da; --text:#26332d; --muted:#5f6f67; --accent:#4f7d63; }}
 * {{ box-sizing:border-box; }}
@@ -324,7 +324,7 @@ table.picks td {{ padding:8px 14px; border-bottom:1px solid var(--border); }}
 .card.hide {{ display:none; }}
 </style></head><body>
 <header>
-  <h1>🌿 NatureX task map</h1>
+  <h1>🌿 WildWorth task map</h1>
   <div class="muted">Synced from GitHub issues {generated_at} · source: <code>tasks/todo.md</code> + issue status · regenerate: <code>make task-map</code></div>
   <div class="stats">
     <span class="stat">✅ Done <b>{c["done"]}</b>/{total}</span><span class="stat">🔨 In progress <b>{c["in_progress"]}</b></span>

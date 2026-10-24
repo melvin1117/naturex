@@ -1,4 +1,4 @@
-# NatureX backend
+# WildWorth backend
 
 FastAPI service for ratings, market, ledger and agents.
 

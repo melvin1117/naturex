@@ -464,7 +464,7 @@ def test_nominatim_geocoder_caches_responses_and_waits_between_misses() -> None:
         return fixture("nominatim_xochimilco.json")
 
     geocoder = NominatimGeocoder(
-        "NatureX/0.1 test@example.invalid",
+        "WildWorth/0.1 test@example.invalid",
         http_get=http_get,
         rate_limiter=NominatimRateLimiter(clock=lambda: now[0], sleep=sleeps.append),
         cache={},
@@ -481,7 +481,7 @@ def test_nominatim_geocoder_caches_responses_and_waits_between_misses() -> None:
     assert third == first
     assert len(calls) == 2
     assert sleeps == [1.0]
-    assert calls[0]["headers"]["User-Agent"] == "NatureX/0.1 test@example.invalid"
+    assert calls[0]["headers"]["User-Agent"] == "WildWorth/0.1 test@example.invalid"
     assert calls[0]["params"]["format"] == "jsonv2"
 
 

@@ -1,4 +1,4 @@
-# NatureX: Devpost submission text
+# WildWorth: Devpost submission text
 
 Draft for the Devpost form (Nebius × NVIDIA Global AI Hackathon, Best Apps & Agents). Every number here comes from a live run or an eval on Oct 22, 2026; update them if you re-run.
 

@@ -17,7 +17,7 @@ import { focusIfLost } from "@/lib/focus";
 
 /** Where a browser remembers the notices this account dismissed: listing → notice key. */
 export function noticesStorageKey(userId: string): string {
-  return `naturex:verification-notices:${userId}`;
+  return `wildworth:verification-notices:${userId}`;
 }
 
 function readSeen(userId: string): Record<string, string> {

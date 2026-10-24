@@ -1,5 +1,5 @@
 # Project-scoped Codex config (loaded only after you trust this project in Codex).
-# MCP servers for NatureX; secrets come from environment variables, never this file.
+# MCP servers for WildWorth; secrets come from environment variables, never this file.
 
 [mcp_servers.github]
 url = "https://api.githubcopilot.com/mcp/"

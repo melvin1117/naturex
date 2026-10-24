@@ -1,6 +1,6 @@
 """Token Factory spike (T02): how Nemotron behaves on Nebius Token Factory.
 
-For each Nemotron model it checks, against NatureX's real contracts:
+For each Nemotron model it checks, against WildWorth's real contracts:
   - structured output: `response_format` json_schema in the OpenAI shape
     ({"name", "schema", "strict"}), in the shape shown in the Token Factory docs
     (the raw schema), and json_object with the schema in the prompt;

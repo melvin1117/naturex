@@ -27,12 +27,12 @@ const RUN = `${Date.now().toString(36)}${randomUUID().slice(0, 4)}`;
 
 const OWNER = {
   name: `Owner ${RUN}`,
-  email: `owner-${RUN}@naturex.test`,
+  email: `owner-${RUN}@wildworth.test`,
   password: `owner pw ${RUN}!`,
 };
 const INVESTOR = {
   name: `Investor ${RUN}`,
-  email: `investor-${RUN}@naturex.test`,
+  email: `investor-${RUN}@wildworth.test`,
   password: `investor pw ${RUN}!`,
 };
 const COMMUNITY = `Riverkeepers ${RUN}`;

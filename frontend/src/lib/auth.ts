@@ -21,7 +21,7 @@ export const REGISTER_PATH = "/register";
 
 const MAX_RETURN_PATH = 2048;
 // Any base works: it only tells a same-origin path apart from one that leaves the site.
-const PROBE_ORIGIN = "https://naturex.invalid";
+const PROBE_ORIGIN = "https://wildworth.invalid";
 
 function startsLikeAnotherHost(path: string): boolean {
   return path.startsWith("//") || path.startsWith("/\\");

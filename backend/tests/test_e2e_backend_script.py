@@ -23,7 +23,7 @@ def run_script(database_url: str, **extra: str) -> subprocess.CompletedProcess[s
         "E2E_DATABASE_URL": database_url,
         "E2E_API_PORT": "1",
         "E2E_WEB_ORIGIN": "http://localhost:1",
-        "E2E_ADMIN_EMAIL": "guard@naturex.test",
+        "E2E_ADMIN_EMAIL": "guard@wildworth.test",
         "E2E_ADMIN_PASSWORD": "never used by these tests",
         **extra,
     }

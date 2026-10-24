@@ -16,6 +16,6 @@ export const DATABASE_URL =
  * There's no admin sign-up: scripts/e2e-backend.sh creates this account with the operator CLI
  * (`python -m app.cli create-admin --password-stdin`) in the throwaway E2E database.
  */
-export const ADMIN_EMAIL = "e2e-admin@naturex.test";
+export const ADMIN_EMAIL = "e2e-admin@wildworth.test";
 export const ADMIN_PASSWORD =
   process.env.E2E_ADMIN_PASSWORD ?? "e2e admin password, test only";

@@ -71,7 +71,7 @@ class Clock:
 def searcher(get: FakeGet, clock: Clock | None = None) -> NominatimPlaceSearch:
     clock = clock or Clock()
     return NominatimPlaceSearch(
-        "NatureX-test/1 (test@example.com)",
+        "WildWorth-test/1 (test@example.com)",
         http_get=get,
         rate_limiter=NominatimRateLimiter(clock=clock, sleep=clock.sleep),
         clock=clock,
@@ -93,7 +93,7 @@ def test_search_identifies_the_app_and_parses_places() -> None:
     url, params, headers = get.calls[0]
     assert url == NOMINATIM_SEARCH_URL
     assert params == {"q": "Xochimilco wetland", "format": "jsonv2", "limit": MAX_RESULTS}
-    assert headers["User-Agent"] == "NatureX-test/1 (test@example.com)"
+    assert headers["User-Agent"] == "WildWorth-test/1 (test@example.com)"
 
 
 def test_repeated_searches_are_cached_case_insensitively() -> None:
@@ -108,7 +108,7 @@ def test_searches_are_spaced_one_second_apart_and_busy_beyond_the_wait() -> None
     clock = Clock()
     limiter = NominatimRateLimiter(clock=clock, sleep=lambda _s: None)
     search = NominatimPlaceSearch(
-        "NatureX-test/1", http_get=FakeGet(), rate_limiter=limiter, clock=clock
+        "WildWorth-test/1", http_get=FakeGet(), rate_limiter=limiter, clock=clock
     )
     search.search("a place")
     search.search("another place")  # waits 1 s for its slot (sleep is a no-op here)
@@ -196,11 +196,11 @@ def test_identical_searches_in_flight_share_one_request() -> None:
 
 def test_the_default_searcher_follows_the_user_agent_setting() -> None:
     place_search_module._default = None
-    first = default_place_search("NatureX-test/1")
-    assert default_place_search("NatureX-test/1") is first
-    second = default_place_search("NatureX-test/2")
+    first = default_place_search("WildWorth-test/1")
+    assert default_place_search("WildWorth-test/1") is first
+    second = default_place_search("WildWorth-test/2")
     assert second is not first
-    assert second.user_agent == "NatureX-test/2"
+    assert second.user_agent == "WildWorth-test/2"
     place_search_module._default = None
 
 
@@ -300,7 +300,7 @@ def test_route_maps_failures_to_codes(client: TestClient) -> None:
         def search(self, query: str) -> list[Any]:
             raise PlaceSearchBusy
 
-    app.dependency_overrides[get_place_search] = lambda: Busy("NatureX-test/1")
+    app.dependency_overrides[get_place_search] = lambda: Busy("WildWorth-test/1")
     res = client.get("/places/search", params={"q": "Xochimilco"})
     assert (res.status_code, res.json()["detail"]) == (429, "place_search_busy")
     assert res.headers["Retry-After"] == "1"

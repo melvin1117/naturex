@@ -1,4 +1,4 @@
-# NatureX task list
+# WildWorth task list
 
 > **Tracked in GitHub Issues** ([melvin1117/naturex](https://github.com/melvin1117/naturex/issues)): epics #1–#6, tasks #7–#65 (issue number shown after each title). **The issues are the source of truth for status**; update this file only when scope changes.
 > **What can I pick?** Open [task-map.html](./task-map.html) (auto-synced from the issues): 🟢 ready tasks have every dependency closed. Keep the heading format and `**Deps:**` lines below intact; `scripts/task_map.py` parses them.
@@ -96,7 +96,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 **Verify:** team review · **Deps:** none · **Files:** `PRODUCT.md`, `docs/design/ux-writing.md`
 
 ### P02 · User flows and information architecture (#20) — PD · M · Must
-- [ ] Flows for Rosa (community), Arjun (investor), NatureX AI (under the hood), Time Machine, and the judge tour chapters (demo-plan §3.3)
+- [ ] Flows for Rosa (community), Arjun (investor), WildWorth AI (under the hood), Time Machine, and the judge tour chapters (demo-plan §3.3)
 - [ ] Sitemap and navigation; persona switcher behaviour
 - [ ] *(ADR-0005)* Two apps (Exchange at `/`, Steward at `/steward`) plus `/admin`; sign-in and sign-up; the `/judge` one-click demo; which role sees what
 

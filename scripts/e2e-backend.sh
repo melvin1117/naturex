@@ -2,7 +2,7 @@
 # T74: the API for the real-account E2E, started by Playwright's webServer (frontend/playwright.config.ts).
 # Recreates a dedicated database (never the dev `naturex` one), migrates, seeds, creates the E2E
 # admin with the supported CLI (password on stdin), then serves the API in the foreground.
-# NATUREX_ENV_FILE=none makes the backend ignore every .env file (backend/app/config.py), so a
+# WILDWORTH_ENV_FILE=none makes the backend ignore every .env file (backend/app/config.py), so a
 # developer's .env (real keys, USE_MOCKS=false, lower limits) can't leak in; the settings the
 # journey depends on are also set explicitly below, and every other one keeps its default.
 set -euo pipefail
@@ -15,7 +15,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../backend"
 
-export NATUREX_ENV_FILE=none
+export WILDWORTH_ENV_FILE=none
 export DATABASE_URL="$E2E_DATABASE_URL"
 export ENVIRONMENT=test
 export USE_MOCKS=true

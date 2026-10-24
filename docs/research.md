@@ -1,4 +1,4 @@
-# NatureX — Open-Source Landscape Research (Sept 2026)
+# WildWorth — Open-Source Landscape Research (Sept 2026)
 
 > What already exists that we can reuse instead of building from scratch. Researched Sept 27–28, 2026; star counts and versions are approximate. Verdicts: **ADOPT** (use as-is), **BORROW** (copy ideas/files), **SKIP**.
 > Related: [dev-spec.md](./specs/dev-spec.md) · [pm-spec.md](./specs/pm-spec.md) · [demo-plan.md](./specs/demo-plan.md)
@@ -30,7 +30,7 @@
 | vercel-labs/agent-skills (MIT), supabase/agent-skills (MIT) | `web-design-guidelines`, `react-best-practices`; Supabase + Postgres best practices | **ADOPTED** (those skills only) |
 | latent-spaces/brag (MIT) | 15–25 s launch-video skill | Optional personal install (not in the repo) |
 | obra/superpowers (MIT) | Brainstorm → plan → subagent TDD workflow | SKIP (overlaps addyosmani/agent-skills) |
-| OpenSpec (~70k★, MIT) | `propose` → `proposal.md` + `tasks.md` per change folder → `apply` → `archive` | **SKIP for NatureX:** replaced by addyosmani's spec and planning skills + `tasks/todo.md` / GitHub Issues (ADR-0001) |
+| OpenSpec (~70k★, MIT) | `propose` → `proposal.md` + `tasks.md` per change folder → `apply` → `archive` | **SKIP for WildWorth:** replaced by addyosmani's spec and planning skills + `tasks/todo.md` / GitHub Issues (ADR-0001) |
 | GitHub Spec Kit (~139k★, MIT) | constitution → specify → plan → tasks → implement; stricter gates | SKIP (same reason) |
 | BMAD Method (MIT) | PM/architect/dev personas, epic and story files | BORROW (PRD template, checklists) |
 | Task Master | **MIT + Commons Clause**; team mode needs a paid cloud | **SKIP** |
@@ -71,7 +71,7 @@
 | Item | Notes | Verdict |
 |---|---|---|
 | **shadcn/ui** CLI + blocks (MIT) | `npx shadcn add dashboard-01 sidebar-07 …` | **ADOPT** |
-| Tailwind v4 CSS-first tokens (`@theme inline`, OKLCH vars) + NatureX brand vars; chart palette shared with Recharts | — | **ADOPT** |
+| Tailwind v4 CSS-first tokens (`@theme inline`, OKLCH vars) + WildWorth brand vars; chart palette shared with Recharts | — | **ADOPT** |
 | Storybook, Ladle | Too heavy for 5 weeks | SKIP; use a **`/dev/ui` route** (hidden in prod) |
 | **Driver.js** (26.9k★, MIT, ~5 kB) | Guided tours | **ADOPT** (react-joyride MIT as an alternative) |
 | Shepherd.js | **AGPL-3.0 or commercial** | **SKIP** (license) |

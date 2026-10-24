@@ -2,7 +2,7 @@
 # The routing-table run: the News Scout eval on Nano, Super and Ultra through the same code
 # path (ADR-0003). About $0.05 uncached. Run from the repo root; see evals/README.md.
 #   PROMPTFOO_DISABLE_TELEMETRY=1 npx -y promptfoo@0.124.0 eval -c evals/promptfooconfig.routing.yaml
-description: NatureX News Scout classification (news-scout-v2 prompt)
+description: WildWorth News Scout classification (news-scout-v2 prompt)
 
 # Every Python step (test generator, provider, assertions) must run in the backend venv,
 # which has the app's dependencies (`cd backend && uv sync`). Paths are relative to the repo

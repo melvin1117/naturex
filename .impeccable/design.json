@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "generatedAt": "2026-10-15T22:40:00Z",
-  "title": "Design System: NatureX",
+  "title": "Design System: WildWorth",
   "extensions": {
     "colorMeta": {
       "forest": { "role": "primary", "displayName": "Forest", "canonical": "oklch(0.31 0.062 148)" },

@@ -6,9 +6,11 @@ from functools import lru_cache
 from pydantic import Field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
-# NATUREX_ENV_FILE=none makes Settings ignore every .env file and read only the process
+# WILDWORTH_ENV_FILE=none makes Settings ignore every .env file and read only the process
 # environment (and defaults), so a developer's .env can't leak into an isolated run (T74's E2E).
-ENV_FILE_SWITCH = "NATUREX_ENV_FILE"
+# The pre-rename name, NATUREX_ENV_FILE, still works.
+ENV_FILE_SWITCH = "WILDWORTH_ENV_FILE"
+LEGACY_ENV_FILE_SWITCH = "NATUREX_ENV_FILE"
 
 
 class Settings(BaseSettings):
@@ -146,7 +148,10 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        if os.environ.get(ENV_FILE_SWITCH, "").strip().lower() == "none":
+        if any(
+            os.environ.get(name, "").strip().lower() == "none"
+            for name in (ENV_FILE_SWITCH, LEGACY_ENV_FILE_SWITCH)
+        ):
             return init_settings, env_settings, file_secret_settings
         return init_settings, env_settings, dotenv_settings, file_secret_settings
 
