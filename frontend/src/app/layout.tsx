@@ -33,13 +33,42 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const DESCRIPTION =
+  "Worth more wild. The AI rating agency for living nature: satellites and local news, read by Nemotron agents. Sandbox · play money only.";
+
 export const metadata: Metadata = {
+  // Absolute links for link previews; without SITE_URL, Next falls back to the dev host.
+  metadataBase: process.env.SITE_URL
+    ? new URL(process.env.SITE_URL)
+    : undefined,
   title: {
-    default: "NatureX",
-    template: "%s · NatureX",
+    default: "WildWorth · nature ratings",
+    template: "%s · WildWorth",
   },
-  description:
-    "AI rating agency and sandbox exchange for living nature. Play money only, not a real security.",
+  description: DESCRIPTION,
+  applicationName: "WildWorth",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "16x16 32x32 48x48" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+  openGraph: {
+    siteName: "WildWorth",
+    title: "WildWorth · nature ratings",
+    description: DESCRIPTION,
+    type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "WildWorth. Worth more wild.",
+      },
+    ],
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({

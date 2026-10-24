@@ -180,7 +180,9 @@ describe("Exchange navigation per role", () => {
       </ExchangeLayout>,
       SIGNED_IN_WORLD,
     );
-    const home = await screen.findByRole("link", { name: "NatureX Exchange" });
+    const home = await screen.findByRole("link", {
+      name: "WildWorth Exchange",
+    });
     // Below `sm` the name is only visually hidden (sr-only), never removed.
     expect(within(home).getByText("Exchange")).toHaveClass("max-sm:sr-only");
     expect(within(home).getByText("Exchange")).not.toHaveClass("hidden");
@@ -361,7 +363,7 @@ describe("Steward shell", () => {
       within(pages).getByRole("link", { name: "List land" }),
     ).toHaveAttribute("href", `/steward/list?community=${SELVA.id}`);
     expect(
-      screen.getByRole("link", { name: /^NatureX\s*Steward$/ }),
+      screen.getByRole("link", { name: /^WildWorth\s*Steward$/ }),
     ).toHaveAttribute("href", `/steward?community=${SELVA.id}`);
   });
 

@@ -299,7 +299,44 @@
   animation: nx-pulse-line 1.4s linear infinite;
 }
 
+/* The WildWorth mark (brand guidelines ch. 4 and 11): the line draws, then the reading rises
+   and its dot pops. Only when a rating lands, never on hover or as a loader. */
+.ww-play .ww-ink {
+  stroke-dasharray: 100;
+  animation: ww-draw 1.1s var(--nx-ease-out) both;
+}
+.ww-play .ww-read {
+  stroke-dasharray: 100;
+  animation: ww-draw 0.55s var(--nx-ease-out) 1s both;
+}
+.ww-play .ww-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ww-pop 0.5s var(--nx-ease-out) 1.45s both;
+}
+@keyframes ww-draw {
+  from {
+    stroke-dashoffset: 100;
+  }
+}
+@keyframes ww-pop {
+  0% {
+    transform: scale(0);
+  }
+  60% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .ww-play .ww-ink,
+  .ww-play .ww-read,
+  .ww-play .ww-dot {
+    animation: none;
+  }
   .nx-stamp,
   .nx-rise,
   .nx-flow,

@@ -3,9 +3,11 @@ import Image from "next/image";
 import { cn } from "cn";
 
 import { BoundaryMap, type BoundaryFrame } from "@/components/boundary-map";
+import { Lockup } from "@/components/brand";
 import type { LonLatRing } from "@/lib/boundary-map";
 import { money, signedPct } from "@/lib/prototype/format";
 
+/** The app's lockup in a header: the WildWorth mark and wordmark, then the app's name. */
 export function Wordmark({
   className,
   app,
@@ -14,13 +16,11 @@ export function Wordmark({
   app?: string;
 }) {
   return (
-    <span className={cn("inline-flex items-baseline gap-2", className)}>
-      <span className="font-serif text-[1.65rem] leading-none tracking-tight">
-        NatureX
-      </span>
+    <span className={cn("inline-flex items-center gap-2.5", className)}>
+      <Lockup size={26} />
       {app && (
         <>
-          {/* The space keeps the accessible name "NatureX Exchange" (flex doesn't draw it).
+          {/* The space keeps the accessible name "WildWorth Exchange" (flex doesn't draw it).
               Below `sm` the app name is only visually hidden, so it stays in that name. */}{" "}
           <span className="text-sm font-medium text-muted-foreground max-sm:sr-only">
             {app}
