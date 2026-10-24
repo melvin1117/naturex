@@ -1,0 +1,826 @@
+<title>NatureX Brand Routes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gloock&family=Hanken+Grotesk:wght@300..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: a single brand direction presented like a studio's brand book. A quiet editorial column,
+   with printed boards (forest, machine, paper) where the mark and the seal are shown at full size. */
+:root{
+  /* theme tokens (light) */
+  --bg:oklch(0.945 0.011 125);
+  --surface:oklch(0.99 0.005 118);
+  --raised:oklch(0.915 0.016 128);
+  --ink:oklch(0.255 0.045 148);
+  --muted:oklch(0.47 0.035 145);
+  --line:oklch(0.875 0.014 128);
+  --accent-ink:oklch(0.42 0.1 135);
+  --shadow:0 1px 2px oklch(0.3 0.05 145/0.06),0 18px 40px -26px oklch(0.3 0.05 145/0.35);
+
+  /* fixed brand tokens: printed boards and product mockups look the same in both themes */
+  --forest:oklch(0.31 0.062 148);
+  --forest-deep:oklch(0.215 0.035 158);
+  --forest-ink:oklch(0.255 0.045 148);
+  --machine-ink:oklch(0.94 0.045 122);
+  --machine-muted:oklch(0.74 0.045 135);
+  --paper:oklch(0.985 0.006 118);
+  --lichen:oklch(0.932 0.012 128);
+  --lime:oklch(0.86 0.135 126);
+  --lime-ink:oklch(0.42 0.1 135);
+  --clay:oklch(0.66 0.13 48);
+
+  /* type */
+  --display:"Gloock",Georgia,"Times New Roman",serif;
+  --body:"Hanken Grotesk",system-ui,-apple-system,sans-serif;
+  --mono:"Geist Mono",ui-monospace,Menlo,monospace;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:oklch(0.19 0.028 158);--surface:oklch(0.235 0.034 156);--raised:oklch(0.27 0.036 155);
+    --ink:oklch(0.94 0.035 122);--muted:oklch(0.74 0.04 135);--line:oklch(0.34 0.04 152);
+    --accent-ink:oklch(0.86 0.135 126);
+    --shadow:0 1px 2px oklch(0 0 0/0.3),0 18px 40px -26px oklch(0 0 0/0.7);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:oklch(0.19 0.028 158);--surface:oklch(0.235 0.034 156);--raised:oklch(0.27 0.036 155);
+  --ink:oklch(0.94 0.035 122);--muted:oklch(0.74 0.04 135);--line:oklch(0.34 0.04 152);
+  --accent-ink:oklch(0.86 0.135 126);
+  --shadow:0 1px 2px oklch(0 0 0/0.3),0 18px 40px -26px oklch(0 0 0/0.7);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16.5px/1.6 var(--body);-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+h1,h2,h3,h4,h5,p{margin:0}
+h1,h2,h3{text-wrap:balance}
+a{color:inherit;text-underline-offset:3px;text-decoration-thickness:1px}
+:focus-visible{outline:2px solid var(--accent-ink);outline-offset:3px;border-radius:4px}
+.wrap{max-width:1160px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:720px){.wrap{padding-left:max(32px,env(safe-area-inset-left,0px));padding-right:max(32px,env(safe-area-inset-right,0px))}}
+.label{font:500 11.5px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono);font-size:.86em}
+section{padding-block:96px 0;scroll-margin-top:64px}
+.h2{font:400 clamp(40px,6vw,72px)/.98 var(--display);letter-spacing:-.02em}
+.h3{font:400 clamp(26px,3vw,34px)/1.1 var(--display);letter-spacing:-.01em}
+.lede{font-size:clamp(18px,2vw,21px);line-height:1.5;max-width:60ch}
+.section-head{display:grid;gap:16px;margin-bottom:36px}
+
+/* top nav */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:color-mix(in oklch,var(--bg) 86%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:24px;height:52px}
+.top .who{display:flex;align-items:center;gap:8px;font:500 12px var(--mono);letter-spacing:.04em;white-space:nowrap}
+.top .who svg{width:22px;height:22px}
+.top nav{display:flex;gap:18px;overflow-x:auto;scrollbar-width:none;font-size:14px;min-width:0}
+.top nav::-webkit-scrollbar{display:none}
+.top nav a{text-decoration:none;color:var(--muted);white-space:nowrap}
+.top nav a:hover{color:var(--ink)}
+
+/* lockups */
+.lk{display:inline-flex;align-items:center;gap:.28em;line-height:1}
+.lk svg{display:block;flex:none;width:1.05em;height:1.05em}
+.wm{display:inline-flex;align-items:baseline;white-space:nowrap}
+.wm .w1{font:400 1em/1 var(--display);letter-spacing:-.025em}
+.wm .w2{font:300 .9em/1 var(--body);letter-spacing:-.045em;margin-left:.02em}
+.wm.serif .w2{font:400 1em/1 var(--display);letter-spacing:-.025em;margin-left:0}
+
+/* hero */
+.hero{padding-block:76px 0}
+.hero .big{font-size:clamp(58px,11.5vw,150px);margin-top:26px}
+.hero h1{font:400 clamp(32px,4.6vw,56px)/1.05 var(--display);letter-spacing:-.02em;color:var(--accent-ink);margin-top:22px}
+.hero .lede{margin-top:20px}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:44px}
+.facts div{border-top:2px solid var(--ink);padding-top:14px}
+.facts b{display:block;font:400 22px/1.2 var(--display);margin-bottom:4px}
+.facts span{font-size:14.5px;color:var(--muted)}
+
+/* idea */
+.plat{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;background:var(--line);border-radius:24px;overflow:hidden;box-shadow:var(--shadow)}
+.plat>div{background:var(--surface);padding:26px;display:grid;align-content:start;gap:10px}
+.plat .w2{grid-column:span 2}.plat .w3{grid-column:span 3}.plat .w6{grid-column:span 6}
+.plat p.say{font:400 22px/1.25 var(--display)}
+.plat .belief p.say{font-size:clamp(26px,3.4vw,40px);line-height:1.1}
+
+/* two names */
+.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.pcard{border-radius:28px;padding:32px;display:grid;gap:16px;align-content:start;box-shadow:var(--shadow)}
+.pcard.brand{background:var(--forest);color:var(--paper)}
+.pcard.report{background:var(--forest-deep);color:var(--machine-ink)}
+.pcard .role{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;opacity:.75}
+.pcard .lk{font-size:52px}
+.pcard ul{margin:0;padding-left:1.1em;display:grid;gap:8px;font-size:15.5px}
+.pcard .ex{padding:14px 16px;border-radius:14px;background:oklch(1 0 0/0.08);font-size:15px;line-height:1.45}
+.pcard .ex small{display:block;font:500 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;opacity:.7;margin-bottom:4px}
+.why-not{margin-top:16px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:24px;align-items:center;padding:26px 28px;border-radius:24px;background:var(--raised)}
+.why-not .big{font:400 clamp(26px,3.4vw,40px)/1.05 var(--display);letter-spacing:-.02em}
+.why-not ul{margin:0;padding-left:1.1em;display:grid;gap:6px;font-size:15px}
+
+/* panels */
+.sys{display:grid;gap:16px}
+.panel{background:var(--surface);border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+.panel .ph{padding:28px 28px 0;display:grid;gap:6px}
+.panel .ph p{font-size:15px;color:var(--muted);max-width:72ch}
+.stage{position:relative;display:grid;place-items:center;min-height:400px;padding:64px 24px;background:var(--forest);color:var(--paper)}
+.stage .lk{font-size:clamp(54px,9vw,120px)}
+.stage .cap{position:absolute;left:20px;bottom:18px;font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;opacity:.7}
+.replay{position:absolute;right:18px;bottom:16px;font:500 12px var(--mono);letter-spacing:.04em;padding:8px 12px;border-radius:99px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer;opacity:.8}
+.replay:hover{opacity:1}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-top:1px solid var(--line)}
+.two>div{padding:30px;min-width:0}
+.two>div+div{border-left:1px solid var(--line)}
+.anat{display:grid;grid-template-columns:auto minmax(0,1fr);gap:24px;align-items:center;margin-top:14px}
+.anat ol{margin:0;padding-left:1.15em;display:grid;gap:8px;font-size:15px}
+.anat .fig{color:var(--ink)}
+.anat .fig svg{width:128px;height:128px;display:block}
+
+/* living reading */
+.living{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:32px;align-items:center;padding:34px 30px;background:var(--forest-deep);color:var(--machine-ink)}
+.living .lm{width:150px;height:150px;display:block}
+.living .score{font:300 64px/1 var(--body);font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.living .gchip{display:inline-grid;place-items:center;min-width:70px;height:42px;padding:0 14px;border-radius:99px;font:600 21px var(--body);margin-left:12px;vertical-align:14px}
+.living .glab{font:400 24px var(--display);margin-top:8px}
+.living label{display:block;margin-top:18px;font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--machine-muted)}
+.living input{width:100%;margin-top:8px;accent-color:oklch(0.86 0.135 126)}
+.living .ticks{display:flex;justify-content:space-between;font:500 11px var(--mono);color:var(--machine-muted);margin-top:2px}
+.living p.n{margin-top:14px;font-size:14px;color:oklch(0.8 0.04 135);max-width:58ch}
+
+.wmcmp{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-top:1px solid var(--line);margin-top:24px}
+.wmcmp>div{padding:36px 28px 26px;display:grid;gap:16px;justify-items:start}
+.wmcmp>div+div{border-left:1px solid var(--line)}
+.wmcmp .lk{font-size:clamp(40px,5vw,60px);color:var(--ink)}
+.wmcmp p{font-size:14.5px}
+.pick{display:inline-block;font:500 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:5px 9px;border-radius:99px;background:var(--lime);color:var(--forest-ink)}
+.alt{display:inline-block;font:500 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:5px 9px;border-radius:99px;background:var(--raised);color:var(--muted)}
+
+.lockgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:24px;border-top:1px solid var(--line)}
+.lockgrid>div{display:grid;place-items:center;min-height:180px;padding:28px 16px;position:relative}
+.lockgrid .lk{font-size:46px}
+.lockgrid small{position:absolute;left:16px;bottom:12px;font:500 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;opacity:.65}
+.on-paper{background:var(--paper);color:var(--forest-ink)}
+.on-forest{background:var(--forest);color:var(--paper)}
+.on-lime{background:var(--lime);color:var(--forest-ink)}
+.on-machine{background:var(--forest-deep);color:var(--machine-ink)}
+.sizes{display:flex;flex-wrap:wrap;align-items:flex-end;gap:22px 28px;padding:26px 28px 30px;border-top:1px solid var(--line)}
+.sizes figure{margin:0;display:grid;justify-items:center;gap:8px}
+.sizes figcaption{font:500 10.5px var(--mono);color:var(--muted)}
+.tile{display:grid;place-items:center;border-radius:22%;background:var(--forest);color:var(--paper)}
+.sites{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--line)}
+.sites figure{margin:0;padding:30px 20px;display:grid;justify-items:center;gap:12px;border-right:1px solid var(--line);text-align:center}
+.sites figure:last-child{border-right:0}
+.sites svg{width:96px;height:96px;color:var(--ink)}
+.sites b{font:400 20px/1.15 var(--display)}
+.gpill{display:inline-flex;align-items:center;gap:6px;font:600 13px var(--body);padding:4px 10px;border-radius:99px;font-variant-numeric:tabular-nums}
+.rules{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border-top:1px solid var(--line)}
+.rules>div{background:var(--surface);padding:22px 28px;font-size:14.5px}
+.rules h4{font:600 14px var(--body);margin-bottom:8px}
+.rules ul{margin:0;padding-left:1.1em;display:grid;gap:6px}
+
+/* seal boards */
+.seals{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr)}
+.seals>div{display:grid;place-items:center;min-height:320px;padding:36px 20px;position:relative}
+.seals svg{width:220px;height:220px;max-width:100%}
+.seals>div:not(:first-child) svg{width:150px;height:150px}
+.seals small{position:absolute;left:16px;bottom:12px;font:500 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;opacity:.65}
+.rephead{margin:24px 28px 28px;border-radius:20px;background:var(--paper);color:var(--forest-ink);padding:22px 24px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:22px;align-items:center;box-shadow:0 0 0 1px oklch(0.3 0.05 145/0.08)}
+.rephead svg{width:96px;height:96px}
+.rephead .k{font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:oklch(0.47 0.035 145)}
+.rephead h5{font:400 30px/1.05 var(--display);margin-top:6px}
+.rephead p{font-size:14px;margin-top:8px;color:oklch(0.47 0.035 145)}
+
+/* colour + type */
+.sw{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:24px 28px 0}
+.sw div{border-radius:16px;overflow:hidden;background:var(--bg)}
+.sw i{display:block;height:74px}
+.sw p{padding:10px 12px;font-size:13px}
+.sw p b{display:block;font-size:14px}
+.ramp{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));margin:16px 28px 28px;border-radius:14px;overflow:hidden}
+.ramp span{display:grid;gap:2px;align-content:end;height:78px;padding:9px;font:600 14px var(--body)}
+.ramp small{font:500 10.5px var(--mono);opacity:.85}
+.spec{display:grid;grid-template-columns:200px minmax(0,1fr);gap:24px;padding:24px 28px;border-top:1px solid var(--line);align-items:center}
+.spec .role{display:grid;gap:4px}
+.spec .role b{font:600 15px var(--body)}
+.spec .role span{font-size:13px;color:var(--muted)}
+.spec .smp{min-width:0;overflow-wrap:anywhere}
+
+/* voice + names */
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border-top:1px solid var(--line);margin-top:24px}
+.grid2>div{background:var(--surface);padding:26px 28px;display:grid;gap:10px;align-content:start}
+.grid2 .line{font:400 clamp(24px,2.6vw,32px)/1.15 var(--display);letter-spacing:-.01em}
+.grid2 .ctx,.grid2 .was{font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.grid2 .why{font-size:14.5px;color:var(--muted)}
+.grid2 h4{font:400 28px/1.05 var(--display)}
+.grid2 p{font-size:15px}
+.grid2 .ui{font-size:13.5px;padding:9px 12px;border-radius:10px;background:var(--bg)}
+.keep{padding:20px 28px 26px;font-size:14.5px;border-top:1px solid var(--line)}
+
+/* mockups (the product is light; fixed colours) */
+.mocks{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;padding:24px 28px 28px}
+.mock{border-radius:20px;overflow:hidden;background:var(--lichen);color:var(--forest-ink);box-shadow:0 0 0 1px oklch(0.3 0.05 145/0.08)}
+.sandbox{background:var(--forest);color:var(--paper);font:500 11.5px var(--body);padding:7px 16px;display:flex;justify-content:space-between;gap:12px}
+.appbar{display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;background:color-mix(in oklch,var(--paper) 80%,var(--lichen));border-bottom:1px solid oklch(0.885 0.014 128);font-size:14px;min-width:0}
+.appbar .lk{font-size:22px}
+.appbar nav{display:flex;gap:4px;margin-left:auto;min-width:0;overflow:hidden}
+.appbar nav span{padding:6px 12px;border-radius:99px;white-space:nowrap;font-size:13px}
+.appbar nav span.on{background:var(--paper);box-shadow:0 1px 3px oklch(0.3 0.05 145/0.12)}
+.rcardm{margin:18px;padding:22px;border-radius:24px;background:var(--paper);display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:center;box-shadow:0 10px 30px -14px oklch(0.3 0.05 145/0.25)}
+.rcardm svg{width:104px;height:104px;color:var(--forest-ink)}
+.rcardm .k{font:500 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:oklch(0.47 0.035 145)}
+.rcardm h5{font:400 30px/1.05 var(--display);letter-spacing:-.01em;margin-top:4px}
+.rcardm .gr{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;font-size:14px}
+.rcardm .val{margin-top:10px;font-size:13px;color:oklch(0.47 0.035 145);font-variant-numeric:tabular-nums}
+.illus{font:500 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:oklch(0.47 0.035 145);padding:0 18px 16px}
+.phone{background:linear-gradient(160deg,oklch(0.42 0.06 160),oklch(0.26 0.04 200));padding:28px 16px;display:grid;align-content:center;gap:10px}
+.phone .time{font:300 52px/1 var(--body);color:oklch(0.98 0.01 120);text-align:center;font-variant-numeric:tabular-nums}
+.phone .date{font-size:13px;color:oklch(0.92 0.02 120);text-align:center;margin-bottom:8px}
+.notif{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;padding:13px 14px;border-radius:18px;background:oklch(0.97 0.006 120/0.9);color:var(--forest-ink);font-size:13.5px;line-height:1.35}
+.notif .ic{width:34px;height:34px;border-radius:9px;background:var(--forest);color:var(--paper);display:grid;place-items:center}
+.notif .ic svg{width:24px;height:24px}
+.notif b{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:2px}
+.notif b span{font-weight:400;color:oklch(0.47 0.035 145)}
+.endcard{grid-column:1/-1;aspect-ratio:16/7;max-width:100%;border-radius:20px;background:var(--forest-deep);color:var(--machine-ink);display:grid;place-items:center;align-content:center;gap:18px;position:relative;overflow:hidden;padding:24px}
+.endcard .lk{font-size:clamp(48px,8vw,104px)}
+.endcard .t{font:400 clamp(20px,2.6vw,32px)/1.1 var(--display);color:var(--lime)}
+.endcard .s{position:absolute;bottom:14px;left:0;right:0;text-align:center;font:500 11px var(--mono);letter-spacing:.05em;color:var(--machine-muted);padding-inline:16px}
+.tabbar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:oklch(0.86 0.012 130);font-size:12.5px;overflow:hidden}
+.tabbar .tab{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:9px 9px 0 0;min-width:0}
+.tabbar .tab.on{background:var(--lichen)}
+.tabbar .tab span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabbar svg{width:16px;height:16px;flex:none}
+
+/* watch-outs, week, decide */
+.risks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.risks>div{background:var(--surface);border-radius:22px;padding:24px 26px;box-shadow:var(--shadow);display:grid;gap:10px;align-content:start}
+.risks h3{font:400 23px/1.15 var(--display)}
+.risks p{font-size:15px}
+.risks .fix{font-size:14px;padding:10px 12px;border-radius:12px;background:color-mix(in oklch,var(--lime) 26%,var(--surface))}
+.week{display:grid}
+.day{display:grid;grid-template-columns:130px 28px minmax(0,1fr);gap:0 18px}
+.day .d{font:500 13px/1.3 var(--mono);color:var(--muted);text-align:right;padding-top:5px}
+.day .r{position:relative;display:flex;justify-content:center}
+.day .r::before{content:"";position:absolute;top:0;bottom:0;width:2px;background:var(--line)}
+.day:first-child .r::before{top:12px}
+.day:last-child .r::before{bottom:calc(100% - 12px)}
+.day .r i{position:relative;width:13px;height:13px;margin-top:7px;border-radius:99px;background:var(--surface);box-shadow:inset 0 0 0 2.5px var(--ink)}
+.day.key .r i{background:var(--lime)}
+.day .b{padding-bottom:26px}
+.day .b h4{font:400 22px/1.2 var(--display)}
+.day .b p{font-size:15px;margin-top:4px;max-width:70ch}
+.ask{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.ask>div{background:var(--surface);border-radius:24px;padding:24px;box-shadow:var(--shadow);display:grid;gap:12px;align-content:start}
+.ask h3{font:400 22px/1.15 var(--display)}
+.ask p{font-size:14.5px}
+.ask .prop{font-size:14px;padding:10px 12px;border-radius:12px;background:color-mix(in oklch,var(--lime) 30%,var(--surface))}
+.others{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+.others div{background:var(--surface);border-radius:18px;padding:16px 18px;font-size:14px}
+.others b{display:block;font:400 20px/1.15 var(--display);margin-bottom:4px}
+.others span{color:var(--muted)}
+footer{padding-block:96px 120px;font-size:13.5px;color:var(--muted)}
+footer ul{margin:10px 0 0;padding-left:1.1em;display:grid;gap:4px}
+
+/* refinements */
+.refine{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.rf{background:var(--surface);border-radius:24px;overflow:hidden;box-shadow:var(--shadow);display:grid;grid-template-rows:auto 1fr}
+.rf-stage{position:relative;display:grid;place-items:center;min-height:200px;padding:40px 16px 32px}
+.rf-stage .lk,.rf-stage .ulw{font-size:40px}
+.rf-stage .stack{font-size:36px}
+.rf-stage .pick{position:absolute;top:14px;left:14px}
+.rf-body{padding:20px 22px 24px;display:grid;gap:8px;align-content:start;border-top:1px solid var(--line)}
+.rf-body h4{font:400 24px/1.1 var(--display)}
+.rf-body p{font-size:14.5px}
+.rf-body .best{font-size:13.5px;color:var(--muted)}
+.rf-body .best b{color:var(--ink);font-weight:600}
+.stack{display:grid;justify-items:center;gap:.22em;line-height:1}
+.stack svg{width:1.5em;height:1.5em;display:block}
+.tilemk{display:grid;place-items:center;width:1.25em;height:1.25em;border-radius:24%;background:var(--forest);color:var(--paper);flex:none}
+.tilemk svg{width:.82em!important;height:.82em!important}
+.ulw{display:inline-grid;gap:.06em;line-height:1}
+.ulw svg.ul{width:100%;height:.34em;display:block;overflow:visible}
+.ask.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+
+/* motion */
+.ww-ink{stroke-dasharray:100;stroke-dashoffset:0}
+.ww-read{stroke-dasharray:100;stroke-dashoffset:0}
+.ww-dot{transform-box:fill-box;transform-origin:center}
+.play .ww-ink{animation:draw 1.1s var(--ease) both}
+.play .ww-read{animation:draw .55s var(--ease) 1s both}
+.play .ww-dot{animation:pop .5s var(--ease) 1.45s both}
+@keyframes draw{from{stroke-dashoffset:100}}
+@keyframes pop{0%{transform:scale(0)}60%{transform:scale(1.3)}100%{transform:scale(1)}}
+
+@media (max-width:980px){
+  .pair,.two,.mocks,.risks,.wmcmp,.why-not{grid-template-columns:minmax(0,1fr)}
+  .two>div+div,.wmcmp>div+div{border-left:0;border-top:1px solid var(--line)}
+  .plat{grid-template-columns:minmax(0,1fr)}
+  .plat .w2,.plat .w3,.plat .w6{grid-column:auto}
+  .sites,.lockgrid,.seals{grid-template-columns:minmax(0,1fr)}
+  .refine{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sites figure{border-right:0;border-bottom:1px solid var(--line)}
+  .sites figure:last-child{border-bottom:0}
+  .living{grid-template-columns:auto auto;justify-content:start}
+  .living>div:last-child{grid-column:1/-1}
+  .grid2,.rules{grid-template-columns:minmax(0,1fr)}
+  .sw{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ask{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .others{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stage{min-height:300px}
+}
+@media (max-width:640px){
+  section{padding-block:72px 0}
+  .facts,.ask,.ask.three,.others,.refine{grid-template-columns:minmax(0,1fr)}
+  .why-not,.anat{grid-template-columns:minmax(0,1fr)}
+  .living .lm{width:118px;height:118px}
+  .living{gap:20px}
+  .spec{grid-template-columns:minmax(0,1fr);gap:12px}
+  .ramp{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .day{grid-template-columns:64px 22px minmax(0,1fr);gap:0 10px}
+  .day .d{font-size:11.5px}
+  .rcardm,.rephead{grid-template-columns:minmax(0,1fr)}
+  .appbar nav{display:none}
+  .endcard{aspect-ratio:auto;min-height:260px}
+  .pcard{padding:24px}
+  .pcard .lk{font-size:40px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+
+<div class="top"><div class="wrap">
+  <span class="who"><span id="navMark"></span>WildWorth · brand direction</span>
+  <nav aria-label="Sections">
+    <a href="#idea">The idea</a><a href="#refine">Refinements</a><a href="#mark">The mark</a><a href="#proof">Proof of Life</a><a href="#colour">Colour and type</a><a href="#voice">Voice</a><a href="#features">Feature names</a><a href="#use">In use</a><a href="#watch">Watch-outs</a><a href="#week">The week</a><a href="#decide">To finalise</a>
+  </nav>
+</div></div>
+
+<main class="wrap">
+
+<header class="hero">
+  <p class="label">For the team · 22 Oct 2026 · submission 29 Oct</p>
+  <div class="big"><span class="lk play" data-lock="ww" data-read="accent" id="heroLock"></span></div>
+  <h1>Worth more wild.</h1>
+  <p class="lede">The name for NatureX's product, finalised. WildWorth says the whole argument in two words: wild land has worth. Every quarter it issues a Proof of Life for each site, with the evidence and a date on it.</p>
+  <div class="facts">
+    <div><b>The argument, in the name</b><span>Wild land has worth. A judge gets it before reading anything else.</span></div>
+    <div><b>A logo that is a reading</b><span>The last stroke rises to the site's Health score. Every site signs its own mark.</span></div>
+    <div><b>A report with a date on it</b><span>Each quarter, a Proof of Life seal: the score, the grade and the date.</span></div>
+  </div>
+</header>
+
+<!-- IDEA -->
+<section id="idea">
+  <div class="section-head">
+    <p class="label">The idea</p>
+    <h2 class="h2">What the brand has to say</h2>
+  </div>
+  <div class="plat">
+    <div class="w6 belief"><p class="label">Belief (the team's line, kept)</p><p class="say">Keeping nature alive should pay more than destroying it.</p></div>
+    <div class="w3"><p class="label">The problem</p><p class="say">The market only sees nature once it's sold: timber, minerals, a drained plot for a factory.</p></div>
+    <div class="w3"><p class="label">What WildWorth says</p><p class="say">Living land has worth while it's alive, and here is how much.</p></div>
+    <div class="w2"><p class="label">Rosa hears</p><p>“Our wetland is worth something as it is. We don't have to sell it.”</p></div>
+    <div class="w2"><p class="label">Arjun hears</p><p>“A valuation with a range, a confidence score and a grade I can compare.”</p></div>
+    <div class="w2"><p class="label">A judge hears</p><p>“A rating for nature's value.” In under a second, with no backstory.</p></div>
+    <div class="w6"><p class="label">The hidden layer</p><p class="say">In old English place names, <i>-worth</i> meant an enclosed homestead: Tamworth, Kenilworth, Letchworth. Wildworth reads as a wild place that is also someone's home.</p><p class="muted">The story for Rosa: the land is wild and it is theirs. Nobody needs to know it for the name to work; it rewards those who notice.</p></div>
+  </div>
+</section>
+
+<!-- REFINEMENTS -->
+<section id="refine">
+  <div class="section-head">
+    <p class="label">Refinements</p>
+    <h2 class="h2">Finer versions of WildWorth</h2>
+    <p class="lede">Six small moves on the same idea. Each keeps the two Ws and the rising reading, and changes one thing. The rest of this page shows the mark as first drawn, for comparison.</p>
+  </div>
+  <div class="refine" id="refineGrid"></div>
+  <div class="why-not" style="margin-top:16px">
+    <p class="big">The proposed set</p>
+    <ul>
+      <li><b>1 · Soft water</b> as the primary logo. It reads as water before it reads as a chart, so it never looks like a stock ticker.</li>
+      <li><b>2 · Single W</b> for anything under 32 px and the app header.</li>
+      <li><b>4 · Tile</b> for the app icon and Devpost thumbnail; <b>5 · Stacked</b> for the video end card.</li>
+      <li>Version 3 is the one real choice left: <b>WildWorth</b> (two capitals, product-like) or <b>Wildworth</b> (one capital, place-like).</li>
+    </ul>
+  </div>
+</section>
+
+<!-- MARK -->
+<section id="mark">
+  <div class="section-head">
+    <p class="label">The mark</p>
+    <h2 class="h2">Two Ws, one line, one reading</h2>
+    <p class="lede">The two Ws of WildWorth join into a single line. It reads as ripples on a wetland, as sedge in the wind and as a value line. The last stroke is the reading.</p>
+  </div>
+  <div class="sys">
+    <div class="panel">
+      <div class="stage">
+        <span class="lk" data-lock="ww" data-play id="stageLock"></span>
+        <span class="cap">The line draws, then the reading rises</span>
+        <button class="replay" type="button" id="replay">Replay</button>
+      </div>
+      <div class="two">
+        <div>
+          <p class="label">Anatomy</p>
+          <div class="anat">
+            <div class="fig" id="wwAnat"></div>
+            <ol>
+              <li><b>Two Ws, one line</b>: Wild and Worth, drawn without lifting the pen.</li>
+              <li><b>The shape</b> is water, grass and a value line at once. No leaf, no price tag.</li>
+              <li><b>The last stroke</b> is the reading. Its height is the site's Health score.</li>
+              <li><b>The dot</b> is today's value, where the reading stops.</li>
+            </ol>
+          </div>
+        </div>
+        <div>
+          <p class="label">Wordmark</p>
+          <p style="margin-top:14px;font-size:15px">“Wild” is set in the serif, the living side. “Worth” is set in the same light sans as every number in the product, the measured side. The wordmark is nature meeting a number.</p>
+          <p style="margin-top:12px;font-size:15px" class="muted">Both words start with W, so the mark and the wordmark rhyme without repeating each other.</p>
+        </div>
+      </div>
+      <div class="living">
+        <svg class="lm" id="liveMark" viewBox="0 0 100 100" aria-hidden="true"></svg>
+        <svg class="lm" id="liveSeal" viewBox="0 0 100 100" aria-hidden="true"></svg>
+        <div>
+          <p class="label" style="color:var(--machine-muted)">One reading, two marks · drag to re-rate</p>
+          <div style="margin-top:8px"><span class="score" id="liveScore">77.6</span><span class="gchip" id="liveGrade">A</span></div>
+          <p class="glab" id="liveLabel">Strong health</p>
+          <label for="liveRange">Health score</label>
+          <input id="liveRange" type="range" min="0" max="100" step="0.1" value="77.6" aria-describedby="liveLabel">
+          <div class="ticks" aria-hidden="true"><span>0 · D</span><span>30 · C</span><span>50 · BB</span><span>70 · A</span><span>90 · AAA</span></div>
+          <p class="n">The WildWorth mark and the Proof of Life seal read the same score. They move only when a new rating lands.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><h3 class="h3">Two wordmarks to choose from</h3><p>Same mark, two settings. The mixed setting carries the idea; the all-serif setting is calmer and easier to draw by hand.</p></div>
+      <div class="wmcmp">
+        <div><span class="pick">Proposed</span><span class="lk" data-lock="ww" data-read="accent"></span><p><b>Mixed.</b> Serif “Wild”, light sans “Worth”. The sans is the product's own numeral face, so the name ends on a number.</p></div>
+        <div><span class="alt">Alternative</span><span class="lk" data-lock="ww" data-read="accent" data-wm="serif"></span><p><b>All serif.</b> One voice, closer to a classic rating agency. Loses the nature-meets-number idea.</p></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><h3 class="h3">Lockups, sizes and site marks</h3><p>The master mark always shows the hero site's target score (77.6). On a site page, the mark shows that site's real score in its grade colour.</p></div>
+      <div class="lockgrid">
+        <div class="on-paper"><span class="lk" data-lock="ww" data-read="lime-ink"></span><small>On paper</small></div>
+        <div class="on-forest"><span class="lk" data-lock="ww"></span><small>On forest</small></div>
+        <div class="on-lime"><span class="lk" data-lock="ww" data-read="forest"></span><small>On lime</small></div>
+      </div>
+      <div class="sizes" id="wwSizes"></div>
+      <div class="sites" id="wwSites"></div>
+      <div class="rules">
+        <div><h4>Construction</h4><ul>
+          <li>100-unit square. Stroke 7.5 units, round joins and caps.</li>
+          <li>The reading's end travels from 80 (score 0) to 16 (score 100).</li>
+          <li>Below 24 px, use the single W: one W, same reading stroke.</li>
+          <li>Clear space is the height of one W stroke on every side.</li>
+        </ul></div>
+        <div><h4>Never</h4><ul>
+          <li>Show a score the API didn't return.</li>
+          <li>Read the last stroke as a price. It is health, always.</li>
+          <li>Animate the reading except when a rating lands.</li>
+          <li>Add a leaf, a dollar sign or a price tag.</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROOF OF LIFE -->
+<section id="proof">
+  <div class="section-head">
+    <p class="label">Proof of Life · the quarterly report</p>
+    <h2 class="h2">A seal with a date on it</h2>
+    <p class="lede">Every quarter, WildWorth issues a Proof of Life for each site. The seal reuses the product's own Health instrument: a ring of 100 dots, one per point of health, lit up to the score. The centre carries the grade and the quarter. The proof is the reading plus the date.</p>
+  </div>
+  <div class="panel">
+    <div class="seals">
+      <div class="on-machine"><span id="sealBig"></span><small>On the machine layer</small></div>
+      <div class="on-paper"><span id="sealPaper"></span><small>On paper</small></div>
+      <div class="on-forest"><span id="sealDown"></span><small>After a downgrade</small></div>
+    </div>
+    <div class="rules">
+      <div><h4>How it reads</h4><ul>
+        <li><b>100 dots</b>: one per point of health, lit up to the score.</li>
+        <li><b>The letter</b>: the grade, in the serif.</li>
+        <li><b>The stamp</b>: the quarter it was issued, in mono.</li>
+        <li>A new seal every quarter. Old seals stay in the Record.</li>
+      </ul></div>
+      <div><h4>Never</h4><ul>
+        <li>Abbreviate it to “PoL”. It reads as crypto.</li>
+        <li>Use a heartbeat line. Every health app has one.</li>
+        <li>Show a newspaper or a date held up to camera.</li>
+        <li>Issue a seal without its evidence one click away.</li>
+      </ul></div>
+    </div>
+    <div class="rephead">
+      <span id="sealReport"></span>
+      <div>
+        <p class="k">Proof of Life · Q3 2026 · Ecological Performance Report</p>
+        <h5>Xochimilco Wetland</h5>
+        <p>A · 77.6 · Strong health · $9.8M–$13.4M /yr · mid $11.7M · 87% confidence · Illustrative values</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COLOUR AND TYPE -->
+<section id="colour">
+  <div class="section-head">
+    <p class="label">Colour and type</p>
+    <h2 class="h2">The system you have, with one job per colour</h2>
+    <p class="lede">The palette, components and grade ramp in DESIGN.md stay. Lime gets one job: the reading. One display face changes.</p>
+  </div>
+  <div class="sys">
+    <div class="panel">
+      <div class="sw">
+        <div><i style="background:var(--forest)"></i><p><b>Forest</b>The line, the wordmark, primary buttons</p></div>
+        <div><i style="background:var(--lime)"></i><p><b>Lime</b>The reading only: last stroke, lit dots</p></div>
+        <div><i style="background:var(--lichen);box-shadow:inset 0 0 0 1px var(--line)"></i><p><b>Lichen</b>Page ground</p></div>
+        <div><i style="background:var(--forest-deep)"></i><p><b>Machine</b>The AI's work and the Proof of Life seal</p></div>
+        <div><i style="background:var(--clay)"></i><p><b>Clay</b>Downgrades, always with ▼ and words</p></div>
+      </div>
+      <div class="ramp" id="ramp" role="img" aria-label="Grade ramp from AAA deep green through olive and mustard to D brick"></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3 class="h3">Type</h3><p>Gloock replaces Instrument Serif for the wordmark, page titles, site names and grade verdicts. Its sturdy, high-contrast shapes read like a printed certificate. Hanken Grotesk and Geist Mono stay. All free (OFL).</p></div>
+      <div class="spec" style="margin-top:20px"><div class="role"><b>Display · new</b><span>Gloock 400 · 40–104 px</span></div><div class="smp" style="font:400 clamp(36px,5vw,58px)/1 var(--display);letter-spacing:-.025em">Xochimilco Wetland</div></div>
+      <div class="spec"><div class="role"><b>Grade verdict · new</b><span>Gloock 400 · 28–40 px</span></div><div class="smp" style="font:400 clamp(26px,3vw,34px)/1.1 var(--display)">A · Strong health</div></div>
+      <div class="spec"><div class="role"><b>Numerals and “Worth” · kept</b><span>Hanken Grotesk 300 · tabular</span></div><div class="smp" style="font:300 clamp(28px,3.4vw,40px)/1 var(--body);letter-spacing:-.03em;font-variant-numeric:tabular-nums">77.6 · $9.8M–$13.4M /yr</div></div>
+      <div class="spec"><div class="role"><b>Seal stamp and machine · kept</b><span>Geist Mono 400</span></div><div class="smp mono">PROOF OF LIFE · Q3 2026 · nvidia/nemotron-3-super</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- VOICE -->
+<section id="voice">
+  <div class="section-head">
+    <p class="label">Voice</p>
+    <h2 class="h2">The lines that carry the name</h2>
+    <p class="lede">The two voices in ux-writing.md stay: sober on ratings, warm with communities. The word “worth” always points at what the land provides, never at a return.</p>
+  </div>
+  <div class="panel">
+    <div class="grid2" style="margin-top:0;border-top:0">
+      <div><p class="ctx">Tagline</p><p class="line">Worth more wild.</p><p class="why">The argument in three words. Alternates: “What living land is worth.” and “Alive is worth more.”</p></div>
+      <div><p class="ctx">Hero · judge landing</p><p class="line">The bees never sent an invoice. WildWorth works out what they're worth.</p><p class="why">Keeps the team's best line and turns it into what the product does.</p></div>
+      <div><p class="ctx">Video · the rating lands</p><p class="line">Every quarter, WildWorth issues a Proof of Life.</p><p class="why">The two names in one sentence, said once.</p></div>
+      <div><p class="ctx">Video close · kept</p><p class="line">Keeping nature alive should pay more than destroying it.</p><p class="why">The belief, unchanged, over the end card.</p></div>
+      <div><p class="ctx">Report · sober</p><p>WildWorth rates Xochimilco Wetland <b>A · 77.6 · Strong health</b>. Worth range $9.8M–$13.4M /yr, 87% confidence.</p></div>
+      <div><p class="ctx">Steward home · warm</p><p>Your wetland's first Proof of Life is in. It rates A, and it provides $9.8M–$13.4M a year in water, flood protection and carbon, alive.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="section-head">
+    <p class="label">Feature names</p>
+    <h2 class="h2">Name only what a judge should repeat</h2>
+  </div>
+  <div class="panel">
+    <div class="grid2" style="margin-top:0;border-top:0">
+      <div><p class="was">Was: rating report</p><h4>Proof of Life</h4><p>Each quarter's rating report, with its seal. “Ecological Performance Report” stays as the subtitle, so finance judges see the lineage.</p><p class="ui">Proof of Life · Q3 2026 · Ecological Performance Report</p></div>
+      <div><p class="was">Was: value range</p><h4>Worth range</h4><p>The low, mid and high value per year. The brand's own word, used where it's most literal.</p><p class="ui">Worth range $9.8M–$13.4M /yr · mid $11.7M</p></div>
+      <div><p class="was">Was: monitoring and alerts</p><h4>WildWatch</h4><p>The daily news sweep and quarterly satellite check that keep watching between reports.</p><p class="ui">WildWatch · encroachment reported at the northern edge</p></div>
+      <div><p class="was">Was: Nature Ledger</p><h4>The Record</h4><p>Every Proof of Life is sealed into a hash-chained record. Verify and Tamper read naturally.</p><p class="ui">Verify the Record · Record broken at entry 14</p></div>
+    </div>
+    <p class="keep"><b>Keep plain:</b> Health score, Agent Trace, Auditor, Time Machine, News Scout, Opening offer, Your stakes, Community fund, Guided tour. The assistant is “Ask about this site”.</p>
+  </div>
+</section>
+
+<!-- IN USE -->
+<section id="use">
+  <div class="section-head">
+    <p class="label">In use</p>
+    <h2 class="h2">In the product and the video</h2>
+    <p class="lede">Mockups in the product's current light theme. Values are the pitch targets from the one-pager, shown as illustrations.</p>
+  </div>
+  <div class="panel">
+    <div class="mocks">
+      <div class="mock">
+        <div class="sandbox"><span>Sandbox · play money only</span><span>Arjun · investor</span></div>
+        <div class="appbar"><span class="lk" data-lock="ww" data-read="lime-ink"></span><nav aria-hidden="true"><span class="on">Rated sites</span><span>Your stakes</span><span>Ask about this site</span></nav></div>
+        <div class="rcardm">
+          <span id="mockSeal"></span>
+          <div>
+            <p class="k">Proof of Life · Q3 2026</p>
+            <h5>Xochimilco Wetland</h5>
+            <div class="gr"><span class="gpill" id="mockGrade">A</span><b style="font-variant-numeric:tabular-nums">77.6</b><span>Strong health</span></div>
+            <p class="val">Worth range $9.8M–$13.4M /yr · mid $11.7M · 87% confidence</p>
+          </div>
+        </div>
+        <p class="illus">Illustrative values</p>
+      </div>
+      <div class="mock phone">
+        <p class="time">9:41</p>
+        <p class="date">Thursday 12 September</p>
+        <div class="notif"><span class="ic" id="notif1"></span><div><b>WildWatch <span>now</span></b>Xochimilco Wetland lowered A → BBB. Encroachment reported at the northern edge. See the evidence.</div></div>
+        <div class="notif"><span class="ic" id="notif2"></span><div><b>WildWorth <span>2 h ago</span></b>New Proof of Life for Celestún Mangrove: AA, no change.</div></div>
+      </div>
+      <div class="endcard">
+        <span class="lk" data-lock="ww" data-play id="endLock"></span>
+        <p class="t">Worth more wild.</p>
+        <p class="s">Built on NVIDIA Nemotron via Nebius Token Factory · Sandbox · play money only</p>
+      </div>
+      <div class="mock" style="grid-column:1/-1">
+        <div class="tabbar" id="tabs"></div>
+        <p class="illus" style="padding-top:12px">Each site's tab carries its own single-W mark: the favicon is the reading</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WATCH-OUTS -->
+<section id="watch">
+  <div class="section-head">
+    <p class="label">Watch-outs</p>
+    <h2 class="h2">What could go wrong, and the rule that prevents it</h2>
+  </div>
+  <div class="risks">
+    <div><h3>“Worth” pulls toward money</h3><p>The sandbox rules forbid anything that reads as a return to supporters.</p><p class="fix">Rule: worth is always what the land provides (water, carbon, flood protection). Never pair it with invest, returns or profit.</p></div>
+    <div><h3>“Wild” can erase the people</h3><p>Xochimilco's chinampas are farmed by its community, and a restoration forest is planted.</p><p class="fix">Rule: in copy, wild means “alive and able to renew itself”, never “untouched by people”. Stewards stay the protagonists.</p></div>
+    <div><h3>Proof of Life's baggage</h3><p>A kidnapping phrase with a crypto echo. Kept out of the company name for that reason.</p><p class="fix">Rule: always “Proof of Life”, in full, attached to a site and a quarter. Never PoL, never on its own as a slogan.</p></div>
+    <div><h3>Clear space</h3><p>Quick searches found no company called WildWorth, and no brand called Proof of Life in nature, satellites or conservation. Nearest: Wild, a UK deodorant brand.</p><p class="fix">Next: a trademark search (USPTO, EUIPO, WIPO, IP India) before anything public. Quick searches aren't legal clearance.</p></div>
+  </div>
+</section>
+
+<!-- WEEK -->
+<section id="week">
+  <div class="section-head">
+    <p class="label">The week</p>
+    <h2 class="h2">Shippable by the 29th</h2>
+    <p class="lede">The rename is small, reversible work. Nothing in the data model or API changes.</p>
+  </div>
+  <div class="week">
+    <div class="day key"><p class="d">Thu 23 Oct</p><div class="r"><i></i></div><div class="b"><h4>Agree the name</h4><p>A 15-minute call with this page. Start the trademark search the same day.</p></div></div>
+    <div class="day"><p class="d">Fri 24 Oct</p><div class="r"><i></i></div><div class="b"><h4>Mark, seal and wordmark</h4><p>The mark and seal as SVG components with a <span class="mono">score</span> prop, a favicon set, a share image. Update PRODUCT.md and DESIGN.md.</p></div></div>
+    <div class="day"><p class="d">Sat 25 Oct</p><div class="r"><i></i></div><div class="b"><h4>One rename PR</h4><p>Header wordmark, page titles, about 45 frontend files that say NatureX, the tour copy and the four feature names. Screenshots in the PR.</p></div></div>
+    <div class="day"><p class="d">Mon 27 Oct</p><div class="r"><i></i></div><div class="b"><h4>Video and Devpost</h4><p>End card, the Proof of Life line in the voice-over, Devpost title, cover and first line.</p></div></div>
+    <div class="day key"><p class="d">Wed 29 Oct</p><div class="r"><i></i></div><div class="b"><h4>Submit</h4><p>Repo name, package names, routes and API stay, so nothing breaks for judges running it locally.</p></div></div>
+  </div>
+</section>
+
+<!-- DECIDE -->
+<section id="decide">
+  <div class="section-head">
+    <p class="label">To finalise</p>
+    <h2 class="h2">Three steps to lock it</h2>
+  </div>
+  <div class="ask three">
+    <div><h3>Pick the refinement</h3><p>The primary logo, the small-size mark and the casing.</p><p class="prop">Proposed: 1 · Soft water, 2 · Single W, and WildWorth with two capitals.</p></div>
+    <div><h3>Run the trademark search</h3><p>USPTO, EUIPO, WIPO and IP India, before anything public.</p><p class="prop">Quick searches found no WildWorth company. That isn't legal clearance.</p></div>
+    <div><h3>Write it into the system</h3><p>PRODUCT.md gets the name, DESIGN.md gets Gloock and the lime rule, and the mark becomes one SVG component with a score prop.</p><p class="prop">One PR, then the rename PR.</p></div>
+  </div>
+</section>
+
+</main>
+
+<footer><div class="wrap">
+  <p>Prepared for the NatureX team. A proposal only: nothing in the app changes until the team decides.</p>
+  <p style="margin-top:14px">Clear-space checks (quick searches, 22 Oct 2026):</p>
+  <ul>
+    <li><a href="https://www.thegrocer.co.uk/comment-and-opinion/why-unilever-has-gone-wild-for-a-deodorant-challenger-brand/700962.article">Wild, the UK deodorant brand (The Grocer)</a>, the nearest name found to WildWorth</li>
+    <li>No brand called Proof of Life found in nature, satellite or conservation results</li>
+  </ul>
+  <p style="margin-top:14px">Project sources: PRODUCT.md, DESIGN.md, docs/design/ux-writing.md, docs/one-pager.md, docs/specs/pm-spec.md.</p>
+</div></footer>
+
+<script>
+(function(){
+  var GRADES=[
+    [90,"AAA","Exceptional health","oklch(0.43 0.1 152)","#fff"],
+    [80,"AA","Very strong health","oklch(0.5 0.115 146)","#fff"],
+    [70,"A","Strong health","oklch(0.54 0.12 138)","#fff"],
+    [60,"BBB","Good health","oklch(0.66 0.13 120)","oklch(0.255 0.045 148)"],
+    [50,"BB","Moderate health, some pressure","oklch(0.7 0.13 92)","oklch(0.255 0.045 148)"],
+    [40,"B","Under pressure","oklch(0.67 0.13 66)","oklch(0.255 0.045 148)"],
+    [30,"C","Serious pressure","oklch(0.56 0.14 46)","#fff"],
+    [-1,"D","Critical","oklch(0.52 0.16 30)","#fff"]
+  ];
+  function grade(s){for(var i=0;i<GRADES.length;i++){if(s>=GRADES[i][0])return {g:GRADES[i][1],label:GRADES[i][2],bg:GRADES[i][3],fg:GRADES[i][4]};}}
+  var C={lime:"oklch(0.86 0.135 126)","lime-ink":"oklch(0.42 0.1 135)",forest:"oklch(0.31 0.062 148)",accent:"var(--accent-ink)"};
+  var MASTER=77.6;
+  var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function clamp(s){return Math.max(0,Math.min(100,s));}
+
+  /* WildWorth mark: two Ws as one line; the last stroke ends at the Health score. */
+  function peakY(s){return 80-clamp(s)/100*64;}
+  var BIG=[[6,24],[17,76],[28,42],[39,76],[50,24],[61,76],[72,42],[83,76]];
+  var SMALL=[[10,24],[30,78],[50,40],[70,78]];
+  function wwInner(s,read,small){
+    var P=small?SMALL:BIG, last=P[P.length-1], end=[small?90:94,peakY(s)];
+    var d="M"+P.map(function(p){return p[0]+" "+p[1];}).join(" L");
+    var sw=small?11:7.5;
+    return '<path class="ww-ink" pathLength="100" d="'+d+'" fill="none" stroke="currentColor" stroke-width="'+sw+'" stroke-linecap="round" stroke-linejoin="round"/>'+
+      '<path class="ww-read" pathLength="100" d="M'+last[0]+' '+last[1]+' L'+end[0]+' '+end[1].toFixed(2)+'" fill="none" style="stroke:'+read+'" stroke-width="'+sw+'" stroke-linecap="round"/>'+
+      (small?'':'<circle class="ww-dot" cx="'+end[0]+'" cy="'+end[1].toFixed(2)+'" r="6" style="fill:'+read+'"/>');
+  }
+  function wwSvg(s,read,o){o=o||{};var sz=o.size?' width="'+o.size+'" height="'+o.size+'"':'';
+    return '<svg viewBox="0 0 100 100"'+sz+' role="img" aria-label="'+(o.label||"WildWorth mark")+'">'+wwInner(s,read||C.lime,o.small)+'</svg>';}
+  function setWW(svg,s){var y=peakY(s).toFixed(2),r=svg.querySelector(".ww-read"),d=svg.querySelector(".ww-dot");
+    if(r)r.setAttribute("d","M83 76 L94 "+y);if(d)d.setAttribute("cy",y);}
+
+  /* Proof of Life seal: 100 dots lit to the score, grade and quarter in the centre. */
+  function sealSvg(s,o){o=o||{};var lit=o.lit||C.lime,n=Math.round(clamp(s)),g=grade(s),dots="";
+    for(var i=0;i<100;i++){var a=(i/100)*2*Math.PI-Math.PI/2,x=50+42*Math.cos(a),y=50+42*Math.sin(a);
+      dots+='<circle cx="'+x.toFixed(2)+'" cy="'+y.toFixed(2)+'" r="1.9" fill="'+(i<n?lit:"currentColor")+'"'+(i<n?'':' opacity=".2"')+'/>';}
+    var txt=o.small?'':'<text x="50" y="35" text-anchor="middle" font-family="Geist Mono, monospace" font-size="5.6" letter-spacing=".9" fill="currentColor" opacity=".75">PROOF OF LIFE</text>'+
+      '<text x="50" y="72" text-anchor="middle" font-family="Geist Mono, monospace" font-size="6.4" letter-spacing=".5" fill="currentColor" opacity=".85">'+(o.q||"Q3 2026")+'</text>';
+    var sz=o.size?' width="'+o.size+'" height="'+o.size+'"':'';
+    return '<svg viewBox="0 0 100 100"'+sz+' role="img" aria-label="Proof of Life seal, grade '+g.g+', score '+s+'"><g class="dots">'+dots+'</g>'+txt+
+      '<text class="gl" x="50" y="'+(o.small?61:59)+'" text-anchor="middle" font-family="Gloock, Georgia, serif" font-size="'+(o.small?30:(g.g.length>2?20:24))+'" fill="currentColor">'+g.g+'</text></svg>';}
+
+  function wordmark(serif){return '<span class="wm'+(serif?' serif':'')+'"><span class="w1">Wild</span><span class="w2">Worth</span></span>';}
+
+  /* Refinement: the same line with its corners rounded into a wave. */
+  function pt(p){return p[0].toFixed(2)+" "+p[1].toFixed(2);}
+  function mid(a,b){return [(a[0]+b[0])/2,(a[1]+b[1])/2];}
+  function softSvg(s,read,o){o=o||{};var P=o.small?SMALL:BIG,n=P.length,end=[o.small?90:94,peakY(s)],last=P[n-1];
+    var r0=[last[0]+(end[0]-last[0])*.32,last[1]+(end[1]-last[1])*.32];
+    var d="M"+pt(P[0])+" L"+pt(mid(P[0],P[1]));
+    for(var i=1;i<n-1;i++){d+=" Q"+pt(P[i])+" "+pt(mid(P[i],P[i+1]));}
+    d+=" Q"+pt(last)+" "+pt(r0);
+    var sw=o.small?11:7.5,sz=o.size?' width="'+o.size+'" height="'+o.size+'"':'';
+    return '<svg viewBox="0 0 100 100"'+sz+' role="img" aria-label="'+(o.label||"WildWorth mark, soft water")+'"><path d="'+d+'" fill="none" stroke="currentColor" stroke-width="'+sw+'" stroke-linecap="round" stroke-linejoin="round"/>'+
+      '<path d="M'+pt(r0)+' L'+pt(end)+'" fill="none" style="stroke:'+read+'" stroke-width="'+sw+'" stroke-linecap="round"/>'+
+      (o.small?'':'<circle cx="'+end[0]+'" cy="'+end[1].toFixed(2)+'" r="6" style="fill:'+read+'"/>')+'</svg>';}
+  function readingLine(read){return '<svg class="ul" viewBox="0 0 200 20" preserveAspectRatio="none" aria-hidden="true"><path d="M2 17 H168 L196 3" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/><path d="M168 17 L196 3" fill="none" style="stroke:'+read+'" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round"/></svg>';}
+  var A=C["lime-ink"];
+  var REFINE=[
+    {n:"1 · Soft water",pick:true,ground:"on-paper",
+     html:'<span class="lk">'+softSvg(MASTER,A)+wordmark()+'</span>',
+     what:"The corners round into a wave. It reads as water first and a chart second, so it never looks like a stock ticker.",best:"The primary logo."},
+    {n:"2 · Single W",ground:"on-paper",
+     html:'<span class="lk">'+softSvg(MASTER,A,{small:true})+wordmark()+'</span>',
+     what:"One W instead of two. Calmer, bolder, and the same shape as the favicon.",best:"Under 32 px, the app header, avatars."},
+    {n:"3 · Wildworth",ground:"on-paper",
+     html:'<span class="lk">'+softSvg(MASTER,A)+'<span class="wm serif"><span class="w1">Wildworth</span></span></span>',
+     what:"One capital, all serif. It reads like an English place name, where -worth meant a homestead. Warmer, less like an app.",best:"If the team wants warmth over tech."},
+    {n:"4 · Tile",ground:"on-paper",
+     html:'<span class="lk"><span class="tilemk">'+softSvg(MASTER,C.lime,{small:true})+'</span>'+wordmark()+'</span>',
+     what:"The single W on a forest tile. Holds its own on busy or photographic grounds.",best:"App icon, Devpost thumbnail, share cards."},
+    {n:"5 · Stacked",ground:"on-machine",
+     html:'<span class="stack">'+softSvg(MASTER,C.lime)+wordmark()+'</span>',
+     what:"Mark above the wordmark, centred. A calm, square block for a full frame.",best:"Video end card, social posts, stickers."},
+    {n:"6 · Reading line",ground:"on-paper",
+     html:'<span class="ulw"><span class="wm serif"><span class="w1">WildWorth</span></span>'+readingLine(A)+'</span>',
+     what:"No mark. The reading becomes a line under the word that lifts at the end.",best:"Report footers, email signatures, video captions."}
+  ];
+  document.getElementById("refineGrid").innerHTML=REFINE.map(function(r){
+    return '<article class="rf"><div class="rf-stage '+r.ground+'">'+(r.pick?'<span class="pick">Proposed primary</span>':'')+r.html+'</div>'+
+      '<div class="rf-body"><h4>'+r.n+'</h4><p>'+r.what+'</p><p class="best"><b>Best for:</b> '+r.best+'</p></div></article>';}).join("");
+  document.querySelectorAll('[data-lock="ww"]').forEach(function(el){
+    var read=C[el.dataset.read||"lime"];el.innerHTML=wwSvg(MASTER,read,{label:"WildWorth logo"})+wordmark(el.dataset.wm==="serif");});
+
+  function play(el){el.classList.remove("play");void el.offsetWidth;el.classList.add("play");}
+  if(!reduce){["heroLock","stageLock","endLock"].forEach(function(id){play(document.getElementById(id));});}
+  document.getElementById("replay").addEventListener("click",function(){play(document.getElementById("stageLock"));});
+
+  document.getElementById("navMark").innerHTML=wwSvg(MASTER,C.accent,{small:true,label:""});
+  document.getElementById("wwAnat").innerHTML=wwSvg(MASTER,C["lime-ink"],{label:"WildWorth mark, annotated"});
+
+  /* living reading */
+  var lm=document.getElementById("liveMark"),ls=document.getElementById("liveSeal");
+  lm.innerHTML=wwInner(MASTER,C.lime);lm.style.color="var(--machine-ink)";ls.style.color="var(--machine-ink)";
+  var rng=document.getElementById("liveRange"),sc=document.getElementById("liveScore"),gc=document.getElementById("liveGrade"),lb=document.getElementById("liveLabel");
+  function upd(){var s=parseFloat(rng.value),g=grade(s);sc.textContent=s.toFixed(1);gc.textContent=g.g;gc.style.background=g.bg;gc.style.color=g.fg;lb.textContent=g.label;
+    setWW(lm,s);lm.querySelector(".ww-read").style.stroke=g.bg;lm.querySelector(".ww-dot").style.fill=g.bg;
+    ls.innerHTML=sealSvg(s,{lit:g.bg}).replace(/^<svg[^>]*>|<\/svg>$/g,"");
+    rng.setAttribute("aria-valuetext",s.toFixed(1)+", grade "+g.g+", "+g.label);}
+  rng.addEventListener("input",upd);upd();
+
+  /* sizes */
+  document.getElementById("wwSizes").innerHTML=[16,20,24,32,48,64].map(function(s){var small=s<24;
+    return '<figure><span style="color:var(--ink);display:block">'+wwSvg(MASTER,C["lime-ink"],{size:s,small:small,label:"WildWorth mark at "+s+" pixels"})+'</span><figcaption>'+s+' px'+(small?' · single W':'')+'</figcaption></figure>';}).join("")+
+    '<figure><span class="tile" style="width:72px;height:72px">'+wwSvg(MASTER,C.lime,{size:50,label:"App tile"})+'</span><figcaption>App tile</figcaption></figure>'+
+    '<figure><span class="tile" style="width:44px;height:44px;border-radius:99px">'+wwSvg(MASTER,C.lime,{size:28,small:true,label:"Avatar"})+'</span><figcaption>Avatar</figcaption></figure>';
+
+  /* site marks (illustrative values) */
+  var SITES=[["Xochimilco Wetland",77.6],["Celestún Mangrove",84.2],["Restoration Forest",55.0]];
+  document.getElementById("wwSites").innerHTML=SITES.map(function(x){var g=grade(x[1]);
+    return '<figure>'+wwSvg(x[1],g.bg,{label:x[0]+" mark at "+x[1]})+'<b>'+x[0]+'</b><span class="gpill" style="background:'+g.bg+';color:'+g.fg+'">'+g.g+' · '+x[1].toFixed(1)+'</span><span class="label">Illustrative</span></figure>';}).join("");
+
+  /* seals */
+  document.getElementById("sealBig").innerHTML=sealSvg(MASTER,{lit:C.lime});
+  document.getElementById("sealPaper").innerHTML=sealSvg(MASTER,{lit:grade(MASTER).bg});
+  document.getElementById("sealDown").innerHTML=sealSvg(63.8,{lit:C.lime,q:"Q4 2026"});
+  document.getElementById("sealReport").innerHTML=sealSvg(MASTER,{lit:grade(MASTER).bg});
+
+  /* ramp */
+  document.getElementById("ramp").innerHTML=GRADES.map(function(g){return '<span style="background:'+g[3]+';color:'+g[4]+'">'+g[1]+'<small>'+(g[0]<0?"< 30":"≥ "+g[0])+'</small></span>';}).join("");
+
+  /* mockups */
+  var xg=grade(MASTER);
+  document.getElementById("mockSeal").innerHTML=sealSvg(MASTER,{lit:xg.bg});
+  var mg=document.getElementById("mockGrade");mg.style.background=xg.bg;mg.style.color=xg.fg;
+  document.getElementById("notif1").innerHTML=wwSvg(63.8,C.lime,{small:true,label:""});
+  document.getElementById("notif2").innerHTML=wwSvg(84.2,C.lime,{small:true,label:""});
+  document.getElementById("tabs").innerHTML=SITES.map(function(x,i){var g=grade(x[1]);
+    return '<div class="tab'+(i===0?' on':'')+'"><span style="color:oklch(0.255 0.045 148);display:flex">'+wwSvg(x[1],g.bg,{size:16,small:true,label:""})+'</span><span>'+x[0]+' · WildWorth</span></div>';}).join("");
+})();
+</script>

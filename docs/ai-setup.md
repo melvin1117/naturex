@@ -10,7 +10,7 @@ How each team member connects their AI assistant to the shared skills and MCP se
 | Path | Purpose | Read by |
 |---|---|---|
 | `AGENTS.md` | Shared instructions | Copilot, Cursor, Codex; Claude via `CLAUDE.md` (`@AGENTS.md`) |
-| `.agents/skills/` | 30 skills (see [.agents/SOURCES.md](../.agents/SOURCES.md)) | Copilot, Cursor, Codex |
+| `.agents/skills/` | 31 skills (see [.agents/SOURCES.md](../.agents/SOURCES.md)) | Copilot, Cursor, Codex |
 | `.claude/skills/` | Symlinks to the same skills (+ impeccable's Claude build) | Claude Code |
 | `.vscode/mcp.json` | MCP servers | GitHub Copilot in VS Code |
 | `.cursor/mcp.json` | MCP servers | Cursor |
@@ -75,18 +75,24 @@ Then **show the findings to the user, who decides** which to fix and which to re
 ## Optional: Context7 API key
 Context7 works without a key but is rate-limited. For higher limits, get a free key at context7.com/dashboard and add `"--api-key", "<key>"` to the Context7 `args` **in your personal (user-level) config only**. Never commit it.
 
+## Launch teaser: brag-slim (in the repo)
+`brag-slim` ([latent-spaces/brag](https://github.com/latent-spaces/brag), MIT) is vendored in `.agents/skills/` like the other skills. Ask for "/brag-slim" or "make a launch video" to get a 15–25 s teaser built from the codebase.
+- Needs Node 22+ and FFmpeg. If FFmpeg isn't on `PATH`, install `ffmpeg-static` inside `brag-output/work/` rather than globally.
+- It has no bundled assets: the model writes the visuals and **synthesises its own soundtrack**, so there's no third-party music to clear. Still check the result against the hackathon video rules (no third-party logos, play-money framing on screen).
+- Numbers on screen must come from the engine (for example `frontend/src/lib/prototype/sites.json`), never invented.
+- It's a teaser only; **it doesn't replace the 3-minute demo video**, which must show the real app running (see [specs/demo-plan.md](./specs/demo-plan.md)).
+- Output goes to `brag-output/` (git-ignored).
+
 ## Optional personal skills (not in the repo)
 Install these in your **user** folder (`-g`) only if you need them, so they never end up in the repo.
 
 | Skill | What it's for | Install |
 |---|---|---|
-| [brag](https://github.com/latent-spaces/brag) (MIT) | A 15–25 s launch-style teaser video made from the codebase | `npx skills add https://github.com/latent-spaces/brag --skill brag -g` |
+| [brag](https://github.com/latent-spaces/brag) (MIT) | The full version of brag-slim: bundled music and the Hyperframes CLI | `npx skills add https://github.com/latent-spaces/brag --skill brag -g` |
 
-**Using brag:**
+**Using the full brag:**
 - Needs Node 22+, **FFmpeg** on `PATH` and the Hyperframes CLI (`npx hyperframes doctor`).
 - Run `/brag --no-music` unless we have clear rights to a track. The hackathon video rules forbid unlicensed music, and brag's bundled tracks have unverified licences.
-- It's a teaser only; **it doesn't replace the 3-minute demo video**, which must show the real app running (see [specs/demo-plan.md](./specs/demo-plan.md)).
-- Output goes to `brag-output/` (git-ignored).
 
 ## Updating skills
 Edit the pinned commit in `scripts/sync-skills.sh`, run it, review the diff, and update `.agents/SOURCES.md`.

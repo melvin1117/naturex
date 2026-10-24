@@ -1,0 +1,510 @@
+<title>Bea Character Sheet</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gloock&family=Hanken+Grotesk:wght@300..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: a character sheet in the WildWorth brand book's voice. A live stage first (states you can play),
+   then anatomy, expressions mapped to product states, motion, sizes, the product in use, voice and don'ts.
+   Bea inherits the theme: ink is currentColor, occluding fill is --chbg, the accent is --chacc. */
+:root{
+  --bg:oklch(0.945 0.011 125);
+  --surface:oklch(0.99 0.005 118);
+  --raised:oklch(0.915 0.016 128);
+  --ink:oklch(0.255 0.045 148);
+  --muted:oklch(0.47 0.035 145);
+  --line:oklch(0.875 0.014 128);
+  --accent-ink:oklch(0.42 0.1 135);
+  --warn-ink:oklch(0.5 0.13 42);
+  --shadow:0 1px 2px oklch(0.3 0.05 145/0.06),0 18px 40px -26px oklch(0.3 0.05 145/0.35);
+
+  --forest:oklch(0.31 0.062 148);
+  --forest-deep:oklch(0.215 0.035 158);
+  --forest-ink:oklch(0.255 0.045 148);
+  --machine-ink:oklch(0.94 0.045 122);
+  --machine-muted:oklch(0.74 0.045 135);
+  --paper:oklch(0.988 0.005 118);
+  --lichen:oklch(0.932 0.012 128);
+  --lime:oklch(0.86 0.135 126);
+  --lime-ink:oklch(0.42 0.1 135);
+  --clay:oklch(0.66 0.13 48);
+  --clay-ink:oklch(0.5 0.13 42);
+
+  --chbg:var(--surface);
+  --chacc:var(--accent-ink);
+
+  --display:"Gloock",Georgia,"Times New Roman",serif;
+  --body:"Hanken Grotesk",system-ui,-apple-system,sans-serif;
+  --mono:"Geist Mono",ui-monospace,Menlo,monospace;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:oklch(0.19 0.028 158);--surface:oklch(0.235 0.034 156);--raised:oklch(0.27 0.036 155);
+    --ink:oklch(0.94 0.035 122);--muted:oklch(0.74 0.04 135);--line:oklch(0.34 0.04 152);
+    --accent-ink:oklch(0.86 0.135 126);--warn-ink:oklch(0.77 0.12 52);
+    --shadow:0 1px 2px oklch(0 0 0/0.3),0 18px 40px -26px oklch(0 0 0/0.7);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:oklch(0.19 0.028 158);--surface:oklch(0.235 0.034 156);--raised:oklch(0.27 0.036 155);
+  --ink:oklch(0.94 0.035 122);--muted:oklch(0.74 0.04 135);--line:oklch(0.34 0.04 152);
+  --accent-ink:oklch(0.86 0.135 126);--warn-ink:oklch(0.77 0.12 52);
+  --shadow:0 1px 2px oklch(0 0 0/0.3),0 18px 40px -26px oklch(0 0 0/0.7);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16.5px/1.6 var(--body);-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+h1,h2,h3,h4,h5,p{margin:0}
+h1,h2,h3{text-wrap:balance}
+a{color:inherit;text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--accent-ink);outline-offset:3px;border-radius:4px}
+.wrap{max-width:1160px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:720px){.wrap{padding-left:max(32px,env(safe-area-inset-left,0px));padding-right:max(32px,env(safe-area-inset-right,0px))}}
+.label{font:500 11.5px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.small{font-size:14px}
+section{padding-block:96px 0;scroll-margin-top:64px}
+.chap{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 22px;align-items:baseline;margin-bottom:32px}
+.chap .no{font:400 clamp(36px,5vw,60px)/.95 var(--display);color:var(--accent-ink);font-variant-numeric:tabular-nums}
+.chap h2{font:400 clamp(36px,5vw,60px)/.98 var(--display);letter-spacing:-.02em}
+.chap p{grid-column:2;font-size:clamp(16.5px,1.8vw,19px);line-height:1.5;max-width:62ch}
+.panel{background:var(--surface);border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+
+/* grounds */
+.g-surface{background:var(--surface);color:var(--ink);--chbg:var(--surface);--chacc:var(--accent-ink)}
+.g-bg{background:var(--bg);color:var(--ink);--chbg:var(--bg);--chacc:var(--accent-ink)}
+.g-paper{background:var(--paper);color:var(--forest-ink);--chbg:var(--paper);--chacc:var(--lime-ink)}
+.g-lichen{background:var(--lichen);color:var(--forest-ink);--chbg:var(--lichen);--chacc:var(--lime-ink)}
+.g-forest{background:var(--forest);color:var(--paper);--chbg:var(--forest);--chacc:var(--lime)}
+.g-machine{background:var(--forest-deep);color:var(--machine-ink);--chbg:var(--forest-deep);--chacc:var(--lime)}
+
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:color-mix(in oklch,var(--bg) 86%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line);--chbg:var(--bg)}
+.top .wrap{display:flex;align-items:center;gap:24px;height:52px}
+.top .who{display:flex;align-items:center;gap:8px;font:500 12px var(--mono);letter-spacing:.04em;white-space:nowrap}
+.top .who svg{width:24px;height:24px}
+.top nav{display:flex;gap:18px;overflow-x:auto;scrollbar-width:none;font-size:14px;min-width:0}
+.top nav::-webkit-scrollbar{display:none}
+.top nav a{text-decoration:none;color:var(--muted);white-space:nowrap}
+.top nav a:hover{color:var(--ink)}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:0;margin-top:40px;border-radius:36px;overflow:hidden;box-shadow:var(--shadow)}
+.stage{position:relative;display:grid;place-items:center;min-height:520px;padding:56px 24px 120px}
+.stage .reactor{display:block;width:min(300px,100%)}
+.stage svg.big{width:100%;height:auto;aspect-ratio:1;display:block}
+.stage .cap{position:absolute;left:0;right:0;bottom:70px;text-align:center;font-size:14px;padding-inline:20px;opacity:.85}
+.acts{position:absolute;left:0;right:0;bottom:20px;display:flex;justify-content:center;gap:6px;flex-wrap:wrap;padding-inline:12px}
+.acts button{font:500 12.5px var(--body);padding:7px 12px;border-radius:99px;border:1px solid oklch(0.85 0.02 128);background:var(--paper);color:var(--forest-ink);cursor:pointer}
+.acts button:hover{border-color:var(--forest-ink)}
+.acts button[aria-pressed="true"]{background:var(--forest);border-color:var(--forest);color:var(--paper)}
+.hhead{padding:44px 44px 40px;display:grid;gap:18px;align-content:start;background:var(--surface)}
+.hhead .lockup{display:flex;align-items:center;gap:16px}
+.hhead .lockup .av{width:76px;height:76px}
+.hhead .lockup b{display:block;font:400 clamp(64px,8vw,96px)/.85 var(--display);letter-spacing:-.03em}
+.hhead .lockup small{display:block;font:500 11px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-top:10px}
+.hhead .one{font:400 clamp(24px,2.6vw,32px)/1.15 var(--display);color:var(--accent-ink)}
+.hhead p{font-size:16px}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border-radius:16px;overflow:hidden;margin-top:4px}
+.facts div{background:var(--surface);padding:12px 14px}
+.facts b{display:block;font:500 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.facts span{font-size:14.5px}
+
+/* before/after */
+.ba{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+.ba>div{position:relative;display:grid;justify-items:center;gap:12px;padding:36px 24px 28px}
+.ba svg{width:180px;height:180px}
+.ba .t{font:500 11px var(--mono);letter-spacing:.07em;text-transform:uppercase}
+.ba p{font-size:14.5px;max-width:42ch;text-align:center}
+.ba .x{color:var(--clay-ink)}
+.ba .y{color:var(--lime-ink)}
+
+/* anatomy */
+.anat{display:grid;grid-template-columns:auto minmax(0,1fr);gap:32px;align-items:center;padding:32px 28px}
+.anat svg{width:300px;height:300px;max-width:100%;display:block}
+.anat ol{margin:0;padding-left:1.2em;display:grid;gap:12px;font-size:15.5px}
+.anat ol b{font-weight:600}
+
+/* states */
+.states{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line)}
+.states figure{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center;padding:20px 22px;background:var(--surface)}
+.states svg{width:96px;height:96px}
+.states b{display:block;font:400 22px/1.1 var(--display)}
+.states .when{font-size:13.5px;color:var(--muted);margin-top:4px}
+.states .ui{display:inline-block;margin-top:8px;font:500 11px var(--mono);padding:4px 8px;border-radius:99px;background:var(--raised)}
+
+/* motion */
+.moves{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.moves>div{background:var(--surface);border-radius:20px;padding:20px;box-shadow:var(--shadow);display:grid;gap:8px;align-content:start}
+.moves b{font:400 22px/1.1 var(--display)}
+.moves p{font-size:14px}
+.moves .t{font:500 11px var(--mono);color:var(--accent-ink)}
+
+/* sizes */
+.sizes{display:flex;flex-wrap:wrap;align-items:flex-end;gap:22px 30px;padding:28px}
+.sizes figure{margin:0;display:grid;justify-items:center;gap:8px}
+.sizes figcaption{font:500 10.5px var(--mono);color:var(--muted);text-align:center}
+.tile{display:grid;place-items:center;border-radius:22%}
+.gl{display:block;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.gl .af{fill:var(--chacc);stroke:currentColor;stroke-width:1.4}
+.gl .f{fill:currentColor;stroke:none}
+
+/* product mockups (the product is light; fixed colours) */
+.mocks{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;padding:24px 28px 28px}
+.mock{border-radius:20px;overflow:hidden;background:var(--lichen);color:var(--forest-ink);box-shadow:0 0 0 1px oklch(0.3 0.05 145/0.08);--chbg:var(--paper);--chacc:var(--lime-ink)}
+.mhead{display:flex;align-items:center;gap:12px;padding:16px 18px;background:var(--paper);border-bottom:1px solid oklch(0.885 0.014 128);min-width:0}
+.mhead h5{font:400 24px/1.1 var(--display);min-width:0}
+.mhead .gp{font:600 12.5px var(--body);padding:4px 10px;border-radius:99px;background:oklch(0.54 0.12 138);color:#fff}
+.askbtn{margin-left:auto;display:inline-flex;align-items:center;gap:8px;padding:6px 14px 6px 6px;border-radius:99px;background:var(--forest);color:var(--paper);font:500 13.5px var(--body);white-space:nowrap;--chbg:var(--forest);--chacc:var(--lime)}
+.askbtn svg{width:28px;height:28px}
+.panelm{display:grid;grid-template-rows:auto 1fr auto;min-height:420px}
+.ptitle{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid oklch(0.885 0.014 128);background:var(--paper)}
+.ptitle svg{width:40px;height:40px}
+.ptitle b{display:block;font:400 21px/1 var(--display)}
+.ptitle small{display:block;font-size:12px;color:oklch(0.47 0.035 145);margin-top:3px}
+.msgs{padding:14px;display:grid;gap:10px;align-content:start;font-size:14px;line-height:1.45}
+.q{justify-self:end;max-width:85%;padding:10px 14px;border-radius:16px 16px 4px 16px;background:var(--forest);color:var(--paper)}
+.a{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start}
+.a svg{width:34px;height:34px}
+.bub{padding:11px 14px;border-radius:16px 16px 16px 4px;background:var(--paper)}
+.cite{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.cite span{font:500 10.5px var(--mono);padding:3px 8px;border-radius:99px;background:var(--lichen);color:var(--lime-ink)}
+.thinking{display:flex;align-items:center;gap:8px;font-size:13px;color:oklch(0.47 0.035 145)}
+.thinking svg{width:34px;height:34px}
+.input{margin:0 14px 14px;padding:11px 14px;border-radius:14px;background:var(--paper);box-shadow:inset 0 0 0 1px oklch(0.885 0.014 128);font-size:13.5px;color:oklch(0.47 0.035 145);display:flex;justify-content:space-between;gap:8px}
+.foot{font:500 10px var(--mono);letter-spacing:.04em;color:oklch(0.47 0.035 145);padding:0 16px 12px}
+.stackm{display:grid;gap:16px;align-content:start}
+.empty{display:grid;justify-items:center;gap:10px;padding:26px 20px;text-align:center}
+.empty svg{width:110px;height:110px}
+.empty b{font:400 22px/1.15 var(--display)}
+.empty p{font-size:13.5px;color:oklch(0.47 0.035 145);max-width:32ch}
+.chips{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+.chips span{font-size:12.5px;padding:6px 11px;border-radius:99px;background:var(--paper);box-shadow:inset 0 0 0 1px oklch(0.885 0.014 128)}
+.waking{display:flex;align-items:center;gap:14px;padding:16px 18px}
+.waking svg{width:64px;height:64px}
+.waking b{display:block;font:400 19px/1.15 var(--display)}
+.waking span{font-size:13px;color:oklch(0.47 0.035 145)}
+.notif{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;margin:14px;padding:13px 14px;border-radius:18px;background:var(--paper);font-size:13.5px;line-height:1.35;box-shadow:0 10px 24px -16px oklch(0.3 0.05 145/0.4)}
+.notif svg{width:36px;height:36px}
+.notif b{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:2px}
+.notif b span{font-weight:400;color:oklch(0.47 0.035 145)}
+
+/* voice + don'ts */
+.voice{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.voice>div{border-radius:24px;padding:24px;display:grid;gap:10px;align-content:start;box-shadow:var(--shadow);background:var(--surface)}
+.voice h3{font:400 26px/1.1 var(--display)}
+.voice ul{margin:0;padding-left:1.1em;display:grid;gap:7px;font-size:15px}
+.pairs{display:grid;gap:8px;margin-top:4px}
+.pairs div{display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;padding:10px 12px;border-radius:12px;background:var(--bg);font-size:14.5px}
+.pairs .y{color:var(--accent-ink);font-weight:700}
+.pairs .n{color:var(--warn-ink);font-weight:700}
+.donts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line)}
+.dont{position:relative;display:grid;justify-items:center;gap:10px;padding:26px 14px 20px;background:var(--paper);color:var(--forest-ink);--chbg:var(--paper);--chacc:var(--lime-ink);text-align:center}
+.dont svg{width:110px;height:110px}
+.dont .x{position:absolute;top:10px;right:12px;font:600 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--clay-ink)}
+.dont p{font-size:13.5px}
+.names{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.names div{background:var(--surface);border-radius:18px;padding:18px;box-shadow:var(--shadow);display:grid;gap:6px}
+.names b{font:400 22px/1.1 var(--display)}
+.names span{font-size:14px;color:var(--muted)}
+.names code{font:500 12px var(--mono);color:var(--accent-ink)}
+footer{padding-block:96px 120px;font-size:13.5px;color:var(--muted)}
+
+/* ---------- motion ---------- */
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.anim svg.big{animation:bob 3.6s ease-in-out infinite}
+.anim .eyes{transform-box:fill-box;transform-origin:center;animation:blink 5s infinite}
+@keyframes blink{0%,94%,100%{transform:scaleY(1)}96.5%{transform:scaleY(.12)}}
+.anim .bea-wl{transform-box:fill-box;transform-origin:100% 100%;animation:flapL .32s ease-in-out infinite alternate}
+.anim .bea-wr{transform-box:fill-box;transform-origin:0% 100%;animation:flapR .32s ease-in-out infinite alternate}
+@keyframes flapL{to{transform:rotate(-16deg)}}
+@keyframes flapR{to{transform:rotate(16deg)}}
+.anim .s-sleep .bea-wl,.anim .s-sleep .bea-wr{animation-duration:2.4s}
+@keyframes swing{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(8deg)}}
+.anim .s-think .bea-ant{transform-box:fill-box;transform-origin:50% 100%;animation:wiggle .5s ease-in-out infinite alternate}
+@keyframes wiggle{to{transform:rotate(7deg)}}
+.anim .s-think .bea-dots circle{animation:dots 1.2s ease-in-out infinite}
+.anim .s-think .bea-dots circle:nth-child(2){animation-delay:.2s}
+.anim .s-think .bea-dots circle:nth-child(3){animation-delay:.4s}
+@keyframes dots{0%,100%{opacity:.25}50%{opacity:1}}
+.anim .bea-z{animation:zz 2.6s ease-out infinite}
+.anim .bea-z:nth-of-type(2){animation-delay:1.3s}
+@keyframes zz{0%{transform:translate(0,0);opacity:0}20%{opacity:1}100%{transform:translate(8px,-14px);opacity:0}}
+.reactor.up{animation:reactUp .75s var(--ease)}
+.reactor.down{animation:reactDown .6s ease}
+@keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.5)}100%{transform:scale(1)}}
+@keyframes reactUp{0%{transform:none}30%{transform:translateY(-18px) scale(1.03,.97)}60%{transform:translateY(0) scale(.97,1.03)}100%{transform:none}}
+@keyframes reactDown{0%,100%{transform:none}20%{transform:translateX(-7px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
+
+@media (max-width:980px){
+  .hero,.ba,.mocks,.voice{grid-template-columns:minmax(0,1fr)}
+  .states{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .moves,.donts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .names{grid-template-columns:minmax(0,1fr)}
+  .hhead{padding:30px 24px}
+}
+@media (max-width:640px){
+  section{padding-block:72px 0}
+  .chap{grid-template-columns:minmax(0,1fr);gap:6px}
+  .chap p{grid-column:1}
+  .anat,.states,.moves,.donts,.facts{grid-template-columns:minmax(0,1fr)}
+  .stage{min-height:440px;padding-bottom:150px}
+  .stage .cap{bottom:96px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+
+<div class="top"><div class="wrap">
+  <span class="who"><span id="navAv"></span>Bea · character sheet</span>
+  <nav aria-label="Sections">
+    <a href="#fix">The fix</a><a href="#anatomy">Anatomy</a><a href="#states">States</a><a href="#motion">Motion</a><a href="#sizes">Sizes</a><a href="#product">In the product</a><a href="#voice">Voice</a><a href="#donts">Don't</a>
+  </nav>
+</div></div>
+
+<main class="wrap">
+
+<header class="hero">
+  <div class="stage g-lichen anim" id="stage">
+    <span class="reactor" id="reactor"></span>
+    <p class="cap" id="cap"></p>
+    <div class="acts" id="acts" role="group" aria-label="Show Bea's states"></div>
+  </div>
+  <div class="hhead">
+    <p class="label">WildWorth · replaces “Copilot” · v1.0 · 23 Oct 2026</p>
+    <div class="lockup g-surface"><span id="heroAv"></span><div><b>Bea</b><small>Your field guide in WildWorth</small></div></div>
+    <p class="one">The bee who never sent an invoice, finally speaking up.</p>
+    <p>Bea answers questions about a site from its own Record: the satellite record, the local news and every rating. She's busy, cheerful and exact. She never overclaims, and she always shows where an answer came from.</p>
+    <div class="facts">
+      <div><b>Name in the UI</b><span>Bea · Ask Bea</span></div>
+      <div><b>Personality</b><span>Busy, cheerful, exact</span></div>
+      <div><b>Runs on</b><span>NVIDIA Nemotron Nano, with the site's Record</span></div>
+      <div><b>Lives in</b><span>Asset pages, the steward app, the tour</span></div>
+    </div>
+  </div>
+</header>
+
+<!-- THE FIX -->
+<section id="fix">
+  <div class="chap"><span class="no">01</span><h2>The fix</h2><p>The rising lime stroke is gone and so is the colour: Bea is ink only. Her zigzag stripe now sits in the centre of her body, two carets side by side.</p></div>
+  <div class="panel"><div class="ba">
+    <div class="g-paper"><span class="t x">Before</span><span id="before"></span><p>A lime stroke climbing out of her stripe, ending in a dot. It looked like a chart tick, and it made Bea look like a second logo.</p></div>
+    <div class="g-paper" style="border-left:1px solid var(--line)"><span class="t y">After</span><span id="after"></span><p>The same Bea, with no line and no colour. The zigzag stripe sits in the centre of her body.</p></div>
+  </div></div>
+</section>
+
+<!-- ANATOMY -->
+<section id="anatomy">
+  <div class="chap"><span class="no">02</span><h2>Anatomy</h2><p>Drawn by the logo's rules: one line weight with round ends, in ink only.</p></div>
+  <div class="panel"><div class="anat g-surface">
+    <span id="anatFig"></span>
+    <ol>
+      <li><b>Zigzag stripe.</b> Two carets of the WildWorth line, centred on her body. It makes her a bee and makes her ours.</li>
+      <li><b>Ink only.</b> No fills and no colour: forest ink on light screens, paper on dark, like the logo's line.</li>
+      <li><b>Wings and antennae.</b> Outline only, same stroke. The antennae carry her mood: up when alert, wiggling while she thinks, drooping when she's asleep.</li>
+      <li><b>Face.</b> Dot eyes and a line smile, shared with the brand's other characters. No blush, no extra colour.</li>
+      <li><b>Build.</b> 120-unit square, 6-unit stroke. Body circle 33 units; the stripe is clipped inside it.</li>
+    </ol>
+  </div></div>
+</section>
+
+<!-- STATES -->
+<section id="states">
+  <div class="chap"><span class="no">03</span><h2>States</h2><p>Each expression has a job in the product. Bea never shows a face that doesn't match what's happening on screen.</p></div>
+  <div class="panel"><div class="states" id="statesGrid"></div></div>
+</section>
+
+<!-- MOTION -->
+<section id="motion">
+  <div class="chap"><span class="no">04</span><h2>Motion</h2><p>Small, constant life at rest; one clear reaction when a rating changes. Everything stops for anyone who prefers reduced motion.</p></div>
+  <div class="moves">
+    <div><b>Idle</b><p>Wings flutter, she bobs gently, and she blinks every few seconds.</p><p class="t">Loop · 3.6 s bob · 0.32 s flutter</p></div>
+    <div><b>Thinking</b><p>While the model is answering: antennae wiggle and three dots pulse beside her.</p><p class="t">Loop until the answer arrives</p></div>
+    <div><b>Upgrade</b><p>A hop with a little squash, and her smile.</p><p class="t">750 ms · once</p></div>
+    <div><b>Downgrade</b><p>A short shake, worried eyes and raised antennae. Never cartoon panic.</p><p class="t">600 ms · once</p></div>
+  </div>
+  <p class="small" style="margin-top:14px;color:var(--muted)">Easing: <span style="font-family:var(--mono)">cubic-bezier(.16,1,.3,1)</span>, the app's <span style="font-family:var(--mono)">--nx-ease-out</span>. Try every state on the stage at the top of this page.</p>
+</section>
+
+<!-- SIZES -->
+<section id="sizes">
+  <div class="chap"><span class="no">05</span><h2>Sizes and icon</h2><p>The full character from 64 px up. Below that, the avatar. In navigation and buttons, the 24-px icon from the WildWorth icon pack.</p></div>
+  <div class="panel"><div class="sizes g-surface" id="sizesRow"></div></div>
+</section>
+
+<!-- PRODUCT -->
+<section id="product">
+  <div class="chap"><span class="no">06</span><h2>In the product</h2><p>Where Bea shows up, in the product's light theme. Values are the example from ux-writing.md.</p></div>
+  <div class="panel">
+    <div class="mocks">
+      <div class="mock">
+        <div class="mhead"><h5>Xochimilco Wetland</h5><span class="gp">BBB</span><span class="askbtn" id="askBtn"></span></div>
+        <div class="panelm">
+          <div class="ptitle" id="ptitle"></div>
+          <div class="msgs">
+            <div class="q">Why did Xochimilco drop to BBB?</div>
+            <div class="a"><span id="msgAv1"></span><div class="bub">Bzz. Two local news reports and the satellites agree: about 40 ha at the northern edge were cleared for an industrial site. That pulled the Health score from 74.2 to 63.8, so the grade fell to BBB.<div class="cite"><span>Record · entry 14</span><span>News · 12 Sep 2026</span><span>News · 14 Sep 2026</span><span>Satellite · Q3 2026</span></div></div></div>
+            <div class="q">What would bring it back?</div>
+            <div class="thinking anim" id="thinking"></div>
+          </div>
+          <div><div class="input"><span>Ask Bea about Xochimilco…</span><span>↵</span></div><p class="foot">Answers only from this site's Record · Runs on NVIDIA Nemotron Nano · Sandbox</p></div>
+        </div>
+      </div>
+      <div class="stackm">
+        <div class="mock"><div class="empty anim" id="empty"></div></div>
+        <div class="mock"><div class="waking anim" id="waking"></div></div>
+        <div class="mock"><div class="notif" id="notif"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- VOICE -->
+<section id="voice">
+  <div class="chap"><span class="no">07</span><h2>Voice</h2><p>Bea is warm in tone and strict about facts. The personality changes how things are said, never what the numbers are.</p></div>
+  <div class="voice">
+    <div><h3>Rules</h3><ul>
+      <li>“Bzz” only to open a first answer, never mid-sentence or twice in a row.</li>
+      <li>Every number comes from the Record, with its source tag.</li>
+      <li>If the Record has no answer, she says so and suggests what to check.</li>
+      <li>Never invest, returns, buy or profit. Play money is play money.</li>
+      <li>In reports and the Agent Trace, the sober rating voice leads; Bea is labelled with the model she runs on.</li>
+    </ul></div>
+    <div><h3>Say it like this</h3><div class="pairs">
+      <div><span class="y">✓</span><span>Bzz. The satellites saw more water this quarter, so the score rose to 77.6.</span></div>
+      <div><span class="n">✕</span><span>Great news!!! This wetland is a fantastic opportunity! 🐝</span></div>
+      <div><span class="y">✓</span><span>I couldn't find that in the Record. The latest news check was 12 Sep.</span></div>
+      <div><span class="n">✕</span><span>I think it's probably fine, most wetlands recover.</span></div>
+    </div></div>
+  </div>
+  <h3 style="font:400 26px/1.1 var(--display);margin-top:36px">Names in the UI</h3>
+  <div class="names" style="margin-top:14px">
+    <div><b>Ask Bea</b><span>The button on asset pages and the steward home.</span><code>was: Copilot</code></div>
+    <div><b>Bea · your field guide</b><span>The chat panel's title.</span><code>subtitle: Answers only from this site's Record</code></div>
+    <div><b>Bea (Nemotron Nano)</b><span>How she appears in the Agent Trace.</span><code>model: nvidia/nemotron-nano</code></div>
+  </div>
+</section>
+
+<!-- DON'TS -->
+<section id="donts">
+  <div class="chap"><span class="no">08</span><h2>Don't</h2><p>Keep her simple. Every one of these makes her look like any other bee mascot.</p></div>
+  <div class="panel"><div class="donts" id="dontsGrid"></div></div>
+</section>
+
+</main>
+
+<footer><div class="wrap">
+  <p>Bea is an original character drawn for WildWorth in the brand's line style. Part of the WildWorth brand guidelines. Sandbox, play money only.</p>
+</div></footer>
+
+<script>
+(function(){
+  var SW=6,uid=0;
+  var INK='stroke="currentColor" stroke-width="'+SW+'" stroke-linecap="round" stroke-linejoin="round"';
+  var FILL='style="fill:var(--chbg)"',ACC='style="stroke:var(--chacc)"',ACCF='style="fill:var(--chacc)"';
+
+  function face(e,cx,cy,dx,s){
+    s=s||1;var eyes="",extra="",o="",w=6.5*s;
+    [cx-dx,cx+dx].forEach(function(x){
+      if(e==="happy"){eyes+='<path d="M'+(x-4.6*s)+' '+(cy+1.6*s)+' Q'+x+' '+(cy-4.6*s)+' '+(x+4.6*s)+' '+(cy+1.6*s)+'" fill="none" '+INK+'/>';}
+      else if(e==="sleep"){eyes+='<path d="M'+(x-4.6*s)+' '+cy+' Q'+x+' '+(cy+3.6*s)+' '+(x+4.6*s)+' '+cy+'" fill="none" '+INK+'/>';}
+      else{var r=(e==="alert"?5.4:4.3)*s,ox=e==="think"?2.4*s:0,oy=e==="think"?-2.4*s:e==="sad"?1.2*s:0;
+        eyes+='<circle cx="'+(x+ox)+'" cy="'+(cy+oy)+'" r="'+r+'" fill="currentColor"/>';}
+      if(e==="alert"){var l=x<cx;extra+='<path d="M'+(x-4.5*s)+' '+(cy-(l?9:12)*s)+' L'+(x+4.5*s)+' '+(cy-(l?12:9)*s)+'" fill="none" '+INK+' stroke-width="'+(SW*.7)+'"/>';}
+      if(e==="sad"){var l2=x<cx;extra+='<path d="M'+(x-4.5*s)+' '+(cy-(l2?11:8)*s)+' L'+(x+4.5*s)+' '+(cy-(l2?8:11)*s)+'" fill="none" '+INK+' stroke-width="'+(SW*.7)+'"/>';}
+    });
+    o='<g class="eyes">'+eyes+'</g>'+extra;
+    if(e==="neutral")o+='<path d="M'+(cx-w)+' '+(cy+10*s)+' Q'+cx+' '+(cy+15.5*s)+' '+(cx+w)+' '+(cy+10*s)+'" fill="none" '+INK+'/>';
+    if(e==="think")o+='<path d="M'+(cx-3*s)+' '+(cy+12.5*s)+' L'+(cx+4.5*s)+' '+(cy+11.5*s)+'" fill="none" '+INK+'/>';
+    if(e==="alert")o+='<circle cx="'+cx+'" cy="'+(cy+13*s)+'" r="'+(3.2*s)+'" fill="none" '+INK+' stroke-width="'+(SW*.75)+'"/>';
+    if(e==="happy")o+='<path d="M'+(cx-w-1.5*s)+' '+(cy+9*s)+' Q'+cx+' '+(cy+19*s)+' '+(cx+w+1.5*s)+' '+(cy+9*s)+'" fill="none" '+INK+'/>';
+    if(e==="sleep")o+='<circle cx="'+cx+'" cy="'+(cy+12*s)+'" r="'+(2.2*s)+'" fill="none" '+INK+' stroke-width="'+(SW*.6)+'"/>';
+    if(e==="sad")o+='<path d="M'+(cx-w)+' '+(cy+15*s)+' Q'+cx+' '+(cy+9.5*s)+' '+(cx+w)+' '+(cy+15*s)+'" fill="none" '+INK+'/>';
+    return o;
+  }
+
+  /* Bea: ink only; her stripe is two carets of the WildWorth zigzag, centred on her body. */
+  function bea(e){var id="bc"+(uid++);
+    var ANT={alert:'M51 38 L45 14M69 38 L75 14',sleep:'M52 38 Q45 30 37 33M68 38 Q75 30 83 33'};
+    var TIP={alert:[[45,14],[75,14]],sleep:[[37,33],[83,33]]};
+    var ant=ANT[e]||'M52 38 Q47 24 41 19M68 38 Q73 24 79 19',tips=TIP[e]||[[41,19],[79,19]];
+    var o='<g class="bea-ant"><path d="'+ant+'" fill="none" '+INK+'/>'+tips.map(function(t){return '<circle cx="'+t[0]+'" cy="'+t[1]+'" r="4.2" fill="currentColor"/>';}).join("")+'</g>'+
+      '<g class="bea-wl"><ellipse cx="37" cy="44" rx="16" ry="10.5" transform="rotate(-28 37 44)" '+FILL+' '+INK+'/></g>'+
+      '<g class="bea-wr"><ellipse cx="83" cy="44" rx="16" ry="10.5" transform="rotate(28 83 44)" '+FILL+' '+INK+'/></g>'+
+      '<path d="M55 104 L60 111 L65 104" fill="none" '+INK+'/>'+
+      '<defs><clipPath id="'+id+'"><circle cx="60" cy="70" r="30"/></clipPath></defs>'+
+      '<circle cx="60" cy="70" r="33" '+FILL+' '+INK+'/>'+
+      '<g clip-path="url(#'+id+')"><path d="M36 96 L48 84 L60 96 L72 84 L84 96" fill="none" '+INK+'/></g>'+
+      face(e,60,62,12,1);
+    if(e==="think")o+='<g class="bea-dots"><circle cx="96" cy="58" r="3" fill="currentColor"/><circle cx="104" cy="50" r="3.6" fill="currentColor"/><circle cx="112" cy="40" r="4.2" fill="currentColor"/></g>';
+    if(e==="sleep")o+='<path class="bea-z" d="M90 30 h8 l-8 8 h8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path class="bea-z" d="M100 16 h6 l-6 6 h6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>';
+    return o;}
+
+  /* the previous Bea, kept only for the before/after */
+  function beaOld(){var id="bo"+(uid++);
+    return '<path d="M52 38 Q47 24 41 19M68 38 Q73 24 79 19" fill="none" '+INK+'/><circle cx="41" cy="19" r="4.2" fill="currentColor"/><circle cx="79" cy="19" r="4.2" fill="currentColor"/>'+
+      '<ellipse cx="37" cy="44" rx="16" ry="10.5" transform="rotate(-28 37 44)" '+FILL+' '+INK+'/><ellipse cx="83" cy="44" rx="16" ry="10.5" transform="rotate(28 83 44)" '+FILL+' '+INK+'/>'+
+      '<defs><clipPath id="'+id+'"><circle cx="60" cy="70" r="30"/></clipPath></defs><circle cx="60" cy="70" r="33" '+FILL+' '+INK+'/>'+
+      '<g clip-path="url(#'+id+')"><path d="M33 89 L41 99 L49 88 L57 99 L65 88 L72 99" fill="none" '+INK+'/><path d="M72 99 L83 85" fill="none" '+INK+' '+ACC+'/></g><circle cx="83" cy="85" r="4.6" '+ACCF+'/>'+
+      '<path d="M55 104 L60 111 L65 104" fill="none" '+INK+'/>'+face("neutral",60,62,12,1);}
+
+  function svg(e,cls,label,vb){return '<svg viewBox="'+(vb||"0 0 120 124")+'" class="'+(cls||"")+'" role="img" aria-label="'+label+'"><g class="s-'+e+'">'+bea(e)+'</g></svg>';}
+  function avatar(label,size){return '<svg viewBox="0 0 120 120" class="av"'+(size?' width="'+size+'" height="'+size+'"':'')+' role="img" aria-label="'+(label||"Bea")+'"><circle cx="60" cy="60" r="56" '+FILL+' stroke="currentColor" stroke-width="5"/><g transform="translate(15 12) scale(.75)">'+bea("neutral")+'</g></svg>';}
+  var ICON='<ellipse cx="7.8" cy="7.2" rx="3.6" ry="2.3" transform="rotate(-28 7.8 7.2)"/><ellipse cx="16.2" cy="7.2" rx="3.6" ry="2.3" transform="rotate(28 16.2 7.2)"/><circle cx="12" cy="14" r="6.4"/><path d="M7.4 17.2 9.7 14.9 12 17.2 14.3 14.9 16.6 17.2" stroke-width="1.5"/><circle class="f" cx="10" cy="11.1" r=".95"/><circle class="f" cx="14" cy="11.1" r=".95"/><path d="M10.7 12.8q1.3 1 2.6 0" stroke-width="1.3"/><path d="M10.7 20.5 12 22.5l1.3-2"/>';
+  function icon(px){return '<svg width="'+px+'" height="'+px+'" viewBox="10 12 100 100" aria-hidden="true">'+bea("neutral")+'</svg>';}
+
+  /* states: each is a product moment */
+  var STATES=[
+    ["neutral","Hello","When the panel opens, or between answers.","Ask Bea"],
+    ["think","Thinking","While the model answers. Loops until text arrives.","Bea is reading the Record…"],
+    ["happy","Found it · upgrade","An answer with evidence, or a grade went up.","Grade raised to A"],
+    ["alert","Downgrade","A grade fell or WildWatch raised an alert.","Lowered A → BBB"],
+    ["sad","Can't answer","The Record has nothing on the question.","Not in the Record yet"],
+    ["sleep","Waking up","The free-tier backend is starting (about 30 s).","Waking up… ~30 s"]
+  ];
+  var r=document.getElementById("reactor"),cap=document.getElementById("cap"),acts=document.getElementById("acts");
+  function show(e,react){var st=STATES.filter(function(s){return s[0]===e;})[0];
+    r.innerHTML=svg(e,"big","Bea, "+st[1]);cap.textContent=st[2];
+    r.classList.remove("up","down");void r.offsetWidth;
+    if(react&&e==="happy")r.classList.add("up");if(react&&e==="alert")r.classList.add("down");
+    acts.querySelectorAll("button").forEach(function(b){b.setAttribute("aria-pressed",b.dataset.e===e?"true":"false");});}
+  acts.innerHTML=STATES.map(function(s){return '<button type="button" data-e="'+s[0]+'" aria-pressed="false">'+s[1].split(" · ")[0]+'</button>';}).join("");
+  acts.addEventListener("click",function(ev){var b=ev.target.closest("button");if(b)show(b.dataset.e,true);});
+  show("neutral",false);
+
+  document.getElementById("navAv").innerHTML=avatar("Bea");
+  document.getElementById("heroAv").innerHTML=avatar("Bea avatar");
+  document.getElementById("before").innerHTML='<svg viewBox="0 0 120 120" role="img" aria-label="Bea before: a lime stroke rising out of her stripe">'+beaOld()+'</svg>';
+  document.getElementById("after").innerHTML='<span class="anim" style="display:block">'+svg("neutral","","Bea after: no line, no colour, centred zigzag stripe")+'</span>';
+  document.getElementById("anatFig").innerHTML=svg("neutral","","Bea, annotated");
+  document.getElementById("statesGrid").innerHTML=STATES.map(function(s){return '<figure class="anim">'+svg(s[0],"","Bea, "+s[1])+'<div><b>'+s[1]+'</b><p class="when">'+s[2]+'</p><span class="ui">'+s[3]+'</span></div></figure>';}).join("");
+
+  document.getElementById("sizesRow").innerHTML=
+    [128,96,64].map(function(n){return '<figure><span style="display:block;width:'+n+'px">'+svg("neutral","","Bea at "+n+" pixels")+'</span><figcaption>'+n+' px<br>character</figcaption></figure>';}).join("")+
+    [48,32,24].map(function(n){return '<figure>'+avatar("Bea avatar",n)+'<figcaption>'+n+' px<br>avatar</figcaption></figure>';}).join("")+
+    [32,24,16].map(function(n){return '<figure>'+icon(n)+'<figcaption>'+n+' px<br>icon</figcaption></figure>';}).join("")+
+    '<figure><span class="tile g-forest" style="width:56px;height:56px">'+icon(32)+'</span><figcaption>On forest</figcaption></figure>'+
+    '<figure><span class="tile g-machine" style="width:56px;height:56px">'+icon(32)+'</span><figcaption>On machine</figcaption></figure>';
+
+  document.getElementById("askBtn").innerHTML=avatar("Bea")+'Ask Bea';
+  document.getElementById("ptitle").innerHTML=avatar("Bea")+'<div><b>Bea · your field guide</b><small>Answers only from this site\'s Record</small></div>';
+  document.getElementById("msgAv1").innerHTML=avatar("Bea");
+  document.getElementById("thinking").innerHTML='<svg viewBox="0 0 124 124" role="img" aria-label="Bea thinking"><g class="s-think">'+bea("think")+'</g></svg>Bea is reading the Record…';
+  document.getElementById("empty").innerHTML=svg("neutral","","Bea says hello")+'<b>Ask Bea about this site</b><p>She answers from the satellite record, the local news and every rating, and shows her sources.</p><div class="chips"><span>Why did it drop?</span><span>What is it worth?</span><span>What would lift it?</span></div>';
+  document.getElementById("waking").innerHTML=svg("sleep","","Bea waking up")+'<div><b>Bea is waking up…</b><span>About 30 seconds. Cached answers are shown meanwhile.</span></div>';
+  document.getElementById("notif").innerHTML=avatar("Bea")+'<div><b>Bea <span>now</span></b>Xochimilco Wetland lowered A → BBB. Encroachment reported at the northern edge. Ask me why.</div>';
+
+  /* don'ts, drawn */
+  var DONT=[
+    ['<svg viewBox="0 0 120 124" role="img" aria-label="Bea filled yellow"><g style="--chbg:oklch(0.88 0.16 95)">'+bea("neutral")+'</g></svg>',"Fill her with colour"],
+    ['<svg viewBox="0 0 120 124" role="img" aria-label="Bea with lime wings"><g style="--chbg:oklch(0.86 0.135 126)">'+bea("neutral")+'</g></svg>',"Add a lime accent back"],
+    ['<svg viewBox="0 0 120 124" role="img" aria-label="Bea with a rising line"><g>'+beaOld()+'</g></svg>',"Bring back the rising stroke"],
+    ['<svg viewBox="0 0 120 124" role="img" aria-label="Bea stretched"><g transform="translate(60 62) scale(1.35 .8) translate(-60 -62)">'+bea("neutral")+'</g></svg>',"Stretch, squash or add a 3D look"]
+  ];
+  document.getElementById("dontsGrid").innerHTML=DONT.map(function(d){return '<div class="dont"><span class="x">✕ Don\'t</span>'+d[0]+'<p>'+d[1]+'</p></div>';}).join("");
+})();
+</script>
