@@ -60,8 +60,8 @@ export function StewardHome() {
               Get paid for keeping your land alive
             </h1>
             <p className="mt-4 max-w-xl text-lg text-muted-foreground">
-              NatureX rates the land your community protects and lets supporters
-              fund it, without you selling a single hectare.
+              WildWorth rates the land your community protects and lets
+              supporters fund it, without you selling a single hectare.
             </p>
             <ol className="mt-6 space-y-3 text-sm">
               {[
@@ -288,7 +288,7 @@ export function StewardHome() {
                 <h2 id="actions-title" className="text-base font-semibold">
                   {downgraded
                     ? `Recover the rating: ${prev.grade} → ${report.grade}`
-                    : "Stewardship actions"}
+                    : "Recovery plan"}
                 </h2>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -315,7 +315,7 @@ export function StewardHome() {
         </div>
 
         <aside className="space-y-6">
-          <Panel title="Alerts">
+          <Panel title="WildWatch alerts">
             {alerts.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No alerts yet. You&apos;ll hear here when your site is re-rated.

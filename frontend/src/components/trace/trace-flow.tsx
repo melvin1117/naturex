@@ -399,8 +399,7 @@ function InspectorDetail({
       <Section title="Sealed">
         <p className="text-[13px] leading-relaxed text-machine-ink/90">
           The report, its evidence and this run&apos;s record are appended to
-          the hash-chained Nature Ledger, so any later change would break the
-          chain.
+          the hash-chained Record, so any later change would break the chain.
         </p>
       </Section>
     );

@@ -1,1 +1,1 @@
-"""NatureX backend application package."""
+"""WildWorth backend application package."""

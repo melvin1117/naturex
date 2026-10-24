@@ -319,7 +319,7 @@ describe("StewardVerifyScreen", () => {
       screen.getByText("Reviewer's reason for rejecting"),
     ).toBeInTheDocument();
     expect(screen.getByText("The minutes are unsigned.")).toBeInTheDocument();
-    expect(screen.getByText("NatureX platform admin")).toBeInTheDocument();
+    expect(screen.getByText("WildWorth platform admin")).toBeInTheDocument();
     expect(
       screen.getByText("2 of 2 bound to this listing"),
     ).toBeInTheDocument();
@@ -414,7 +414,7 @@ describe("StewardVerifyScreen", () => {
     });
     expect(
       await screen.findAllByText(
-        "Documents reviewed by NatureX (hackathon process)",
+        "Documents reviewed by WildWorth (hackathon process)",
       ),
     ).not.toHaveLength(0);
     expect(
@@ -440,7 +440,7 @@ describe("StewardVerifyScreen", () => {
       ),
     ).not.toHaveLength(0);
     expect(
-      screen.queryByText("Documents reviewed by NatureX (hackathon process)"),
+      screen.queryByText("Documents reviewed by WildWorth (hackathon process)"),
     ).not.toBeInTheDocument();
   });
 

@@ -91,10 +91,10 @@ export function JudgeLanding() {
             The bees never sent an invoice.
           </h1>
           <p className="mt-6 max-w-xl text-lg text-foreground/80">
-            NatureX is an AI rating agency for living land. Nemotron agents read
-            satellite data and local news, rate a site&apos;s health and value
-            with honest ranges, and keep watching, so keeping nature alive can
-            pay more than destroying it.
+            WildWorth is an AI rating agency for living land. Nemotron agents
+            read satellite data and local news, rate a site&apos;s health and
+            value with honest ranges, and keep watching, so keeping nature alive
+            can pay more than destroying it.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Button size="lg" onClick={tour.start}>

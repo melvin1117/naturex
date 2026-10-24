@@ -243,12 +243,15 @@ export function ValueRange({
   confidence,
   tone = "light",
   revealDelay,
+  label = "Worth range",
   className,
 }: {
   low: number;
   mid: number;
   high: number;
   confidence: number;
+  /** The feature's name above the range (guidelines ch. 9); null where a heading says it. */
+  label?: string | null;
   tone?: "light" | "dark" | "image";
   /** A newly computed range: after this many ms the bar opens from its centre, then the
    * midpoint and the confidence settle in (#216). */
@@ -271,6 +274,7 @@ export function ValueRange({
         : "text-white/75";
   return (
     <div className={cn("space-y-2", className)}>
+      {label && <p className={cn("text-xs font-medium", muted)}>{label}</p>}
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="tabular text-2xl font-light tracking-tight">
           {money(low)}–{money(high)}
@@ -283,7 +287,7 @@ export function ValueRange({
           tone === "light" ? "bg-foreground/8" : "bg-white/15",
         )}
         role="img"
-        aria-label={`Estimated value between ${money(low)} and ${money(high)} a year, midpoint ${money(mid)}`}
+        aria-label={`Worth range: ${money(low)} to ${money(high)} a year, midpoint ${money(mid)}`}
       >
         <div
           className={cn(

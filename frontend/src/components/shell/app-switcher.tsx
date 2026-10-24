@@ -1,9 +1,10 @@
 "use client";
 
-import { Plus, Repeat2, ShieldCheck } from "lucide-react";
+import { Plus } from "lucide-react";
 import Link from "@/components/app-link";
 import { cn } from "cn";
 
+import { AppIcon } from "@/components/shell/app-icons";
 import { Button } from "@/components/ui/button";
 import { useMyCommunities, useWorld } from "@/lib/hooks";
 import {
@@ -71,11 +72,7 @@ export function AppSwitcher({
               className={cn(layout === "stack" && "w-full justify-start")}
             >
               <Link href={APPS[app].href} onClick={onNavigate}>
-                {app === "admin" ? (
-                  <ShieldCheck aria-hidden="true" />
-                ) : (
-                  <Repeat2 aria-hidden="true" />
-                )}
+                <AppIcon app={app} />
                 {APPS[app].switchLabel}
               </Link>
             </Button>

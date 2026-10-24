@@ -273,7 +273,7 @@ describe("ReviewQueueScreen decided views (#211)", () => {
       within(list).getByText("Title matches the land"),
     ).toBeInTheDocument();
     expect(
-      within(list).getByText(/NatureX platform admin/),
+      within(list).getByText(/WildWorth platform admin/),
     ).toBeInTheDocument();
     expect(
       within(list).getByRole("link", { name: "Open Río Claro Forest" }),
@@ -664,7 +664,7 @@ describe("ListingReviewScreen", () => {
     expect(
       within(history).getByText(/1 document: Land title/),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Verifications" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Verified land" })).toHaveAttribute(
       "href",
       "/admin/verifications?view=verified",
     );

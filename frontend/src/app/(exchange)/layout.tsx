@@ -3,7 +3,7 @@ import { SiteFooter } from "@/components/proto/site-footer";
 import { AppHeader } from "@/components/shell/app-header";
 import { MAIN_ID } from "@/components/shell/skip-link";
 
-/** NatureX Exchange (`/`): for investors and everyone (ADR-0005 §5). */
+/** WildWorth Exchange (`/`): for investors and everyone (ADR-0005 §5). */
 export default function ExchangeLayout({
   children,
 }: {

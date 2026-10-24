@@ -308,7 +308,7 @@ describe("ReportTab changes from the diff API (#189)", () => {
     ).toMatch(/ring-lime/);
 
     fireEvent.pointerDown(
-      screen.getByRole("combobox", { name: "Report version" }),
+      screen.getByRole("combobox", { name: "Proof of Life version" }),
       { button: 0, ctrlKey: false, pointerType: "mouse" },
     );
     fireEvent.click(await screen.findByRole("option", { name: /^v2/ }));

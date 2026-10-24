@@ -20,7 +20,7 @@ export const REPORT_SOURCE: CopilotSource = {
   kind: "report",
   asset_id: ASSET_ID,
   asset_name: "Xochimilco wetland",
-  title: "Report v2",
+  title: "Proof of Life v2",
   snippet: "Rating report version 2 for Xochimilco wetland.",
   event_id: null,
   report_id: "77777777-7777-4777-8777-777777777702",

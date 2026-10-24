@@ -239,7 +239,7 @@ function Home({ summary }: { summary: CommunitySummary }) {
 
         <aside className="min-w-0 space-y-6" aria-label="Community">
           {listings.length > 0 && <WalletCard wallet={summary.wallet} />}
-          <StewardPanel title="Alerts">
+          <StewardPanel title="WildWatch alerts">
             <AlertsList
               key={community.id}
               communityId={community.id}
@@ -283,7 +283,7 @@ function EmptyHome({ listHref }: { listHref: string }) {
           List your land
         </h2>
         <p className="mt-3 text-pretty text-primary-foreground/85">
-          Draw the boundary of the land your community protects. NatureX rates
+          Draw the boundary of the land your community protects. WildWorth rates
           it from satellite data in a few minutes, and you decide afterwards
           whether to open it to supporters.
         </p>
@@ -623,7 +623,7 @@ function ListingRow({
 function Recommendations({ listings }: { listings: ListingSummary[] }) {
   const rated = listings.filter((l) => l.recommendations.length > 0);
   return (
-    <StewardPanel title="Stewardship actions">
+    <StewardPanel title="Recovery plan">
       {rated.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {recommendationsEmptyText(listings)}

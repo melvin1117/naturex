@@ -239,9 +239,9 @@ describe("route loading states", () => {
   );
 
   it.each([
-    ["/", "Marketplace"],
+    ["/", "Rated sites"],
     ["/admin", "Time Machine"],
-    ["/admin/verifications", "Verifications"],
+    ["/admin/verifications", "Verified land"],
     ["/portfolio", "Your stakes"],
     ["/steward/listings", "Listings"],
   ])("%s draws its real heading", (route, heading) => {
@@ -253,7 +253,7 @@ describe("route loading states", () => {
   });
 
   it.each([
-    ["/asset/x", "Marketplace", "/"],
+    ["/asset/x", "Rated sites", "/"],
     ["/steward/community", "Community home", "/steward"],
   ])("%s keeps its real back link", (route, name, href) => {
     const { Loading } = LOADERS.find((l) => l.route === route)!;

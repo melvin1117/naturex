@@ -56,7 +56,7 @@ function routes(overrides: Parameters<typeof renderExchange>[1] = {}) {
       json({
         asset_id: ID,
         level: "verified",
-        badge: "Documents reviewed by NatureX (hackathon process)",
+        badge: "Documents reviewed by WildWorth (hackathon process)",
         decided_at: "2026-10-19T09:00:00Z",
         reviewer_role: "platform_admin",
         checks: [{ check: "boundary_free", result: "pass" }],
@@ -128,7 +128,9 @@ describe("AssetView", () => {
     expect(
       within(hero).getByRole("img", { name: /Grade A, Strong health/ }),
     ).toBeInTheDocument();
-    expect(within(hero).getByText("Report v1 · Q3 2026")).toBeInTheDocument();
+    expect(
+      within(hero).getByText("Proof of Life v1 · Q3 2026"),
+    ).toBeInTheDocument();
 
     expect(screen.getByText("8,828 tCO₂")).toBeInTheDocument();
     expect(screen.getByText("Formula health").nextSibling).toHaveTextContent(
@@ -549,7 +551,7 @@ describe("AssetView", () => {
     );
 
     expect(
-      await screen.findByText("Ecological Performance Report · v3"),
+      await screen.findByRole("heading", { name: /^Proof of Life/ }),
     ).toBeInTheDocument();
     expect(await screen.findByText("Why it changed")).toBeInTheDocument();
     const reason = screen.getByText(/Replanting raised vegetation vigour/);
@@ -564,7 +566,7 @@ describe("AssetView", () => {
       screen.getByText("Written by the Auditor (Nemotron), with cited facts"),
     ).toBeInTheDocument();
     expect(screen.getByText("What changed since v1")).toBeInTheDocument();
-    expect(screen.getByText("Was A in report v1")).toBeInTheDocument();
+    expect(screen.getByText("Was A in Proof of Life v1")).toBeInTheDocument();
     // The table comes from the diff API (#189), not from comparing reports in the browser.
     expect(screen.getByText("Grade").closest("tr")).toHaveTextContent(
       "GradeAAAUpgraded",
@@ -696,14 +698,14 @@ describe("AssetView", () => {
     renderExchange(<AssetView id={ID} />, routes());
 
     const hero = await screen.findByRole("link", {
-      name: /^Documents reviewed by NatureX \(hackathon process\)/,
+      name: /^Documents reviewed by WildWorth \(hackathon process\)/,
     });
     expect(hero).toHaveAttribute("href", "#verification");
     const panel = screen.getByRole("region", {
       name: "How this listing was verified",
     });
     expect(
-      within(panel).getByText("NatureX platform admin"),
+      within(panel).getByText("WildWorth platform admin"),
     ).toBeInTheDocument();
     expect(within(panel).getByText("Registry records")).toBeInTheDocument();
     expect(
@@ -736,7 +738,7 @@ describe("AssetView", () => {
           json({
             asset_id: ID,
             level: "verified",
-            badge: "Documents reviewed by NatureX (hackathon process)",
+            badge: "Documents reviewed by WildWorth (hackathon process)",
             checks: [],
             not_checked: [],
             ledger_seq: 0,
@@ -770,10 +772,10 @@ describe("AssetView", () => {
       expect(found).not.toBeNull();
       return found!;
     });
+    expect(screen.getByRole("heading", { name: "The Record" })).toBeVisible();
     expect(
-      screen.getByRole("heading", { name: "Nature Ledger" }),
-    ).toBeVisible();
-    expect(screen.getByRole("button", { name: "Verify chain" })).toBeDisabled();
+      screen.getByRole("button", { name: "Verify the Record" }),
+    ).toBeDisabled();
     expect(region.querySelector(".animate-spin")).toBeNull();
     act(() => release());
     expect(await screen.findByText("#0")).toBeInTheDocument();
@@ -800,7 +802,7 @@ describe("AssetView", () => {
     const { backend } = renderExchange(<AssetView id={ID} />, routes());
 
     expect(await screen.findByText("#0")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Verify chain" }));
+    fireEvent.click(screen.getByRole("button", { name: "Verify the Record" }));
 
     expect(
       await screen.findByText("Chain intact: its 1 entry verified."),
@@ -826,7 +828,7 @@ describe("AssetView", () => {
     );
     // The panel's real chrome shows while the entries load; verify once they're here.
     expect(await screen.findByText("#0")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Verify chain" }));
+    fireEvent.click(screen.getByRole("button", { name: "Verify the Record" }));
     expect(
       await screen.findByText("Chain intact: its 1 entry verified."),
     ).toBeInTheDocument();
@@ -860,9 +862,9 @@ describe("AssetView", () => {
     );
     // The panel's real chrome shows while the entries load; verify once they're here.
     expect(await screen.findByText("#0")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Verify chain" }));
+    fireEvent.click(screen.getByRole("button", { name: "Verify the Record" }));
     expect(
-      await screen.findByText("Tampering detected at entry #0."),
+      await screen.findByText("Record broken at entry #0."),
     ).toBeInTheDocument();
   });
 });

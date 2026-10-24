@@ -5000,7 +5000,7 @@ export interface components {
             level: components["schemas"]["VerificationLevel"];
             /**
              * Badge
-             * @description `Documents reviewed by NatureX (hackathon process)` when verified, `Verification revoked`, else `Self-attested by the community`.
+             * @description `Documents reviewed by WildWorth (hackathon process)` when verified, `Verification revoked`, else `Self-attested by the community`.
              */
             badge: string;
             /** Run Id */
@@ -5181,7 +5181,7 @@ export interface components {
             me: components["schemas"]["MeOut"] | null;
             /**
              * Document Ai Check
-             * @description What the AI document check (T71) does with a steward's own verification upload in this world, for the uploader notice (ADR-0006 §5): `uploads` (its sanitised preview may be sent to an AI model on Nebius Token Factory when submitted), `samples_only` (a sandbox: only NatureX sample documents are sent, never an upload) or `off` (the live world while `VERIFICATION_AI_LIVE=false`).
+             * @description What the AI document check (T71) does with a steward's own verification upload in this world, for the uploader notice (ADR-0006 §5): `uploads` (its sanitised preview may be sent to an AI model on Nebius Token Factory when submitted), `samples_only` (a sandbox: only WildWorth sample documents are sent, never an upload) or `off` (the live world while `VERIFICATION_AI_LIVE=false`).
              * @enum {string}
              */
             document_ai_check: "off" | "samples_only" | "uploads";

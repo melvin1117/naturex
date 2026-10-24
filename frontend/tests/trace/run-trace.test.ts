@@ -126,8 +126,8 @@ describe("runOptions", () => {
     const reports = [report(3, RUN_ID), report(2, null), report(1, OLD_RUN_ID)];
     expect(runOptions(reports, [RUN_ID, "extra"])).toEqual([
       { runId: "extra", label: "Latest run" },
-      { runId: RUN_ID, label: "Report v3 · A · 2026-10-13" },
-      { runId: OLD_RUN_ID, label: "Report v1 · A · 2026-10-11" },
+      { runId: RUN_ID, label: "Proof of Life v3 · A · 2026-10-13" },
+      { runId: OLD_RUN_ID, label: "Proof of Life v1 · A · 2026-10-11" },
     ]);
     expect(runOptions([report(1, null)])).toEqual([]);
   });

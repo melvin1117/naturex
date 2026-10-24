@@ -125,9 +125,11 @@ describe("TraceSheet on a real site", () => {
     expect(backend.calls(`GET /runs/${RUN_ID}/trace`)).toBe(1);
 
     const picker = screen.getByRole("combobox", { name: "Rating run" });
-    expect(picker).toHaveTextContent("Report v2");
+    expect(picker).toHaveTextContent("Proof of Life v2");
     fireEvent.click(picker);
-    fireEvent.click(await screen.findByRole("option", { name: /Report v1/ }));
+    fireEvent.click(
+      await screen.findByRole("option", { name: /Proof of Life v1/ }),
+    );
 
     expect(
       await screen.findByText("This run hasn't recorded any steps yet."),

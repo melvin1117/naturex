@@ -11,14 +11,14 @@ type ListingFacts = {
   asset: { mock?: boolean };
 };
 
-/** The steward home's "Stewardship actions" panel with no recommendation to show. */
+/** The steward home's "Recovery plan" panel with no recommendation to show. */
 export function recommendationsEmptyText(listings: readonly ListingFacts[]) {
   const rated = listings.filter((l) => l.report_version !== null);
   if (rated.length === 0)
-    return "Stewardship actions appear after a site's first rating: concrete steps from the Auditor that would strengthen its grade.";
+    return "A Recovery plan appears after a site's first rating: concrete steps from the Auditor that would strengthen its grade.";
   if (rated.every((l) => l.asset.mock))
     return "Mock ratings don't include the Auditor's recommendations. A live rating may list concrete steps here that would strengthen the grade.";
-  return "The latest rating lists no stewardship actions.";
+  return "The latest rating lists no recovery steps.";
 }
 
 /** The steward home's "Quarterly payouts" panel before any payout. */

@@ -61,7 +61,7 @@ function common(error: ApiError): TimeMachineFailure | null {
     case "rating_global_limit":
       return {
         title: "Too many ratings right now",
-        message: `NatureX limits how many ratings run each hour. Try again in ${wait}.`,
+        message: `WildWorth limits how many ratings run each hour. Try again in ${wait}.`,
         refresh: false,
       };
     case "rating_busy":

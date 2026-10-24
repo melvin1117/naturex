@@ -339,9 +339,13 @@ describe("orderFailure", () => {
   it("keeps a coded 403's own message", () => {
     expect(
       orderFailure(
-        new ApiError(403, "Open NatureX from its usual address", "csrf_origin"),
+        new ApiError(
+          403,
+          "Open WildWorth from its usual address",
+          "csrf_origin",
+        ),
       ).message,
-    ).toBe("Open NatureX from its usual address");
+    ).toBe("Open WildWorth from its usual address");
     expect(orderFailure(new ApiError(403, "x")).message).toBe(
       "Your account can't trade this site.",
     );

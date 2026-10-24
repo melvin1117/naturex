@@ -222,7 +222,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     chapter: 7,
     chapterTitle: "Bad news",
-    title: "Rosa gets stewardship actions",
+    title: "Rosa gets a Recovery plan",
     why: "The community isn't just punished: it gets concrete, local steps to recover the rating.",
     tech: "Recommendations come with each report version; grade changes create alerts for owners and holders.",
     route: "/steward",
@@ -248,7 +248,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     chapter: 9,
     chapterTitle: "Trust",
-    title: "Verify the ledger",
+    title: "Verify the Record",
     why: "Every listing, rating and price anchor is written to a tamper-evident record anyone can check.",
     tech: "Each entry stores sha256(payload + kind + seq + previous hash). Verifying recomputes the whole chain in your browser.",
     route: `/asset/${HERO_ID}?tab=ledger`,
@@ -663,7 +663,7 @@ function TourFinish({
             What you just saw
           </DialogTitle>
           <DialogDescription>
-            Five things NatureX does, in about seven minutes.
+            Five things WildWorth does, in about seven minutes.
           </DialogDescription>
         </DialogHeader>
         <ol className="space-y-3 text-sm">
@@ -686,7 +686,7 @@ function TourFinish({
             ],
             [
               "Everything is checkable",
-              "the Copilot cites sources, the ledger exposes tampering, the trace shows every model call.",
+              "the Copilot cites sources, the Record exposes tampering, the trace shows every model call.",
             ],
           ].map(([a, b], i) => (
             <li key={a} className="flex gap-3">

@@ -202,8 +202,8 @@ export function buildRun(args: {
   });
   steps.push({
     id: "seal",
-    agent: "Nature Ledger",
-    label: "Seal report on the ledger",
+    agent: "The Record",
+    label: "Seal the report in the Record",
     kind: "seal",
     latencyMs: jitter(35, 15),
     detail: "Report snapshot appended to the site's hash chain.",

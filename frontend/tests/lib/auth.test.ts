@@ -309,7 +309,7 @@ describe("authFailure", () => {
 
   it("explains network, CSRF, busy and server errors", () => {
     expect(authFailure("login", new ApiError(0, "x")).form).toBe(
-      "Can't reach NatureX. Check your connection and try again.",
+      "Can't reach WildWorth. Check your connection and try again.",
     );
     const csrf = apiErrorFromResponse(new Response(null, { status: 403 }), {
       detail: "csrf_origin",
@@ -318,7 +318,7 @@ describe("authFailure", () => {
     expect(
       authFailure("login", new ApiError(503, "x", "auth_busy", "auth_busy", 1))
         .form,
-    ).toBe("NatureX is busy right now. Try again in a second.");
+    ).toBe("WildWorth is busy right now. Try again in a second.");
     expect(authFailure("register", new ApiError(500, "x")).form).toBe(
       "Something went wrong on our side. Try again.",
     );

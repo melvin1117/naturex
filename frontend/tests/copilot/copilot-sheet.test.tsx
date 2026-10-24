@@ -164,7 +164,7 @@ describe("Header Copilot, signed in", () => {
     );
 
     const chip = await within(sheet).findByRole("link", {
-      name: `Source ${REPORT_SOURCE.ref}: Xochimilco wetland · Report v2`,
+      name: `Source ${REPORT_SOURCE.ref}: Xochimilco wetland · Proof of Life v2`,
     });
     expect(chip).toHaveAttribute("href", `/asset/${ASSET_ID}?tab=report`);
     expect(
@@ -202,7 +202,7 @@ describe("Header Copilot, signed in", () => {
       within(sheet).getByRole("button", { name: "Why did the price change?" }),
     );
     await within(sheet).findByRole("link", {
-      name: `Source ${REPORT_SOURCE.ref}: Report v2`,
+      name: `Source ${REPORT_SOURCE.ref}: Proof of Life v2`,
     });
 
     const all = within(scope).getByRole("radio", { name: "All sites" });
@@ -348,7 +348,9 @@ describe("Header Copilot, when the page changes under it", () => {
     fireEvent.click(
       within(sheet).getByRole("button", { name: "Why did the price change?" }),
     );
-    await within(sheet).findByRole("link", { name: "Source R2: Report v2" });
+    await within(sheet).findByRole("link", {
+      name: "Source R2: Proof of Life v2",
+    });
 
     act(() => nav.go(`/asset/${OSA_ID}`));
 

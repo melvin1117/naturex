@@ -372,7 +372,7 @@ function CreateCommunityEmptyState({
             Start a community
           </h1>
           <p className="mt-4 max-w-prose text-pretty text-muted-foreground">
-            The Steward app is for the people who look after the land. Create a
+            Stewards is the app for the people who look after the land. Create a
             community to list your land, get it rated and receive what
             supporters pay into its fund. You&apos;ll be its owner and can add
             stewards.

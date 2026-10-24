@@ -1,3 +1,4 @@
+import { Lockup } from "@/components/brand";
 import { DATA_ATTRIBUTIONS } from "@/lib/prototype/data";
 
 export function SiteFooter() {
@@ -5,8 +6,11 @@ export function SiteFooter() {
     <footer className="mt-16 border-t border-border/70">
       <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 text-xs text-muted-foreground sm:px-6 md:grid-cols-[1fr_2fr]">
         <div className="space-y-1.5">
-          <p className="font-medium text-foreground">
-            NatureX · hackathon prototype
+          <p className="flex items-center gap-2 text-foreground">
+            <Lockup size={18} />
+            <span className="text-muted-foreground">
+              Worth more wild. · hackathon prototype
+            </span>
           </p>
           <p>
             Sandbox with play money. Nothing here is a real security or

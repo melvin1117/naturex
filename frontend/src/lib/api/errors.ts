@@ -13,7 +13,7 @@ const CODE_MESSAGES: Record<string, string> = {
   admin_only: "Only a platform admin can do that.",
   sandbox_only: "That only works in a demo sandbox.",
   csrf_origin:
-    "Your browser sent this from an address NatureX doesn't recognise. Open NatureX from its usual address and try again.",
+    "Your browser sent this from an address WildWorth doesn't recognise. Open WildWorth from its usual address and try again.",
   demo_session_only: "Only a demo session can do that.",
   too_many_event_streams:
     "Live updates are busy right now; they will keep refreshing every few seconds.",
@@ -126,7 +126,7 @@ function friendlyMessage(
     case 429:
     case 503:
       if (isHumanText(detail)) return detail;
-      return `NatureX is busy right now. Try again in ${wait}.`;
+      return `WildWorth is busy right now. Try again in ${wait}.`;
     default:
       return status >= 500
         ? "Something went wrong on our side. Try again."
@@ -169,7 +169,7 @@ export function toApiError(error: unknown): ApiError {
   if (error instanceof ApiError) return error;
   return new ApiError(
     0,
-    "Can't reach NatureX. Check your connection and try again.",
+    "Can't reach WildWorth. Check your connection and try again.",
     null,
     error instanceof Error ? error.message : error,
   );

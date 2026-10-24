@@ -403,7 +403,7 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
   });
 
   await test.step("the investor is refused Steward and admin actions", async () => {
-    // The Steward app tells a non-member why it shows none of the community's controls...
+    // The Stewards tells a non-member why it shows none of the community's controls...
     for (const path of [ipoPath, `/steward/assets/${assetId}/verify`]) {
       await investor.goto(path);
       await expect(

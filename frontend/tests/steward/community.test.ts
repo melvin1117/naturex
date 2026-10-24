@@ -94,8 +94,8 @@ describe("communityFailure", () => {
 
   it("falls back to the API's safe message", () => {
     expect(
-      communityFailure(new ApiError(0, "Can't reach NatureX.")).message,
-    ).toBe("Can't reach NatureX.");
+      communityFailure(new ApiError(0, "Can't reach WildWorth.")).message,
+    ).toBe("Can't reach WildWorth.");
   });
 
   it("explains member refusals", () => {
@@ -278,7 +278,7 @@ describe("verificationChip", () => {
   it.each([
     [{ level: "unverified", in_review: false }, "Not verified"],
     [{ level: "documents_submitted", in_review: true }, "In review"],
-    [{ level: "verified", in_review: false }, "Verified"],
+    [{ level: "verified", in_review: false }, "Verified land"],
     [{ level: "rejected", in_review: false }, "Not approved"],
     [{ level: "revoked", in_review: false }, "Verification revoked"],
     [
@@ -327,13 +327,13 @@ describe("listingStatusLine", () => {
       "verification_in_review",
       { level: "revoked", in_review: true },
       "suspended",
-      "Verification revoked. Trading is paused until a NatureX reviewer approves new documents.",
+      "Verification revoked. Trading is paused until a WildWorth reviewer approves new documents.",
     ],
     [
       "verification_in_review",
       { level: "documents_submitted", in_review: true },
       "listed",
-      "A NatureX reviewer is checking your land documents.",
+      "A WildWorth reviewer is checking your land documents.",
     ],
     [
       "awaiting_verification",
@@ -414,7 +414,7 @@ describe("decisionNotice", () => {
     expect(notice).toMatchObject({
       level: "verified",
       title: "Laguna Viva is verified",
-      body: "A NatureX reviewer approved your land documents on 20 Oct 2026. You can open it to supporters now.",
+      body: "A WildWorth reviewer approved your land documents on 20 Oct 2026. You can open it to supporters now.",
       reason: "Matches the map.",
       action: {
         label: "Open to supporters",

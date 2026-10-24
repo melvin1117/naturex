@@ -322,7 +322,7 @@ export function useDataLayer(): DataLayer {
   const layer = useContext(DataLayerContext);
   if (!layer) {
     throw new Error(
-      "NatureX data hooks need <WorldProvider> (app/layout.tsx) or <DataLayerProvider>.",
+      "WildWorth data hooks need <WorldProvider> (app/layout.tsx) or <DataLayerProvider>.",
     );
   }
   return layer;

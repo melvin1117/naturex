@@ -270,8 +270,8 @@ export function sourceHref(source: CopilotSource): string {
 }
 
 /**
- * "Report v2" or the event's title, for a citation chip. `withAsset` (the world-wide Copilot)
- * prefixes the site's name: "Xochimilco wetland · Report v2".
+ * "Proof of Life v2" or the event's title, for a citation chip. `withAsset` (the world-wide Copilot)
+ * prefixes the site's name: "Xochimilco wetland · Proof of Life v2".
  */
 export function sourceLabel(
   source: CopilotSource,
@@ -279,7 +279,7 @@ export function sourceLabel(
 ): string {
   const label =
     source.kind === "report" && source.version != null
-      ? `Report v${source.version}`
+      ? `Proof of Life v${source.version}`
       : source.title;
   return withAsset ? `${source.asset_name} · ${label}` : label;
 }

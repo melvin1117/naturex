@@ -243,7 +243,7 @@ describe("PortfolioView", () => {
 
     expect(
       await within(chat).findByRole("link", {
-        name: "Source R2-2: Osa Forest · Report v2",
+        name: "Source R2-2: Osa Forest · Proof of Life v2",
       }),
     ).toHaveAttribute("href", `/asset/${FOREST}?tab=report`);
     expect(
@@ -253,7 +253,7 @@ describe("PortfolioView", () => {
     ).toHaveAttribute("href", `/asset/${EVENT_SOURCE.asset_id}?tab=news`);
     expect(
       within(chat).getByRole("link", {
-        name: /^R2-2\s*Osa Forest · Report v2$/,
+        name: /^R2-2\s*Osa Forest · Proof of Life v2$/,
       }),
     ).toBeVisible();
     const [request] = backend.requests.filter((r) => r.method === "POST");

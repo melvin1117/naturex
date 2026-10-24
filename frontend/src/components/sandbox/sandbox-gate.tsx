@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, RefreshCwIcon } from "lucide-react";
 import NextLink from "next/link";
 import type { ReactNode } from "react";
 
+import { Lockup } from "@/components/brand";
 import { RouteSkeleton } from "@/components/page-skeletons";
 import {
   LOOK_AROUND,
@@ -53,15 +54,13 @@ function StartFrame({ children }: { children: ReactNode }) {
     >
       <div className="mx-auto max-w-2xl px-5 py-8 sm:py-14">
         <nav className="flex items-center justify-between gap-4 text-sm">
-          <span className="font-serif text-[26px] leading-none tracking-tight">
-            NatureX
-          </span>
+          <Lockup size={24} reading="lime" />
           <NextLink
             href="/"
             className="inline-flex items-center gap-1.5 text-machine-muted underline-offset-4 hover:text-machine-ink hover:underline"
           >
             <ArrowLeft className="size-4" aria-hidden="true" />
-            Back to NatureX
+            Back to WildWorth
           </NextLink>
         </nav>
         <div className="mt-12">{children}</div>
@@ -76,10 +75,10 @@ function SandboxStart() {
   return (
     <StartFrame>
       <h1 className="font-serif text-[clamp(2.2rem,5vw,3.2rem)] leading-[1.04] tracking-tight text-balance">
-        Your own NatureX, live, with no sign-up.
+        Your own WildWorth, live, with no sign-up.
       </h1>
       <p className="mt-4 max-w-[46ch] text-[17px] leading-relaxed text-machine-muted">
-        A private copy with a community steward, a supporter and the NatureX
+        A private copy with a community steward, a supporter and the WildWorth
         team in it. Switch between them any time. Real AI agents and real
         satellite data; play money only.
       </p>

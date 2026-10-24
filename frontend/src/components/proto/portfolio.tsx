@@ -99,10 +99,10 @@ export function Portfolio() {
             {holdings.length === 0 ? (
               <div className="py-8 text-center">
                 <p className="text-muted-foreground">
-                  No stakes yet. Explore the Marketplace to back a site.
+                  No stakes yet. Explore Rated sites to back a site.
                 </p>
                 <Button asChild className="mt-4">
-                  <Link href="/">Explore the Marketplace</Link>
+                  <Link href="/">Explore Rated sites</Link>
                 </Button>
               </div>
             ) : (
@@ -236,7 +236,7 @@ export function Portfolio() {
               Attribution only. Not a carbon credit or offset.
             </p>
           </section>
-          <Panel title="Alerts">
+          <Panel title="WildWatch alerts">
             {alerts.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No alerts yet. You&apos;ll hear here when a site you back is

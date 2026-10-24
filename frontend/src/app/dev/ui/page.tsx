@@ -81,9 +81,9 @@ export default function DevUiPage() {
       <header>
         <h1 className="font-serif text-5xl">UI kit</h1>
         <p className="mt-2 text-muted-foreground">
-          Every shared component and state in the NatureX world: lichen ground,
-          forest ink, lime and lilac data, clay for pressure, and the dark
-          machine layer.
+          Every shared component and state in the WildWorth world: lichen
+          ground, forest ink, lime and lilac data, clay for pressure, and the
+          dark machine layer.
         </p>
       </header>
 

@@ -41,7 +41,7 @@ import {
 /**
  * The bar above every page. The real app has none: its homepage stays a homepage. In the
  * visitor's sandbox (`/sandbox/*`) it says where they are, who they act as (switched
- * instantly), what to try, how to reset, and the way back to NatureX.
+ * instantly), what to try, how to reset, and the way back to WildWorth.
  */
 export function DemoBar() {
   const sandbox = useInSandbox();
@@ -97,7 +97,7 @@ function SandboxBar({ persona }: { persona: DemoPersona }) {
           {/* Leaves the sandbox on purpose: plain next/link, never the sandbox prefix. */}
           <NextLink href="/">
             <ArrowLeft aria-hidden="true" />
-            <span className="sr-only sm:not-sr-only">NatureX</span>
+            <span className="sr-only sm:not-sr-only">WildWorth</span>
             <span className="sr-only">, leave the sandbox</span>
           </NextLink>
         </Button>
@@ -162,8 +162,8 @@ function SandboxBar({ persona }: { persona: DemoPersona }) {
               className="w-[min(26rem,calc(100vw-2rem))] rounded-3xl p-3"
             >
               <p className="px-1.5 pt-1 pb-2.5 text-sm text-muted-foreground">
-                NatureX&apos;s loop, step by step. Each step opens its screen as
-                the right person; go anywhere from there.
+                WildWorth&apos;s loop, step by step. Each step opens its screen
+                as the right person; go anywhere from there.
               </p>
               <SandboxFlow sandbox={guide} tone="light" />
             </PopoverContent>

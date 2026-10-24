@@ -1,6 +1,6 @@
 """The judge story's numbers (`GET /story`): one demo site told end to end, all from tested code.
 
-The story at `/judge` walks a visitor through why NatureX exists on the hero wetland: measure it,
+The story at `/judge` walks a visitor through why WildWorth exists on the hero wetland: measure it,
 fund it, watch it, trust the record. Everything it shows comes from committed data and the same
 pure functions the product uses, never typed into the page:
 

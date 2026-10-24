@@ -54,7 +54,7 @@ describe("CopilotChat", () => {
     });
     expect(event).toHaveAttribute("href", `/asset/${ASSET_ID}?tab=news`);
     expect(
-      screen.getByRole("link", { name: "Source R2: Report v2" }),
+      screen.getByRole("link", { name: "Source R2: Proof of Life v2" }),
     ).toHaveAttribute("href", `/asset/${ASSET_ID}?tab=report`);
     const sources = screen.getByRole("list", {
       name: "Sources of this answer",
@@ -95,7 +95,7 @@ describe("CopilotChat", () => {
     );
 
     const link = await screen.findByRole("link", {
-      name: "Source R2: Report v2",
+      name: "Source R2: Proof of Life v2",
     });
     const strong = link.closest("strong");
     expect(strong).toHaveTextContent("fell to 72.30 R2");

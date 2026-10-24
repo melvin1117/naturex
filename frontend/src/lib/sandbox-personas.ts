@@ -8,7 +8,7 @@ export const SANDBOX_PERSONAS: Record<
 > = {
   rosa: { name: "Rosa", role: "Community steward", home: "/steward" },
   arjun: { name: "Arjun", role: "Supporter", home: "/" },
-  admin: { name: "Admin", role: "NatureX team", home: "/admin" },
+  admin: { name: "Admin", role: "WildWorth team", home: "/admin" },
 };
 
 export type SwitchablePersona = keyof typeof SANDBOX_PERSONAS;

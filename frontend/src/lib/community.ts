@@ -257,7 +257,7 @@ export function listingAction(
 const CHIP: Record<VerificationLevel, string> = {
   unverified: "Not verified",
   documents_submitted: "In review",
-  verified: "Verified",
+  verified: "Verified land",
   rejected: "Not approved",
   revoked: "Verification revoked",
 };
@@ -288,7 +288,7 @@ export function listingStatusLine(
   if (status === "suspended" && verifying) {
     return action === "verify"
       ? "Verification revoked. Trading is paused until new documents are approved."
-      : "Verification revoked. Trading is paused until a NatureX reviewer approves new documents.";
+      : "Verification revoked. Trading is paused until a WildWorth reviewer approves new documents.";
   }
   switch (action) {
     case "verify":
@@ -298,7 +298,7 @@ export function listingStatusLine(
         return "Verification revoked. Verify it again to open it to supporters.";
       return "Rated and listed. Verify the land documents to open it to supporters.";
     case "verification_in_review":
-      return "A NatureX reviewer is checking your land documents.";
+      return "A WildWorth reviewer is checking your land documents.";
     case "awaiting_verification":
       return "Rated and listed. It opens to supporters once its land documents are verified.";
     case "launch_ipo":
@@ -376,15 +376,15 @@ export function decisionNotice(
         title: `${asset.name} is verified`,
         body:
           listing.next_action === "launch_ipo"
-            ? `A NatureX reviewer approved your land documents on ${on}. You can open it to supporters now.`
-            : `A NatureX reviewer approved your land documents on ${on}.`,
+            ? `A WildWorth reviewer approved your land documents on ${on}. You can open it to supporters now.`
+            : `A WildWorth reviewer approved your land documents on ${on}.`,
         action: link,
       };
     case "rejected":
       return {
         ...base,
         title: `${asset.name}: documents not approved`,
-        body: `A NatureX reviewer didn't approve the documents on ${on}. Upload corrected ones and submit them again.`,
+        body: `A WildWorth reviewer didn't approve the documents on ${on}. Upload corrected ones and submit them again.`,
         action: link,
       };
     case "revoked":
@@ -393,8 +393,8 @@ export function decisionNotice(
         title: `${asset.name}: verification revoked`,
         body:
           asset.status === "suspended"
-            ? `A NatureX reviewer revoked the verification on ${on}. Trading is paused until new documents are approved.`
-            : `A NatureX reviewer revoked the verification on ${on}. It can't open to supporters until new documents are approved.`,
+            ? `A WildWorth reviewer revoked the verification on ${on}. Trading is paused until new documents are approved.`
+            : `A WildWorth reviewer revoked the verification on ${on}. It can't open to supporters until new documents are approved.`,
         action: link,
       };
   }
@@ -509,8 +509,8 @@ export function openingChecklist({
       status: "Done",
       state: "done",
       detail: verification.decided_at
-        ? `A NatureX reviewer approved the land documents on ${date(verification.decided_at)}.`
-        : "A NatureX reviewer approved the land documents.",
+        ? `A WildWorth reviewer approved the land documents on ${date(verification.decided_at)}.`
+        : "A WildWorth reviewer approved the land documents.",
     };
   } else if (!required && verification) {
     verified = verification.in_review
@@ -520,7 +520,7 @@ export function openingChecklist({
           status: "In review",
           state: "optional",
           detail:
-            "A NatureX reviewer is checking your documents. This sandbox can open without waiting.",
+            "A WildWorth reviewer is checking your documents. This sandbox can open without waiting.",
           action: { label: "See your submission", href: verify },
         }
       : {
@@ -549,7 +549,7 @@ export function openingChecklist({
       status: "In review",
       state: "waiting",
       detail:
-        "A NatureX reviewer is checking your documents. You can open the offer once they're approved.",
+        "A WildWorth reviewer is checking your documents. You can open the offer once they're approved.",
       action: { label: "See your submission", href: verify },
     };
   } else if (verification?.decision === "rejected") {
@@ -577,7 +577,7 @@ export function openingChecklist({
       status: "Needed",
       state: "current",
       detail:
-        "Upload the land title and the assembly minutes, then submit them for review. A NatureX reviewer approves them before the offer opens.",
+        "Upload the land title and the assembly minutes, then submit them for review. A WildWorth reviewer approves them before the offer opens.",
       action: { label: "Verify this listing", href: verify },
     };
   }

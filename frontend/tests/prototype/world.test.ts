@@ -148,7 +148,7 @@ describe("Time Machine", () => {
   });
 });
 
-describe("Nature Ledger", () => {
+describe("The Record", () => {
   it("verifies an intact chain and detects tampering", () => {
     const w = listedHero();
     expect(verify(w.ledger[HERO_ID])).toMatchObject({ valid: true });

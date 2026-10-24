@@ -184,11 +184,11 @@ function PanelBody({ data }: { data: VerificationPublic }) {
             className="inline-flex items-center gap-1.5 font-medium underline underline-offset-4"
           >
             <ScrollText className="size-4" aria-hidden="true" />
-            See the decision in the Nature Ledger (entry #{data.ledger_seq})
+            See the decision in the Record (entry #{data.ledger_seq})
           </Link>
         ) : (
           <p className="text-muted-foreground">
-            No verification decision is in the Nature Ledger yet.
+            No verification decision is in the Record yet.
           </p>
         )}
         {world?.me?.is_admin && (

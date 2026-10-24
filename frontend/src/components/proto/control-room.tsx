@@ -254,8 +254,8 @@ export function ControlRoom() {
                         {site.name}
                       </Link>
                       <div className="text-xs text-muted-foreground">
-                        Report v{report.version} · {quarterLabel(report.period)}{" "}
-                        · {report.scenario}
+                        Proof of Life v{report.version} ·{" "}
+                        {quarterLabel(report.period)} · {report.scenario}
                       </div>
                     </div>
                     <span className="flex items-center gap-1.5">
@@ -362,8 +362,8 @@ export function ControlRoom() {
           </Table>
         </div>
         <p className="mt-4 text-xs text-muted-foreground">
-          Approving documents writes a verification entry to the Nature Ledger
-          with the reviewer&apos;s role, never a name (ADR-0006).
+          Approving documents writes a verification entry to the Record with the
+          reviewer&apos;s role, never a name (ADR-0006).
         </p>
       </Panel>
     </div>

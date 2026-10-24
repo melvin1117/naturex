@@ -115,7 +115,7 @@ export function PhotoUploadForm({
             className="mt-0.5"
           />
           <Label htmlFor={`${id}-consent`} className="leading-snug font-normal">
-            I took this photo on this land and may share it. NatureX reads its
+            I took this photo on this land and may share it. WildWorth reads its
             GPS position and date to check them, keeps only the result, and
             stores the photo without location data.
           </Label>

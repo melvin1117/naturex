@@ -54,7 +54,7 @@ export function SentAlerts({ ids }: { ids: readonly string[] }) {
               {sent.data.map((alert) => (
                 <li key={alert.id}>
                   <AlertCard
-                    from={`NatureX · ${alert.asset_name}`}
+                    from={`WildWatch · ${alert.asset_name}`}
                     title={alert.title}
                     message={alert.message}
                     urgent={alert.severity >= 4}

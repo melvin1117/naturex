@@ -144,7 +144,7 @@ class NominatimPlaceSearch:
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if not user_agent.strip():
-            raise ValueError("NOMINATIM_USER_AGENT must identify the NatureX app")
+            raise ValueError("NOMINATIM_USER_AGENT must identify the WildWorth app")
         self.user_agent = user_agent
         self._http_get = http_get or _http_get
         self._rate_limiter = rate_limiter or DEFAULT_NOMINATIM_RATE_LIMITER

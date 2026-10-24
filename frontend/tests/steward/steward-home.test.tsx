@@ -786,7 +786,9 @@ describe("the community home", () => {
       },
     });
 
-    const panel = await screen.findByRole("region", { name: "Alerts" });
+    const panel = await screen.findByRole("region", {
+      name: "WildWatch alerts",
+    });
     expect(
       await within(panel).findByText("Xochimilco Wetland downgraded to BBB"),
     ).toBeVisible();
@@ -943,7 +945,7 @@ describe("the community home", () => {
 
 describe("the Community home's updates dot", () => {
   const steward = () =>
-    screen.getByRole("navigation", { name: "Steward navigation" });
+    screen.getByRole("navigation", { name: "Stewards navigation" });
   const homeLink = () =>
     within(steward()).getByRole("link", { name: "Community home" });
   const seenKey = homeSeenKey(ROSA.id, SELVA.id);
@@ -1393,7 +1395,7 @@ describe("the next step and what changed (#216)", () => {
                 kind: "verification",
                 title: "Xochimilco Wetland: documents not approved",
                 message:
-                  "A NatureX reviewer didn't approve the land documents.",
+                  "A WildWorth reviewer didn't approve the land documents.",
                 severity: 3,
                 created_at: "2026-10-20T15:00:01Z",
                 read_at: null,
@@ -1475,7 +1477,7 @@ describe("the next step and what changed (#216)", () => {
       "href",
       `/steward/assets/${decided.asset.id}/ipo?community=${SELVA.id}`,
     );
-    expect(screen.getAllByText("Verified").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Verified land").length).toBeGreaterThan(0);
   });
 
   it("moves focus to the next notice, then to the heading after the last", async () => {

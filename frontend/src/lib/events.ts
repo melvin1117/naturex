@@ -386,7 +386,7 @@ export class EventHub {
     try {
       this.#deliver(JSON.parse(data) as StreamEvent);
     } catch (error) {
-      console.error("NatureX events: unreadable event", error);
+      console.error("WildWorth events: unreadable event", error);
     }
   }
 
@@ -399,7 +399,7 @@ export class EventHub {
       try {
         handler(event);
       } catch (error) {
-        console.error(`NatureX events: ${event.type} handler failed`, error);
+        console.error(`WildWorth events: ${event.type} handler failed`, error);
       }
     });
   }

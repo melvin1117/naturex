@@ -24,7 +24,7 @@ function listing({
 describe("recommendationsEmptyText", () => {
   it("says recommendations follow the first rating when nothing is rated", () => {
     expect(recommendationsEmptyText([listing({ rated: false })])).toMatch(
-      /^Stewardship actions appear after a site's first rating/,
+      /^A Recovery plan appears after a site's first rating/,
     );
   });
 
@@ -59,7 +59,7 @@ describe("recommendationsEmptyText", () => {
       [listing({ mock: true }), listing({ mock: false })],
     ]) {
       expect(recommendationsEmptyText(listings)).toBe(
-        "The latest rating lists no stewardship actions.",
+        "The latest rating lists no recovery steps.",
       );
     }
   });

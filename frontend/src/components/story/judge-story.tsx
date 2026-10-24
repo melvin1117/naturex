@@ -32,6 +32,7 @@ import {
   StoryChain,
   type ChainState,
 } from "@/components/story/story-chain";
+import { Lockup } from "@/components/brand";
 import {
   LOOK_AROUND,
   SandboxFlow,
@@ -85,7 +86,7 @@ function useWide(): boolean {
 }
 
 /**
- * `/judge`: why NatureX exists, told on one real wetland in a couple of minutes, then the
+ * `/judge`: why WildWorth exists, told on one real wetland in a couple of minutes, then the
  * judge's own private sandbox (no sign-up). Every number comes from `GET /story` (the product's
  * own rating, market and ledger code) and the wetland's recorded run (a real run of the agents).
  */
@@ -243,9 +244,7 @@ function StoryStage({
         className="absolute inset-x-0 top-0 bottom-auto z-[500] flex max-h-[54vh] flex-col rounded-b-3xl bg-machine/95 px-4 pt-4 pb-1 shadow-[0_16px_40px_-20px_rgba(0,0,0,0.7)] min-[900px]:inset-y-7 min-[900px]:right-auto min-[900px]:left-7 min-[900px]:max-h-none min-[900px]:w-[470px] min-[900px]:rounded-none min-[900px]:bg-transparent min-[900px]:p-0 min-[900px]:shadow-none"
       >
         <div className="flex items-center gap-4">
-          <span className="font-serif text-[26px] leading-none tracking-tight">
-            NatureX
-          </span>
+          <Lockup size={24} reading="lime" />
           {scene > 0 && scene < LAST && (
             <span
               className="flex gap-1.5"
@@ -524,7 +523,7 @@ function Opening({ stage }: { stage: Stage }) {
         {area} hectares in {story.site.place}, looked after by its community.
         The only real offer they get is to sell it.
       </p>
-      <Why>NatureX gives them a better one.</Why>
+      <Why>WildWorth gives them a better one.</Why>
       <Actions>
         <Primary onClick={stage.next}>
           Show me how
@@ -885,7 +884,7 @@ function Watch({ stage }: { stage: Stage }) {
       <Why>
         If the wetland is damaged, Arjun&apos;s stake falls. If it recovers, it
         rises. So the supporter and the community want the same thing, and
-        NatureX keeps watching.
+        WildWatch keeps watching.
       </Why>
       {step === 0 && (
         <Actions>
@@ -976,11 +975,11 @@ function Trust({ stage }: { stage: Stage }) {
     <>
       <Title>And nobody can quietly change the record.</Title>
       <Why>
-        Real support now rides on these ratings, so no one, NatureX included,
+        Real support now rides on these ratings, so no one, WildWorth included,
         can rewrite one afterwards. Each entry is sealed with the fingerprint of
         the one before it.
       </Why>
-      <ol className="mt-5 grid gap-2" aria-label="Nature Ledger">
+      <ol className="mt-5 grid gap-2" aria-label="The Record">
         {ledger.entries.map((e) => {
           const edited = tampered && e.seq === ledger.tampered_seq;
           const after = tampered && broken !== null && e.seq > broken;
@@ -1024,8 +1023,8 @@ function Trust({ stage }: { stage: Stage }) {
               aria-hidden="true"
             />
             {ledger.verified
-              ? "Ledger verified: every fingerprint matches."
-              : "Ledger check failed."}
+              ? "Record verified: every fingerprint matches."
+              : "Record check failed."}
           </>
         )}
       </p>
@@ -1038,7 +1037,7 @@ function Trust({ stage }: { stage: Stage }) {
       ) : (
         <>
           <p className="mt-3 text-sm text-machine-muted">
-            The real Nature Ledger works the same way: anyone can verify any
+            The real Record works the same way: anyone can verify any
             site&apos;s history, any time.
           </p>
           <Actions>
@@ -1060,9 +1059,9 @@ function YourTurn({ onReplay }: { onReplay: () => void }) {
     <>
       <Title>Your turn. Everything here is live.</Title>
       <Why>
-        Your own private NatureX, with a community steward, a supporter and the
-        NatureX team in it. Switch between them any time. No sign-up, play money
-        only.
+        Your own private WildWorth, with a community steward, a supporter and
+        the WildWorth team in it. Switch between them any time. No sign-up, play
+        money only.
       </Why>
       <Actions>
         <Primary

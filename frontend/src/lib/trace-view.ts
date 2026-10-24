@@ -64,7 +64,7 @@ export const ACTOR: Record<
     kind: "code",
   },
   ledger: {
-    name: "Nature Ledger",
+    name: "The Record",
     role: "Seals the report in a hash chain",
     kind: "code",
   },
@@ -903,8 +903,8 @@ export function runStory(
       key: "seal",
       actor: "ledger",
       text: showCost
-        ? `The report was sealed in the Nature Ledger. The run took ${seconds(done.latency_ms)} and cost ${usd(receipt.totalUsd, 3)} in model calls${receipt.savedPct ? `, ${receipt.savedPct}% less than running every call on Ultra` : ""}.`
-        : `The report was sealed in the Nature Ledger. The run took ${seconds(done.latency_ms)}.`,
+        ? `The report was sealed in the Record. The run took ${seconds(done.latency_ms)} and cost ${usd(receipt.totalUsd, 3)} in model calls${receipt.savedPct ? `, ${receipt.savedPct}% less than running every call on Ultra` : ""}.`
+        : `The report was sealed in the Record. The run took ${seconds(done.latency_ms)}.`,
       details: [],
     });
   }
@@ -1227,7 +1227,7 @@ export function runFlow(trace: RunTrace): FlowNode[] {
     } else if (step.step === "done") {
       base.actor = "ledger";
       base.title = "Sealed";
-      base.summary = "The report enters the hash-chained Nature Ledger";
+      base.summary = "The report enters the hash-chained Record";
       base.latencyMs = null;
     }
     // The plan step's cost is the thinking turn itself; elsewhere the choosing turn is shown

@@ -447,10 +447,10 @@ export function ReportTab({
   return (
     <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
       <Panel
-        title={`Ecological Performance Report · v${report.version}`}
+        title={`Proof of Life${report.period ? ` · ${quarterLabel(report.period)}` : ""}`}
         action={
           <Select value={report.id} onValueChange={setPicked}>
-            <SelectTrigger className="w-52" aria-label="Report version">
+            <SelectTrigger className="w-52" aria-label="Proof of Life version">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -592,10 +592,10 @@ export function ReportTab({
             </table>
           )}
         </Panel>
-        <Panel title="Stewardship actions">
+        <Panel title="Recovery plan">
           {report.recommendations.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No actions were recommended in this report.
+              No recovery steps were recommended in this Proof of Life.
             </p>
           ) : (
             <ul className="space-y-2.5 text-sm">
@@ -814,8 +814,7 @@ export function VerificationTab({ site }: { site: Site }) {
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
         The badge never says &ldquo;ownership proven&rdquo;. Each review
-        decision is written to the Nature Ledger without names or documents
-        (ADR-0006).
+        decision is written to the Record without names or documents (ADR-0006).
       </p>
     </Panel>
   );

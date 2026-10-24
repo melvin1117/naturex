@@ -178,7 +178,7 @@ def _escape(text: str) -> str:
 
 
 SYSTEM_PROMPT = (
-    "You are the NatureX Copilot. You explain ratings, values, prices and news of nature "
+    "You are the WildWorth Copilot. You explain ratings, values, prices and news of nature "
     "sites in a play-money sandbox exchange. Answer the investor's question using ONLY the "
     "sources given inside <sources>.\n"
     "Rules:\n"

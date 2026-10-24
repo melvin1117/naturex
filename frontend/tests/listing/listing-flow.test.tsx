@@ -316,7 +316,7 @@ describe("creating a listing", () => {
     await drawSquare();
     fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("NatureX couldn't accept this boundary");
+    expect(alert).toHaveTextContent("WildWorth couldn't accept this boundary");
     const items = within(alert).getAllByRole("listitem");
     expect(items.map((li) => li.textContent)).toEqual([
       "Too small. The area is 3.3 ha; the minimum is 10 ha.",
@@ -972,7 +972,7 @@ describe("the boundary step (review fixes)", () => {
     await fillDetails();
     await drawSquare();
     expect(
-      await screen.findByText(/NatureX checks overlaps with other sites/),
+      await screen.findByText(/WildWorth checks overlaps with other sites/),
     ).toBeVisible();
     expect(screen.queryByText(/overlap look right/)).toBeNull();
   });

@@ -8,7 +8,7 @@ import { beginLoading, endLoading } from "@/lib/loading-chain";
 /** How long a wait runs before the region says why it may be slow (ux-writing §8). */
 export const SLOW_AFTER_MS = 8000;
 export const SLOW_NOTE =
-  "Still loading. The NatureX servers may be waking up, which can take about 30 seconds.";
+  "Still loading. The WildWorth servers may be waking up, which can take about 30 seconds.";
 
 /**
  * The region's one status. It mounts empty and gets its text after mount, so screen readers
