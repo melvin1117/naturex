@@ -109,7 +109,7 @@ const noSearch = { searchParams: Promise.resolve({}) };
 
 describe("routes", () => {
   it.each([
-    ["/", MarketplacePage, "Marketplace"],
+    ["/", MarketplacePage, "Rated sites"],
     ["/portfolio", PortfolioPage, "Your stakes"],
     ["/steward", StewardPage, "Get paid for keeping your land alive"],
     ["/admin", AdminPage, "Time Machine"],

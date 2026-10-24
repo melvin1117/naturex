@@ -143,7 +143,7 @@ test("the Exchange has no serious accessibility violations", async ({
     // The keyboard reaches the last tab, and it scrolls into view.
     await page.getByRole("tab", { name: "Overview" }).focus();
     await page.keyboard.press("End");
-    const ledger = page.getByRole("tab", { name: "Ledger" });
+    const ledger = page.getByRole("tab", { name: "The Record" });
     await expect(ledger).toBeFocused();
     // Sub-pixel layout can leave a hair outside.
     await expect(ledger).toBeInViewport({ ratio: 0.95 });

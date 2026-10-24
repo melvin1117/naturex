@@ -1599,7 +1599,7 @@ class WorldOut(BaseModel):
         description="What the AI document check (T71) does with a steward's own verification "
         "upload in this world, for the uploader notice (ADR-0006 §5): `uploads` (its sanitised "
         "preview may be sent to an AI model on Nebius Token Factory when submitted), "
-        "`samples_only` (a sandbox: only NatureX sample documents are sent, never an upload) "
+        "`samples_only` (a sandbox: only WildWorth sample documents are sent, never an upload) "
         "or `off` (the live world while `VERIFICATION_AI_LIVE=false`)."
     )
 
@@ -1915,7 +1915,7 @@ class VerificationPublicOut(BaseModel):
         "listing changed since it."
     )
     badge: str = Field(
-        description="`Documents reviewed by NatureX (hackathon process)` when verified, "
+        description="`Documents reviewed by WildWorth (hackathon process)` when verified, "
         "`Verification revoked`, else `Self-attested by the community`."
     )
     run_id: UUID | None = None

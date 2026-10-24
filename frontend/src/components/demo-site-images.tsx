@@ -113,7 +113,7 @@ export function DemoSiteImages() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Marketplace thumbnail</CardTitle>
+              <CardTitle>Rated sites thumbnail</CardTitle>
               <CardDescription>
                 {state.images.thumbnail.width}×{state.images.thumbnail.height}{" "}
                 WebP with the polygon outline.

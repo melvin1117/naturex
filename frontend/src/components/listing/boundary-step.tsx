@@ -60,10 +60,10 @@ const CHECKED_TEXT: Record<
   Extract<BoundaryHint, { ok: true }>["checked"],
   string
 > = {
-  all: "Shape, size and overlap look right. NatureX checks again when you save.",
+  all: "Shape, size and overlap look right. WildWorth checks again when you save.",
   "no-overlap":
-    "Shape and size look right. NatureX checks overlaps with other sites when you save.",
-  size: "The size looks right. This boundary is too detailed to check here: NatureX checks its shape and overlaps when you save.",
+    "Shape and size look right. WildWorth checks overlaps with other sites when you save.",
+  size: "The size looks right. This boundary is too detailed to check here: WildWorth checks its shape and overlaps when you save.",
 };
 
 /** A few words for the map's dock; the side panel has the full sentence. */

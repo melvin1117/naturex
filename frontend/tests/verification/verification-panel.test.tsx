@@ -36,15 +36,15 @@ describe("VerificationPanel", () => {
 
     expect(
       await screen.findByText(
-        "Documents reviewed by NatureX (hackathon process)",
+        "Documents reviewed by WildWorth (hackathon process)",
       ),
     ).toBeInTheDocument();
     const panelEl = region();
-    expect(within(panelEl).getByText("Verified")).toBeInTheDocument();
+    expect(within(panelEl).getByText("Verified land")).toBeInTheDocument();
     expect(within(panelEl).getByText("Decided on")).toBeInTheDocument();
     expect(within(panelEl).getByText("19 Oct 2026")).toBeInTheDocument();
     expect(
-      within(panelEl).getByText("NatureX platform admin"),
+      within(panelEl).getByText("WildWorth platform admin"),
     ).toBeInTheDocument();
 
     const checks = within(panelEl).getByRole("list", {
@@ -63,7 +63,7 @@ describe("VerificationPanel", () => {
       expect(within(panelEl).getByText(item)).toBeInTheDocument();
 
     const ledger = within(panelEl).getByRole("link", {
-      name: /Nature Ledger \(entry #7\)/,
+      name: /the Record \(entry #7\)/,
     });
     expect(ledger).toHaveAttribute(
       "href",
@@ -104,7 +104,7 @@ describe("VerificationPanel", () => {
     expect(screen.getByText("No reviewer yet")).toBeInTheDocument();
     expect(screen.getByText(/No checks have run/)).toBeInTheDocument();
     expect(
-      screen.getByText("No verification decision is in the Nature Ledger yet."),
+      screen.getByText("No verification decision is in the Record yet."),
     ).toBeInTheDocument();
     for (const item of NOT_CHECKED)
       expect(screen.getByText(item)).toBeInTheDocument();
@@ -140,7 +140,7 @@ describe("VerificationPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(
       await screen.findByText(
-        "Documents reviewed by NatureX (hackathon process)",
+        "Documents reviewed by WildWorth (hackathon process)",
       ),
     ).toBeInTheDocument();
   });

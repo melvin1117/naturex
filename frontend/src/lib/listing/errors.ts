@@ -171,7 +171,7 @@ export function listingFailure(error: ApiError): ListingFailure {
       return {
         ...base,
         title: "Too many ratings right now",
-        message: `NatureX limits how many ratings run each hour. Try again in ${wait}.`,
+        message: `WildWorth limits how many ratings run each hour. Try again in ${wait}.`,
       };
     // T60's live satellite ratings: only live-world accounts see these (a sandbox falls back).
     case "live_rating_quota":
@@ -184,7 +184,7 @@ export function listingFailure(error: ApiError): ListingFailure {
       return {
         ...base,
         title: "Live ratings are full for today",
-        message: `NatureX limits how many new places get a live satellite rating each day. Your listing is unchanged. Try again in ${dailyWaitText(error.retryAfterSeconds)}.`,
+        message: `WildWorth limits how many new places get a live satellite rating each day. Your listing is unchanged. Try again in ${dailyWaitText(error.retryAfterSeconds)}.`,
       };
     case "live_area_too_large":
       return {
@@ -237,7 +237,7 @@ export function listingFailure(error: ApiError): ListingFailure {
         fields,
         title: polygon.length ? "Check the boundary" : "Check the details",
         message: polygon.length
-          ? "NatureX couldn't accept this boundary. Fix the problems below and save again."
+          ? "WildWorth couldn't accept this boundary. Fix the problems below and save again."
           : "Some details need a change before saving.",
       };
   }

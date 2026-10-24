@@ -130,7 +130,7 @@ export function AuthForm({
       clearFills();
       toast(
         isRegister
-          ? `Welcome to NatureX, ${me.name}`
+          ? `Welcome to WildWorth, ${me.name}`
           : `Welcome back, ${me.name}`,
         {
           description: "Play money only, not a real security.",
@@ -254,7 +254,7 @@ export function AuthForm({
                 : "Sign in"}
           </Button>
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            {isRegister ? "Already have an account? " : "New to NatureX? "}
+            {isRegister ? "Already have an account? " : "New to WildWorth? "}
             <Link
               href={withNext(isRegister ? LOGIN_PATH : REGISTER_PATH, next)}
               className="font-medium text-foreground underline"

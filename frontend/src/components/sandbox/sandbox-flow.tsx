@@ -11,7 +11,7 @@ import { useStartDemo } from "@/lib/hooks";
 import { sandboxHref } from "@/lib/sandbox";
 import { personaLabel, type SwitchablePersona } from "@/lib/sandbox-personas";
 
-/** One step of NatureX's loop, who does it in the sandbox and where. A guide, not a script:
+/** One step of WildWorth's loop, who does it in the sandbox and where. A guide, not a script:
  * every step opens the real screen and the visitor goes anywhere from there. */
 export type FlowStep = {
   key: string;
@@ -24,7 +24,7 @@ export type FlowStep = {
 export const SANDBOX_FLOW: FlowStep[] = [
   {
     key: "list",
-    title: "List land",
+    title: "List your land",
     body: "Draw any land on Earth. AI agents rate it live from satellite data and local news.",
     persona: "rosa",
     path: "/steward/list",
@@ -124,7 +124,7 @@ const TONES = {
   },
 } as const;
 
-/** NatureX's loop as numbered steps; each opens the sandbox there, as the right person. */
+/** WildWorth's loop as numbered steps; each opens the sandbox there, as the right person. */
 export function SandboxFlow({
   sandbox,
   tone = "dark",

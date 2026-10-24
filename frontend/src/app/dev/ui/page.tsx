@@ -1,6 +1,15 @@
 import type { Metadata } from "next";
 
+import {
+  Lockup,
+  ProofOfLifeSeal,
+  ProofOfLifeShareCard,
+  WildWorthMark,
+} from "@/components/brand";
+import { Bea } from "@/components/bea/bea";
+import { BEA_STATE_LABEL, type BeaState } from "@/components/bea/states";
 import { DataLayerPanel } from "@/components/data-layer-panel";
+import { BRAND_ICONS } from "@/components/icons";
 import { DemoSiteImages } from "@/components/demo-site-images";
 import {
   Delta,
@@ -79,9 +88,9 @@ export default function DevUiPage() {
       <header>
         <h1 className="font-serif text-5xl">UI kit</h1>
         <p className="mt-2 text-muted-foreground">
-          Every shared component and state in the NatureX world: lichen ground,
-          forest ink, lime and lilac data, clay for pressure, and the dark
-          machine layer.
+          Every shared component and state in the WildWorth world: lichen
+          ground, forest ink, lime and lilac data, clay for pressure, and the
+          dark machine layer.
         </p>
       </header>
 
@@ -89,7 +98,7 @@ export default function DevUiPage() {
         <div className="space-y-2 rounded-3xl bg-card p-6 shadow-soft">
           <Wordmark app="Exchange" />
           <p className="font-serif text-5xl leading-none">
-            Page title in Instrument Serif
+            Page title in Gloock
           </p>
           <p className="tabular text-4xl font-light">$21.47 · 76.2</p>
           <p className="max-w-prose">
@@ -100,6 +109,108 @@ export default function DevUiPage() {
             Secondary text in muted forest.
           </p>
         </div>
+      </Section>
+
+      <Separator />
+
+      <Section title="Brand">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid place-items-center rounded-3xl bg-card p-8 shadow-soft">
+            <Lockup size={40} />
+          </div>
+          <div className="grid place-items-center rounded-3xl bg-primary p-8 text-primary-foreground">
+            <Lockup size={40} reading="lime" />
+          </div>
+          <div className="flex items-end justify-center gap-4 rounded-3xl bg-card p-8 shadow-soft">
+            {[16, 24, 48].map((size) => (
+              <WildWorthMark
+                key={size}
+                size={size}
+                label={`WildWorth mark at ${size} px`}
+              />
+            ))}
+          </div>
+        </div>
+      </Section>
+
+      <Separator />
+
+      <Section title="Proof of Life">
+        <div className="grid items-center gap-4 lg:grid-cols-[auto_minmax(0,1fr)]">
+          <div className="flex gap-4 rounded-3xl bg-card p-6 shadow-soft">
+            <ProofOfLifeSeal
+              health={77.6}
+              grade="A"
+              quarter="Q3 2026"
+              siteName="Xochimilco wetland"
+            />
+            <ProofOfLifeSeal
+              health={63.8}
+              grade="BBB"
+              quarter="Q4 2026"
+              siteName="Xochimilco wetland"
+            />
+          </div>
+          <ProofOfLifeShareCard
+            version={1}
+            siteName="Xochimilco wetland"
+            health={77.6}
+            grade="A"
+            quarter="Q3 2026"
+          />
+        </div>
+      </Section>
+
+      <Separator />
+
+      <Section title="Icons">
+        <ul className="grid grid-cols-3 gap-2 sm:grid-cols-6 lg:grid-cols-8">
+          {Object.entries(BRAND_ICONS).map(([key, Icon]) => (
+            <li
+              key={key}
+              className="grid justify-items-center gap-2 rounded-2xl bg-card p-4 text-center shadow-soft"
+            >
+              <Icon size={28} />
+              <span className="font-mono text-[11px] text-muted-foreground">
+                {key}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <ul className="grid grid-cols-3 gap-2 rounded-3xl bg-machine p-4 text-machine-ink sm:grid-cols-6">
+          {(
+            ["trace", "satellite", "news", "auditor", "live", "record"] as const
+          ).map((key) => {
+            const Icon = BRAND_ICONS[key];
+            return (
+              <li key={key} className="grid justify-items-center gap-2 p-2">
+                <Icon size={28} />
+                <span className="font-mono text-[11px] text-machine-muted">
+                  {key}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </Section>
+
+      <Separator />
+
+      <Section title="Bea">
+        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          {(Object.keys(BEA_STATE_LABEL) as BeaState[]).map((state) => (
+            <li
+              key={state}
+              className="grid justify-items-center gap-2 rounded-2xl bg-card p-4 text-center shadow-soft"
+            >
+              <Bea state={state} size={96} />
+              <span className="flex items-center gap-2">
+                <Bea state={state} size={28} label="" />
+                <span className="text-sm">{BEA_STATE_LABEL[state]}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
       </Section>
 
       <Separator />
@@ -155,9 +266,9 @@ export default function DevUiPage() {
             </Button>
           ))}
           <Button disabled>disabled</Button>
-          <Button className="bg-lime text-foreground hover:bg-lime/90">
-            On image
-          </Button>
+          <span className="rounded-full bg-machine p-1.5">
+            <Button variant="on-image">On image</Button>
+          </span>
         </div>
         <div className="flex flex-wrap gap-2">
           {BADGE_VARIANTS.map((variant) => (

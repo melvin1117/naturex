@@ -643,7 +643,7 @@ describe("Uploader notice (ADR-0006 §5)", () => {
     await waitFor(() =>
       expect(note).toHaveTextContent("Your uploads aren't sent to an AI model"),
     );
-    expect(note).toHaveTextContent(/only NatureX's sample documents/);
+    expect(note).toHaveTextContent(/only WildWorth's sample documents/);
     expect(note).toHaveTextContent(/read by a reviewer\./);
   });
 

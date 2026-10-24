@@ -123,18 +123,20 @@ describe("answerParts", () => {
   it("builds links to the report and news tabs", () => {
     expect(sourceHref(REPORT_SOURCE)).toBe(`/asset/${ASSET_ID}?tab=report`);
     expect(sourceHref(EVENT_SOURCE)).toBe(`/asset/${ASSET_ID}?tab=news`);
-    expect(sourceLabel(REPORT_SOURCE)).toBe("Report v2");
+    expect(sourceLabel(REPORT_SOURCE)).toBe("Proof of Life v2");
     expect(sourceLabel(EVENT_SOURCE)).toBe(EVENT_SOURCE.title);
   });
 
   it("names the site in a world-wide answer's citation labels", () => {
     expect(sourceLabel(REPORT_SOURCE, { withAsset: true })).toBe(
-      `${REPORT_SOURCE.asset_name} · Report v2`,
+      `${REPORT_SOURCE.asset_name} · Proof of Life v2`,
     );
     expect(sourceLabel(EVENT_SOURCE, { withAsset: true })).toBe(
       `${EVENT_SOURCE.asset_name} · ${EVENT_SOURCE.title}`,
     );
-    expect(sourceLabel(REPORT_SOURCE, { withAsset: false })).toBe("Report v2");
+    expect(sourceLabel(REPORT_SOURCE, { withAsset: false })).toBe(
+      "Proof of Life v2",
+    );
   });
 });
 

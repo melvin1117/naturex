@@ -1,4 +1,4 @@
-"""SQLModel tables for NatureX v1 (dev-spec §5 + world_id sandbox)."""
+"""SQLModel tables for WildWorth v1 (dev-spec §5 + world_id sandbox)."""
 
 from __future__ import annotations
 

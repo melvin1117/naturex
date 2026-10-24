@@ -1,5 +1,5 @@
 /**
- * NatureX's motion vocabulary (DESIGN.md; interaction principles in #216). Motion is purely
+ * WildWorth's motion vocabulary (DESIGN.md; interaction principles in #216). Motion is purely
  * presentational: it may delay or replay what the API returned, never invent a value or a step.
  *
  * - `DURATION` mirrors the CSS tokens in `app/globals.css` (`--nx-duration-*`; the ease-out curve

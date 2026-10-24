@@ -230,7 +230,7 @@ describe("the sandbox bar", () => {
     ).toHaveTextContent("Rosa(Community steward)");
 
     fireEvent.click(
-      screen.getByRole("radio", { name: "Admin (NatureX team)" }),
+      screen.getByRole("radio", { name: "Admin (WildWorth team)" }),
     );
 
     await waitFor(() =>
@@ -239,10 +239,10 @@ describe("the sandbox bar", () => {
     expect(backend.calls("POST /demo/persona")).toBe(1);
   });
 
-  it("leads back to NatureX, the story, a guide and a reset", async () => {
+  it("leads back to WildWorth, the story, a guide and a reset", async () => {
     setup(<DemoBar />, { "GET /world": () => json(demoWorld("rosa")) });
 
-    const home = await screen.findByRole("link", { name: /NatureX/ });
+    const home = await screen.findByRole("link", { name: /WildWorth/ });
     expect(home).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "The story" })).toHaveAttribute(
       "href",
@@ -279,7 +279,7 @@ describe("the sandbox bar", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "What to try" }));
     expect(
-      await screen.findByRole("button", { name: /List land/ }),
+      await screen.findByRole("button", { name: /List your land/ }),
     ).toBeEnabled();
   });
 
@@ -314,12 +314,12 @@ describe("the sandbox gate", () => {
     expect(
       await screen.findByRole("heading", {
         level: 1,
-        name: "Your own NatureX, live, with no sign-up.",
+        name: "Your own WildWorth, live, with no sign-up.",
       }),
     ).toBeVisible();
     expect(screen.queryByText("Inside")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /Back to NatureX/ }),
+      screen.getByRole("link", { name: /Back to WildWorth/ }),
     ).toHaveAttribute("href", "/");
 
     fireEvent.click(screen.getByRole("button", { name: /Open my sandbox/ }));

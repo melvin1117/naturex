@@ -13,8 +13,8 @@ export const APPS: Record<
   { name: string; switchLabel: string; href: string }
 > = {
   exchange: { name: "Exchange", switchLabel: "Exchange", href: "/" },
-  steward: { name: "Steward", switchLabel: "Steward app", href: "/steward" },
-  admin: { name: "Control room", switchLabel: "Admin", href: "/admin" },
+  steward: { name: "Stewards", switchLabel: "Stewards", href: "/steward" },
+  admin: { name: "Control room", switchLabel: "Control room", href: "/admin" },
 };
 
 export interface NavItem {
@@ -26,18 +26,18 @@ export interface NavItem {
 
 export const APP_NAV: Record<AppKey, NavItem[]> = {
   exchange: [
-    { href: "/", label: "Marketplace", tour: "nav-marketplace" },
+    { href: "/", label: "Rated sites", tour: "nav-marketplace" },
     { href: "/portfolio", label: "Your stakes", tour: "nav-portfolio" },
     { href: "/ai", label: "AI at work" },
   ],
   steward: [
     { href: "/steward", label: "Community home" },
     { href: "/steward/listings", label: "Listings" },
-    { href: "/steward/list", label: "List land", tour: "nav-list" },
+    { href: "/steward/list", label: "List your land", tour: "nav-list" },
   ],
   admin: [
     { href: "/admin", label: "Time Machine" },
-    { href: "/admin/verifications", label: "Verifications" },
+    { href: "/admin/verifications", label: "Verified land" },
   ],
 };
 

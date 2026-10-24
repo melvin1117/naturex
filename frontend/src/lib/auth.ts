@@ -233,7 +233,7 @@ export function authFailure(mode: AuthMode, error: ApiError): AuthFailure {
     fields: {},
   });
   if (error.isNetworkError)
-    return form("Can't reach NatureX. Check your connection and try again.");
+    return form("Can't reach WildWorth. Check your connection and try again.");
   switch (error.status) {
     case 401:
       return form("Email or password is incorrect.");
@@ -257,7 +257,7 @@ export function authFailure(mode: AuthMode, error: ApiError): AuthFailure {
       return form(error.message);
     case 503:
       return form(
-        `NatureX is busy right now. Try again in ${waitText(error.retryAfterSeconds)}.`,
+        `WildWorth is busy right now. Try again in ${waitText(error.retryAfterSeconds)}.`,
       );
     default:
       return form(

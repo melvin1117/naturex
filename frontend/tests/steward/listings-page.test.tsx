@@ -259,9 +259,16 @@ describe("the Listings page", () => {
     expect(
       await screen.findByRole("heading", { name: "No listings yet" }),
     ).toBeVisible();
-    expect(
-      screen.getByRole("link", { name: "List your land" }),
-    ).toHaveAttribute("href", `/steward/list?community=${SELVA.id}`);
+    // The page's button and the empty state's link both lead to the listing flow.
+    const links = within(screen.getByRole("main")).getAllByRole("link", {
+      name: "List your land",
+    });
+    expect(links.length).toBeGreaterThan(1);
+    for (const link of links)
+      expect(link).toHaveAttribute(
+        "href",
+        `/steward/list?community=${SELVA.id}`,
+      );
   });
 
   it("offers no changes to someone who isn't a member", async () => {

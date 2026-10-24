@@ -71,9 +71,9 @@ type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   overview: "Overview",
   price: "Price",
-  report: "Report",
+  report: "Proof of Life",
   news: "News",
-  ledger: "Ledger",
+  ledger: "The Record",
 };
 
 /** The asset page for a real asset: report, charts, map, prices and ledger from the API. */
@@ -85,7 +85,7 @@ export function AssetView({ id }: { id: string }) {
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
-        Marketplace
+        Rated sites
       </Link>
       <div className="mt-4">
         <WorldGate
@@ -136,7 +136,7 @@ function NotFound() {
         when the demo was reset.
       </p>
       <Button asChild className="mt-6">
-        <Link href="/">Back to the Marketplace</Link>
+        <Link href="/">Back to Rated sites</Link>
       </Button>
     </div>
   );
@@ -155,6 +155,7 @@ function AssetLoaded({
   const params = useSearchParams();
   const tabParam = params.get("tab") as Tab | null;
   const tab: Tab = tabParam && TABS.includes(tabParam) ? tabParam : "overview";
+  const versionParam = Number(params.get("version"));
 
   const reports = useAssetReports(asset.id);
   const prices = useAssetPrices(asset.id);
@@ -210,7 +211,7 @@ function AssetLoaded({
 
   return (
     <>
-      <title>{`${asset.name} · NatureX`}</title>
+      <title>{`${asset.name} · WildWorth`}</title>
       <section
         className="relative isolate overflow-hidden rounded-[2rem] text-white shadow-lift"
         aria-labelledby="site-title"
@@ -300,11 +301,11 @@ function AssetLoaded({
                 </p>
                 {prev && prev.grade !== latest.grade && (
                   <p className="mt-1 text-xs text-white/70">
-                    Was {prev.grade} in report v{prev.version}
+                    Was {prev.grade} in Proof of Life v{prev.version}
                   </p>
                 )}
                 <p className="mt-1 text-xs text-white/70">
-                  Report v{latest.version}
+                  Proof of Life v{latest.version}
                   {latest.period && ` · ${quarterLabel(latest.period)}`}
                 </p>
               </div>
@@ -388,7 +389,12 @@ function AssetLoaded({
                   Showing the latest report only: {reports.error.message}
                 </p>
               )}
-              <ReportTab versions={versions} live />
+              <ReportTab
+                versions={versions}
+                siteName={asset.name}
+                initialVersion={versionParam || null}
+                live
+              />
             </TabsContent>
             <TabsContent value="news">
               <Panel title="News and evidence near this site">

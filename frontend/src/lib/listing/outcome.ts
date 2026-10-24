@@ -77,7 +77,7 @@ export function listingOutcome(
       return outcome(
         "draft",
         "Draft",
-        "Only your community and NatureX admins see this until the land is listed and its opening offer launches.",
+        "Only your community and WildWorth admins see this until the land is listed and its opening offer launches.",
         {
           canWithdraw: true,
         },
@@ -87,7 +87,7 @@ export function listingOutcome(
         return outcome(
           "waiting_for_data",
           "Waiting for satellite data",
-          "NatureX doesn't have satellite data for this land yet, so the rating stopped before scoring it. Nothing was made up. Try again later, once satellite data is available.",
+          "WildWorth doesn't have satellite data for this land yet, so the rating stopped before scoring it. Nothing was made up. Try again later, once satellite data is available.",
           stuck,
         );
       if (reason === "rating_stale")
@@ -128,7 +128,7 @@ export function listingOutcome(
         "Listed",
         asset.trading
           ? "The land is listed and trading is open."
-          : "The land passed the listing gate. Set up the opening offer to let supporters back it; until it launches, only your community and NatureX admins see it.",
+          : "The land passed the listing gate. Set up the opening offer to let supporters back it; until it launches, only your community and WildWorth admins see it.",
       );
     case "suspended":
       return outcome(

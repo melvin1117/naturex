@@ -45,11 +45,11 @@ import {
 
 const DONE: Record<Decision, string> = {
   approve:
-    "Approved. The listing is verified and a verification entry is in the Nature Ledger.",
+    "Approved. The listing is verified and a verification entry is in the Record.",
   reject:
-    "Rejected. The steward sees your reason and can submit again; the decision is in the Nature Ledger.",
+    "Rejected. The steward sees your reason and can submit again; the decision is in the Record.",
   revoke:
-    "Revoked. Trading is suspended until a new submission is approved; both changes are in the Nature Ledger.",
+    "Revoked. Trading is suspended until a new submission is approved; both changes are in the Record.",
 };
 
 /**
@@ -102,7 +102,7 @@ export function ListingReviewScreen({ assetId }: { assetId: string }) {
       <Button asChild variant="ghost" size="sm" className="mb-4 -ml-3">
         <Link href={backHref}>
           <ArrowLeft aria-hidden="true" />
-          Verifications
+          Verified land
         </Link>
       </Button>
       {body}

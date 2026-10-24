@@ -16,7 +16,7 @@ export default function NotFound() {
         demo was reset.
       </p>
       <Button asChild className="mt-6">
-        <Link href="/">Back to the Marketplace</Link>
+        <Link href="/">Back to Rated sites</Link>
       </Button>
     </main>
   );

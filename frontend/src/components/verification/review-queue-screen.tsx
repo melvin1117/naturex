@@ -130,7 +130,7 @@ const DECIDED_EMPTY: Record<DecidedLevel, string> = {
 function DecidedList({ level }: { level: DecidedLevel }) {
   const [offset, setOffset] = useState(0);
   const decided = useDecidedVerifications(level, offset, QUEUE_PAGE);
-  const label = LEVEL_LABEL[level].toLowerCase();
+  const label = VIEW_LABEL[level].toLowerCase();
   return (
     <Paged
       label={`Listings ${label}, latest decision first`}

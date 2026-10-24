@@ -598,7 +598,7 @@ describe("FieldEvidencePanel", () => {
     renderPanel(EMPTY);
     expect(
       await screen.findByText(
-        /No field photos yet\. Members of the site's community add them from the Steward app/,
+        /No field photos yet\. Members of the site's community add them from the Stewards app/,
       ),
     ).toBeInTheDocument();
     // Not a member: no way in.

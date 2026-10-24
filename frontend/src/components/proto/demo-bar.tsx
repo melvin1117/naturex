@@ -41,7 +41,7 @@ import {
 /**
  * The bar above every page. The real app has none: its homepage stays a homepage. In the
  * visitor's sandbox (`/sandbox/*`) it says where they are, who they act as (switched
- * instantly), what to try, how to reset, and the way back to NatureX.
+ * instantly), what to try, how to reset, and the way back to WildWorth.
  */
 export function DemoBar() {
   const sandbox = useInSandbox();
@@ -97,7 +97,7 @@ function SandboxBar({ persona }: { persona: DemoPersona }) {
           {/* Leaves the sandbox on purpose: plain next/link, never the sandbox prefix. */}
           <NextLink href="/">
             <ArrowLeft aria-hidden="true" />
-            <span className="sr-only sm:not-sr-only">NatureX</span>
+            <span className="sr-only sm:not-sr-only">WildWorth</span>
             <span className="sr-only">, leave the sandbox</span>
           </NextLink>
         </Button>
@@ -134,7 +134,7 @@ function SandboxBar({ persona }: { persona: DemoPersona }) {
                   key={key}
                   value={key}
                   aria-label={`${p.name} (${p.role})`}
-                  className="h-auto min-h-7 flex-1 rounded-full px-3 py-1 text-[13px] font-medium text-primary-foreground/80 hover:bg-transparent hover:text-primary-foreground data-[state=on]:bg-lime data-[state=on]:text-foreground lg:h-7 lg:flex-none lg:py-0"
+                  className="h-auto min-h-7 flex-1 rounded-full px-3 py-1 text-[13px] font-medium text-primary-foreground/80 hover:bg-transparent hover:text-primary-foreground data-[state=on]:bg-card data-[state=on]:text-foreground lg:h-7 lg:flex-none lg:py-0"
                 >
                   <span className="flex flex-col items-center leading-tight lg:flex-row lg:gap-1">
                     <span>{p.name}</span>
@@ -162,8 +162,8 @@ function SandboxBar({ persona }: { persona: DemoPersona }) {
               className="w-[min(26rem,calc(100vw-2rem))] rounded-3xl p-3"
             >
               <p className="px-1.5 pt-1 pb-2.5 text-sm text-muted-foreground">
-                NatureX&apos;s loop, step by step. Each step opens its screen as
-                the right person; go anywhere from there.
+                WildWorth&apos;s loop, step by step. Each step opens its screen
+                as the right person; go anywhere from there.
               </p>
               <SandboxFlow sandbox={guide} tone="light" />
             </PopoverContent>
@@ -190,8 +190,8 @@ function SandboxBar({ persona }: { persona: DemoPersona }) {
               <DialogHeader>
                 <DialogTitle>Reset your sandbox?</DialogTitle>
                 <DialogDescription>
-                  Listings, stakes, Time Machine changes and Copilot history go
-                  back to the starting world. You stay who you are now.
+                  Listings, stakes, Time Machine changes and your questions to
+                  Bea go back to the starting world. You stay who you are now.
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>

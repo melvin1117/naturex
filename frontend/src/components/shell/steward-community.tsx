@@ -372,7 +372,7 @@ function CreateCommunityEmptyState({
             Start a community
           </h1>
           <p className="mt-4 max-w-prose text-pretty text-muted-foreground">
-            The Steward app is for the people who look after the land. Create a
+            Stewards is the app for the people who look after the land. Create a
             community to list your land, get it rated and receive what
             supporters pay into its fund. You&apos;ll be its owner and can add
             stewards.
@@ -384,7 +384,7 @@ function CreateCommunityEmptyState({
               "Open it to supporters and grow your community fund",
             ].map((step, i) => (
               <li key={step} className="flex items-center gap-3">
-                <span className="tabular grid size-6 place-items-center rounded-full bg-lime text-xs font-semibold">
+                <span className="tabular grid size-6 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
                   {i + 1}
                 </span>
                 {step}

@@ -40,14 +40,14 @@ function payloadText(payload: Record<string, unknown>) {
     .join(" · ");
 }
 
-/** The Nature Ledger: entries newest first, the verify result and the caller's actions. */
+/** The Record (the hash-chained ledger): entries newest first, the verify result and the caller's actions. */
 export function LedgerPanel({
   entries,
   check,
   actions,
   tamperedAt,
   highlightedAt,
-  empty = "No ledger entries yet.",
+  empty = "No entries in the Record yet.",
   loading = false,
 }: {
   entries: LedgerRow[];
@@ -64,7 +64,7 @@ export function LedgerPanel({
     <section className="rounded-3xl bg-machine p-6 text-machine-ink shadow-soft">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-xl">
-          <h3 className="font-serif text-3xl">Nature Ledger</h3>
+          <h3 className="font-serif text-3xl">The Record</h3>
           <p className="mt-1 text-sm text-machine-muted">
             Append-only and hash-chained. Each entry stores sha256 of its
             content, kind, sequence number and the previous entry&apos;s hash,
@@ -98,7 +98,7 @@ export function LedgerPanel({
                     ? "Chain intact: its 1 entry verified."
                     : `Chain intact: all ${check.entries} entries verified.`
                   : check.brokenAt !== null
-                    ? `Tampering detected at entry #${check.brokenAt}.`
+                    ? `Record broken at entry #${check.brokenAt}.`
                     : "The chain doesn't verify."}
               </div>
               <div className="text-machine-muted">{check.note}</div>
@@ -107,7 +107,7 @@ export function LedgerPanel({
         )}
       </div>
       {loading ? (
-        <MachineRowsSkeleton label="Loading the ledger…" className="mt-5" />
+        <MachineRowsSkeleton label="Loading the Record…" className="mt-5" />
       ) : entries.length === 0 ? (
         <p className="mt-5 text-sm text-machine-muted">{empty}</p>
       ) : (
@@ -156,7 +156,6 @@ export function LedgerPanel({
   );
 }
 
-export const LEDGER_PRIMARY = "bg-lime text-machine hover:bg-lime/90";
 export const LEDGER_OUTLINE =
   "border-machine-line bg-transparent text-machine-ink hover:bg-machine-raised hover:text-machine-ink";
 
@@ -191,12 +190,12 @@ export function LedgerTab({ site }: { site: Site }) {
         actions={
           <>
             <Button
-              className={LEDGER_PRIMARY}
+              variant="on-image"
               onClick={() => setResult(verify(chain))}
               data-tour="ledger-verify"
             >
               <ShieldCheck aria-hidden="true" />
-              Verify chain
+              Verify the Record
             </Button>
             <Button
               variant="outline"
@@ -247,7 +246,7 @@ export function ApiLedgerTab({ assetId }: { assetId: string }) {
   if (!ledger.data && ledger.error)
     return (
       <LoadError
-        title="We couldn't load the ledger"
+        title="We couldn't load the Record"
         error={ledger.error}
         retry={ledger.refetch}
       />
@@ -259,9 +258,9 @@ export function ApiLedgerTab({ assetId }: { assetId: string }) {
         check={null}
         loading
         actions={
-          <Button className={LEDGER_PRIMARY} disabled>
+          <Button variant="on-image" disabled>
             <ShieldCheck aria-hidden="true" />
-            Verify chain
+            Verify the Record
           </Button>
         }
       />
@@ -287,7 +286,7 @@ export function ApiLedgerTab({ assetId }: { assetId: string }) {
         }
         actions={
           <Button
-            className={LEDGER_PRIMARY}
+            variant="on-image"
             onClick={() => void verifier.mutate(undefined)}
             disabled={verifier.isPending}
           >
@@ -296,7 +295,7 @@ export function ApiLedgerTab({ assetId }: { assetId: string }) {
             ) : (
               <ShieldCheck aria-hidden="true" />
             )}
-            Verify chain
+            Verify the Record
           </Button>
         }
       />

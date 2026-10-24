@@ -1,13 +1,14 @@
 "use client";
 
-import { ArrowUp, Sparkles } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import Link from "@/components/app-link";
 import { usePathname } from "@/lib/nav";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
 import { AccountCopilot } from "@/components/account-copilot";
-import { LiveBadge } from "@/components/proto/bits";
+import { Bea } from "@/components/bea/bea";
+import { BeaSheetTitle, SITE_SUBTITLE } from "@/components/bea/bea-sheet-title";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,14 +18,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { useReturnFocus } from "@/lib/use-return-focus";
+import { BEA_MODEL, beaState, bzzTurnId, type BeaTurn } from "@/lib/bea";
+import { modelLabel } from "@/lib/trace-view";
 import { SUGGESTED_QUESTIONS } from "@/lib/prototype/copilot";
 import { useTour } from "@/components/proto/tour";
 import { useWorld } from "@/lib/hooks";
@@ -48,9 +45,9 @@ function Rich({ text }: { text: string }) {
 }
 
 /**
- * The header's Copilot sheet. A signed-in account gets the real Copilot (#213): world-wide,
- * or about the site whose page is open. Anonymous visitors and the guided tour keep the
- * prototype's scripted answers.
+ * The header's Bea sheet ("Ask Bea"; was the Copilot). A signed-in account, or a sandbox
+ * persona, gets her real answers (#213): world-wide, or about the site whose page is open.
+ * Anonymous visitors and the guided tour keep the prototype's scripted answers.
  */
 export function CopilotSheet() {
   const { ui, closeCopilot } = usePrototype();
@@ -90,7 +87,7 @@ export function CopilotSheet() {
   );
 }
 
-/** The prototype's scripted Copilot: a site to ask about and recorded answers. */
+/** The prototype's scripted Bea: a site to ask about and recorded answers. */
 function ScriptedCopilot() {
   const { world, ui, closeCopilot, ask, openCopilot } = usePrototype();
   const [draft, setDraft] = useState("");
@@ -112,6 +109,19 @@ function ScriptedCopilot() {
     });
   }, [world.copilot.length, ui.copilotTyping]);
 
+  // The scripted answers follow Bea's rules too: an answer without a source is one she can't give.
+  const answers: BeaTurn[] = world.copilot
+    .filter((m) => m.role !== "user")
+    .map((m) => ({
+      id: m.id,
+      status: "done",
+      mode: m.citations.length > 0 ? "model" : "refusal",
+      citations: m.citations,
+      answer: m.text,
+    }));
+  const bea = ui.copilotTyping ? "thinking" : beaState(answers);
+  const bzz = bzzTurnId(answers);
+
   function submit(q: string) {
     if (!q.trim()) return;
     ask(q, siteId);
@@ -121,17 +131,11 @@ function ScriptedCopilot() {
   return (
     <>
       <SheetHeader className="border-b px-6 pt-6 pb-4">
-        <div className="flex items-center gap-2">
-          <SheetTitle className="font-serif text-3xl font-normal">
-            Copilot
-          </SheetTitle>
-          <LiveBadge />
-        </div>
-        <SheetDescription>
-          Answers come from the site&apos;s reports, news and ledger, with
-          sources. Nemotron 3 Nano in the full build; scripted answers in this
-          prototype.
-        </SheetDescription>
+        <BeaSheetTitle state={bea} subtitle={SITE_SUBTITLE} />
+        <p className="text-xs text-muted-foreground">
+          This preview uses scripted answers. In your sandbox, Bea answers live
+          on {modelLabel(BEA_MODEL)}.
+        </p>
         {rated.length > 0 && (
           <Select
             value={siteId ?? undefined}
@@ -159,11 +163,14 @@ function ScriptedCopilot() {
         aria-live="polite"
       >
         {world.copilot.length === 0 && (
-          <div className="rounded-3xl bg-secondary p-5">
-            <Sparkles className="size-5 text-lime-ink" aria-hidden="true" />
-            <p className="mt-2 text-sm">
-              Ask about {site ? site.name : "a site"}: why its grade or price
-              changed, how the value is estimated, or how sure the rating is.
+          <div className="grid justify-items-center gap-2 px-2 pt-4 text-center">
+            <Bea state={bea} size={96} label="" />
+            <p className="font-serif text-2xl leading-tight">
+              Ask Bea about {site ? site.name : "a site"}
+            </p>
+            <p className="max-w-[34ch] text-sm text-muted-foreground">
+              Why its grade or price changed, how its worth is estimated, or how
+              sure the rating is.
             </p>
           </div>
         )}
@@ -183,6 +190,7 @@ function ScriptedCopilot() {
                   : "rounded-bl-lg bg-card shadow-soft",
               )}
             >
+              {m.id === bzz && "Bzz. "}
               <Rich text={m.text} />
               {m.citations.length > 0 && (
                 <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -203,20 +211,10 @@ function ScriptedCopilot() {
         ))}
         {ui.copilotTyping && (
           <div className="flex">
-            <div
-              className="rounded-3xl rounded-bl-lg bg-card px-4 py-3 shadow-soft"
-              aria-label="Copilot is writing"
-            >
-              <span className="flex gap-1">
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className="size-1.5 animate-pulse rounded-full bg-muted-foreground motion-reduce:animate-none"
-                    style={{ animationDelay: `${i * 120}ms` }}
-                  />
-                ))}
-              </span>
-            </div>
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Bea state="thinking" size={28} label="" />
+              Bea is reading the Record…
+            </p>
           </div>
         )}
       </div>
@@ -241,7 +239,7 @@ function ScriptedCopilot() {
           className="flex gap-2"
         >
           <label htmlFor="copilot-input" className="sr-only">
-            Ask the Copilot
+            Ask Bea
           </label>
           <Input
             id="copilot-input"

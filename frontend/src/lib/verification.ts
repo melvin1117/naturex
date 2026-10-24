@@ -28,7 +28,7 @@ export const ACCEPT_ATTRIBUTE = ACCEPTED_MEDIA_TYPES.join(",");
 export const LEVEL_LABEL: Record<VerificationLevel, string> = {
   unverified: "Not verified",
   documents_submitted: "Waiting for a reviewer",
-  verified: "Verified",
+  verified: "Verified land",
   rejected: "Rejected",
   revoked: "Revoked",
 };
@@ -62,7 +62,7 @@ export const RESULT_LABEL: Record<CheckResult, string> = {
 };
 
 const REVIEWER_LABEL: Record<ReviewerRole, string> = {
-  platform_admin: "NatureX platform admin",
+  platform_admin: "WildWorth platform admin",
   partner_reviewer: "Partner reviewer",
 };
 
@@ -169,7 +169,7 @@ export function stewardStatus(run: VerificationRun | null): Status {
     case "documents_submitted":
       return {
         title: "Waiting for a reviewer",
-        body: "The automated checks have run. A NatureX reviewer reads them with your documents and approves or rejects the listing; you'll see the decision here.",
+        body: "The automated checks have run. A WildWorth reviewer reads them with your documents and approves or rejects the listing; you'll see the decision here.",
         tone: "pending",
       };
     case "verified":

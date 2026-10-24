@@ -211,18 +211,18 @@ def news_alert(asset_id: UUID, asset_name: str, item: NewsScoutItem) -> AlertDra
 _VERIFICATION_ALERT: dict[VerificationLevel, tuple[str, str, int]] = {
     VerificationLevel.VERIFIED: (
         "{name}: land documents verified",
-        "A NatureX reviewer approved the community's land documents for this listing.",
+        "A WildWorth reviewer approved the community's land documents for this listing.",
         2,
     ),
     VerificationLevel.REJECTED: (
         "{name}: documents not approved",
-        "A NatureX reviewer didn't approve the land documents submitted for this listing. "
+        "A WildWorth reviewer didn't approve the land documents submitted for this listing. "
         "Its community can read why under Verification on the Steward home, and submit again.",
         3,
     ),
     VerificationLevel.REVOKED: (
         "{name}: verification revoked",
-        "A NatureX reviewer revoked this listing's verification. The opening offer and "
+        "A WildWorth reviewer revoked this listing's verification. The opening offer and "
         "trading stay closed until new documents are approved.",
         4,
     ),

@@ -102,7 +102,8 @@ function AccountMenuContent() {
           <Button
             variant="ghost"
             size="sm"
-            className="max-w-48 gap-2 pl-1"
+            // Shrinks before the header can overflow: the name truncates, the initials stay.
+            className="max-w-48 min-w-0 shrink gap-2 pl-1"
             aria-label={`Account: ${me.name}`}
           >
             {/* Initials as generated content, so the button's visible text matches its name. */}

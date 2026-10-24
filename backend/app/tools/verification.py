@@ -53,7 +53,7 @@ NOT_CHECKED: tuple[str, ...] = (
 """ADR-0006 §2's disclosure row, shown on every public panel."""
 
 BADGES: Mapping[VerificationLevel, str] = {
-    VerificationLevel.VERIFIED: "Documents reviewed by NatureX (hackathon process)",
+    VerificationLevel.VERIFIED: "Documents reviewed by WildWorth (hackathon process)",
     VerificationLevel.REVOKED: "Verification revoked",
 }
 SELF_ATTESTED = "Self-attested by the community"

@@ -34,7 +34,7 @@ export function AlertToaster() {
       toast.custom(
         () => (
           <AlertCard
-            from="NatureX"
+            from="WildWatch"
             title={payload.title}
             message={payload.message}
             urgent={payload.severity >= 4}
@@ -64,7 +64,7 @@ function PrototypeAlertToaster() {
       toast.custom(
         () => (
           <AlertCard
-            from={`NatureX · ${PERSONAS[alert.persona].name}'s phone`}
+            from={`WildWatch · ${PERSONAS[alert.persona].name}'s phone`}
             title={alert.title}
             message={alert.message}
             urgent={alert.severity === "critical"}

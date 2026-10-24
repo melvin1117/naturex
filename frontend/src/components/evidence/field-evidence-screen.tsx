@@ -137,7 +137,7 @@ function Loaded({
         </h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
           Show the land as it is today with up to {evidence.max_photos}{" "}
-          geotagged photos. NatureX checks each photo&apos;s location and date
+          geotagged photos. WildWorth checks each photo&apos;s location and date
           in code, an image model labels what it shows, and validated photos
           raise the rating&apos;s confidence by a fixed amount.
         </p>
@@ -214,7 +214,7 @@ function Loaded({
                     The photo&apos;s GPS position and date are read once to
                     check them against the boundary; only the result is kept.
                     The photo is stored without any location data, and only your
-                    community and NatureX admins can see it.{" "}
+                    community and WildWorth admins can see it.{" "}
                     {SENT_TO[evidence.ai_analysis]} The public sees counts,
                     labels and the month of your latest photo, never the photos.
                   </p>

@@ -56,7 +56,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("next/font/google", () => {
   const font = () => ({ variable: "font", className: "font" });
-  return { Geist_Mono: font, Hanken_Grotesk: font, Instrument_Serif: font };
+  return { Geist_Mono: font, Gloock: font, Hanken_Grotesk: font };
 });
 
 beforeAll(() => {
@@ -143,7 +143,22 @@ describe("Exchange navigation per role", () => {
     expect(backend.calls("GET /me/communities")).toBe(0);
   });
 
-  it("anonymous in the scripted demo: the Steward app too", async () => {
+  it("always says the Exchange is a play-money sandbox, beside its name", async () => {
+    setup(
+      <ExchangeLayout>
+        <Page />
+      </ExchangeLayout>,
+      WORLD,
+    );
+    const banner = await screen.findByRole("banner");
+    const line = within(banner).getByText("Sandbox · play money only");
+    // Visible wherever the app's name is; below `sm` both are only visually hidden.
+    expect(line).not.toHaveClass("hidden");
+    expect(line).toHaveClass("max-sm:sr-only");
+    expect(within(banner).getByText("Exchange")).toHaveClass("max-sm:sr-only");
+  });
+
+  it("anonymous in the scripted demo: Stewards too", async () => {
     window.sessionStorage.setItem("nx-prototype-demo", "1");
     setup(
       <ExchangeLayout>
@@ -155,7 +170,7 @@ describe("Exchange navigation per role", () => {
       name: "Switch app",
     });
     expect(
-      within(switcher).getByRole("link", { name: "Steward app" }),
+      within(switcher).getByRole("link", { name: "Stewards" }),
     ).toHaveAttribute("href", "/steward");
   });
 
@@ -180,7 +195,9 @@ describe("Exchange navigation per role", () => {
       </ExchangeLayout>,
       SIGNED_IN_WORLD,
     );
-    const home = await screen.findByRole("link", { name: "NatureX Exchange" });
+    const home = await screen.findByRole("link", {
+      name: "WildWorth Exchange",
+    });
     // Below `sm` the name is only visually hidden (sr-only), never removed.
     expect(within(home).getByText("Exchange")).toHaveClass("max-sm:sr-only");
     expect(within(home).getByText("Exchange")).not.toHaveClass("hidden");
@@ -189,7 +206,7 @@ describe("Exchange navigation per role", () => {
   it.each([
     ["steward", RIO],
     ["owner", SELVA],
-  ])("%s: the switcher to the Steward app", async (_role, member) => {
+  ])("%s: the switcher to Stewards", async (_role, member) => {
     setup(
       <ExchangeLayout>
         <Page />
@@ -198,7 +215,7 @@ describe("Exchange navigation per role", () => {
       [member],
     );
     await screen.findByRole("navigation", { name: "Switch app" });
-    expect(await switchLinks()).toEqual([["Steward app", "/steward"]]);
+    expect(await switchLinks()).toEqual([["Stewards", "/steward"]]);
     expect(screen.queryByText("Create a community")).not.toBeInTheDocument();
   });
 
@@ -212,10 +229,10 @@ describe("Exchange navigation per role", () => {
     expect(
       await screen.findByRole("link", { name: "Create a community" }),
     ).toBeVisible();
-    expect(await switchLinks()).toEqual([["Admin", "/admin"]]);
+    expect(await switchLinks()).toEqual([["Control room", "/admin"]]);
   });
 
-  it("admin and community member: the Steward app and Admin", async () => {
+  it("admin and community member: Stewards and Admin", async () => {
     setup(
       <ExchangeLayout>
         <Page />
@@ -223,10 +240,10 @@ describe("Exchange navigation per role", () => {
       ADMIN_WORLD,
       [SELVA],
     );
-    await screen.findByRole("link", { name: "Steward app" });
+    await screen.findByRole("link", { name: "Stewards" });
     expect(await switchLinks()).toEqual([
-      ["Steward app", "/steward"],
-      ["Admin", "/admin"],
+      ["Stewards", "/steward"],
+      ["Control room", "/admin"],
     ]);
   });
 
@@ -245,7 +262,7 @@ describe("Exchange navigation per role", () => {
       within(pages).getByRole("link", { name: "Your stakes" }),
     ).toHaveAttribute("aria-current", "page");
     expect(
-      within(pages).getByRole("link", { name: "Marketplace" }),
+      within(pages).getByRole("link", { name: "Rated sites" }),
     ).not.toHaveAttribute("aria-current");
     expect(
       within(pages).getByRole("link", { name: "AI at work" }),
@@ -289,7 +306,7 @@ describe("Steward shell", () => {
     expect(await switchLinks()).toEqual([["Exchange", "/"]]);
     expect(
       within(
-        screen.getByRole("navigation", { name: "Steward navigation" }),
+        screen.getByRole("navigation", { name: "Stewards navigation" }),
       ).getByRole("link", { name: "Community home" }),
     ).toHaveAttribute("aria-current", "page");
   });
@@ -355,13 +372,13 @@ describe("Steward shell", () => {
     );
     await screen.findByRole("button", { name: "Selva Viva, switch community" });
     const pages = screen.getByRole("navigation", {
-      name: "Steward navigation",
+      name: "Stewards navigation",
     });
     expect(
-      within(pages).getByRole("link", { name: "List land" }),
+      within(pages).getByRole("link", { name: "List your land" }),
     ).toHaveAttribute("href", `/steward/list?community=${SELVA.id}`);
     expect(
-      screen.getByRole("link", { name: /^NatureX\s*Steward$/ }),
+      screen.getByRole("link", { name: /^WildWorth\s*Stewards$/ }),
     ).toHaveAttribute("href", `/steward?community=${SELVA.id}`);
   });
 
@@ -461,9 +478,9 @@ describe("Steward shell", () => {
     expect(screen.queryByText("Page content")).not.toBeInTheDocument();
     // Its pages would all show this empty state, so they aren't offered.
     expect(
-      screen.queryByRole("navigation", { name: "Steward navigation" }),
+      screen.queryByRole("navigation", { name: "Stewards navigation" }),
     ).not.toBeInTheDocument();
-    // Already in the Steward app: no second "Create a community" in the header.
+    // Already in Stewards: no second "Create a community" in the header.
     expect(screen.queryByText("Create a community")).not.toBeInTheDocument();
     expect(await switchLinks()).toEqual([["Exchange", "/"]]);
   });
@@ -511,7 +528,7 @@ describe("Admin shell", () => {
     expect(await screen.findByText("Page content")).toBeVisible();
     expect(await switchLinks()).toEqual([
       ["Exchange", "/"],
-      ["Steward app", "/steward"],
+      ["Stewards", "/steward"],
     ]);
     expect(
       within(
@@ -533,10 +550,10 @@ describe("Admin shell", () => {
       await screen.findByText("The control room is for platform admins"),
     ).toBeVisible();
     expect(screen.queryByText("Page content")).not.toBeInTheDocument();
-    await screen.findByRole("link", { name: "Steward app" });
+    await screen.findByRole("link", { name: "Stewards" });
     expect(await switchLinks()).toEqual([
       ["Exchange", "/"],
-      ["Steward app", "/steward"],
+      ["Stewards", "/steward"],
     ]);
   });
 });
@@ -554,10 +571,10 @@ describe("mobile menu", () => {
     await screen.findByText("Page content");
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     const sheet = await screen.findByRole("dialog", {
-      name: "NatureX Steward",
+      name: "WildWorth Stewards",
     });
     expect(
-      within(sheet).getByRole("link", { name: "List land" }),
+      within(sheet).getByRole("link", { name: "List your land" }),
     ).toHaveAttribute("aria-current", "page");
     expect(
       within(sheet).getByRole("button", {
@@ -569,7 +586,7 @@ describe("mobile menu", () => {
       within(apps)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Exchange", "Admin"]);
+    ).toEqual(["Exchange", "Control room"]);
 
     fireEvent.click(within(apps).getByRole("link", { name: "Exchange" }));
     await waitFor(() =>
@@ -587,7 +604,7 @@ describe("mobile menu", () => {
     await screen.findAllByRole("link", { name: "Create a community" });
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     const sheet = await screen.findByRole("dialog", {
-      name: "NatureX Exchange",
+      name: "WildWorth Exchange",
     });
     expect(
       within(sheet).getByRole("link", { name: "Create a community" }),
@@ -606,7 +623,7 @@ describe("when the account changes", () => {
   }
 
   it.each([
-    ["a member", [SELVA], "Steward app"],
+    ["a member", [SELVA], "Stewards"],
     ["an investor", [], "Create a community"],
   ])(
     "signing out %s never asks for communities anonymously",
@@ -672,9 +689,7 @@ describe("when the account changes", () => {
         ),
       },
     );
-    expect(
-      await screen.findByRole("link", { name: "Steward app" }),
-    ).toBeVisible();
+    expect(await screen.findByRole("link", { name: "Stewards" })).toBeVisible();
 
     await act(() => layer.session.reload());
     const account = await screen.findByRole("button", {
@@ -688,7 +703,7 @@ describe("when the account changes", () => {
     // Ines's answer hasn't come back: nothing from Rosa, nothing guessed.
     await waitFor(() => expect(backend.calls("GET /me/communities")).toBe(2));
     expect(
-      screen.queryByRole("link", { name: "Steward app" }),
+      screen.queryByRole("link", { name: "Stewards" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Create a community")).not.toBeInTheDocument();
 
@@ -697,11 +712,11 @@ describe("when the account changes", () => {
       (await screen.findAllByRole("link", { name: "Create a community" }))[0],
     ).toBeVisible();
     expect(
-      screen.queryByRole("link", { name: "Steward app" }),
+      screen.queryByRole("link", { name: "Stewards" }),
     ).not.toBeInTheDocument();
   });
 
-  it("still offers the Steward app when the communities can't be read", async () => {
+  it("still offers Stewards when the communities can't be read", async () => {
     setup(
       <ExchangeLayout>
         <Page />
@@ -713,7 +728,7 @@ describe("when the account changes", () => {
       },
     );
     expect(
-      await screen.findByRole("link", { name: "Steward app" }),
+      await screen.findByRole("link", { name: "Stewards" }),
     ).toHaveAttribute("href", "/steward");
     expect(screen.queryByText("Create a community")).not.toBeInTheDocument();
   });

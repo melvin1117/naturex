@@ -379,9 +379,12 @@ describe("IpoLaunchScreen", () => {
     ["ipo_price_too_high", /Issue more units/],
     [
       "verification_required",
-      /A NatureX reviewer approves them before the offer opens/,
+      /A WildWorth reviewer approves them before the offer opens/,
     ],
-    ["not_verified", /A NatureX reviewer approves them before the offer opens/],
+    [
+      "not_verified",
+      /A WildWorth reviewer approves them before the offer opens/,
+    ],
     ["something_new", /can't launch right now/],
   ])("explains blocked_reason %s and won't launch", async (code, message) => {
     const { backend } = renderLaunch({

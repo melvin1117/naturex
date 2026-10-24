@@ -86,7 +86,7 @@ describe("apiErrorFromResponse", () => {
     });
     expect(error.retryAfterSeconds).toBe(300);
     expect(error.message).toBe(
-      "NatureX is busy right now. Try again in 5 minutes.",
+      "WildWorth is busy right now. Try again in 5 minutes.",
     );
   });
 

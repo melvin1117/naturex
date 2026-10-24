@@ -126,10 +126,12 @@ async function openCopilot(): Promise<{
   opener: HTMLElement;
   sheet: HTMLElement;
 }> {
-  const opener = await screen.findByRole("button", { name: "Copilot" });
+  const opener = await screen.findByRole("button", { name: "Ask Bea" });
   opener.focus();
   fireEvent.click(opener);
-  const sheet = await screen.findByRole("dialog", { name: "Copilot" });
+  const sheet = await screen.findByRole("dialog", {
+    name: "Bea · your field guide",
+  });
   return { opener, sheet };
 }
 
@@ -141,7 +143,7 @@ async function requests(backend: ReturnType<typeof renderHeader>["backend"]) {
   );
 }
 
-describe("Header Copilot, signed in", () => {
+describe("Header Bea, signed in", () => {
   it("asks across every site by default, with sources named after their site", async () => {
     const { backend } = renderHeader(signedIn);
     await screen.findByRole("button", { name: /Alerts/ });
@@ -156,6 +158,10 @@ describe("Header Copilot, signed in", () => {
     ).not.toBeInTheDocument();
     expect(within(sheet).getByText(/Ask across every site/)).toBeVisible();
     expect(within(sheet).queryByText(/scripted/)).not.toBeInTheDocument();
+    // Her title, what she answers from, and that it's never advice.
+    expect(sheet).toHaveAccessibleDescription(
+      "Answers only from the Record of your sites Play money only; not advice.",
+    );
 
     fireEvent.click(
       within(sheet).getByRole("button", {
@@ -164,7 +170,7 @@ describe("Header Copilot, signed in", () => {
     );
 
     const chip = await within(sheet).findByRole("link", {
-      name: `Source ${REPORT_SOURCE.ref}: Xochimilco wetland · Report v2`,
+      name: `Source ${REPORT_SOURCE.ref}: Xochimilco wetland · Proof of Life v2`,
     });
     expect(chip).toHaveAttribute("href", `/asset/${ASSET_ID}?tab=report`);
     expect(
@@ -202,7 +208,7 @@ describe("Header Copilot, signed in", () => {
       within(sheet).getByRole("button", { name: "Why did the price change?" }),
     );
     await within(sheet).findByRole("link", {
-      name: `Source ${REPORT_SOURCE.ref}: Report v2`,
+      name: `Source ${REPORT_SOURCE.ref}: Proof of Life v2`,
     });
 
     const all = within(scope).getByRole("radio", { name: "All sites" });
@@ -211,9 +217,7 @@ describe("Header Copilot, signed in", () => {
     expect(
       within(scope).getByRole("radio", { name: "All sites" }),
     ).toHaveAttribute("aria-checked", "true");
-    const input = within(sheet).getByLabelText(
-      "Ask the Copilot about every site",
-    );
+    const input = within(sheet).getByLabelText("Ask Bea about every site");
     fireEvent.change(input, { target: { value: "Which site fell most?" } });
     fireEvent.click(
       within(sheet).getByRole("button", { name: "Send question" }),
@@ -273,11 +277,11 @@ describe("Header Copilot, signed in", () => {
     );
 
     expect(await within(sheet).findByRole("alert")).toHaveTextContent(
-      "The Copilot has answered a lot of questions in this sandbox this hour.",
+      "Bea has answered a lot of questions in this sandbox this hour.",
     );
   });
 
-  it("puts focus back on the Copilot button when closed", async () => {
+  it("puts focus back on the Ask Bea button when closed", async () => {
     renderHeader(signedIn);
     await screen.findByRole("button", { name: /Alerts/ });
     const { opener, sheet } = await openCopilot();
@@ -295,7 +299,7 @@ describe("Header Copilot, signed in", () => {
   });
 });
 
-describe("Header Copilot, while an answer streams", () => {
+describe("Header Bea, while an answer streams", () => {
   it("locks the scope until the answer ends", async () => {
     nav.pathname = `/asset/${ASSET_ID}`;
     const signals: AbortSignal[] = [];
@@ -311,7 +315,7 @@ describe("Header Copilot, while an answer streams", () => {
       within(sheet).getByRole("button", { name: "Why did the price change?" }),
     );
 
-    await within(sheet).findByText(/Reading 0 sources/);
+    await within(sheet).findByText(/Bea is reading 0 sources/);
     for (const radio of within(scope).getAllByRole("radio"))
       expect(radio).toBeDisabled();
     expect(other).toBeDisabled();
@@ -327,7 +331,7 @@ describe("Header Copilot, while an answer streams", () => {
         name: "Which sites were downgraded?",
       }),
     );
-    await within(sheet).findByText(/Reading 0 sources/);
+    await within(sheet).findByText(/Bea is reading 0 sources/);
     expect(signals[0]?.aborted).toBe(false);
 
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
@@ -339,7 +343,7 @@ describe("Header Copilot, while an answer streams", () => {
   });
 });
 
-describe("Header Copilot, when the page changes under it", () => {
+describe("Header Bea, when the page changes under it", () => {
   it("follows the page's site (browser Back) and keeps earlier answers", async () => {
     nav.pathname = `/asset/${ASSET_ID}`;
     const { backend } = renderHeader(signedIn);
@@ -348,7 +352,9 @@ describe("Header Copilot, when the page changes under it", () => {
     fireEvent.click(
       within(sheet).getByRole("button", { name: "Why did the price change?" }),
     );
-    await within(sheet).findByRole("link", { name: "Source R2: Report v2" });
+    await within(sheet).findByRole("link", {
+      name: "Source R2: Proof of Life v2",
+    });
 
     act(() => nav.go(`/asset/${OSA_ID}`));
 
@@ -368,10 +374,9 @@ describe("Header Copilot, when the page changes under it", () => {
         within(sheet).queryByRole("radiogroup", { name: "Ask about" }),
       ).not.toBeInTheDocument(),
     );
-    fireEvent.change(
-      within(sheet).getByLabelText("Ask the Copilot about every site"),
-      { target: { value: "Which site fell most?" } },
-    );
+    fireEvent.change(within(sheet).getByLabelText("Ask Bea about every site"), {
+      target: { value: "Which site fell most?" },
+    });
     fireEvent.click(
       within(sheet).getByRole("button", { name: "Send question" }),
     );
@@ -382,7 +387,7 @@ describe("Header Copilot, when the page changes under it", () => {
   });
 });
 
-describe("Header Copilot, signed in during the guided tour", () => {
+describe("Header Bea, signed in during the guided tour", () => {
   it("keeps the tour's scripted sheet and never calls the Copilot API", async () => {
     const { backend } = renderHeader(signedIn, <TourAtCopilot />);
     await screen.findByRole("button", { name: /Alerts/ });
@@ -402,7 +407,7 @@ describe("Header Copilot, signed in during the guided tour", () => {
   });
 });
 
-describe("Header Copilot, anonymous", () => {
+describe("Header Bea, anonymous", () => {
   it("keeps the scripted demo and never calls the Copilot API", async () => {
     const { backend } = renderHeader();
     const { sheet } = await openCopilot();

@@ -151,14 +151,14 @@ describe("/judge: your turn", () => {
     const steps = screen.getByRole("list", {
       name: "What you can do in your sandbox",
     });
-    expect(steps).toHaveTextContent("List land");
+    expect(steps).toHaveTextContent("List your land");
     expect(steps).toHaveTextContent("as Rosa (Community steward)");
     expect(steps).toHaveTextContent("as Arjun (Supporter)");
-    expect(steps).toHaveTextContent("as Admin (NatureX team)");
+    expect(steps).toHaveTextContent("as Admin (WildWorth team)");
   });
 
   it.each([
-    [/List land/, "rosa", "/sandbox/steward/list"],
+    [/List your land/, "rosa", "/sandbox/steward/list"],
     [/Check it's theirs/, "admin", "/sandbox/admin/verifications"],
     [/Back a community/, "arjun", "/sandbox"],
     [/Move time forward/, "admin", "/sandbox/admin"],

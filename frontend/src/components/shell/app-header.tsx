@@ -7,6 +7,7 @@ import { useId, useState, type ReactNode } from "react";
 import { cn } from "cn";
 
 import { AccountMenu } from "@/components/account-menu";
+import { PageIcon } from "@/components/shell/app-icons";
 import { Wordmark } from "@/components/proto/bits";
 import {
   AppSwitcher,
@@ -34,6 +35,9 @@ import {
   type AppAccess,
   type AppKey,
 } from "@/lib/navigation";
+
+/** The sandbox line (ux-writing §4): beside the Exchange's name, always. */
+export const SANDBOX_LINE = "Sandbox · play money only";
 
 /** The Steward app's home, which carries a dot while it has updates the member hasn't seen. */
 const STEWARD_HOME = APPS.steward.href;
@@ -65,6 +69,13 @@ export function AppHeader({ app, tools }: { app: AppKey; tools?: ReactNode }) {
           <Link href={href(APPS[app].href)} className="shrink-0 rounded-md">
             <Wordmark app={APPS[app].name} />
           </Link>
+          {app === "exchange" && (
+            // "Exchange" could suggest a real securities exchange: it always comes with this.
+            // Shown wherever the app's name is; below `sm` both are visually hidden but read out.
+            <span className="text-xs whitespace-nowrap text-muted-foreground max-sm:sr-only">
+              {SANDBOX_LINE}
+            </span>
+          )}
           {app === "steward" && steward?.active && (
             <div className="hidden min-w-0 items-center gap-3 lg:flex">
               <span aria-hidden="true" className="text-border">
@@ -83,7 +94,7 @@ export function AppHeader({ app, tools }: { app: AppKey; tools?: ReactNode }) {
             className="hidden lg:block"
           />
         )}
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex min-w-0 items-center gap-1.5">
           {tools}
           <AppSwitcher
             current={app}
@@ -148,13 +159,22 @@ function AppNav({
                 aria-describedby={updated ? updatesId : undefined}
                 onClick={onNavigate}
                 className={cn(
-                  "inline-flex h-9 items-center rounded-full px-3.5 text-sm font-medium whitespace-nowrap transition-colors",
+                  "inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium whitespace-nowrap transition-colors",
                   layout === "stack" && "flex h-11 w-full",
                   active
                     ? "bg-card text-foreground shadow-soft"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
+                {/* In the header row the icons need room the account menu may want at 1280 px. */}
+                <PageIcon
+                  href={item.href}
+                  size={16}
+                  className={cn(
+                    "shrink-0",
+                    layout === "row" && "hidden 2xl:block",
+                  )}
+                />
                 {item.label}
                 {updated && <UpdatesDot />}
               </Link>
@@ -230,10 +250,12 @@ function MobileMenu({
       <SheetContent side="right" className="w-[min(20rem,85vw)] gap-6 p-0">
         <SheetHeader className="border-b border-border/70 px-5 py-4">
           <SheetTitle className="font-serif text-2xl font-normal tracking-tight">
-            NatureX {APPS[app].name}
+            WildWorth {APPS[app].name}
           </SheetTitle>
-          <SheetDescription className="sr-only">
-            Pages, communities and apps
+          <SheetDescription
+            className={app === "exchange" ? "text-xs" : "sr-only"}
+          >
+            {app === "exchange" ? SANDBOX_LINE : "Pages, communities and apps"}
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-6 overflow-y-auto overscroll-contain px-3 pb-6">

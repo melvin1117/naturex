@@ -1,12 +1,12 @@
 "use client";
 
-import { Bell, MessageCircle } from "lucide-react";
 import Link from "@/components/app-link";
 import { usePathname } from "@/lib/nav";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
 import { AlertsList } from "@/components/alerts-list";
+import { AlertsIcon, BeaIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -24,7 +24,7 @@ import {
 } from "@/lib/prototype/world";
 
 /**
- * The header tools (Copilot, alerts). The shell header (`components/shell/app-header.tsx`)
+ * The header tools (Ask Bea, alerts). The shell header (`components/shell/app-header.tsx`)
  * shows them in its `tools` slot. Signed-in accounts get their real alerts (T75, #199);
  * anonymous visitors keep the prototype's scripted alerts. The Agent Trace isn't here: a
  * site's page opens its own runs ("How the AI rated it"), and the exchange's "AI at work"
@@ -54,8 +54,8 @@ export function PrototypeHeaderTools({ app }: { app: AppKey }) {
           }
           data-tour="copilot-button"
         >
-          <MessageCircle aria-hidden="true" />
-          <span className="sr-only xl:not-sr-only">Copilot</span>
+          <BeaIcon className="size-5" aria-hidden="true" />
+          <span className="sr-only xl:not-sr-only">Ask Bea</span>
         </Button>
       )}
       {loading ? (
@@ -96,7 +96,7 @@ function AccountAlertsBell({ accountId }: { accountId: string | null }) {
             aria-label={label}
             data-tour="alerts-bell"
           >
-            <Bell aria-hidden="true" />
+            <AlertsIcon aria-hidden="true" />
             {unread > 0 && (
               <span
                 className="tabular absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-clay-ink px-1 text-[10px] font-semibold text-white"
@@ -117,9 +117,11 @@ function AccountAlertsBell({ accountId }: { accountId: string | null }) {
               setOpen(false);
           }}
         >
-          <div className="border-b px-4 py-3 text-sm font-semibold">Alerts</div>
+          <div className="border-b px-4 py-3 text-sm font-semibold">
+            WildWatch alerts
+          </div>
           <div className="max-h-[min(28rem,70vh)] overflow-y-auto px-4 py-3">
-            <AlertsList empty="No alerts yet. You'll hear here when a site you back is re-rated or in the news." />
+            <AlertsList empty="No alerts yet. WildWatch tells you here when a site you back is re-rated or in the news." />
           </div>
         </PopoverContent>
       </Popover>
@@ -140,7 +142,7 @@ function PendingAlertsBell() {
       disabled
       data-tour="alerts-bell"
     >
-      <Bell aria-hidden="true" />
+      <AlertsIcon aria-hidden="true" />
     </Button>
   );
 }
@@ -162,7 +164,7 @@ function AlertsBell({ trader }: { trader: TraderKey }) {
           className="relative"
           data-tour="alerts-bell"
         >
-          <Bell aria-hidden="true" />
+          <AlertsIcon aria-hidden="true" />
           <span className="sr-only">
             Alerts{unread ? `, ${unread} unread` : ""}
           </span>
@@ -174,7 +176,9 @@ function AlertsBell({ trader }: { trader: TraderKey }) {
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 rounded-2xl p-0">
-        <div className="border-b px-4 py-3 text-sm font-semibold">Alerts</div>
+        <div className="border-b px-4 py-3 text-sm font-semibold">
+          WildWatch alerts
+        </div>
         {alerts.length === 0 ? (
           <p className="px-4 py-6 text-sm text-muted-foreground">
             No alerts yet. You&apos;ll hear here when a site you back is

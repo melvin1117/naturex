@@ -152,7 +152,7 @@ export function DocumentUploadForm({
           />
           <Label htmlFor={`${id}-consent`} className="leading-snug font-normal">
             I&apos;m authorised to share this document. Only this
-            community&apos;s members and NatureX reviewers can open it; the
+            community&apos;s members and WildWorth reviewers can open it; the
             public sees check results, never the document.
           </Label>
         </div>

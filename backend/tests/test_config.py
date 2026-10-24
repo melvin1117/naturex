@@ -47,7 +47,7 @@ def test_env_file_switch_none_ignores_every_env_file(
 
     settings = Settings()
 
-    assert settings.app_name == "NatureX"
+    assert settings.app_name == "WildWorth"
     assert settings.use_mocks is True
     assert settings.llm_budget_usd == 20.0
 

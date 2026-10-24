@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Hanken_Grotesk, Instrument_Serif } from "next/font/google";
+import { Geist_Mono, Gloock, Hanken_Grotesk } from "next/font/google";
 
 import { AlertToaster } from "@/components/proto/alert-toaster";
 import { CopilotSheet } from "@/components/proto/copilot-sheet";
@@ -21,11 +21,12 @@ const hanken = Hanken_Grotesk({
   weight: ["300", "400", "500", "600", "700"],
 });
 
-const instrument = Instrument_Serif({
-  variable: "--font-instrument",
-  subsets: ["latin"],
+// The display face (DESIGN.md): names, page titles and the wordmark's "Wild". One weight, no
+// italic.
+const gloock = Gloock({
+  variable: "--font-gloock",
+  subsets: ["latin", "latin-ext"],
   weight: "400",
-  style: ["normal", "italic"],
 });
 
 const geistMono = Geist_Mono({
@@ -33,13 +34,49 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/** SITE_URL, when it's a valid absolute URL; a bad value must not stop the app from starting. */
+function siteUrl(): URL | undefined {
+  try {
+    return process.env.SITE_URL ? new URL(process.env.SITE_URL) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const DESCRIPTION =
+  "Worth more wild. The AI rating agency for living nature: satellites and local news, read by Nemotron agents. Sandbox · play money only.";
+
 export const metadata: Metadata = {
+  // Absolute links for link previews; without SITE_URL, Next falls back to the dev host.
+  metadataBase: siteUrl(),
   title: {
-    default: "NatureX",
-    template: "%s · NatureX",
+    default: "WildWorth · nature ratings",
+    template: "%s · WildWorth",
   },
-  description:
-    "AI rating agency and sandbox exchange for living nature. Play money only, not a real security.",
+  description: DESCRIPTION,
+  applicationName: "WildWorth",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "16x16 32x32 48x48" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+  openGraph: {
+    siteName: "WildWorth",
+    title: "WildWorth · nature ratings",
+    description: DESCRIPTION,
+    type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "WildWorth. Worth more wild.",
+      },
+    ],
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({
@@ -50,7 +87,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${hanken.variable} ${instrument.variable} ${geistMono.variable} flex min-h-dvh flex-col font-sans antialiased`}
+        className={`${hanken.variable} ${gloock.variable} ${geistMono.variable} flex min-h-dvh flex-col font-sans antialiased`}
       >
         <WorldProvider>
           <PrototypeProvider>

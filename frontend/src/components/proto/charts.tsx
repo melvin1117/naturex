@@ -58,7 +58,7 @@ export type ChartEvent = {
   id: string;
   date: string;
   direction: number | null;
-  /** When NatureX recorded it, which places it on the time axis; `date` if absent. */
+  /** When WildWorth recorded it, which places it on the time axis; `date` if absent. */
   at?: string;
   title?: string;
 };

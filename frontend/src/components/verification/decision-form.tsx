@@ -109,7 +109,7 @@ export function DecisionForm({
           {kind === "revoke"
             ? "Required."
             : "Required to reject; optional to approve."}{" "}
-          {reason.length}/{REASON_MAX} characters. The public ledger keeps only
+          {reason.length}/{REASON_MAX} characters. The public Record keeps only
           a salted commitment to it, never the text.
         </p>
         {missing && (
@@ -187,7 +187,7 @@ export function DecisionForm({
             <DialogDescription>
               The public panel will say &ldquo;Verification revoked&rdquo; and
               trading is suspended at once. Only approving a new submission
-              resumes it. Both changes go into the Nature Ledger.
+              resumes it. Both changes go into the Record.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

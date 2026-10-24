@@ -124,7 +124,7 @@ export function QuarterResult({ result }: { result: SimulateQuarter }) {
       )}
       <Button asChild variant="outline" size="sm">
         <Link href="/">
-          See the Marketplace
+          See Rated sites
           <ArrowRight aria-hidden="true" />
         </Link>
       </Button>

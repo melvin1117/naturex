@@ -94,7 +94,7 @@ export interface Explanation {
 
 const VERIFICATION: Explanation = {
   title: "Verification comes first",
-  body: "The opening offer stays closed until this listing's land documents are verified: upload them and submit them for review, and once a NatureX reviewer approves them you can launch. A revoked verification keeps it closed too, so supporters only back land whose papers were reviewed.",
+  body: "The opening offer stays closed until this listing's land documents are verified: upload them and submit them for review, and once a WildWorth reviewer approves them you can launch. A revoked verification keeps it closed too, so supporters only back land whose papers were reviewed.",
 };
 
 /** The codes that mean "verify the listing first" (T69's IPO gate). */

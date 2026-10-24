@@ -71,7 +71,7 @@ export function RequireAccount({
               have admin access. Admin accounts are created by an operator.
             </p>
             <Button asChild variant="outline" size="sm" className="mt-2">
-              <Link href="/">Go to the Marketplace</Link>
+              <Link href="/">Go to Rated sites</Link>
             </Button>
           </AlertDescription>
         </Alert>
@@ -90,7 +90,7 @@ export function RequireAccount({
           <AlertDescription>
             <p>
               {error?.message ??
-                "Can't reach NatureX. Check your connection and try again."}
+                "Can't reach WildWorth. Check your connection and try again."}
             </p>
             <Button
               variant="outline"
