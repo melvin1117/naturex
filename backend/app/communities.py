@@ -11,7 +11,7 @@ import unicodedata
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, exists
+from sqlalchemy import delete, exists, update
 from sqlmodel import Session, col, select
 
 from app.models import (
@@ -23,6 +23,7 @@ from app.models import (
     User,
     UserKind,
     UserRole,
+    World,
 )
 
 
@@ -37,6 +38,11 @@ class MembershipConflict(Exception):
 ALREADY_MEMBER = "already_member"
 NOT_A_MEMBER = "not_a_member"
 OWNER_CANNOT_BE_REMOVED = "owner_cannot_be_removed"
+OWNER_IS_A_PERSON = "owner_is_a_person"
+OWNER_NOT_UNIQUE = "owner_not_unique"
+NOT_A_PERSON = "not_a_person"
+MEMBER_NOT_ELIGIBLE = "member_not_eligible"
+MEMBER_HAS_HOLDINGS = "member_has_holdings"
 
 NAME_MIN_LENGTH = 2
 NAME_MAX_LENGTH = 80
@@ -177,6 +183,65 @@ def remove_member(session: Session, community: Community, user_id: UUID) -> None
         )
     )
     session.flush()
+
+
+def transfer_ownership(session: Session, community: Community, new_owner_id: UUID) -> bool:
+    """Hand a community from its seeded owner persona (who can't sign in) to a person: an
+    operator step for the live world's curated communities (`app.jobs.seed_live`), never an API.
+
+    Takes the same locks as adding a steward (the world, then the new owner's row) and keeps
+    the same rules: admins can't be members, and someone holding the community's shares can't
+    become one (they couldn't trade them any more). Returns False when the person already owns
+    it. Raises MembershipConflict: `owner_not_unique`, `owner_is_a_person` (only a persona's
+    community is handed over), `not_a_person`, `member_not_eligible` (an admin),
+    `already_member` or `member_has_holdings`. Flushes; the caller commits.
+    """
+    session.exec(
+        select(World.id).where(World.id == community.world_id).with_for_update(key_share=True)
+    ).one()
+    owners = session.exec(
+        select(User)
+        .join(
+            CommunityMember,
+            (col(CommunityMember.world_id) == col(User.world_id))
+            & (col(CommunityMember.user_id) == col(User.id)),
+        )
+        .where(
+            CommunityMember.community_id == community.id,
+            CommunityMember.role == CommunityRole.OWNER,
+        )
+    ).all()
+    if any(owner.id == new_owner_id for owner in owners):
+        return False
+    if len(owners) != 1:
+        raise MembershipConflict(OWNER_NOT_UNIQUE)
+    if owners[0].kind is not UserKind.PERSONA:
+        raise MembershipConflict(OWNER_IS_A_PERSON)
+    current = owners[0]
+    person = session.exec(
+        select(User)
+        .where(User.world_id == community.world_id, User.id == new_owner_id)
+        .with_for_update()
+    ).one()
+    if person.kind is not UserKind.PERSON:
+        raise MembershipConflict(NOT_A_PERSON)
+    if person.is_admin:
+        # Admins operate and review the community's assets, so they stay out (as stewards do).
+        raise MembershipConflict(MEMBER_NOT_ELIGIBLE)
+    if get_member(session, community, person.id) is not None:
+        raise MembershipConflict(ALREADY_MEMBER)
+    if holds_community_shares(session, community, person.id):
+        raise MembershipConflict(MEMBER_HAS_HOLDINGS)
+    session.execute(
+        update(CommunityMember)
+        .where(
+            col(CommunityMember.community_id) == community.id,
+            col(CommunityMember.user_id) == current.id,
+        )
+        .values(user_id=person.id)
+    )
+    session.flush()
+    return True
 
 
 def holds_community_shares(session: Session, community: Community, user_id: UUID) -> bool:

@@ -206,17 +206,22 @@ def launch(
     *,
     expected_price: Decimal,
     now: datetime | None = None,
+    require_verification: bool = True,
 ) -> Launched:
     """Launch the IPO (see the module docstring). The caller authorized `LAUNCH_IPO` and
     commits. `expected_price` is the price the owner confirmed in the preview (any number of
-    decimals: 21.47 equals 21.4700). Raises LookupError, or IpoRefused:
+    decimals: 21.47 equals 21.4700). `require_verification=False` skips the verification gate
+    for an operator's seed only (`app.jobs.seed_live`): it opens a self-attested listing, like
+    the curated sites, which the public panel shows as "Self-attested by the community". No
+    route passes it. Raises LookupError, or IpoRefused:
     `ipo_already_launched`, `asset_not_listed`, the gate's code (T69), `run_in_progress`,
     `no_rating`, `ipo_price_too_low`, `ipo_price_changed` or `ipo_price_too_high`."""
     launched_at = now or datetime.now(UTC)
     lock_world_key_share(session, world_id)
     asset = lock_asset(session, world_id, asset_id)
     check_launchable(asset)
-    check_gate(session, asset)
+    if require_verification:
+        check_gate(session, asset)
     # Run activity is decided under the publisher lock (see rating_runs), after the asset's.
     lock_world_publisher(session, world_id)
     if run_active(session, world_id, asset_id):
