@@ -1,0 +1,456 @@
+{
+  "_note": "Live-world seed (app.jobs.seed_live). People are fictional sandbox accounts; every rating, verification, offer and trade is made through the real API with live models and Earth Engine. Passwords are generated at run time and written to a git-ignored file, never here.",
+  "admin": {
+    "name": "WildWorth Admin",
+    "email": "admin@example.com"
+  },
+  "people": [
+    {
+      "key": "lucia",
+      "name": "Lucía Hernández",
+      "email": "lucia.hernandez@example.com"
+    },
+    {
+      "key": "tomas",
+      "name": "Tomás Galicia",
+      "email": "tomas.galicia@example.com"
+    },
+    {
+      "key": "ana",
+      "name": "Ana Pech",
+      "email": "ana.pech@example.com"
+    },
+    {
+      "key": "jorge",
+      "name": "Jorge Canul",
+      "email": "jorge.canul@example.com"
+    },
+    {
+      "key": "martin",
+      "name": "Martín Gómez",
+      "email": "martin.gomez@example.com"
+    },
+    {
+      "key": "elena",
+      "name": "Elena Ruiz",
+      "email": "elena.ruiz@example.com"
+    },
+    {
+      "key": "sam",
+      "name": "Sam Carter",
+      "email": "sam.carter@example.com"
+    },
+    {
+      "key": "priya",
+      "name": "Priya Nair",
+      "email": "priya.nair@example.com"
+    },
+    {
+      "key": "hannah",
+      "name": "Hannah Lee",
+      "email": "hannah.lee@example.com"
+    },
+    {
+      "key": "daniel",
+      "name": "Daniel Okafor",
+      "email": "daniel.okafor@example.com"
+    },
+    {
+      "key": "sofia",
+      "name": "Sofia Rossi",
+      "email": "sofia.rossi@example.com"
+    },
+    {
+      "key": "kenji",
+      "name": "Kenji Watanabe",
+      "email": "kenji.watanabe@example.com"
+    },
+    {
+      "key": "amara",
+      "name": "Amara Diallo",
+      "email": "amara.diallo@example.com"
+    }
+  ],
+  "communities": [
+    {
+      "match_name": "Xochimilco Wetland Community",
+      "owner": "lucia",
+      "stewards": [
+        "tomas"
+      ]
+    },
+    {
+      "match_name": "Ría Celestún Mangrove Community",
+      "name": "Yucatán Coastal Wetlands Collective",
+      "description": "Fishing and ejido families who keep the mangroves and coastal marshes of the Yucatán peninsula.",
+      "owner": "ana",
+      "stewards": [
+        "jorge"
+      ]
+    },
+    {
+      "match_name": "Sumidero Canyon Restoration Forest Community",
+      "name": "Chiapas Forest Stewards",
+      "description": "Communities restoring and guarding tropical forest in Chiapas, from the Sumidero canyon to the Lacandon rainforest.",
+      "owner": "martin",
+      "stewards": [
+        "elena"
+      ]
+    },
+    {
+      "name": "Florida Keys Mangrove Trust",
+      "country": "US",
+      "description": "Volunteers who look after the mangroves and hammocks of the Florida Keys and the southern Everglades.",
+      "owner": "sam",
+      "stewards": [
+        "priya"
+      ]
+    }
+  ],
+  "listings": [
+    {
+      "community": "Yucatán Coastal Wetlands Collective",
+      "name": "Sian Ka'an Coastal Marsh",
+      "country": "MX",
+      "description": "Freshwater and brackish marsh around the Campechén lagoons inside the Sian Ka'an Biosphere Reserve, Quintana Roo.",
+      "box": [
+        20.02,
+        -87.565,
+        20.038,
+        -87.545
+      ],
+      "documents": [
+        "agrarian_certificate",
+        "assembly_minutes"
+      ],
+      "rerate": true
+    },
+    {
+      "community": "Yucatán Coastal Wetlands Collective",
+      "name": "Ría Lagartos Coastal Forest",
+      "country": "MX",
+      "description": "Coastal dry forest behind the Ría Lagartos estuary, at the edge of the Ría Lagartos Biosphere Reserve, Yucatán.",
+      "box": [
+        21.56,
+        -88.15,
+        21.575,
+        -88.128
+      ],
+      "documents": [
+        "agrarian_certificate",
+        "assembly_minutes"
+      ],
+      "rerate": true
+    },
+    {
+      "community": "Chiapas Forest Stewards",
+      "name": "Montes Azules Rainforest",
+      "country": "MX",
+      "description": "Lowland rainforest on the north bank of the Lacantún river, in the Montes Azules Biosphere Reserve, Chiapas.",
+      "box": [
+        16.13,
+        -90.96,
+        16.15,
+        -90.94
+      ],
+      "documents": [
+        "agrarian_certificate",
+        "assembly_minutes"
+      ],
+      "rerate": true
+    },
+    {
+      "community": "Florida Keys Mangrove Trust",
+      "name": "John Pennekamp Mangroves",
+      "country": "US",
+      "description": "Mangrove shoreline of John Pennekamp Coral Reef State Park, Key Largo.",
+      "documents": [
+        "title",
+        "assembly_minutes"
+      ],
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -80.55021,
+              24.97541
+            ],
+            [
+              -80.55639,
+              24.96981
+            ],
+            [
+              -80.55571,
+              24.9653
+            ],
+            [
+              -80.55347,
+              24.96452
+            ],
+            [
+              -80.54867,
+              24.96452
+            ],
+            [
+              -80.54558,
+              24.96483
+            ],
+            [
+              -80.54438,
+              24.96872
+            ],
+            [
+              -80.5442,
+              24.97246
+            ],
+            [
+              -80.53768,
+              24.98102
+            ],
+            [
+              -80.54403,
+              24.98102
+            ],
+            [
+              -80.54592,
+              24.98102
+            ],
+            [
+              -80.55021,
+              24.97541
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "community": "Florida Keys Mangrove Trust",
+      "name": "Key West Salt Ponds",
+      "country": "US",
+      "description": "Salt ponds and mangrove fringe of the Key West Tropical Forest and salt ponds, Key West.",
+      "documents": [
+        "title",
+        "assembly_minutes"
+      ],
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -81.76043,
+              24.56381
+            ],
+            [
+              -81.7773,
+              24.55906
+            ],
+            [
+              -81.77657,
+              24.54857
+            ],
+            [
+              -81.75788,
+              24.54294
+            ],
+            [
+              -81.74283,
+              24.55111
+            ],
+            [
+              -81.74562,
+              24.56601
+            ],
+            [
+              -81.75752,
+              24.57209
+            ],
+            [
+              -81.76043,
+              24.56381
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "community": "Florida Keys Mangrove Trust",
+      "name": "Flamingo Mangroves, Everglades",
+      "country": "US",
+      "description": "Mangrove forest along the Buttonwood canal north of Flamingo, Everglades National Park.",
+      "box": [
+        25.16,
+        -80.925,
+        25.178,
+        -80.905
+      ],
+      "documents": [
+        "title",
+        "assembly_minutes"
+      ],
+      "rerate": true
+    }
+  ],
+  "trades_round_1": [
+    [
+      "hannah",
+      "Xochimilco Wetland",
+      "buy",
+      900
+    ],
+    [
+      "hannah",
+      "Montes Azules Rainforest",
+      "buy",
+      1200
+    ],
+    [
+      "daniel",
+      "Ría Celestún Mangrove",
+      "buy",
+      1500
+    ],
+    [
+      "daniel",
+      "Flamingo Mangroves, Everglades",
+      "buy",
+      800
+    ],
+    [
+      "sofia",
+      "Ría Lagartos Coastal Forest",
+      "buy",
+      1000
+    ],
+    [
+      "sofia",
+      "Xochimilco Wetland",
+      "buy",
+      600
+    ],
+    [
+      "kenji",
+      "Sumidero Canyon Restoration Forest",
+      "buy",
+      1100
+    ],
+    [
+      "kenji",
+      "John Pennekamp Mangroves",
+      "buy",
+      700
+    ],
+    [
+      "amara",
+      "Key West Salt Ponds",
+      "buy",
+      900
+    ],
+    [
+      "amara",
+      "Montes Azules Rainforest",
+      "buy",
+      800
+    ],
+    [
+      "hannah",
+      "Ría Celestún Mangrove",
+      "buy",
+      500
+    ],
+    [
+      "daniel",
+      "Ría Lagartos Coastal Forest",
+      "buy",
+      600
+    ]
+  ],
+  "trades_round_2": [
+    [
+      "sofia",
+      "Xochimilco Wetland",
+      "sell",
+      0.5
+    ],
+    [
+      "kenji",
+      "John Pennekamp Mangroves",
+      "sell",
+      0.4
+    ],
+    [
+      "amara",
+      "Flamingo Mangroves, Everglades",
+      "buy",
+      700
+    ],
+    [
+      "hannah",
+      "Sumidero Canyon Restoration Forest",
+      "buy",
+      600
+    ],
+    [
+      "daniel",
+      "Ría Celestún Mangrove",
+      "sell",
+      0.3
+    ],
+    [
+      "sofia",
+      "Montes Azules Rainforest",
+      "buy",
+      900
+    ],
+    [
+      "kenji",
+      "Key West Salt Ponds",
+      "buy",
+      500
+    ],
+    [
+      "amara",
+      "Xochimilco Wetland",
+      "buy",
+      400
+    ]
+  ],
+  "trades_round_3": [
+    [
+      "hannah",
+      "Montes Azules Rainforest",
+      "sell",
+      0.25
+    ],
+    [
+      "kenji",
+      "Ría Lagartos Coastal Forest",
+      "buy",
+      600
+    ],
+    [
+      "daniel",
+      "Xochimilco Wetland",
+      "buy",
+      500
+    ],
+    [
+      "amara",
+      "Sumidero Canyon Restoration Forest",
+      "buy",
+      450
+    ],
+    [
+      "sofia",
+      "Ría Lagartos Coastal Forest",
+      "sell",
+      0.3
+    ],
+    [
+      "hannah",
+      "Key West Salt Ponds",
+      "buy",
+      400
+    ]
+  ]
+}

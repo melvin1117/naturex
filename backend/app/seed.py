@@ -117,20 +117,22 @@ DEMO_SITES: tuple[DemoSite, ...] = (
         UUID("33333333-3333-3333-3333-333333333301"),
         "wetland_mx",
         "Xochimilco Wetland",
-        "Hero inland wetland near Mexico City (demo).",
+        "Canals, chinampas and wet meadows of the Xochimilco ecological park, southern "
+        "Mexico City: an inland wetland kept by its chinampa farmers.",
     ),
     _demo_site(
         UUID("33333333-3333-3333-3333-333333333302"),
         "mangrove_mx",
         "Ría Celestún Mangrove",
-        "Blue-carbon mangrove in the Ría Celestún Biosphere Reserve, Yucatán (demo).",
+        "Blue-carbon mangrove fringing the estuary of the Ría Celestún Biosphere Reserve, "
+        "Yucatán.",
     ),
     _demo_site(
         UUID("33333333-3333-3333-3333-333333333303"),
         "restoration_forest",
         "Sumidero Canyon Restoration Forest",
         "Tropical forest recovering from 2021–2025 loss on the edge of Cañón del Sumidero "
-        "National Park, Chiapas (demo).",
+        "National Park, Chiapas.",
     ),
 )
 
