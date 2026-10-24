@@ -262,7 +262,7 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
     await admin.getByLabel("Password", { exact: true }).fill(ADMIN_PASSWORD);
     await admin.getByRole("button", { name: "Sign in" }).click();
     await expect(
-      admin.getByRole("heading", { name: "Verifications", level: 1 }),
+      admin.getByRole("heading", { name: "Verified land", level: 1 }),
     ).toBeVisible();
     await admin.getByRole("link", { name: `Review ${SITE}` }).click();
     await expect(
@@ -461,7 +461,7 @@ test("real accounts: list, verify, launch, trade, and sign out", async ({
         .filter({ hasText: "The control room is for platform admins" }),
     ).toBeVisible();
     await expect(
-      investor.getByRole("heading", { name: "Verifications", level: 1 }),
+      investor.getByRole("heading", { name: "Verified land", level: 1 }),
     ).toHaveCount(0);
   });
 

@@ -166,7 +166,15 @@ function AppNav({
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <PageIcon href={item.href} size={16} className="shrink-0" />
+                {/* In the header row the icons need room the account menu may want at 1280 px. */}
+                <PageIcon
+                  href={item.href}
+                  size={16}
+                  className={cn(
+                    "shrink-0",
+                    layout === "row" && "hidden 2xl:block",
+                  )}
+                />
                 {item.label}
                 {updated && <UpdatesDot />}
               </Link>
