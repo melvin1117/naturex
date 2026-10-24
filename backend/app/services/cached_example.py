@@ -1,10 +1,11 @@
 """The demo-world "cached example" (T60).
 
-In a demo sandbox, a new listing is never computed live on Earth Engine. When it waits in
-`rating` for satellite metrics (none, or a failed live computation), `AssetDetail` points it to
-the nearest precomputed demo site of the same world, with an explicit notice. It is shown next to
-the listing, never as its data: the listing keeps no report and stays in `rating`. Never in the
-live world.
+In a demo sandbox, a new listing waiting in `rating` for satellite metrics (none: live Earth
+Engine is off, the sandbox's live rating was refused by a hidden guardrail, or a live
+computation failed) is pointed by `AssetDetail` to the nearest precomputed demo site of the same
+world, with an explicit notice.
+It is shown next to the listing, never as its data: the listing keeps no report and stays in
+`rating`. Never in the live world.
 """
 
 from __future__ import annotations
@@ -84,7 +85,7 @@ def cached_example(session: Session, asset: Asset) -> CachedExample | None:
         site_key=key,
         distance_km=round(km, 1),
         notice=(
-            f"Cached example: demo sandboxes don't compute satellite metrics for new land. "
+            f"Cached example: there are no satellite metrics for this land yet. "
             f"{site.name}, a precomputed demo site {km:,.0f} km away, shows what a rating looks "
             f"like. Its numbers describe that site, not this land."
         ),

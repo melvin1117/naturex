@@ -58,6 +58,14 @@ function waitText(seconds: number | null): string {
   return seconds === null ? "a moment" : formatWait(seconds);
 }
 
+/** A daily limit's wait (up to 24 hours) in hours once it's over an hour. */
+function dailyWaitText(seconds: number | null): string {
+  if (seconds === null) return "a few hours";
+  if (seconds < 3600) return formatWait(seconds);
+  const hours = Math.round(seconds / 3600);
+  return hours === 1 ? "about an hour" : `about ${hours} hours`;
+}
+
 function validationIssues(detail: unknown) {
   if (!Array.isArray(detail)) return [];
   return detail.flatMap((item) => {
@@ -164,6 +172,26 @@ export function listingFailure(error: ApiError): ListingFailure {
         ...base,
         title: "Too many ratings right now",
         message: `NatureX limits how many ratings run each hour. Try again in ${wait}.`,
+      };
+    // T60's live satellite ratings: only live-world accounts see these (a sandbox falls back).
+    case "live_rating_quota":
+      return {
+        ...base,
+        title: "Today's live ratings are used",
+        message: `Each account can request a few live satellite ratings a day, and yours are used. Your listing is unchanged. You can submit it in ${dailyWaitText(error.retryAfterSeconds)}.`,
+      };
+    case "live_rating_global_limit":
+      return {
+        ...base,
+        title: "Live ratings are full for today",
+        message: `NatureX limits how many new places get a live satellite rating each day. Your listing is unchanged. Try again in ${dailyWaitText(error.retryAfterSeconds)}.`,
+      };
+    case "live_area_too_large":
+      return {
+        ...base,
+        title: "Too large for a live rating",
+        message:
+          "This boundary is too large for a live satellite rating. Draw a smaller area, or list the land as several sites, then submit again.",
       };
     case "rating_busy":
       return {

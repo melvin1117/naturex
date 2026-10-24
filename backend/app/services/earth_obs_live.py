@@ -1,28 +1,34 @@
 """Live Earth Engine metrics for new listings (T60).
 
-A new listing's polygon has no precomputed metrics, so in the **live world** its rating run
-computes them live with the T11/T13 methods (`app.tools.earth_engine.compute_polygon_metrics`,
-the same code as `scripts/precompute_sites.py`). Demo sandboxes never compute (they may only
-reuse the cache; `services/cached_example.py` covers them), so free visitor worlds can't spend
-the live world's Earth Engine capacity.
+A new listing's polygon has no precomputed metrics, so its rating run computes them live with the
+T11/T13 methods (`app.tools.earth_engine.compute_polygon_metrics`, the same code as
+`scripts/precompute_sites.py`): in the **live world**, and in **demo sandboxes** so judges can
+rate land of their choice. `live_policy` is the one place that decides whether a world computes
+and which caps apply; the template never computes.
 
 - **Cache:** results are stored in `earth_obs_cache`, keyed by the SHA-256 of the bare geometry
   and the data version, so a polygon is computed once per data version. A row that doesn't
   describe its polygon is a miss: it is deleted and the polygon computed again.
 - **Timeout and concurrency:** at most `EARTH_ENGINE_MAX_CONCURRENT` computations run at once
-  **per API process** (one by default; the daily quotas below are global, in the database). A run
-  waits up to `EARTH_ENGINE_TIMEOUT_S` for a slot (`earth_engine_busy`) and then has
-  `EARTH_ENGINE_TIMEOUT_S` to finish (`earth_engine_timeout`). The computation checks its
-  deadline before each Earth Engine round trip and each request has the same deadline (no
-  retries), so an abandoned one stops soon after and only then frees its slot. A result that
-  still arrives after the deadline is cached by the worker thread, so the retry is free.
+  **per API process** (one by default; the daily quotas below are global, in the database). A
+  live-world run waits up to `EARTH_ENGINE_TIMEOUT_S` for a slot (`earth_engine_busy`); a
+  sandbox run takes a slot only if one is free right now, so it never queues ahead of the live
+  world. Either then has `EARTH_ENGINE_TIMEOUT_S` to finish (`earth_engine_timeout`). The
+  computation checks its deadline before each Earth Engine round trip and each request has the
+  same deadline (no retries), so an abandoned one stops soon after and only then frees its slot.
+  A result that still arrives after the deadline is cached by the worker thread, so the retry is
+  free.
 - **Area:** polygons above `EARTH_ENGINE_LIVE_MAX_HA` are never computed (`live_area_too_large`).
-- **Quotas:** `reserve_live_rating` counts a live rating against the submitting account
-  (`LIVE_RATINGS_PER_USER_PER_DAY`) and globally (`LIVE_RATINGS_GLOBAL_PER_DAY`) in the
-  transaction that queues the run. Only live-world submits that need a computation count; a
-  cache hit is free, and a run that never reached Earth Engine (`earth_engine_busy`, or stale
-  before a worker took it) is refunded. `LLM_BUDGET_USD` stays the hard cap for the run's model
-  calls (`app/llm.py`).
+- **Quotas:** `reserve_live_rating` counts a live rating in the transaction that queues the run:
+  against the submitting account (`LIVE_RATINGS_PER_USER_PER_DAY`, sandbox personas included),
+  then for a sandbox against that sandbox (`SANDBOX_LIVE_RATINGS_PER_WORLD_PER_DAY`), then
+  against the world's pool: the live world's own (`LIVE_RATINGS_GLOBAL_PER_DAY`), or every
+  sandbox's together (`SANDBOX_LIVE_RATINGS_PER_DAY`); neither pool counts the other's. Only
+  submits that need a computation count; a cache hit is free, and a run that never reached
+  Earth Engine (`earth_engine_busy`, or stale before a worker took it) is refunded. In the live
+  world a spent quota is a 429; in a sandbox it is a hidden guardrail: the run doesn't compute
+  and falls back as if sandboxes never did. `LLM_BUDGET_USD` stays the hard cap for the run's
+  model calls, and `SANDBOX_LLM_BUDGET_USD` a sandbox's (`app/llm.py`).
 
 Tests never call Earth Engine: they plug in a fake `EarthEngineClient`.
 """
@@ -43,7 +49,7 @@ from typing import Any, Protocol
 from uuid import UUID
 
 from pydantic import ValidationError
-from sqlalchemy import delete
+from sqlalchemy import ColumnElement, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, col, select
@@ -52,6 +58,7 @@ from app.config import Settings
 from app.models import EarthObsCache, LiveRatingRequest
 from app.tools.earth_obs import EarthObsMetrics
 from app.tools.geometry import bare_geometry, check_shape, geometry_sha256, metrics_match_polygon
+from app.worlds import LIVE_WORLD_ID, PROTECTED_WORLDS, is_sandbox_world
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +74,8 @@ EARTH_ENGINE_ERROR = "earth_engine_error"
 EARTH_ENGINE_INVALID_OUTPUT = "earth_engine_invalid_output"
 LIVE_AREA_TOO_LARGE = "live_area_too_large"
 LIVE_RATING_QUOTA = "live_rating_quota"
+LIVE_RATING_WORLD_LIMIT = "live_rating_world_limit"
+"""A sandbox's own daily cap; never shown (a sandbox falls back instead)."""
 LIVE_RATING_GLOBAL_LIMIT = "live_rating_global_limit"
 
 Checkpoint = Callable[[], None]
@@ -98,6 +107,56 @@ class LiveQuotaExceeded(Exception):
 
 class _DeadlinePassed(Exception):
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class LivePolicy:
+    """Whether a world computes new polygons live, and under which caps (see `live_policy`)."""
+
+    computes: bool
+    """A listing submit may compute a new polygon live (with live Earth Engine on)."""
+    sandbox: bool
+    """Sandbox rules: a refused live rating falls back silently instead of a 429/409, the
+    computation slot is taken only if free right now, and overlays and views render only what
+    the run computed itself, on their own lane."""
+    per_user_per_day: int
+    per_world_per_day: int | None
+    """The world's own daily cap; None for the live world, whose pool is the world itself."""
+    pool_per_day: int
+    """The pool's daily cap: the live world's requests, or every sandbox's together."""
+
+
+NO_LIVE = LivePolicy(
+    computes=False, sandbox=False, per_user_per_day=0, per_world_per_day=0, pool_per_day=0
+)
+"""Never computes: the template, and a sandbox run falling back."""
+
+
+def live_policy(world_id: UUID, settings: Settings) -> LivePolicy:
+    """How `world_id` computes new polygons live (T60): the live world with its own allowance,
+    demo sandboxes with per-sandbox and shared allowances (none: never computes), the template
+    never."""
+    if world_id == LIVE_WORLD_ID:
+        return LivePolicy(
+            computes=True,
+            sandbox=False,
+            per_user_per_day=settings.live_ratings_per_user_per_day,
+            per_world_per_day=None,
+            pool_per_day=settings.live_ratings_global_per_day,
+        )
+    if not is_sandbox_world(world_id):
+        return NO_LIVE
+    per_world, pool = (
+        settings.sandbox_live_ratings_per_world_per_day,
+        settings.sandbox_live_ratings_per_day,
+    )
+    return LivePolicy(
+        computes=per_world > 0 and pool > 0,
+        sandbox=True,
+        per_user_per_day=settings.live_ratings_per_user_per_day,
+        per_world_per_day=per_world,
+        pool_per_day=pool,
+    )
 
 
 def live_site_key(sha256: str) -> str:
@@ -163,12 +222,25 @@ class LiveEarthObs:
         LiveMetricsError."""
         return self.cached(geojson) or self.compute(geojson)
 
-    def compute(self, geojson: Mapping[str, Any]) -> EarthObsMetrics:
+    def compute(self, geojson: Mapping[str, Any], *, wait: bool = True) -> EarthObsMetrics:
+        return self.compute_fresh(geojson, wait=wait)[0]
+
+    def compute_fresh(
+        self, geojson: Mapping[str, Any], *, wait: bool = True
+    ) -> tuple[EarthObsMetrics, bool]:
+        """The polygon's live metrics, and whether this call computed them (False: another run
+        cached them meanwhile). With `wait` it waits up to `timeout_s` for a slot; without (a
+        sandbox), it takes one only if free right now, else `earth_engine_busy` at once."""
         sha256 = geometry_sha256(geojson)
         area = check_shape(geojson).area_ha
         if area is None or not self.area_allowed(area):
             raise LiveMetricsError(LIVE_AREA_TOO_LARGE)
-        if not self._slots.acquire(timeout=self.timeout_s):
+        acquired = (
+            self._slots.acquire(timeout=self.timeout_s)
+            if wait
+            else self._slots.acquire(blocking=False)
+        )
+        if not acquired:
             raise LiveMetricsError(EARTH_ENGINE_BUSY)
         # Another run may have computed the same geometry while this one waited.
         try:
@@ -178,7 +250,7 @@ class LiveEarthObs:
             raise
         if hit is not None:
             self._slots.release()
-            return hit
+            return hit, False
         started = self.clock()
         deadline = started + self.timeout_s
 
@@ -203,7 +275,7 @@ class LiveEarthObs:
             self._slots.release()
             raise
         try:
-            return future.result(timeout=max(0.0, deadline - self.clock()))
+            return future.result(timeout=max(0.0, deadline - self.clock())), True
         except LiveMetricsError:
             raise
         except (FutureTimeout, _DeadlinePassed) as exc:  # incl. a request's own deadline
@@ -290,12 +362,13 @@ def build_live_earth_obs(
 
 @dataclass(frozen=True, slots=True)
 class LiveQuota:
-    """One live rating to count: the submitting account and the polygon."""
+    """One live rating to count: the submitting account, its world, the polygon and the world's
+    `LivePolicy` (its caps)."""
 
     user_id: UUID
+    world_id: UUID
     geometry_sha256: str
-    per_user_per_day: int
-    global_per_day: int
+    policy: LivePolicy
 
 
 def _retry_after(times: list[datetime], cap: int, now: datetime) -> int:
@@ -309,34 +382,37 @@ def _retry_after(times: list[datetime], cap: int, now: datetime) -> int:
 def reserve_live_rating(
     session: Session, quota: LiveQuota, now: datetime, run_id: UUID | None = None
 ) -> None:
-    """Count one live rating for `run_id`, or raise LiveQuotaExceeded (`live_rating_quota` for
-    the account, `live_rating_global_limit` across everyone) with the seconds until one frees
-    up.
+    """Count one live rating for `run_id`, or raise LiveQuotaExceeded with the seconds until one
+    frees up: `live_rating_quota` for the account, `live_rating_world_limit` for a sandbox's own
+    cap, `live_rating_global_limit` for the world's pool (the live world, or all sandboxes
+    together, pruned ones included).
 
     The caller must hold the global run lock (`rating_runs.GLOBAL_RUNS_LOCK_KEY`, taken by
-    every enqueue), so two submits can't both take the last slot."""
+    every enqueue), so two submits can't both take the last slot of any cap."""
+    policy = quota.policy
     session.execute(
         delete(LiveRatingRequest).where(col(LiveRatingRequest.created_at) < now - QUOTA_RETENTION)
     )
     since = now - QUOTA_WINDOW
     recent = select(LiveRatingRequest.created_at).where(col(LiveRatingRequest.created_at) > since)
-    mine = list(
-        session.exec(
-            recent.where(LiveRatingRequest.user_id == quota.user_id).order_by(
-                col(LiveRatingRequest.created_at)
-            )
-        ).all()
-    )
-    if len(mine) >= quota.per_user_per_day:
-        raise LiveQuotaExceeded(LIVE_RATING_QUOTA, _retry_after(mine, quota.per_user_per_day, now))
-    everyone = list(session.exec(recent.order_by(col(LiveRatingRequest.created_at))).all())
-    if len(everyone) >= quota.global_per_day:
-        raise LiveQuotaExceeded(
-            LIVE_RATING_GLOBAL_LIMIT, _retry_after(everyone, quota.global_per_day, now)
+    user, world = col(LiveRatingRequest.user_id), col(LiveRatingRequest.world_id)
+    caps: list[tuple[str, ColumnElement[bool], int]] = [
+        (LIVE_RATING_QUOTA, user == quota.user_id, policy.per_user_per_day)
+    ]
+    if policy.per_world_per_day is not None:
+        caps.append((LIVE_RATING_WORLD_LIMIT, world == quota.world_id, policy.per_world_per_day))
+    pool = world.not_in(PROTECTED_WORLDS) if policy.sandbox else world == quota.world_id
+    caps.append((LIVE_RATING_GLOBAL_LIMIT, pool, policy.pool_per_day))
+    for code, counted, cap in caps:
+        times = list(
+            session.exec(recent.where(counted).order_by(col(LiveRatingRequest.created_at))).all()
         )
+        if len(times) >= cap:
+            raise LiveQuotaExceeded(code, _retry_after(times, cap, now))
     session.add(
         LiveRatingRequest(
             user_id=quota.user_id,
+            world_id=quota.world_id,
             geometry_sha256=quota.geometry_sha256,
             run_id=run_id,
             created_at=now,

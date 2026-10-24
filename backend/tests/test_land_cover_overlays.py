@@ -21,6 +21,7 @@ from app.config import get_settings
 from app.models import Asset, AssetOverlay, AssetStatus
 from app.services.earth_obs_live import LIVE_DATA_VERSION, LiveEarthObs
 from app.services.land_cover_overlays import (
+    SANDBOX_RENDERS_MAX_PENDING,
     LiveOverlays,
     OverlayJob,
     build_live_overlays,
@@ -155,10 +156,14 @@ def test_overlays_exist_only_with_live_earth_engine(monkeypatch: pytest.MonkeyPa
     real = LiveEarthObs(session_factory=factory, client=api, timeout_s=120.0)
     overlays = build_live_overlays(factory, real)
     assert overlays is not None and overlays.client is api and overlays.timeout_s == 60.0
+    lane = build_live_overlays(factory, real, lane="sandbox")  # the sandboxes' own worker
+    assert lane is not None and lane.max_pending == SANDBOX_RENDERS_MAX_PENDING == 1
+    assert lane.executor is not overlays.executor and overlays.max_pending == 4
 
     for use_mocks in (True, False):  # Earth Engine off (the default), with or without mocks
         runner = build_runner(lifecycle._settings(use_mocks=use_mocks), factory, Inline())
         assert runner.live_metrics is None and runner.live_overlays is None
+        assert runner.sandbox_overlays is None and runner.sandbox_views is None
 
 
 # ----- with a database ----------------------------------------------------------------------------
@@ -298,25 +303,75 @@ def test_a_failed_render_never_fails_the_rating(
     assert (response.status_code, response.json()["detail"]) == (404, "overlay_not_found")
 
 
+def sandbox_lane(live: Live, client: FakeLandCover) -> LiveOverlays:
+    """The sandboxes' own render lane, as `build_live_overlays(..., lane="sandbox")` makes it."""
+    overlays = LiveOverlays(
+        session_factory=live.w.runner.session_factory,
+        client=client,
+        executor=Inline(),
+        max_pending=SANDBOX_RENDERS_MAX_PENDING,
+    )
+    live.w.runner.sandbox_overlays = overlays
+    return overlays
+
+
+def sandbox_rating(live: Live, geometry: dict[str, Any]) -> str:
+    w = live.w
+    asset_id = str(lifecycle.draft(w, geojson=geometry)["id"])
+    assert lifecycle.submit(w, asset_id).status_code == 202
+    w.executor.run_all()
+    assert status_of(w, asset_id) == (AssetStatus.LISTED, None)  # a render never fails it
+    return asset_id
+
+
 @requires_db
-def test_mock_ratings_and_sandboxes_never_render(live: Live) -> None:
-    land_cover = FakeLandCover()
+def test_mock_ratings_and_sandbox_cache_hits_never_render(live: Live) -> None:
+    land_cover, sandbox_cover = FakeLandCover(), FakeLandCover()
     overlays_for(live, land_cover)
+    sandbox_lane(live, sandbox_cover)
     # Mock mode in the live world: no live metrics, so no overlay.
     asset_id = live.draft(square(800))
     rate(live, asset_id)
     assert status_of(live.w, asset_id) == (AssetStatus.LISTED, None)
     assert live.detail(asset_id)["mock"] is True
-    # A sandbox listing reusing a polygon computed live: rated, never rendered.
-    w = live.w
-    go_live(w, FakeEarthEngine()).load(square(1_200))
-    sandbox_asset = str(lifecycle.draft(w)["id"])
-    assert lifecycle.submit(w, sandbox_asset).status_code == 202
-    w.executor.run_all()
+    # A sandbox listing reusing a polygon computed live: it computed nothing, so no render.
+    go_live(live.w, FakeEarthEngine()).load(square(1_200))
+    sandbox_asset = sandbox_rating(live, square(1_200))
 
-    assert status_of(w, sandbox_asset)[0] is AssetStatus.LISTED
-    assert land_cover.calls == []
+    assert land_cover.calls == [] and sandbox_cover.calls == []
     assert stored(live, asset_id) == [] and stored(live, sandbox_asset) == []
+
+
+@requires_db
+def test_a_sandbox_listing_computed_live_gets_its_overlay_on_its_own_lane(live: Live) -> None:
+    land_cover, sandbox_cover = FakeLandCover(), FakeLandCover()
+    overlays_for(live, land_cover)
+    sandbox_lane(live, sandbox_cover)
+    go_live(live.w, FakeEarthEngine())
+    geometry = square(800)
+    sandbox_asset = sandbox_rating(live, geometry)
+
+    [row] = stored(live, sandbox_asset)
+    assert row.world_id == live.w.id and sandbox_cover.calls == [geometry_sha256(geometry)]
+    assert land_cover.calls == []  # never the live world's lane
+
+
+@requires_db
+def test_a_busy_sandbox_lane_skips_and_never_displaces_live_world_renders(live: Live) -> None:
+    land_cover, sandbox_cover = FakeLandCover(), FakeLandCover()
+    overlays_for(live, land_cover)
+    busy = sandbox_lane(live, sandbox_cover)
+    assert busy._pending.acquire(blocking=False)  # another sandbox's render holds the lane
+    try:
+        go_live(live.w, FakeEarthEngine())
+        sandbox_asset = sandbox_rating(live, square(800))
+        assert sandbox_cover.calls == [] and stored(live, sandbox_asset) == []  # skipped
+        geometry = square(800, lat=LAT + 0.1)
+        asset_id = live.draft(geometry)
+        rate(live, asset_id)  # the live world renders at once on its own lane
+        assert land_cover.calls == [geometry_sha256(geometry)] and len(stored(live, asset_id)) == 1
+    finally:
+        busy._pending.release()
 
 
 @requires_db

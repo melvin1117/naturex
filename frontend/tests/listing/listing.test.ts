@@ -323,6 +323,26 @@ describe("listingFailure: every T58 error code", () => {
     );
   });
 
+  it("live-world live rating limits say what happened and when to retry", () => {
+    const quota = listingFailure(err(429, "live_rating_quota", 4 * 3600));
+    expect(quota.title).toMatch(/live ratings are used/);
+    expect(quota.message).toMatch(
+      /unchanged\. You can submit it in about 4 hours/,
+    );
+    expect(
+      listingFailure(err(429, "live_rating_global_limit", 1800)).message,
+    ).toMatch(/each day\. Your listing is unchanged\. Try again in 30 minutes/);
+    expect(
+      listingFailure(err(429, "live_rating_global_limit", 3600)).message,
+    ).toMatch(/about an hour/);
+    expect(listingFailure(err(429, "live_rating_quota", null)).message).toMatch(
+      /in a few hours/,
+    );
+    expect(listingFailure(err(409, "live_area_too_large")).message).toMatch(
+      /too large for a live satellite rating\. Draw a smaller area/,
+    );
+  });
+
   it("422 polygon problems come back one per issue", () => {
     const f = listingFailure(
       err(422, [

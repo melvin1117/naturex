@@ -1183,7 +1183,7 @@
           "listings"
         ],
         "summary": "Submit Listing",
-        "description": "Submit a draft for rating, or resubmit: a `needs_evidence` listing with new evidence or\nnewer satellite data, or a `rating` listing whose run failed (at most every 10 minutes).\nIn the live world, a new polygon's metrics are computed live on Earth Engine when that is on\n(T60); such a submit counts against the live-rating quotas, while a polygon already computed\nis free. Demo sandboxes never compute live.\nThe move to `rating`, its ledger entry and the queued run commit together; the run's\nsealed report then sets `listed`, `needs_evidence` or `ineligible`. Follow it with\n`GET /runs/{run_id}` or `listing_status` events.",
+        "description": "Submit a draft for rating, or resubmit: a `needs_evidence` listing with new evidence or\nnewer satellite data, or a `rating` listing whose run failed (at most every 10 minutes).\nA new polygon's metrics are computed live on Earth Engine when that is on (T60), in the live\nworld and in demo sandboxes alike; such a submit counts against the live-rating quotas,\nwhile a polygon already computed is free. In a sandbox the quotas and the area cap are\nhidden guardrails: past them the submit still succeeds and the run falls back (mocks, or\nthe cached example) instead of computing.\nThe move to `rating`, its ledger entry and the queued run commit together; the run's\nsealed report then sets `listed`, `needs_evidence` or `ineligible`. Follow it with\n`GET /runs/{run_id}` or `listing_status` events.",
         "operationId": "submit_listing_assets__asset_id__submit_post",
         "parameters": [
           {
@@ -1218,10 +1218,10 @@
             "description": "Not found in the caller's world"
           },
           "409": {
-            "description": "`cannot_submit_<status>`, `overlap` (a listing submitted first claims the land), `evidence_required` (needs_evidence with no new evidence or newer data), `metrics_unavailable` (still no metrics for the polygon), `live_area_too_large` (too large to compute its satellite metrics live) or `run_in_progress` (Location: the active run)"
+            "description": "`cannot_submit_<status>`, `overlap` (a listing submitted first claims the land), `evidence_required` (needs_evidence with no new evidence or newer data), `metrics_unavailable` (still no metrics for the polygon), `live_area_too_large` (live world: too large to compute its satellite metrics live) or `run_in_progress` (Location: the active run)"
           },
           "429": {
-            "description": "`resubmit_cooldown`, `rating_rate_limited`, `rating_global_limit`, or, when the run must compute the polygon's satellite metrics live, `live_rating_quota` (per account per day) or `live_rating_global_limit`; see Retry-After"
+            "description": "`resubmit_cooldown`, `rating_rate_limited`, `rating_global_limit`, or, in the live world when the run must compute the polygon's satellite metrics live, `live_rating_quota` (per account per day) or `live_rating_global_limit` (the live world's daily allowance); see Retry-After"
           },
           "503": {
             "description": "`rating_busy`; see Retry-After"

@@ -32,6 +32,7 @@ below the reserve, so Time Machine and listing runs keep it.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import threading
 import time
@@ -106,17 +107,26 @@ from app.schemas import (
 from app.services.alerts import alert_on_rerate, safe_url
 from app.services.earth_obs_live import (
     EARTH_ENGINE_BUSY,
+    LIVE_AREA_TOO_LARGE,
     LIVE_SITE_KEY_PREFIX,
+    NO_LIVE,
     LiveEarthObs,
     LiveMetricsError,
+    LivePolicy,
     LiveQuota,
     build_live_earth_obs,
+    live_policy,
     refund_live_rating,
 )
 from app.services.field_evidence import DbEvidenceProvider
 from app.services.land_cover_overlays import LiveOverlays, OverlayJob, build_live_overlays
-from app.services.lifecycle import GATED_STATUSES
-from app.services.listings import apply_rating_result, lock_asset, note_rating_failure
+from app.services.lifecycle import GATED_STATUSES, TransitionRefused
+from app.services.listings import (
+    ListingSubmit,
+    apply_rating_result,
+    lock_asset,
+    note_rating_failure,
+)
 from app.services.listings import audience as listing_audience
 from app.services.news_events import record_news
 from app.services.rating import SiteRating, asset_is_wetland, latest_report, rate_asset, rate_site
@@ -132,7 +142,6 @@ from app.tools.earth_obs import (
 from app.tools.ecosystem import Ecosystem, infer_ecosystem
 from app.tools.geometry import geometry_sha256, metrics_match_polygon
 from app.tools.signals import Signal, find_signals
-from app.worlds import LIVE_WORLD_ID
 
 log = logging.getLogger(__name__)
 
@@ -225,6 +234,9 @@ class RunSpec:
     based_on_report: int | None = None
     """The report version `metrics` was computed from (T38): if the asset's latest report is
     another one when the run stores, the run fails with `stale_metrics` and writes nothing."""
+    compute_live: bool = False
+    """The run may compute a new polygon's metrics live (T60): decided by its listing submit,
+    which counted the live rating (`QueueHook`). Any other run uses the cache, or falls back."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -274,8 +286,9 @@ class QueueHook(Protocol):
     def lock(self, session: Session, world_id: UUID, asset_id: UUID) -> None:
         """Take the hook's locks; called before the world's publisher lock."""
 
-    def __call__(self, session: Session, asset: Asset, run_id: UUID) -> None:
-        """Called once every run check passed, just before `queued` is published."""
+    def __call__(self, session: Session, asset: Asset, run_id: UUID) -> bool:
+        """Called once every run check passed, just before `queued` is published. Returns
+        whether the run may compute live metrics (`RunSpec.compute_live`)."""
 
 
 NewsRunner = Callable[[NewsScoutAsset, LLMClient | None], NewsScoutOutput]
@@ -289,23 +302,42 @@ def resolve_metrics(
     use_mocks: bool,
     live: LiveEarthObs | None = None,
     *,
+    policy: LivePolicy = NO_LIVE,
     compute_live: bool = False,
 ) -> EarthObsMetrics:
     """The run's metrics for the asset: the loader's, else for a new polygon with none (T60)
-    its live Earth Engine metrics when live is on (cached, or computed if `compute_live`),
-    else (with `USE_MOCKS=true` only) `mock_listing_metrics`. Metrics for a new polygon must
-    describe it: never a curated site's, centroid in its convex hull and area within ±10 %
-    (`foreign_metrics`)."""
+    its live Earth Engine metrics when live is on: cached, or in a world whose `policy` computes,
+    computed if `compute_live` (else `live_metrics_pending`; a sandbox's caller then falls back
+    with `NO_LIVE`). Otherwise (with `USE_MOCKS=true` only) `mock_listing_metrics`. Metrics for a
+    new polygon must describe it: never a curated site's, centroid in its convex hull and area
+    within ±10 % (`foreign_metrics`)."""
+    return _resolve(
+        loader, asset, scenario, use_mocks, live, policy=policy, compute_live=compute_live
+    )[0]
+
+
+def _resolve(
+    loader: MetricsLoader,
+    asset: AssetInfo,
+    scenario: ScenarioName,
+    use_mocks: bool,
+    live: LiveEarthObs | None,
+    *,
+    policy: LivePolicy,
+    compute_live: bool,
+) -> tuple[EarthObsMetrics, bool]:
+    """`resolve_metrics`, and whether this call computed the metrics on Earth Engine."""
+    computed = False
     try:
         metrics = loader(asset, scenario)
     except ToolFailed as exc:
         new_polygon = asset.site_key is None and scenario == "baseline"
         if exc.code != NO_CACHED_METRICS or not new_polygon:
             raise
-        metrics = _new_polygon_metrics(asset, exc, use_mocks, live, compute_live)
+        metrics, computed = _new_polygon_metrics(asset, exc, use_mocks, live, policy, compute_live)
     if asset.site_key is None and not _describes_polygon(asset, metrics):
         raise ToolFailed("foreign_metrics", retryable=False)  # never another site's data
-    return metrics
+    return metrics, computed
 
 
 def _new_polygon_metrics(
@@ -313,26 +345,29 @@ def _new_polygon_metrics(
     missing: ToolFailed,
     use_mocks: bool,
     live: LiveEarthObs | None,
+    policy: LivePolicy,
     compute_live: bool,
-) -> EarthObsMetrics:
+) -> tuple[EarthObsMetrics, bool]:
     lat, lon, area = asset.centroid_lat, asset.centroid_lon, asset.area_ha
     if live is not None and asset.geojson is not None:
         cached = live.cached(asset.geojson)  # any world may reuse a computed polygon
         if cached is not None:
-            return cached
-        if asset.world_id == LIVE_WORLD_ID:
-            # Live world: rated with its own observations, never mocks. Demo sandboxes never
-            # compute (they would spend the live world's capacity): they fall through to mocks
-            # or `no_cached_metrics`, and the cached example (T60).
+            return cached, False
+        if policy.computes:
+            # Rated with its own observations, never mocks: a run that may not compute stops
+            # here (a sandbox's caller then falls back). A world that never computes (the
+            # template, a sandbox with no allowance) falls through to mocks or
+            # `no_cached_metrics`, and the cached example (T60).
             if not compute_live:
                 raise ToolFailed(LIVE_METRICS_PENDING, retryable=False)
             try:
-                return live.compute(asset.geojson)
+                # A sandbox never waits for a slot, so it can't queue ahead of the live world.
+                return live.compute_fresh(asset.geojson, wait=not policy.sandbox)
             except LiveMetricsError as exc:
                 raise ToolFailed(exc.code, retryable=False) from exc
     if not use_mocks or lat is None or lon is None or area is None:
         raise missing
-    return mock_listing_metrics(area_ha=area, centroid_lat=lat, centroid_lon=lon)
+    return mock_listing_metrics(area_ha=area, centroid_lat=lat, centroid_lon=lon), False
 
 
 def _describes_polygon(asset: AssetInfo, metrics: EarthObsMetrics) -> bool:
@@ -636,6 +671,9 @@ class MetricsProbe:
     """The data version a run would rate with, or None (no metrics for the polygon)."""
     live_compute: bool = False
     """True when that run must compute the metrics live (T60): the submit counts the quota."""
+    fallback_version: str | None = None
+    """With `live_compute` in a sandbox: the version of the run's fallback (mocks, or None) if
+    its live rating is refused."""
 
 
 @dataclass(slots=True)
@@ -650,7 +688,10 @@ class RunDeps:
     live: LiveEarthObs | None = None
     investigator: Investigator | None = None
     overlays: LiveOverlays | None = None
+    """The run's world's render lane: the live world's, or the sandboxes' own."""
     views: LiveSiteViews | None = None
+    policy: LivePolicy = NO_LIVE
+    """The run's world's `live_policy`."""
 
 
 def previous_for_bundle(report: Report | None) -> PreviousReport | None:
@@ -731,6 +772,8 @@ class RunToolbox:
         self.failed: list[str] = []
         self.overlay: OverlayJob | None = None
         self.views: OverlayJob | None = None
+        self.computed_live = False
+        """This run computed its metrics on Earth Engine (not a cache hit)."""
 
     @property
     def scenario(self) -> ScenarioName:
@@ -889,15 +932,34 @@ class RunToolbox:
             if not given_metrics_fit(self._asset, given):
                 raise ToolFailed("foreign_metrics", retryable=False)
             return given
-        return resolve_metrics(
+        policy = self._deps.policy
+        try:
+            metrics, self.computed_live = self._resolve(policy, self._spec.compute_live)
+            return metrics
+        except ToolFailed as exc:
+            if not policy.sandbox or exc.code not in (LIVE_METRICS_PENDING, EARTH_ENGINE_BUSY):
+                raise
+            # A sandbox that may not compute now (no live rating counted, or the slot busy:
+            # it never waits for the live world's) falls back as if sandboxes never computed.
+            if exc.code == EARTH_ENGINE_BUSY:
+                self._refund_live_rating()
+        return self._resolve(NO_LIVE, False)[0]
+
+    def _resolve(self, policy: LivePolicy, compute_live: bool) -> tuple[EarthObsMetrics, bool]:
+        return _resolve(
             self._deps.metrics_loader,
             self._asset,
             self.scenario,
             self._deps.settings.use_mocks,
             self._deps.live,
-            # Only a listing submit counted the live-rating quota (T60), so only it computes.
-            compute_live=self._spec.trigger == "listing",
+            policy=policy,
+            compute_live=compute_live,
         )
+
+    def _refund_live_rating(self) -> None:
+        with self._deps.session_factory() as session:
+            if refund_live_rating(session, self._spec.run_id):
+                session.commit()
 
     def _earth_obs(self) -> dict[str, Any]:
         metrics = self._load_metrics()
@@ -970,12 +1032,16 @@ class RunToolbox:
 
     def _start_overlay(self, metrics: EarthObsMetrics) -> None:
         """Render the listing's land-cover overlay (#231) and before/after views alongside the
-        rating: live world, live Earth Engine metrics of a new polygon only (never mocks, a demo
-        site or a scenario)."""
+        rating: in a world that computes live, live Earth Engine metrics of a new polygon only
+        (never mocks, a demo site or a scenario). A sandbox renders only metrics this run
+        computed (never a cache hit), on its own lane (`RunDeps.overlays`), so it never waits in
+        or fills the live world's render queue."""
         geojson = self._asset.geojson
+        policy = self._deps.policy
         if (
             geojson is None
-            or self._spec.world_id != LIVE_WORLD_ID
+            or not policy.computes
+            or (policy.sandbox and not self.computed_live)
             or self._asset.site_key is not None
             or self._spec.metrics is not None
             or self.scenario != "baseline"
@@ -1375,6 +1441,10 @@ class RatingRunner:
     """Land-cover overlays of live-rated listings (#231); None when live Earth Engine is off."""
     live_views: LiveSiteViews | None = None
     """Before/after views of live-rated listings; None when live Earth Engine is off."""
+    sandbox_overlays: LiveOverlays | None = None
+    """The sandboxes' own render lane (own worker, at most one pending, skipped when busy), so
+    a sandbox never waits in or fills the live world's queue."""
+    sandbox_views: LiveSiteViews | None = None
     evidence: EvidenceProvider = field(default_factory=NoFieldEvidence)
     today: Callable[[], date] = field(default=lambda: datetime.now(UTC).date())
     max_pending: int = MAX_PENDING_RUNS
@@ -1407,7 +1477,8 @@ class RatingRunner:
         (`RATING_RUNS_PER_WORLD_PER_HOUR`), e.g. for a Time Machine quarter (T38).
         ``on_queue`` (T58's submit) takes its locks first (`on_queue.lock`, before the
         publisher lock) and writes once every check passed, just before `queued` is published,
-        so its writes commit with the queued run or not at all. Without it, listings under
+        so its writes commit with the queued run or not at all; it also decides whether the run
+        may compute live metrics (`RunSpec.compute_live`, T60). Without it, listings under
         review are refused (`asset_is_draft`, `asset_not_listed`): they are rated through
         submit only. ``metrics`` (T38's Time Machine) replaces the loader's metrics for this run;
         its scenario is the run's, and ``based_on_report`` is the report version they were
@@ -1484,9 +1555,8 @@ class RatingRunner:
         oldest = _global_cap_reached(session, now, global_cap)
         if oldest is not None:
             raise RunRateLimited(_cap_retry_after(oldest, now), code="rating_global_limit")
-        if on_queue is not None:
-            on_queue(session, asset, spec.run_id)
-        spec = replace(spec, audience=listing_audience(asset))
+        compute_live = on_queue is not None and on_queue(session, asset, spec.run_id)
+        spec = replace(spec, audience=listing_audience(asset), compute_live=compute_live)
         publish(
             session,
             spec.world_id,
@@ -1549,6 +1619,7 @@ class RatingRunner:
             llm, no_llm_reason, recorder = self._client(spec.trigger)
             if not self._claim(spec, progress, llm, no_llm_reason, started):
                 return
+            policy = live_policy(spec.world_id, self.settings)
             deps = RunDeps(
                 session_factory=self.session_factory,
                 settings=self.settings,
@@ -1558,8 +1629,9 @@ class RatingRunner:
                 today=self.today,
                 live=self.live_metrics,
                 investigator=self.investigator,
-                overlays=self.live_overlays,
-                views=self.live_views,
+                overlays=self.sandbox_overlays if policy.sandbox else self.live_overlays,
+                views=self.sandbox_views if policy.sandbox else self.live_views,
+                policy=policy,
             )
             toolbox = RunToolbox(
                 spec,
@@ -1639,19 +1711,25 @@ class RatingRunner:
     def metrics_probe(self, asset: Asset) -> MetricsProbe:
         """What a run's metrics would be for `asset` now, without computing anything (T58's
         resubmit check, T60's quota). Never raises for missing metrics."""
+        info, live = asset_info(asset), self.live_metrics
+        policy = live_policy(asset.world_id, self.settings)
+
+        def version(policy: LivePolicy) -> str | None:
+            loader, mocks = self.metrics_loader, self.settings.use_mocks
+            return resolve_metrics(
+                loader, info, "baseline", mocks, live, policy=policy
+            ).data_version
+
         try:
-            metrics = resolve_metrics(
-                self.metrics_loader,
-                asset_info(asset),
-                "baseline",
-                self.settings.use_mocks,
-                self.live_metrics,
-            )
+            return MetricsProbe(version(policy))
         except ToolFailed as exc:
-            if exc.code == LIVE_METRICS_PENDING and self.live_metrics is not None:
-                return MetricsProbe(self.live_metrics.data_version, live_compute=True)
-            return MetricsProbe(None)
-        return MetricsProbe(metrics.data_version)
+            if exc.code != LIVE_METRICS_PENDING or live is None:
+                return MetricsProbe(None)
+        fallback: str | None = None
+        if policy.sandbox:  # what the run falls back to if its live rating is refused
+            with contextlib.suppress(ToolFailed):
+                fallback = version(NO_LIVE)
+        return MetricsProbe(live.data_version, live_compute=True, fallback_version=fallback)
 
     def live_area_allowed(self, asset: Asset) -> bool:
         """Whether `asset` is small enough to compute live (`EARTH_ENGINE_LIVE_MAX_HA`)."""
@@ -1659,13 +1737,31 @@ class RatingRunner:
         return live is None or live.area_allowed(float(asset.area_ha))
 
     def live_quota(self, asset: Asset, user_id: UUID) -> LiveQuota:
-        """The live rating a submit of `asset` by `user_id` counts (T60)."""
+        """The live rating a submit of `asset` by `user_id` counts (T60), under its world's
+        `live_policy`."""
         return LiveQuota(
             user_id=user_id,
+            world_id=asset.world_id,
             geometry_sha256=geometry_sha256(asset.geojson),
-            per_user_per_day=self.settings.live_ratings_per_user_per_day,
-            global_per_day=self.settings.live_ratings_global_per_day,
+            policy=live_policy(asset.world_id, self.settings),
         )
+
+    def listing_submit(self, asset: Asset, user_id: UUID) -> ListingSubmit:
+        """T58's submit of `asset` by `user_id`, probed before any lock (never computes
+        anything): with the live rating to count when its run must compute the polygon live
+        (T60). A polygon too large to compute is 409 `live_area_too_large` (TransitionRefused)
+        in the live world; in a sandbox, like a refused live rating, it falls back silently."""
+        probe = self.metrics_probe(asset)
+        if not probe.live_compute:
+            return ListingSubmit(probe.version)
+        if self.live_area_allowed(asset):
+            quota = self.live_quota(asset, user_id)
+            return ListingSubmit(
+                probe.version, live_quota=quota, fallback_version=probe.fallback_version
+            )
+        if live_policy(asset.world_id, self.settings).sandbox:
+            return ListingSubmit(probe.fallback_version)
+        raise TransitionRefused(LIVE_AREA_TOO_LARGE)
 
     def _store(
         self,
@@ -2233,6 +2329,8 @@ def build_runner(
         live_metrics=live,
         live_overlays=build_live_overlays(session_factory, live),
         live_views=build_live_views(session_factory, live),
+        sandbox_overlays=build_live_overlays(session_factory, live, lane="sandbox"),
+        sandbox_views=build_live_views(session_factory, live, lane="sandbox"),
         evidence=DbEvidenceProvider(session_factory),
         investigator=investigator_for(settings),
     )

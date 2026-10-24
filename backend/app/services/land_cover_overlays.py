@@ -33,7 +33,7 @@ from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 from uuid import UUID
 
 from shapely.geometry import shape
@@ -62,6 +62,10 @@ log = logging.getLogger(__name__)
 OVERLAY_TIMEOUT_S = 60.0
 """How long a rating waits for its overlay (from when the render started) before sealing."""
 OVERLAY_MAX_PENDING = 4
+SANDBOX_RENDERS_MAX_PENDING = 1
+"""Demo sandboxes render on their own lane (own worker, one render at a time, none queued; a
+busy lane skips), so they never wait in or fill the live world's queue."""
+RenderLane = Literal["live", "sandbox"]
 
 
 class LandCoverClient(Protocol):
@@ -263,18 +267,24 @@ class LiveOverlays:
 
 
 def build_live_overlays(
-    session_factory: Callable[[], Session], live: LiveEarthObs | None
+    session_factory: Callable[[], Session], live: LiveEarthObs | None, lane: RenderLane = "live"
 ) -> LiveOverlays | None:
     """Overlays for live ratings, on the live metrics' Earth Engine client; None when live Earth
-    Engine is off (no render, no network call)."""
+    Engine is off (no render, no network call). The sandboxes' `lane` has its own worker and
+    `SANDBOX_RENDERS_MAX_PENDING`."""
     if live is None:
         return None
     from app.tools.earth_engine import EarthEngineApi
 
     if not isinstance(live.client, EarthEngineApi):
         return None
+    sandbox = lane == "sandbox"
     return LiveOverlays(
         session_factory=session_factory,
         client=live.client,
         timeout_s=min(OVERLAY_TIMEOUT_S, live.timeout_s),
+        max_pending=SANDBOX_RENDERS_MAX_PENDING if sandbox else OVERLAY_MAX_PENDING,
+        executor=ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="land-cover-sandbox" if sandbox else "land-cover"
+        ),
     )

@@ -25,7 +25,11 @@ from app.llm import LLMClient
 from app.models import Asset, AssetOverlay, AssetStatus, AssetView
 from app.services import rating_runs
 from app.services.earth_obs_live import LIVE_DATA_VERSION, LiveEarthObs
-from app.services.land_cover_overlays import LiveOverlays, geometry_bounds
+from app.services.land_cover_overlays import (
+    SANDBOX_RENDERS_MAX_PENDING,
+    LiveOverlays,
+    geometry_bounds,
+)
 from app.services.rating_runs import (
     AssetInfo,
     NoFieldEvidence,
@@ -313,22 +317,54 @@ def test_a_view_over_its_byte_budget_is_never_stored(
     assert "before/after views failed: ValueError" in caplog.text
 
 
+def sandbox_lane(live: Live, client: FakeTrueColour) -> LiveSiteViews:
+    """The sandboxes' own render lane, as `build_live_views(..., lane="sandbox")` makes it."""
+    views = LiveSiteViews(
+        session_factory=live.w.runner.session_factory,
+        client=client,
+        before=BEFORE,
+        after=AFTER,
+        executor=Inline(),
+        max_pending=SANDBOX_RENDERS_MAX_PENDING,
+    )
+    live.w.runner.sandbox_views = views
+    return views
+
+
 @requires_db
-def test_mock_ratings_and_sandboxes_never_render(live: Live) -> None:
-    client = FakeTrueColour()
+def test_mock_ratings_and_sandbox_cache_hits_never_render(live: Live) -> None:
+    client, sandbox_client = FakeTrueColour(), FakeTrueColour()
     views_for(live, client)
+    sandbox_lane(live, sandbox_client)
     asset_id = live.draft(square(800))  # mock mode in the live world: no live metrics
     rate(live, asset_id)
     assert live.detail(asset_id)["mock"] is True
     w = live.w
-    go_live(w, FakeEarthEngine()).load(square(1_200))
+    go_live(w, FakeEarthEngine()).load(square(1_200))  # a cached polygon: nothing computed
     sandbox_asset = str(lifecycle.draft(w)["id"])
     assert lifecycle.submit(w, sandbox_asset).status_code == 202
     w.executor.run_all()
 
     assert status_of(w, sandbox_asset)[0] is AssetStatus.LISTED
-    assert client.calls == []
+    assert client.calls == [] and sandbox_client.calls == []
     assert stored(live, asset_id) == [] and stored(live, sandbox_asset) == []
+
+
+@requires_db
+def test_a_sandbox_listing_computed_live_gets_its_views_on_its_own_lane(live: Live) -> None:
+    client, sandbox_client = FakeTrueColour(), FakeTrueColour()
+    views_for(live, client)
+    sandbox_lane(live, sandbox_client)
+    w = live.w
+    go_live(w, FakeEarthEngine())
+    sandbox_asset = str(lifecycle.draft(w, geojson=square(800))["id"])
+    assert lifecycle.submit(w, sandbox_asset).status_code == 202
+    w.executor.run_all()
+
+    assert status_of(w, sandbox_asset) == (AssetStatus.LISTED, None)
+    [row] = stored(live, sandbox_asset)
+    assert row.world_id == w.id and sandbox_client.calls == [(1, *BEFORE), (1, *AFTER)]
+    assert client.calls == []  # never the live world's lane
 
 
 def toolbox_for(live: Live, asset_id: str, geometry: dict[str, Any], views: LiveSiteViews) -> Any:
