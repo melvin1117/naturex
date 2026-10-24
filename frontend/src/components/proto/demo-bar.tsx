@@ -190,8 +190,8 @@ function SandboxBar({ persona }: { persona: DemoPersona }) {
               <DialogHeader>
                 <DialogTitle>Reset your sandbox?</DialogTitle>
                 <DialogDescription>
-                  Listings, stakes, Time Machine changes and Copilot history go
-                  back to the starting world. You stay who you are now.
+                  Listings, stakes, Time Machine changes and your questions to
+                  Bea go back to the starting world. You stay who you are now.
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>

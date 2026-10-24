@@ -232,7 +232,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     chapter: 8,
     chapterTitle: "Ask why",
-    title: "Ask the Copilot",
+    title: "Ask Bea",
     why: "Arjun asks in plain words and gets an answer that cites the report and the news.",
     tech: "Nemotron 3 Nano with retrieval over reports and events; every answer links its sources.",
     route: `/asset/${HERO_ID}`,
@@ -686,7 +686,7 @@ function TourFinish({
             ],
             [
               "Everything is checkable",
-              "the Copilot cites sources, the Record exposes tampering, the trace shows every model call.",
+              "Bea cites sources, the Record exposes tampering, the trace shows every model call.",
             ],
           ].map(([a, b], i) => (
             <li key={a} className="flex gap-3">

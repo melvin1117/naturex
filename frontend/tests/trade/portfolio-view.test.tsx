@@ -204,7 +204,7 @@ describe("PortfolioView", () => {
     expect(screen.getByRole("button", { name: "Mark all read" })).toBeVisible();
   });
 
-  it("asks the Copilot across every site, citing each site's report or news (T44)", async () => {
+  it("asks Bea across every site, citing each site's report or news (T44)", async () => {
     const FOREST = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
     const forestReport = {
       ...REPORT_SOURCE,
@@ -232,11 +232,10 @@ describe("PortfolioView", () => {
         ]),
     });
 
-    const chat = await screen.findByRole("region", { name: "Ask the Copilot" });
-    fireEvent.change(
-      within(chat).getByLabelText("Ask the Copilot about every site"),
-      { target: { value: "Which sites fell?" } },
-    );
+    const chat = await screen.findByRole("region", { name: "Ask Bea" });
+    fireEvent.change(within(chat).getByLabelText("Ask Bea about every site"), {
+      target: { value: "Which sites fell?" },
+    });
     fireEvent.click(
       within(chat).getByRole("button", { name: "Send question" }),
     );
@@ -263,7 +262,7 @@ describe("PortfolioView", () => {
 
   it("offers world-wide suggestions", async () => {
     renderPortfolio();
-    const chat = await screen.findByRole("region", { name: "Ask the Copilot" });
+    const chat = await screen.findByRole("region", { name: "Ask Bea" });
     expect(
       within(chat).getByRole("button", {
         name: "Which sites were downgraded?",

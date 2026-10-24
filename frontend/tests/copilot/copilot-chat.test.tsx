@@ -26,7 +26,7 @@ describe("CopilotChat", () => {
     renderExchange(chat());
 
     expect(
-      await screen.findByRole("link", { name: "Sign in to ask the Copilot" }),
+      await screen.findByRole("link", { name: "Sign in to ask Bea" }),
     ).toHaveAttribute(
       "href",
       `/login?next=${encodeURIComponent(`/asset/${ASSET_ID}?tab=overview`)}`,
@@ -67,11 +67,15 @@ describe("CopilotChat", () => {
         .getAllByRole("listitem")
         .map((c) => c.textContent),
     ).toEqual([
-      expect.stringMatching(/^Searched the record · \d+ sources?$/),
+      expect.stringMatching(/^Searched the Record · \d+ sources?$/),
       "Written by Nemotron 3 Nano",
       "Code checked 2 citations",
     ]);
     expect(screen.getByText(/health fell from 77.60 to 72.30/)).toBeVisible();
+    // Bea opens her first answer with "Bzz" (ux-writing §6).
+    expect(screen.getByTestId("copilot-turns")).toHaveTextContent(
+      /Bzz\. An encroachment event/,
+    );
     // The list follows the answer down to its source links.
     expect(screen.getByTestId("copilot-turns").scrollTop).toBe(900);
     height.mockRestore();
@@ -104,7 +108,7 @@ describe("CopilotChat", () => {
   });
 
   it("shows a refusal without sources", async () => {
-    const refusal = "That isn't in the record I can see.";
+    const refusal = "I couldn't find that in the Record.";
     renderExchange(chat(), {
       ...signedIn,
       "POST /copilot": () =>
@@ -116,13 +120,17 @@ describe("CopilotChat", () => {
     });
 
     const input = await screen.findByLabelText(
-      "Ask the Copilot about Xochimilco wetland",
+      "Ask Bea about Xochimilco wetland",
     );
     fireEvent.change(input, { target: { value: "Capital of France?" } });
     fireEvent.click(screen.getByRole("button", { name: "Send question" }));
 
     expect(await screen.findByText(refusal)).toBeInTheDocument();
     expect(screen.queryByText("Sources:")).not.toBeInTheDocument();
+    // Never "Bzz" on a refusal.
+    await waitFor(() =>
+      expect(screen.getByTestId("copilot-turns")).not.toHaveTextContent("Bzz"),
+    );
     await waitFor(() => expect(input).toHaveValue(""));
   });
 
@@ -138,7 +146,7 @@ describe("CopilotChat", () => {
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "The Copilot can't search the record right now.",
+      "Bea can't search the Record right now.",
     );
   });
 
@@ -158,7 +166,7 @@ describe("CopilotChat", () => {
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "The Copilot couldn't finish this answer.",
+      "Bea couldn't finish this answer.",
     );
     expect(screen.getByText("An encroachment event")).toBeInTheDocument();
     expect(screen.queryByText("Sources:")).not.toBeInTheDocument();
@@ -189,13 +197,13 @@ describe("answerChips", () => {
   it("says who wrote the answer, or that code quoted it, and what code checked", () => {
     const base = { sourcesFound: 1, model: null, citations: [] };
     expect(answerChips({ ...base, mode: "extractive" })).toEqual([
-      "Searched the record · 1 source",
+      "Searched the Record · 1 source",
       "Quoted by code, no model",
       "No citation to check",
     ]);
     expect(answerChips({ ...base, mode: "refusal" })).toEqual([
-      "Searched the record · 1 source",
-      "Not in the record",
+      "Searched the Record · 1 source",
+      "Not in the Record",
     ]);
   });
 });

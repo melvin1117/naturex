@@ -88,7 +88,7 @@ export async function askCopilot(
   const stream = await unwrap(
     api.POST("/copilot", { body, parseAs: "stream", signal }),
   );
-  if (!stream) throw new ApiError(502, "The Copilot sent an empty answer.");
+  if (!stream) throw new ApiError(502, "Bea sent an empty answer.");
   const reader = (stream as ReadableStream<Uint8Array>).getReader();
   const decoder = new TextDecoder();
   const parser = new SseParser();

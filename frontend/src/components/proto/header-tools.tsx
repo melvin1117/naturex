@@ -1,13 +1,12 @@
 "use client";
 
-import { MessageCircle } from "lucide-react";
 import Link from "@/components/app-link";
 import { usePathname } from "@/lib/nav";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
 import { AlertsList } from "@/components/alerts-list";
-import { AlertsIcon } from "@/components/icons";
+import { AlertsIcon, BeaIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -25,7 +24,7 @@ import {
 } from "@/lib/prototype/world";
 
 /**
- * The header tools (Copilot, alerts). The shell header (`components/shell/app-header.tsx`)
+ * The header tools (Ask Bea, alerts). The shell header (`components/shell/app-header.tsx`)
  * shows them in its `tools` slot. Signed-in accounts get their real alerts (T75, #199);
  * anonymous visitors keep the prototype's scripted alerts. The Agent Trace isn't here: a
  * site's page opens its own runs ("How the AI rated it"), and the exchange's "AI at work"
@@ -55,8 +54,8 @@ export function PrototypeHeaderTools({ app }: { app: AppKey }) {
           }
           data-tour="copilot-button"
         >
-          <MessageCircle aria-hidden="true" />
-          <span className="sr-only xl:not-sr-only">Copilot</span>
+          <BeaIcon size={20} aria-hidden="true" />
+          <span className="sr-only xl:not-sr-only">Ask Bea</span>
         </Button>
       )}
       {loading ? (

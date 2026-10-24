@@ -50,7 +50,7 @@ export const ACTOR: Record<
   },
   embed: {
     name: "Embedding model",
-    role: "Finds passages for the Copilot",
+    role: "Finds passages for Bea",
     kind: "model",
   },
   tavily: {

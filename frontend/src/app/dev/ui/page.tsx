@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { Lockup, WildWorthMark } from "@/components/brand";
+import { Bea, BEA_STATE_LABEL, type BeaState } from "@/components/bea/bea";
 import { DataLayerPanel } from "@/components/data-layer-panel";
 import { BRAND_ICONS } from "@/components/icons";
 import { DemoSiteImages } from "@/components/demo-site-images";
@@ -156,6 +157,25 @@ export default function DevUiPage() {
               </li>
             );
           })}
+        </ul>
+      </Section>
+
+      <Separator />
+
+      <Section title="Bea">
+        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          {(Object.keys(BEA_STATE_LABEL) as BeaState[]).map((state) => (
+            <li
+              key={state}
+              className="grid justify-items-center gap-2 rounded-2xl bg-card p-4 text-center shadow-soft"
+            >
+              <Bea state={state} size={96} />
+              <span className="flex items-center gap-2">
+                <Bea state={state} size={28} label="" />
+                <span className="text-sm">{BEA_STATE_LABEL[state]}</span>
+              </span>
+            </li>
+          ))}
         </ul>
       </Section>
 

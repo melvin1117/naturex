@@ -3,6 +3,12 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
+import type { BeaState } from "@/components/bea/bea";
+import {
+  BeaSheetTitle,
+  SITE_SUBTITLE,
+  WORLD_SUBTITLE,
+} from "@/components/bea/bea-sheet-title";
 import { CopilotChat } from "@/components/copilot-chat";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,19 +19,15 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { SheetHeader } from "@/components/ui/sheet";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useAsset, useAssets } from "@/lib/hooks";
 
 type Scope = "world" | "site";
 
 /**
- * The header Copilot for a signed-in account (#213): the real Copilot (`POST /copilot`,
- * streamed and cited) in the sheet. It asks across every site by default; opened on a site's
+ * Bea in the header's sheet for a signed-in account (#213; was the Copilot): her real answers
+ * (`POST /copilot`, streamed and cited). It asks across every site by default; opened on a site's
  * page it starts on that site, one tap from "All sites". Narrowing to another site is optional.
  * Mounted only while the sheet is open, so each opening starts from the current page; if the
  * page's site changes while it's open (browser Back), the scope follows it. The scope is locked
@@ -42,6 +44,7 @@ export function AccountCopilot({
   const [scope, setScope] = useState<Scope>(pageAssetId ? "site" : "world");
   const [page, setPage] = useState(pageAssetId);
   const [pending, setPending] = useState(false);
+  const [bea, setBea] = useState<BeaState>("hello");
   if (page !== pageAssetId) {
     setPage(pageAssetId);
     setSiteId(pageAssetId);
@@ -57,15 +60,10 @@ export function AccountCopilot({
   return (
     <>
       <SheetHeader className="gap-3 border-b px-6 pt-6 pb-4">
-        <div className="space-y-1.5">
-          <SheetTitle className="font-serif text-3xl font-normal">
-            Copilot
-          </SheetTitle>
-          <SheetDescription>
-            Answers come only from the sites&apos; reports and news, and link
-            every claim to its source. Play money only; not advice.
-          </SheetDescription>
-        </div>
+        <BeaSheetTitle
+          state={bea}
+          subtitle={scoped ? SITE_SUBTITLE : WORLD_SUBTITLE}
+        />
         {siteId && (
           <ToggleGroup
             type="single"
@@ -133,12 +131,14 @@ export function AccountCopilot({
           assetName={siteName ?? "this site"}
           onNavigate={onNavigate}
           onPendingChange={setPending}
+          onBeaStateChange={setBea}
         />
       ) : (
         <CopilotChat
           variant="sheet"
           onNavigate={onNavigate}
           onPendingChange={setPending}
+          onBeaStateChange={setBea}
         />
       )}
     </>

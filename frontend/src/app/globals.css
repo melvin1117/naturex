@@ -333,6 +333,145 @@
   --bea-ground: var(--color-machine-raised);
 }
 
+/* Bea (docs/design/bea-character.html, "Motion"): small, constant life at rest; one clear
+   reaction when a rating changes. Values from the character sheet. */
+.bea-anim .bea-bob {
+  animation: bea-bob 3.6s ease-in-out infinite;
+}
+.bea-anim .eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bea-blink 5s infinite;
+}
+.bea-anim .bea-wl {
+  transform-box: fill-box;
+  transform-origin: 100% 100%;
+  animation: bea-flap-l 0.32s ease-in-out infinite alternate;
+}
+.bea-anim .bea-wr {
+  transform-box: fill-box;
+  transform-origin: 0% 100%;
+  animation: bea-flap-r 0.32s ease-in-out infinite alternate;
+}
+.bea-anim .s-sleep .bea-wl,
+.bea-anim .s-sleep .bea-wr {
+  animation-duration: 2.4s;
+}
+.bea-anim .s-think .bea-ant {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: bea-wiggle 0.5s ease-in-out infinite alternate;
+}
+.bea-anim .s-think .bea-dots circle {
+  animation: bea-dots 1.2s ease-in-out infinite;
+}
+.bea-anim .s-think .bea-dots circle:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.bea-anim .s-think .bea-dots circle:nth-child(3) {
+  animation-delay: 0.4s;
+}
+.bea-anim .bea-z {
+  animation: bea-zz 2.6s ease-out infinite;
+}
+.bea-anim .bea-z + .bea-z {
+  animation-delay: 1.3s;
+}
+.bea-react-up {
+  animation: bea-react-up 0.75s var(--nx-ease-out);
+}
+.bea-react-down {
+  animation: bea-react-down 0.6s ease;
+}
+@keyframes bea-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+@keyframes bea-blink {
+  0%,
+  94%,
+  100% {
+    transform: scaleY(1);
+  }
+  96.5% {
+    transform: scaleY(0.12);
+  }
+}
+@keyframes bea-flap-l {
+  to {
+    transform: rotate(-16deg);
+  }
+}
+@keyframes bea-flap-r {
+  to {
+    transform: rotate(16deg);
+  }
+}
+@keyframes bea-wiggle {
+  to {
+    transform: rotate(7deg);
+  }
+}
+@keyframes bea-dots {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes bea-zz {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(8px, -14px);
+    opacity: 0;
+  }
+}
+@keyframes bea-react-up {
+  0% {
+    transform: none;
+  }
+  30% {
+    transform: translateY(-18px) scale(1.03, 0.97);
+  }
+  60% {
+    transform: translateY(0) scale(0.97, 1.03);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes bea-react-down {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: translateX(-7px);
+  }
+  40% {
+    transform: translateX(7px);
+  }
+  60% {
+    transform: translateX(-5px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
 /* The WildWorth mark (brand guidelines ch. 4 and 11): the line draws, then the reading rises
    and its dot pops. Only when a rating lands, never on hover or as a loader. */
 .ww-play .ww-ink {
@@ -366,6 +505,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .bea-anim *,
+  .bea-anim,
+  .bea-react-up,
+  .bea-react-down {
+    animation: none !important;
+  }
   .ww-play .ww-ink,
   .ww-play .ww-read,
   .ww-play .ww-dot {

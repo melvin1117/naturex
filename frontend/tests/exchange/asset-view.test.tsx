@@ -165,7 +165,7 @@ describe("AssetView", () => {
     ).toHaveAttribute("href", "/login?next=%2Fasset%2Fx");
     // The real Copilot (T39) asks anonymous visitors to sign in; the real trace opens (T34).
     expect(
-      screen.getByRole("link", { name: "Sign in to ask the Copilot" }),
+      screen.getByRole("link", { name: "Sign in to ask Bea" }),
     ).toHaveAttribute("href", "/login?next=%2Fasset%2Fx");
     // No run, and the recording didn't load: once that's settled, the card says so.
     const trace = screen.getByRole("region", { name: "How the AI rated it" });
