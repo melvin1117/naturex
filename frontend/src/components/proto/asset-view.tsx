@@ -388,7 +388,7 @@ function AssetLoaded({
                   Showing the latest report only: {reports.error.message}
                 </p>
               )}
-              <ReportTab versions={versions} live />
+              <ReportTab versions={versions} siteName={asset.name} live />
             </TabsContent>
             <TabsContent value="news">
               <Panel title="News and evidence near this site">

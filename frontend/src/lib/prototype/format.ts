@@ -68,6 +68,13 @@ export function quarterLabel(period: string) {
   return `Q${q} ${year}`;
 }
 
+/** A report's quarter: its rating period, else the quarter it was issued in (UTC). */
+export function reportQuarter(period: string | null, issuedAt: string) {
+  if (period) return quarterLabel(period);
+  const issued = new Date(issuedAt);
+  return `Q${Math.floor(issued.getUTCMonth() / 3) + 1} ${issued.getUTCFullYear()}`;
+}
+
 export const GRADE_ORDER: Grade[] = [
   "AAA",
   "AA",

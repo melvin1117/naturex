@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 
-import { Lockup, WildWorthMark } from "@/components/brand";
+import {
+  Lockup,
+  ProofOfLifeSeal,
+  ProofOfLifeShareCard,
+  WildWorthMark,
+} from "@/components/brand";
 import { Bea, BEA_STATE_LABEL, type BeaState } from "@/components/bea/bea";
 import { DataLayerPanel } from "@/components/data-layer-panel";
 import { BRAND_ICONS } from "@/components/icons";
@@ -124,6 +129,33 @@ export default function DevUiPage() {
               />
             ))}
           </div>
+        </div>
+      </Section>
+
+      <Separator />
+
+      <Section title="Proof of Life">
+        <div className="grid items-center gap-4 lg:grid-cols-[auto_minmax(0,1fr)]">
+          <div className="flex gap-4 rounded-3xl bg-card p-6 shadow-soft">
+            <ProofOfLifeSeal
+              health={77.6}
+              grade="A"
+              quarter="Q3 2026"
+              siteName="Xochimilco wetland"
+            />
+            <ProofOfLifeSeal
+              health={63.8}
+              grade="BBB"
+              quarter="Q4 2026"
+              siteName="Xochimilco wetland"
+            />
+          </div>
+          <ProofOfLifeShareCard
+            siteName="Xochimilco wetland"
+            health={77.6}
+            grade="A"
+            quarter="Q3 2026"
+          />
         </div>
       </Section>
 

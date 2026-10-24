@@ -38,6 +38,7 @@ export function DotRing({
   tone = "light",
   reveal,
   label,
+  unlitClassName,
   className,
   children,
 }: {
@@ -45,6 +46,8 @@ export function DotRing({
   size: number;
   tone?: "light" | "dark";
   reveal?: DotRingReveal;
+  /** The fill of unlit dots, when the ground is neither paper nor the machine layer. */
+  unlitClassName?: string;
   /** What the ring says, for assistive tech (the dots themselves are hidden). */
   label: string;
   className?: string;
@@ -113,6 +116,7 @@ export function DotRing({
             key={c}
             className={cn(
               column.fill ??
+                unlitClassName ??
                 (tone === "dark" ? "fill-machine-line" : "fill-foreground/12"),
               column.at !== null && "nx-dot-on",
             )}

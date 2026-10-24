@@ -309,6 +309,7 @@ export function PrototypeAssetView({ id }: { id: string }) {
             </TabsContent>
             <TabsContent value="report">
               <ReportTab
+                siteName={site.name}
                 versions={[...site.reports]
                   .reverse()
                   .map((r) => prototypeFacts(r))}
