@@ -398,15 +398,33 @@
 .bea-anim .bea-z + .bea-z {
   animation-delay: 1.3s;
 }
-/* The Ask Bea button: hovered or focused, she stirs (wings and antennae) until left. */
-.ask-bea:is(:hover, :focus-visible) .bea-anim .bea-wl,
+/* The Ask Bea button: hovered or focused, she stirs (wings and antennae) for about 2 s, once.
+   Their own keyframes, so each hover or focus starts them again; never a loop (WCAG 2.2.2). */
+.ask-bea:is(:hover, :focus-visible) .bea-anim .bea-wl {
+  animation: ask-bea-flap-l 0.32s ease-in-out 6 alternate;
+}
 .ask-bea:is(:hover, :focus-visible) .bea-anim .bea-wr {
-  animation-iteration-count: infinite;
+  animation: ask-bea-flap-r 0.32s ease-in-out 6 alternate;
 }
 .ask-bea:is(:hover, :focus-visible) .bea-anim .bea-ant {
   transform-box: fill-box;
   transform-origin: 50% 100%;
-  animation: bea-wiggle 0.5s ease-in-out infinite alternate;
+  animation: ask-bea-wiggle 0.5s ease-in-out 4 alternate;
+}
+@keyframes ask-bea-flap-l {
+  to {
+    transform: rotate(-16deg);
+  }
+}
+@keyframes ask-bea-flap-r {
+  to {
+    transform: rotate(16deg);
+  }
+}
+@keyframes ask-bea-wiggle {
+  to {
+    transform: rotate(7deg);
+  }
 }
 .bea-react-up {
   animation: bea-react-up 0.75s var(--nx-ease-out);

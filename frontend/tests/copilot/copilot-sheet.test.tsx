@@ -126,7 +126,9 @@ async function openCopilot(): Promise<{
   opener: HTMLElement;
   sheet: HTMLElement;
 }> {
-  const opener = await screen.findByRole("button", { name: "Ask Bea" });
+  const opener = await screen.findByRole("button", {
+    name: "Ask Bea AI assistant",
+  });
   opener.focus();
   fireEvent.click(opener);
   const sheet = await screen.findByRole("dialog", {
@@ -427,5 +429,21 @@ describe("Header Bea, anonymous", () => {
       within(sheet).queryByRole("radiogroup", { name: "Ask about" }),
     ).not.toBeInTheDocument();
     expect(backend.calls("POST /copilot")).toBe(0);
+  });
+
+  it("starts on a scripted site when the page's real site isn't in its world", async () => {
+    nav.pathname = `/asset/${ASSET_ID}`;
+    renderHeader();
+    const { sheet } = await openCopilot();
+    // Never a blank picker: the preview names a site it has answers for.
+    const picker = within(sheet).getByRole("combobox", {
+      name: "Site to ask about",
+    });
+    expect(picker.textContent!.trim()).not.toBe("");
+    expect(
+      within(sheet).getByLabelText(
+        `Ask Bea about ${picker.textContent!.trim()}`,
+      ),
+    ).toBeInTheDocument();
   });
 });

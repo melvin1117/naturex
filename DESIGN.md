@@ -213,7 +213,7 @@ The app bar follows the guidelines' "In use" mock. Above it, a thin forest strip
 - the WildWorth lockup;
 - a hairline, then the app's name, quiet and regular: **Exchange**, **Stewards** or **Control room**. When the account can open another app, the name is the switcher: a menu of its apps, plus "Create a community" when it has none;
 - the pill nav, with the active page raised on a card and, from `xl`, a WildWorth icon beside each label;
-- **Ask Bea**: a forest pill with Bea's avatar and an "AI" tag. Her wings and antennae stir while it's hovered or focused, and a tooltip names the model she runs on;
+- **Ask Bea**: a forest pill with Bea's avatar and an "AI" tag (its name is "Ask Bea AI assistant"). Her wings and antennae stir for about two seconds when it's hovered or focused, and a tooltip names the model she runs on;
 - the alerts bell;
 - the account, shown as initials only.
 
@@ -237,7 +237,7 @@ Her chat follows the character sheet's product mock (`components/bea/chat-parts.
 - **Sources:** small chips (the ref in mono, then the source's name).
 - **How the answer was made:** a mono footnote under the bubble: searched, written by, code checked.
 - **Working:** what she's doing, as a quiet line beside her avatar.
-- **Empty:** Bea, "Ask Bea about {site}", a sentence and question chips.
+- **Empty:** Bea, "Ask Bea about {site}", a sentence and question chips. The chips show only before the first question.
 - **Field:** paper, inset, with the send button inside it, and a mono footnote: "Runs on NVIDIA Nemotron 3 Nano · Play money only; not advice."
 
 ## Motion

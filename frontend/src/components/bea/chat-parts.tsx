@@ -2,10 +2,10 @@
 
 import { ArrowUp } from "lucide-react";
 import { useId, type FormEvent, type ReactNode } from "react";
-import { cn } from "cn";
 
 import { Bea, type BeaState } from "@/components/bea/bea";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { BEA_MODEL } from "@/lib/bea";
 import { modelLabel } from "@/lib/trace-view";
 
@@ -61,9 +61,9 @@ export function BeaAnswer({
   );
 }
 
-/** Where a source chip in an answer points: the label, and the ref in mono. */
+/** A source chip under an answer: the ref in lime-ink mono (where the real chat has one), then the label. */
 export const SOURCE_CHIP =
-  "inline-flex max-w-full items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-[11px] font-medium text-lime-ink transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
+  "inline-flex max-w-full items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
 
 /** Before the first question: Bea, what to ask her, and a few questions to start with. */
 export function BeaEmpty({
@@ -151,20 +151,19 @@ export function BeaComposer({
   onSubmit,
   label,
   placeholder,
-  disabled,
   sendDisabled,
   maxLength,
-  inputProps,
+  tourAnchor,
 }: {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
   label: string;
   placeholder: string;
-  disabled?: boolean;
   sendDisabled?: boolean;
   maxLength?: number;
-  inputProps?: Record<string, string>;
+  /** Guided-tour anchor (`data-tour`) on the field. */
+  tourAnchor?: string;
 }) {
   const id = useId();
   return (
@@ -179,19 +178,15 @@ export function BeaComposer({
         <label htmlFor={id} className="sr-only">
           {label}
         </label>
-        <input
+        <Input
           id={id}
           value={value}
           maxLength={maxLength}
-          disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           autoComplete="off"
-          className={cn(
-            "h-12 w-full rounded-2xl bg-card pr-14 pl-4 text-sm shadow-[inset_0_0_0_1px_var(--color-border)] transition-shadow outline-none placeholder:text-muted-foreground",
-            "focus-visible:shadow-[inset_0_0_0_1.5px_var(--color-ring)] disabled:opacity-60",
-          )}
-          {...inputProps}
+          data-tour={tourAnchor}
+          className="h-12 rounded-2xl pr-14 pl-4 shadow-none"
         />
         <Button
           type="submit"

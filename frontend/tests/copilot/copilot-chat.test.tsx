@@ -147,6 +147,29 @@ describe("CopilotChat", () => {
     expect(screen.getByTestId("copilot-turns")).not.toHaveTextContent("*");
   });
 
+  it("offers questions to start with only before the first one, and says once it's not advice", async () => {
+    renderExchange(chat(), {
+      ...signedIn,
+      "POST /copilot": () => sseResponse(answerEvents()),
+    });
+    // The card says what she answers from; the field's footnote, what she runs on and that
+    // it's play money and never advice (once).
+    expect(
+      await screen.findByText(
+        "Runs on NVIDIA Nemotron 3 Nano · Play money only; not advice.",
+      ),
+    ).toBeVisible();
+    expect(screen.getAllByText(/not advice/)).toHaveLength(1);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Why did the price change?" }),
+    );
+    await screen.findByRole("link", { name: "Source R2: Proof of Life v2" });
+    expect(
+      screen.queryByRole("button", { name: "What drives this grade?" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows a refusal without sources", async () => {
     const refusal = "I couldn't find that in the Record.";
     renderExchange(chat(), {

@@ -8,10 +8,10 @@ import { stubBrowserApis } from "../exchange/render";
 beforeAll(stubBrowserApis);
 
 describe("AskBeaButton", () => {
-  it("is called Ask Bea, shows her avatar and says she's an AI", () => {
+  it("is called Ask Bea AI assistant, shows her avatar and says she's an AI", () => {
     const onClick = vi.fn();
     const { container } = render(<AskBeaButton onClick={onClick} />);
-    const button = screen.getByRole("button", { name: "Ask Bea" });
+    const button = screen.getByRole("button", { name: "Ask Bea AI assistant" });
     // Her avatar (the ringed medallion), sized by a class so the Button never shrinks her.
     const avatar = container.querySelector("svg[viewBox='0 0 120 120']");
     expect(avatar).toHaveClass("size-full");
@@ -22,7 +22,9 @@ describe("AskBeaButton", () => {
 
   it("names the model she runs on in its tooltip", async () => {
     render(<AskBeaButton />);
-    fireEvent.focus(screen.getByRole("button", { name: "Ask Bea" }));
+    fireEvent.focus(
+      screen.getByRole("button", { name: "Ask Bea AI assistant" }),
+    );
     expect(
       (await screen.findAllByText(/Runs on NVIDIA Nemotron 3 Nano/))[0],
     ).toBeInTheDocument();
@@ -35,9 +37,20 @@ describe("AskBeaButton", () => {
       join(__dirname, "../../src/app/globals.css"),
       "utf8",
     );
-    expect(css).toContain(
-      ".ask-bea:is(:hover, :focus-visible) .bea-anim .bea-wl",
-    );
+    const rule = (selector: string) => {
+      const start = css.indexOf(`${selector} {`);
+      expect(start, selector).toBeGreaterThan(-1);
+      return css.slice(start, css.indexOf("}", start));
+    };
+    // About two seconds, once per hover or focus: never a loop (WCAG 2.2.2), even when the
+    // sheet hands focus back to the button.
+    for (const part of ["bea-wl", "bea-wr", "bea-ant"]) {
+      const stir = rule(
+        `.ask-bea:is(:hover, :focus-visible) .bea-anim .${part}`,
+      );
+      expect(stir).toMatch(/animation: ask-bea-/);
+      expect(stir).not.toContain("infinite");
+    }
     const reduced = css.slice(
       css.indexOf("@media (prefers-reduced-motion: reduce)"),
     );

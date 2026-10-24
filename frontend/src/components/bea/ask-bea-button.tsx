@@ -17,16 +17,17 @@ import { modelLabel } from "@/lib/trace-view";
 /**
  * The header's way to Bea, as the character sheet draws it (chapter 6): a forest pill with her
  * avatar and "Ask Bea". It says plainly that she's an AI ("AI", and the model in the tooltip);
- * her wings and antennae stir while it's hovered or focused, as if she's ready to answer.
- * Below `sm` only her avatar shows; the button's name stays "Ask Bea".
+ * when it's hovered or focused her wings and antennae stir for about two seconds, as if she's
+ * ready to answer. Below `sm` only her avatar shows; the button's name stays "Ask Bea AI
+ * assistant".
  */
 export const AskBeaButton = forwardRef<
   HTMLButtonElement,
-  ComponentPropsWithoutRef<typeof Button>
+  Omit<ComponentPropsWithoutRef<typeof Button>, "asChild" | "children">
 >(function AskBeaButton({ className, ...props }, ref) {
-  // Its own provider, so the button works wherever it's rendered (providers nest).
+  // Its own provider (with the root's delay), so the button works wherever it's rendered.
   return (
-    <TooltipProvider>
+    <TooltipProvider delayDuration={200}>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -38,13 +39,12 @@ export const AskBeaButton = forwardRef<
             {...props}
           >
             <Bea size={32} label="" />
-            <span className="max-sm:sr-only">Ask Bea</span>
-            <span
-              aria-hidden="true"
-              className="hidden rounded-full bg-primary-foreground/15 px-1.5 py-0.5 font-mono text-[10px] leading-none tracking-[0.06em] sm:inline"
-            >
+            <span className="max-sm:sr-only">Ask Bea</span>{" "}
+            {/* Part of the name too ("Ask Bea AI assistant"): the disclosure isn't visual only. */}
+            <span className="hidden rounded-full bg-primary-foreground/15 px-1.5 py-0.5 font-mono text-[10px] leading-none tracking-[0.06em] sm:inline">
               AI
-            </span>
+            </span>{" "}
+            <span className="sr-only">assistant</span>
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-64 text-center">

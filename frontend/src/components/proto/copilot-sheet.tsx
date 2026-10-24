@@ -217,18 +217,15 @@ function ScriptedCopilot() {
           </BeaAnswer>
         )}
       </div>
-      <div className="space-y-3 px-5 pt-2 pb-5">
-        {world.copilot.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">{suggestions}</div>
-        )}
+      <div className="px-5 pt-2 pb-5">
         <BeaComposer
           value={draft}
           onChange={setDraft}
           onSubmit={() => submit(draft)}
-          label="Ask Bea"
+          label={`Ask Bea about ${site ? site.name : "a site"}`}
           placeholder={`Ask Bea about ${site ? site.name : "a site"}…`}
           sendDisabled={!draft.trim()}
-          inputProps={{ "data-tour": "copilot-input" }}
+          tourAnchor="copilot-input"
         />
       </div>
     </>

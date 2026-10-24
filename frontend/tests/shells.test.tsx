@@ -137,7 +137,7 @@ async function switchLinks() {
     .getAllByRole("menuitem")
     .filter(
       (item) =>
-        item.getAttribute("aria-current") !== "page" &&
+        !item.hasAttribute("aria-current") &&
         item.textContent !== "Create a community",
     )
     .map((item) => [item.textContent, item.getAttribute("href")]);
@@ -184,13 +184,15 @@ describe("Exchange navigation per role", () => {
       WORLD,
     );
     const banner = await screen.findByRole("banner");
-    // Not beside the app's name any more: in the strip above, on every page and width.
-    expect(
-      within(banner).queryByText("Sandbox · play money only"),
-    ).not.toBeInTheDocument();
-    const line = screen.getByText("Sandbox · play money only");
+    // In the strip at the top of the sticky header (not beside the app's name), so it never
+    // scrolls away, on every page and width.
+    expect(banner).toHaveClass("sticky");
+    const line = within(banner).getByText("Sandbox · play money only");
     expect(line).not.toHaveClass("hidden");
     expect(line).not.toHaveClass("sr-only");
+    expect(
+      within(banner).getByText("Exchange").parentElement,
+    ).not.toContainElement(line);
     expect(
       await screen.findByRole("link", { name: /Try it in your own sandbox/ }),
     ).toHaveAttribute("href", "/sandbox");
@@ -269,7 +271,19 @@ describe("Exchange navigation per role", () => {
     const menu = await openAppMenu();
     expect(
       within(menu!).getByRole("menuitem", { name: "Exchange" }),
-    ).toHaveAttribute("aria-current", "page");
+    ).toHaveAttribute("aria-current", "true");
+  });
+
+  it("keeps the app menu's links inside a visitor's sandbox", async () => {
+    nav.pathname = "/sandbox";
+    setup(
+      <ExchangeLayout>
+        <Page />
+      </ExchangeLayout>,
+      SIGNED_IN_WORLD,
+      [SELVA],
+    );
+    await expectSwitchLinks([["Stewards", "/sandbox/steward"]]);
   });
 
   it.each([

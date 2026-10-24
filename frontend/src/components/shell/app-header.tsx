@@ -38,8 +38,6 @@ import {
   type AppKey,
 } from "@/lib/navigation";
 
-export { SANDBOX_LINE };
-
 /** The Steward app's home, which carries a dot while it has updates the member hasn't seen. */
 const STEWARD_HOME = APPS.steward.href;
 
@@ -68,8 +66,9 @@ export function AppHeader({ app, tools }: { app: AppKey; tools?: ReactNode }) {
 
   return (
     <>
-      {!inSandbox && <SandboxStrip />}
+      {/* The strip rides inside the sticky header, so the sandbox line never scrolls away. */}
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-md">
+        {!inSandbox && <SandboxStrip />}
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-x-3 px-4 sm:px-6 lg:gap-x-8">
           <div className="flex min-w-0 shrink-0 items-center gap-3">
             <Link

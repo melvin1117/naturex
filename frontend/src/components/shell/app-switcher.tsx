@@ -156,12 +156,13 @@ export function AppMenu({
           <DropdownMenuItem key={app} asChild className="gap-2.5 rounded-xl">
             <Link
               href={APPS[app].href}
-              aria-current={app === current ? "page" : undefined}
+              // "true", not "page": you may be on any of the app's pages.
+              aria-current={app === current ? "true" : undefined}
             >
               <AppIcon app={app} className="size-[18px]" />
               <span className="flex-1">{APPS[app].switchLabel}</span>
               {app === current && (
-                <Check className="size-4 text-lime-ink" aria-hidden="true" />
+                <Check className="size-4" aria-hidden="true" />
               )}
             </Link>
           </DropdownMenuItem>

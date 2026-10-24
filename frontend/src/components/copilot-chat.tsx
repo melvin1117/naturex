@@ -20,7 +20,6 @@ import {
   BeaEmpty,
   BeaQuestion,
   BeaSuggestion,
-  NOT_ADVICE,
   SOURCE_CHIP,
 } from "@/components/bea/chat-parts";
 import { SLOW_AFTER_MS } from "@/components/loading-region";
@@ -270,11 +269,7 @@ export function CopilotChat(
             }
             compact={!sheet}
             suggestions={suggestions.map((q) => (
-              <BeaSuggestion
-                key={q}
-                disabled={pending}
-                onClick={() => void ask(q)}
-              >
+              <BeaSuggestion key={q} onClick={() => void ask(q)}>
                 {q}
               </BeaSuggestion>
             ))}
@@ -339,8 +334,7 @@ function Shell({
       <p className="mt-1 text-sm text-muted-foreground">
         {scope.kind === "asset"
           ? "Your field guide. She answers only from this site's Record and links every claim to its source."
-          : "Your field guide. She answers only from the Record of the sites in your world and links every claim to its source."}{" "}
-        {NOT_ADVICE}
+          : "Your field guide. She answers only from the Record of the sites in your world and links every claim to its source."}
       </p>
       {children}
     </section>
@@ -366,7 +360,7 @@ function Hello({
 }) {
   const about =
     scope.kind === "asset"
-      ? "Why its grade or price changed, how its worth is estimated, or what the news says. She answers from every rating and the local news, and shows her sources."
+      ? "Why its grade or price changed, how its worth is estimated, or what the news says."
       : "Ask across every site: which were re-rated, what the news says, or how they compare. Answers link to each site's Proof of Life or news.";
   return (
     <BeaEmpty
@@ -465,12 +459,10 @@ function TurnView({
                       onClick={onNavigate}
                       className={SOURCE_CHIP}
                     >
-                      <span className="shrink-0 font-mono whitespace-nowrap">
+                      <span className="shrink-0 font-mono whitespace-nowrap text-lime-ink">
                         {s.ref}
                       </span>
-                      <span className="truncate text-foreground">
-                        {label(s)}
-                      </span>
+                      <span className="truncate">{label(s)}</span>
                     </Link>
                   </li>
                 ))}
@@ -509,7 +501,7 @@ export function answerChips(
 function AnswerChips({ turn }: { turn: Turn }) {
   return (
     <ul
-      className="mt-1.5 flex flex-wrap gap-x-1.5 gap-y-0.5 px-1 font-mono text-[10.5px] leading-snug text-muted-foreground [&>li:not(:last-child)]:after:ml-1.5 [&>li:not(:last-child)]:after:content-['·']"
+      className="mt-1.5 flex flex-wrap gap-x-1.5 gap-y-0.5 px-1 font-mono text-[10.5px] leading-snug text-muted-foreground [&>li:not(:last-child)]:after:ml-1.5 [&>li:not(:last-child)]:after:opacity-50 [&>li:not(:last-child)]:after:content-['|']"
       aria-label="How this answer was made"
     >
       {answerChips(turn).map((chip) => (
@@ -549,7 +541,10 @@ function AnswerText({
           return <em key={i}>{render(node.children)}</em>;
         case "code":
           return (
-            <code key={i} className="rounded bg-card px-1 font-mono text-xs">
+            <code
+              key={i}
+              className="rounded bg-background px-1 font-mono text-xs"
+            >
               {render(node.children)}
             </code>
           );
@@ -560,7 +555,7 @@ function AnswerText({
               href={sourceHref(node.source)}
               onClick={onNavigate}
               aria-label={`Source ${node.ref}: ${label(node.source)}`}
-              className="mx-0.5 rounded bg-card px-1 font-mono text-xs font-medium whitespace-nowrap underline-offset-2 hover:underline"
+              className="mx-0.5 rounded bg-background px-1 font-mono text-xs font-medium whitespace-nowrap text-lime-ink underline decoration-lime-ink/40 underline-offset-2 hover:decoration-lime-ink"
             >
               {node.ref}
             </Link>
