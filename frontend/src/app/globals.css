@@ -299,6 +299,40 @@
   animation: nx-pulse-line 1.4s linear infinite;
 }
 
+/* The WildWorth icon pack (brand guidelines ch. 8): each icon lights one part. Filled accents
+   are lime with an ink outline; accent strokes are lime-ink on light grounds and lime on dark
+   ones. Bea's wings and body are filled with the ground they sit on. */
+.ww-icon .af {
+  fill: var(--color-lime);
+  stroke: currentColor;
+  stroke-width: 1.4;
+}
+.ww-icon .as {
+  stroke: var(--ww-accent, var(--color-lime-ink));
+}
+.ww-icon .f {
+  fill: currentColor;
+  stroke: none;
+}
+.bea-ground {
+  fill: var(--bea-ground, var(--color-background));
+}
+.bg-card {
+  --bea-ground: var(--color-card);
+}
+.bg-primary {
+  --ww-accent: var(--color-lime);
+  --bea-ground: var(--color-primary);
+}
+.bg-machine {
+  --ww-accent: var(--color-lime);
+  --bea-ground: var(--color-machine);
+}
+.bg-machine-raised {
+  --ww-accent: var(--color-lime);
+  --bea-ground: var(--color-machine-raised);
+}
+
 /* The WildWorth mark (brand guidelines ch. 4 and 11): the line draws, then the reading rises
    and its dot pops. Only when a rating lands, never on hover or as a loader. */
 .ww-play .ww-ink {

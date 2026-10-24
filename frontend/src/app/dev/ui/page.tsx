@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
+import { Lockup, WildWorthMark } from "@/components/brand";
 import { DataLayerPanel } from "@/components/data-layer-panel";
+import { BRAND_ICONS } from "@/components/icons";
 import { DemoSiteImages } from "@/components/demo-site-images";
 import {
   Delta,
@@ -100,6 +102,61 @@ export default function DevUiPage() {
             Secondary text in muted forest.
           </p>
         </div>
+      </Section>
+
+      <Separator />
+
+      <Section title="Brand">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid place-items-center rounded-3xl bg-card p-8 shadow-soft">
+            <Lockup size={40} />
+          </div>
+          <div className="grid place-items-center rounded-3xl bg-primary p-8 text-primary-foreground">
+            <Lockup size={40} reading="lime" />
+          </div>
+          <div className="flex items-end justify-center gap-4 rounded-3xl bg-card p-8 shadow-soft">
+            {[16, 24, 48].map((size) => (
+              <WildWorthMark
+                key={size}
+                size={size}
+                label={`WildWorth mark at ${size} px`}
+              />
+            ))}
+          </div>
+        </div>
+      </Section>
+
+      <Separator />
+
+      <Section title="Icons">
+        <ul className="grid grid-cols-3 gap-2 sm:grid-cols-6 lg:grid-cols-8">
+          {Object.entries(BRAND_ICONS).map(([key, Icon]) => (
+            <li
+              key={key}
+              className="grid justify-items-center gap-2 rounded-2xl bg-card p-4 text-center shadow-soft"
+            >
+              <Icon size={28} />
+              <span className="font-mono text-[11px] text-muted-foreground">
+                {key}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <ul className="grid grid-cols-3 gap-2 rounded-3xl bg-machine p-4 text-machine-ink sm:grid-cols-6">
+          {(
+            ["trace", "satellite", "news", "auditor", "live", "record"] as const
+          ).map((key) => {
+            const Icon = BRAND_ICONS[key];
+            return (
+              <li key={key} className="grid justify-items-center gap-2 p-2">
+                <Icon size={28} />
+                <span className="font-mono text-[11px] text-machine-muted">
+                  {key}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       </Section>
 
       <Separator />
