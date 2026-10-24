@@ -119,7 +119,7 @@ SOURCES: Mapping[str, str] = {
     ),
     "naturalearth_10m": COASTLINE_SOURCE,
     "soilgrids": "ISRIC SoilGrids soil organic carbon stock, 0-30 cm (site input)",
-    "naturex_policy": "NatureX dev-spec §7.3: class not valued as natural capital",
+    "naturex_policy": "WildWorth dev-spec §7.3: class not valued as natural capital",
     "giri2021": (
         "Giri, C. (2021) Recent advancement in mangrove forests mapping and monitoring of the "
         "world using Earth observation satellite data. Remote Sensing 13:563. "

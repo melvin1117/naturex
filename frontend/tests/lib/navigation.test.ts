@@ -88,7 +88,7 @@ describe("appAccess", () => {
     });
   });
 
-  it("still offers the Steward app when the communities can't be read", () => {
+  it("still offers Stewards when the communities can't be read", () => {
     expect(
       appAccess({
         me: person,

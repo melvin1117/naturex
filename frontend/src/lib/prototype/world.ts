@@ -48,7 +48,7 @@ export const PERSONAS: Record<
   steward: {
     name: "Rosa",
     role: "Community steward",
-    app: "Steward",
+    app: "Stewards",
     home: "/steward",
     initials: "R",
   },
@@ -1017,7 +1017,7 @@ function rerate(
         severity: change < 0 ? "critical" : "info",
         title: `${verb} ${prev.grade} → ${report.grade}: ${site.name}`,
         message: owns
-          ? `${verb} after ${cause}. ${change < 0 ? "See the stewardship actions on your listing." : "Your community's work shows in the data."}`
+          ? `${verb} after ${cause}. ${change < 0 ? "See the Recovery plan on your listing." : "Your community's work shows in the data."}`
           : `${verb} after ${cause}. Stake price ${pctMove >= 0 ? "up" : "down"} ${Math.abs(pctMove).toFixed(1)}% (play money).`,
         date: w.today,
       });

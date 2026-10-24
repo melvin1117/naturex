@@ -139,7 +139,7 @@ export function ListingsView({
         <Button asChild>
           <Link href={listHref}>
             <Plus aria-hidden="true" />
-            List land
+            List your land
           </Link>
         </Button>
       </div>

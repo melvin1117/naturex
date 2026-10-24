@@ -83,7 +83,7 @@ describe("WorldProvider", () => {
   it("renders pages straight away and bootstraps the world once, first", async () => {
     const { backend } = renderWithWorld(
       <>
-        <h1>Marketplace</h1>
+        <h1>Rated sites</h1>
         <Portfolio />
         <Assets />
       </>,
@@ -94,7 +94,7 @@ describe("WorldProvider", () => {
     );
 
     expect(
-      screen.getByRole("heading", { name: "Marketplace" }),
+      screen.getByRole("heading", { name: "Rated sites" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(await screen.findByText("Cash 100.00")).toBeInTheDocument();
@@ -123,7 +123,7 @@ describe("WorldGate", () => {
   it("shows a loading state, then the gated section once the world exists", async () => {
     renderWithWorld(
       <>
-        <h1>Marketplace</h1>
+        <h1>Rated sites</h1>
         <WorldGate>
           <p>Gated</p>
         </WorldGate>
@@ -133,7 +133,7 @@ describe("WorldGate", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "Opening your demo world",
     );
-    expect(screen.getByRole("heading", { name: "Marketplace" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Rated sites" })).toBeVisible();
     expect(await screen.findByText("Gated")).toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
@@ -141,7 +141,7 @@ describe("WorldGate", () => {
   it("shows an accessible error with a retry when the world can't be opened", async () => {
     const { backend } = renderWithWorld(
       <>
-        <h1>Marketplace</h1>
+        <h1>Rated sites</h1>
         <WorldGate>
           <p>Gated</p>
         </WorldGate>
@@ -161,7 +161,7 @@ describe("WorldGate", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "The demo is busy; try again in a few minutes",
     );
-    expect(screen.getByRole("heading", { name: "Marketplace" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Rated sites" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Gated")).toBeInTheDocument();
     expect(backend.calls("GET /world")).toBe(2);

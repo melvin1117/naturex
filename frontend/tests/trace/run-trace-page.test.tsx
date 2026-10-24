@@ -272,9 +272,7 @@ describe("in a no-sign-up demo session", () => {
     const story = screen.getByRole("list", {
       name: "What happened in this run",
     });
-    expect(
-      within(story).getByText(/sealed in the Nature Ledger/),
-    ).toBeVisible();
+    expect(within(story).getByText(/sealed in the Record/)).toBeVisible();
     // Model spend is gone; the land's own ecosystem value ($…M a year) stays.
     expect(story.textContent).not.toMatch(/in model calls|less than running/);
   });

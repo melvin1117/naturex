@@ -77,7 +77,7 @@ function ListingFromUrl() {
           <AlertDescription>
             <p>Land is listed by a community. Create one, then come back.</p>
             <Button asChild variant="outline" size="sm" className="mt-2">
-              <Link href="/steward">Go to the Steward home</Link>
+              <Link href="/steward">Go to the Stewards home</Link>
             </Button>
           </AlertDescription>
         </Alert>
@@ -311,9 +311,9 @@ function ListingWizard({
         {asset ? asset.name : "List your land"}
       </h1>
       <p className="mt-3 max-w-2xl text-muted-foreground">
-        Draw the land {community.name} protects. NatureX rates it from satellite
-        data and local news, then you decide whether to open it to supporters.
-        The land always stays yours.
+        Draw the land {community.name} protects. WildWorth rates it from
+        satellite data and local news, then you decide whether to open it to
+        supporters. The land always stays yours.
       </p>
       {restored && (
         <p className="mt-3 text-sm text-muted-foreground" role="status">

@@ -13,12 +13,12 @@ const CODE_MESSAGES: Record<string, string> = {
   admin_only: "Only a platform admin can do that.",
   sandbox_only: "That only works in a demo sandbox.",
   csrf_origin:
-    "Your browser sent this from an address NatureX doesn't recognise. Open NatureX from its usual address and try again.",
+    "Your browser sent this from an address WildWorth doesn't recognise. Open WildWorth from its usual address and try again.",
   demo_session_only: "Only a demo session can do that.",
   too_many_event_streams:
     "Live updates are busy right now; they will keep refreshing every few seconds.",
   copilot_rate_limited:
-    "The Copilot has answered a lot of questions in this sandbox this hour. Try again later.",
+    "Bea has answered a lot of questions in this sandbox this hour. Try again later.",
   place_search_busy:
     "Lots of people are searching right now. Try again in a moment.",
   place_search_rate_limited:
@@ -27,7 +27,7 @@ const CODE_MESSAGES: Record<string, string> = {
   place_search_unavailable:
     "Place search isn't available right now. Move the map yourself or type coordinates.",
   copilot_unavailable:
-    "The Copilot can't search the record right now. Try again in a little while.",
+    "Bea can't search the Record right now. Try again in a little while.",
 };
 
 export class ApiError extends Error {
@@ -126,7 +126,7 @@ function friendlyMessage(
     case 429:
     case 503:
       if (isHumanText(detail)) return detail;
-      return `NatureX is busy right now. Try again in ${wait}.`;
+      return `WildWorth is busy right now. Try again in ${wait}.`;
     default:
       return status >= 500
         ? "Something went wrong on our side. Try again."
@@ -169,7 +169,7 @@ export function toApiError(error: unknown): ApiError {
   if (error instanceof ApiError) return error;
   return new ApiError(
     0,
-    "Can't reach NatureX. Check your connection and try again.",
+    "Can't reach WildWorth. Check your connection and try again.",
     null,
     error instanceof Error ? error.message : error,
   );

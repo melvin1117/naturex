@@ -56,7 +56,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("next/font/google", () => {
   const font = () => ({ variable: "font", className: "font" });
-  return { Geist_Mono: font, Hanken_Grotesk: font, Instrument_Serif: font };
+  return { Geist_Mono: font, Gloock: font, Hanken_Grotesk: font };
 });
 
 beforeAll(() => {
@@ -117,14 +117,44 @@ const REMEMBERED = `nx-steward-community:${ROSA_ID}`;
 
 const Page = () => <p>Page content</p>;
 
-/** The header's "Switch app" links, once the account (and its communities) are known. */
-async function switchLinks() {
+/**
+ * The header's app menu (the app's name beside the lockup), opened, once the account and its
+ * communities are known; null when the name is just a label (nowhere else to go).
+ */
+async function openAppMenu(): Promise<HTMLElement | null> {
   await screen.findByRole("button", { name: /^Account: / });
-  const switcher = screen.queryByRole("navigation", { name: "Switch app" });
-  if (!switcher) return [];
-  return within(switcher)
-    .getAllByRole("link")
-    .map((link) => [link.textContent, link.getAttribute("href")]);
+  const trigger = screen.queryByRole("button", { name: /, switch app$/ });
+  if (!trigger) return null;
+  fireEvent.keyDown(trigger, { key: "Enter" });
+  return screen.findByRole("menu");
+}
+
+/** The other apps the app menu offers: [name, href], without the current one. */
+async function switchLinks() {
+  const menu = await openAppMenu();
+  if (!menu) return [];
+  const links = within(menu)
+    .getAllByRole("menuitem")
+    .filter(
+      (item) =>
+        !item.hasAttribute("aria-current") &&
+        item.textContent !== "Create a community",
+    )
+    .map((item) => [item.textContent, item.getAttribute("href")]);
+  fireEvent.keyDown(menu, { key: "Escape" });
+  return links;
+}
+
+/** Waits until the app menu offers exactly these other apps (communities load after the account). */
+async function expectSwitchLinks(expected: string[][]) {
+  await waitFor(async () => expect(await switchLinks()).toEqual(expected));
+}
+
+/** The app menu's "Create a community", if it offers one. */
+async function createCommunityItem(): Promise<HTMLElement | null> {
+  const menu = await openAppMenu();
+  if (!menu) return null;
+  return within(menu).queryByRole("menuitem", { name: "Create a community" });
 }
 
 describe("Exchange navigation per role", () => {
@@ -136,14 +166,67 @@ describe("Exchange navigation per role", () => {
       WORLD,
     );
     expect(await screen.findByRole("link", { name: "Sign in" })).toBeVisible();
+    // Nowhere else to go: the app's name is a label, not a menu.
+    const banner = screen.getByRole("banner");
+    expect(within(banner).getByText("Exchange").tagName).toBe("SPAN");
     expect(
-      screen.queryByRole("navigation", { name: "Switch app" }),
+      screen.queryByRole("button", { name: /, switch app$/ }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Create a community")).not.toBeInTheDocument();
     expect(backend.calls("GET /me/communities")).toBe(0);
   });
 
-  it("anonymous in the scripted demo: the Steward app too", async () => {
+  it("says it's a play-money sandbox in the strip above the app bar, and offers one", async () => {
+    setup(
+      <ExchangeLayout>
+        <Page />
+      </ExchangeLayout>,
+      WORLD,
+    );
+    const banner = await screen.findByRole("banner");
+    // In the strip at the top of the sticky header (not beside the app's name), so it never
+    // scrolls away, on every page and width.
+    expect(banner).toHaveClass("sticky");
+    const line = within(banner).getByText("Sandbox · play money only");
+    expect(line).not.toHaveClass("hidden");
+    expect(line).not.toHaveClass("sr-only");
+    expect(
+      within(banner).getByText("Exchange").parentElement,
+    ).not.toContainElement(line);
+    expect(
+      await screen.findByRole("link", { name: /Try it in your own sandbox/ }),
+    ).toHaveAttribute("href", "/sandbox");
+  });
+
+  it("leaves the strip out inside a visitor's sandbox, where the sandbox bar says it", async () => {
+    nav.pathname = "/sandbox";
+    setup(
+      <ExchangeLayout>
+        <Page />
+      </ExchangeLayout>,
+      SIGNED_IN_WORLD,
+    );
+    await screen.findByRole("button", { name: /^Account: / });
+    expect(
+      screen.queryByText("Sandbox · play money only"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers a signed-in account no sandbox of its own in the strip", async () => {
+    setup(
+      <ExchangeLayout>
+        <Page />
+      </ExchangeLayout>,
+      SIGNED_IN_WORLD,
+    );
+    await screen.findByRole("button", { name: /^Account: / });
+    expect(screen.getByText("Sandbox · play money only")).toBeVisible();
+    expect(
+      screen.queryByRole("link", { name: /Try it in your own sandbox/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("anonymous in the scripted demo: Stewards too", async () => {
     window.sessionStorage.setItem("nx-prototype-demo", "1");
     setup(
       <ExchangeLayout>
@@ -151,11 +234,14 @@ describe("Exchange navigation per role", () => {
       </ExchangeLayout>,
       WORLD,
     );
-    const switcher = await screen.findByRole("navigation", {
-      name: "Switch app",
-    });
+    fireEvent.keyDown(
+      await screen.findByRole("button", { name: "Exchange, switch app" }),
+      { key: "Enter" },
+    );
     expect(
-      within(switcher).getByRole("link", { name: "Steward app" }),
+      within(await screen.findByRole("menu")).getByRole("menuitem", {
+        name: "Stewards",
+      }),
     ).toHaveAttribute("href", "/steward");
   });
 
@@ -166,30 +252,44 @@ describe("Exchange navigation per role", () => {
       </ExchangeLayout>,
       SIGNED_IN_WORLD,
     );
-    expect(
-      await screen.findByRole("link", { name: "Create a community" }),
-    ).toHaveAttribute("href", "/steward");
+    expect(await createCommunityItem()).toHaveAttribute("href", "/steward");
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
     expect(await switchLinks()).toEqual([]);
     expect(backend.calls("GET /me/communities")).toBe(1);
   });
 
-  it("keeps the app's name in the home link when it's hidden on phones", async () => {
+  it("names the app in the home link, and marks the current app in its menu", async () => {
     setup(
       <ExchangeLayout>
         <Page />
       </ExchangeLayout>,
       SIGNED_IN_WORLD,
     );
-    const home = await screen.findByRole("link", { name: "NatureX Exchange" });
-    // Below `sm` the name is only visually hidden (sr-only), never removed.
-    expect(within(home).getByText("Exchange")).toHaveClass("max-sm:sr-only");
-    expect(within(home).getByText("Exchange")).not.toHaveClass("hidden");
+    expect(
+      await screen.findByRole("link", { name: "WildWorth Exchange" }),
+    ).toHaveAttribute("href", "/");
+    const menu = await openAppMenu();
+    expect(
+      within(menu!).getByRole("menuitem", { name: "Exchange" }),
+    ).toHaveAttribute("aria-current", "true");
+  });
+
+  it("keeps the app menu's links inside a visitor's sandbox", async () => {
+    nav.pathname = "/sandbox";
+    setup(
+      <ExchangeLayout>
+        <Page />
+      </ExchangeLayout>,
+      SIGNED_IN_WORLD,
+      [SELVA],
+    );
+    await expectSwitchLinks([["Stewards", "/sandbox/steward"]]);
   });
 
   it.each([
     ["steward", RIO],
     ["owner", SELVA],
-  ])("%s: the switcher to the Steward app", async (_role, member) => {
+  ])("%s: the switcher to Stewards", async (_role, member) => {
     setup(
       <ExchangeLayout>
         <Page />
@@ -197,9 +297,8 @@ describe("Exchange navigation per role", () => {
       SIGNED_IN_WORLD,
       [member],
     );
-    await screen.findByRole("navigation", { name: "Switch app" });
-    expect(await switchLinks()).toEqual([["Steward app", "/steward"]]);
-    expect(screen.queryByText("Create a community")).not.toBeInTheDocument();
+    expect(await switchLinks()).toEqual([["Stewards", "/steward"]]);
+    expect(await createCommunityItem()).toBeNull();
   });
 
   it("admin: Admin, plus Create a community without one", async () => {
@@ -209,13 +308,12 @@ describe("Exchange navigation per role", () => {
       </ExchangeLayout>,
       ADMIN_WORLD,
     );
-    expect(
-      await screen.findByRole("link", { name: "Create a community" }),
-    ).toBeVisible();
-    expect(await switchLinks()).toEqual([["Admin", "/admin"]]);
+    expect(await createCommunityItem()).toBeVisible();
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    expect(await switchLinks()).toEqual([["Control room", "/admin"]]);
   });
 
-  it("admin and community member: the Steward app and Admin", async () => {
+  it("admin and community member: Stewards and Admin", async () => {
     setup(
       <ExchangeLayout>
         <Page />
@@ -223,10 +321,9 @@ describe("Exchange navigation per role", () => {
       ADMIN_WORLD,
       [SELVA],
     );
-    await screen.findByRole("link", { name: "Steward app" });
-    expect(await switchLinks()).toEqual([
-      ["Steward app", "/steward"],
-      ["Admin", "/admin"],
+    await expectSwitchLinks([
+      ["Stewards", "/steward"],
+      ["Control room", "/admin"],
     ]);
   });
 
@@ -245,7 +342,7 @@ describe("Exchange navigation per role", () => {
       within(pages).getByRole("link", { name: "Your stakes" }),
     ).toHaveAttribute("aria-current", "page");
     expect(
-      within(pages).getByRole("link", { name: "Marketplace" }),
+      within(pages).getByRole("link", { name: "Rated sites" }),
     ).not.toHaveAttribute("aria-current");
     expect(
       within(pages).getByRole("link", { name: "AI at work" }),
@@ -289,7 +386,7 @@ describe("Steward shell", () => {
     expect(await switchLinks()).toEqual([["Exchange", "/"]]);
     expect(
       within(
-        screen.getByRole("navigation", { name: "Steward navigation" }),
+        screen.getByRole("navigation", { name: "Stewards navigation" }),
       ).getByRole("link", { name: "Community home" }),
     ).toHaveAttribute("aria-current", "page");
   });
@@ -355,13 +452,13 @@ describe("Steward shell", () => {
     );
     await screen.findByRole("button", { name: "Selva Viva, switch community" });
     const pages = screen.getByRole("navigation", {
-      name: "Steward navigation",
+      name: "Stewards navigation",
     });
     expect(
-      within(pages).getByRole("link", { name: "List land" }),
+      within(pages).getByRole("link", { name: "List your land" }),
     ).toHaveAttribute("href", `/steward/list?community=${SELVA.id}`);
     expect(
-      screen.getByRole("link", { name: /^NatureX\s*Steward$/ }),
+      screen.getByRole("link", { name: /^WildWorth\s*Stewards$/ }),
     ).toHaveAttribute("href", `/steward?community=${SELVA.id}`);
   });
 
@@ -461,9 +558,9 @@ describe("Steward shell", () => {
     expect(screen.queryByText("Page content")).not.toBeInTheDocument();
     // Its pages would all show this empty state, so they aren't offered.
     expect(
-      screen.queryByRole("navigation", { name: "Steward navigation" }),
+      screen.queryByRole("navigation", { name: "Stewards navigation" }),
     ).not.toBeInTheDocument();
-    // Already in the Steward app: no second "Create a community" in the header.
+    // Already in Stewards: no second "Create a community" in the header.
     expect(screen.queryByText("Create a community")).not.toBeInTheDocument();
     expect(await switchLinks()).toEqual([["Exchange", "/"]]);
   });
@@ -511,7 +608,7 @@ describe("Admin shell", () => {
     expect(await screen.findByText("Page content")).toBeVisible();
     expect(await switchLinks()).toEqual([
       ["Exchange", "/"],
-      ["Steward app", "/steward"],
+      ["Stewards", "/steward"],
     ]);
     expect(
       within(
@@ -533,10 +630,9 @@ describe("Admin shell", () => {
       await screen.findByText("The control room is for platform admins"),
     ).toBeVisible();
     expect(screen.queryByText("Page content")).not.toBeInTheDocument();
-    await screen.findByRole("link", { name: "Steward app" });
-    expect(await switchLinks()).toEqual([
+    await expectSwitchLinks([
       ["Exchange", "/"],
-      ["Steward app", "/steward"],
+      ["Stewards", "/steward"],
     ]);
   });
 });
@@ -554,10 +650,10 @@ describe("mobile menu", () => {
     await screen.findByText("Page content");
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     const sheet = await screen.findByRole("dialog", {
-      name: "NatureX Steward",
+      name: "WildWorth Stewards",
     });
     expect(
-      within(sheet).getByRole("link", { name: "List land" }),
+      within(sheet).getByRole("link", { name: "List your land" }),
     ).toHaveAttribute("aria-current", "page");
     expect(
       within(sheet).getByRole("button", {
@@ -569,7 +665,7 @@ describe("mobile menu", () => {
       within(apps)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Exchange", "Admin"]);
+    ).toEqual(["Exchange", "Control room"]);
 
     fireEvent.click(within(apps).getByRole("link", { name: "Exchange" }));
     await waitFor(() =>
@@ -584,13 +680,13 @@ describe("mobile menu", () => {
       </ExchangeLayout>,
       SIGNED_IN_WORLD,
     );
-    await screen.findAllByRole("link", { name: "Create a community" });
+    await screen.findByRole("button", { name: /^Account: / });
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     const sheet = await screen.findByRole("dialog", {
-      name: "NatureX Exchange",
+      name: "WildWorth Exchange",
     });
     expect(
-      within(sheet).getByRole("link", { name: "Create a community" }),
+      await within(sheet).findByRole("link", { name: "Create a community" }),
     ).toHaveAttribute("href", "/steward");
   });
 });
@@ -606,11 +702,11 @@ describe("when the account changes", () => {
   }
 
   it.each([
-    ["a member", [SELVA], "Steward app"],
-    ["an investor", [], "Create a community"],
+    ["a member", [SELVA], true],
+    ["an investor", [], false],
   ])(
     "signing out %s never asks for communities anonymously",
-    async (_who, communities, link) => {
+    async (_who, communities, member) => {
       window.localStorage.setItem(REMEMBERED, SELVA.id);
       const { backend } = setup(
         <ExchangeLayout>
@@ -626,17 +722,18 @@ describe("when the account changes", () => {
           "POST /auth/logout": () => new Response(null, { status: 204 }),
         },
       );
-      expect(
-        (await screen.findAllByRole("link", { name: link }))[0],
-      ).toBeVisible();
+      if (member) await expectSwitchLinks([["Stewards", "/steward"]]);
+      else
+        await waitFor(async () =>
+          expect(await createCommunityItem()).toBeVisible(),
+        );
+      fireEvent.keyDown(document.body, { key: "Escape" });
       expect(backend.calls("GET /me/communities")).toBe(1);
 
       await signOut();
+      // Anonymous again: the app's name is a label; no apps, no Create a community.
       expect(
-        screen.queryByRole("link", { name: link }),
-      ).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole("navigation", { name: "Switch app" }),
+        screen.queryByRole("button", { name: /, switch app$/ }),
       ).not.toBeInTheDocument();
       // Give any stray refetch time to land.
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -672,36 +769,33 @@ describe("when the account changes", () => {
         ),
       },
     );
-    expect(
-      await screen.findByRole("link", { name: "Steward app" }),
-    ).toBeVisible();
+    await expectSwitchLinks([["Stewards", "/steward"]]);
 
     await act(() => layer.session.reload());
     const account = await screen.findByRole("button", {
       name: "Account: Ines",
     });
-    // Label in name (2.5.3): what the button shows (the name; the initials are drawn by CSS,
-    // so they aren't text) is part of what it's called.
-    const visible = account.textContent!.trim();
-    expect(visible).toBe("Ines");
-    expect(account).toHaveAccessibleName(new RegExp(visible));
+    // Just her initials, drawn by CSS (not text); the name is in its accessible name and menu.
+    expect(account.textContent!.trim()).toBe("");
     // Ines's answer hasn't come back: nothing from Rosa, nothing guessed.
     await waitFor(() => expect(backend.calls("GET /me/communities")).toBe(2));
     expect(
-      screen.queryByRole("link", { name: "Steward app" }),
+      screen.queryByRole("button", { name: /, switch app$/ }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Create a community")).not.toBeInTheDocument();
 
     await act(async () => answerInvestor(json([])));
+    await waitFor(async () =>
+      expect(await createCommunityItem()).toBeVisible(),
+    );
     expect(
-      (await screen.findAllByRole("link", { name: "Create a community" }))[0],
-    ).toBeVisible();
-    expect(
-      screen.queryByRole("link", { name: "Steward app" }),
+      within(screen.getByRole("menu")).queryByRole("menuitem", {
+        name: "Stewards",
+      }),
     ).not.toBeInTheDocument();
   });
 
-  it("still offers the Steward app when the communities can't be read", async () => {
+  it("still offers Stewards when the communities can't be read", async () => {
     setup(
       <ExchangeLayout>
         <Page />
@@ -712,10 +806,8 @@ describe("when the account changes", () => {
         "GET /me/communities": () => json({ detail: "boom" }, { status: 503 }),
       },
     );
-    expect(
-      await screen.findByRole("link", { name: "Steward app" }),
-    ).toHaveAttribute("href", "/steward");
-    expect(screen.queryByText("Create a community")).not.toBeInTheDocument();
+    await expectSwitchLinks([["Stewards", "/steward"]]);
+    expect(await createCommunityItem()).toBeNull();
   });
 });
 

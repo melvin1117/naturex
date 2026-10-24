@@ -140,7 +140,7 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
                   aria-hidden="true"
                 />
                 <p className="mt-3 text-muted-foreground">
-                  No stakes yet. Every rated site in the Marketplace is open for
+                  No stakes yet. Every site on Rated sites is open for
                   play-money stakes.
                 </p>
                 <Button asChild className="mt-4">
@@ -156,7 +156,7 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
           </Suspense>
         </div>
         <div className="min-w-0 space-y-8">
-          <Panel title="Alerts" headingLevel="h2">
+          <Panel title="WildWatch alerts" headingLevel="h2">
             <AlertsList empty="No alerts yet. When a site you back is re-rated or in the news, you'll hear about it here." />
           </Panel>
           <ImpactCard data={data} />

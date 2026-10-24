@@ -270,7 +270,7 @@ export function FeatureSiteCard({ card }: { card: MarketCard }) {
               />
             )}
           </div>
-          <Button asChild className="bg-lime text-foreground hover:bg-lime/90">
+          <Button asChild variant="on-image">
             <Link href={`/asset/${card.id}`}>View site</Link>
           </Button>
         </div>

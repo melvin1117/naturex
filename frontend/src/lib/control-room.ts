@@ -36,7 +36,7 @@ export const ROUTING: Route[] = [
   {
     model: "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
     actor: "nano",
-    jobs: "Reads articles for Super's questions and answers Copilot questions",
+    jobs: "Reads articles for Super's questions and answers as Bea, the field guide",
     why: "Fast and cheap for small, well-defined reads whose answers code checks",
     price: [0.06, 0.24],
     reasoning: "Thinking off",
@@ -52,7 +52,7 @@ export const ROUTING: Route[] = [
   {
     model: "Qwen/Qwen3-Embedding-8B",
     actor: "embed",
-    jobs: "Finds the report passages the Copilot cites",
+    jobs: "Finds the passages of the Record that Bea cites",
     why: "Token Factory serves no NVIDIA embedding model",
     price: [0.01, 0],
     reasoning: "No text generated",

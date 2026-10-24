@@ -99,19 +99,19 @@ function AccountMenuContent() {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
+          {/* Just the initials in the bar; the name, role and ID are in the menu. */}
           <Button
             variant="ghost"
-            size="sm"
-            className="max-w-48 gap-2 pl-1"
+            size="icon"
+            className="size-10 shrink-0 rounded-full p-0 aria-expanded:bg-accent"
             aria-label={`Account: ${me.name}`}
           >
             {/* Initials as generated content, so the button's visible text matches its name. */}
             <span
               aria-hidden="true"
               data-initials={initials(me.name)}
-              className="grid size-7 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground before:content-[attr(data-initials)]"
+              className="grid size-8 place-items-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground before:content-[attr(data-initials)]"
             />
-            <span className="hidden min-w-0 truncate sm:inline">{me.name}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64 rounded-2xl p-1.5">

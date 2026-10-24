@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "NatureX",
+    "title": "WildWorth",
     "description": "AI rating agency and sandbox exchange for living nature",
     "version": "0.1.0"
   },
@@ -12212,7 +12212,7 @@
           "badge": {
             "type": "string",
             "title": "Badge",
-            "description": "`Documents reviewed by NatureX (hackathon process)` when verified, `Verification revoked`, else `Self-attested by the community`."
+            "description": "`Documents reviewed by WildWorth (hackathon process)` when verified, `Verification revoked`, else `Self-attested by the community`."
           },
           "run_id": {
             "anyOf": [
@@ -12673,7 +12673,7 @@
               "uploads"
             ],
             "title": "Document Ai Check",
-            "description": "What the AI document check (T71) does with a steward's own verification upload in this world, for the uploader notice (ADR-0006 \u00a75): `uploads` (its sanitised preview may be sent to an AI model on Nebius Token Factory when submitted), `samples_only` (a sandbox: only NatureX sample documents are sent, never an upload) or `off` (the live world while `VERIFICATION_AI_LIVE=false`)."
+            "description": "What the AI document check (T71) does with a steward's own verification upload in this world, for the uploader notice (ADR-0006 \u00a75): `uploads` (its sanitised preview may be sent to an AI model on Nebius Token Factory when submitted), `samples_only` (a sandbox: only WildWorth sample documents are sent, never an upload) or `off` (the live world while `VERIFICATION_AI_LIVE=false`)."
           }
         },
         "type": "object",

@@ -73,7 +73,7 @@ export function ListingFlow() {
         List your land
       </h1>
       <p className="mt-3 max-w-2xl text-muted-foreground">
-        Draw the land your community protects. NatureX rates it from satellite
+        Draw the land your community protects. WildWorth rates it from satellite
         data and local news, then you decide whether to open it to supporters.
         The land always stays yours.
       </p>
@@ -646,7 +646,7 @@ function OfferStep() {
             )}
             {report.gatePassed
               ? "Passes the listing gate: confidence ≥ 70, grade ≥ C, no significant forest loss this year."
-              : "Doesn't pass the listing gate yet (confidence ≥ 70, grade ≥ C, forest loss under 1% this year). Add field evidence or follow the stewardship actions, then re-rate."}
+              : "Doesn't pass the listing gate yet (confidence ≥ 70, grade ≥ C, forest loss under 1% this year). Add field evidence or follow the Recovery plan, then re-rate."}
           </li>
           <li className="flex gap-2">
             <Check

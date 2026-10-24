@@ -188,9 +188,9 @@ function Loaded({
         </h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
           Show the Exchange why your community may list this land. Upload your
-          documents and submit them; automated checks run at once and a NatureX
-          reviewer decides. On the live Exchange, the opening offer needs a
-          verified listing.
+          documents and submit them; automated checks run at once and a
+          WildWorth reviewer decides. On the live Exchange, the opening offer
+          needs a verified listing.
         </p>
         {!closed && (
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">

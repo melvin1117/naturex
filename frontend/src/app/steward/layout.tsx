@@ -9,7 +9,7 @@ import {
 } from "@/components/shell/steward-community";
 
 /**
- * NatureX Steward (`/steward`): for community owners and stewards (ADR-0005 §5). A signed-in
+ * WildWorth Stewards (`/steward`): for community owners and stewards (ADR-0005 §5). A signed-in
  * account without a community sees how to start one instead of the pages.
  */
 export default function StewardLayout({

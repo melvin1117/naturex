@@ -2,17 +2,20 @@
 
 import { Menu } from "lucide-react";
 import Link from "@/components/app-link";
-import { usePathname } from "@/lib/nav";
+import { useInSandbox, usePathname } from "@/lib/nav";
 import { useId, useState, type ReactNode } from "react";
 import { cn } from "cn";
 
 import { AccountMenu } from "@/components/account-menu";
-import { Wordmark } from "@/components/proto/bits";
+import { Lockup } from "@/components/brand";
+import { PageIcon } from "@/components/shell/app-icons";
 import {
+  AppMenu,
   AppSwitcher,
   CreateCommunityLink,
   useAppAccess,
 } from "@/components/shell/app-switcher";
+import { SANDBOX_LINE, SandboxStrip } from "@/components/shell/sandbox-strip";
 import {
   CommunitySwitcher,
   useOptionalStewardCommunity,
@@ -39,10 +42,12 @@ import {
 const STEWARD_HOME = APPS.steward.href;
 
 /**
- * The shell header of the Exchange, the Steward app and the control room (T62). Navigation
- * follows the signed-in account's roles (`useAppAccess`); from `lg` down, the pages, the app
- * switcher and the community switcher move into a menu sheet. `tools` holds app-specific
- * buttons (today the Copilot and alerts; the Agent Trace opens from a site's page).
+ * The shell header of the Exchange, the Steward app and the control room (T62), as the brand
+ * guidelines' app bar (chapter 12): the lockup, a hairline, the app's name (the app switcher
+ * when there's another app to open), the pages, then the tools and the account. Above it sits
+ * the sandbox strip; in a visitor's sandbox, the sandbox bar instead. Navigation follows the
+ * account's roles (`useAppAccess`); below `lg` the pages, apps and communities move into a
+ * menu sheet. `tools` holds app-specific buttons (Ask Bea, alerts).
  */
 export function AppHeader({ app, tools }: { app: AppKey; tools?: ReactNode }) {
   const pathname = usePathname();
@@ -57,55 +62,66 @@ export function AppHeader({ app, tools }: { app: AppKey; tools?: ReactNode }) {
     pathname === STEWARD_HOME,
   );
   const updates = homeUpdates ? [STEWARD_HOME] : [];
+  const inSandbox = useInSandbox();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-7xl items-center gap-x-3 px-4 sm:px-6 lg:gap-x-6">
-        <div className="flex min-w-0 shrink-0 items-center gap-3">
-          <Link href={href(APPS[app].href)} className="shrink-0 rounded-md">
-            <Wordmark app={APPS[app].name} />
-          </Link>
-          {app === "steward" && steward?.active && (
-            <div className="hidden min-w-0 items-center gap-3 lg:flex">
-              <span aria-hidden="true" className="text-border">
-                /
-              </span>
-              <CommunitySwitcher />
-            </div>
+    <>
+      {/* The strip rides inside the sticky header, so the sandbox line never scrolls away. */}
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-md">
+        {!inSandbox && <SandboxStrip />}
+        <div className="mx-auto flex h-16 max-w-7xl items-center gap-x-3 px-4 sm:px-6 lg:gap-x-8">
+          <div className="flex min-w-0 shrink-0 items-center gap-3">
+            <Link
+              href={href(APPS[app].href)}
+              className="shrink-0 rounded-md"
+              aria-label={`WildWorth ${APPS[app].name}`}
+            >
+              <Lockup size={24} />
+            </Link>
+            <span
+              aria-hidden="true"
+              className="hidden h-5 w-px bg-border sm:block"
+            />
+            <AppMenu
+              current={app}
+              access={access}
+              offerCreate={offerCreate}
+              className="hidden sm:inline-flex"
+            />
+            {app === "steward" && steward?.active && (
+              <div className="hidden min-w-0 items-center gap-2 lg:flex">
+                <span aria-hidden="true" className="text-border">
+                  /
+                </span>
+                <CommunitySwitcher />
+              </div>
+            )}
+          </div>
+          {showPages && (
+            <AppNav
+              app={app}
+              pathname={pathname}
+              href={href}
+              updates={updates}
+              className="hidden lg:block"
+            />
           )}
+          <div className="ml-auto flex min-w-0 items-center gap-2">
+            {tools}
+            <AccountMenu />
+            <MobileMenu
+              app={app}
+              access={access}
+              pathname={pathname}
+              href={href}
+              offerCreate={offerCreate}
+              showPages={showPages}
+              updates={updates}
+            />
+          </div>
         </div>
-        {showPages && (
-          <AppNav
-            app={app}
-            pathname={pathname}
-            href={href}
-            updates={updates}
-            className="hidden lg:block"
-          />
-        )}
-        <div className="ml-auto flex items-center gap-1.5">
-          {tools}
-          <AppSwitcher
-            current={app}
-            access={access}
-            className="ml-1.5 hidden lg:block"
-          />
-          {offerCreate && (
-            <CreateCommunityLink className="ml-1.5 hidden lg:inline-flex" />
-          )}
-          <AccountMenu />
-          <MobileMenu
-            app={app}
-            access={access}
-            pathname={pathname}
-            href={href}
-            offerCreate={offerCreate}
-            showPages={showPages}
-            updates={updates}
-          />
-        </div>
-      </div>
-    </header>
+      </header>
+    </>
   );
 }
 
@@ -148,13 +164,21 @@ function AppNav({
                 aria-describedby={updated ? updatesId : undefined}
                 onClick={onNavigate}
                 className={cn(
-                  "inline-flex h-9 items-center rounded-full px-3.5 text-sm font-medium whitespace-nowrap transition-colors",
+                  "inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium whitespace-nowrap transition-colors",
                   layout === "stack" && "flex h-11 w-full",
                   active
                     ? "bg-card text-foreground shadow-soft"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
+                <PageIcon
+                  href={item.href}
+                  size={16}
+                  className={cn(
+                    "shrink-0",
+                    layout === "row" && "hidden xl:block",
+                  )}
+                />
                 {item.label}
                 {updated && <UpdatesDot />}
               </Link>
@@ -230,10 +254,12 @@ function MobileMenu({
       <SheetContent side="right" className="w-[min(20rem,85vw)] gap-6 p-0">
         <SheetHeader className="border-b border-border/70 px-5 py-4">
           <SheetTitle className="font-serif text-2xl font-normal tracking-tight">
-            NatureX {APPS[app].name}
+            WildWorth {APPS[app].name}
           </SheetTitle>
-          <SheetDescription className="sr-only">
-            Pages, communities and apps
+          <SheetDescription
+            className={app === "exchange" ? "text-xs" : "sr-only"}
+          >
+            {app === "exchange" ? SANDBOX_LINE : "Pages, communities and apps"}
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-6 overflow-y-auto overscroll-contain px-3 pb-6">

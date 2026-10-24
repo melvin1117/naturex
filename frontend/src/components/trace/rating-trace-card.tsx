@@ -7,7 +7,7 @@ import { useId } from "react";
 import { Button } from "@/components/ui/button";
 
 const PRIMARY =
-  "bg-lime text-foreground hover:bg-lime/90 focus-visible:ring-lime focus-visible:ring-offset-2 focus-visible:ring-offset-machine";
+  "focus-visible:ring-card focus-visible:ring-offset-2 focus-visible:ring-offset-machine";
 
 /**
  * On a site's page, the way into the Agent Trace of its rating. `href` is the full trace page
@@ -54,7 +54,7 @@ export function RatingTraceCard({
       ) : href || onOpen ? (
         <div className="mt-4 flex flex-wrap gap-2">
           {href && (
-            <Button asChild size="sm" className={PRIMARY}>
+            <Button asChild size="sm" variant="on-image" className={PRIMARY}>
               <Link href={href}>
                 {recorded ? "Open the recorded run" : "Open the Agent Trace"}
                 <ArrowRight aria-hidden="true" />
@@ -63,11 +63,11 @@ export function RatingTraceCard({
           )}
           {onOpen && (
             <Button
-              variant={href ? "ghost" : "default"}
+              variant={href ? "ghost" : "on-image"}
               size="sm"
               className={
                 href
-                  ? "text-machine-ink hover:bg-machine-raised hover:text-machine-ink focus-visible:ring-lime"
+                  ? "text-machine-ink hover:bg-machine-raised hover:text-machine-ink focus-visible:ring-card"
                   : PRIMARY
               }
               onClick={onOpen}

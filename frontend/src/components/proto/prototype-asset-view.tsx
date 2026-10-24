@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowLeft, MapPin, MessageCircle } from "lucide-react";
+import { ArrowLeft, MapPin } from "lucide-react";
+import { BeaIcon } from "@/components/icons";
 import Link from "@/components/app-link";
 import { useSearchParams } from "next/navigation";
 import { usePathname, useRouter } from "@/lib/nav";
@@ -77,6 +78,7 @@ export function PrototypeAssetView({ id }: { id: string }) {
   const site = world.sites.find((s) => s.id === id);
   const tabParam = params.get("tab") as Tab | null;
   const tab: Tab = tabParam && TABS.includes(tabParam) ? tabParam : "overview";
+  const versionParam = Number(params.get("version"));
 
   if (!site) {
     return (
@@ -87,7 +89,7 @@ export function PrototypeAssetView({ id }: { id: string }) {
           when the demo was reset.
         </p>
         <Button asChild className="mt-6">
-          <Link href="/">Back to the Marketplace</Link>
+          <Link href="/">Back to Rated sites</Link>
         </Button>
       </div>
     );
@@ -108,7 +110,7 @@ export function PrototypeAssetView({ id }: { id: string }) {
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
-        Marketplace
+        Rated sites
       </Link>
 
       <section
@@ -179,11 +181,12 @@ export function PrototypeAssetView({ id }: { id: string }) {
                 </p>
                 {prev && prev.grade !== report.grade && (
                   <p className="mt-1 text-xs text-white/70">
-                    Was {prev.grade} in report v{prev.version}
+                    Was {prev.grade} in Proof of Life v{prev.version}
                   </p>
                 )}
                 <p className="mt-1 text-xs text-white/70">
-                  Report v{report.version} · {quarterLabel(report.period)}
+                  Proof of Life v{report.version} ·{" "}
+                  {quarterLabel(report.period)}
                 </p>
               </div>
             </div>
@@ -222,7 +225,7 @@ export function PrototypeAssetView({ id }: { id: string }) {
                   value="report"
                   className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                 >
-                  Report
+                  Proof of Life
                 </TabsTrigger>
                 <TabsTrigger
                   value="news"
@@ -234,7 +237,7 @@ export function PrototypeAssetView({ id }: { id: string }) {
                   value="ledger"
                   className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                 >
-                  Ledger
+                  The Record
                 </TabsTrigger>
                 <TabsTrigger
                   value="verification"
@@ -307,6 +310,8 @@ export function PrototypeAssetView({ id }: { id: string }) {
             </TabsContent>
             <TabsContent value="report">
               <ReportTab
+                siteName={site.name}
+                initialVersion={versionParam || null}
                 versions={[...site.reports]
                   .reverse()
                   .map((r) => prototypeFacts(r))}
@@ -332,10 +337,10 @@ export function PrototypeAssetView({ id }: { id: string }) {
               tourAnchor="trace-button"
             />
             <section className="rounded-3xl bg-card p-6 shadow-soft">
-              <h2 className="text-base font-semibold">Ask about this site</h2>
+              <h2 className="text-base font-semibold">Ask Bea</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                The Copilot answers from this site&apos;s reports, news and
-                ledger, with sources.
+                Bea, your field guide, answers only from this site&apos;s
+                Record, with sources.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button
@@ -343,8 +348,8 @@ export function PrototypeAssetView({ id }: { id: string }) {
                   size="sm"
                   onClick={() => openCopilot(site.id)}
                 >
-                  <MessageCircle aria-hidden="true" />
-                  Open Copilot
+                  <BeaIcon size={18} aria-hidden="true" />
+                  Ask Bea
                 </Button>
               </div>
             </section>

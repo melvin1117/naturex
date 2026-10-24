@@ -34,7 +34,13 @@ import {
   useWorldTrace,
 } from "@/lib/hooks";
 import { date } from "@/lib/prototype/format";
-import { auditCase, runStory, withoutCitations } from "@/lib/trace-view";
+import { agentLabel } from "@/lib/bea";
+import {
+  auditCase,
+  modelLabel,
+  runStory,
+  withoutCitations,
+} from "@/lib/trace-view";
 import { TraceStory } from "@/components/trace/trace-story";
 import {
   modelName,
@@ -299,7 +305,10 @@ function RealStepRow({ row }: { row: TraceRow }) {
                     className="tabular rounded-xl bg-machine px-3 py-2 text-[11px] text-machine-muted"
                   >
                     <span className="text-machine-ink">
-                      {c.agent ?? "model"}
+                      {agentLabel(
+                        c.agent,
+                        c.model ? modelLabel(c.model) : null,
+                      ) ?? "model"}
                     </span>
                     {" · "}
                     <span className="font-mono">{c.model ?? "—"}</span>
@@ -387,7 +396,8 @@ export function WorldModelCalls() {
           >
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-sm font-medium">
-                {c.agent ?? "Model call"}
+                {agentLabel(c.agent, c.model ? modelLabel(c.model) : null) ??
+                  "Model call"}
               </span>
               <span className="text-[11px] text-machine-muted">
                 {date(c.created_at)}

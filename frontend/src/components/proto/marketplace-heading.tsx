@@ -1,9 +1,9 @@
 "use client";
 
-import { Compass, FlaskConical } from "lucide-react";
 import NextLink from "next/link";
 import type { ReactNode } from "react";
 
+import { GuidedTourIcon, SandboxIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { useInSandbox } from "@/lib/nav";
 
@@ -21,7 +21,7 @@ export function MarketplaceHeading({ stats }: { stats?: ReactNode }) {
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div>
           <h1 className="font-serif text-5xl leading-none tracking-tight sm:text-6xl">
-            Marketplace
+            Rated sites
           </h1>
           <p className="mt-3 max-w-xl text-muted-foreground">
             Living land, rated by AI from satellite data and local news. Back a
@@ -33,11 +33,11 @@ export function MarketplaceHeading({ stats }: { stats?: ReactNode }) {
 
       {!sandbox && (
         <div className="mt-8 flex flex-wrap items-center gap-3 rounded-3xl bg-lichen px-5 py-3.5 text-sm">
-          <Compass className="size-4 text-lime-ink" aria-hidden="true" />
+          <GuidedTourIcon size={18} className="shrink-0" aria-hidden="true" />
           <span>
-            <span className="font-medium">New here?</span> See why NatureX
-            exists on one real wetland, then try everything in your own sandbox.
-            No sign-up.
+            <span className="font-medium">The bees never sent an invoice.</span>{" "}
+            WildWorth works out what they&apos;re worth: see it on one real
+            wetland, then try it in your own sandbox. No sign-up.
           </span>
           <div className="ml-auto flex flex-wrap gap-2">
             <Button size="sm" asChild>
@@ -45,7 +45,7 @@ export function MarketplaceHeading({ stats }: { stats?: ReactNode }) {
             </Button>
             <Button size="sm" variant="outline" asChild>
               <NextLink href="/sandbox">
-                <FlaskConical aria-hidden="true" />
+                <SandboxIcon aria-hidden="true" />
                 Try it yourself
               </NextLink>
             </Button>

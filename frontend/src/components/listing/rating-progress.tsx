@@ -76,7 +76,7 @@ export function RatingProgress({
     <section
       ref={ref}
       className={cn(
-        "scroll-mt-20 rounded-[1.75rem] bg-machine p-5 text-machine-ink shadow-soft",
+        "scroll-mt-28 rounded-[1.75rem] bg-machine p-5 text-machine-ink shadow-soft",
         className,
       )}
       aria-labelledby="rating-pipeline-title"

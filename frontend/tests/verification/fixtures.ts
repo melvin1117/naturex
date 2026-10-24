@@ -139,7 +139,7 @@ export function panel(
 export const verifiedPanel = (overrides: Partial<VerificationPublic> = {}) =>
   panel({
     level: "verified",
-    badge: "Documents reviewed by NatureX (hackathon process)",
+    badge: "Documents reviewed by WildWorth (hackathon process)",
     run_id: RUN_ID,
     submitted_at: "2026-10-18T11:00:00Z",
     decided_at: "2026-10-19T09:00:00Z",

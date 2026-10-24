@@ -13,6 +13,10 @@ import {
 import { useState } from "react";
 import { cn } from "cn";
 
+import {
+  ProofOfLifeSeal,
+  ProofOfLifeShareCard,
+} from "@/components/brand/proof-of-life";
 import { MarkdownText } from "@/components/markdown-text";
 import { SampleTag } from "@/components/proto/bits";
 import { NdviChart } from "@/components/proto/charts";
@@ -38,7 +42,7 @@ import {
   date,
   price as fmtPrice,
   money,
-  quarterLabel,
+  reportQuarter,
   signed,
 } from "@/lib/prototype/format";
 import { documentChecks, type Site } from "@/lib/prototype/world";
@@ -426,9 +430,15 @@ function prototypeDiffRows(report: ReportFacts, prev?: ReportFacts): DiffRow[] {
 /** Report versions, newest first; the picker shows any version and what changed from the one before. */
 export function ReportTab({
   versions,
+  siteName,
+  initialVersion = null,
   live = false,
 }: {
   versions: ReportFacts[];
+  /** The seal and its share card always carry the site's name. */
+  siteName: string;
+  /** The version a shared link asked for (`?version=`), until another one is picked. */
+  initialVersion?: number | null;
   /**
    * A real asset: the changes, grade change and reasons come from the diff API. The prototype
    * (false) has no API and compares its own report facts in the browser.
@@ -438,47 +448,67 @@ export function ReportTab({
   const [picked, setPicked] = useState<string | null>(null);
   const index = Math.max(
     0,
-    versions.findIndex((r) => r.id === picked),
+    versions.findIndex((r) =>
+      picked ? r.id === picked : r.version === initialVersion,
+    ),
   );
   const report = versions[index];
   if (!report) return null;
   // Versions are newest first: the previous report is the next item, whatever its number.
   const prev = versions[index + 1];
+  const quarter = reportQuarter(report.period, report.createdAt);
   return (
     <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
       <Panel
-        title={`Ecological Performance Report · v${report.version}`}
+        title={`Proof of Life · ${quarter}`}
         action={
           <Select value={report.id} onValueChange={setPicked}>
-            <SelectTrigger className="w-52" aria-label="Report version">
+            <SelectTrigger className="w-52" aria-label="Proof of Life version">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {versions.map((r) => (
                 <SelectItem key={r.id} value={r.id}>
                   v{r.version}
-                  {r.period ? ` · ${quarterLabel(r.period)}` : ""} · {r.grade}
+                  {" · "}
+                  {reportQuarter(r.period, r.createdAt)} · {r.grade}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         }
       >
-        <div className="flex flex-wrap items-center gap-3">
-          <GradeBadge
-            grade={report.grade}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
+          <ProofOfLifeSeal
+            key={report.id}
             health={report.health}
-            showLabel
-            size="lg"
+            grade={report.grade}
+            quarter={quarter}
+            siteName={siteName}
+            size={168}
+            rise
           />
-          <span className="text-sm text-muted-foreground">
-            Issued {date(report.createdAt)}
-          </span>
-          {report.simulated && (
-            <span className="rounded-full bg-lilac/30 px-2.5 py-0.5 text-xs font-medium">
-              Simulated scenario
-            </span>
-          )}
+          <div className="min-w-0 space-y-3">
+            <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground uppercase">
+              Ecological Performance Report · v{report.version}
+            </p>
+            <GradeBadge
+              grade={report.grade}
+              health={report.health}
+              showLabel
+              size="lg"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                Issued {date(report.createdAt)}
+              </span>
+              {report.simulated && (
+                <span className="rounded-full bg-lilac/30 px-2.5 py-0.5 text-xs font-medium">
+                  Simulated scenario
+                </span>
+              )}
+            </div>
+          </div>
         </div>
         <MarkdownText
           text={report.summary}
@@ -526,6 +556,14 @@ export function ReportTab({
         )}
       </Panel>
       <div className="space-y-6">
+        <ProofOfLifeShareCard
+          version={report.version}
+          siteName={siteName}
+          health={report.health}
+          grade={report.grade}
+          quarter={quarter}
+          simulated={report.simulated}
+        />
         <Panel
           title={prev ? `What changed since v${prev.version}` : "What changed"}
         >
@@ -592,10 +630,10 @@ export function ReportTab({
             </table>
           )}
         </Panel>
-        <Panel title="Stewardship actions">
+        <Panel title="Recovery plan">
           {report.recommendations.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No actions were recommended in this report.
+              No recovery steps were recommended in this Proof of Life.
             </p>
           ) : (
             <ul className="space-y-2.5 text-sm">
@@ -814,8 +852,7 @@ export function VerificationTab({ site }: { site: Site }) {
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
         The badge never says &ldquo;ownership proven&rdquo;. Each review
-        decision is written to the Nature Ledger without names or documents
-        (ADR-0006).
+        decision is written to the Record without names or documents (ADR-0006).
       </p>
     </Panel>
   );

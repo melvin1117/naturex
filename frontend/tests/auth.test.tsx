@@ -265,7 +265,7 @@ describe("AuthForm", () => {
       "login",
       "POST /auth/login",
       () => Promise.reject(new TypeError("Failed to fetch")),
-      "Can't reach NatureX. Check your connection and try again.",
+      "Can't reach WildWorth. Check your connection and try again.",
     ],
   ] as const)(
     "%s shows a clear message for %s failures",
@@ -358,13 +358,13 @@ describe("AuthForm", () => {
     // The rule and the form's error.
     fill("Password", "long-enough-password");
     submit(/create account/i);
-    await screen.findByText(/NatureX is busy right now/);
+    await screen.findByText(/WildWorth is busy right now/);
     expect(password).toHaveAttribute(
       "aria-describedby",
       "password-hint form-error",
     );
     expect(password).toHaveAccessibleDescription(
-      `${PASSWORD_RULE} NatureX is busy right now. Try again in a minute.`,
+      `${PASSWORD_RULE} WildWorth is busy right now. Try again in a minute.`,
     );
   });
 
@@ -481,7 +481,7 @@ describe("RequireAccount", () => {
       }),
     ).toBeVisible();
     expect(
-      screen.getByRole("link", { name: "Go to the Marketplace" }),
+      screen.getByRole("link", { name: "Go to Rated sites" }),
     ).toHaveAttribute("href", "/");
     expect(screen.queryByText("Your stakes")).not.toBeInTheDocument();
     expect(router.replace).not.toHaveBeenCalled();
@@ -687,7 +687,8 @@ describe("AccountMenu", () => {
     expect(await screen.findByText("Viewer Rosa, cash 9000.00")).toBeVisible();
 
     const trigger = screen.getByRole("button", { name: "Account: Rosa" });
-    expect(trigger).toHaveTextContent("Rosa");
+    // Just her initials in the bar; the name is the button's accessible name and in the menu.
+    expect(trigger).toHaveAccessibleName("Account: Rosa");
     fireEvent.keyDown(trigger, { key: "Enter" });
     expect(await screen.findByText("rosa@example.org")).toBeVisible();
     fireEvent.click(screen.getByRole("menuitem", { name: /sign out/i }));

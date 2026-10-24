@@ -1,15 +1,19 @@
 "use client";
 
-import { ArrowUp, Sparkles } from "lucide-react";
 import Link from "@/components/app-link";
 import { usePathname } from "@/lib/nav";
 import { useEffect, useRef, useState } from "react";
-import { cn } from "cn";
 
 import { AccountCopilot } from "@/components/account-copilot";
-import { LiveBadge } from "@/components/proto/bits";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  BeaAnswer,
+  BeaComposer,
+  BeaEmpty,
+  BeaQuestion,
+  BeaSuggestion,
+  SOURCE_CHIP,
+} from "@/components/bea/chat-parts";
+import { BeaSheetTitle, SITE_SUBTITLE } from "@/components/bea/bea-sheet-title";
 import {
   Select,
   SelectContent,
@@ -17,14 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { useReturnFocus } from "@/lib/use-return-focus";
+import { BEA_MODEL, beaState, bzzTurnId, type BeaTurn } from "@/lib/bea";
+import { modelLabel } from "@/lib/trace-view";
 import { SUGGESTED_QUESTIONS } from "@/lib/prototype/copilot";
 import { useTour } from "@/components/proto/tour";
 import { useWorld } from "@/lib/hooks";
@@ -48,9 +48,9 @@ function Rich({ text }: { text: string }) {
 }
 
 /**
- * The header's Copilot sheet. A signed-in account gets the real Copilot (#213): world-wide,
- * or about the site whose page is open. Anonymous visitors and the guided tour keep the
- * prototype's scripted answers.
+ * The header's Bea sheet ("Ask Bea"; was the Copilot). A signed-in account, or a sandbox
+ * persona, gets her real answers (#213): world-wide, or about the site whose page is open.
+ * Anonymous visitors and the guided tour keep the prototype's scripted answers.
  */
 export function CopilotSheet() {
   const { ui, closeCopilot } = usePrototype();
@@ -90,14 +90,15 @@ export function CopilotSheet() {
   );
 }
 
-/** The prototype's scripted Copilot: a site to ask about and recorded answers. */
+/** The prototype's scripted Bea: a site to ask about and recorded answers. */
 function ScriptedCopilot() {
   const { world, ui, closeCopilot, ask, openCopilot } = usePrototype();
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
   const rated = world.sites.filter((s) => s.reports.length);
+  // A real site's page isn't in the scripted world: start on the hero site instead.
   const siteId =
-    ui.copilotSiteId ??
+    rated.find((s) => s.id === ui.copilotSiteId)?.id ??
     rated.find((s) => s.id === "xochimilco-wetland")?.id ??
     rated[0]?.id ??
     null;
@@ -112,33 +113,42 @@ function ScriptedCopilot() {
     });
   }, [world.copilot.length, ui.copilotTyping]);
 
+  // The scripted answers follow Bea's rules too: an answer without a source is one she can't give.
+  const answers: BeaTurn[] = world.copilot
+    .filter((m) => m.role !== "user")
+    .map((m) => ({
+      id: m.id,
+      status: "done",
+      mode: m.citations.length > 0 ? "model" : "refusal",
+      citations: m.citations,
+      answer: m.text,
+    }));
+  const bea = ui.copilotTyping ? "thinking" : beaState(answers);
+  const bzz = bzzTurnId(answers);
+
   function submit(q: string) {
     if (!q.trim()) return;
     ask(q, siteId);
     setDraft("");
   }
 
+  const suggestions = SUGGESTED_QUESTIONS.map((q) => (
+    <BeaSuggestion key={q} onClick={() => submit(q)}>
+      {q}
+    </BeaSuggestion>
+  ));
+
   return (
     <>
-      <SheetHeader className="border-b px-6 pt-6 pb-4">
-        <div className="flex items-center gap-2">
-          <SheetTitle className="font-serif text-3xl font-normal">
-            Copilot
-          </SheetTitle>
-          <LiveBadge />
-        </div>
-        <SheetDescription>
-          Answers come from the site&apos;s reports, news and ledger, with
-          sources. Nemotron 3 Nano in the full build; scripted answers in this
-          prototype.
-        </SheetDescription>
+      <SheetHeader className="gap-3.5 border-b bg-card px-5 pt-5 pb-4">
+        <BeaSheetTitle state={bea} subtitle={SITE_SUBTITLE} />
         {rated.length > 0 && (
           <Select
             value={siteId ?? undefined}
             onValueChange={(v) => openCopilot(v)}
           >
             <SelectTrigger
-              className="mt-2 w-full"
+              className="h-9 w-full rounded-full bg-background text-[13px]"
               aria-label="Site to ask about"
             >
               <SelectValue placeholder="Choose a site" />
@@ -152,114 +162,71 @@ function ScriptedCopilot() {
             </SelectContent>
           </Select>
         )}
+        <p className="text-xs text-muted-foreground">
+          A preview with scripted answers. In your own sandbox, Bea answers live
+          on NVIDIA {modelLabel(BEA_MODEL)}.
+        </p>
       </SheetHeader>
       <div
         ref={listRef}
-        className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5"
+        className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5"
         aria-live="polite"
       >
         {world.copilot.length === 0 && (
-          <div className="rounded-3xl bg-secondary p-5">
-            <Sparkles className="size-5 text-lime-ink" aria-hidden="true" />
-            <p className="mt-2 text-sm">
-              Ask about {site ? site.name : "a site"}: why its grade or price
-              changed, how the value is estimated, or how sure the rating is.
-            </p>
-          </div>
-        )}
-        {world.copilot.map((m) => (
-          <div
-            key={m.id}
-            className={cn(
-              "flex",
-              m.role === "user" ? "justify-end" : "justify-start",
-            )}
+          <BeaEmpty
+            state={bea}
+            title={`Ask Bea about ${site ? site.name : "a site"}`}
+            suggestions={suggestions}
           >
-            <div
-              className={cn(
-                "nx-rise max-w-[88%] rounded-3xl px-4 py-3 text-sm leading-relaxed",
-                m.role === "user"
-                  ? "rounded-br-lg bg-primary text-primary-foreground"
-                  : "rounded-bl-lg bg-card shadow-soft",
-              )}
+            Why its grade or price changed, how its worth is estimated, or how
+            sure the rating is. She shows her sources.
+          </BeaEmpty>
+        )}
+        {world.copilot.map((m) =>
+          m.role === "user" ? (
+            <BeaQuestion key={m.id}>{m.text}</BeaQuestion>
+          ) : (
+            <BeaAnswer
+              key={m.id}
+              state={m.citations.length > 0 ? "found" : "cant-answer"}
             >
-              <Rich text={m.text} />
+              <p>
+                {m.id === bzz && "Bzz. "}
+                <Rich text={m.text} />
+              </p>
               {m.citations.length > 0 && (
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border/70 pt-2.5">
                   {m.citations.map((c) => (
                     <Link
                       key={c.label + c.href}
                       href={c.href}
                       onClick={closeCopilot}
-                      className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground hover:bg-accent"
+                      className={SOURCE_CHIP}
                     >
                       {c.label}
                     </Link>
                   ))}
                 </div>
               )}
-            </div>
-          </div>
-        ))}
+            </BeaAnswer>
+          ),
+        )}
         {ui.copilotTyping && (
-          <div className="flex">
-            <div
-              className="rounded-3xl rounded-bl-lg bg-card px-4 py-3 shadow-soft"
-              aria-label="Copilot is writing"
-            >
-              <span className="flex gap-1">
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className="size-1.5 animate-pulse rounded-full bg-muted-foreground motion-reduce:animate-none"
-                    style={{ animationDelay: `${i * 120}ms` }}
-                  />
-                ))}
-              </span>
-            </div>
-          </div>
+          <BeaAnswer state="thinking" bubble={false}>
+            Bea is reading the Record…
+          </BeaAnswer>
         )}
       </div>
-      <div className="border-t px-6 pt-3 pb-6">
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {SUGGESTED_QUESTIONS.map((q) => (
-            <button
-              key={q}
-              type="button"
-              onClick={() => submit(q)}
-              className="rounded-full border border-input bg-card px-3 py-1.5 text-xs font-medium hover:bg-accent"
-            >
-              {q}
-            </button>
-          ))}
-        </div>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit(draft);
-          }}
-          className="flex gap-2"
-        >
-          <label htmlFor="copilot-input" className="sr-only">
-            Ask the Copilot
-          </label>
-          <Input
-            id="copilot-input"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Why did it drop?"
-            className="rounded-full"
-            data-tour="copilot-input"
-          />
-          <Button
-            type="submit"
-            size="icon"
-            aria-label="Send question"
-            disabled={!draft.trim()}
-          >
-            <ArrowUp aria-hidden="true" />
-          </Button>
-        </form>
+      <div className="px-5 pt-2 pb-5">
+        <BeaComposer
+          value={draft}
+          onChange={setDraft}
+          onSubmit={() => submit(draft)}
+          label={`Ask Bea about ${site ? site.name : "a site"}`}
+          placeholder={`Ask Bea about ${site ? site.name : "a site"}…`}
+          sendDisabled={!draft.trim()}
+          tourAnchor="copilot-input"
+        />
       </div>
     </>
   );

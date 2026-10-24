@@ -23,7 +23,7 @@ describe("labels", () => {
       "Consent-labelled document attached",
     );
     expect(checkLabel("registry_match")).toBe("Registry match");
-    expect(reviewerLabel("platform_admin")).toBe("NatureX platform admin");
+    expect(reviewerLabel("platform_admin")).toBe("WildWorth platform admin");
     expect(reviewerLabel("demo_auto")).toBe("Demo auto");
     expect(reviewerLabel(null)).toBeNull();
     expect(documentFacts(document())).toBe("PDF · 3 pages · 1.2 MB");

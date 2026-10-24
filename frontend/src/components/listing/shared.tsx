@@ -99,7 +99,7 @@ export function PolygonProblems({ problems }: { problems: PolygonProblem[] }) {
   return (
     <Alert variant="destructive">
       <TriangleAlert aria-hidden="true" />
-      <AlertTitle>NatureX couldn&apos;t accept this boundary</AlertTitle>
+      <AlertTitle>WildWorth couldn&apos;t accept this boundary</AlertTitle>
       <AlertDescription>
         <ul className="mt-1 list-disc space-y-1 pl-4">
           {problems.map((problem, i) => (

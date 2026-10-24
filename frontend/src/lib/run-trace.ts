@@ -45,7 +45,7 @@ const STEP_INFO: Record<
     agent: "Rating runner",
     kind: "event",
   },
-  done: { label: "Seal the report", agent: "Nature Ledger", kind: "seal" },
+  done: { label: "Seal the report", agent: "The Record", kind: "seal" },
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -209,7 +209,9 @@ export function runOptions(
     const day = r.created_at ? r.created_at.slice(0, 10) : null;
     options.push({
       runId: r.run_id,
-      label: [`Report v${r.version}`, r.grade, day].filter(Boolean).join(" · "),
+      label: [`Proof of Life v${r.version}`, r.grade, day]
+        .filter(Boolean)
+        .join(" · "),
     });
   }
   return options;

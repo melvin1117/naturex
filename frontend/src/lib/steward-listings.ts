@@ -111,7 +111,7 @@ export function listingStatusWords(listing: Listing): StatusWords {
         detail:
           listing.verification.level === "revoked"
             ? "Its verification was revoked. Trading resumes once new documents are approved."
-            : "NatureX paused trading on this site.",
+            : "WildWorth paused trading on this site.",
         tone: "attention",
       };
     case "listed":
@@ -130,13 +130,13 @@ export function listingStatusWords(listing: Listing): StatusWords {
         : {
             label: "Waiting for verification",
             detail:
-              "Upload the land documents so a NatureX reviewer can check them.",
+              "Upload the land documents so a WildWorth reviewer can check them.",
             tone: "attention",
           };
     case "verification_in_review":
       return {
         label: "Documents in review",
-        detail: "A NatureX reviewer is checking the land documents.",
+        detail: "A WildWorth reviewer is checking the land documents.",
         tone: "working",
       };
     case "awaiting_verification":

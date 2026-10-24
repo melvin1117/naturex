@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, RefreshCwIcon } from "lucide-react";
 import NextLink from "next/link";
 import type { ReactNode } from "react";
 
+import { Lockup } from "@/components/brand";
 import { RouteSkeleton } from "@/components/page-skeletons";
 import {
   LOOK_AROUND,
@@ -33,7 +34,8 @@ export function SandboxGate({ children }: { children: ReactNode }) {
           {error?.message ?? "Check your connection and try again."}
         </p>
         <Button
-          className="mt-6 bg-lime text-foreground hover:bg-lime/90"
+          variant="on-image"
+          className="mt-6"
           onClick={() => void retry()}
         >
           <RefreshCwIcon aria-hidden="true" />
@@ -53,15 +55,13 @@ function StartFrame({ children }: { children: ReactNode }) {
     >
       <div className="mx-auto max-w-2xl px-5 py-8 sm:py-14">
         <nav className="flex items-center justify-between gap-4 text-sm">
-          <span className="font-serif text-[26px] leading-none tracking-tight">
-            NatureX
-          </span>
+          <Lockup size={24} reading="lime" />
           <NextLink
             href="/"
             className="inline-flex items-center gap-1.5 text-machine-muted underline-offset-4 hover:text-machine-ink hover:underline"
           >
             <ArrowLeft className="size-4" aria-hidden="true" />
-            Back to NatureX
+            Back to WildWorth
           </NextLink>
         </nav>
         <div className="mt-12">{children}</div>
@@ -76,10 +76,10 @@ function SandboxStart() {
   return (
     <StartFrame>
       <h1 className="font-serif text-[clamp(2.2rem,5vw,3.2rem)] leading-[1.04] tracking-tight text-balance">
-        Your own NatureX, live, with no sign-up.
+        Your own WildWorth, live, with no sign-up.
       </h1>
       <p className="mt-4 max-w-[46ch] text-[17px] leading-relaxed text-machine-muted">
-        A private copy with a community steward, a supporter and the NatureX
+        A private copy with a community steward, a supporter and the WildWorth
         team in it. Switch between them any time. Real AI agents and real
         satellite data; play money only.
       </p>
@@ -89,7 +89,8 @@ function SandboxStart() {
           onClick={() => void sandbox.open(LOOK_AROUND)}
           disabled={sandbox.busy !== null}
           aria-busy={busy || undefined}
-          className="bg-lime font-semibold text-foreground hover:bg-lime/90 focus-visible:ring-lime focus-visible:ring-offset-2 focus-visible:ring-offset-machine"
+          variant="on-image"
+          className="font-semibold focus-visible:ring-card focus-visible:ring-offset-2 focus-visible:ring-offset-machine"
         >
           {busy ? <Spinner aria-hidden="true" /> : null}
           Open my sandbox

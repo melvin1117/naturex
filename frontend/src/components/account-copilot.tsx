@@ -3,6 +3,12 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
+import type { BeaState } from "@/components/bea/bea";
+import {
+  BeaSheetTitle,
+  SITE_SUBTITLE,
+  WORLD_SUBTITLE,
+} from "@/components/bea/bea-sheet-title";
 import { CopilotChat } from "@/components/copilot-chat";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,19 +19,15 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { SheetHeader } from "@/components/ui/sheet";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useAsset, useAssets } from "@/lib/hooks";
 
 type Scope = "world" | "site";
 
 /**
- * The header Copilot for a signed-in account (#213): the real Copilot (`POST /copilot`,
- * streamed and cited) in the sheet. It asks across every site by default; opened on a site's
+ * Bea in the header's sheet for a signed-in account (#213; was the Copilot): her real answers
+ * (`POST /copilot`, streamed and cited). It asks across every site by default; opened on a site's
  * page it starts on that site, one tap from "All sites". Narrowing to another site is optional.
  * Mounted only while the sheet is open, so each opening starts from the current page; if the
  * page's site changes while it's open (browser Back), the scope follows it. The scope is locked
@@ -42,6 +44,7 @@ export function AccountCopilot({
   const [scope, setScope] = useState<Scope>(pageAssetId ? "site" : "world");
   const [page, setPage] = useState(pageAssetId);
   const [pending, setPending] = useState(false);
+  const [bea, setBea] = useState<BeaState>("hello");
   if (page !== pageAssetId) {
     setPage(pageAssetId);
     setSiteId(pageAssetId);
@@ -56,74 +59,80 @@ export function AccountCopilot({
 
   return (
     <>
-      <SheetHeader className="gap-3 border-b px-6 pt-6 pb-4">
-        <div className="space-y-1.5">
-          <SheetTitle className="font-serif text-3xl font-normal">
-            Copilot
-          </SheetTitle>
-          <SheetDescription>
-            Answers come only from the sites&apos; reports and news, and link
-            every claim to its source. Play money only; not advice.
-          </SheetDescription>
-        </div>
-        {siteId && (
-          <ToggleGroup
-            type="single"
-            value={scope}
-            onValueChange={(v) =>
-              (v === "world" || v === "site") && setScope(v)
-            }
-            className="w-full max-w-full rounded-full bg-secondary p-1"
-            aria-label="Ask about"
-            disabled={pending}
-          >
-            <ToggleGroupItem
-              value="site"
-              className="min-w-0 flex-1 rounded-full px-3 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
-            >
-              <span className="truncate">{siteName ?? "This site"}</span>
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="world"
-              className="flex-1 rounded-full px-3 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
-            >
-              All sites
-            </ToggleGroupItem>
-          </ToggleGroup>
-        )}
-        {rated.length > 0 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
+      <SheetHeader className="gap-3.5 border-b bg-card px-5 pt-5 pb-4">
+        <BeaSheetTitle
+          state={bea}
+          subtitle={scoped ? SITE_SUBTITLE : WORLD_SUBTITLE}
+        />
+        {(siteId || rated.length > 0) && (
+          <div className="flex min-w-0 items-center gap-2">
+            {siteId && (
+              <ToggleGroup
+                type="single"
+                value={scope}
+                onValueChange={(v) =>
+                  (v === "world" || v === "site") && setScope(v)
+                }
+                className="min-w-0 flex-1 rounded-full bg-background p-0.5"
+                aria-label="Ask about"
                 disabled={pending}
-                className="-ml-3 w-fit text-muted-foreground"
               >
-                {siteId ? "Ask about another site" : "Narrow to one site"}
-                <ChevronDown aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              className="max-h-72 w-64 overflow-y-auto"
-            >
-              <DropdownMenuLabel>Ask about one site</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={scoped ? siteId : ""}
-                onValueChange={(v) => {
-                  setSiteId(v);
-                  setScope("site");
-                }}
-              >
-                {rated.map((a) => (
-                  <DropdownMenuRadioItem key={a.id} value={a.id}>
-                    {a.name}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <ToggleGroupItem
+                  value="site"
+                  className="h-8 min-w-0 flex-1 rounded-full px-3 text-[13px] data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                >
+                  <span className="truncate">{siteName ?? "This site"}</span>
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="world"
+                  className="h-8 shrink-0 rounded-full px-3 text-[13px] data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                >
+                  All sites
+                </ToggleGroupItem>
+              </ToggleGroup>
+            )}
+            {rated.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={pending}
+                    aria-label={
+                      siteId ? "Ask about another site" : "Narrow to one site"
+                    }
+                    className={
+                      siteId
+                        ? "shrink-0 gap-1 px-2.5 text-[13px] text-muted-foreground"
+                        : "-ml-2.5 w-fit gap-1 px-2.5 text-[13px] text-muted-foreground"
+                    }
+                  >
+                    {siteId ? "Another site" : "Narrow to one site"}
+                    <ChevronDown aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="max-h-72 w-64 overflow-y-auto"
+                >
+                  <DropdownMenuLabel>Ask about one site</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={scoped ? siteId : ""}
+                    onValueChange={(v) => {
+                      setSiteId(v);
+                      setScope("site");
+                    }}
+                  >
+                    {rated.map((a) => (
+                      <DropdownMenuRadioItem key={a.id} value={a.id}>
+                        {a.name}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
         )}
       </SheetHeader>
       {scoped ? (
@@ -133,12 +142,14 @@ export function AccountCopilot({
           assetName={siteName ?? "this site"}
           onNavigate={onNavigate}
           onPendingChange={setPending}
+          onBeaStateChange={setBea}
         />
       ) : (
         <CopilotChat
           variant="sheet"
           onNavigate={onNavigate}
           onPendingChange={setPending}
+          onBeaStateChange={setBea}
         />
       )}
     </>

@@ -6,7 +6,7 @@ export function ReviewQueueHeading() {
   return (
     <>
       <h1 className="font-serif text-5xl leading-none tracking-tight sm:text-6xl">
-        Verifications
+        Verified land
       </h1>
       <p className="mt-3 max-w-2xl text-muted-foreground">
         Listings whose communities submitted land documents. Read the documents,

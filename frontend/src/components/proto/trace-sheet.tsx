@@ -198,8 +198,8 @@ export function TraceSheet() {
           >
             <p className="text-sm text-machine-muted">
               Routing from ADR-0003. Nemotron does all reasoning, text and
-              vision; only the Copilot&apos;s embeddings use a non-NVIDIA model,
-              because Token Factory serves no NVIDIA embedding model.
+              vision; only Bea&apos;s embeddings use a non-NVIDIA model, because
+              Token Factory serves no NVIDIA embedding model.
             </p>
             <ul className="mt-4 space-y-2">
               {[
@@ -209,7 +209,7 @@ export function TraceSheet() {
                   "Tool calling, sorting the news; thinks once to plan",
                 ],
                 [
-                  "Article reader and Copilot",
+                  "Article reader and Bea",
                   MODELS.fast,
                   "Reads articles, chats",
                 ],

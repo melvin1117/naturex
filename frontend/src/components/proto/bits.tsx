@@ -3,9 +3,11 @@ import Image from "next/image";
 import { cn } from "cn";
 
 import { BoundaryMap, type BoundaryFrame } from "@/components/boundary-map";
+import { Lockup } from "@/components/brand";
 import type { LonLatRing } from "@/lib/boundary-map";
 import { money, signedPct } from "@/lib/prototype/format";
 
+/** The app's lockup in a header: the WildWorth mark and wordmark, then the app's name. */
 export function Wordmark({
   className,
   app,
@@ -14,13 +16,11 @@ export function Wordmark({
   app?: string;
 }) {
   return (
-    <span className={cn("inline-flex items-baseline gap-2", className)}>
-      <span className="font-serif text-[1.65rem] leading-none tracking-tight">
-        NatureX
-      </span>
+    <span className={cn("inline-flex items-center gap-2.5", className)}>
+      <Lockup size={26} />
       {app && (
         <>
-          {/* The space keeps the accessible name "NatureX Exchange" (flex doesn't draw it).
+          {/* The space keeps the accessible name "WildWorth Exchange" (flex doesn't draw it).
               Below `sm` the app name is only visually hidden, so it stays in that name. */}{" "}
           <span className="text-sm font-medium text-muted-foreground max-sm:sr-only">
             {app}
@@ -243,12 +243,15 @@ export function ValueRange({
   confidence,
   tone = "light",
   revealDelay,
+  label = "Worth range",
   className,
 }: {
   low: number;
   mid: number;
   high: number;
   confidence: number;
+  /** The feature's name above the range (guidelines ch. 9); null where a heading says it. */
+  label?: string | null;
   tone?: "light" | "dark" | "image";
   /** A newly computed range: after this many ms the bar opens from its centre, then the
    * midpoint and the confidence settle in (#216). */
@@ -271,6 +274,7 @@ export function ValueRange({
         : "text-white/75";
   return (
     <div className={cn("space-y-2", className)}>
+      {label && <p className={cn("text-xs font-medium", muted)}>{label}</p>}
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="tabular text-2xl font-light tracking-tight">
           {money(low)}–{money(high)}
@@ -283,7 +287,7 @@ export function ValueRange({
           tone === "light" ? "bg-foreground/8" : "bg-white/15",
         )}
         role="img"
-        aria-label={`Estimated value between ${money(low)} and ${money(high)} a year, midpoint ${money(mid)}`}
+        aria-label={`Worth range: ${money(low)} to ${money(high)} a year, midpoint ${money(mid)}`}
       >
         <div
           className={cn(

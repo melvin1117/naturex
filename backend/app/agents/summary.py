@@ -196,7 +196,7 @@ def _facts(report: ReportOut, context: SummaryContext | None) -> list[str]:
 
 def _prompt(facts: list[str]) -> str:
     return (
-        "Write a sober NatureX rating-agency summary for the report below.\n"
+        "Write a sober WildWorth rating-agency summary for the report below.\n"
         "Use Markdown. Keep it under 160 words. Say the value as a range, midpoint, "
         "and confidence. State that sandbox prices are play money only if you mention price. "
         "Do not introduce any number that is not present verbatim in the facts. "

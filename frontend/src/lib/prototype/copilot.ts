@@ -33,7 +33,7 @@ export function answer(
     world.sites.find((s) => s.reports.length);
   if (!site) {
     return {
-      text: "No site has a rating yet. List a site or open one from the Marketplace, then ask again.",
+      text: "No site has a rating yet. List a site or open one from Rated sites, then ask again.",
       citations: [],
     };
   }
@@ -47,7 +47,7 @@ export function answer(
   const prev = previousReport(site);
   const href = `/asset/${site.id}`;
   const reportCite = {
-    label: `Report v${report.version}`,
+    label: `Proof of Life v${report.version}`,
     href: `${href}?tab=report`,
   };
   const events = world.events.filter((e) => e.siteId === site.id);
@@ -66,7 +66,7 @@ export function answer(
       const dir = report.health < prev.health ? "fell" : "rose";
       const cites = [
         reportCite,
-        { label: `Report v${prev.version}`, href: `${href}?tab=report` },
+        { label: `Proof of Life v${prev.version}`, href: `${href}?tab=report` },
       ];
       const parts = [
         `${site.name}'s health ${dir} from ${prev.health.toFixed(1)} to ${report.health.toFixed(1)} (${prev.grade} → ${report.grade}).`,
@@ -126,7 +126,7 @@ export function answer(
     text: `${site.name} is rated ${report.grade} (${GRADE_LABEL[report.grade].toLowerCase()}), health ${report.health.toFixed(1)}. The score weighs vegetation vigour (30%), natural cover (25%), habitat loss (20%), water stability (15%) and threat pressure (10%). Its weakest part is ${weakest.label}, scoring ${Math.round(weakest.value * 100)} out of 100. The formula sets the number; the Auditor can only adjust it within ±10 with cited evidence.`,
     citations: [
       reportCite,
-      { label: "Nature Ledger", href: `${href}?tab=ledger` },
+      { label: "The Record", href: `${href}?tab=ledger` },
     ],
   };
 }

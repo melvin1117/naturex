@@ -204,7 +204,7 @@ describe("PortfolioView", () => {
     expect(screen.getByRole("button", { name: "Mark all read" })).toBeVisible();
   });
 
-  it("asks the Copilot across every site, citing each site's report or news (T44)", async () => {
+  it("asks Bea across every site, citing each site's report or news (T44)", async () => {
     const FOREST = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
     const forestReport = {
       ...REPORT_SOURCE,
@@ -232,18 +232,17 @@ describe("PortfolioView", () => {
         ]),
     });
 
-    const chat = await screen.findByRole("region", { name: "Ask the Copilot" });
-    fireEvent.change(
-      within(chat).getByLabelText("Ask the Copilot about every site"),
-      { target: { value: "Which sites fell?" } },
-    );
+    const chat = await screen.findByRole("region", { name: "Ask Bea" });
+    fireEvent.change(within(chat).getByLabelText("Ask Bea about every site"), {
+      target: { value: "Which sites fell?" },
+    });
     fireEvent.click(
       within(chat).getByRole("button", { name: "Send question" }),
     );
 
     expect(
       await within(chat).findByRole("link", {
-        name: "Source R2-2: Osa Forest · Report v2",
+        name: "Source R2-2: Osa Forest · Proof of Life v2",
       }),
     ).toHaveAttribute("href", `/asset/${FOREST}?tab=report`);
     expect(
@@ -253,7 +252,7 @@ describe("PortfolioView", () => {
     ).toHaveAttribute("href", `/asset/${EVENT_SOURCE.asset_id}?tab=news`);
     expect(
       within(chat).getByRole("link", {
-        name: /^R2-2\s*Osa Forest · Report v2$/,
+        name: /^R2-2\s*Osa Forest · Proof of Life v2$/,
       }),
     ).toBeVisible();
     const [request] = backend.requests.filter((r) => r.method === "POST");
@@ -263,7 +262,7 @@ describe("PortfolioView", () => {
 
   it("offers world-wide suggestions", async () => {
     renderPortfolio();
-    const chat = await screen.findByRole("region", { name: "Ask the Copilot" });
+    const chat = await screen.findByRole("region", { name: "Ask Bea" });
     expect(
       within(chat).getByRole("button", {
         name: "Which sites were downgraded?",

@@ -1,6 +1,8 @@
-# 🌿 NatureX
+# WildWorth
 
-**An AI rating agency and sandbox exchange for living nature.** NatureX uses NVIDIA Nemotron agents on Nebius Token Factory to rate land from satellite data and local news, turn it into a graded, investable (play-money) asset, and keep monitoring it, so keeping nature alive pays more than destroying it.
+*Worth more wild.* The repository and code keep their working name, `naturex`.
+
+**The AI rating agency for living nature, with a sandbox exchange.** WildWorth uses NVIDIA Nemotron agents on Nebius Token Factory to rate land from satellite data and local news, turn it into a graded site that supporters can back with play money, and keep watching it, so keeping nature alive pays more than destroying it. Every quarter, WildWorth issues a Proof of Life for each site.
 
 Built for the **Nebius × NVIDIA Global AI Hackathon**, *Best Apps & Agents* track. Sandbox only: play money, nothing here is a real security.
 
@@ -12,7 +14,7 @@ Every number (areas, values, scores, prices) comes from deterministic, tested co
 3. **Local news (Tavily + Nemotron 3 Super).** Code writes the queries from the site's name, region and ecosystem, in English and the local language; Super sorts the results; a place check drops items about somewhere else.
 4. **Investigation (Nemotron 3 Super, thinking once).** Super compares the dated signals with the news and decides what to check: a dated news search for a signal nothing explains, and reading the most serious article (Tavily Extract, ranked by its question; **Nemotron 3 Nano** answers, code verifies the quote and the place). It says why for each step.
 5. **The audit (Nemotron 3 Ultra, thinking on).** Ultra weighs competing explanations against every cited fact, writes a verdict, and may move health by up to ±10 with cited evidence. Code refuses any uncited claim, unknown ID or number not in the facts, and sends the answer back once.
-6. **Sealed.** The report, its evidence and the run's record go into the hash-chained Nature Ledger.
+6. **Sealed.** The report, its evidence and the run's record go into the hash-chained Record.
 
 Every run has an **Agent Trace** (`/trace/<run>`; each demo site also carries a real run recorded with the live models, at `/trace/recorded/<asset>`, so a visitor sees one without spending anything): a story, a flow of every step with its model, tokens, time and cost, a timeline per model, Ultra's case with its notes, the checks code ran, and a cost receipt against an all-Ultra baseline. **The AI at work** (`/ai`) shows each model's live calls, latency, refusals and cost, the spend against the cap, and the eval results.
 
@@ -23,9 +25,9 @@ All calls go through Nebius Token Factory; Nemotron does all reasoning, text and
 |---|---|---|---|
 | Run the rating, plan the follow-ups, sort the news | Nemotron 3 Super | Once, on the planning turn | Reliable tool calling; 39/40 on the news eval (Nano 33/40) at the same speed |
 | Audit: weigh, cite, adjust | Nemotron 3 Ultra | On (up to 16k tokens) | The judgment that matters most; 15/15 eval cases finished on Ultra |
-| Read an article for Super's question; Copilot answers | Nemotron 3 Nano | Off | Short reads whose answers code checks |
+| Read an article for Super's question; Bea (the field guide) answers | Nemotron 3 Nano | Off | Short reads whose answers code checks |
 | Satellite before/after, field photos, title documents | Nemotron 3.5 Super VL | Off, strict JSON | Nemotron's vision model; 6/6 valid on the injection fixtures |
-| Copilot retrieval | Qwen3-Embedding-8B | – | Token Factory serves no NVIDIA embedding model |
+| Bea's retrieval | Qwen3-Embedding-8B | – | Token Factory serves no NVIDIA embedding model |
 
 A live rating costs about **$0.03–0.05** and takes 35–60 s; Ultra's audit is 80–90% of the cost. Details and evidence: [ADR-0003](./docs/adr/0003-model-routing-on-token-factory.md).
 

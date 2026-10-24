@@ -111,7 +111,7 @@ function TraceShell({
   liveRunId?: string | null;
 }) {
   useEffect(() => {
-    if (name) document.title = `How ${name} was rated · NatureX`;
+    if (name) document.title = `How ${name} was rated · WildWorth`;
   }, [name]);
 
   return (

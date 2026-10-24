@@ -171,7 +171,7 @@ describe("steward home loading", () => {
 describe("steward home empty states", () => {
   it("doesn't ask a rated site's steward to wait for a rating (#216)", async () => {
     setup(() => json(summary([listing()])));
-    const actions = await panel("Stewardship actions");
+    const actions = await panel("Recovery plan");
     expect(actions).toHaveTextContent(
       "Mock ratings don't include the Auditor's recommendations. A live rating may list concrete steps here that would strengthen the grade.",
     );
@@ -200,8 +200,8 @@ describe("steward home empty states", () => {
     expect(await panel("Quarterly payouts")).toHaveTextContent(
       "The first payout comes when the next quarter runs",
     );
-    expect(await panel("Stewardship actions")).toHaveTextContent(
-      "The latest rating lists no stewardship actions.",
+    expect(await panel("Recovery plan")).toHaveTextContent(
+      "The latest rating lists no recovery steps.",
     );
   });
 
@@ -209,7 +209,7 @@ describe("steward home empty states", () => {
     setup(() =>
       json(summary([listing({ recommendations: ["Fence the riverbank"] })])),
     );
-    const actions = await panel("Stewardship actions");
+    const actions = await panel("Recovery plan");
     expect(within(actions).getByText("Fence the riverbank")).toBeVisible();
     expect(actions).not.toHaveTextContent(/Mock ratings/);
   });

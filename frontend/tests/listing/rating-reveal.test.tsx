@@ -485,7 +485,7 @@ describe("ListedStep", () => {
       "href",
       `/steward/assets/${ASSET_ID}/ipo?community=${SELVA.id}`,
     );
-    expect(screen.getByText("Verified")).toBeVisible();
+    expect(screen.getByText("Verified land")).toBeVisible();
   });
 
   it("falls back to the offer, which explains any blocker, without the summary", async () => {

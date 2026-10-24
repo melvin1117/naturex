@@ -1,4 +1,6 @@
-# NatureX — Demo & Judge Experience Plan
+# WildWorth — Demo & Judge Experience Plan
+
+> **Renamed WildWorth (23 Oct 2026).** In the UI the Nature Ledger is **The Record**, a quarterly report is a **Proof of Life**, the value range is the **Worth range**, the Copilot is **Bea** and the Steward app is **Stewards**; routes, API, database and code names are unchanged ([brand guidelines](../design/wildworth-brand-guidelines.html)).
 
 > Related: [pm-spec.md](./pm-spec.md) · [dev-spec.md](./dev-spec.md) · [one-pager.md](../one-pager.md) · [diagrams.html](../diagrams.html). The judge story (§3) is built; the video (§4) is not yet.
 
@@ -12,7 +14,7 @@
 - The app must stay **free and testable until judging ends**, with login credentials in the testing instructions if login is needed.
 - The video must show the app actually running, with **no third-party trademarks or copyrighted music** without permission.
 
-## 2. Three ways judges experience NatureX
+## 2. Three ways judges experience WildWorth
 | # | Channel | Audience | Priority |
 |---|---|---|---|
 | A | **3-minute YouTube video** | Every judge | 🔴 Most important |
@@ -36,9 +38,9 @@
 > 3. **Fund:** the rating sets the price. Arjun backs 100 units, and the fund counts up: the community is paid without selling.
 > 4. **Watch:** a simulated encroachment appears on the north edge. The bar drops to BBB, the price falls and Arjun gets an alert. A simulated restoration takes it back up to AA.
 > 5. **Trust:** a five-entry Nature Ledger. Try to edit the downgrade into an AA: the chain shows where it broke.
-> 6. **Your turn:** "Open my sandbox" starts a no-sign-up demo session (`POST /sandbox/demo/start`) and lands on the sandbox's marketplace as Arjun. Below it, NatureX's loop as five steps, each saying who does it (List land as Rosa (Community steward), Check it's theirs as Admin (NatureX team), Open it to supporters, Back a community as Arjun (Supporter), Move time forward): a guide, not a script. Each step opens its real screen in the sandbox as the right person, and the visitor goes anywhere from there.
+> 6. **Your turn:** "Open my sandbox" starts a no-sign-up demo session (`POST /sandbox/demo/start`) and lands on the sandbox's marketplace as Arjun. Below it, WildWorth's loop as five steps, each saying who does it (List land as Rosa (Community steward), Check it's theirs as Admin (WildWorth team), Open it to supporters, Back a community as Arjun (Supporter), Move time forward): a guide, not a script. Each step opens its real screen in the sandbox as the right person, and the visitor goes anywhere from there.
 >
-> **The sandbox lives at `/sandbox/*` (Oct 23).** The real app keeps its own URLs, and its homepage has no demo bar; the marketplace invites newcomers to the story (`/judge`) and to `/sandbox`. Every app screen has a twin under `/sandbox` running against the visitor's sandbox through the API's sandbox channel (`/api/sandbox/*`, its own `nx_demo` cookie), so trying the sandbox never signs a real account out. Inside, the sandbox bar shows who the visitor acts as (labelled, switched instantly with `POST /sandbox/demo/persona`), "What to try" (the same five steps), the story, Reset, and the way back to NatureX. `/sandbox` without a sandbox offers to open one.
+> **The sandbox lives at `/sandbox/*` (Oct 23).** The real app keeps its own URLs, and its homepage has no demo bar; the marketplace invites newcomers to the story (`/judge`) and to `/sandbox`. Every app screen has a twin under `/sandbox` running against the visitor's sandbox through the API's sandbox channel (`/api/sandbox/*`, its own `nx_demo` cookie), so trying the sandbox never signs a real account out. Inside, the sandbox bar shows who the visitor acts as (labelled, switched instantly with `POST /sandbox/demo/persona`), "What to try" (the same five steps), the story, Reset, and the way back to WildWorth. `/sandbox` without a sandbox offers to open one.
 >
 > Every number comes from `GET /story`: the product's own rating, market and ledger code over committed data. Simulated steps are labelled. The AI steps quote the recorded run, which is labelled with its date. In the sandbox, ratings run live.
 >
@@ -57,7 +59,7 @@
 |---|---|---|
 | 🏘️ **Rosa, community steward** | Lists the wetland | Registration, drawing the land, receiving IPO money, stewardship tips |
 | 💼 **Arjun, investor** | Buys shares | Marketplace, compare, buy, portfolio, alerts, Copilot |
-| 🛰️ **NatureX AI** ("under the hood") | Rating engine | Live view of every agent, model call, formula and ledger entry |
+| 🛰️ **WildWorth AI** ("under the hood") | Rating engine | Live view of every agent, model call, formula and ledger entry |
 | 🎛️ **Time Machine** (narrator) | Advances the story | Next quarter; inject fire, encroachment or restoration |
 
 ### 3.3 Tour chapters (with a progress bar)

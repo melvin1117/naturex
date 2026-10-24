@@ -43,7 +43,7 @@ MOCK_MODEL = "mock"
 READ_MAX_TOKENS = 300
 
 READ_PROMPT = (
-    "You label one field photo uploaded by a land steward to NatureX, a nature rating sandbox. "
+    "You label one field photo uploaded by a land steward to WildWorth, a nature rating sandbox. "
     "Describe only what is visible; never guess. Answer with labels from the schema only.\n\n"
     "shows_outdoor_landscape: true for an outdoor photo of land, water or vegetation; false "
     "for indoor scenes, close-ups of objects, documents, screenshots or people as the subject.\n"

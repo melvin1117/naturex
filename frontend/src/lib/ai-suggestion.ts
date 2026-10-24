@@ -153,11 +153,11 @@ export const UPLOAD_NOTICE: Record<
 > = {
   uploads: {
     title: "An AI model may read your documents",
-    body: "When you submit, a preview image of each document (never the original file) may be sent to an AI model on Nebius Token Factory, which compares what it reads with this listing. Its suggestion goes only to the NatureX reviewer, labelled as untrusted; a person decides.",
+    body: "When you submit, a preview image of each document (never the original file) may be sent to an AI model on Nebius Token Factory, which compares what it reads with this listing. Its suggestion goes only to the WildWorth reviewer, labelled as untrusted; a person decides.",
   },
   samples_only: {
     title: "Your uploads aren't sent to an AI model",
-    body: "In this demo world the AI document check reads only NatureX's sample documents, with an AI model on Nebius Token Factory. Files you upload here are checked by code and read by a reviewer.",
+    body: "In this demo world the AI document check reads only WildWorth's sample documents, with an AI model on Nebius Token Factory. Files you upload here are checked by code and read by a reviewer.",
   },
   off: {
     title: "Your documents aren't sent to an AI model",

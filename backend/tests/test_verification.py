@@ -1055,7 +1055,7 @@ def test_the_public_panel_shows_results_not_values(world: World_) -> None:
         "platform_admin",
         run["id"],
     )
-    assert panel["badge"] == "Documents reviewed by NatureX (hackathon process)"
+    assert panel["badge"] == "Documents reviewed by WildWorth (hackathon process)"
     assert panel["checks"] == [
         {"check": c["check"], "result": c["result"]} for c in run["checklist"]
     ]

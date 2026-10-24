@@ -19,7 +19,7 @@ describe("error boundaries", () => {
     expect(screen.queryByText(/Reference/)).toBeNull();
     expect(screen.getByRole("main")).toHaveAttribute("id", MAIN_ID);
     expect(
-      screen.getByRole("link", { name: "Back to the Marketplace" }),
+      screen.getByRole("link", { name: "Back to Rated sites" }),
     ).toHaveAttribute("href", "/");
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(reset).toHaveBeenCalledOnce();

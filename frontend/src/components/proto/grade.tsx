@@ -14,6 +14,18 @@ export const GRADE_BG: Record<Grade, string> = {
   D: "bg-grade-d",
 };
 
+/** Grade colour as an SVG fill, e.g. the Proof of Life seal's lit dots on paper. */
+export const GRADE_FILL: Record<Grade, string> = {
+  AAA: "fill-grade-aaa",
+  AA: "fill-grade-aa",
+  A: "fill-grade-a",
+  BBB: "fill-grade-bbb",
+  BB: "fill-grade-bb",
+  B: "fill-grade-b",
+  C: "fill-grade-c",
+  D: "fill-grade-d",
+};
+
 export const GRADE_TEXT: Record<Grade, string> = {
   AAA: "text-grade-aaa",
   AA: "text-grade-aa",

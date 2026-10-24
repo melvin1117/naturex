@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { ReportTab } from "@/components/proto/report-panels";
 import type { AssetDetail, ReportDiff, ReportOut } from "@/lib/api/types";
+import { reportQuarter } from "@/lib/prototype/format";
 import { reportFacts, type ReportFacts } from "@/lib/report-facts";
 
 import { json, sequence } from "../lib/helpers";
@@ -98,15 +99,58 @@ const BODY: ReportDiff = {
 };
 
 const live = (body: Partial<ReportDiff> = {}) =>
-  renderExchange(<ReportTab versions={VERSIONS} live />, {
-    [DIFF]: () => json({ ...BODY, ...body }),
-  });
+  renderExchange(
+    <ReportTab siteName="Xochimilco wetland" versions={VERSIONS} live />,
+    {
+      [DIFF]: () => json({ ...BODY, ...body }),
+    },
+  );
 
 function rowOf(label: string) {
   return screen.getByText(label).closest("tr")!;
 }
 
 beforeAll(stubBrowserApis);
+
+describe("ReportTab's Proof of Life seal", () => {
+  it("heads the report with the seal and its share card, both naming the site", async () => {
+    live();
+    const quarter = reportQuarter(V2.period ?? null, V2.created_at);
+    const seals = await screen.findAllByRole("img", {
+      name: `Proof of Life seal for Xochimilco wetland, ${quarter}: grade AA, health 87.1 out of 100`,
+    });
+    // The report header's and the share card's.
+    expect(seals).toHaveLength(2);
+    expect(
+      screen.getByText("Ecological Performance Report · v2"),
+    ).toBeVisible();
+    expect(
+      within(screen.getByRole("group", { name: "Share card" })).getByText(
+        "Xochimilco wetland rates AA",
+      ),
+    ).toBeVisible();
+  });
+
+  it("opens the version a shared link asked for", async () => {
+    renderExchange(
+      <ReportTab
+        siteName="Xochimilco wetland"
+        versions={VERSIONS}
+        initialVersion={1}
+        live
+      />,
+      {},
+    );
+    expect(
+      await screen.findByText("Ecological Performance Report · v1"),
+    ).toBeVisible();
+    expect(
+      within(screen.getByRole("group", { name: "Share card" })).getByText(
+        "Xochimilco wetland rates A",
+      ),
+    ).toBeVisible();
+  });
+});
 
 describe("ReportTab changes from the diff API (#189)", () => {
   it("renders the headline rows from diff.metrics, the grade change first", async () => {
@@ -216,21 +260,27 @@ describe("ReportTab changes from the diff API (#189)", () => {
   });
 
   it("shows a loading state while the diff loads", async () => {
-    renderExchange(<ReportTab versions={VERSIONS} live />, {
-      [DIFF]: () => new Promise<Response>(() => {}),
-    });
+    renderExchange(
+      <ReportTab siteName="Xochimilco wetland" versions={VERSIONS} live />,
+      {
+        [DIFF]: () => new Promise<Response>(() => {}),
+      },
+    );
     const loading = await screen.findByText("Loading what changed…");
     expect(loading.closest("[role=status]")).not.toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
   });
 
   it("says so when the diff can't load, and retries", async () => {
-    const { backend } = renderExchange(<ReportTab versions={VERSIONS} live />, {
-      [DIFF]: sequence(
-        () => json({ detail: "boom" }, { status: 500 }),
-        () => json(BODY),
-      ),
-    });
+    const { backend } = renderExchange(
+      <ReportTab siteName="Xochimilco wetland" versions={VERSIONS} live />,
+      {
+        [DIFF]: sequence(
+          () => json({ detail: "boom" }, { status: 500 }),
+          () => json(BODY),
+        ),
+      },
+    );
     expect(
       await screen.findByText("We couldn't load what changed"),
     ).toBeInTheDocument();
@@ -289,6 +339,7 @@ describe("ReportTab changes from the diff API (#189)", () => {
     };
     const { backend } = renderExchange(
       <ReportTab
+        siteName="Xochimilco wetland"
         versions={[V3, V2, V1].map((r) => reportFacts(r)) as ReportFacts[]}
         live
       />,
@@ -308,7 +359,7 @@ describe("ReportTab changes from the diff API (#189)", () => {
     ).toMatch(/ring-lime/);
 
     fireEvent.pointerDown(
-      screen.getByRole("combobox", { name: "Report version" }),
+      screen.getByRole("combobox", { name: "Proof of Life version" }),
       { button: 0, ctrlKey: false, pointerType: "mouse" },
     );
     fireEvent.click(await screen.findByRole("option", { name: /^v2/ }));
@@ -330,9 +381,12 @@ describe("ReportTab changes from the diff API (#189)", () => {
   });
 
   it("keeps the prototype's own comparison and never calls the diff API", async () => {
-    const { backend } = renderExchange(<ReportTab versions={VERSIONS} />, {
-      [DIFF]: () => json(BODY),
-    });
+    const { backend } = renderExchange(
+      <ReportTab siteName="Xochimilco wetland" versions={VERSIONS} />,
+      {
+        [DIFF]: () => json(BODY),
+      },
+    );
     expect(
       await screen.findByText("What changed since v1"),
     ).toBeInTheDocument();
