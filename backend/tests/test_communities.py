@@ -416,11 +416,29 @@ def test_a_handover_refuses_members_holders_and_personas(session: Session) -> No
         (steward.id, "already_member"),
         (holder.id, "member_has_holdings"),
         (person(session, "Persona", kind=UserKind.PERSONA).id, "not_a_person"),
+        (person(session, "Admin", role=UserRole.ADMIN, is_admin=True).id, "member_not_eligible"),
     ]:
         with pytest.raises(MembershipConflict) as refused:
             transfer_ownership(session, community, user_id)
         assert refused.value.reason == reason
     assert owners_of(session, community) == [persona_id]
+
+
+def test_a_handover_needs_exactly_one_owner(session: Session) -> None:
+    community, _ = seeded_live_community(session)
+    session.add(
+        CommunityMember(
+            community_id=community.id,
+            user_id=person(session, "Co-owner").id,
+            world_id=LIVE_WORLD_ID,
+            role=CommunityRole.OWNER,
+        )
+    )
+    session.commit()
+
+    with pytest.raises(MembershipConflict) as refused:
+        transfer_ownership(session, community, person(session, "Lucía").id)
+    assert refused.value.reason == "owner_not_unique"
 
 
 def test_member_conflicts_and_unknown_users(

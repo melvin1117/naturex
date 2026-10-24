@@ -9,6 +9,7 @@ import stat
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -24,9 +25,13 @@ from app.jobs.seed_live import (
     live_settings_problem,
     retry_after_s,
     sell_qty,
+    trade_key,
     write_private,
 )
+from app.schemas import RegisterIn
 from app.seed import SEED_COMMUNITIES
+from app.services import ipo
+from app.tools.geometry import validate_polygon
 
 SEED = json.loads(DATA.read_text())
 ROUNDS = ("trades_round_1", "trades_round_2", "trades_round_3")
@@ -61,6 +66,25 @@ def test_every_community_has_an_owner_and_a_steward_who_are_people() -> None:
         assert set(community["stewards"]) <= people
 
 
+def test_every_boundary_is_valid_and_none_overlap() -> None:
+    drawn: list[tuple[Any, dict[str, Any]]] = []
+    for index, listing in enumerate(SEED["listings"]):
+        geometry = listing.get("geometry") or box_polygon(listing["box"])
+        feature = {"type": "Feature", "properties": {}, "geometry": geometry}
+        check = validate_polygon(feature, drawn)
+        assert check.ok, (listing["name"], check.problems)
+        assert not check.overlaps, listing["name"]
+        drawn.append((index, feature))
+
+
+def test_every_account_passes_the_register_routes_checks() -> None:
+    """The seed registers in-process (`register_person`), which skips the route's checks."""
+    emails = [p["email"] for p in SEED["people"]]
+    assert len(set(emails)) == len(emails)
+    for p in SEED["people"]:
+        RegisterIn(email=p["email"], password="a-long-enough-password", name=p["name"])
+
+
 def test_trades_name_real_sites_and_sells_follow_buys() -> None:
     sites = {c.site.name for c in SEED_COMMUNITIES} | {item["name"] for item in SEED["listings"]}
     bought: set[tuple[str, str]] = set()
@@ -84,6 +108,8 @@ def test_supporters_never_trade_their_own_community() -> None:
             assert who not in members
             assert side in {"buy", "sell"}
             assert amount > 0 and (side == "buy" or amount <= 1)
+        keys = [trade_key(round_key, row) for row in SEED[round_key]]
+        assert len(set(keys)) == len(keys), "a repeated row would be skipped as done"
 
 
 def test_the_data_holds_no_secret_and_no_admin() -> None:
@@ -127,19 +153,51 @@ def test_the_seed_refuses_mocks_and_fake_satellite_data() -> None:
 
 def test_private_files_are_created_owner_only(tmp_path: Path) -> None:
     path = tmp_path / "accounts.json"
+    path.write_text("{}")
+    path.chmod(0o644)
     write_private(path, {"a@example.com": "x"})
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert json.loads(path.read_text()) == {"a@example.com": "x"}
 
 
+def test_the_accounts_file_must_be_git_ignored(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit):
+        seed_live.main(["--api", "http://x", "--origin", "http://y", "--accounts-out", "a.json"])
+
+
+def test_only_the_seed_skips_the_verification_gate() -> None:
+    app_dir = Path(seed_live.__file__).resolve().parents[1]
+    callers = {
+        path.relative_to(app_dir).as_posix()
+        for path in app_dir.rglob("*.py")
+        if "require_verification" in path.read_text()
+    }
+    assert callers == {"jobs/seed_live.py", "services/ipo.py"}
+
+
 class FakeApi:
-    """Two open sites and one supporter's portfolio; records every order."""
+    """Two open sites, one supporter's portfolio and a community's listing; records every
+    order and rating run."""
 
     def __init__(self) -> None:
         self.orders: list[dict[str, Any]] = []
         self.held = {"site-a": 40}
+        self.runs: list[str] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/me/communities":
+            return httpx.Response(200, json=[{"id": "c1", "name": "Trust"}])
+        if path == "/communities/c1/assets":
+            # The community list carries no report version (only grade and health).
+            listing = {"id": "site-a", "name": "Site A", "status": "listed"}
+            return httpx.Response(200, json=[listing])
+        if path == "/assets/site-a/rate":
+            self.runs.append("run-1")
+            return httpx.Response(202, json={"run_id": "run-1", "asset_id": "site-a"})
+        if path == "/runs/run-1":
+            done = {"status": "succeeded", "version": 3, "grade": "AA"}
+            return httpx.Response(200, json={"run_id": "run-1", **done})
         if request.url.path == "/assets":
             return httpx.Response(
                 200,
@@ -163,17 +221,23 @@ def seeder_for(api: FakeApi, tmp_path: Path) -> Seeder:
         origin="http://web.test",
         accounts_out=tmp_path / ".env.seed-accounts.json",
         data={
+            "communities": [{"name": "Trust", "owner": "sam", "stewards": []}],
+            "listings": [
+                {"community": "Trust", "name": "Site A", "rerate": True},
+                {"community": "Trust", "name": "Site B"},
+            ],
             "trades_round_1": [
                 ["hannah", "Site A", "buy", 100],
                 ["hannah", "Site B", "buy", 100],
                 ["hannah", "Site A", "sell", 0.5],
-            ]
+            ],
         },
         transport=httpx.MockTransport(api),
     )
     seeder.load()
     seeder.people = {
-        "hannah": Account("hannah", "Hannah", "h@example.com", "-", seeder.client()),
+        "hannah": Account("Hannah", "h@example.com", "-", seeder.client()),
+        "sam": Account("Sam", "s@example.com", "-", seeder.client()),
     }
     return seeder
 
@@ -191,4 +255,46 @@ def test_a_re_run_never_repeats_a_trade(tmp_path: Path, monkeypatch: pytest.Monk
         {"asset_id": "site-a", "side": "sell", "qty": 20},
     ]
     state = json.loads((tmp_path / ".env.seed-state.json").read_text())
-    assert state == {"trades": ["trades_round_1:0", "trades_round_1:2"]}
+    assert state == {
+        "done": ["trades_round_1:hannah|Site A|buy|100", "trades_round_1:hannah|Site A|sell|0.5"]
+    }
+
+
+def test_an_owner_re_rate_runs_once_and_waits_for_its_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(seed_live, "RUN_POLL_S", 0)
+    jobs: list[str] = []
+    monkeypatch.setattr(Seeder, "job", lambda self, phase, module, *args: jobs.append(module))
+    api = FakeApi()
+
+    first = seeder_for(api, tmp_path)
+    first.phase_rerate()
+    second = seeder_for(api, tmp_path)
+    second.phase_rerate()
+
+    assert api.runs == ["run-1"], "a re-run never starts another owner re-rate"
+    assert jobs == ["app.jobs.rerate_all", "app.jobs.rerate_all"]  # idempotent per quarter
+    assert first.unfinished == second.unfinished == []
+    assert "rerate:Site A" in json.loads((tmp_path / ".env.seed-state.json").read_text())["done"]
+
+
+def test_a_refused_launch_is_logged_and_the_run_moves_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse(*_args: Any, **_kwargs: Any) -> None:
+        raise ipo.IpoRefused("ipo_price_too_high")
+
+    monkeypatch.setattr(ipo, "launch", refuse)
+    seeder = seeder_for(FakeApi(), tmp_path)
+    site = str(uuid4())
+    replies = {
+        f"/assets/{site}": {"ipo_at": None},
+        f"/assets/{site}/ipo/preview": {"ipo_price": "9"},
+    }
+    seeder.people["sam"].client = httpx.Client(
+        base_url="http://api.test",
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, json=replies[r.url.path])),
+    )
+
+    assert seeder.launch(seeder.people["sam"], {"id": site, "name": "Site A"}) is False

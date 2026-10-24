@@ -1,5 +1,5 @@
 {
-  "_note": "Live-world seed (app.jobs.seed_live). The people and communities are fictional sandbox accounts; the land is real. Every rating, report, alert and trade is made by the product with live models and Earth Engine. New listings open self-attested, like the curated sites: no documents are made up and no review is faked. Play money only. Passwords are generated at run time into a git-ignored file, never here.",
+  "_note": "Live-world seed (app.jobs.seed_live). The people and communities are fictional sandbox accounts; the land is real. Boundaries are simple boxes or a few vertices drawn by hand on the app's map (nothing traced from a dataset). Every rating, report, alert and trade is made by the product with live models and Earth Engine. New listings open self-attested, like the curated sites: no documents are made up and no review is faked. Play money only. Passwords are generated at run time into a git-ignored file, never here.",
   "people": [
     {
       "key": "lucia",

@@ -1,4 +1,4 @@
-# WildWorth backend
+# NatureX backend
 
 FastAPI service for ratings, market, ledger and agents.
 
@@ -65,8 +65,8 @@ make create-admin EMAIL=you@example.org NAME="Your name"
   (`launch(require_verification=False)`) run in-process. No route can do either. Everything
   else goes through HTTP.
 - **Passwords:** generated once into `.env.seed-accounts.json` at the repo root (mode 0600,
-  git-ignored, never printed). Finished trades are kept in `.env.seed-state.json`, so a re-run
-  doesn't repeat them.
+  git-ignored, never printed). Finished trades and owner re-rates are kept in
+  `.env.seed-state.json`, so a re-run doesn't repeat them (or spend more model credit).
 - **Caps:** the quarter's re-rate keeps its own hourly cap. When a job stops early the seed
   exits 1 and names the phase: re-run it (`--phase rerate`) an hour later.
 - **Deploying this data:** sign everyone out first, then dump outside the repo and

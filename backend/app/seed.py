@@ -124,8 +124,7 @@ DEMO_SITES: tuple[DemoSite, ...] = (
         UUID("33333333-3333-3333-3333-333333333302"),
         "mangrove_mx",
         "Ría Celestún Mangrove",
-        "Blue-carbon mangrove fringing the estuary of the Ría Celestún Biosphere Reserve, "
-        "Yucatán.",
+        "Blue-carbon mangrove fringing the estuary of the Ría Celestún Biosphere Reserve, Yucatán.",
     ),
     _demo_site(
         UUID("33333333-3333-3333-3333-333333333303"),
