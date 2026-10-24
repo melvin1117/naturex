@@ -32,9 +32,10 @@ done
 
 cd "$root"
 echo "Starting Postgres..."
-docker compose up -d --wait
+hint="Moving from the old naturex database? See backend/README.md#setup."
+docker compose up -d --wait || { echo "Postgres didn't start. $hint" >&2; exit 1; }
 echo "Applying migrations..."
-make -s migrate
+make -s migrate || { echo "Migrations failed: is DATABASE_URL in .env as in .env.example? $hint" >&2; exit 1; }
 
 if [ ! -d frontend/node_modules ]; then
   (cd frontend && pnpm install --frozen-lockfile)

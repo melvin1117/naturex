@@ -40,19 +40,19 @@ jobs:
       db:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: naturex
-          POSTGRES_PASSWORD: naturex
-          POSTGRES_DB: naturex
+          POSTGRES_USER: wildworth
+          POSTGRES_PASSWORD: wildworth
+          POSTGRES_DB: wildworth
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U naturex -d naturex"
+          --health-cmd "pg_isready -U wildworth -d wildworth"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
       CI: "true"
-      E2E_DATABASE_URL: postgresql+psycopg://naturex:naturex@localhost:5432/naturex_e2e
+      E2E_DATABASE_URL: postgresql+psycopg://wildworth:wildworth@localhost:5432/wildworth_e2e
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - name: Check out repository

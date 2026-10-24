@@ -51,18 +51,18 @@ jobs:
       db:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: naturex
-          POSTGRES_PASSWORD: naturex
-          POSTGRES_DB: naturex
+          POSTGRES_USER: wildworth
+          POSTGRES_PASSWORD: wildworth
+          POSTGRES_DB: wildworth
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U naturex -d naturex"
+          --health-cmd "pg_isready -U wildworth -d wildworth"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql+psycopg://naturex:naturex@localhost:5432/naturex
+      DATABASE_URL: postgresql+psycopg://wildworth:wildworth@localhost:5432/wildworth
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

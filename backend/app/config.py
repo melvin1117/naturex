@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     use_mocks: bool = True
     demo_mode: bool = True
     local_jobs: bool = True
-    database_url: str = "postgresql+psycopg://naturex:naturex@localhost:5432/naturex"
+    database_url: str = "postgresql+psycopg://wildworth:wildworth@localhost:5432/wildworth"
     llm_budget_usd: float = 20.0
     # Cap on new demo sandbox worlds per hour (T55's POST /demo/start), so the DB can't be filled.
     sandbox_max_new_worlds_per_hour: int = 300

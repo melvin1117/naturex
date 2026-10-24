@@ -24,7 +24,7 @@ def _test_database_url() -> str:
     if explicit:
         return explicit
     url = make_url(Settings().database_url)
-    name = url.database or "naturex"
+    name = url.database or "wildworth"
     if not name.endswith("_test"):
         url = url.set(database=f"{name}_test")
     return url.render_as_string(hide_password=False)
