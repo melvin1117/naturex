@@ -1,4 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import vm from "node:vm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -21,13 +24,40 @@ beforeEach(() => {
 
 afterEach(() => vi.restoreAllMocks());
 
-/** The seal's dot columns: one `<g>` per point of health. */
-function columns(container: HTMLElement): SVGGElement[] {
-  return [...container.querySelectorAll<SVGGElement>("svg > g")];
+const ROOT = join(__dirname, "../../..");
+
+/** The guidelines' own `sealInner()`, run as written (it only needs `clamp`). */
+function guidelinesSeal(score: number, lit: string, quarter: string): string {
+  const html = readFileSync(
+    join(ROOT, "docs/design/wildworth-brand-guidelines.html"),
+    "utf8",
+  );
+  const between = (from: string, to: string) =>
+    html.slice(html.indexOf(from), html.indexOf(to, html.indexOf(from)));
+  const code = [
+    between("var GRADES=", "function ok("),
+    between("function ok(", "function grade("),
+    between("function grade(", "var C="),
+    between("function clamp(", "\n"),
+    between("function sealInner(", "function sealSvg("),
+    `result = sealInner(${score}, { lit: ${JSON.stringify(lit)}, q: ${JSON.stringify(quarter)} });`,
+  ].join("\n");
+  const context: { result?: string } = {};
+  vm.runInNewContext(code, context);
+  return context.result!;
 }
 
+const attrs = (tag: string): Record<string, string> =>
+  Object.fromEntries(
+    [...tag.matchAll(/([a-z-]+)="([^"]*)"/g)].map((m) => [m[1], m[2]]),
+  );
+
 describe("ProofOfLifeSeal", () => {
-  it("is the DotRing: 100 columns of 5 rings, lit to the score in the grade's colour", () => {
+  it("draws the guidelines' seal: one ring of 100 dots, lit to the score", () => {
+    const theirs = guidelinesSeal(77.6, "LIT", "Q3 2026");
+    const circles = [...theirs.matchAll(/<circle[^>]*\/>/g)].map((m) =>
+      attrs(m[0]),
+    );
     const { container } = render(
       <ProofOfLifeSeal
         health={77.6}
@@ -36,15 +66,69 @@ describe("ProofOfLifeSeal", () => {
         siteName="Xochimilco wetland"
       />,
     );
-    const all = columns(container);
-    expect(all).toHaveLength(100);
-    expect(
-      Math.max(...all.map((g) => g.querySelectorAll("circle").length)),
-    ).toBe(5);
-    expect(
-      all.filter((g) => g.classList.contains("fill-grade-a")),
-    ).toHaveLength(78);
-    expect(all[78]).toHaveClass("fill-foreground/12");
+    const ours = [...container.querySelectorAll("circle")];
+    expect(ours).toHaveLength(circles.length);
+    expect(circles).toHaveLength(100);
+    ours.forEach((c, i) => {
+      const t = circles[i]!;
+      expect(Number(c.getAttribute("cx"))).toBe(Number(t.cx));
+      expect(Number(c.getAttribute("cy"))).toBe(Number(t.cy));
+      expect(Number(c.getAttribute("r"))).toBe(Number(t.r));
+      const lit = t.fill === "LIT";
+      expect(c.classList.contains("fill-grade-a")).toBe(lit);
+      if (!lit)
+        expect(Number(c.getAttribute("opacity"))).toBe(Number(t.opacity));
+    });
+    expect(circles.filter((c) => c.fill === "LIT")).toHaveLength(78);
+    // Not the live dial: a single ring, every dot the same distance from the centre.
+    const radii = new Set(
+      ours.map((c) =>
+        Math.round(
+          Math.hypot(
+            Number(c.getAttribute("cx")) - 50,
+            Number(c.getAttribute("cy")) - 50,
+          ),
+        ),
+      ),
+    );
+    expect([...radii]).toEqual([42]);
+  });
+
+  it("sets its stamp where and how the guidelines do", () => {
+    const theirs = [
+      ...guidelinesSeal(63.8, "LIT", "Q4 2026").matchAll(
+        /<text([^>]*)>([^<]*)<\/text>/g,
+      ),
+    ].map((m): Record<string, string> => ({ ...attrs(m[1]!), text: m[2]! }));
+    const { container } = render(
+      <ProofOfLifeSeal
+        health={63.8}
+        grade="BBB"
+        quarter="Q4 2026"
+        siteName="Celestún mangrove"
+      />,
+    );
+    const ours = [...container.querySelectorAll("text")].map((t) => ({
+      text: t.textContent,
+      y: t.getAttribute("y"),
+      size: t.getAttribute("font-size"),
+      tracking: t.getAttribute("letter-spacing"),
+      opacity: t.getAttribute("opacity"),
+    }));
+    for (const t of theirs) {
+      const mine = ours.find((o) => o.text === t.text)!;
+      expect(mine, t.text).toBeDefined();
+      expect(Number(mine.y)).toBe(Number(t.y));
+      expect(Number(mine.size)).toBe(Number(t["font-size"]));
+      if (t["letter-spacing"])
+        expect(Number(mine.tracking)).toBe(Number(t["letter-spacing"]));
+      if (t.opacity) expect(Number(mine.opacity)).toBe(Number(t.opacity));
+    }
+    expect(theirs.map((t) => t.text)).toEqual([
+      "PROOF OF LIFE",
+      "Q4 2026",
+      "BBB",
+    ]);
   });
 
   it("names the site, quarter, grade and health, and shows the grade and quarter in the centre", () => {
@@ -59,7 +143,7 @@ describe("ProofOfLifeSeal", () => {
     const seal = screen.getByRole("img", {
       name: "Proof of Life seal for Celestún mangrove, Q4 2026: grade BBB, health 63.8 out of 100",
     });
-    expect(within(seal).getByText("Proof of Life")).toBeInTheDocument();
+    expect(within(seal).getByText("PROOF OF LIFE")).toBeInTheDocument();
     expect(within(seal).getByText("BBB")).toHaveClass("font-serif");
     expect(within(seal).getByText("Q4 2026")).toHaveClass("font-mono");
     // No counting numeral: the seal is a verdict, not the live dial.
@@ -77,7 +161,9 @@ describe("ProofOfLifeSeal", () => {
       />,
     );
     expect(
-      columns(container).filter((g) => g.classList.contains("fill-lime")),
+      [...container.querySelectorAll("circle")].filter((c) =>
+        c.classList.contains("fill-lime"),
+      ),
     ).toHaveLength(100);
     expect(screen.getByRole("img")).toHaveAccessibleName(
       /health 100\.0 out of 100/,
@@ -97,6 +183,12 @@ describe("ProofOfLifeSeal", () => {
     const grade = screen.getByText("A");
     expect(grade).toHaveClass("nx-stamp");
     expect(grade.style.animationDelay).toBe("550ms");
+    // Stamped about its own centre, not the seal's corner.
+    expect(grade.style.transformOrigin).toBe("center");
+    const lit = document.querySelectorAll("circle.nx-dot-on");
+    expect(lit).toHaveLength(78);
+    expect((lit[0] as SVGElement).style.animationDelay).toBe("0ms");
+    expect((lit[77] as SVGElement).style.animationDelay).toBe("543ms");
   });
 });
 

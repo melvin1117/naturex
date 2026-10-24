@@ -63,3 +63,45 @@ export function markGeometry(score: number, single = false): MarkGeometry {
 
 /** The Proof of Life seal's dots rise once, then the grade is stamped (DESIGN.md, Motion). */
 export const SEAL_RISE_MS = 550;
+
+/**
+ * The Proof of Life seal, from `sealInner()` in the guidelines (chapter 5): one ring of 100 dots
+ * in a 100-unit square, one per point of health, lit up to the score, with "PROOF OF LIFE", the
+ * grade and the quarter in the centre. It is deliberately not the live dial's five rings: the
+ * dial is the live reading, the seal the verdict issued each quarter.
+ */
+export const SEAL = {
+  dots: 100,
+  center: 50,
+  radius: 42,
+  dot: 1.9,
+  unlitOpacity: 0.2,
+  title: {
+    text: "PROOF OF LIFE",
+    y: 35,
+    size: 5.6,
+    tracking: 0.9,
+    opacity: 0.75,
+  },
+  grade: { y: 59, size: 24, longSize: 20 },
+  quarter: { y: 72, size: 6.4, tracking: 0.5, opacity: 0.85 },
+} as const;
+
+export interface SealDot {
+  cx: number;
+  cy: number;
+  lit: boolean;
+}
+
+/** The seal's 100 dots, clockwise from 12 o'clock; the first round(score) are lit. */
+export function sealDots(score: number): SealDot[] {
+  const lit = Math.round(clampScore(score));
+  return Array.from({ length: SEAL.dots }, (_, i) => {
+    const angle = (i / SEAL.dots) * 2 * Math.PI - Math.PI / 2;
+    return {
+      cx: Number((SEAL.center + SEAL.radius * Math.cos(angle)).toFixed(2)),
+      cy: Number((SEAL.center + SEAL.radius * Math.sin(angle)).toFixed(2)),
+      lit: i < lit,
+    };
+  });
+}

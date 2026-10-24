@@ -4,19 +4,20 @@ import { cn } from "cn";
 
 import { CopyIcon, useCopy } from "@/components/account-id";
 import { GRADE_FILL } from "@/components/proto/grade";
-import { DotRing } from "@/components/proto/health-ring";
 import { Button } from "@/components/ui/button";
-import { clampScore, SEAL_RISE_MS } from "@/lib/brand";
+import { clampScore, SEAL, SEAL_RISE_MS, sealDots } from "@/lib/brand";
 import { useInSandbox } from "@/lib/nav";
 import type { Grade } from "@/lib/prototype/data";
 
 import { Lockup } from "./lockup";
 
 /**
- * The Proof of Life seal: the health instrument issued as a verdict (guidelines chapter 5). The
- * same `DotRing` as the live dial (5 rings, 100 columns, one per point of health), lit to the
- * report's score, with "Proof of Life", the grade and the quarter in the centre instead of the
- * counting numeral. On paper the lit dots take the grade's colour; on forest, lime. Only on the
+ * The Proof of Life seal, drawn as `sealInner()` in the guidelines (chapter 5): one ring of 100
+ * dots, one per point of health, lit up to the report's score, with "PROOF OF LIFE", the grade
+ * and the quarter in the centre. Not the live dial's five rings: the dial is the live reading,
+ * the seal the verdict issued each quarter. On paper the lit dots take the grade's colour; on
+ * forest, lime; unlit dots are the ink at 20%. With `rise`, the dots light in order and the grade
+ * is stamped after them (DESIGN.md, Motion); reduced motion shows the final frame. Only on the
  * quarterly report's header and its share card, always with the site's name and the quarter.
  */
 export function ProofOfLifeSeal({
@@ -24,7 +25,7 @@ export function ProofOfLifeSeal({
   grade,
   quarter,
   siteName,
-  size = 168,
+  size = 160,
   ground = "paper",
   rise = false,
   className,
@@ -41,51 +42,81 @@ export function ProofOfLifeSeal({
   className?: string;
 }) {
   const score = clampScore(health);
-  const forest = ground === "forest";
+  const dots = sealDots(score);
+  const lit = dots.filter((d) => d.lit).length;
+  const litFill = ground === "forest" ? "fill-lime" : GRADE_FILL[grade];
   return (
-    <DotRing
-      segments={[
-        {
-          columns: Math.round(score),
-          className: forest ? "fill-lime" : GRADE_FILL[grade],
-        },
-      ]}
-      size={size}
-      unlitClassName={forest ? "fill-primary-foreground/20" : undefined}
-      reveal={rise ? { from: 0, duration: SEAL_RISE_MS } : undefined}
-      label={`Proof of Life seal for ${siteName}, ${quarter}: grade ${grade}, health ${score.toFixed(1)} out of 100`}
-      className={className}
+    <svg
+      viewBox="0 0 100 100"
+      width={size}
+      height={size}
+      role="img"
+      aria-label={`Proof of Life seal for ${siteName}, ${quarter}: grade ${grade}, health ${score.toFixed(1)} out of 100`}
+      className={cn(
+        "shrink-0",
+        ground === "forest" ? "text-primary-foreground" : "text-foreground",
+        className,
+      )}
     >
-      <div
-        className={cn(
-          "grid justify-items-center leading-none",
-          forest ? "text-primary-foreground" : "text-foreground",
-        )}
-        style={{ gap: size * 0.04 }}
+      {dots.map((d, i) => (
+        <circle
+          key={i}
+          cx={d.cx}
+          cy={d.cy}
+          r={SEAL.dot}
+          className={d.lit ? cn(litFill, rise && "nx-dot-on") : "fill-current"}
+          opacity={d.lit ? undefined : SEAL.unlitOpacity}
+          style={
+            d.lit && rise
+              ? { animationDelay: `${Math.round((SEAL_RISE_MS * i) / lit)}ms` }
+              : undefined
+          }
+        />
+      ))}
+      <text
+        x={SEAL.center}
+        y={SEAL.title.y}
+        textAnchor="middle"
+        className="font-mono"
+        fontSize={SEAL.title.size}
+        letterSpacing={SEAL.title.tracking}
+        fill="currentColor"
+        opacity={SEAL.title.opacity}
       >
-        <span
-          className="font-mono tracking-[0.08em] uppercase opacity-75"
-          style={{ fontSize: Math.max(8, size * 0.05) }}
-        >
-          Proof of Life
-        </span>
-        <span
-          className={cn("font-serif", rise && "nx-stamp")}
-          style={{
-            fontSize: size * (grade.length > 2 ? 0.17 : 0.2),
-            animationDelay: rise ? `${SEAL_RISE_MS}ms` : undefined,
-          }}
-        >
-          {grade}
-        </span>
-        <span
-          className="font-mono tracking-[0.04em] opacity-85"
-          style={{ fontSize: Math.max(9, size * 0.058) }}
-        >
-          {quarter}
-        </span>
-      </div>
-    </DotRing>
+        {SEAL.title.text}
+      </text>
+      <text
+        x={SEAL.center}
+        y={SEAL.quarter.y}
+        textAnchor="middle"
+        className="font-mono"
+        fontSize={SEAL.quarter.size}
+        letterSpacing={SEAL.quarter.tracking}
+        fill="currentColor"
+        opacity={SEAL.quarter.opacity}
+      >
+        {quarter}
+      </text>
+      <text
+        x={SEAL.center}
+        y={SEAL.grade.y}
+        textAnchor="middle"
+        className={cn("font-serif", rise && "nx-stamp")}
+        fontSize={grade.length > 2 ? SEAL.grade.longSize : SEAL.grade.size}
+        fill="currentColor"
+        style={
+          rise
+            ? {
+                transformBox: "fill-box",
+                transformOrigin: "center",
+                animationDelay: `${SEAL_RISE_MS}ms`,
+              }
+            : undefined
+        }
+      >
+        {grade}
+      </text>
+    </svg>
   );
 }
 
