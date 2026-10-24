@@ -2,7 +2,7 @@
  * Bea's rules as pure functions (docs/design/bea-character.html; ux-writing §6): which of her
  * states a moment shows, when she says "Bzz", and what she greets a site with.
  */
-import type { BeaState } from "@/components/bea/bea";
+import type { BeaState } from "@/components/bea/states";
 import type { ReportOut } from "@/lib/api/types";
 import type { Grade } from "@/lib/prototype/data";
 import { GRADE_ORDER } from "@/lib/prototype/format";

@@ -6,7 +6,8 @@ import {
   ProofOfLifeShareCard,
   WildWorthMark,
 } from "@/components/brand";
-import { Bea, BEA_STATE_LABEL, type BeaState } from "@/components/bea/bea";
+import { Bea } from "@/components/bea/bea";
+import { BEA_STATE_LABEL, type BeaState } from "@/components/bea/states";
 import { DataLayerPanel } from "@/components/data-layer-panel";
 import { BRAND_ICONS } from "@/components/icons";
 import { DemoSiteImages } from "@/components/demo-site-images";

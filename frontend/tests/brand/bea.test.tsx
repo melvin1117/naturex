@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Bea, BEA_STATE_LABEL, type BeaState } from "@/components/bea/bea";
+import { Bea } from "@/components/bea/bea";
+import { BEA_STATE_LABEL, type BeaState } from "@/components/bea/states";
 
 const ROOT = join(__dirname, "../../..");
 

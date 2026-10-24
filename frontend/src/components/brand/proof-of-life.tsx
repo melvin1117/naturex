@@ -123,7 +123,7 @@ export function ProofOfLifeShareCard({
       role="group"
       aria-label="Share card"
       className={cn(
-        "relative grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 overflow-hidden rounded-3xl bg-primary p-6 text-primary-foreground shadow-soft",
+        "grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-3xl bg-primary p-6 text-primary-foreground shadow-soft",
         className,
       )}
     >
@@ -136,37 +136,36 @@ export function ProofOfLifeShareCard({
           Proof of Life · {quarter}
           {simulated && " · Simulated"} · Sandbox
         </p>
-        {!inSandbox && (
-          <>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="mt-4"
-              data-state={state}
-              onClick={() => void copy()}
-            >
-              <CopyIcon copied={state === "copied"} />
-              {state === "copied" ? "Link copied" : "Copy link to this report"}
-            </Button>
-            <p aria-live="polite" className="mt-1.5 min-h-4 text-xs">
-              {state === "copied" && (
-                <span className="sr-only">Link to this report copied.</span>
-              )}
-              {state === "failed" &&
-                "Couldn't copy. Copy the address from your browser."}
-            </p>
-          </>
-        )}
       </div>
       <ProofOfLifeSeal
         health={health}
         grade={grade}
         quarter={quarter}
         siteName={siteName}
-        size={128}
+        size={112}
         ground="forest"
       />
+      {!inSandbox && (
+        <div className="col-span-2">
+          <Button
+            type="button"
+            variant="on-image"
+            size="sm"
+            data-state={state}
+            onClick={() => void copy()}
+          >
+            <CopyIcon copied={state === "copied"} />
+            {state === "copied" ? "Link copied" : "Copy link to this report"}
+          </Button>
+          <p aria-live="polite" className="text-xs">
+            {state === "copied" && (
+              <span className="sr-only">Link to this report copied.</span>
+            )}
+            {state === "failed" &&
+              "Couldn't copy. Copy the address from your browser."}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

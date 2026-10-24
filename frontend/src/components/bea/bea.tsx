@@ -4,40 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
 import { BeaDrawing } from "./bea-drawing";
-import type { BeaDrawingState } from "./drawings";
+import {
+  BEA_CHARACTER_FROM_PX,
+  BEA_DRAWING,
+  BEA_STATE_LABEL,
+  type BeaState,
+} from "./states";
 
-/**
- * Bea's six states (docs/design/bea-character.html), each tied to a product moment:
- * - hello: the panel opens, or between answers;
- * - thinking: the model is answering (loops until text arrives);
- * - found: an answer with evidence, or a grade went up;
- * - downgrade: a grade fell, or WildWatch raised an alert;
- * - cant-answer: the Record has nothing on the question;
- * - waking: the free-tier backend is starting (about 30 s).
- */
-export type BeaState =
-  "hello" | "thinking" | "found" | "downgrade" | "cant-answer" | "waking";
-
-const DRAWING: Record<BeaState, BeaDrawingState> = {
-  hello: "neutral",
-  thinking: "think",
-  found: "happy",
-  downgrade: "alert",
-  "cant-answer": "sad",
-  waking: "sleep",
-};
-
-export const BEA_STATE_LABEL: Record<BeaState, string> = {
-  hello: "Hello",
-  thinking: "Thinking",
-  found: "Found it",
-  downgrade: "Downgrade",
-  "cant-answer": "Can't answer",
-  waking: "Waking up",
-};
-
-/** From this size up she's drawn in full; below it, as the avatar (the character sheet). */
-export const BEA_CHARACTER_FROM_PX = 64;
+export type { BeaState };
 
 /**
  * Bea, the field guide: ink only, in the logo's line (`currentColor`). At rest her wings
@@ -88,7 +62,7 @@ export function Bea({
             strokeWidth="5"
           />
           <g transform="translate(15 12) scale(.75)">
-            <BeaDrawing state={DRAWING[state]} />
+            <BeaDrawing state={BEA_DRAWING[state]} />
           </g>
         </svg>
       ) : (
@@ -99,7 +73,7 @@ export function Bea({
           className="bea-bob"
           {...a11y}
         >
-          <BeaDrawing state={DRAWING[state]} />
+          <BeaDrawing state={BEA_DRAWING[state]} />
         </svg>
       )}
     </span>
