@@ -187,8 +187,7 @@ footer{padding-block:88px 110px;font-size:13.5px;color:var(--muted)}
 /* Bea */
 .anim .bea-wl{transform-box:fill-box;transform-origin:100% 100%;animation:flapL .32s ease-in-out infinite alternate}
 .anim .bea-wr{transform-box:fill-box;transform-origin:0% 100%;animation:flapR .32s ease-in-out infinite alternate}
-.anim .bea-read{stroke-dasharray:100;animation:rise 4.5s var(--ease) infinite}
-.anim .bea-dot{transform-box:fill-box;transform-origin:center;animation:dot 4.5s var(--ease) infinite}
+@keyframes swing{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(8deg)}}
 /* Axo */
 .anim .axo-gl{transform-box:fill-box;transform-origin:100% 50%;animation:swayL 2.6s ease-in-out infinite}
 .anim .axo-gr{transform-box:fill-box;transform-origin:0% 50%;animation:swayR 2.6s ease-in-out infinite}
@@ -340,11 +339,11 @@ footer{padding-block:88px 110px;font-size:13.5px;color:var(--muted)}
     return '<path d="'+ant+'" fill="none" '+INK+'/>'+tips.map(function(t){return '<circle cx="'+t[0]+'" cy="'+t[1]+'" r="4.2" fill="currentColor"/>';}).join("")+
       '<g class="bea-wl"><ellipse cx="37" cy="44" rx="16" ry="10.5" transform="rotate(-28 37 44)" '+FILL+' '+INK+'/></g>'+
       '<g class="bea-wr"><ellipse cx="83" cy="44" rx="16" ry="10.5" transform="rotate(28 83 44)" '+FILL+' '+INK+'/></g>'+
+      '<path d="M55 104 L60 111 L65 104" fill="none" '+INK+'/>'+
       '<defs><clipPath id="'+id+'"><circle cx="60" cy="70" r="30"/></clipPath></defs>'+
       '<circle cx="60" cy="70" r="33" '+FILL+' '+INK+'/>'+
-      '<g clip-path="url(#'+id+')"><path d="M33 89 L41 99 L49 88 L57 99 L65 88 L72 99" fill="none" '+INK+'/>'+
-      '<path class="bea-read" pathLength="100" d="M72 99 L83 85" fill="none" '+INK+' '+ACC+'/></g><circle class="bea-dot" cx="83" cy="85" r="4.6" '+ACCF+'/>'+
-      '<path d="M55 104 L60 111 L65 104" fill="none" '+INK+'/>'+face(e,60,62,12,1);}
+      '<g clip-path="url(#'+id+')"><path d="M36 96 L48 84 L60 96 L72 84 L84 96" fill="none" '+INK+'/></g>'+
+      face(e,60,62,12,1);}
 
   function axo(e){var lift=e==="alert"?-4:e==="happy"?-2:0,gl="",gr="";
     var L=[[29,52,11,36],[26,63,7,61],[29,74,11,88]];
@@ -443,7 +442,7 @@ footer{padding-block:88px 110px;font-size:13.5px;color:var(--muted)}
 
   /* 24-px icons in the brand pack's style: 1.75 stroke, one accent */
   var ICON={
-    bea:'<ellipse cx="7.8" cy="7.4" rx="3.6" ry="2.3" transform="rotate(-28 7.8 7.4)"/><ellipse cx="16.2" cy="7.4" rx="3.6" ry="2.3" transform="rotate(28 16.2 7.4)"/><circle cx="12" cy="14" r="6.4"/><path d="M7 16.3l1.6 2 1.6-2.3 1.6 2.3 1.6-2.3"/><path class="as" d="M13.4 16l2.4-2.8" stroke-width="2"/><circle class="f" cx="10" cy="12.2" r=".95"/><circle class="f" cx="14" cy="12.2" r=".95"/>',
+    bea:'<ellipse cx="7.8" cy="7.2" rx="3.6" ry="2.3" transform="rotate(-28 7.8 7.2)"/><ellipse cx="16.2" cy="7.2" rx="3.6" ry="2.3" transform="rotate(28 16.2 7.2)"/><circle cx="12" cy="14" r="6.4"/><path d="M7.4 17.2 9.7 14.9 12 17.2 14.3 14.9 16.6 17.2" stroke-width="1.5"/><circle class="f" cx="10" cy="11.1" r=".95"/><circle class="f" cx="14" cy="11.1" r=".95"/><path d="M10.7 12.8q1.3 1 2.6 0" stroke-width="1.3"/><path d="M10.7 20.5 12 22.5l1.3-2"/>',
     axo:'<path d="M5.2 10 2.6 7.6M4.8 13H2M5.2 16l-2.6 2.4M19.2 13H22M18.8 16l2.6 2.4"/><path class="as" d="M18.8 10l2.6-2.4" stroke-width="2"/><ellipse cx="12" cy="13" rx="6.8" ry="5.4"/><circle class="f" cx="9.4" cy="12.4" r="1"/><circle class="f" cx="14.6" cy="12.4" r="1"/><path d="M9.2 15.2q2.8 1.7 5.6 0"/>',
     pip:'<path class="as" d="M3 21h14l3.5-2.5" stroke-width="2"/><path d="M4.5 16.4c0-3.9 3.4-6.4 7.5-6.4s7.5 2.5 7.5 6.4c0 1.4-1.2 2.1-2.7 2.1H7.2c-1.5 0-2.7-.7-2.7-2.1z"/><circle cx="8.4" cy="8.6" r="2.8"/><circle cx="15.6" cy="8.6" r="2.8"/><circle class="f" cx="8.4" cy="8.6" r=".9"/><circle class="f" cx="15.6" cy="8.6" r=".9"/><path d="M9.4 14.6q2.6 1.5 5.2 0"/>',
     burl:'<path d="M12 9V5.2"/><path class="as" d="M12 6.4c-.9-1.8-2.8-2.4-4.3-1.8.4 1.7 2.3 2.4 4.3 1.8zM12 5.8c.8-1.5 2.4-2 3.7-1.4-.3 1.4-1.8 2-3.7 1.4z" stroke-width="1.6"/><rect x="5.5" y="9" width="13" height="12" rx="3"/><path d="M6 10.6c1.3.8 3.5 1.2 6 1.2s4.7-.4 6-1.2" opacity=".6"/><circle class="f" cx="9.8" cy="15" r="1"/><circle class="f" cx="14.2" cy="15" r="1"/><path d="M10.8 18h2.4"/>',
@@ -453,7 +452,7 @@ footer{padding-block:88px 110px;font-size:13.5px;color:var(--muted)}
     sprig:'<path class="af" d="M12 10C10.4 8 10.6 5.2 12 3.6 13.4 5.2 13.6 8 12 10z"/><path class="af" d="M11.6 10.2C9.4 10.1 7.6 8.6 7.2 6.6 9.3 6.4 11.1 7.9 11.6 10.2z"/><path class="af" d="M12.4 10.2c2.2-.1 4-1.6 4.4-3.6-2.1-.2-3.9 1.3-4.4 3.6z"/><rect x="8.6" y="10.2" width="6.8" height="9.6" rx="3"/><path d="M8.6 14.6 6 13M15.4 14.6 18 13"/><path d="M4.5 21.6l1.6-1.4 1.6 1.4 1.6-1.4 1.6 1.4 1.6-1.4 1.6 1.4 1.6-1.4 1.6 1.4 1.6-1.4 1.6 1.4" stroke-width="1.5"/><circle class="f" cx="10.9" cy="13.6" r=".8"/><circle class="f" cx="13.1" cy="13.6" r=".8"/>',
     wade:'<path d="M9.8 3.4C8.6 2.2 7 2 5.6 2.6"/><circle cx="12" cy="6" r="3.2"/><path d="M10.9 9.1 12 12.4l1.1-3.3"/><ellipse cx="11.5" cy="15" rx="4.6" ry="2.6"/><path d="M11.5 17.6v3"/><path class="as" d="M7.4 21.4h8.2" stroke-width="1.9"/><circle class="f" cx="10.9" cy="5.6" r=".7"/><circle class="f" cx="13.1" cy="5.6" r=".7"/>'
   };
-  function gl(k,px){return '<svg class="gl" width="'+px+'" height="'+px+'" viewBox="0 0 24 24" aria-hidden="true">'+ICON[k]+'</svg>';}
+  function gl(k,px){if(k==="bea")return '<svg width="'+px+'" height="'+px+'" viewBox="10 12 100 100" aria-hidden="true">'+bea("neutral")+'</svg>';return '<svg class="gl" width="'+px+'" height="'+px+'" viewBox="0 0 24 24" aria-hidden="true">'+ICON[k]+'</svg>';}
 
   var Q="Why did Xochimilco drop to BBB?";
   var REACT=" Downgrade: a short shake and worried eyes. Upgrade: a hop and a smile.";
@@ -472,11 +471,11 @@ footer{padding-block:88px 110px;font-size:13.5px;color:var(--muted)}
      one:"The bee who never sent an invoice, finally speaking up.",
      traits:["Busy","Cheerful","Exact","Never overclaims"],
      why:"Your pitch opens with “The bees never sent an invoice.” Bea is that bee. A bee belongs on every site: wetland, mangrove or forest.",
-     tie:"Her stripe is the WildWorth zigzag, and its last stroke rises in lime to the dot, exactly like the logo. She wears the brand.",
-     motion:"Wings flutter. Every few seconds her stripe redraws and the lime stroke rises to the dot, the logo's own animation.",
+     tie:"Her stripe is two carets of the WildWorth zigzag, centred on her body. Ink only, like the logo's line. Full sheet: bea-character.html.",
+     motion:"Wings flutter, she bobs gently and blinks.",
      say:"“Bzz. I've visited every flower here. Let me show you what I saw.”",
      ans:"Bzz. Two local news reports and the satellites agree: about 40 ha at the northern edge were cleared for an industrial site. That pulled the Health score from 74.2 to 63.8, so the grade fell to BBB.",
-     pros:["Ties straight to the pitch's first line","Works on every kind of site","Carries the logo's line and its animation on her body"],
+     pros:["Ties straight to the pitch's first line","Works on every kind of site","Wears the logo's zigzag as her stripe"],
      watch:["Keep “Bzz” to greetings, not every line","Bee mascots are common; the zigzag stripe is what makes her ours"]},
     {k:"axo",fn:axo,name:"Axo",kind:"The axolotl",
      one:"The hero site's famous resident, always smiling, always healing.",

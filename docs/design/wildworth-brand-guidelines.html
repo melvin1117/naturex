@@ -7,6 +7,7 @@
 /* Layout: a brand book. Numbered chapters in one editorial column; the logo, icons and colour
    are shown on fixed "printed" grounds (paper, forest, machine) so they look the same in either theme. */
 :root{
+  --chbg:var(--surface);
   --bg:oklch(0.945 0.011 125);
   --surface:oklch(0.99 0.005 118);
   --raised:oklch(0.915 0.016 128);
@@ -81,11 +82,11 @@ section{padding-block:104px 0;scroll-margin-top:64px}
 .cols3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border-top:1px solid var(--line);margin-top:24px}
 .cols2 h4,.cols3 h4{font:600 14.5px var(--body);margin-bottom:8px}
 ul.list{margin:0;padding-left:1.1em;display:grid;gap:7px;font-size:15px}
-.on-paper{background:var(--paper);color:var(--forest-ink)}
-.on-forest{background:var(--forest);color:var(--paper)}
-.on-lime{background:var(--lime);color:var(--forest-ink)}
-.on-machine{background:var(--forest-deep);color:var(--machine-ink)}
-.on-lichen{background:var(--lichen);color:var(--forest-ink)}
+.on-paper{background:var(--paper);color:var(--forest-ink);--chbg:var(--paper)}
+.on-forest{background:var(--forest);color:var(--paper);--chbg:var(--forest)}
+.on-lime{background:var(--lime);color:var(--forest-ink);--chbg:var(--lime)}
+.on-machine{background:var(--forest-deep);color:var(--machine-ink);--chbg:var(--forest-deep)}
+.on-lichen{background:var(--lichen);color:var(--forest-ink);--chbg:var(--lichen)}
 
 /* nav */
 .top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:color-mix(in oklch,var(--bg) 86%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
@@ -261,7 +262,7 @@ th{font:500 11px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;c
 
 /* features */
 .feat td:first-child{width:64px}
-.feat .ic{display:grid;place-items:center;width:44px;height:44px;border-radius:13px;background:var(--paper);color:var(--forest-ink);box-shadow:0 0 0 1px var(--line)}
+.feat .ic{display:grid;place-items:center;width:44px;height:44px;border-radius:13px;background:var(--paper);--chbg:var(--paper);color:var(--forest-ink);box-shadow:0 0 0 1px var(--line)}
 .feat .nm{font:400 21px/1.15 var(--display)}
 .feat .was{font-size:13px;color:var(--muted)}
 .feat .chg{font:500 10.5px var(--mono);letter-spacing:.05em;text-transform:uppercase;padding:4px 8px;border-radius:99px;white-space:nowrap}
@@ -275,6 +276,7 @@ th{font:500 11px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;c
 .apps .hdr .app{padding-left:10px;border-left:1px solid currentColor;opacity:.7;white-space:nowrap}
 .apps .was{font-size:12.5px;opacity:.7}
 .apps h3{font:400 30px/1 var(--display)}
+.apphead{display:flex;align-items:center;gap:10px}
 .apps p{font-size:14.5px}
 
 /* voice */
@@ -292,6 +294,28 @@ th{font:500 11px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;c
 .vocab td:nth-child(2){color:var(--accent-ink);font-weight:600}
 .vocab td:nth-child(3){color:var(--warn-ink)}
 
+/* Bea, the field guide */
+.beagrid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr)}
+.beastage{display:grid;place-items:center;min-height:340px;padding:32px;--chbg:var(--lichen)}
+.beastage svg{width:min(240px,100%);height:auto;display:block}
+.beatext{padding:30px 30px 28px;display:grid;gap:14px;align-content:start}
+.beaname{font:400 72px/.9 var(--display);letter-spacing:-.03em}
+.beatext .one{font:400 clamp(22px,2.4vw,28px)/1.2 var(--display);color:var(--accent-ink)}
+.beatext a.btn{text-decoration:none;display:inline-block}
+.beastates{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border-top:1px solid var(--line)}
+.beastates figure{margin:0;display:grid;justify-items:center;gap:6px;padding:18px 8px;background:var(--surface);color:var(--ink);--chbg:var(--surface)}
+.beastates svg{width:88px;height:88px}
+.beastates figcaption{font:500 10.5px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);text-align:center}
+@keyframes beabob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.anim svg.beabig{animation:beabob 3.6s ease-in-out infinite}
+.anim .eyes{transform-box:fill-box;transform-origin:center;animation:blink 5s infinite}
+@keyframes blink{0%,94%,100%{transform:scaleY(1)}96.5%{transform:scaleY(.12)}}
+.anim .bea-wl{transform-box:fill-box;transform-origin:100% 100%;animation:flapL .32s ease-in-out infinite alternate}
+.anim .bea-wr{transform-box:fill-box;transform-origin:0% 100%;animation:flapR .32s ease-in-out infinite alternate}
+@keyframes flapL{to{transform:rotate(-16deg)}}
+@keyframes flapR{to{transform:rotate(16deg)}}
+@media (max-width:980px){.beagrid{grid-template-columns:minmax(0,1fr)}.beastates{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
 /* motion */
 .moves{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .moves>div{background:var(--surface);border-radius:20px;padding:20px;box-shadow:var(--shadow);display:grid;gap:8px;align-content:start}
@@ -303,14 +327,14 @@ th{font:500 11px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;c
 
 /* applications */
 .mocks{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;padding:24px 28px 28px}
-.mock{border-radius:20px;overflow:hidden;background:var(--lichen);color:var(--forest-ink);box-shadow:0 0 0 1px oklch(0.3 0.05 145/0.08)}
+.mock{border-radius:20px;overflow:hidden;background:var(--lichen);--chbg:var(--lichen);color:var(--forest-ink);box-shadow:0 0 0 1px oklch(0.3 0.05 145/0.08)}
 .sandbox{background:var(--forest);color:var(--paper);font:500 11.5px var(--body);padding:7px 16px;display:flex;justify-content:space-between;gap:12px}
 .appbar{display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;background:color-mix(in oklch,var(--paper) 80%,var(--lichen));border-bottom:1px solid oklch(0.885 0.014 128);font-size:14px;min-width:0}
 .appbar .lk{font-size:22px}
 .appbar .app{padding-left:12px;border-left:1px solid oklch(0.85 0.02 128);color:oklch(0.47 0.035 145);white-space:nowrap}
 .appbar nav{display:flex;gap:4px;margin-left:auto;min-width:0;overflow:hidden}
 .appbar nav span{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;white-space:nowrap;font-size:13px}
-.appbar nav span.on{background:var(--paper);box-shadow:0 1px 3px oklch(0.3 0.05 145/0.12)}
+.appbar nav span.on{background:var(--paper);--chbg:var(--paper);box-shadow:0 1px 3px oklch(0.3 0.05 145/0.12)}
 .rcardm{margin:18px;padding:22px;border-radius:24px;background:var(--paper);display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:center;box-shadow:0 10px 30px -14px oklch(0.3 0.05 145/0.25)}
 .rcardm .seal svg{width:104px;height:104px;color:var(--forest-ink);display:block}
 .rcardm .k{font:500 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:oklch(0.47 0.035 145)}
@@ -718,9 +742,29 @@ footer ol{margin:10px 0 0;padding-left:1.2em;display:grid;gap:5px}
       <thead><tr><th></th><th>Name in the UI</th><th>Feature</th><th>Status</th><th>How it appears</th></tr></thead>
       <tbody id="featRows"></tbody>
     </table></div></div>
+    <h3 class="h3" style="margin-top:24px">Bea, the field guide</h3>
+    <div class="panel">
+      <div class="beagrid">
+        <div class="beastage on-lichen anim"><span id="beaHero"></span></div>
+        <div class="beatext">
+          <p class="label">Replaces “Copilot”</p>
+          <p class="beaname">Bea</p>
+          <p class="one">The bee who never sent an invoice, finally speaking up.</p>
+          <p>Bea answers questions about a site from its own Record: the satellite record, the local news and every rating. She's busy, cheerful and exact. She never overclaims, and she always shows where an answer came from.</p>
+          <ul class="list">
+            <li><b>In the UI:</b> the button is <b>Ask Bea</b>, the panel title is <b>Bea · your field guide</b>, and the Agent Trace shows <b>Bea (Nemotron Nano)</b>.</li>
+            <li><b>How she's drawn:</b> ink only, in the logo's line weight. Her stripe is two carets of the WildWorth zigzag, centred. No colour, by design.</li>
+            <li><b>How she talks:</b> “Bzz” only to open a first answer. Every number comes from the Record with its source. Never invest, returns or buy.</li>
+          </ul>
+          <p><a class="btn primary" href="https://claude.ai/artifact/4mMmUYgP7Z6Dz23B4159Qq">Open Bea's character sheet</a></p>
+          <p class="small muted">In the repo: <span class="mono">docs/design/bea-character.html</span> (states, motion, sizes, product use, voice and don'ts).</p>
+        </div>
+      </div>
+      <div class="beastates" id="beaStates"></div>
+    </div>
     <h3 class="h3" style="margin-top:24px">The three apps</h3>
     <div class="apps" id="apps"></div>
-    <p class="small muted">Routes stay as they are (<span class="mono">/</span>, <span class="mono">/steward</span>, <span class="mono">/admin</span>); only the names people read change. “Exchange” goes because it suggests a real securities exchange.</p>
+    <p class="small muted">Routes stay as they are (<span class="mono">/</span>, <span class="mono">/steward</span>, <span class="mono">/admin</span>); only the names people read change. Because “Exchange” can suggest a real securities exchange, it always appears with the sandbox line: “Sandbox · play money only.”</p>
   </div>
 </section>
 
@@ -787,7 +831,7 @@ footer ol{margin:10px 0 0;padding-left:1.2em;display:grid;gap:5px}
     <div class="mocks">
       <div class="mock">
         <div class="sandbox"><span>Sandbox · play money only</span><span>Arjun · supporter</span></div>
-        <div class="appbar"><span class="lk" data-lock="ww" data-read="lime-ink"></span><span class="app">Ratings</span><nav aria-hidden="true" id="mockNav"></nav></div>
+        <div class="appbar"><span class="lk" data-lock="ww" data-read="lime-ink"></span><span class="app">Exchange</span><nav aria-hidden="true" id="mockNav"></nav></div>
         <div class="rcardm">
           <span class="seal" id="mockSeal"></span>
           <div>
@@ -856,6 +900,7 @@ footer ol{margin:10px 0 0;padding-left:1.2em;display:grid;gap:5px}
   function grade(s){for(var i=0;i<GRADES.length;i++){var g=GRADES[i];if(s>=g[0])return {g:g[1],label:g[2],bg:ok(g[3],g[4],g[5]),fg:g[6]};}}
   var C={lime:"oklch(0.86 0.135 126)","lime-ink":"oklch(0.42 0.1 135)",forest:"oklch(0.31 0.062 148)",accent:"var(--accent-ink)"};
   var MASTER=77.6;
+  var BSW=6,buid=0,BINK='stroke="currentColor" stroke-width="'+BSW+'" stroke-linecap="round" stroke-linejoin="round"',BFILL='style="fill:var(--chbg)"';
   var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   function clamp(s){return Math.max(0,Math.min(100,s));}
 
@@ -1016,6 +1061,10 @@ footer ol{margin:10px 0 0;padding-left:1.2em;display:grid;gap:5px}
     back:'<path d="M5 21h14"/><path d="M12 21V5"/><path class="af" d="M12 4.5h6.8l-1.6 2.6 1.6 2.6H12z"/>',
     stakes:'<path d="M12 3.2 20.8 8 12 12.8 3.2 8z"/><path d="M3.2 12.2 12 17l8.8-4.8"/><path class="as" d="M3.2 16.2 12 21l8.8-4.8" stroke-width="2"/>',
     fund:'<circle class="af" cx="12" cy="7" r="2.7"/><circle cx="5.3" cy="10.2" r="2"/><circle cx="18.7" cy="10.2" r="2"/><path d="M3 20c.5-3.6 4.5-5.6 9-5.6s8.5 2 9 5.6"/>',
+    exchange:'<path d="M4 8.5h14.5"/><path d="M15 5l3.5 3.5L15 12"/><path class="as" d="M20 15.5H5.5" stroke-width="2"/><path class="as" d="M9 12l-3.5 3.5L9 19" stroke-width="2"/>',
+    stewards:'<path d="M5.5 19.5v-7.3L12 7l6.5 5.2v7.3"/><path d="M10 19.5v-4.2h4v4.2"/><path class="as" d="M2.5 19.5h19" stroke-width="2"/>',
+    control:'<path d="M5.5 3.5v3.3M5.5 11.2v9.3M12 3.5v9.3M12 17.2v3.3M18.5 3.5v1.3M18.5 9.2v11.3"/><circle cx="5.5" cy="9" r="2.2"/><circle class="af" cx="12" cy="15" r="2.2"/><circle cx="18.5" cy="7" r="2.2"/>',
+    bea:'<ellipse cx="7.8" cy="7.2" rx="3.6" ry="2.3" transform="rotate(-28 7.8 7.2)"/><ellipse cx="16.2" cy="7.2" rx="3.6" ry="2.3" transform="rotate(28 16.2 7.2)"/><circle cx="12" cy="14" r="6.4"/><path d="M7.4 17.2 9.7 14.9 12 17.2 14.3 14.9 16.6 17.2" stroke-width="1.5"/><circle class="f" cx="10" cy="11.1" r=".95"/><circle class="f" cx="14" cy="11.1" r=".95"/><path d="M10.7 12.8q1.3 1 2.6 0" stroke-width="1.3"/><path d="M10.7 20.5 12 22.5l1.3-2"/>',
     ask:'<path d="M4 4.6h16v10.6h-8.6L7 19.2v-4H4z"/><path d="M8 8.6h7M8 11.6h4.5"/><circle class="af" cx="17" cy="11.7" r="1.7"/>',
     alerts:'<path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14z"/><path d="M10 20.6a2 2 0 0 0 4 0"/><circle class="af" cx="18.4" cy="5.6" r="2.6"/>',
     recovery:'<path d="M3 19.5h4.2v-4h4.2v-4h4.2v-4H20"/><path class="as" d="M15.6 3.8H20v4.4" stroke-width="2"/>',
@@ -1028,12 +1077,16 @@ footer ol{margin:10px 0 0;padding-left:1.2em;display:grid;gap:5px}
     habitat:'<path d="M3.5 12.5c1 5 4.5 7.5 8.5 7.5s7.5-2.5 8.5-7.5z"/><path d="M6 15.5h12" opacity=".45"/><ellipse class="af" cx="12" cy="9" rx="2.7" ry="3.3"/>',
     recreation:'<path d="M3 14.5h18l-2.4 4H5.4z"/><path d="M6.5 14.5V9h11v5.5"/><path d="M5 9h14"/><path class="as" d="M2.5 21.5c2-1 4-1 6 0s4 1 6 0 4-1 6 0" stroke-width="1.9"/>'
   };
-  function gl(k,px){return '<svg class="gl" width="'+(px||28)+'" height="'+(px||28)+'" viewBox="0 0 24 24" aria-hidden="true">'+GL[k]+'</svg>';}
+  function gl(k,px){
+    /* Bea's icon is the Bea drawing itself, scaled down, so the icon and the character always match. */
+    if(k==="bea")return '<svg width="'+(px||28)+'" height="'+(px||28)+'" viewBox="10 12 100 100" aria-hidden="true">'+beaDraw("neutral")+'</svg>';
+    return '<svg class="gl" width="'+(px||28)+'" height="'+(px||28)+'" viewBox="0 0 24 24" aria-hidden="true">'+GL[k]+'</svg>';}
   var ICONS=[
     ["The rating",[["proof","Proof of Life"],["health","Health score"],["worth","Worth range"],["wildwatch","WildWatch"],["record","The Record"],["verify","Verified land"]]],
     ["Communities and supporters",[["list","List your land"],["evidence","Field evidence"],["offer","Opening offer"],["back","Back this site"],["stakes","Your stakes"],["fund","Community fund"],["recovery","Recovery plan"],["sites","Rated sites"]]],
     ["Ecosystem services",[["carbon","Carbon"],["water","Water"],["flood","Flood protection"],["habitat","Habitat"],["recreation","Recreation"]]],
-    ["Help and the sandbox",[["ask","Ask about this site"],["alerts","Alerts"],["tour","Guided tour"],["time","Time Machine"],["sandbox","Sandbox"]]]
+    ["Apps",[["exchange","Exchange"],["stewards","Stewards"],["control","Control room"]]],
+    ["Help and the sandbox",[["bea","Ask Bea"],["alerts","Alerts"],["tour","Guided tour"],["time","Time Machine"],["sandbox","Sandbox"]]]
   ];
   var MACHINE=[["The machine layer",[["trace","Agent Trace"],["satellite","Satellite record"],["news","News Scout"],["auditor","Auditor"],["live","Live"],["record","The Record"]]]];
   function sheet(groups){return groups.map(function(g){return '<h4>'+g[0]+'</h4>'+g[1].map(function(i){return '<figure>'+gl(i[0])+'<figcaption>'+i[1]+'</figcaption><small>'+i[0]+'</small></figure>';}).join("");}).join("");}
@@ -1044,6 +1097,35 @@ footer ol{margin:10px 0 0;padding-left:1.2em;display:grid;gap:5px}
     el.innerHTML=g+'<rect x="2" y="2" width="20" height="20" fill="none" stroke="oklch(0.86 0.135 126)" stroke-width=".12" stroke-dasharray=".5 .4"/><g class="gl" style="stroke-width:1.75">'+GL.wildwatch+'</g>';})();
   document.getElementById("iconSizes").innerHTML=[16,20,24,32].map(function(s){return '<figure><span style="color:var(--ink)">'+gl("proof",s)+'</span><figcaption>'+s+'</figcaption></figure>';}).join("")+
     [16,24].map(function(s){return '<figure><span style="color:var(--ink)">'+gl("wildwatch",s)+'</span><figcaption>'+s+'</figcaption></figure>';}).join("");
+
+  /* ---------- Bea, the field guide (same drawing as docs/design/bea-character.html) ---------- */
+  function bface(e,cx,cy,dx){var eyes="",o="",w=6.5;
+    [cx-dx,cx+dx].forEach(function(x){
+      if(e==="happy"){eyes+='<path d="M'+(x-4.6)+' '+(cy+1.6)+' Q'+x+' '+(cy-4.6)+' '+(x+4.6)+' '+(cy+1.6)+'" fill="none" '+BINK+'/>';}
+      else{var r=e==="alert"?5.4:4.3,ox=e==="think"?2.4:0,oy=e==="think"?-2.4:0;eyes+='<circle cx="'+(x+ox)+'" cy="'+(cy+oy)+'" r="'+r+'" fill="currentColor"/>';}
+      if(e==="alert"){var l=x<cx;o+='<path d="M'+(x-4.5)+' '+(cy-(l?9:12))+' L'+(x+4.5)+' '+(cy-(l?12:9))+'" fill="none" '+BINK+' stroke-width="4.2"/>';}
+    });
+    o='<g class="eyes">'+eyes+'</g>'+o;
+    if(e==="neutral")o+='<path d="M'+(cx-w)+' '+(cy+10)+' Q'+cx+' '+(cy+15.5)+' '+(cx+w)+' '+(cy+10)+'" fill="none" '+BINK+'/>';
+    if(e==="think")o+='<path d="M'+(cx-3)+' '+(cy+12.5)+' L'+(cx+4.5)+' '+(cy+11.5)+'" fill="none" '+BINK+'/>';
+    if(e==="alert")o+='<circle cx="'+cx+'" cy="'+(cy+13)+'" r="3.2" fill="none" '+BINK+' stroke-width="4.5"/>';
+    if(e==="happy")o+='<path d="M'+(cx-w-1.5)+' '+(cy+9)+' Q'+cx+' '+(cy+19)+' '+(cx+w+1.5)+' '+(cy+9)+'" fill="none" '+BINK+'/>';
+    return o;}
+  function beaDraw(e){var id="bg"+(buid++),al=e==="alert";
+    var ant=al?'M51 38 L45 14M69 38 L75 14':'M52 38 Q47 24 41 19M68 38 Q73 24 79 19',tips=al?[[45,14],[75,14]]:[[41,19],[79,19]];
+    var o='<path d="'+ant+'" fill="none" '+BINK+'/>'+tips.map(function(t){return '<circle cx="'+t[0]+'" cy="'+t[1]+'" r="4.2" fill="currentColor"/>';}).join("")+
+      '<g class="bea-wl"><ellipse cx="37" cy="44" rx="16" ry="10.5" transform="rotate(-28 37 44)" '+BFILL+' '+BINK+'/></g>'+
+      '<g class="bea-wr"><ellipse cx="83" cy="44" rx="16" ry="10.5" transform="rotate(28 83 44)" '+BFILL+' '+BINK+'/></g>'+
+      '<path d="M55 104 L60 111 L65 104" fill="none" '+BINK+'/>'+
+      '<defs><clipPath id="'+id+'"><circle cx="60" cy="70" r="30"/></clipPath></defs>'+
+      '<circle cx="60" cy="70" r="33" '+BFILL+' '+BINK+'/>'+
+      '<g clip-path="url(#'+id+')"><path d="M36 96 L48 84 L60 96 L72 84 L84 96" fill="none" '+BINK+'/></g>'+bface(e,60,62,12);
+    if(e==="think")o+='<circle cx="96" cy="58" r="3" fill="currentColor"/><circle cx="104" cy="50" r="3.6" fill="currentColor"/><circle cx="112" cy="40" r="4.2" fill="currentColor"/>';
+    return o;}
+  function beaSvg(e,cls,label){return '<svg viewBox="0 0 120 120"'+(cls?' class="'+cls+'"':'')+' role="img" aria-label="'+label+'">'+beaDraw(e)+'</svg>';}
+  document.getElementById("beaHero").innerHTML=beaSvg("neutral","beabig","Bea, WildWorth's field guide");
+  document.getElementById("beaStates").innerHTML=[["neutral","Hello"],["think","Thinking"],["happy","Found it · upgrade"],["alert","Downgrade"]].map(function(x){
+    return '<figure class="anim">'+beaSvg(x[0],"","Bea, "+x[1])+'<figcaption>'+x[1]+'</figcaption></figure>';}).join("");
 
   /* ---------- feature names ---------- */
   var FEATS=[
@@ -1057,7 +1139,7 @@ footer ol{margin:10px 0 0;padding-left:1.2em;display:grid;gap:5px}
     ["trace","Agent Trace","Every model call, formula and step","keep","Open the Agent Trace"],
     ["auditor","Auditor","The model that may move a score by ±10 with evidence","keep","Auditor adjusted −6.0 (cited: event #3)"],
     ["news","News Scout","Finds and classifies local news","keep","News Scout found 3 events near the site"],
-    ["ask","Ask about this site","Answers from the site's own record (was Copilot)","new","Ask about this site"],
+    ["bea","Ask Bea","Bea, the field guide: answers from the site's own Record (was Copilot)","new","Ask Bea · Bea · your field guide"],
     ["sites","Rated sites","The marketplace page","new","Rated sites · 3 sites"],
     ["back","Back this site","Buying units, outside the trade panel","keep","Back this site"],
     ["stakes","Your stakes","The portfolio page","keep","Your stakes · $10,000 play money"],
@@ -1068,17 +1150,17 @@ footer ol{margin:10px 0 0;padding-left:1.2em;display:grid;gap:5px}
   document.getElementById("featRows").innerHTML=FEATS.map(function(f){
     return '<tr><td><span class="ic">'+gl(f[0],24)+'</span></td><td><span class="nm">'+f[1]+'</span></td><td><span class="was">'+f[2]+'</span></td><td><span class="chg '+f[3]+'">'+(f[3]==="new"?"New name":"Kept")+'</span></td><td class="ui">'+f[4]+'</td></tr>';}).join("");
   var APPS=[
-    ["on-paper","Ratings","Was: Exchange","Open to everyone. Browse rated sites, read each Proof of Life, back a site with play money.","Rated sites · Your stakes · Ask about this site"],
-    ["on-lichen","Communities","Was: Steward","For the people who keep the land. List land, add field evidence, open to supporters, see the community fund.","Home · List your land · Recovery plan"],
-    ["on-machine","Control room","Kept","For platform admins. The Time Machine, land checks and the Record.","Time Machine · Verified land · The Record"]
+    ["on-paper","Exchange","Kept","Open to everyone. Browse rated sites, read each Proof of Life, back a site with play money. Always shown with the sandbox line.","Rated sites · Your stakes · Ask Bea","exchange"],
+    ["on-lichen","Stewards","Was: Steward","For the people who keep the land. List land, add field evidence, open to supporters, see the community fund.","Home · List your land · Recovery plan","stewards"],
+    ["on-machine","Control room","Kept","For platform admins. The Time Machine, land checks and the Record.","Time Machine · Verified land · The Record","control"]
   ];
   document.getElementById("apps").innerHTML=APPS.map(function(a){var dark=a[0]==="on-machine";
     return '<div class="'+a[0]+'"><div class="hdr" style="background:'+(dark?'oklch(0.26 0.038 156)':'var(--paper)')+'"><span class="lk">'+wwSvg(MASTER,dark?C.lime:C["lime-ink"],{label:""})+wordmark()+'</span><span class="app">'+a[1]+'</span></div>'+
-      '<p class="was">'+a[2]+'</p><h3>'+a[1]+'</h3><p>'+a[3]+'</p><p class="was">Nav: '+a[4]+'</p></div>';}).join("");
+      '<p class="was">'+a[2]+'</p><div class="apphead">'+gl(a[5],30)+'<h3>'+a[1]+'</h3></div><p>'+a[3]+'</p><p class="was">Nav: '+a[4]+'</p></div>';}).join("");
 
   /* ---------- mockups ---------- */
   var xg=grade(MASTER);
-  document.getElementById("mockNav").innerHTML='<span class="on">'+gl("sites",16)+'Rated sites</span><span>'+gl("stakes",16)+'Your stakes</span><span>'+gl("ask",16)+'Ask</span>';
+  document.getElementById("mockNav").innerHTML='<span class="on">'+gl("sites",16)+'Rated sites</span><span>'+gl("stakes",16)+'Your stakes</span><span>'+gl("bea",16)+'Ask Bea</span>';
   document.getElementById("mockSeal").innerHTML=sealSvg(MASTER,{lit:xg.bg});
   var mg=document.getElementById("mockGrade");mg.style.background=xg.bg;mg.style.color=xg.fg;
   document.getElementById("mockSvc").innerHTML=[["water","Water"],["flood","Flood"],["carbon","Carbon"],["habitat","Habitat"],["recreation","Recreation"]].map(function(s){return '<span>'+gl(s[0],16)+s[1]+'</span>';}).join("");
@@ -1089,7 +1171,7 @@ footer ol{margin:10px 0 0;padding-left:1.2em;display:grid;gap:5px}
     return '<div class="tab'+(i===0?' on':'')+'"><span style="color:oklch(0.255 0.045 148);display:flex">'+wwSvg(x[1],g.bg,{size:16,small:true,label:""})+'</span><span>'+x[0]+' · WildWorth</span></div>';}).join("");
 
   /* ---------- checklist (per-viewer only) ---------- */
-  var CHECK=["The name is written WildWorth, one word, two capitals.","The logo's reading shows a real score, or the master 77.6.","Lime appears only for the reading, live states and confirmations.",
+  var CHECK=["The name is written WildWorth, one word, two capitals.","The assistant is Bea; its button says Ask Bea, never Copilot.","The logo's reading shows a real score, or the master 77.6.","Lime appears only for the reading, live states and confirmations.",
     "Every number shows its range and confidence.","Grades show letter, score and label on first mention.","Direction uses ▲ ▼ or words, not colour alone.",
     "No invest, returns, profit or opportunity anywhere.","“Sandbox · play money only” is visible on first mention.","Proof of Life is written in full, with a site and a quarter.",
     "Icons come from the WildWorth pack, with a text label in navigation.","Text pairs pass 4.5:1 (see Colour).","Motion plays once and respects reduced motion."];
