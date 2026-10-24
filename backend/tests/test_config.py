@@ -1,6 +1,7 @@
 """Settings load .env from the repo root (README) and backend/, unless WILDWORTH_ENV_FILE=none
 (or its pre-rename name, NATUREX_ENV_FILE=none)."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -86,3 +87,35 @@ def test_the_pre_rename_switch_still_works(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setenv("NATUREX_ENV_FILE", "none")
 
     assert Settings().app_name == "WildWorth"
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _postgres_env(text: str) -> tuple[str, str, str]:
+    values = dict(re.findall(r"POSTGRES_(USER|PASSWORD|DB): (\S+)", text))
+    return values["USER"], values["PASSWORD"], values["DB"]
+
+
+def test_every_setup_file_names_the_same_database() -> None:
+    """compose, .env.example, the Settings default, CI and E2E agree, so a partial rename can't
+    pass CI and leave a fresh setup unable to connect."""
+    default = Settings.model_fields["database_url"].default
+    env_example = (REPO_ROOT / ".env.example").read_text()
+    assert f"\nDATABASE_URL={default}\n" in env_example
+    url = re.fullmatch(r"postgresql\+psycopg://(\w+):(\w+)@localhost:5432/(\w+)", default)
+    assert url is not None, default
+    user_password_db = url.groups()
+
+    assert _postgres_env((REPO_ROOT / "compose.yml").read_text()) == user_password_db
+    for name in ("backend", "database", "e2e"):
+        workflow = (REPO_ROOT / ".github" / "workflows" / f"{name}.yml").read_text()
+        assert _postgres_env(workflow) == user_password_db, name
+        if name != "e2e":
+            assert f"DATABASE_URL: {default}\n" in workflow, name
+    e2e_url = f"{default}_e2e"
+    assert (
+        f"E2E_DATABASE_URL: {e2e_url}\n"
+        in (REPO_ROOT / ".github" / "workflows" / "e2e.yml").read_text()
+    )
+    assert f'"{e2e_url}"' in (REPO_ROOT / "frontend" / "e2e" / "env.ts").read_text()
