@@ -34,14 +34,21 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/** SITE_URL, when it's a valid absolute URL; a bad value must not stop the app from starting. */
+function siteUrl(): URL | undefined {
+  try {
+    return process.env.SITE_URL ? new URL(process.env.SITE_URL) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const DESCRIPTION =
   "Worth more wild. The AI rating agency for living nature: satellites and local news, read by Nemotron agents. Sandbox · play money only.";
 
 export const metadata: Metadata = {
   // Absolute links for link previews; without SITE_URL, Next falls back to the dev host.
-  metadataBase: process.env.SITE_URL
-    ? new URL(process.env.SITE_URL)
-    : undefined,
+  metadataBase: siteUrl(),
   title: {
     default: "WildWorth · nature ratings",
     template: "%s · WildWorth",

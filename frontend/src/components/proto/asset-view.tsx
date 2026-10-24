@@ -155,6 +155,7 @@ function AssetLoaded({
   const params = useSearchParams();
   const tabParam = params.get("tab") as Tab | null;
   const tab: Tab = tabParam && TABS.includes(tabParam) ? tabParam : "overview";
+  const versionParam = Number(params.get("version"));
 
   const reports = useAssetReports(asset.id);
   const prices = useAssetPrices(asset.id);
@@ -388,7 +389,12 @@ function AssetLoaded({
                   Showing the latest report only: {reports.error.message}
                 </p>
               )}
-              <ReportTab versions={versions} siteName={asset.name} live />
+              <ReportTab
+                versions={versions}
+                siteName={asset.name}
+                initialVersion={versionParam || null}
+                live
+              />
             </TabsContent>
             <TabsContent value="news">
               <Panel title="News and evidence near this site">

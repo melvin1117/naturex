@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
 import { AccountCopilot } from "@/components/account-copilot";
-import { Bea, type BeaState } from "@/components/bea/bea";
+import { Bea } from "@/components/bea/bea";
 import { BeaSheetTitle, SITE_SUBTITLE } from "@/components/bea/bea-sheet-title";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { useReturnFocus } from "@/lib/use-return-focus";
+import { BEA_MODEL, beaState, bzzTurnId, type BeaTurn } from "@/lib/bea";
+import { modelLabel } from "@/lib/trace-view";
 import { SUGGESTED_QUESTIONS } from "@/lib/prototype/copilot";
 import { useTour } from "@/components/proto/tour";
 import { useWorld } from "@/lib/hooks";
@@ -107,13 +109,18 @@ function ScriptedCopilot() {
     });
   }, [world.copilot.length, ui.copilotTyping]);
 
-  const last = world.copilot[world.copilot.length - 1];
-  const bea: BeaState = ui.copilotTyping
-    ? "thinking"
-    : last?.role === "assistant" && last.citations.length > 0
-      ? "found"
-      : "hello";
-  const firstAnswer = world.copilot.find((m) => m.role !== "user")?.id;
+  // The scripted answers follow Bea's rules too: an answer without a source is one she can't give.
+  const answers: BeaTurn[] = world.copilot
+    .filter((m) => m.role !== "user")
+    .map((m) => ({
+      id: m.id,
+      status: "done",
+      mode: m.citations.length > 0 ? "model" : "refusal",
+      citations: m.citations,
+      answer: m.text,
+    }));
+  const bea = ui.copilotTyping ? "thinking" : beaState(answers);
+  const bzz = bzzTurnId(answers);
 
   function submit(q: string) {
     if (!q.trim()) return;
@@ -127,7 +134,7 @@ function ScriptedCopilot() {
         <BeaSheetTitle state={bea} subtitle={SITE_SUBTITLE} />
         <p className="text-xs text-muted-foreground">
           This preview uses scripted answers. In your sandbox, Bea answers live
-          on Nemotron 3 Nano.
+          on {modelLabel(BEA_MODEL)}.
         </p>
         {rated.length > 0 && (
           <Select
@@ -183,7 +190,7 @@ function ScriptedCopilot() {
                   : "rounded-bl-lg bg-card shadow-soft",
               )}
             >
-              {m.id === firstAnswer && "Bzz. "}
+              {m.id === bzz && "Bzz. "}
               <Rich text={m.text} />
               {m.citations.length > 0 && (
                 <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -205,7 +212,7 @@ function ScriptedCopilot() {
         {ui.copilotTyping && (
           <div className="flex">
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Bea state="thinking" size={34} avatar={false} label="" />
+              <Bea state="thinking" size={28} label="" />
               Bea is reading the Record…
             </p>
           </div>

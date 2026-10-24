@@ -7,6 +7,7 @@ import {
   bzzTurnId,
   gradeChange,
   greetingFor,
+  turnState,
   type BeaTurn,
 } from "@/lib/bea";
 
@@ -76,6 +77,21 @@ describe("beaState", () => {
   });
 });
 
+describe("turnState", () => {
+  it("shows each turn's own moment: working, then its answer", () => {
+    expect(turnState(turn({ id: 1, status: "searching", answer: "" }))).toBe(
+      "thinking",
+    );
+    expect(
+      turnState(turn({ id: 1, status: "searching", answer: "" }), true),
+    ).toBe("waking");
+    expect(turnState(turn({ id: 1, status: "writing", answer: "" }))).toBe(
+      "thinking",
+    );
+    expect(turnState(turn({ id: 1 }))).toBe("found");
+  });
+});
+
 describe("answerState", () => {
   it("is found with evidence, can't answer on a refusal, else hello", () => {
     expect(answerState(turn({ id: 1 }))).toBe("found");
@@ -90,6 +106,14 @@ describe("answerState", () => {
 describe("bzzTurnId", () => {
   it("opens only the first answer with something to say", () => {
     expect(bzzTurnId([turn({ id: 1 }), turn({ id: 2 })])).toBe(1);
+  });
+
+  it("waits for the answer to finish, so a streaming refusal never opens with it", () => {
+    expect(
+      bzzTurnId([
+        turn({ id: 1, status: "writing", mode: null, answer: "I couldn't" }),
+      ]),
+    ).toBeNull();
   });
 
   it("never opens a refusal, an error or an empty answer", () => {
@@ -124,5 +148,6 @@ describe("agentLabel", () => {
     );
     expect(agentLabel("auditor", "Nemotron 3 Super")).toBe("auditor");
     expect(agentLabel(null, "Nemotron 3 Super")).toBeNull();
+    expect(agentLabel("copilot", null)).toBe("Bea");
   });
 });

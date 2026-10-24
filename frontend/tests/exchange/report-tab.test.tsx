@@ -130,6 +130,26 @@ describe("ReportTab's Proof of Life seal", () => {
       ),
     ).toBeVisible();
   });
+
+  it("opens the version a shared link asked for", async () => {
+    renderExchange(
+      <ReportTab
+        siteName="Xochimilco wetland"
+        versions={VERSIONS}
+        initialVersion={1}
+        live
+      />,
+      {},
+    );
+    expect(
+      await screen.findByText("Ecological Performance Report · v1"),
+    ).toBeVisible();
+    expect(
+      within(screen.getByRole("group", { name: "Share card" })).getByText(
+        "Xochimilco wetland rates A",
+      ),
+    ).toBeVisible();
+  });
 });
 
 describe("ReportTab changes from the diff API (#189)", () => {

@@ -103,6 +103,7 @@ describe("ProofOfLifeSeal", () => {
 describe("ProofOfLifeShareCard", () => {
   const card = (
     <ProofOfLifeShareCard
+      version={2}
       siteName="Xochimilco wetland"
       health={77.6}
       grade="A"
@@ -123,7 +124,7 @@ describe("ProofOfLifeShareCard", () => {
     ).toBeInTheDocument();
   });
 
-  it("copies a link to the report, so the evidence is one click away", async () => {
+  it("copies a link to this version of the report, so the evidence is one click away", async () => {
     const writeText = vi.fn(() => Promise.resolve());
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText },
@@ -137,7 +138,7 @@ describe("ProofOfLifeShareCard", () => {
       await screen.findByRole("button", { name: "Link copied" }),
     ).toBeVisible();
     expect(writeText).toHaveBeenCalledWith(
-      `${window.location.origin}${window.location.pathname}?tab=report`,
+      `${window.location.origin}${window.location.pathname}?tab=report&version=2`,
     );
   });
 

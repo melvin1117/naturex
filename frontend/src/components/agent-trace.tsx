@@ -305,7 +305,10 @@ function RealStepRow({ row }: { row: TraceRow }) {
                     className="tabular rounded-xl bg-machine px-3 py-2 text-[11px] text-machine-muted"
                   >
                     <span className="text-machine-ink">
-                      {agentLabel(c.agent, modelLabel(c.model)) ?? "model"}
+                      {agentLabel(
+                        c.agent,
+                        c.model ? modelLabel(c.model) : null,
+                      ) ?? "model"}
                     </span>
                     {" · "}
                     <span className="font-mono">{c.model ?? "—"}</span>
@@ -393,7 +396,8 @@ export function WorldModelCalls() {
           >
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-sm font-medium">
-                {agentLabel(c.agent, modelLabel(c.model)) ?? "Model call"}
+                {agentLabel(c.agent, c.model ? modelLabel(c.model) : null) ??
+                  "Model call"}
               </span>
               <span className="text-[11px] text-machine-muted">
                 {date(c.created_at)}

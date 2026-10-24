@@ -60,3 +60,6 @@ export function markGeometry(score: number, single = false): MarkGeometry {
     strokeWidth: single ? 11 : 7.5,
   };
 }
+
+/** The Proof of Life seal's dots rise once, then the grade is stamped (DESIGN.md, Motion). */
+export const SEAL_RISE_MS = 550;

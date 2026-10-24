@@ -158,6 +158,10 @@ describe("Header Bea, signed in", () => {
     ).not.toBeInTheDocument();
     expect(within(sheet).getByText(/Ask across every site/)).toBeVisible();
     expect(within(sheet).queryByText(/scripted/)).not.toBeInTheDocument();
+    // Her title, what she answers from, and that it's never advice.
+    expect(sheet).toHaveAccessibleDescription(
+      "Answers only from the Record of your sites Play money only; not advice.",
+    );
 
     fireEvent.click(
       within(sheet).getByRole("button", {

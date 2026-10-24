@@ -130,7 +130,7 @@ Voice follows PRODUCT.md: sober on rating and market surfaces, warm on community
 - **Forest** (`forest`): the logo's line, primary buttons, active tabs, the sandbox bar. **Forest ink** (`forest-ink`) is the text colour everywhere on light surfaces; there is no pure black.
 
 ### Secondary
-- **Lime** (`lime`): **the reading**: the logo's last stroke and dot, the lit dots of the health dial and the Proof of Life seal, value bars and price fill, live states and confirmations. **Lime ink** (`lime-ink`) is the text-safe version for positive deltas and pass states, and the reading on light grounds.
+- **Lime** (`lime`): **the reading**: the logo's last stroke and dot, the lit dots of the health dial and, on dark grounds, of the Proof of Life seal (on paper the seal lights in its grade colour), value bars and price fill, live states and confirmations. **Lime ink** (`lime-ink`) is the text-safe version for positive deltas and pass states, and the reading on light grounds.
 - **Lilac** (`lilac`): the second chart series only.
 - **Sky** (`sky`): water layers and the flood service only.
 

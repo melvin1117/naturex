@@ -143,6 +143,21 @@ describe("Exchange navigation per role", () => {
     expect(backend.calls("GET /me/communities")).toBe(0);
   });
 
+  it("always says the Exchange is a play-money sandbox, beside its name", async () => {
+    setup(
+      <ExchangeLayout>
+        <Page />
+      </ExchangeLayout>,
+      WORLD,
+    );
+    const banner = await screen.findByRole("banner");
+    const line = within(banner).getByText("Sandbox · play money only");
+    // Visible wherever the app's name is; below `sm` both are only visually hidden.
+    expect(line).not.toHaveClass("hidden");
+    expect(line).toHaveClass("max-sm:sr-only");
+    expect(within(banner).getByText("Exchange")).toHaveClass("max-sm:sr-only");
+  });
+
   it("anonymous in the scripted demo: Stewards too", async () => {
     window.sessionStorage.setItem("nx-prototype-demo", "1");
     setup(

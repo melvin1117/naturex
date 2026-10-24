@@ -431,11 +431,14 @@ function prototypeDiffRows(report: ReportFacts, prev?: ReportFacts): DiffRow[] {
 export function ReportTab({
   versions,
   siteName,
+  initialVersion = null,
   live = false,
 }: {
   versions: ReportFacts[];
   /** The seal and its share card always carry the site's name. */
   siteName: string;
+  /** The version a shared link asked for (`?version=`), until another one is picked. */
+  initialVersion?: number | null;
   /**
    * A real asset: the changes, grade change and reasons come from the diff API. The prototype
    * (false) has no API and compares its own report facts in the browser.
@@ -445,7 +448,9 @@ export function ReportTab({
   const [picked, setPicked] = useState<string | null>(null);
   const index = Math.max(
     0,
-    versions.findIndex((r) => r.id === picked),
+    versions.findIndex((r) =>
+      picked ? r.id === picked : r.version === initialVersion,
+    ),
   );
   const report = versions[index];
   if (!report) return null;
@@ -552,6 +557,7 @@ export function ReportTab({
       </Panel>
       <div className="space-y-6">
         <ProofOfLifeShareCard
+          version={report.version}
           siteName={siteName}
           health={report.health}
           grade={report.grade}

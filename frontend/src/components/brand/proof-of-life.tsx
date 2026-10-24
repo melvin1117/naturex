@@ -6,14 +6,11 @@ import { CopyIcon, useCopy } from "@/components/account-id";
 import { GRADE_FILL } from "@/components/proto/grade";
 import { DotRing } from "@/components/proto/health-ring";
 import { Button } from "@/components/ui/button";
-import { clampScore } from "@/lib/brand";
+import { clampScore, SEAL_RISE_MS } from "@/lib/brand";
 import { useInSandbox } from "@/lib/nav";
 import type { Grade } from "@/lib/prototype/data";
 
 import { Lockup } from "./lockup";
-
-/** The seal's dots rise once, then the grade is stamped (DESIGN.md, Motion). */
-export const SEAL_RISE_MS = 550;
 
 /**
  * The Proof of Life seal: the health instrument issued as a verdict (guidelines chapter 5). The
@@ -98,6 +95,7 @@ export function ProofOfLifeSeal({
  * the evidence is one click away from wherever it's shared.
  */
 export function ProofOfLifeShareCard({
+  version,
   siteName,
   health,
   grade,
@@ -105,6 +103,8 @@ export function ProofOfLifeShareCard({
   simulated = false,
   className,
 }: {
+  /** The report version on the card; the copied link opens that version. */
+  version: number;
   siteName: string;
   health: number;
   grade: Grade;
@@ -116,7 +116,7 @@ export function ProofOfLifeShareCard({
   const link =
     typeof window === "undefined"
       ? ""
-      : `${window.location.origin}${window.location.pathname}?tab=report`;
+      : `${window.location.origin}${window.location.pathname}?tab=report&version=${version}`;
   const { state, copy } = useCopy(link);
   return (
     <div

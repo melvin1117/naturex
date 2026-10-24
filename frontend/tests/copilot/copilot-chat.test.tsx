@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { CopilotChat, answerChips } from "@/components/copilot-chat";
+import { SLOW_AFTER_MS } from "@/components/loading-region";
 
 import { renderExchange, stubBrowserApis } from "../exchange/render";
 import { json, SIGNED_IN_WORLD } from "../lib/helpers";
@@ -20,6 +21,45 @@ const signedIn = { "GET /world": () => json(SIGNED_IN_WORLD) };
 function chat() {
   return <CopilotChat assetId={ASSET_ID} assetName="Xochimilco wetland" />;
 }
+
+describe("CopilotChat, Bea's moments", () => {
+  it("greets with the site's grade change, and reacts to it once", async () => {
+    renderExchange(chat(), {
+      ...signedIn,
+      [`GET /assets/${ASSET_ID}/reports`]: () =>
+        json([{ grade: "BB" }, { grade: "A" }]),
+    });
+
+    expect(
+      await screen.findByText(
+        /Xochimilco wetland was lowered A → BB\. Ask me why\./,
+      ),
+    ).toBeVisible();
+    const bea = document.querySelector('[data-state="downgrade"]');
+    expect(bea).toHaveClass("bea-react-down");
+  });
+
+  it("says she's waking up when the server is slow to answer", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderExchange(chat(), {
+        ...signedIn,
+        "POST /copilot": () => new Promise<Response>(() => {}),
+      });
+      fireEvent.click(
+        await screen.findByRole("button", { name: "What drives this grade?" }),
+      );
+      expect(
+        await screen.findByText("Bea is reading the Record…"),
+      ).toBeVisible();
+      await vi.advanceTimersByTimeAsync(SLOW_AFTER_MS);
+      expect(await screen.findByText("Bea is waking up…")).toBeVisible();
+      expect(document.querySelector('[data-state="waking"]')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
 
 describe("CopilotChat", () => {
   it("asks signed-out visitors to sign in and come back", async () => {

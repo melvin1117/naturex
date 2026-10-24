@@ -78,6 +78,7 @@ export function PrototypeAssetView({ id }: { id: string }) {
   const site = world.sites.find((s) => s.id === id);
   const tabParam = params.get("tab") as Tab | null;
   const tab: Tab = tabParam && TABS.includes(tabParam) ? tabParam : "overview";
+  const versionParam = Number(params.get("version"));
 
   if (!site) {
     return (
@@ -310,6 +311,7 @@ export function PrototypeAssetView({ id }: { id: string }) {
             <TabsContent value="report">
               <ReportTab
                 siteName={site.name}
+                initialVersion={versionParam || null}
                 versions={[...site.reports]
                   .reverse()
                   .map((r) => prototypeFacts(r))}

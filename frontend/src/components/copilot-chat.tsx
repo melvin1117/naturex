@@ -30,7 +30,7 @@ import {
   sourceLabel,
 } from "@/lib/copilot";
 import {
-  answerState,
+  turnState,
   beaState,
   bzzTurnId,
   gradeChange,
@@ -255,6 +255,7 @@ export function CopilotChat(
           <Hello
             scope={scope}
             state={bea}
+            react={change?.direction ?? null}
             greeting={
               change && scope.kind === "asset"
                 ? greetingFor(scope.assetName, change)
@@ -366,11 +367,14 @@ function Shell({
 function Hello({
   scope,
   state,
+  react,
   greeting,
   sheet,
 }: {
   scope: Scope;
   state: BeaState;
+  /** The site's grade just moved: she hops or shakes once. */
+  react: "up" | "down" | null;
   greeting: string | null;
   sheet: boolean;
 }) {
@@ -381,7 +385,7 @@ function Hello({
   if (sheet)
     return (
       <div className="grid justify-items-center gap-2 px-2 pt-4 pb-2 text-center">
-        <Bea state={state} size={96} label="" />
+        <Bea state={state} size={96} react={react} label="" />
         <p className="font-serif text-2xl leading-tight">
           {scope.kind === "asset"
             ? `Ask Bea about ${scope.assetName}`
@@ -394,24 +398,18 @@ function Hello({
     );
   return (
     <div className="flex items-start gap-3 rounded-2xl bg-secondary p-4 text-sm">
-      <Bea state={state} size={40} label="" />
+      <Bea state={state} size={40} react={react} label="" />
       <p>{greeting ? `${greeting} ${about}` : about}</p>
     </div>
   );
 }
 
-/** Bea while she works: reading the Record, or waking the servers up. */
+/** What Bea is doing while she works (her avatar beside the bubble shows it too). */
 function Working({ waking, sources }: { waking: boolean; sources?: number }) {
   return (
-    <span className="flex items-center gap-2 text-muted-foreground">
-      <Bea
-        state={waking ? "waking" : "thinking"}
-        size={34}
-        avatar={false}
-        label=""
-      />
+    <span className="text-muted-foreground">
       {waking
-        ? "Bea is waking up… about 30 seconds."
+        ? "Bea is waking up…"
         : sources === undefined
           ? "Bea is reading the Record…"
           : `Bea is reading ${sources} ${sources === 1 ? "source" : "sources"}…`}
@@ -439,7 +437,12 @@ function TurnView({
         {turn.question}
       </p>
       <div className="flex items-end gap-2">
-        <Bea state={answerState(turn)} size={28} label="" className="mb-0.5" />
+        <Bea
+          state={turnState(turn, waking)}
+          size={28}
+          label=""
+          className="mb-0.5"
+        />
         <div className="max-w-[90%] min-w-0 rounded-2xl rounded-bl-md bg-secondary px-3.5 py-2.5 text-sm leading-relaxed">
           {turn.status === "searching" && <Working waking={waking} />}
           {turn.status === "writing" && !turn.answer && (

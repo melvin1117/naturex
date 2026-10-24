@@ -71,7 +71,8 @@ export function AppHeader({ app, tools }: { app: AppKey; tools?: ReactNode }) {
           </Link>
           {app === "exchange" && (
             // "Exchange" could suggest a real securities exchange: it always comes with this.
-            <span className="hidden text-xs whitespace-nowrap text-muted-foreground md:inline">
+            // Shown wherever the app's name is; below `sm` both are visually hidden but read out.
+            <span className="text-xs whitespace-nowrap text-muted-foreground max-sm:sr-only">
               {SANDBOX_LINE}
             </span>
           )}

@@ -55,20 +55,21 @@ describe("Bea", () => {
     );
   });
 
-  it("hops once when she finds something, and shakes once at a downgrade", () => {
+  it("hops once when a grade goes up, and shakes once when one goes down", () => {
     vi.useFakeTimers();
     const { container, rerender } = render(<Bea state="found" size={40} />);
     const root = () => container.firstElementChild!;
-    // No reaction to the state she arrives in.
-    expect(root()).not.toHaveClass("bea-react-up");
-
+    // A cited answer turns her to "found" without a hop: only a grade change makes her react.
     rerender(<Bea state="thinking" size={40} />);
     rerender(<Bea state="found" size={40} />);
+    expect(root()).not.toHaveClass("bea-react-up");
+
+    rerender(<Bea state="found" size={40} react="up" />);
     expect(root()).toHaveClass("bea-react-up");
     act(() => vi.advanceTimersByTime(750));
     expect(root()).not.toHaveClass("bea-react-up");
 
-    rerender(<Bea state="downgrade" size={40} />);
+    rerender(<Bea state="downgrade" size={40} react="down" />);
     expect(root()).toHaveClass("bea-react-down");
     act(() => vi.advanceTimersByTime(600));
     expect(root()).not.toHaveClass("bea-react-down");

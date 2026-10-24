@@ -266,6 +266,15 @@ describe("TraceSheet away from a real site", () => {
               created_at: "2026-10-19T08:00:16Z",
               status: "ok",
             },
+            {
+              agent: "copilot",
+              model: "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+              prompt_tokens: 1400,
+              completion_tokens: 120,
+              latency_ms: 900,
+              created_at: "2026-10-19T08:01:00Z",
+              status: "ok",
+            },
           ],
         }),
     });
@@ -275,6 +284,8 @@ describe("TraceSheet away from a real site", () => {
       name: "Latest model calls",
     });
     expect(calls).toHaveTextContent("auditor");
+    // The assistant's calls are Bea's, named with the model that ran her.
+    expect(calls).toHaveTextContent("Bea (Nemotron 3 Nano)");
     expect(calls).toHaveTextContent("Nemotron 3 Ultra");
     expect(calls).toHaveTextContent("6,200 in · 980 out");
     expect(

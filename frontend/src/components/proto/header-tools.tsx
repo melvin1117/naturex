@@ -54,7 +54,7 @@ export function PrototypeHeaderTools({ app }: { app: AppKey }) {
           }
           data-tour="copilot-button"
         >
-          <BeaIcon size={20} aria-hidden="true" />
+          <BeaIcon className="size-5" aria-hidden="true" />
           <span className="sr-only xl:not-sr-only">Ask Bea</span>
         </Button>
       )}

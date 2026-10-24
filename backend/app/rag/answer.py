@@ -48,8 +48,14 @@ NOT_IN_RECORD = (
 EXTRACTIVE_INTRO = "Here is what the Record says:"
 # Bea's voice (docs/design/ux-writing.md §6): play money is play money. A draft using these
 # market words is sent back, like one that invents a number.
+# Only the financial senses: "the festival returns", "otters returned" and "the community
+# bought the land" are nature news, not market talk.
 MARKET_WORDS = re.compile(
-    r"\b(invest(?:s|ed|ing|ment|ments|or|ors)?|returns?|buy(?:s|ing)?|bought|profits?)\b",
+    r"\b(?:invest(?:s|ed|ing|ment|ments|or|ors)?"
+    r"|profits?"
+    r"|returns?\s+on"
+    r"|(?:financial|investment|expected|guaranteed|potential|annual|high|good|your)\s+returns?"
+    r"|(?:buy|buys|buying|bought)\s+(?:\S+\s+){0,2}(?:shares?|units?|stakes?|stocks?|tokens?))\b",
     re.IGNORECASE,
 )
 # A bracket group is a citation when any token in it looks like a ref (`R2`, `E1a2b3c4d`: R or

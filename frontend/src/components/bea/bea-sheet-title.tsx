@@ -9,9 +9,12 @@ export const SITE_SUBTITLE = "Answers only from this site's Record";
 /** …and across the sites in the visitor's world. */
 export const WORLD_SUBTITLE = "Answers only from the Record of your sites";
 
+/** Bea never gives advice, and her world is play money (AGENTS.md, sandbox framing). */
+export const NOT_ADVICE = "Play money only; not advice.";
+
 /**
  * Bea's panel title: her avatar, in the state of the conversation, then "Bea · your field
- * guide" and what she answers from.
+ * guide", what she answers from, and that none of it is advice.
  */
 export function BeaSheetTitle({
   state,
@@ -27,7 +30,9 @@ export function BeaSheetTitle({
         <SheetTitle className="font-serif text-2xl leading-none font-normal">
           Bea · your field guide
         </SheetTitle>
-        <SheetDescription>{subtitle}</SheetDescription>
+        <SheetDescription>
+          {subtitle} <span className="block text-xs">{NOT_ADVICE}</span>
+        </SheetDescription>
       </div>
     </div>
   );

@@ -317,8 +317,23 @@
 .bea-ground {
   fill: var(--bea-ground, var(--color-background));
 }
+/* Every surface sets both, so a light surface inside a dark one (or the reverse) never inherits
+   the wrong ground or accent. */
+.bg-background {
+  --ww-accent: var(--color-lime-ink);
+  --bea-ground: var(--color-background);
+}
 .bg-card {
+  --ww-accent: var(--color-lime-ink);
   --bea-ground: var(--color-card);
+}
+.bg-secondary {
+  --ww-accent: var(--color-lime-ink);
+  --bea-ground: var(--color-secondary);
+}
+.bg-muted {
+  --ww-accent: var(--color-lime-ink);
+  --bea-ground: var(--color-muted);
 }
 .bg-primary {
   --ww-accent: var(--color-lime);

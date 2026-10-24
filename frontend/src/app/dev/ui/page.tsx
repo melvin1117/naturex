@@ -152,6 +152,7 @@ export default function DevUiPage() {
             />
           </div>
           <ProofOfLifeShareCard
+            version={1}
             siteName="Xochimilco wetland"
             health={77.6}
             grade="A"

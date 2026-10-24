@@ -28,15 +28,13 @@ describe("the WildWorth icon pack", () => {
   });
 
   it("matches what the generator makes from the guidelines today", () => {
-    const files = [
-      "frontend/src/components/icons/drawings.ts",
-      "frontend/src/components/bea/drawings.ts",
-    ];
-    const before = files.map((f) => readFileSync(join(ROOT, f), "utf8"));
-    execFileSync("node", [join(ROOT, "scripts/generate-brand-drawings.mjs")]);
-    expect(files.map((f) => readFileSync(join(ROOT, f), "utf8"))).toEqual(
-      before,
+    // --check compares without writing, and exits non-zero (throwing here) when stale.
+    const out = execFileSync(
+      "node",
+      [join(ROOT, "scripts/generate-brand-drawings.mjs"), "--check"],
+      { encoding: "utf8" },
     );
+    expect(out).toMatch(/^Checked \d+ icons and 6 Bea states/);
   });
 
   it("takes Lucide's props, at the brand's stroke, hidden unless labelled", () => {

@@ -275,6 +275,8 @@ def test_injected_text_stays_fenced_data_in_the_prompt() -> None:
         "It's a good investment now [R2].",
         "Buy units while health is 72.30 [R2].",
         "Your returns follow the fair value of $93.40 [R2].",
+        "Supporters bought 120 more units after the report [R2].",
+        "The return on this site is tied to health 72.30 [R2].",
     ],
 )
 def test_a_draft_with_market_words_is_sent_back(answer: str) -> None:
@@ -284,6 +286,22 @@ def test_a_draft_with_market_words_is_sent_back(answer: str) -> None:
     assert (reply.mode, reply.text) == (AnswerMode.MODEL, GOOD)
     assert [row.status for row in log.rows] == ["rejected", "ok"]
     assert "market words" in transport.requests[1]["messages"][-2]["content"]
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "The weekend food festival returns to Xochimilco [E55555555].",
+        "Axolotls returned to two canals as health rose to 72.30 [R2].",
+        "The community bought the land long ago, and health is 72.30 [R2].",
+    ],
+)
+def test_nature_news_that_says_return_or_bought_is_not_market_talk(answer: str) -> None:
+    """Only the financial senses are refused; a festival returning is news, not a sales pitch."""
+    reply, _, log = ask(draft(answer))
+
+    assert reply.mode is AnswerMode.MODEL
+    assert [row.status for row in log.rows] == ["ok"]
 
 
 def test_bea_answers_as_herself_and_leaves_the_greeting_to_the_app() -> None:
