@@ -6,7 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
 import { AlertsList } from "@/components/alerts-list";
-import { AlertsIcon, BeaIcon } from "@/components/icons";
+import { AskBeaButton } from "@/components/bea/ask-bea-button";
+import { AlertsIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -44,19 +45,14 @@ export function PrototypeHeaderTools({ app }: { app: AppKey }) {
   return (
     <>
       {app === "exchange" && (
-        <Button
-          variant="ghost"
-          size="sm"
+        <AskBeaButton
           onClick={() =>
             openCopilot(
               pathname.startsWith("/asset/") ? pathname.split("/")[2] : null,
             )
           }
           data-tour="copilot-button"
-        >
-          <BeaIcon className="size-5" aria-hidden="true" />
-          <span className="sr-only xl:not-sr-only">Ask Bea</span>
-        </Button>
+        />
       )}
       {loading ? (
         <PendingAlertsBell />

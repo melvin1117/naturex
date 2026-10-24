@@ -1,6 +1,5 @@
 "use client";
 
-import { ArrowUp } from "lucide-react";
 import Link from "@/components/app-link";
 import { useSearchParams } from "next/navigation";
 import { usePathname } from "@/lib/nav";
@@ -14,11 +13,18 @@ import {
 } from "react";
 import { cn } from "cn";
 
-import { Bea, type BeaState } from "@/components/bea/bea";
+import type { BeaState } from "@/components/bea/bea";
+import {
+  BeaAnswer,
+  BeaComposer,
+  BeaEmpty,
+  BeaQuestion,
+  BeaSuggestion,
+  NOT_ADVICE,
+  SOURCE_CHIP,
+} from "@/components/bea/chat-parts";
 import { SLOW_AFTER_MS } from "@/components/loading-region";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { isAbortError, toApiError } from "@/lib/api/errors";
 import type { CopilotSource } from "@/lib/api/types";
 import { loginHref } from "@/lib/auth";
@@ -105,7 +111,6 @@ export function CopilotChat(
   const onNavigate = props.onNavigate;
   const onPendingChange = props.onPendingChange;
   const onBeaStateChange = props.onBeaStateChange;
-  const inputId = useId();
   const { api } = useDataLayer();
   const { world } = useWorld();
   const pathname = usePathname();
@@ -245,8 +250,10 @@ export function CopilotChat(
         ref={listRef}
         data-testid="copilot-turns"
         className={cn(
-          "space-y-4 overflow-y-auto overscroll-contain",
-          sheet ? "min-h-0 flex-1 px-6 py-5" : "mt-4 max-h-[28rem]",
+          "space-y-5 overflow-y-auto overscroll-contain",
+          sheet
+            ? "min-h-0 flex-1 px-5 py-5"
+            : "mt-5 max-h-[30rem] rounded-2xl bg-background p-4",
         )}
         aria-live="polite"
         aria-busy={pending}
@@ -261,7 +268,16 @@ export function CopilotChat(
                 ? greetingFor(scope.assetName, change)
                 : null
             }
-            sheet={sheet}
+            compact={!sheet}
+            suggestions={suggestions.map((q) => (
+              <BeaSuggestion
+                key={q}
+                disabled={pending}
+                onClick={() => void ask(q)}
+              >
+                {q}
+              </BeaSuggestion>
+            ))}
           />
         )}
         {turns.map((turn) => (
@@ -274,56 +290,24 @@ export function CopilotChat(
           />
         ))}
       </div>
-      <div className={cn(sheet && "border-t px-6 pt-3 pb-6")}>
-        <div className={cn("flex flex-wrap gap-1.5", sheet ? "mb-3" : "mt-4")}>
-          {suggestions.map((q) => (
-            <Button
-              key={q}
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-auto rounded-full px-3 py-1.5 text-xs"
-              disabled={pending}
-              onClick={() => void ask(q)}
-            >
-              {q}
-            </Button>
-          ))}
-        </div>
-        <form
-          className={cn("flex gap-2", !sheet && "mt-3")}
-          onSubmit={(e) => {
-            e.preventDefault();
-            void ask(draft);
-          }}
-        >
-          <label htmlFor={inputId} className="sr-only">
-            {scope.kind === "asset"
+      <div className={cn(sheet ? "px-5 pt-2 pb-5" : "mt-4")}>
+        <BeaComposer
+          value={draft}
+          onChange={setDraft}
+          onSubmit={() => void ask(draft)}
+          maxLength={MAX_QUESTION}
+          label={
+            scope.kind === "asset"
               ? `Ask Bea about ${scope.assetName}`
-              : "Ask Bea about every site"}
-          </label>
-          <Input
-            id={inputId}
-            value={draft}
-            maxLength={MAX_QUESTION}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={
-              scope.kind === "asset"
-                ? "Why did it drop?"
-                : "Which site fell most?"
-            }
-            className="rounded-full"
-            autoComplete="off"
-          />
-          <Button
-            type="submit"
-            size="icon"
-            aria-label="Send question"
-            disabled={!draft.trim() || pending}
-          >
-            <ArrowUp aria-hidden="true" />
-          </Button>
-        </form>
+              : "Ask Bea about every site"
+          }
+          placeholder={
+            scope.kind === "asset"
+              ? `Ask Bea about ${scope.assetName}…`
+              : "Ask Bea about your sites…"
+          }
+          sendDisabled={!draft.trim() || pending}
+        />
       </div>
     </Shell>
   );
@@ -354,9 +338,9 @@ function Shell({
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
         {scope.kind === "asset"
-          ? "Bea, your field guide, answers only from this site's Record and links every claim to its source."
-          : "Bea, your field guide, answers only from the Record of the sites in your world and links every claim to its source."}{" "}
-        Play money only; not advice.
+          ? "Your field guide. She answers only from this site's Record and links every claim to its source."
+          : "Your field guide. She answers only from the Record of the sites in your world and links every claim to its source."}{" "}
+        {NOT_ADVICE}
       </p>
       {children}
     </section>
@@ -369,38 +353,35 @@ function Hello({
   state,
   react,
   greeting,
-  sheet,
+  compact,
+  suggestions,
 }: {
   scope: Scope;
   state: BeaState;
   /** The site's grade just moved: she hops or shakes once. */
   react: "up" | "down" | null;
   greeting: string | null;
-  sheet: boolean;
+  compact: boolean;
+  suggestions: ReactNode;
 }) {
   const about =
     scope.kind === "asset"
-      ? `Ask about ${scope.assetName}: why its grade or price changed, how its worth is estimated, or what the news says.`
+      ? "Why its grade or price changed, how its worth is estimated, or what the news says. She answers from every rating and the local news, and shows her sources."
       : "Ask across every site: which were re-rated, what the news says, or how they compare. Answers link to each site's Proof of Life or news.";
-  if (sheet)
-    return (
-      <div className="grid justify-items-center gap-2 px-2 pt-4 pb-2 text-center">
-        <Bea state={state} size={96} react={react} label="" />
-        <p className="font-serif text-2xl leading-tight">
-          {scope.kind === "asset"
-            ? `Ask Bea about ${scope.assetName}`
-            : "Ask Bea about your sites"}
-        </p>
-        <p className="max-w-[34ch] text-sm text-muted-foreground">
-          {greeting ?? about}
-        </p>
-      </div>
-    );
   return (
-    <div className="flex items-start gap-3 rounded-2xl bg-secondary p-4 text-sm">
-      <Bea state={state} size={40} react={react} label="" />
-      <p>{greeting ? `${greeting} ${about}` : about}</p>
-    </div>
+    <BeaEmpty
+      state={state}
+      react={react}
+      compact={compact}
+      title={
+        scope.kind === "asset"
+          ? `Ask Bea about ${scope.assetName}`
+          : "Ask Bea about your sites"
+      }
+      suggestions={suggestions}
+    >
+      {greeting ? `${greeting} ${about}` : about}
+    </BeaEmpty>
   );
 }
 
@@ -431,24 +412,24 @@ function TurnView({
 }) {
   const label = (s: CopilotSource) =>
     sourceLabel(s, { withAsset: turn.worldWide });
+  const working =
+    turn.status === "searching" || (turn.status === "writing" && !turn.answer);
   return (
-    <div className="space-y-2">
-      <p className="ml-auto w-fit max-w-[90%] rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-sm text-primary-foreground">
-        {turn.question}
-      </p>
-      <div className="flex items-end gap-2">
-        <Bea
-          state={turnState(turn, waking)}
-          size={28}
-          label=""
-          className="mb-0.5"
-        />
-        <div className="max-w-[90%] min-w-0 rounded-2xl rounded-bl-md bg-secondary px-3.5 py-2.5 text-sm leading-relaxed">
-          {turn.status === "searching" && <Working waking={waking} />}
-          {turn.status === "writing" && !turn.answer && (
+    <div className="space-y-3">
+      <BeaQuestion>{turn.question}</BeaQuestion>
+      {working ? (
+        <BeaAnswer state={turnState(turn, waking)} bubble={false}>
+          {turn.status === "searching" ? (
+            <Working waking={waking} />
+          ) : (
             <Working waking={false} sources={turn.sourcesFound} />
           )}
-          {turn.status === "done" && <AnswerChips turn={turn} />}
+        </BeaAnswer>
+      ) : (
+        <BeaAnswer
+          state={turnState(turn, waking)}
+          meta={turn.status === "done" ? <AnswerChips turn={turn} /> : null}
+        >
           {turn.answer && (
             <p>
               {bzz && "Bzz. "}
@@ -466,14 +447,14 @@ function TurnView({
             </p>
           )}
           {turn.status === "done" && turn.citations.length > 0 && (
-            <div className="mt-2.5">
-              <p className="text-xs text-muted-foreground">
+            <div className="mt-3 border-t border-border/70 pt-2.5">
+              <p className="text-[11px] text-muted-foreground">
                 {turn.mode === "extractive"
                   ? "Quoted from the Record:"
                   : "Sources:"}
               </p>
               <ul
-                className="mt-1 flex flex-wrap gap-1.5"
+                className="mt-1.5 flex flex-wrap gap-1.5"
                 aria-label="Sources of this answer"
               >
                 {turn.citations.map((s) => (
@@ -482,20 +463,22 @@ function TurnView({
                       href={sourceHref(s)}
                       title={label(s)}
                       onClick={onNavigate}
-                      className="inline-flex max-w-full items-center gap-1 rounded-full bg-card px-2.5 py-1 text-xs font-medium hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                      className={SOURCE_CHIP}
                     >
-                      <span className="shrink-0 font-mono whitespace-nowrap text-muted-foreground">
+                      <span className="shrink-0 font-mono whitespace-nowrap">
                         {s.ref}
                       </span>
-                      <span className="truncate">{label(s)}</span>
+                      <span className="truncate text-foreground">
+                        {label(s)}
+                      </span>
                     </Link>
                   </li>
                 ))}
               </ul>
             </div>
           )}
-        </div>
-      </div>
+        </BeaAnswer>
+      )}
     </div>
   );
 }
@@ -522,21 +505,15 @@ export function answerChips(
   return chips;
 }
 
+/** How the answer was made, as a quiet machine footnote under the bubble. */
 function AnswerChips({ turn }: { turn: Turn }) {
   return (
     <ul
-      className="mb-2 flex flex-wrap gap-1.5"
+      className="mt-1.5 flex flex-wrap gap-x-1.5 gap-y-0.5 px-1 font-mono text-[10.5px] leading-snug text-muted-foreground [&>li:not(:last-child)]:after:ml-1.5 [&>li:not(:last-child)]:after:content-['·']"
       aria-label="How this answer was made"
     >
       {answerChips(turn).map((chip) => (
-        <li key={chip}>
-          <Badge
-            variant="outline"
-            className="bg-card font-normal text-muted-foreground"
-          >
-            {chip}
-          </Badge>
-        </li>
+        <li key={chip}>{chip}</li>
       ))}
     </ul>
   );

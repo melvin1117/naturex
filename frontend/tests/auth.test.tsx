@@ -687,7 +687,8 @@ describe("AccountMenu", () => {
     expect(await screen.findByText("Viewer Rosa, cash 9000.00")).toBeVisible();
 
     const trigger = screen.getByRole("button", { name: "Account: Rosa" });
-    expect(trigger).toHaveTextContent("Rosa");
+    // Just her initials in the bar; the name is the button's accessible name and in the menu.
+    expect(trigger).toHaveAccessibleName("Account: Rosa");
     fireEvent.keyDown(trigger, { key: "Enter" });
     expect(await screen.findByText("rosa@example.org")).toBeVisible();
     fireEvent.click(screen.getByRole("menuitem", { name: /sign out/i }));

@@ -106,12 +106,14 @@ function SandboxBar({ persona }: { persona: DemoPersona }) {
             className="size-4 shrink-0 text-lime"
             aria-hidden="true"
           />
-          <span className="font-medium">Your private sandbox</span>
-          <span className="hidden text-primary-foreground/75 2xl:inline">
-            · live AI, play money
+          <span className="font-medium whitespace-nowrap">
+            Your private sandbox
+          </span>
+          <span className="whitespace-nowrap text-primary-foreground/75">
+            · play money only
           </span>
         </p>
-        {/* Below lg the switcher takes its own row, each persona over its role. */}
+        {/* Below lg the switcher takes its own row. */}
         <div className="order-last flex w-full items-center gap-1.5 lg:order-none lg:ml-auto lg:w-auto">
           <span className="hidden text-primary-foreground/75 2xl:inline">
             Acting as
@@ -134,14 +136,15 @@ function SandboxBar({ persona }: { persona: DemoPersona }) {
                   key={key}
                   value={key}
                   aria-label={`${p.name} (${p.role})`}
-                  className="h-auto min-h-7 flex-1 rounded-full px-3 py-1 text-[13px] font-medium text-primary-foreground/80 hover:bg-transparent hover:text-primary-foreground data-[state=on]:bg-card data-[state=on]:text-foreground lg:h-7 lg:flex-none lg:py-0"
+                  className="h-auto min-h-7 flex-1 rounded-full px-3 py-1 text-[13px] font-medium text-primary-foreground/80 hover:bg-transparent hover:text-primary-foreground data-[state=on]:bg-card data-[state=on]:text-foreground lg:flex-none xl:h-7 xl:py-0"
                 >
-                  <span className="flex flex-col items-center leading-tight lg:flex-row lg:gap-1">
+                  {/* Each person over their role until xl, so the bar stays one row at lg. */}
+                  <span className="flex flex-col items-center leading-tight xl:flex-row xl:gap-1">
                     <span>{p.name}</span>
-                    <span className="text-[10.5px] font-normal opacity-75 lg:text-[13px]">
-                      <span className="hidden lg:inline">(</span>
+                    <span className="text-[10.5px] font-normal opacity-75 xl:text-[13px]">
+                      <span className="hidden xl:inline">(</span>
                       {p.role}
-                      <span className="hidden lg:inline">)</span>
+                      <span className="hidden xl:inline">)</span>
                     </span>
                   </span>
                 </ToggleGroupItem>

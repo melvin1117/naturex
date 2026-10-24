@@ -45,7 +45,7 @@ Built for the Nebius × NVIDIA Global AI Hackathon (Best Apps & Agents track); s
 
 ## Capabilities and Constraints
 
-- Three apps, routes unchanged: **Exchange** (`/`, always with "Sandbox · play money only"), **Stewards** (`/steward`) and **Control room** (`/admin`).
+- Three apps, routes unchanged: **Exchange** (`/`, always under "Sandbox · play money only"), **Stewards** (`/steward`) and **Control room** (`/admin`).
 - Screens: the story (`/judge`), Rated sites (`/`), List your land (`/steward/list`, map drawing + form + rating progress), site page (`/asset/[id]`: Proof of Life, chart, trade panel, alerts, The Record), Your stakes (`/portfolio`), Time Machine (`/admin`), Ask Bea, Agent Trace, `/dev/ui` component showcase; every app screen also runs in the sandbox under `/sandbox/*`.
 - Three curated demo sites (hero: a ~500 ha Xochimilco-style wetland near Mexico City; plus a mangrove and a restoration forest). Live rating of user-drawn polygons is best-effort (2 live runs per visitor).
 - Ratings: Health Score 0–100; grades AAA ≥ 90 · AA ≥ 80 · A ≥ 70 · BBB ≥ 60 · BB ≥ 50 · B ≥ 40 · C ≥ 30 · D < 30; confidence 0–100%; values as low/mid/high $/yr per service (carbon, water, flood, habitat, recreation).

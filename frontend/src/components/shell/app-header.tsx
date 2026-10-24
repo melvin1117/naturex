@@ -2,18 +2,20 @@
 
 import { Menu } from "lucide-react";
 import Link from "@/components/app-link";
-import { usePathname } from "@/lib/nav";
+import { useInSandbox, usePathname } from "@/lib/nav";
 import { useId, useState, type ReactNode } from "react";
 import { cn } from "cn";
 
 import { AccountMenu } from "@/components/account-menu";
+import { Lockup } from "@/components/brand";
 import { PageIcon } from "@/components/shell/app-icons";
-import { Wordmark } from "@/components/proto/bits";
 import {
+  AppMenu,
   AppSwitcher,
   CreateCommunityLink,
   useAppAccess,
 } from "@/components/shell/app-switcher";
+import { SANDBOX_LINE, SandboxStrip } from "@/components/shell/sandbox-strip";
 import {
   CommunitySwitcher,
   useOptionalStewardCommunity,
@@ -36,17 +38,18 @@ import {
   type AppKey,
 } from "@/lib/navigation";
 
-/** The sandbox line (ux-writing §4): beside the Exchange's name, always. */
-export const SANDBOX_LINE = "Sandbox · play money only";
+export { SANDBOX_LINE };
 
 /** The Steward app's home, which carries a dot while it has updates the member hasn't seen. */
 const STEWARD_HOME = APPS.steward.href;
 
 /**
- * The shell header of the Exchange, the Steward app and the control room (T62). Navigation
- * follows the signed-in account's roles (`useAppAccess`); from `lg` down, the pages, the app
- * switcher and the community switcher move into a menu sheet. `tools` holds app-specific
- * buttons (today the Copilot and alerts; the Agent Trace opens from a site's page).
+ * The shell header of the Exchange, the Steward app and the control room (T62), as the brand
+ * guidelines' app bar (chapter 12): the lockup, a hairline, the app's name (the app switcher
+ * when there's another app to open), the pages, then the tools and the account. Above it sits
+ * the sandbox strip; in a visitor's sandbox, the sandbox bar instead. Navigation follows the
+ * account's roles (`useAppAccess`); below `lg` the pages, apps and communities move into a
+ * menu sheet. `tools` holds app-specific buttons (Ask Bea, alerts).
  */
 export function AppHeader({ app, tools }: { app: AppKey; tools?: ReactNode }) {
   const pathname = usePathname();
@@ -61,62 +64,65 @@ export function AppHeader({ app, tools }: { app: AppKey; tools?: ReactNode }) {
     pathname === STEWARD_HOME,
   );
   const updates = homeUpdates ? [STEWARD_HOME] : [];
+  const inSandbox = useInSandbox();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-7xl items-center gap-x-3 px-4 sm:px-6 lg:gap-x-6">
-        <div className="flex min-w-0 shrink-0 items-center gap-3">
-          <Link href={href(APPS[app].href)} className="shrink-0 rounded-md">
-            <Wordmark app={APPS[app].name} />
-          </Link>
-          {app === "exchange" && (
-            // "Exchange" could suggest a real securities exchange: it always comes with this.
-            // Shown wherever the app's name is; below `sm` both are visually hidden but read out.
-            <span className="text-xs whitespace-nowrap text-muted-foreground max-sm:sr-only">
-              {SANDBOX_LINE}
-            </span>
+    <>
+      {!inSandbox && <SandboxStrip />}
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-7xl items-center gap-x-3 px-4 sm:px-6 lg:gap-x-8">
+          <div className="flex min-w-0 shrink-0 items-center gap-3">
+            <Link
+              href={href(APPS[app].href)}
+              className="shrink-0 rounded-md"
+              aria-label={`WildWorth ${APPS[app].name}`}
+            >
+              <Lockup size={24} />
+            </Link>
+            <span
+              aria-hidden="true"
+              className="hidden h-5 w-px bg-border sm:block"
+            />
+            <AppMenu
+              current={app}
+              access={access}
+              offerCreate={offerCreate}
+              className="hidden sm:inline-flex"
+            />
+            {app === "steward" && steward?.active && (
+              <div className="hidden min-w-0 items-center gap-2 lg:flex">
+                <span aria-hidden="true" className="text-border">
+                  /
+                </span>
+                <CommunitySwitcher />
+              </div>
+            )}
+          </div>
+          {showPages && (
+            <AppNav
+              app={app}
+              pathname={pathname}
+              href={href}
+              updates={updates}
+              className="hidden lg:block"
+            />
           )}
-          {app === "steward" && steward?.active && (
-            <div className="hidden min-w-0 items-center gap-3 lg:flex">
-              <span aria-hidden="true" className="text-border">
-                /
-              </span>
-              <CommunitySwitcher />
-            </div>
-          )}
+          <div className="ml-auto flex min-w-0 items-center gap-2">
+            {tools}
+            <AccountMenu />
+            <MobileMenu
+              app={app}
+              access={access}
+              pathname={pathname}
+              href={href}
+              offerCreate={offerCreate}
+              showPages={showPages}
+              updates={updates}
+            />
+          </div>
         </div>
-        {showPages && (
-          <AppNav
-            app={app}
-            pathname={pathname}
-            href={href}
-            updates={updates}
-            className="hidden lg:block"
-          />
-        )}
-        <div className="ml-auto flex min-w-0 items-center gap-1.5">
-          {tools}
-          <AppSwitcher
-            current={app}
-            access={access}
-            className="ml-1.5 hidden lg:block"
-          />
-          {offerCreate && (
-            <CreateCommunityLink className="ml-1.5 hidden lg:inline-flex" />
-          )}
-          <AccountMenu />
-          <MobileMenu
-            app={app}
-            access={access}
-            pathname={pathname}
-            href={href}
-            offerCreate={offerCreate}
-            showPages={showPages}
-            updates={updates}
-          />
-        </div>
-      </div>
-    </header>
+      </header>
+    </>
   );
 }
 
@@ -166,13 +172,12 @@ function AppNav({
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                {/* In the header row the icons need room the account menu may want at 1280 px. */}
                 <PageIcon
                   href={item.href}
                   size={16}
                   className={cn(
                     "shrink-0",
-                    layout === "row" && "hidden 2xl:block",
+                    layout === "row" && "hidden xl:block",
                   )}
                 />
                 {item.label}

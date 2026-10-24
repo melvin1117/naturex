@@ -158,10 +158,16 @@ describe("Header Bea, signed in", () => {
     ).not.toBeInTheDocument();
     expect(within(sheet).getByText(/Ask across every site/)).toBeVisible();
     expect(within(sheet).queryByText(/scripted/)).not.toBeInTheDocument();
-    // Her title, what she answers from, and that it's never advice.
+    // Her title says what she answers from; the footnote, what she runs on and that it's
+    // never advice.
     expect(sheet).toHaveAccessibleDescription(
-      "Answers only from the Record of your sites Play money only; not advice.",
+      "Answers only from the Record of your sites",
     );
+    expect(
+      within(sheet).getByText(
+        "Runs on NVIDIA Nemotron 3 Nano · Play money only; not advice.",
+      ),
+    ).toBeVisible();
 
     fireEvent.click(
       within(sheet).getByRole("button", {
@@ -200,8 +206,9 @@ describe("Header Bea, signed in", () => {
       name: "Xochimilco wetland",
     });
     expect(site).toHaveAttribute("aria-checked", "true");
+    // Scoped to the open site: her greeting and the question field both name it.
     expect(
-      within(sheet).getByText(/Ask about Xochimilco wetland/),
+      within(sheet).getByLabelText("Ask Bea about Xochimilco wetland"),
     ).toBeVisible();
 
     fireEvent.click(

@@ -57,7 +57,7 @@ Everywhere:
 - AI adjustments are explicit: "Auditor adjusted −6.0 (cited: event #3, NDVI trend)." Adjustments outside ±10 cannot happen; don't imply they could.
 
 ## 4. Sandbox wording
-- The sandbox line: **"Sandbox · play money only."** It sits beside the **Exchange** name in its header, always, because "Exchange" alone could suggest a real securities exchange. The footer adds "Nothing here is a real security or investment." The trade panel repeats it near the confirm button; inside `/sandbox` the sandbox bar says it too (ADR-0007).
+- The sandbox line: **"Sandbox · play money only."** It sits in the forest strip above every app's header, always, because "Exchange" alone could suggest a real securities exchange. The footer adds "Nothing here is a real security or investment." The trade panel repeats it near the confirm button; inside `/sandbox` the sandbox bar says it too (ADR-0007).
 - Use "play money", "sandbox balance". Never "funds", "deposit", "withdraw", "wallet" for the user's own money.
 - Mock or cached data is labelled: "Cached result (live service busy)" or "Mock mode: no API keys configured". Live AI steps get a **Live** badge.
 
@@ -85,7 +85,7 @@ Name only what a judge should be able to repeat (guidelines chapter 9). Everythi
 | **Time Machine** | The sandbox's narrator | Time Machine · next quarter |
 
 - **Proof of Life** is written in full, always with a site and a quarter. Never "PoL" (it reads as crypto). "Ecological Performance Report" stays as its subtitle so finance readers see the lineage.
-- **Apps** (routes unchanged: `/`, `/steward`, `/admin`): **Exchange** (always with "Sandbox · play money only"), **Stewards** (was "Steward") and **Control room**.
+- **Apps** (routes unchanged: `/`, `/steward`, `/admin`): **Exchange** (always under the sandbox line), **Stewards** (was "Steward") and **Control room**.
 
 ## 6. Bea's voice
 Bea is warm in tone and strict about facts. The personality changes how things are said, never what the numbers are.

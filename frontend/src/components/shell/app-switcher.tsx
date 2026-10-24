@@ -1,11 +1,19 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Check, ChevronDown, Plus } from "lucide-react";
 import Link from "@/components/app-link";
 import { cn } from "cn";
 
 import { AppIcon } from "@/components/shell/app-icons";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useMyCommunities, useWorld } from "@/lib/hooks";
 import {
   APPS,
@@ -98,5 +106,78 @@ export function CreateCommunityLink({
         Create a community
       </Link>
     </Button>
+  );
+}
+
+/**
+ * The app's name beside the lockup, as in the guidelines' app bar: after a hairline, quiet and
+ * regular. When the visitor can open another app (or create a community) the name is the
+ * switcher: a menu of their apps, the current one checked. Otherwise it's just the name.
+ */
+export function AppMenu({
+  current,
+  access,
+  offerCreate,
+  className,
+}: {
+  current: AppKey;
+  access: AppAccess;
+  offerCreate: boolean;
+  className?: string;
+}) {
+  const name = APPS[current].name;
+  const others = switchTargets(current, access);
+  const label =
+    "text-[15px] font-normal whitespace-nowrap text-muted-foreground";
+  if (others.length === 0 && !offerCreate)
+    return <span className={cn(label, "px-1", className)}>{name}</span>;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            label,
+            "-mx-1 gap-1 rounded-full px-2.5 hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground",
+            className,
+          )}
+        >
+          {name}
+          <span className="sr-only">, switch app</span>
+          <ChevronDown className="size-3.5 opacity-70" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-60 rounded-2xl p-1.5">
+        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+          WildWorth apps
+        </DropdownMenuLabel>
+        {access.apps.map((app) => (
+          <DropdownMenuItem key={app} asChild className="gap-2.5 rounded-xl">
+            <Link
+              href={APPS[app].href}
+              aria-current={app === current ? "page" : undefined}
+            >
+              <AppIcon app={app} className="size-[18px]" />
+              <span className="flex-1">{APPS[app].switchLabel}</span>
+              {app === current && (
+                <Check className="size-4 text-lime-ink" aria-hidden="true" />
+              )}
+            </Link>
+          </DropdownMenuItem>
+        ))}
+        {offerCreate && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild className="gap-2.5 rounded-xl">
+              <Link href={APPS.steward.href}>
+                <Plus className="size-[18px]" aria-hidden="true" />
+                Create a community
+              </Link>
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

@@ -398,6 +398,16 @@
 .bea-anim .bea-z + .bea-z {
   animation-delay: 1.3s;
 }
+/* The Ask Bea button: hovered or focused, she stirs (wings and antennae) until left. */
+.ask-bea:is(:hover, :focus-visible) .bea-anim .bea-wl,
+.ask-bea:is(:hover, :focus-visible) .bea-anim .bea-wr {
+  animation-iteration-count: infinite;
+}
+.ask-bea:is(:hover, :focus-visible) .bea-anim .bea-ant {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: bea-wiggle 0.5s ease-in-out infinite alternate;
+}
 .bea-react-up {
   animation: bea-react-up 0.75s var(--nx-ease-out);
 }

@@ -209,7 +209,15 @@ Ecosystem, verification and status chips are small pills; on images they are whi
 44px, 12px radius, card fill, input border, forest caret, ring on focus. Errors in destructive text below the field, wired with `aria-describedby`.
 
 ### Navigation
-Sticky translucent header per app with the WildWorth lockup and the app name: **Exchange** (always with "Sandbox · play money only"), **Stewards** and **Control room**. Pill nav with the active page raised on a card and an icon from the WildWorth pack beside each label, then Ask Bea and the alerts bell. Inside `/sandbox` the forest sandbox bar sits above with the persona switcher, "What to try", the story and reset; the real app has no bar (ADR-0007).
+The app bar follows the guidelines' "In use" mock. Above it, a thin forest strip carries the sandbox line, "Sandbox · play money only", and, for anonymous visitors, the way into a sandbox of their own. Inside `/sandbox` the forest sandbox bar takes its place, with the persona switcher (each person over their role below `xl`), "What to try", the story and reset, and it says "play money only" too (ADR-0007). The sticky translucent bar holds, from left to right:
+- the WildWorth lockup;
+- a hairline, then the app's name, quiet and regular: **Exchange**, **Stewards** or **Control room**. When the account can open another app, the name is the switcher: a menu of its apps, plus "Create a community" when it has none;
+- the pill nav, with the active page raised on a card and, from `xl`, a WildWorth icon beside each label;
+- **Ask Bea**: a forest pill with Bea's avatar and an "AI" tag. Her wings and antennae stir while it's hovered or focused, and a tooltip names the model she runs on;
+- the alerts bell;
+- the account, shown as initials only.
+
+Below `lg` the pages, apps and communities move into a menu sheet.
 
 ### Health instrument (signature)
 A dotted radial dial (`DotRing`): 100 columns of dots in 5 rings, one column per point of health, lit up to the score (forest on light, lime on dark), with the light numeral in the centre. It reads literally, not decoratively, and stays wherever a live score is shown.
@@ -222,6 +230,15 @@ The WildWorth pack (`components/icons/`, from the guidelines' `GL` object) for e
 
 ### Bea, the field guide (character)
 Bea replaces "Copilot". She is drawn in the logo's line, **ink only** (forest on light, paper on dark), no fills and no colour: a round body with two carets of the WildWorth zigzag as her stripe, outline wings and antennae, dot eyes and a line smile (`bea()` in the character sheet). Six states, each tied to a product moment: **Hello** (panel opens, between answers), **Thinking** (the model is answering), **Found it** (an answer with evidence, or a grade went up), **Downgrade** (a grade fell or WildWatch raised an alert), **Can't answer** (the Record has nothing), **Waking up** (the free-tier backend is starting). When she appears or changes state her wings flutter (0.32 s), she bobs (3.6 s) and blinks, then she rests within 5 seconds (WCAG 2.2.2); thinking and waking loop only while the work runs. On an upgrade she hops once (750 ms), on a downgrade she shakes once (600 ms). Full character from 64 px, an avatar below that, the 24 px icon in buttons. Never fill her with colour, add a lime accent, bring back a rising stroke, or stretch her.
+
+Her chat follows the character sheet's product mock (`components/bea/chat-parts.tsx`), the same in the header's sheet, on a site's page and in the scripted preview:
+- **Title:** her avatar, "Bea · your field guide" in Gloock and what she answers from, on paper.
+- **Messages:** the reader's questions in forest bubbles on the right; her answers in paper bubbles beside her avatar, which shows the turn's state.
+- **Sources:** small chips (the ref in mono, then the source's name).
+- **How the answer was made:** a mono footnote under the bubble: searched, written by, code checked.
+- **Working:** what she's doing, as a quiet line beside her avatar.
+- **Empty:** Bea, "Ask Bea about {site}", a sentence and question chips.
+- **Field:** paper, inset, with the send button inside it, and a mono footnote: "Runs on NVIDIA Nemotron 3 Nano · Play money only; not advice."
 
 ## Motion
 Every animation means something, plays once, ends on the real value, and is replaced by its final frame under `prefers-reduced-motion`. Four moves, all on `--nx-ease-out` (`cubic-bezier(.16,1,.3,1)`): **Draw** (something is being measured: the logo line, a boundary, a chart; 900–1100 ms), **Rise** (a reading arrived: the logo's last stroke, the seal's dots; 550 ms after the draw), **Count** (a number changed; 600–900 ms) and **Stamp** (a verdict was issued: grade reveal or change; 520 ms, once). Bea's idle motion settles within 5 seconds (her thinking and waking loops last only as long as the work), and stops for reduced motion too.

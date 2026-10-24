@@ -61,6 +61,8 @@ export function Bea({
           viewBox="0 0 120 120"
           width={size}
           height={size}
+          // A size class, so a Button's `svg:not([class*='size-'])` rule never shrinks her.
+          className="size-full"
           {...a11y}
         >
           <circle
@@ -81,7 +83,7 @@ export function Bea({
           viewBox="0 0 120 124"
           width={size}
           height={size}
-          className="bea-bob"
+          className="bea-bob size-full"
           {...a11y}
         >
           <BeaDrawing state={BEA_DRAWING[state]} />

@@ -1,16 +1,19 @@
 "use client";
 
-import { ArrowUp } from "lucide-react";
 import Link from "@/components/app-link";
 import { usePathname } from "@/lib/nav";
 import { useEffect, useRef, useState } from "react";
-import { cn } from "cn";
 
 import { AccountCopilot } from "@/components/account-copilot";
-import { Bea } from "@/components/bea/bea";
+import {
+  BeaAnswer,
+  BeaComposer,
+  BeaEmpty,
+  BeaQuestion,
+  BeaSuggestion,
+  SOURCE_CHIP,
+} from "@/components/bea/chat-parts";
 import { BeaSheetTitle, SITE_SUBTITLE } from "@/components/bea/bea-sheet-title";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -93,8 +96,9 @@ function ScriptedCopilot() {
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
   const rated = world.sites.filter((s) => s.reports.length);
+  // A real site's page isn't in the scripted world: start on the hero site instead.
   const siteId =
-    ui.copilotSiteId ??
+    rated.find((s) => s.id === ui.copilotSiteId)?.id ??
     rated.find((s) => s.id === "xochimilco-wetland")?.id ??
     rated[0]?.id ??
     null;
@@ -128,21 +132,23 @@ function ScriptedCopilot() {
     setDraft("");
   }
 
+  const suggestions = SUGGESTED_QUESTIONS.map((q) => (
+    <BeaSuggestion key={q} onClick={() => submit(q)}>
+      {q}
+    </BeaSuggestion>
+  ));
+
   return (
     <>
-      <SheetHeader className="border-b px-6 pt-6 pb-4">
+      <SheetHeader className="gap-3.5 border-b bg-card px-5 pt-5 pb-4">
         <BeaSheetTitle state={bea} subtitle={SITE_SUBTITLE} />
-        <p className="text-xs text-muted-foreground">
-          This preview uses scripted answers. In your sandbox, Bea answers live
-          on {modelLabel(BEA_MODEL)}.
-        </p>
         {rated.length > 0 && (
           <Select
             value={siteId ?? undefined}
             onValueChange={(v) => openCopilot(v)}
           >
             <SelectTrigger
-              className="mt-2 w-full"
+              className="h-9 w-full rounded-full bg-background text-[13px]"
               aria-label="Site to ask about"
             >
               <SelectValue placeholder="Choose a site" />
@@ -156,108 +162,74 @@ function ScriptedCopilot() {
             </SelectContent>
           </Select>
         )}
+        <p className="text-xs text-muted-foreground">
+          A preview with scripted answers. In your own sandbox, Bea answers live
+          on NVIDIA {modelLabel(BEA_MODEL)}.
+        </p>
       </SheetHeader>
       <div
         ref={listRef}
-        className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5"
+        className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5"
         aria-live="polite"
       >
         {world.copilot.length === 0 && (
-          <div className="grid justify-items-center gap-2 px-2 pt-4 text-center">
-            <Bea state={bea} size={96} label="" />
-            <p className="font-serif text-2xl leading-tight">
-              Ask Bea about {site ? site.name : "a site"}
-            </p>
-            <p className="max-w-[34ch] text-sm text-muted-foreground">
-              Why its grade or price changed, how its worth is estimated, or how
-              sure the rating is.
-            </p>
-          </div>
-        )}
-        {world.copilot.map((m) => (
-          <div
-            key={m.id}
-            className={cn(
-              "flex",
-              m.role === "user" ? "justify-end" : "justify-start",
-            )}
+          <BeaEmpty
+            state={bea}
+            title={`Ask Bea about ${site ? site.name : "a site"}`}
+            suggestions={suggestions}
           >
-            <div
-              className={cn(
-                "nx-rise max-w-[88%] rounded-3xl px-4 py-3 text-sm leading-relaxed",
-                m.role === "user"
-                  ? "rounded-br-lg bg-primary text-primary-foreground"
-                  : "rounded-bl-lg bg-card shadow-soft",
-              )}
+            Why its grade or price changed, how its worth is estimated, or how
+            sure the rating is. She shows her sources.
+          </BeaEmpty>
+        )}
+        {world.copilot.map((m) =>
+          m.role === "user" ? (
+            <BeaQuestion key={m.id}>{m.text}</BeaQuestion>
+          ) : (
+            <BeaAnswer
+              key={m.id}
+              state={m.citations.length > 0 ? "found" : "cant-answer"}
             >
-              {m.id === bzz && "Bzz. "}
-              <Rich text={m.text} />
+              <p>
+                {m.id === bzz && "Bzz. "}
+                <Rich text={m.text} />
+              </p>
               {m.citations.length > 0 && (
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border/70 pt-2.5">
                   {m.citations.map((c) => (
                     <Link
                       key={c.label + c.href}
                       href={c.href}
                       onClick={closeCopilot}
-                      className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground hover:bg-accent"
+                      className={SOURCE_CHIP}
                     >
                       {c.label}
                     </Link>
                   ))}
                 </div>
               )}
-            </div>
-          </div>
-        ))}
+            </BeaAnswer>
+          ),
+        )}
         {ui.copilotTyping && (
-          <div className="flex">
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Bea state="thinking" size={28} label="" />
-              Bea is reading the Record…
-            </p>
-          </div>
+          <BeaAnswer state="thinking" bubble={false}>
+            Bea is reading the Record…
+          </BeaAnswer>
         )}
       </div>
-      <div className="border-t px-6 pt-3 pb-6">
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {SUGGESTED_QUESTIONS.map((q) => (
-            <button
-              key={q}
-              type="button"
-              onClick={() => submit(q)}
-              className="rounded-full border border-input bg-card px-3 py-1.5 text-xs font-medium hover:bg-accent"
-            >
-              {q}
-            </button>
-          ))}
-        </div>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit(draft);
-          }}
-          className="flex gap-2"
-        >
-          <label htmlFor="copilot-input" className="sr-only">
-            Ask Bea
-          </label>
-          <Input
-            id="copilot-input"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Why did it drop?"
-            className="rounded-full"
-            data-tour="copilot-input"
-          />
-          <Button
-            type="submit"
-            size="icon"
-            aria-label="Send question"
-            disabled={!draft.trim()}
-          >
-            <ArrowUp aria-hidden="true" />
-          </Button>
-        </form>
+      <div className="space-y-3 px-5 pt-2 pb-5">
+        {world.copilot.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">{suggestions}</div>
+        )}
+        <BeaComposer
+          value={draft}
+          onChange={setDraft}
+          onSubmit={() => submit(draft)}
+          label="Ask Bea"
+          placeholder={`Ask Bea about ${site ? site.name : "a site"}…`}
+          sendDisabled={!draft.trim()}
+          inputProps={{ "data-tour": "copilot-input" }}
+        />
       </div>
     </>
   );
