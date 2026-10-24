@@ -1,29 +1,34 @@
 """`python -m app.jobs.seed_live --api URL --origin URL [--accounts-out PATH] [--phase NAME]`
 
-Fills the live world with real activity from `data/live_seed.json`, through the real API, so
-every rating, report, verification, offer, trade, alert and Record entry is made by the product
-itself (no inserted rows, no mock model):
+Fills the live world with activity from `data/live_seed.json`. Ratings, reports, alerts,
+trades and Record entries are all made by the product with live models and Earth Engine
+(nothing is mocked); a few operator steps run in-process with the product's own functions:
 
-1. **people**: the admin (`app.cli create-admin`) and every account (`POST /auth/register`);
-2. **communities**: the curated communities are handed from the template's owner persona (who
-   can't sign in) to a real owner, renamed where the data says so, and given a steward; new
-   communities are created by their owners;
-3. **listings**: new listings drawn on real land, rated live (Earth Engine, Tavily, Nemotron),
-   verified with sample documents (labelled as samples: nothing here is a legal title) that the
-   admin approves, then opened to supporters at their opening offer;
+1. **people**: each account is registered and signed in with the register and login
+   endpoints' own functions (`register_person`, `authenticate`, `start_session`), which skips
+   their per-IP throttles; everything after that goes through the running API;
+2. **communities**: the curated communities are handed from their seeded owner persona (who
+   can't sign in) to a person (`transfer_ownership`), renamed where the data says so and given
+   stewards; new communities are created by their owners;
+3. **listings**: new listings drawn on real land and rated live (Earth Engine, Tavily,
+   Nemotron). The ones the gate lists are opened to supporters at the engine's opening price
+   without the verification gate (`launch(require_verification=False)`), like the curated
+   sites: the Exchange shows them as "Self-attested by the community". No documents are made
+   up and no review is faked;
 4. **trade1**: supporters back sites; **news**: the news sweep (`app.jobs.news_sweep`);
 5. **rerate**: the quarter's re-rate (`app.jobs.rerate_all`) and owner re-rates of some listings;
 6. **trade2**, **trade3**: supporters react: some sell, some buy more.
 
-Run it against an API started with `USE_MOCKS=false` and `EARTH_ENGINE_LIVE=true` on the same
-`DATABASE_URL` as this process. Re-running skips what's done. Passwords are generated once and
-kept in `--accounts-out` (git-ignored by `.env.*`), never printed or logged.
+Run it with `USE_MOCKS=false EARTH_ENGINE_LIVE=true`, against an API started with the same
+settings on the same `DATABASE_URL`. Re-running skips what's done (trades are recorded in a
+state file next to the accounts file). Passwords are generated once and kept in
+`--accounts-out` (git-ignored by `.env.*`, mode 0600), never printed or logged. Exits 1 when a
+phase stops early (e.g. a job at its hourly rating cap): re-run that phase later.
 """
 
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import math
 import os
@@ -31,31 +36,43 @@ import secrets
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from decimal import Decimal
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 import httpx
-from sqlalchemy import update
-from sqlmodel import Session, col, select
+from sqlmodel import Session, select
 
 from app.auth import (
     SESSION_COOKIE,
     EmailTaken,
     authenticate,
+    end_session,
     register_person,
     start_session,
 )
+from app.communities import MembershipConflict, transfer_ownership
+from app.config import Settings, get_settings
 from app.db import engine
-from app.models import Community, CommunityMember, CommunityRole, User, UserKind
+from app.market.offering import Offering
+from app.models import Community
+from app.services import ipo
 from app.worlds import LIVE_WORLD_ID
 
 DATA = Path(__file__).resolve().parents[2] / "data" / "live_seed.json"
+DEFAULT_ACCOUNTS = Path(__file__).resolve().parents[3] / ".env.seed-accounts.json"
 PHASES = ("people", "communities", "listings", "trade1", "news", "rerate", "trade2", "trade3")
+TRADE_ROUNDS = {"trade1": "trades_round_1", "trade2": "trades_round_2", "trade3": "trades_round_3"}
 SETTLED = {"listed", "needs_evidence", "ineligible", "draft", "withdrawn"}
+RETRIED = {429, 503}
 TRADE_PAUSE_S = 4
+WAIT_S = 1800
 
 
 def log(message: str) -> None:
@@ -66,6 +83,46 @@ class SeedError(RuntimeError):
     pass
 
 
+def live_settings_problem(settings: Settings) -> str | None:
+    """Why this process can't seed real data, or None. Jobs it starts inherit its env."""
+    if settings.use_mocks:
+        return "USE_MOCKS is on: run with USE_MOCKS=false (and the API too)"
+    if not settings.earth_engine_live:
+        return "EARTH_ENGINE_LIVE is off: run with EARTH_ENGINE_LIVE=true (and the API too)"
+    return None
+
+
+def retry_after_s(value: str | None, *, default: float = 10, now: datetime | None = None) -> float:
+    """Seconds to wait from a `Retry-After` header: delta-seconds or an HTTP date."""
+    if not value:
+        return default
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        pass
+    try:
+        when = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0.0, (when - (now or datetime.now(UTC))).total_seconds())
+
+
+def write_private(path: Path, data: Any) -> None:
+    """Write JSON readable by the owner only, created 0600 (never briefly world-readable)."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as out:
+        out.write(json.dumps(data, indent=2) + "\n")
+    os.chmod(path, 0o600)
+
+
+def buy_qty(budget: float, price: float) -> int:
+    return math.floor(budget / price) if price > 0 else 0
+
+
+def sell_qty(held: float, fraction: float) -> int:
+    return math.floor(held * fraction)
+
+
 @dataclass
 class Account:
     key: str
@@ -74,6 +131,7 @@ class Account:
     password: str
     client: httpx.Client
     id: UUID | None = None
+    token: str | None = None
 
 
 @dataclass
@@ -82,16 +140,32 @@ class Seeder:
     origin: str
     accounts_out: Path
     data: dict[str, Any]
+    transport: httpx.BaseTransport | None = None
     passwords: dict[str, str] = field(default_factory=dict)
+    done_trades: set[str] = field(default_factory=set)
     people: dict[str, Account] = field(default_factory=dict)
-    admin: Account | None = None
     communities: dict[str, str] = field(default_factory=dict)
+    unfinished: list[str] = field(default_factory=list)
+
+    @property
+    def state_path(self) -> Path:
+        return self.accounts_out.with_name(".env.seed-state.json")
+
+    def load(self) -> None:
+        if self.accounts_out.exists():
+            self.passwords = json.loads(self.accounts_out.read_text())
+        if self.state_path.exists():
+            self.done_trades = set(json.loads(self.state_path.read_text()).get("trades", []))
 
     # ----- plumbing ------------------------------------------------------------------------------
 
     def client(self) -> httpx.Client:
         return httpx.Client(
-            base_url=self.api, headers={"Origin": self.origin}, timeout=120, follow_redirects=True
+            base_url=self.api,
+            headers={"Origin": self.origin},
+            timeout=120,
+            follow_redirects=True,
+            transport=self.transport,
         )
 
     def call(
@@ -104,27 +178,25 @@ class Seeder:
     ) -> httpx.Response:
         for _ in range(8):
             response = account.client.request(method, path, **kw)
-            if response.status_code == 429:
-                wait = int(response.headers.get("Retry-After", "10"))
-                log(f"  rate limited on {path}; waiting {wait}s")
-                time.sleep(min(wait, 120) + 1)
+            if response.status_code in RETRIED:
+                wait = min(retry_after_s(response.headers.get("Retry-After")), 120)
+                log(f"  {response.status_code} on {path}; waiting {wait:.0f}s")
+                time.sleep(wait + 1)
                 continue
             if response.status_code not in ok:
                 raise SeedError(f"{method} {path} → {response.status_code}: {response.text[:300]}")
             return response
-        raise SeedError(f"{method} {path}: still rate limited")
+        raise SeedError(f"{method} {path}: still refused after retries")
 
     def password_for(self, email: str) -> str:
         if email not in self.passwords:
             self.passwords[email] = secrets.token_urlsafe(18)
-            self.accounts_out.write_text(json.dumps(self.passwords, indent=2) + "\n")
-            os.chmod(self.accounts_out, 0o600)
+            write_private(self.accounts_out, self.passwords)
         return self.passwords[email]
 
-    def sign_in(self, key: str, name: str, email: str, *, register: bool = True) -> Account:
+    def sign_in(self, key: str, name: str, email: str) -> Account:
         account = Account(key, name, email, self.password_for(email), self.client())
-        if register:
-            self.register(name, email, account.password)
+        self.register(name, email, account.password)
         self.start_session(account)
         me = self.call(account, "GET", "/world").json().get("me")
         if not me:
@@ -145,14 +217,22 @@ class Seeder:
     def start_session(self, account: Account) -> None:
         """Sign in with the login endpoint's own functions (`authenticate`, `start_session`):
         the same password check and session, without the per-IP login throttle (10 every
-        15 minutes) that would idle a seed run of 14 accounts. The token is the session cookie."""
+        15 minutes). The token is the session cookie."""
         with Session(engine) as session:
             user = authenticate(session, LIVE_WORLD_ID, account.email, account.password)
             if user is None:
                 raise SeedError(f"{account.email}: wrong password in the accounts file")
-            token = start_session(session, user)
+            account.token = start_session(session, user)
         # A header, not the cookie jar: the jar won't match a bare "localhost" host.
-        account.client.headers["Cookie"] = f"{SESSION_COOKIE}={token}"
+        account.client.headers["Cookie"] = f"{SESSION_COOKIE}={account.token}"
+
+    def close(self) -> None:
+        """Sign every account out and close its client."""
+        with Session(engine) as session:
+            for account in self.people.values():
+                end_session(session, account.token)
+                account.client.close()
+        self.people.clear()
 
     def accounts(self) -> None:
         if self.people:
@@ -161,15 +241,13 @@ class Seeder:
             self.people[person["key"]] = self.sign_in(
                 person["key"], person["name"], person["email"]
             )
-        admin = self.data["admin"]
-        self.admin = self.sign_in("admin", admin["name"], admin["email"], register=False)
 
-    def asset_by_name(self, name: str) -> dict[str, Any]:
+    def asset_by_name(self, name: str) -> dict[str, Any] | None:
         account = next(iter(self.people.values()))
         for asset in self.call(account, "GET", "/assets").json():
             if asset["name"] == name:
                 return dict(asset)
-        raise SeedError(f"no public asset named {name!r}")
+        return None
 
     def my_communities(self, account: Account) -> list[dict[str, Any]]:
         return list(self.call(account, "GET", "/me/communities").json())
@@ -177,36 +255,12 @@ class Seeder:
     # ----- phases --------------------------------------------------------------------------------
 
     def phase_people(self) -> None:
-        admin = self.data["admin"]
-        password = self.password_for(admin["email"])
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "app.cli",
-                "create-admin",
-                "--email",
-                admin["email"],
-                "--name",
-                admin["name"],
-                "--password-stdin",
-            ],
-            input=password + "\n",
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        if result.returncode == 0:
-            log(f"admin {admin['email']} created")
-        elif "already" in (result.stdout + result.stderr).lower():
-            log(f"admin {admin['email']} exists")
-        else:
-            raise SeedError(f"create-admin failed: {(result.stdout + result.stderr)[-300:]}")
         self.accounts()
         log(f"{len(self.people)} accounts ready")
 
     def hand_over(self, match_name: str, owner: Account) -> UUID:
-        """Move a curated community's ownership from the template persona to a real owner."""
+        """Hand a curated community from its owner persona to `owner` (`transfer_ownership`)."""
+        assert owner.id is not None
         with Session(engine) as session:
             community = session.exec(
                 select(Community).where(
@@ -215,25 +269,12 @@ class Seeder:
             ).first()
             if community is None:
                 raise SeedError(f"no live community named {match_name!r}")
-            owner_row = session.exec(
-                select(CommunityMember).where(
-                    CommunityMember.community_id == community.id,
-                    CommunityMember.role == CommunityRole.OWNER,
-                )
-            ).one()
-            if owner_row.user_id != owner.id:
-                current = session.get_one(User, owner_row.user_id)
-                if current.kind != UserKind.PERSONA:
-                    raise SeedError(f"{match_name} already has a real owner")
-                session.execute(
-                    update(CommunityMember)
-                    .where(
-                        col(CommunityMember.community_id) == community.id,
-                        col(CommunityMember.user_id) == current.id,
-                    )
-                    .values(user_id=owner.id)
-                )
-                session.commit()
+            try:
+                moved = transfer_ownership(session, community, owner.id)
+            except MembershipConflict as exc:
+                raise SeedError(f"{match_name} can't go to {owner.name}: {exc.reason}") from None
+            session.commit()
+            if moved:
                 log(f"  {match_name}: handed to {owner.name}")
             return community.id
 
@@ -255,16 +296,20 @@ class Seeder:
                 community_id = self.call(owner, "POST", "/communities", json=body).json()["id"]
                 log(f"  {name}: created by {owner.name}")
             for steward_key in spec.get("stewards", []):
-                steward = self.people[steward_key]
-                self.call(
-                    owner,
-                    "POST",
-                    f"/communities/{community_id}/members",
-                    json={"user_id": str(steward.id)},
-                    ok=(200, 201, 409),
-                )
+                self.add_steward(owner, community_id, self.people[steward_key])
             self.communities[name] = community_id
             log(f"community {name}: owner {owner.name}, stewards {spec.get('stewards', [])}")
+
+    def add_steward(self, owner: Account, community_id: str, steward: Account) -> None:
+        response = self.call(
+            owner,
+            "POST",
+            f"/communities/{community_id}/members",
+            json={"user_id": str(steward.id)},
+            ok=(200, 201, 409),
+        )
+        if response.status_code == 409 and response.json().get("detail") != "already_member":
+            raise SeedError(f"{steward.name} can't be a steward: {response.text[:200]}")
 
     def owner_of(self, community_name: str) -> Account:
         spec = next(
@@ -274,16 +319,27 @@ class Seeder:
         )
         return self.people[spec["owner"]]
 
-    def wait_settled(
-        self, owner: Account, asset_id: str, *, timeout_s: int = 1800
-    ) -> dict[str, Any]:
-        deadline = time.monotonic() + timeout_s
+    def find_listing(self, owner: Account, name: str) -> dict[str, Any] | None:
+        for community in self.my_communities(owner):
+            listings = self.call(owner, "GET", f"/communities/{community['id']}/assets").json()
+            for asset in listings:
+                if asset["name"] == name:
+                    return dict(asset)
+        return None
+
+    def wait_settled(self, owner: Account, asset_id: str) -> dict[str, Any]:
+        deadline = time.monotonic() + WAIT_S
         while True:
             asset = self.call(owner, "GET", f"/assets/{asset_id}").json()
             if asset["status"] in SETTLED:
+                if asset.get("mock"):
+                    raise SeedError(
+                        f"{asset['name']} was rated from mock metrics: start the API with "
+                        "USE_MOCKS=false EARTH_ENGINE_LIVE=true"
+                    )
                 return dict(asset)
             if time.monotonic() > deadline:
-                raise SeedError(f"{asset['name']} still {asset['status']} after {timeout_s}s")
+                raise SeedError(f"{asset['name']} still {asset['status']} after {WAIT_S}s")
             time.sleep(15)
 
     def phase_listings(self) -> None:
@@ -316,99 +372,80 @@ class Seeder:
                 f"health {report.get('health_score')}"
             )
             if asset["status"] != "listed":
-                log(f"  {spec['name']}: not listed ({asset.get('status_reason')}); skipping offer")
+                log(f"  {spec['name']}: not listed ({asset.get('status_reason')}); no offer")
                 continue
-            self.verify(owner, asset, spec)
             self.launch(owner, asset)
 
-    def find_listing(self, owner: Account, name: str) -> dict[str, Any] | None:
-        for community in self.my_communities(owner):
-            for listing in self.call(owner, "GET", f"/communities/{community['id']}/assets").json():
-                if listing["name"] == name:
-                    return dict(self.call(owner, "GET", f"/assets/{listing['id']}").json())
-        return None
-
-    def verify(self, owner: Account, asset: dict[str, Any], spec: dict[str, Any]) -> None:
-        assert self.admin is not None
-        state = self.call(owner, "GET", f"/assets/{asset['id']}/verification").json()
-        if (state.get("level") or "") == "verified":
-            return
-        ids = []
-        for doc_type in spec["documents"]:
-            png = sample_document(doc_type, spec["name"], spec["community"], asset)
-            uploaded = self.call(
-                owner,
-                "POST",
-                f"/assets/{asset['id']}/documents",
-                params={"doc_type": doc_type},
-                content=png,
-                headers={"Content-Type": "image/png"},
-            ).json()
-            ids.append(uploaded["id"])
-        run = self.call(
-            owner, "POST", f"/assets/{asset['id']}/verification/runs", json={"document_ids": ids}
-        ).json()
-        self.call(
-            self.admin,
-            "POST",
-            f"/admin/assets/{asset['id']}/verification/{run['id']}/approve",
-            json={"reason": "Sample documents reviewed for the sandbox: play money only."},
-        )
-        log(f"  {asset['name']}: verified (sample documents, admin approved)")
-
     def launch(self, owner: Account, asset: dict[str, Any]) -> None:
+        """Open a listed site to supporters at the engine's previewed price, self-attested
+        (`require_verification=False`); every other launch check still applies."""
         fresh = self.call(owner, "GET", f"/assets/{asset['id']}").json()
         if fresh.get("ipo_at"):
             return
         preview = self.call(owner, "GET", f"/assets/{asset['id']}/ipo/preview").json()
-        if not preview.get("launchable"):
-            raise SeedError(f"{asset['name']} can't open: {preview.get('blocked_reason')}")
-        self.call(
-            owner,
-            "POST",
-            f"/assets/{asset['id']}/ipo",
-            json={"expected_price": str(preview["ipo_price"])},
-        )
-        log(f"  {asset['name']}: opened to supporters at ${preview['ipo_price']}")
-
-    def trade(self, rows: list[list[Any]]) -> None:
-        self.accounts()
-        for who, site, side, amount in rows:
-            account = self.people[who]
+        if preview.get("blocked_reason") not in (None, "not_verified"):
+            raise SeedError(f"{asset['name']} can't open: {preview['blocked_reason']}")
+        price = Decimal(str(preview["ipo_price"]))
+        with Session(engine) as session:
             try:
-                asset = self.asset_by_name(site)
-            except SeedError:
+                ipo.launch(
+                    session,
+                    LIVE_WORLD_ID,
+                    UUID(asset["id"]),
+                    Offering(),
+                    expected_price=price,
+                    require_verification=False,
+                )
+            except ipo.IpoRefused as exc:
+                raise SeedError(f"{asset['name']} can't open: {exc.code}") from None
+            session.commit()
+        log(f"  {asset['name']}: opened to supporters at ${price} (self-attested)")
+
+    def trade(self, round_key: str) -> None:
+        self.accounts()
+        for index, (who, site, side, amount) in enumerate(self.data.get(round_key, [])):
+            done_key = f"{round_key}:{index}"
+            if done_key in self.done_trades:
+                continue
+            account = self.people[who]
+            asset = self.asset_by_name(site)
+            if asset is None or not asset.get("price"):
                 log(f"  {site} isn't open to supporters; skipping {account.name}'s {side}")
                 continue
-            price = float(asset.get("price") or 0)
+            price = float(asset["price"])
             if side == "buy":
-                qty = math.floor(float(amount) / price) if price else 0
+                qty = buy_qty(float(amount), price)
             else:
                 held = {
                     h["asset_id"]: h["shares"]
                     for h in self.call(account, "GET", "/portfolio").json().get("holdings", [])
                 }
-                qty = math.floor(float(held.get(asset["id"], 0)) * float(amount))
-            if qty <= 0:
+                qty = sell_qty(float(held.get(asset["id"], 0)), float(amount))
+            if qty > 0:
+                self.call(
+                    account,
+                    "POST",
+                    "/orders",
+                    json={"asset_id": asset["id"], "side": side, "qty": qty},
+                )
+                log(f"  {account.name} {side}s {qty} units of {site} (~${price:.2f})")
+            else:
                 log(f"  {account.name}: nothing to {side} on {site}")
-                continue
-            self.call(
-                account, "POST", "/orders", json={"asset_id": asset["id"], "side": side, "qty": qty}
-            )
-            log(f"  {account.name} {side}s {qty} units of {site} (~${price:.2f})")
+            self.done_trades.add(done_key)
+            write_private(self.state_path, {"trades": sorted(self.done_trades)})
             time.sleep(TRADE_PAUSE_S)
 
-    def job(self, module: str, *args: str) -> None:
+    def job(self, phase: str, module: str, *args: str) -> None:
         log(f"running {module} {' '.join(args)}")
         result = subprocess.run([sys.executable, "-m", module, *args], check=False)
         if result.returncode:
             # A job stops at its own caps (e.g. the hourly rating cap) and resumes on a re-run.
-            log(f"  {module} stopped early (exit {result.returncode}); re-run this phase later")
+            log(f"  {module} stopped early (exit {result.returncode})")
+            self.unfinished.append(phase)
 
     def phase_rerate(self) -> None:
         self.accounts()
-        quarter = f"{datetime.now(UTC).year}Q{(datetime.now(UTC).month - 1) // 3 + 1}"
-        self.job("app.jobs.rerate_all", "--period", quarter, "--max-usd", "3")
+        self.job("rerate", "app.jobs.rerate_all", "--max-usd", "3")
         for spec in self.data["listings"]:
             if not spec.get("rerate"):
                 continue
@@ -419,19 +456,41 @@ class Seeder:
             before = (asset.get("latest_report") or {}).get("version") or 0
             if before >= 2:
                 continue
-            self.call(owner, "POST", f"/assets/{asset['id']}/rate", ok=(200, 201, 202, 409))
+            started = self.call(owner, "POST", f"/assets/{asset['id']}/rate", ok=(202, 409))
+            if started.status_code == 409:
+                log(f"  {spec['name']}: not re-rated now ({started.text[:120]})")
+                self.unfinished.append("rerate")
+                continue
             log(f"  {spec['name']}: re-rated by {owner.name}…")
-            deadline = time.monotonic() + 1800
-            while time.monotonic() < deadline:
-                time.sleep(15)
-                now = self.call(owner, "GET", f"/assets/{asset['id']}").json()
-                version = (now.get("latest_report") or {}).get("version") or 0
-                if version > before:
-                    log(
-                        f"  {spec['name']}: Proof of Life v{version}, grade "
-                        f"{now['latest_report'].get('grade')}"
-                    )
-                    break
+            if not self.wait_version(owner, asset["id"], before):
+                log(f"  {spec['name']}: no new Proof of Life after {WAIT_S}s")
+                self.unfinished.append("rerate")
+
+    def wait_version(self, owner: Account, asset_id: str, before: int) -> bool:
+        deadline = time.monotonic() + WAIT_S
+        while time.monotonic() < deadline:
+            time.sleep(15)
+            now = self.call(owner, "GET", f"/assets/{asset_id}").json()
+            report = now.get("latest_report") or {}
+            if (report.get("version") or 0) > before:
+                log(f"  {now['name']}: Proof of Life v{report['version']}, grade {report['grade']}")
+                return True
+        return False
+
+    def run(self, phase: str) -> None:
+        log(f"== {phase}")
+        if phase == "people":
+            self.phase_people()
+        elif phase == "communities":
+            self.phase_communities()
+        elif phase == "listings":
+            self.phase_listings()
+        elif phase == "news":
+            self.job("news", "app.jobs.news_sweep", "--max-usd", "1")
+        elif phase == "rerate":
+            self.phase_rerate()
+        else:
+            self.trade(TRADE_ROUNDS[phase])
 
 
 def box_polygon(box: list[float]) -> dict[str, Any]:
@@ -440,42 +499,12 @@ def box_polygon(box: list[float]) -> dict[str, Any]:
     return {"type": "Polygon", "coordinates": [ring]}
 
 
-DOC_TITLES = {
-    "title": "Land title (sample)",
-    "agrarian_certificate": "Agrarian certificate (sample)",
-    "assembly_minutes": "Community assembly minutes: consent to list (sample)",
-}
-
-
-def sample_document(doc_type: str, site: str, community: str, asset: dict[str, Any]) -> bytes:
-    """A plainly labelled sample document: the sandbox has no real titles, and says so."""
-    from PIL import Image, ImageDraw, ImageFont
-
-    image = Image.new("RGB", (1240, 1754), "white")
-    draw = ImageDraw.Draw(image)
-    big = ImageFont.load_default(size=44)
-    body = ImageFont.load_default(size=30)
-    lines = [
-        ("SAMPLE DOCUMENT · WildWorth sandbox · play money only", body),
-        ("", body),
-        (DOC_TITLES[doc_type], big),
-        ("", body),
-        (f"Site: {site}", body),
-        (f"Community: {community}", body),
-        (f"Area: {asset.get('area_ha')} ha", body),
-        (f"Centroid: {asset.get('centroid_lat'):.4f}, {asset.get('centroid_lon'):.4f}", body),
-        (f"Prepared: {datetime.now(UTC):%Y-%m-%d}", body),
-        ("", body),
-        ("This is not a legal document. It stands in for the community's", body),
-        ("papers so the verification flow can be shown end to end.", body),
-    ]
-    y = 120
-    for text, font in lines:
-        draw.text((100, y), text, fill="black", font=font)
-        y += 70 if font is big else 48
-    out = io.BytesIO()
-    image.save(out, format="PNG")
-    return out.getvalue()
+@contextmanager
+def seeding(seeder: Seeder) -> Iterator[Seeder]:
+    try:
+        yield seeder
+    finally:
+        seeder.close()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -487,42 +516,34 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--accounts-out",
         type=Path,
-        default=Path("../.env.seed-accounts.json"),
-        help="where the generated passwords live (git-ignored)",
+        default=DEFAULT_ACCOUNTS,
+        help="where the generated passwords live (git-ignored; default: the repo root)",
     )
     parser.add_argument("--phase", choices=("all", *PHASES), default="all")
     args = parser.parse_args(argv)
 
+    problem = live_settings_problem(get_settings())
+    if problem:
+        log(f"refusing to seed: {problem}")
+        return 2
     seeder = Seeder(
         api=args.api,
         origin=args.origin,
         accounts_out=args.accounts_out,
         data=json.loads(DATA.read_text()),
     )
-    if args.accounts_out.exists():
-        seeder.passwords = json.loads(args.accounts_out.read_text())
+    seeder.load()
     phases = PHASES if args.phase == "all" else (args.phase,)
-    try:
-        for phase in phases:
-            log(f"== {phase}")
-            if phase == "people":
-                seeder.phase_people()
-            elif phase == "communities":
-                seeder.phase_communities()
-            elif phase == "listings":
-                seeder.phase_listings()
-            elif phase == "trade1":
-                seeder.trade(seeder.data["trades_round_1"])
-            elif phase == "news":
-                seeder.job("app.jobs.news_sweep", "--max-usd", "1")
-            elif phase == "rerate":
-                seeder.phase_rerate()
-            elif phase == "trade2":
-                seeder.trade(seeder.data["trades_round_2"])
-            elif phase == "trade3":
-                seeder.trade(seeder.data.get("trades_round_3", []))
-    except SeedError as exc:
-        log(f"stopped: {exc}")
+    with seeding(seeder):
+        try:
+            for phase in phases:
+                seeder.run(phase)
+        except SeedError as exc:
+            log(f"stopped: {exc}")
+            return 1
+    if seeder.unfinished:
+        pending = ", ".join(dict.fromkeys(seeder.unfinished))
+        log(f"unfinished: {pending}; re-run with --phase <name> later")
         return 1
     log("done")
     return 0

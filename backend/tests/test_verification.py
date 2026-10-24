@@ -38,6 +38,7 @@ from app.communities import create_community
 from app.config import Settings, document_fingerprint_secret, get_settings
 from app.db import get_session
 from app.main import app
+from app.market.offering import Offering
 from app.models import (
     Asset,
     AssetStatus,
@@ -64,7 +65,7 @@ from app.sandbox import (
     reset_world,
 )
 from app.seed import seed
-from app.services import verification
+from app.services import ipo, verification
 from app.services.document_check import get_document_checker
 from app.tools import documents as docs
 from app.tools.verification import (
@@ -1137,6 +1138,31 @@ def test_the_live_ipo_waits_for_a_verified_run(live: World_) -> None:
     launched = launch(live, asset_id)
     assert launched.status_code == 201, launched.text
     assert buy(live, asset_id).status_code == 200
+
+
+@requires_db
+def test_only_the_operators_seed_opens_a_live_listing_without_verification(live: World_) -> None:
+    asset_id = UUID(listed(live)["id"])
+    price = Decimal(ipo_preview(live, str(asset_id)).json()["ipo_price"])
+
+    with pytest.raises(ipo.IpoRefused) as refused:
+        ipo.launch(live.session, LIVE_WORLD_ID, asset_id, Offering(), expected_price=price)
+    assert refused.value.code == "not_verified"
+    live.session.rollback()
+
+    ipo.launch(
+        live.session,
+        LIVE_WORLD_ID,
+        asset_id,
+        Offering(),
+        expected_price=price,
+        require_verification=False,
+    )
+    live.session.commit()
+    assert buy(live, str(asset_id)).status_code == 200
+    panel = client_for(live, live.outsider).get(f"/assets/{asset_id}/verification")
+    assert panel.status_code == 200, panel.text
+    assert panel.json()["level"] == "unverified"  # shown as "Self-attested by the community"
 
 
 def summary_listing(w: World_, user: User, asset_id: str) -> dict[str, Any]:

@@ -1,9 +1,5 @@
 {
-  "_note": "Live-world seed (app.jobs.seed_live). People are fictional sandbox accounts; every rating, verification, offer and trade is made through the real API with live models and Earth Engine. Passwords are generated at run time and written to a git-ignored file, never here.",
-  "admin": {
-    "name": "WildWorth Admin",
-    "email": "admin@example.com"
-  },
+  "_note": "Live-world seed (app.jobs.seed_live). The people and communities are fictional sandbox accounts; the land is real. Every rating, report, alert and trade is made by the product with live models and Earth Engine. New listings open self-attested, like the curated sites: no documents are made up and no review is faked. Play money only. Passwords are generated at run time into a git-ignored file, never here.",
   "people": [
     {
       "key": "lucia",
@@ -119,10 +115,6 @@
         20.038,
         -87.545
       ],
-      "documents": [
-        "agrarian_certificate",
-        "assembly_minutes"
-      ],
       "rerate": true
     },
     {
@@ -135,10 +127,6 @@
         -88.15,
         21.575,
         -88.128
-      ],
-      "documents": [
-        "agrarian_certificate",
-        "assembly_minutes"
       ],
       "rerate": true
     },
@@ -153,10 +141,6 @@
         16.15,
         -90.94
       ],
-      "documents": [
-        "agrarian_certificate",
-        "assembly_minutes"
-      ],
       "rerate": true
     },
     {
@@ -164,10 +148,6 @@
       "name": "John Pennekamp Mangroves",
       "country": "US",
       "description": "Mangrove shoreline of John Pennekamp Coral Reef State Park, Key Largo.",
-      "documents": [
-        "title",
-        "assembly_minutes"
-      ],
       "geometry": {
         "type": "Polygon",
         "coordinates": [
@@ -229,10 +209,6 @@
       "name": "Key West Salt Ponds",
       "country": "US",
       "description": "Salt ponds and mangrove fringe of the Key West Tropical Forest and salt ponds, Key West.",
-      "documents": [
-        "title",
-        "assembly_minutes"
-      ],
       "geometry": {
         "type": "Polygon",
         "coordinates": [
@@ -283,10 +259,6 @@
         -80.925,
         25.178,
         -80.905
-      ],
-      "documents": [
-        "title",
-        "assembly_minutes"
       ],
       "rerate": true
     }
