@@ -654,7 +654,7 @@ describe("the community home", () => {
     expect(
       within(wallet).getByText("Payouts on the units you kept").closest("div"),
     ).toHaveTextContent("$25.12");
-    // Steward surfaces use the softened words (ux-writing §5), never the market's.
+    // Steward surfaces use the softened words (ux-writing §7), never the market's.
     expect(document.body).not.toHaveTextContent(/IPO|dividend|treasury cash/i);
     expect(
       within(wallet).getByText("Total received").closest("div"),

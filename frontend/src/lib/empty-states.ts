@@ -1,5 +1,5 @@
 /**
- * Empty-state copy that teaches (WP4, #216; ux-writing §6): what will appear, what makes it
+ * Empty-state copy that teaches (WP4, #216; ux-writing §8): what will appear, what makes it
  * appear and, where there is one, the next action. It must never contradict the screen, so
  * the steward home's copy depends on whether its sites are rated yet, and claims nothing it
  * can't know (a live rating may have run without the Auditor).

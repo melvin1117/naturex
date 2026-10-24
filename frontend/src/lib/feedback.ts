@@ -1,5 +1,5 @@
 /**
- * Where feedback lives (#216 WP2; docs/design/ux-writing.md §7). Pick the lowest rung that's
+ * Where feedback lives (#216 WP2; docs/design/ux-writing.md §9). Pick the lowest rung that's
  * enough:
  *
  * 1. Inline: field validity and refusals, next to the control, with the fix.

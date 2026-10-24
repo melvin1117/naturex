@@ -1,8 +1,10 @@
-# NatureX — Product Requirements (PM Spec)
+# WildWorth — Product Requirements (PM Spec)
+
+> **Renamed WildWorth (23 Oct 2026).** In the UI the Nature Ledger is **The Record**, a quarterly report is a **Proof of Life**, the value range is the **Worth range**, the Copilot is **Bea** and the Steward app is **Stewards**; routes, API, database and code names are unchanged ([brand guidelines](../design/wildworth-brand-guidelines.html)).
 
 | | |
 |---|---|
-| **Product** | NatureX — AI rating agency & sandbox exchange for living nature |
+| **Product** | WildWorth — AI rating agency & sandbox exchange for living nature |
 | **Event** | Nebius × NVIDIA Global AI Hackathon (Devpost) |
 | **Track** | Best Apps & Agents |
 | **Deadline** | **Fri Oct 30, 2026, 10:00 AM PT** (target internal submit: Thu Oct 29) |
@@ -13,7 +15,7 @@
 ---
 
 ## 1. Background
-Living ecosystems produce enormous value (water filtration, flood protection, carbon storage, biodiversity) that markets don't price, so the only monetisation path for landowners is extraction or sale. The Natural Asset Company (NAC) concept proposes turning ecosystem services into investable equity, but the bottleneck is **cheap, credible, continuous measurement**. NatureX uses NVIDIA Nemotron agents on Nebius Token Factory to automate that measurement, and wraps it in a familiar "stock exchange" experience to make nature investable and understandable.
+Living ecosystems produce enormous value (water filtration, flood protection, carbon storage, biodiversity) that markets don't price, so the only monetisation path for landowners is extraction or sale. The Natural Asset Company (NAC) concept proposes turning ecosystem services into investable equity, but the bottleneck is **cheap, credible, continuous measurement**. WildWorth uses NVIDIA Nemotron agents on Nebius Token Factory to automate that measurement, and wraps it in a familiar "stock exchange" experience to make nature investable and understandable.
 
 ## 2. Goals & non-goals
 **Goals (hackathon)**
@@ -36,7 +38,7 @@ Living ecosystems produce enormous value (water filtration, flood protection, ca
 | **Rosa — community steward** | Leads a cooperative that owns a wetland near an industrial zone | Prove the wetland is worth more alive; attract funding without selling |
 | **Arjun — impact investor** | Manages a small nature-focused fund | Trustworthy, comparable data; know when something goes wrong |
 | **Mia — curious retail user** | Wants to "own a piece of the Amazon" | Simple UI, visible impact |
-| **Platform admin** | NatureX operator | Run re-ratings, inject events, suspend abusive listings |
+| **Platform admin** | WildWorth operator | Run re-ratings, inject events, suspend abusive listings |
 | **Judge** | Hackathon judge | See the whole story fast: one click, no sign-up |
 
 ### 3.1 Roles and access ([ADR-0005](../adr/0005-accounts-roles-and-two-apps.md))

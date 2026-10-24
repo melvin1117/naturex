@@ -7,7 +7,7 @@ import { moneyText } from "@/lib/trade";
  * community fund (`community_wallet`) is what supporters paid in the opening offer plus the
  * quarterly payouts; the payouts on the units the community keeps (the API's retained-stake
  * dividends, held by its treasury) are a separate line. Play money, in steward words
- * (docs/design/ux-writing.md §5).
+ * (docs/design/ux-writing.md §7).
  */
 export function WalletCard({
   wallet,

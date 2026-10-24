@@ -1,4 +1,6 @@
-# 🌿 NatureX — The AI rating agency & exchange for living nature
+# WildWorth — The AI rating agency for living nature
+
+*Worth more wild.* (Formerly NatureX; brand: [wildworth-brand-guidelines.html](design/wildworth-brand-guidelines.html).)
 
 **Nebius × NVIDIA Global AI Hackathon** · Track: **Best Apps & Agents** · Built on **NVIDIA Nemotron via Nebius Token Factory** + **Tavily**
 
@@ -10,7 +12,7 @@
 Nature delivers ~$100T/yr of services — clean water, flood protection, carbon storage, pollination — but markets only see **dead** nature (timber, minerals, land for factories). Communities protecting wetlands and forests get one tempting offer: *sell once*. Meanwhile, trillions in investor capital is earmarked for nature but has **no trusted way to see, compare or track** living ecosystems. Valuing a site today takes consultants, field surveys and months — and carbon-credit scandals made investors wary of unverifiable claims.
 
 ## The solution
-**NatureX turns any piece of living nature into a rated, trackable, investable asset — in minutes, with AI.**
+**WildWorth turns any piece of living nature into a rated, trackable, investable asset — in minutes, with AI.**
 
 1. **List** – A community draws its land on a map.
 2. **Rate** – A team of Nemotron agents reads satellite data, values ecosystem services ($/yr with ranges), scans local news via Tavily, and writes an auditable **Ecological Performance Report** with a **grade (AAA–D)** and **confidence score**.
@@ -20,7 +22,7 @@ Nature delivers ~$100T/yr of services — clean water, flood protection, carbon 
 **Think: Moody's + a stock exchange — for wetlands, forests and reefs.**
 
 ## Who it's for
-| User | Pain today | NatureX gives them |
+| User | Pain today | WildWorth gives them |
 |---|---|---|
 | 🏘️ Communities / landowners | Only way to monetise land is to sell or destroy it | A valuation + a path to recurring income for keeping nature alive |
 | 💼 Impact investors | No trusted, comparable, continuously-updated data | Rated assets, live health, alerts, portfolio impact |
@@ -33,7 +35,7 @@ Nature delivers ~$100T/yr of services — clean water, flood protection, carbon 
 | Auditor / Rating Analyst | **Nemotron 3 Ultra** | Deep reasoning: cross-checks evidence, flags greenwashing, grades, writes report |
 | News Scout | **Nemotron Nano** + **Tavily** | Finds & classifies real-world events near the asset |
 | Field Evidence | **MiniCPM-V** (perception) + **Nemotron 3 Ultra** (judgement) | Reads community photos (audio after the hackathon) |
-| Investor Copilot | **Nemotron Nano** + RAG | Fast grounded Q&A |
+| Bea, the field guide (was Copilot) | **Nemotron Nano** + RAG | Fast grounded Q&A |
 
 The frontend runs on Vercel; the backend and database run on **Nebius Serverless** if event credits arrive, otherwise on team-approved Azure credits or free tiers (Hugging Face Spaces / Render + Supabase). All AI runs on Token Factory; re-rating and news sweeps run as scheduled jobs.
 
@@ -42,7 +44,7 @@ The frontend runs on Vercel; the backend and database run on **Nebius Serverless
 - **Always-on** – ratings update from satellites + news, not a one-off consultant report.
 - **Community-first** – built for the people protecting the land, not just the investors.
 - **Explainable** – every grade change links back to evidence (satellite deltas, news sources).
-- **Tamper-evident** – every rating is written to a hash-chained *Nature Ledger* (blockchain-style trust, no tokens or speculation).
+- **Tamper-evident** – every rating is written to a hash-chained *Record* (blockchain-style trust, no tokens or speculation).
 - **Measured, not claimed** – an eval harness scores news classification, Auditor faithfulness and model routing (Nano vs Super vs Ultra); results published in the repo.
 
 ## Demo (3 min)

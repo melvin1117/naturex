@@ -3,7 +3,7 @@
  * the way the backend will (so the form can say so before sending), turn the community routes'
  * errors into form messages, map a listing's `next_action` to its link, and say what its
  * verification means for the opening offer (#216). Every number on the Steward home is the
- * API's; nothing here computes one. Steward wording follows docs/design/ux-writing.md §5: no
+ * API's; nothing here computes one. Steward wording follows docs/design/ux-writing.md §7: no
  * "IPO", "dividends" or "treasury" outside the trade panel.
  */
 import type { ApiError } from "./api/errors";
