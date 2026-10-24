@@ -88,7 +88,7 @@ export function JudgeLanding() {
       >
         <div>
           <h1 className="font-serif text-6xl leading-[0.95] tracking-tight text-balance sm:text-7xl lg:text-[5.5rem]">
-            The bees never sent an <em className="italic">invoice.</em>
+            The bees never sent an invoice.
           </h1>
           <p className="mt-6 max-w-xl text-lg text-foreground/80">
             NatureX is an AI rating agency for living land. Nemotron agents read

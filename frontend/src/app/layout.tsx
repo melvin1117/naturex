@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Hanken_Grotesk, Instrument_Serif } from "next/font/google";
+import { Geist_Mono, Gloock, Hanken_Grotesk } from "next/font/google";
 
 import { AlertToaster } from "@/components/proto/alert-toaster";
 import { CopilotSheet } from "@/components/proto/copilot-sheet";
@@ -21,11 +21,12 @@ const hanken = Hanken_Grotesk({
   weight: ["300", "400", "500", "600", "700"],
 });
 
-const instrument = Instrument_Serif({
-  variable: "--font-instrument",
-  subsets: ["latin"],
+// The display face (DESIGN.md): names, page titles and the wordmark's "Wild". One weight, no
+// italic.
+const gloock = Gloock({
+  variable: "--font-gloock",
+  subsets: ["latin", "latin-ext"],
   weight: "400",
-  style: ["normal", "italic"],
 });
 
 const geistMono = Geist_Mono({
@@ -79,7 +80,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${hanken.variable} ${instrument.variable} ${geistMono.variable} flex min-h-dvh flex-col font-sans antialiased`}
+        className={`${hanken.variable} ${gloock.variable} ${geistMono.variable} flex min-h-dvh flex-col font-sans antialiased`}
       >
         <WorldProvider>
           <PrototypeProvider>

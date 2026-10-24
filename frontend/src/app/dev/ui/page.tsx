@@ -91,7 +91,7 @@ export default function DevUiPage() {
         <div className="space-y-2 rounded-3xl bg-card p-6 shadow-soft">
           <Wordmark app="Exchange" />
           <p className="font-serif text-5xl leading-none">
-            Page title in Instrument Serif
+            Page title in Gloock
           </p>
           <p className="tabular text-4xl font-light">$21.47 · 76.2</p>
           <p className="max-w-prose">

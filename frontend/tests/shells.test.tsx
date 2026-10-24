@@ -56,7 +56,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("next/font/google", () => {
   const font = () => ({ variable: "font", className: "font" });
-  return { Geist_Mono: font, Hanken_Grotesk: font, Instrument_Serif: font };
+  return { Geist_Mono: font, Gloock: font, Hanken_Grotesk: font };
 });
 
 beforeAll(() => {
