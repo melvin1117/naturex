@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # T74: the API for the real-account E2E, started by Playwright's webServer (frontend/playwright.config.ts).
-# Recreates a dedicated database (never the dev `naturex` one), migrates, seeds, creates the E2E
+# Recreates a dedicated database (never the dev `wildworth` one), migrates, seeds, creates the E2E
 # admin with the supported CLI (password on stdin), then serves the API in the foreground.
 # WILDWORTH_ENV_FILE=none makes the backend ignore every .env file (backend/app/config.py), so a
 # developer's .env (real keys, USE_MOCKS=false, lower limits) can't leak in; the settings the

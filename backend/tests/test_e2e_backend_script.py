@@ -35,21 +35,21 @@ def run_script(database_url: str, **extra: str) -> subprocess.CompletedProcess[s
 @pytest.mark.parametrize(
     "database_url",
     [
-        "postgresql+psycopg://naturex:naturex@db.example.org:5432/naturex_e2e",
-        "postgresql+psycopg://naturex:naturex@10.0.0.5:5432/naturex_e2e",
+        "postgresql+psycopg://wildworth:wildworth@db.example.org:5432/wildworth_e2e",
+        "postgresql+psycopg://wildworth:wildworth@10.0.0.5:5432/wildworth_e2e",
     ],
 )
 def test_refuses_a_remote_host(database_url: str) -> None:
     result = run_script(database_url)
 
     assert result.returncode != 0
-    assert "refusing to recreate 'naturex_e2e' on host" in result.stderr
+    assert "refusing to recreate 'wildworth_e2e' on host" in result.stderr
     assert "recreated database" not in result.stdout
 
 
-@pytest.mark.parametrize("name", ["naturex", "naturex_test"])
+@pytest.mark.parametrize("name", ["wildworth", "wildworth_test"])
 def test_refuses_a_name_without_e2e(name: str) -> None:
-    result = run_script(f"postgresql+psycopg://naturex:naturex@localhost:5432/{name}")
+    result = run_script(f"postgresql+psycopg://wildworth:wildworth@localhost:5432/{name}")
 
     assert result.returncode != 0
     assert f"refusing to recreate {name!r}" in result.stderr
@@ -59,7 +59,7 @@ def test_refuses_a_name_without_e2e(name: str) -> None:
 def test_a_remote_host_needs_the_explicit_opt_in() -> None:
     # `.invalid` never resolves, so the run fails at connect time, after the guard let it through.
     result = run_script(
-        "postgresql+psycopg://naturex:naturex@db.invalid:5432/naturex_e2e",
+        "postgresql+psycopg://wildworth:wildworth@db.invalid:5432/wildworth_e2e",
         E2E_ALLOW_REMOTE_DB="1",
     )
 

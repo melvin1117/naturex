@@ -1,19 +1,23 @@
+# A fixed project name, so the database volume (wildworth_pgdata) doesn't depend on the name of
+# the folder the repo is checked out in.
+name: wildworth
+
 services:
   db:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: naturex
-      POSTGRES_PASSWORD: naturex
-      POSTGRES_DB: naturex
+      POSTGRES_USER: wildworth
+      POSTGRES_PASSWORD: wildworth
+      POSTGRES_DB: wildworth
     ports:
       - "5432:5432"
     volumes:
-      - naturex_pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U naturex -d naturex"]
+      test: ["CMD-SHELL", "pg_isready -U wildworth -d wildworth"]
       interval: 5s
       timeout: 5s
       retries: 5
 
 volumes:
-  naturex_pgdata:
+  pgdata:

@@ -3,7 +3,7 @@
 Instructions for every AI coding assistant on this repo (GitHub Copilot, Cursor, Codex and Claude Code, via `CLAUDE.md`). Keep this file short; put detail in skills or the docs below.
 
 ## Project
-WildWorth (the repo, database and stored identifiers keep the working name `naturex`) is the AI rating agency for living nature, with a sandbox exchange, built for the **Nebius × NVIDIA Global AI Hackathon** (Best Apps & Agents track, deadline Oct 30, 2026). A community lists land, Nemotron agents rate it from satellite data and news, investors trade play-money shares, and ratings update as nature heals or is damaged.
+WildWorth (the repo and a few stored identifiers keep the working name `naturex`) is the AI rating agency for living nature, with a sandbox exchange, built for the **Nebius × NVIDIA Global AI Hackathon** (Best Apps & Agents track, deadline Oct 30, 2026). A community lists land, Nemotron agents rate it from satellite data and news, investors trade play-money shares, and ratings update as nature heals or is damaged.
 
 **Status:** planning. Application code isn't scaffolded yet; follow the planned layout in `docs/specs/dev-spec.md` §4 when creating it.
 

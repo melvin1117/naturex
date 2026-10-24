@@ -14,7 +14,24 @@ uv run uvicorn app.main:app --reload --port 8000
 
 Health check: `GET http://localhost:8000/healthz`
 
-Postgres (local): `docker compose up -d` from the repo root.
+Postgres (local): `docker compose up -d` from the repo root. The database, user and password are
+all `wildworth` (Compose project `wildworth`, volume `wildworth_pgdata`), as in `.env.example`.
+
+**Moving from the old `naturex` database?** Its container still holds port 5432, and its data
+stays in the `naturex_naturex_pgdata` volume. Copy the database you use across once, then set
+`DATABASE_URL` in `.env` as in `.env.example`:
+
+```bash
+# from the repo root; replace the last `naturex` with the database you use
+docker compose -p naturex exec -T db pg_dump -U naturex -Fc naturex > ~/naturex-local.dump
+docker compose -p naturex down    # stops the old container; its volume stays
+docker compose up -d --wait
+docker compose exec -T db pg_restore -U wildworth -d wildworth --no-owner --no-acl \
+  < ~/naturex-local.dump
+# when you no longer need it: docker volume rm naturex_naturex_pgdata
+```
+
+Tests create their own `wildworth_test` database (and E2E `wildworth_e2e`) on demand.
 
 Seed (template world, and the live world with the 3 curated sites; idempotent): `make migrate && make seed`.
 
@@ -39,9 +56,10 @@ The people and communities are fictional sandbox accounts; the land is real. New
 the seed makes up no documents and fakes no review. Play money only.
 
 ```bash
-# 1. a fresh database (the old one stays as it is)
-docker compose exec -T db psql -U naturex -d postgres -c "CREATE DATABASE wildworth;"
-export DATABASE_URL=postgresql+psycopg://naturex:naturex@localhost:5432/wildworth
+# 1. an empty database: a fresh `docker compose up -d` gives you `wildworth`; to keep your dev
+#    data, seed another one (e.g. wildworth_live) and use its name below instead
+docker compose exec -T db psql -U wildworth -d postgres -c "CREATE DATABASE wildworth_live;"
+export DATABASE_URL=postgresql+psycopg://wildworth:wildworth@localhost:5432/wildworth_live
 uv run alembic upgrade head && uv run python -m app.seed
 
 # 2. the API in live mode on that database (the raised caps are for this run only)
@@ -73,7 +91,7 @@ make create-admin EMAIL=you@example.org NAME="Your name"
   `pg_restore` it into the hosted database:
 
   ```bash
-  docker compose exec -T db psql -U naturex -d wildworth \
+  docker compose exec -T db psql -U wildworth -d wildworth \
     -c "DELETE FROM sessions; DELETE FROM auth_attempts;"
-  docker compose exec -T db pg_dump -U naturex -Fc wildworth > ~/wildworth.dump
+  docker compose exec -T db pg_dump -U wildworth -Fc wildworth > ~/wildworth.dump
   ```

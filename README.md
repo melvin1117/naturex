@@ -1,6 +1,6 @@
 # WildWorth
 
-*Worth more wild.* The repository, the database and a few internal identifiers keep the working name, `naturex`.
+*Worth more wild.* The repository and a few stored identifiers (method versions, database setting names) keep the working name, `naturex`.
 
 **The AI rating agency for living nature, with a sandbox exchange.** WildWorth uses NVIDIA Nemotron agents on Nebius Token Factory to rate land from satellite data and local news, turn it into a graded site that supporters can back with play money, and keep watching it, so keeping nature alive pays more than destroying it. Every quarter, WildWorth issues a Proof of Life for each site.
 
@@ -67,6 +67,8 @@ cd backend && USE_MOCKS=false EARTH_ENGINE_LIVE=true uv run python -m app.jobs.r
 
 It rates every listed site of the live world with the live models (about $0.03 a site), stores audited reports with their Agent Traces, saves the news it found and pays the quarter's play-money revenue. It runs once per quarter per site; a site that fails or hits the hourly cap is picked up by the next run. The daily `news_sweep` keeps news coming after that. Until a site has its own run, its page shows the recorded one, labelled "Recorded".
 
+To deploy a live world you seeded locally (`app.jobs.seed_live`), restore a dump of the **whole** database instead ([backend/README.md](backend/README.md#live-data-appjobsseed_live)): every ID comes along, so the ledger still verifies.
+
 ## Limitations
 - The three demo sites use precomputed satellite metrics and images; live Earth Engine runs only for new polygons when `EARTH_ENGINE_LIVE` is on, and the before/after vision runs only for the demo sites.
 - Uploaded photos and documents are read by a model only after Token Factory's data terms are confirmed (`FIELD_EVIDENCE_AI_LIVE`, `VERIFICATION_AI_LIVE` are off by default).
@@ -86,6 +88,7 @@ cp .env.example .env    # first time only; add keys for live services
 make dev                # uses .env as is (USE_MOCKS=true: mock agents and data)
 make dev LIVE=1         # real services: Token Factory models, Tavily, Earth Engine (needs keys)
 ```
+Moving from the old `naturex` database? See [backend/README.md](backend/README.md#setup).
 
 ### Quick start (backend)
 ```bash
