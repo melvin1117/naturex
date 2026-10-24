@@ -287,11 +287,7 @@ function EmptyHome({ listHref }: { listHref: string }) {
           it from satellite data in a few minutes, and you decide afterwards
           whether to open it to supporters.
         </p>
-        <Button
-          asChild
-          size="lg"
-          className="mt-6 bg-lime text-foreground hover:bg-lime/90"
-        >
+        <Button asChild size="lg" variant="on-image" className="mt-6">
           <Link href={listHref}>
             List your land
             <ArrowRight aria-hidden="true" />
@@ -346,15 +342,19 @@ function ActionButton({
     );
   }
   const external = listing.next_action === "view_on_exchange";
-  const lime = tone === "image" && action.primary;
   return (
     <>
       <Button
         asChild
         size={tone === "image" ? "default" : "sm"}
-        variant={action.primary ? "default" : "outline"}
+        variant={
+          action.primary
+            ? tone === "image"
+              ? "on-image"
+              : "default"
+            : "outline"
+        }
         className={cn(
-          lime && "bg-lime text-foreground hover:bg-lime/90",
           tone === "image" &&
             !action.primary &&
             "border-white/40 bg-transparent text-white hover:bg-white/15 hover:text-white",

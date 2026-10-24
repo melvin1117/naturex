@@ -186,7 +186,8 @@ export function QuarterSection({
                   here, and a disabled button would drop it to the page. */}
               <Button
                 size="lg"
-                className="bg-lime text-machine hover:bg-lime/90 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-lime aria-disabled:active:translate-y-0"
+                variant="on-image"
+                className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-card aria-disabled:active:translate-y-0"
                 disabled={!canRun && !running}
                 aria-disabled={running || undefined}
                 data-tour="next-quarter"

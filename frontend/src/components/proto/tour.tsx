@@ -690,7 +690,7 @@ function TourFinish({
             ],
           ].map(([a, b], i) => (
             <li key={a} className="flex gap-3">
-              <span className="tabular grid size-6 shrink-0 place-items-center rounded-full bg-lime text-xs font-semibold text-foreground">
+              <span className="tabular grid size-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
                 {i + 1}
               </span>
               <span>

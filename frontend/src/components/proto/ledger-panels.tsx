@@ -156,7 +156,6 @@ export function LedgerPanel({
   );
 }
 
-export const LEDGER_PRIMARY = "bg-lime text-machine hover:bg-lime/90";
 export const LEDGER_OUTLINE =
   "border-machine-line bg-transparent text-machine-ink hover:bg-machine-raised hover:text-machine-ink";
 
@@ -191,7 +190,7 @@ export function LedgerTab({ site }: { site: Site }) {
         actions={
           <>
             <Button
-              className={LEDGER_PRIMARY}
+              variant="on-image"
               onClick={() => setResult(verify(chain))}
               data-tour="ledger-verify"
             >
@@ -259,7 +258,7 @@ export function ApiLedgerTab({ assetId }: { assetId: string }) {
         check={null}
         loading
         actions={
-          <Button className={LEDGER_PRIMARY} disabled>
+          <Button variant="on-image" disabled>
             <ShieldCheck aria-hidden="true" />
             Verify the Record
           </Button>
@@ -287,7 +286,7 @@ export function ApiLedgerTab({ assetId }: { assetId: string }) {
         }
         actions={
           <Button
-            className={LEDGER_PRIMARY}
+            variant="on-image"
             onClick={() => void verifier.mutate(undefined)}
             disabled={verifier.isPending}
           >

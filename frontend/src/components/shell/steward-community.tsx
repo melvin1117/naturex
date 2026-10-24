@@ -384,7 +384,7 @@ function CreateCommunityEmptyState({
               "Open it to supporters and grow your community fund",
             ].map((step, i) => (
               <li key={step} className="flex items-center gap-3">
-                <span className="tabular grid size-6 place-items-center rounded-full bg-lime text-xs font-semibold">
+                <span className="tabular grid size-6 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
                   {i + 1}
                 </span>
                 {step}

@@ -18,6 +18,8 @@ const buttonVariants = cva(
         ghost:
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
+        // Primary on a photograph or the machine layer: paper, never lime (DESIGN.md, Buttons).
+        "on-image": "bg-card text-foreground hover:bg-card/90",
       },
       size: {
         default: "h-10 px-5 py-2 has-[>svg]:px-4",

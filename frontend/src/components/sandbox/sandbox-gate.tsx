@@ -34,7 +34,8 @@ export function SandboxGate({ children }: { children: ReactNode }) {
           {error?.message ?? "Check your connection and try again."}
         </p>
         <Button
-          className="mt-6 bg-lime text-foreground hover:bg-lime/90"
+          variant="on-image"
+          className="mt-6"
           onClick={() => void retry()}
         >
           <RefreshCwIcon aria-hidden="true" />
@@ -88,7 +89,8 @@ function SandboxStart() {
           onClick={() => void sandbox.open(LOOK_AROUND)}
           disabled={sandbox.busy !== null}
           aria-busy={busy || undefined}
-          className="bg-lime font-semibold text-foreground hover:bg-lime/90 focus-visible:ring-lime focus-visible:ring-offset-2 focus-visible:ring-offset-machine"
+          variant="on-image"
+          className="font-semibold focus-visible:ring-card focus-visible:ring-offset-2 focus-visible:ring-offset-machine"
         >
           {busy ? <Spinner aria-hidden="true" /> : null}
           Open my sandbox

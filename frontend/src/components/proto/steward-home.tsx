@@ -70,7 +70,7 @@ export function StewardHome() {
                 "Open it to supporters and grow your community fund",
               ].map((t, i) => (
                 <li key={t} className="flex items-center gap-3">
-                  <span className="tabular grid size-6 place-items-center rounded-full bg-lime text-xs font-semibold">
+                  <span className="tabular grid size-6 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
                     {i + 1}
                   </span>
                   {t}
@@ -185,10 +185,7 @@ export function StewardHome() {
                   takes a few minutes and you decide afterwards whether to open
                   it to supporters.
                 </p>
-                <Button
-                  asChild
-                  className="mt-6 bg-lime text-foreground hover:bg-lime/90"
-                >
+                <Button asChild variant="on-image" className="mt-6">
                   <Link href="/steward/list">Start the listing</Link>
                 </Button>
               </div>
@@ -233,17 +230,11 @@ export function StewardHome() {
                   )}
                   <div className="mt-5 flex flex-wrap gap-2">
                     {site.status === "draft" ? (
-                      <Button
-                        asChild
-                        className="bg-lime text-foreground hover:bg-lime/90"
-                      >
+                      <Button asChild variant="on-image">
                         <Link href="/steward/list">Launch opening offer</Link>
                       </Button>
                     ) : (
-                      <Button
-                        asChild
-                        className="bg-lime text-foreground hover:bg-lime/90"
-                      >
+                      <Button asChild variant="on-image">
                         <Link href={`/asset/${site.id}`}>
                           Public page
                           <ExternalLink aria-hidden="true" />

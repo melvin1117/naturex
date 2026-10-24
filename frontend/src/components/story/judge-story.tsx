@@ -112,7 +112,8 @@ export function JudgeStory() {
             The service may be waking up; it takes about half a minute.
           </p>
           <Button
-            className="mt-6 bg-lime text-foreground hover:bg-lime/90"
+            variant="on-image"
+            className="mt-6"
             onClick={() => void story.refetch()}
           >
             Try again
@@ -389,7 +390,8 @@ function Primary({
       size="lg"
       onClick={onClick}
       disabled={disabled}
-      className="bg-lime font-semibold text-foreground hover:bg-lime/90 focus-visible:ring-lime focus-visible:ring-offset-2 focus-visible:ring-offset-machine"
+      variant="on-image"
+      className="font-semibold focus-visible:ring-card focus-visible:ring-offset-2 focus-visible:ring-offset-machine"
     >
       {children}
     </Button>

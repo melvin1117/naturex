@@ -134,7 +134,7 @@ function SandboxBar({ persona }: { persona: DemoPersona }) {
                   key={key}
                   value={key}
                   aria-label={`${p.name} (${p.role})`}
-                  className="h-auto min-h-7 flex-1 rounded-full px-3 py-1 text-[13px] font-medium text-primary-foreground/80 hover:bg-transparent hover:text-primary-foreground data-[state=on]:bg-lime data-[state=on]:text-foreground lg:h-7 lg:flex-none lg:py-0"
+                  className="h-auto min-h-7 flex-1 rounded-full px-3 py-1 text-[13px] font-medium text-primary-foreground/80 hover:bg-transparent hover:text-primary-foreground data-[state=on]:bg-card data-[state=on]:text-foreground lg:h-7 lg:flex-none lg:py-0"
                 >
                   <span className="flex flex-col items-center leading-tight lg:flex-row lg:gap-1">
                     <span>{p.name}</span>

@@ -264,9 +264,9 @@ export default function DevUiPage() {
             </Button>
           ))}
           <Button disabled>disabled</Button>
-          <Button className="bg-lime text-foreground hover:bg-lime/90">
-            On image
-          </Button>
+          <span className="rounded-full bg-machine p-1.5">
+            <Button variant="on-image">On image</Button>
+          </span>
         </div>
         <div className="flex flex-wrap gap-2">
           {BADGE_VARIANTS.map((variant) => (

@@ -145,7 +145,7 @@ export function ControlRoom() {
         <div className="mt-8 flex flex-wrap items-center gap-3">
           <Button
             size="lg"
-            className="bg-lime text-machine hover:bg-lime/90"
+            variant="on-image"
             onClick={() => act(nextQuarter)}
             disabled={atEnd}
             data-tour="next-quarter"
@@ -209,7 +209,7 @@ export function ControlRoom() {
                     target &&
                     act((w) => injectEvent(w, target.id, "restoration"))
                   }
-                  className="group flex flex-col items-start gap-3 rounded-3xl bg-lime/15 p-5 text-left ring-1 ring-lime/50 transition hover:bg-lime/25 focus-visible:ring-2"
+                  className="group flex flex-col items-start gap-3 rounded-3xl bg-grade-aa/10 p-5 text-left ring-1 ring-grade-aa/30 transition hover:bg-grade-aa/15 focus-visible:ring-2"
                 >
                   <span className="grid size-10 place-items-center rounded-2xl bg-grade-aa text-white">
                     <Sprout className="size-5" aria-hidden="true" />
