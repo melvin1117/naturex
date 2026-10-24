@@ -19,7 +19,12 @@ from sqlmodel import Session, col, select
 
 from app.auth import SESSION_COOKIE, start_session
 from app.authz import Actor, Granted, WorldRef
-from app.communities import create_community
+from app.communities import (
+    MembershipConflict,
+    create_community,
+    get_member,
+    transfer_ownership,
+)
 from app.config import get_settings
 from app.db import get_session
 from app.main import app
@@ -359,6 +364,81 @@ def test_adding_a_holder_of_the_communitys_shares_is_409(
     session.add(holding)
     session.commit()
     assert add(client, community.id, holder.id).status_code == 201
+
+
+def owners_of(session: Session, community: Community) -> list[UUID]:
+    return list(
+        session.exec(
+            select(CommunityMember.user_id).where(
+                CommunityMember.community_id == community.id,
+                CommunityMember.role == CommunityRole.OWNER,
+            )
+        ).all()
+    )
+
+
+def test_an_operator_hands_a_seeded_community_from_its_persona_to_a_person(
+    session: Session,
+) -> None:
+    community, _ = seeded_live_community(session)
+    [persona_id] = owners_of(session, community)
+    assert session.get_one(User, persona_id).kind is UserKind.PERSONA
+    lucia = person(session, "Lucía")
+
+    assert transfer_ownership(session, community, lucia.id) is True
+    session.commit()
+    assert owners_of(session, community) == [lucia.id]
+    assert get_member(session, community, persona_id) is None
+    assert transfer_ownership(session, community, lucia.id) is False, "idempotent"
+
+    with pytest.raises(MembershipConflict) as taken:
+        transfer_ownership(session, community, person(session, "Someone else").id)
+    assert taken.value.reason == "owner_is_a_person"
+
+
+def test_a_handover_refuses_members_holders_and_personas(session: Session) -> None:
+    community, asset = seeded_live_community(session)
+    steward = person(session, "Steward")
+    holder = person(session, "Holder")
+    session.add(
+        CommunityMember(
+            community_id=community.id,
+            user_id=steward.id,
+            world_id=LIVE_WORLD_ID,
+            role=CommunityRole.STEWARD,
+        )
+    )
+    session.add(Holding(world_id=LIVE_WORLD_ID, user_id=holder.id, asset_id=asset.id, shares=5))
+    session.commit()
+    [persona_id] = owners_of(session, community)
+
+    for user_id, reason in [
+        (steward.id, "already_member"),
+        (holder.id, "member_has_holdings"),
+        (person(session, "Persona", kind=UserKind.PERSONA).id, "not_a_person"),
+        (person(session, "Admin", role=UserRole.ADMIN, is_admin=True).id, "member_not_eligible"),
+    ]:
+        with pytest.raises(MembershipConflict) as refused:
+            transfer_ownership(session, community, user_id)
+        assert refused.value.reason == reason
+    assert owners_of(session, community) == [persona_id]
+
+
+def test_a_handover_needs_exactly_one_owner(session: Session) -> None:
+    community, _ = seeded_live_community(session)
+    session.add(
+        CommunityMember(
+            community_id=community.id,
+            user_id=person(session, "Co-owner").id,
+            world_id=LIVE_WORLD_ID,
+            role=CommunityRole.OWNER,
+        )
+    )
+    session.commit()
+
+    with pytest.raises(MembershipConflict) as refused:
+        transfer_ownership(session, community, person(session, "Lucía").id)
+    assert refused.value.reason == "owner_not_unique"
 
 
 def test_member_conflicts_and_unknown_users(

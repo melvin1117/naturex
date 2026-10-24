@@ -30,3 +30,6 @@ CLAUDE.local.md
 
 # promptfoo eval output (evals/README.md)
 evals/output/
+
+# Database dumps (may hold accounts and sessions)
+*.dump
