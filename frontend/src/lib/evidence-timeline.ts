@@ -185,9 +185,12 @@ export function evidenceTimeline(
       for (const item of f.found) if (item.url) found.add(item.url);
   }
 
+  // News from after the last satellite month (this quarter's, or a simulated event) is still
+  // part of what happened: listed, without a pin on the chart. Older than the series, it isn't.
+  const listed = (m: string) => inRange(m) || Boolean(last && m > last);
   const dated: TimelineNews[] = news
     .filter(
-      (n) => MONTH_RE.test(n.date.slice(0, 7)) && inRange(n.date.slice(0, 7)),
+      (n) => MONTH_RE.test(n.date.slice(0, 7)) && listed(n.date.slice(0, 7)),
     )
     .map((n) => ({
       id: n.id,
@@ -203,7 +206,7 @@ export function evidenceTimeline(
     }));
 
   const byMonth = new Map<string, TimelineNews[]>();
-  for (const n of dated)
+  for (const n of dated.filter((d) => inRange(d.month)))
     byMonth.set(n.month, [...(byMonth.get(n.month) ?? []), n]);
   const pins = [...byMonth.entries()]
     .sort(([a], [b]) => a.localeCompare(b))

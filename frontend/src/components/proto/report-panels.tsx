@@ -10,7 +10,7 @@ import {
   Flag,
   Layers,
 } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { cn } from "cn";
 
 import {
@@ -63,13 +63,17 @@ export function Panel({
   /** `h2` when the panel is a top-level section of its page. */
   headingLevel?: "h2" | "h3";
 } & React.HTMLAttributes<HTMLElement>) {
+  const headingId = useId();
   return (
     <section
+      aria-labelledby={headingId}
       className={cn("rounded-3xl bg-card p-6 shadow-soft", className)}
       {...rest}
     >
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Heading className="text-base font-semibold">{title}</Heading>
+        <Heading id={headingId} className="text-base font-semibold">
+          {title}
+        </Heading>
         {action}
       </div>
       {children}
@@ -77,7 +81,13 @@ export function Panel({
   );
 }
 
-export function ServicesPanel({ facts }: { facts: ReportFacts }) {
+export function ServicesPanel({
+  facts,
+  headingLevel,
+}: {
+  facts: ReportFacts;
+  headingLevel?: "h2" | "h3";
+}) {
   // A group is shown only when the report values every one of its parts.
   const groups = SERVICE_GROUPS.flatMap((g) => {
     const parts = g.parts.map((k) => facts.services[k]);
@@ -87,7 +97,7 @@ export function ServicesPanel({ facts }: { facts: ReportFacts }) {
   }).sort((a, b) => b.value - a.value);
   const max = Math.max(1, ...groups.map((g) => g.value));
   return (
-    <Panel title="What the land does each year">
+    <Panel title="What the land does each year" headingLevel={headingLevel}>
       {groups.length === 0 && (
         <p className="text-sm text-muted-foreground">
           The service breakdown isn&apos;t available for this report.
@@ -212,20 +222,39 @@ export function LandPanel({
   simulated?: boolean;
   caption?: React.ReactNode;
 }) {
+  return (
+    <Panel title="Land cover">
+      <LandCoverView
+        polygon={polygon}
+        label={label}
+        overlay={overlay}
+        landcover={landcover}
+        simulated={simulated}
+        caption={caption}
+      />
+    </Panel>
+  );
+}
+
+/** The land-cover map with its overlay switch and composition bar, inside a panel. */
+export function LandCoverView({
+  polygon,
+  label,
+  overlay,
+  landcover,
+  simulated = false,
+  caption,
+}: Parameters<typeof LandPanel>[0]) {
   const [visible, setVisible] = useState(true);
   return (
-    <Panel
-      title="Land cover"
-      action={
-        overlay && (
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Layers className="size-4" aria-hidden="true" />
-            Dynamic World overlay
-            <Switch checked={visible} onCheckedChange={setVisible} />
-          </label>
-        )
-      }
-    >
+    <>
+      {overlay && (
+        <label className="mb-3 flex items-center justify-end gap-2 text-sm text-muted-foreground">
+          <Layers className="size-4" aria-hidden="true" />
+          Dynamic World overlay
+          <Switch checked={visible} onCheckedChange={setVisible} />
+        </label>
+      )}
       {polygon.length > 2 ? (
         <SiteMap
           polygon={polygon}
@@ -249,7 +278,7 @@ export function LandPanel({
       {caption && (
         <div className="mt-3 text-xs text-muted-foreground">{caption}</div>
       )}
-    </Panel>
+    </>
   );
 }
 
@@ -668,7 +697,8 @@ export type NewsItem = {
   sample?: boolean;
 };
 
-function safeHref(url: string | null | undefined) {
+/** A news link only if it is http(s): anything else (`javascript:`, `data:`) is dropped. */
+export function safeHref(url: string | null | undefined) {
   if (!url) return null;
   try {
     const parsed = new URL(url);

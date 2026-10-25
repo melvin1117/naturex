@@ -230,12 +230,11 @@ describe("Marketplace", () => {
       name: /Xochimilco Wetland/,
     });
 
-    expect(
-      within(link).queryByText("The price chart starts with the first trade"),
-    ).toBeNull();
-    expect(
-      screen.getAllByText("The price chart starts with the first trade"),
-    ).toHaveLength(2);
+    // Only a card with two prices or more draws one; the others say nothing.
+    const charts = grid().querySelectorAll(".recharts-responsive-container");
+    expect(charts).toHaveLength(1);
+    expect(link).toContainElement(charts[0] as HTMLElement);
+    expect(screen.queryByText(/price chart starts/)).toBeNull();
     expect(
       backend.requests.filter((r) => r.url.includes("/prices")),
     ).toHaveLength(0);

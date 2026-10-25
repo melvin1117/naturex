@@ -223,6 +223,14 @@ The footer is one quiet line: the lockup, "A hackathon prototype. Values are scr
 ### Welcome (signature)
 `/` is full-bleed: Esri imagery of the hero wetland settles from 108% over 4.5 s, its boundary is drawn in lime (the "Draw" move), and Bea flies in to say "Hi, I'm Bea." Then the display-xl title "Welcome to WildWorth.", one sentence on what WildWorth does, and two buttons: **Show me how** (paper, primary) and **Try it yourself** (paper outline, `on-image-outline`). Reduced motion shows the final frame.
 
+### Site page (signature)
+One scroll that a judge reads top to bottom, with depth one tap away and never on another page (ADR-0008 §4):
+- **Hero** on the site's own satellite ground: place and verification badge, the name, one line on the land, the **Worth range** and the price a unit, the live health dial with its grade, and two ways in: **How it was rated** (paper, primary) and **Proof of Life report** (paper outline). On phones a third, **Back this site**, leads first and jumps to the trade panel.
+- **The verdict band** (machine layer): the Auditor's one-line verdict, the models that worked on the run (from its own receipt, busiest first, then the web searches) and **Open the Agent Trace**.
+- **Three sections**, each one panel: **What the land does each year**, **Seen from above** (the views five years apart, or the land cover, one at a time) and **What happened** (five years of greenness with what explains it, then the latest news). **Price a unit** follows once there are trades to chart.
+- **Back this site** is the sticky right column on wide screens.
+- **Everything else is in two drawers** over the page, named by `?tab=` so links still land: the **Agent Trace** (machine layer, `?tab=trace`) and the **Proof of Life drawer** (paper, tabs Proof of Life · The Record · Verification · Field photos · Data sources). A row of quiet buttons under the sections opens each tab.
+
 ### Health instrument (signature)
 A dotted radial dial (`DotRing`): 100 columns of dots in 5 rings, one column per point of health, lit up to the score (forest on light, lime on dark), with the light numeral in the centre. It reads literally, not decoratively, and stays wherever a live score is shown.
 
@@ -242,7 +250,7 @@ Her chat follows the character sheet's product mock (`components/bea/chat-parts.
 - **How the answer was made:** a mono footnote under the bubble: searched, written by, code checked.
 - **Working:** what she's doing, as a quiet line beside her avatar.
 - **Empty:** Bea, "Ask Bea about {site}", a sentence and question chips. The chips show only before the first question.
-- **Field:** paper, inset, with the send button inside it, and a mono footnote: "Runs on NVIDIA Nemotron 3 Nano · Play money only; not advice."
+- **Field:** paper, inset, with the send button inside it, and a mono footnote: "Runs on NVIDIA Nemotron 3 Nano · Not advice."
 
 ## Motion
 Every animation means something, plays once, ends on the real value, and is replaced by its final frame under `prefers-reduced-motion`. Four moves, all on `--ww-ease-out` (`cubic-bezier(.16,1,.3,1)`): **Draw** (something is being measured: the logo line, a boundary, a chart; 900–1100 ms), **Rise** (a reading arrived: the logo's last stroke, the seal's dots; 550 ms after the draw), **Count** (a number changed; 600–900 ms) and **Stamp** (a verdict was issued: grade reveal or change; 520 ms, once). Bea's idle motion settles within 5 seconds (her thinking and waking loops last only as long as the work), and stops for reduced motion too.

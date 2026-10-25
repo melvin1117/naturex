@@ -53,6 +53,7 @@ describe("evidence timeline (a recorded investigated run)", () => {
         news({ id: "a", date: "2026-07-14" }),
         news({ id: "b", date: "2026-07-30", direction: 1 }),
         news({ id: "c", date: "2019-01-01" }),
+        news({ id: "d", date: "2099-01-05" }),
       ],
       [],
     );
@@ -69,10 +70,12 @@ describe("evidence timeline (a recorded investigated run)", () => {
       expect.objectContaining({ month: "2026-07", direction: -1 }),
     ]);
     expect(t.pins[0]!.items.map((i) => i.id)).toEqual(["a", "b"]);
+    // Older than the series: dropped. Newer (this quarter, a simulated event): listed, no pin.
     expect(t.entries.map((e) => `${e.type}:${e.month}`)).toEqual([
       "signal:2025-06",
       "news:2026-07",
       "news:2026-07",
+      "news:2099-01",
     ]);
   });
 

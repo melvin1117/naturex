@@ -30,11 +30,16 @@ Accepted (2026-10-25). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) 
 - New action `SIMULATE` (`app/authz.py`) for `GET /admin/time-machine`, `POST /admin/simulate/quarter`, its job, `POST /admin/simulate/event` and `GET /admin/alerts`. In a sandbox world with a demo session, anyone may run it: a sandbox is one visitor's private copy, so it's the demo's control, not an operator's power. Elsewhere it is `OPERATE`'s rule (an impartial admin).
 - `OPERATE` keeps suspend, resume and operator re-rates; `REVIEW_LISTING` keeps verification decisions (the Reviewer).
 
+### 4. A site's depth opens over it
+- A site page is one short scroll: the hero, the Auditor's verdict with the models that worked on it, then **What the land does**, **Seen from above** and **What happened**, with **Back this site** beside them.
+- **The Agent Trace and the Proof of Life drawer open over the page** instead of on their own pages, so the visitor never loses the site they were reading. The page's `?tab=` names the open drawer (`trace`, or `report` · `ledger` · `verification` · `photos` · `sources`), so links into a report, a ledger entry or the news keep working; `?tab=news` and `?tab=price` scroll to that part of the page.
+- `/trace/<run>` and `/trace/recorded/<site>` stay as pages for deep links; nothing on the site page links to them.
+
 ## Consequences
 - **Good:** a judge reads what WildWorth is in one sentence, reaches a working app in one click and never meets a sign-in. Every page has the same three choices.
 - **Real accounts are dormant, not deleted.** The backend's auth routes, the live world and their tests stay; nothing in the frontend reaches them. Bringing accounts back later means a header for them, not a rebuild.
 - **The live world has no public page.** The deployed URL shows the welcome, the story and the sandbox only.
-- **Slices still to come** (each its own PR): the trimmed story; the site page with the "How it was rated" drawer; the one-screen listing flow with drafts and optional documents, launched on the Reviewer's approval; Communities and Your stakes; then removing the code nothing reaches (the scripted prototype, its tour) and updating the specs.
+- **Slices still to come** (each its own PR): the one-screen listing flow with drafts and optional documents, launched on the Reviewer's approval; Communities and Your stakes; then removing the code nothing reaches (the scripted prototype, its tour) and updating the specs.
 
 ## Alternatives considered
 - **Keep a read-only live Marketplace beside the sandbox:** two kinds of page to explain to a judge for little gain. Rejected for the hackathon.

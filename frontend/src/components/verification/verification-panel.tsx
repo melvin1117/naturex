@@ -206,18 +206,26 @@ function PanelBody({ data }: { data: VerificationPublic }) {
 }
 
 /** The page's badge, linking to the panel; nothing until the record loads. */
-export function VerificationHeroBadge({ assetId }: { assetId: string }) {
+export function VerificationHeroBadge({
+  assetId,
+  onOpen,
+}: {
+  assetId: string;
+  /** Opens "How this listing was verified" (the site's Proof of Life drawer). */
+  onOpen: () => void;
+}) {
   const panel = useVerificationPanel(assetId);
   if (!panel.data) return null;
   return (
-    <a
-      href={`#${VERIFICATION_PANEL_ID}`}
-      className="max-w-full rounded-full focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+    <button
+      type="button"
+      onClick={onOpen}
+      className="max-w-full rounded-full text-left focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
     >
       <VerificationBadge level={panel.data.level} tone="image">
         {panel.data.badge}
       </VerificationBadge>
       <span className="sr-only">: how this listing was verified</span>
-    </a>
+    </button>
   );
 }

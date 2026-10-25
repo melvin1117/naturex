@@ -169,7 +169,8 @@ function TraceShell({
   );
 }
 
-function TraceBody({
+/** One run, explained: the page's and the site drawer's body, on the machine layer. */
+export function TraceBody({
   trace,
   views,
   recordedOn,
