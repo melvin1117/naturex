@@ -5,7 +5,7 @@
 set -euo pipefail
 
 OWNER=melvin1117
-REPO=melvin1117/naturex
+REPO=melvin1117/wildworth
 PROJECT=2
 
 issue=${1:?usage: board_status.sh <issue> <status>}

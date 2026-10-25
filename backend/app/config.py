@@ -113,7 +113,7 @@ class Settings(BaseSettings):
     # News Scout pauses new searches when the Tavily account (all environments, read from
     # `/usage`) has fewer credits than this left, so judging never meets an empty quota.
     tavily_min_credits_left: int = 150
-    nominatim_user_agent: str = "WildWorth/0.1 (https://github.com/melvin1117/naturex)"
+    nominatim_user_agent: str = "WildWorth/0.1 (https://github.com/melvin1117/wildworth)"
     # Listing map place search (#215): searches per account per rolling minute, per API process
     # (429 `place_search_rate_limited` after), on top of Nominatim's shared 1 request/s.
     place_searches_per_user_per_minute: int = Field(default=20, ge=1)

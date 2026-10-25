@@ -133,7 +133,7 @@
 
 ## 5. Local run for technical judges (README quick start)
 ```bash
-git clone https://github.com/melvin1117/naturex && cd naturex
+git clone https://github.com/melvin1117/wildworth && cd wildworth
 cp .env.example .env        # add a Token Factory key and a Tavily key
 docker compose up           # http://localhost:3000, 3 demo sites preloaded
 ```

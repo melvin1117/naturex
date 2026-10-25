@@ -92,7 +92,7 @@ Every call goes through a wrapper that logs `model, prompt_tokens, completion_to
 
 ## 4. Repository layout
 ```
-naturex/
+wildworth/
 ├── LICENSE                     # MIT (must show in GitHub About)
 ├── README.md                   # setup, run, Nemotron/Token Factory usage, architecture image
 ├── AGENTS.md, CLAUDE.md        # shared instructions for all AI coding assistants
