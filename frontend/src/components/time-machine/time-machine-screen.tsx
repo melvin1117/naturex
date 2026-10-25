@@ -13,11 +13,7 @@ import { LoadError } from "@/components/proto/load-error";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useAssets, useWorld } from "@/lib/hooks";
-import {
-  ADMIN_ONLY,
-  SANDBOX_ONLY,
-  unavailableReason,
-} from "@/lib/time-machine";
+import { SANDBOX_ONLY, unavailableReason } from "@/lib/time-machine";
 import { useTimeMachine } from "@/lib/time-machine-hooks";
 
 import { EventSection } from "./event-section";
@@ -35,10 +31,16 @@ export function AdminScreen() {
   return world?.me ? <TimeMachinePanel /> : <ControlRoom />;
 }
 
-export function TimeMachinePanel() {
-  const { world } = useWorld();
-  // Until the session loads, the Time Machine's own loading state shows.
-  const notAdmin = world?.me ? !world.me.is_admin : false;
+/**
+ * The Time Machine: the sandbox's next quarter, injected events and reset. Anyone in a sandbox
+ * may use it (the backend's `SIMULATE`). `variant="sheet"` drops the page's frame and heading
+ * for the header's Time Machine sheet.
+ */
+export function TimeMachinePanel({
+  variant = "page",
+}: {
+  variant?: "page" | "sheet";
+} = {}) {
   const state = useTimeMachine();
   const assets = useAssets();
   // A reset remounts the sections, so no result from before it stays on screen.
@@ -66,21 +68,16 @@ export function TimeMachinePanel() {
   }, [refetchState, refetchAssets]);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 pt-10 pb-16 sm:px-6">
-      <TimeMachineHeading />
+    <div
+      className={
+        variant === "sheet"
+          ? "time-machine-sheet"
+          : "mx-auto max-w-7xl px-4 pt-10 pb-16 sm:px-6"
+      }
+    >
+      {variant === "page" && <TimeMachineHeading />}
 
-      {notAdmin ? (
-        <Alert className="mt-8 max-w-2xl">
-          <LockKeyhole aria-hidden="true" />
-          <AlertTitle>{ADMIN_ONLY.title}</AlertTitle>
-          <AlertDescription>
-            <p>
-              {ADMIN_ONLY.message} Open a demo session as the demo admin to try
-              it.
-            </p>
-          </AlertDescription>
-        </Alert>
-      ) : unavailable ? (
+      {unavailable ? (
         <Alert className="mt-8 max-w-2xl">
           <LockKeyhole aria-hidden="true" />
           <AlertTitle>{SANDBOX_ONLY.title}</AlertTitle>

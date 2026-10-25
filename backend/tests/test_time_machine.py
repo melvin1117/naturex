@@ -1105,14 +1105,16 @@ def test_the_api_runs_the_time_machine_for_the_demo_admin(
 
 
 @requires_db
-def test_only_admins_use_the_time_machine(client: TestClient, api_session: Session) -> None:
+def test_anyone_in_a_sandbox_uses_its_time_machine(
+    client: TestClient, api_session: Session
+) -> None:
+    """The sandbox's own demo control (#252); signed-out visitors still can't."""
     start_demo(client, api_session)  # the demo investor
 
-    for res in (
-        client.get("/admin/time-machine"),
-        client.post("/admin/simulate/quarter", json={"period": "2026Q4"}),
-    ):
-        assert (res.status_code, res.json()["detail"]) == (403, "admin_only")
+    res = client.get("/admin/time-machine")
+
+    assert res.status_code == 200, res.text
+    assert res.json()["available"] is True
     anonymous = TestClient(app)
     assert anonymous.get("/admin/time-machine").status_code == 401
 
@@ -1290,12 +1292,16 @@ def test_admins_read_the_alerts_a_simulation_sent(client: TestClient, api_sessio
 
 
 @requires_db
-def test_only_admins_read_sent_alerts(client: TestClient, api_session: Session) -> None:
+def test_anyone_in_a_sandbox_reads_the_alerts_its_simulations_sent(
+    client: TestClient, api_session: Session
+) -> None:
     start_demo(client, api_session)  # the demo investor
 
     res = client.get("/admin/alerts", params={"ids": [str(UUID(int=1))]})
 
-    assert (res.status_code, res.json()["detail"]) == (403, "admin_only")
+    assert (res.status_code, res.json()) == (200, [])
+    anonymous = TestClient(app).get("/admin/alerts", params={"ids": [str(UUID(int=1))]})
+    assert anonymous.status_code == 401
 
 
 @requires_db

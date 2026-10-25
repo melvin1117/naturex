@@ -8,16 +8,17 @@ web
 
 ## Users
 
-**Primary design audience: a hackathon judge seeing WildWorth cold.** They arrive from Devpost with no login, spend 3–7 minutes, watch the story at `/judge` (skippable) and then explore their own sandbox at `/sandbox`. Many only watch the 3-minute video. When needs conflict, the judge's first-time comprehension wins over density or power-user speed.
+**Primary design audience: a hackathon judge seeing WildWorth cold.** They arrive from Devpost with no login, spend 3–7 minutes, land on the welcome at `/`, watch the story at `/how` (skippable) and then try it in their own sandbox at `/sandbox`. Many only watch the 3-minute video. When needs conflict, the judge's first-time comprehension wins over density or power-user speed.
 
-In the sandbox the judge switches instantly between people (no login):
+In the sandbox the judge switches instantly between people from the avatar menu (no login):
 
 | Persona | Role | Job on WildWorth |
 |---|---|---|
-| **Rosa, community steward** | Leads a cooperative that owns a wetland near an industrial zone | Prove the wetland is worth more alive; get funded without selling the land |
-| **Arjun, supporter** | Backs nature with play money | Find trustworthy, comparable ratings; know quickly when something goes wrong |
-| **The WildWorth AI** ("under the hood") | The rating engine | Show every agent step, model call, formula and Record entry |
-| **Time Machine** (narrator) | Advances the story | Move to the next quarter; inject fire, encroachment or restoration |
+| **Rosa, Community** | Leads a cooperative that owns a wetland near an industrial zone | Prove the wetland is worth more alive; get funded without selling the land |
+| **Arjun, Supporter** | Backs nature with play money | Find trustworthy, comparable ratings; know quickly when something goes wrong |
+| **Reviewer, WildWorth team** | Checks new listings | Approve a listing so it opens on the Marketplace |
+
+The **Time Machine** (next quarter; fire, encroachment or restoration) is open to whoever the visitor is, from the bar.
 
 **Bea, the field guide,** answers a visitor's questions about a site from its own Record (see Brand Commitments).
 
@@ -37,16 +38,16 @@ Built for the Nebius × NVIDIA Global AI Hackathon (Best Apps & Agents track); s
 
 ## Operating Context
 
-- **Judge mode:** one link, no signup. `/judge` tells the story on one real wetland (every step skippable), then "Open my sandbox" gives each visitor a private sandbox at `/sandbox/*`; Reset restores it. The real app's homepage stays a homepage (ADR-0007).
-- **Explore freely:** in the sandbox, every person is one click away, with "What to try" listing the loop as steps.
+- **One link, no sign-up (ADR-0008):** `/` is a welcome (Bea, one sentence, two buttons). "Show me how" plays the story at `/how` on one real wetland (every step skippable); "Try it yourself" opens a private sandbox at `/sandbox/*` straight away. "Start the sandbox over" restores it. There are no sign-in pages.
+- **Explore freely:** in the sandbox everyone has the same pages (Marketplace, Communities, Your stakes; the Reviewer has Reviews), every person is one click away in the avatar menu, and Bea is a floating button on every page.
 - **Video:** recorded with Playwright at ~125% browser zoom, 1080p+. Screens must read well in a recording.
 - **Free hosting (if used, dev-spec §21):** the backend may be asleep; a "Waking up… ~30 s" state is part of the experience. When the LLM budget or Earth Engine is unavailable, live steps fall back to cached results with a clear notice, never an error.
 - **Local run** for technical judges: without keys the app runs in clearly labelled mock mode.
 
 ## Capabilities and Constraints
 
-- Three apps, routes unchanged: **Exchange** (`/`, always under "Sandbox · play money only"), **Stewards** (`/steward`) and **Control room** (`/admin`).
-- Screens: the story (`/judge`), Rated sites (`/`), List your land (`/steward/list`, map drawing + form + rating progress), site page (`/asset/[id]`: Proof of Life, chart, trade panel, alerts, The Record), Your stakes (`/portfolio`), Time Machine (`/admin`), Ask Bea, Agent Trace, `/dev/ui` component showcase; every app screen also runs in the sandbox under `/sandbox/*`.
+- One app, in the sandbox (ADR-0008): **Marketplace** (`/sandbox`), **Communities** (`/sandbox/steward`), **Your stakes** (`/sandbox/portfolio`) and, for the Reviewer, **Reviews** (`/sandbox/admin/verifications`). No app names or switcher.
+- Screens: the welcome (`/`), the story (`/how`), the Marketplace, List your land (`/sandbox/steward/list`, map drawing + form + rating progress), site page (`/sandbox/asset/[id]`: Proof of Life, chart, trade panel, alerts, The Record), Your stakes, the Time Machine (a sheet from the bar), Ask Bea (a floating button), Agent Trace, `/dev/ui` component showcase.
 - Three curated demo sites (hero: a ~500 ha Xochimilco-style wetland near Mexico City; plus a mangrove and a restoration forest). Live rating of user-drawn polygons is best-effort (2 live runs per visitor).
 - Ratings: Health Score 0–100; grades AAA ≥ 90 · AA ≥ 80 · A ≥ 70 · BBB ≥ 60 · BB ≥ 50 · B ≥ 40 · C ≥ 30 · D < 30; confidence 0–100%; values as low/mid/high $/yr per service (carbon, water, flood, habitat, recreation).
 - Listing polygon: 10–50,000 ha, no self-intersection, no overlap with existing listings.
@@ -64,12 +65,12 @@ The source of truth for the brand is [docs/design/wildworth-brand-guidelines.htm
 - **Tagline:** *"Worth more wild."* Hero line (judge invitation): *"The bees never sent an invoice. WildWorth works out what they're worth."* Video line: *"Every quarter, WildWorth issues a Proof of Life."* Closing line: *"Keeping nature alive should pay more than destroying it."*
 - **Belief:** keeping nature alive should pay more than destroying it. **Promise:** measured, not claimed. **Personality:** credible, alive, plain-spoken, open.
 - **The logo is a reading:** two Ws drawn as one line, the last stroke rising to the site's Health score (the master shows 77.6). Visual rules live in DESIGN.md.
-- **Feature names** (repeat these exactly): Proof of Life (the quarterly rating report and its seal), Health score, Worth range, WildWatch (news sweeps, satellite checks and their alerts), The Record (the hash-chained ledger), Recovery plan, Verified land, Agent Trace, Auditor, News Scout, Rated sites (the marketplace page), Back this site, Your stakes, Opening offer, Community fund, Time Machine. App names: Exchange, Stewards, Control room.
+- **Feature names** (repeat these exactly): Proof of Life (the quarterly rating report and its seal), Health score, Worth range, WildWatch (news sweeps, satellite checks and their alerts), The Record (the hash-chained ledger), Recovery plan, Verified land, Agent Trace, Auditor, News Scout, Rated sites (the marketplace page), Back this site, Your stakes, Opening offer, Community fund, Time Machine. Page names: Marketplace, Communities, Your stakes, Reviews.
 - **Bea, the field guide** (replaces "Copilot"): a bee drawn in the logo's line, ink only. The button is **Ask Bea**; the panel is **Bea · your field guide**, "Answers only from this site's Record"; the Agent Trace shows **Bea (model name)**. She answers only from the site's Record, shows her sources, says "Bzz" only to open a first answer, and never says invest, returns or buy.
 - **Voice is mixed by context** (confirmed):
   - **Rating, report, market, trace and ledger surfaces:** sober rating-agency voice. Precise, evidence-led, understated; ranges and confidence always shown; never hype.
   - **Community, listing, onboarding and tour surfaces:** warmer, plain language, celebrates stewards, still honest about uncertainty.
-- **Market vocabulary is softened** (confirmed): rating-agency language first; explicit market terms appear only inside the trade panel, always with sandbox framing.
+- **Market vocabulary is softened** (confirmed): rating-agency language first; explicit market terms appear only inside the trade panel. The sandbox line is said once on the welcome and once in the trade panel, not on every surface.
 - Visual decisions (logo, colour, type, icons, motion) belong to DESIGN.md, which follows the guidelines.
 
 ## Evidence on Hand

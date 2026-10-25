@@ -9,7 +9,8 @@ import type { ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CopilotSheet } from "@/components/proto/copilot-sheet";
-import { PrototypeHeaderTools } from "@/components/proto/header-tools";
+import { BeaFab } from "@/components/bea/bea-fab";
+import { AlertsBell } from "@/components/shell/alerts-bell";
 import { TOUR_STEPS, useTour } from "@/components/proto/tour";
 import type { CopilotStreamEvent } from "@/lib/api/types";
 
@@ -76,6 +77,7 @@ const signedIn = {
     json({ id: ASSET_ID, name: "Xochimilco wetland" }),
   [`GET /assets/${OSA_ID}`]: () => json({ id: OSA_ID, name: "Osa forest" }),
   "POST /copilot": () => sseResponse(answerEvents()),
+  "GET /alerts": () => json({ alerts: [], unread_count: 0, next_before: null }),
 };
 
 type Routes = Parameters<typeof renderExchange>[1];
@@ -84,7 +86,9 @@ function renderHeader(routes: Routes = {}, extra: ReactNode = null) {
   return renderExchange(
     <>
       {extra}
-      <PrototypeHeaderTools app="exchange" />
+      {/* The bell shows once the world has loaded, so tests wait on it. */}
+      <AlertsBell />
+      <BeaFab />
       <CopilotSheet />
     </>,
     routes,

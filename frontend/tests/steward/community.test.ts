@@ -138,7 +138,7 @@ describe("listingAction", () => {
     ],
     ["awaiting_ipo", "Waiting for the owner to open it to supporters", null],
     ["awaiting_verification", "Waiting for verification", null],
-    ["view_on_exchange", "View on Exchange", `/asset/${ASSET}`],
+    ["view_on_exchange", "View on Marketplace", `/asset/${ASSET}`],
     ["none", "Closed", null],
   ] as const)("%s → %s", (action, label, href) => {
     expect(listingAction(action, ASSET, COMMUNITY)).toMatchObject({
@@ -759,7 +759,7 @@ describe("listingAction for suspended listings", () => {
   it("opens the Exchange once the listing has traded", () => {
     expect(
       listingAction("view_on_exchange", ASSET, COMMUNITY, "suspended"),
-    ).toMatchObject({ label: "View on Exchange", href: `/asset/${ASSET}` });
+    ).toMatchObject({ label: "View on Marketplace", href: `/asset/${ASSET}` });
   });
 
   it("says it's suspended, with nothing to open, before its IPO", () => {

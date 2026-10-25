@@ -6,7 +6,6 @@ import { useSearchParams } from "next/navigation";
 import { usePathname } from "@/lib/nav";
 import { Suspense, useMemo, useState } from "react";
 
-import { CopilotChat } from "@/components/copilot-chat";
 import { FieldEvidencePanel } from "@/components/evidence/field-evidence-panel";
 import { AssetBodySkeleton } from "@/components/page-skeletons";
 import { Delta, SiteBackdrop, ValueRange } from "@/components/proto/bits";
@@ -425,13 +424,6 @@ function AssetLoaded({
                 pending={findingRecording}
               />
             )}
-            <Suspense fallback={null}>
-              <CopilotChat
-                key={asset.id}
-                assetId={asset.id}
-                assetName={asset.name}
-              />
-            </Suspense>
           </aside>
         </div>
       )}

@@ -1,2 +1,5 @@
-// The sandbox twin of `steward/loading.tsx`: the same screen in the visitor's sandbox (lib/sandbox.ts).
-export { default } from "@/app/steward/loading";
+import { StewardHomeSkeleton } from "@/components/page-skeletons";
+
+export default function Loading() {
+  return <StewardHomeSkeleton />;
+}

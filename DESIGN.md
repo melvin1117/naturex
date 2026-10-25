@@ -209,15 +209,19 @@ Ecosystem, verification and status chips are small pills; on images they are whi
 44px, 12px radius, card fill, input border, forest caret, ring on focus. Errors in destructive text below the field, wired with `aria-describedby`.
 
 ### Navigation
-The app bar follows the guidelines' "In use" mock. Above it, a thin forest strip carries the sandbox line, "Sandbox · play money only", and, for anonymous visitors, the way into a sandbox of their own. Inside `/sandbox` the forest sandbox bar takes its place, with the persona switcher (each person over their role below `xl`), "What to try", the story and reset, and it says "play money only" too (ADR-0007). The sticky translucent bar holds, from left to right:
-- the WildWorth lockup;
-- a hairline, then the app's name, quiet and regular: **Exchange**, **Stewards** or **Control room**. When the account can open another app, the name is the switcher: a menu of its apps, plus "Create a community" when it has none;
-- the pill nav, with the active page raised on a card and, from `xl`, a WildWorth icon beside each label;
-- **Ask Bea**: a forest pill with Bea's avatar and an "AI" tag (its name is "Ask Bea AI assistant"). Her wings and antennae stir for about two seconds when it's hovered or focused, and a tooltip names the model she runs on;
+One bar for the whole sandbox (ADR-0008), sticky and translucent, holding from left to right:
+- the WildWorth lockup (it leads to the Marketplace);
+- the pill nav: **Marketplace · Communities · Your stakes** (the Reviewer: **Marketplace · Reviews**), the active page raised on a card. Below `md` the pills wrap onto their own row;
+- **Time Machine** (a ghost button with Lucide's history icon) that opens a side sheet;
 - the alerts bell;
-- the account, shown as initials only.
+- **who you are**: the persona's round avatar (Rosa lime, Arjun forest, the Reviewer on the machine layer with a check), name and role, and a menu to be someone else, start the sandbox over or leave it.
 
-Below `lg` the pages, apps and communities move into a menu sheet.
+**Ask Bea** floats bottom-right on every sandbox page: a forest pill with Bea's avatar, "Ask Bea" and an "AI" tag (its name is "Ask Bea AI assistant"); below `sm` only her avatar. Her wings and antennae stir for about two seconds when it's hovered or focused.
+
+The footer is one quiet line: the lockup, "A hackathon prototype. Values are screening estimates, not appraisals." and a "Data sources" dialog. The sandbox line is said once on the welcome and once in the trade panel.
+
+### Welcome (signature)
+`/` is full-bleed: Esri imagery of the hero wetland settles from 108% over 4.5 s, its boundary is drawn in lime (the "Draw" move), and Bea flies in to say "Hi, I'm Bea." Then the display-xl title "Welcome to WildWorth.", one sentence on what WildWorth does, and two buttons: **Show me how** (paper, primary) and **Try it yourself** (paper outline, `on-image-outline`). Reduced motion shows the final frame.
 
 ### Health instrument (signature)
 A dotted radial dial (`DotRing`): 100 columns of dots in 5 rings, one column per point of health, lit up to the score (forest on light, lime on dark), with the light numeral in the centre. It reads literally, not decoratively, and stays wherever a live score is shown.

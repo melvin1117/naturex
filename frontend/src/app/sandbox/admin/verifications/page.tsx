@@ -1,2 +1,15 @@
-// The sandbox twin of `admin/verifications/page.tsx`: the same screen in the visitor's sandbox (lib/sandbox.ts).
-export { default, metadata } from "@/app/admin/verifications/page";
+import type { Metadata } from "next";
+import { Suspense } from "react";
+
+import { ReviewQueueScreen } from "@/components/verification/review-queue-screen";
+
+export const metadata: Metadata = { title: "Verified land" };
+
+export default function VerificationQueuePage() {
+  // The screen reads its view from the address (useSearchParams), so it renders on the client.
+  return (
+    <Suspense>
+      <ReviewQueueScreen />
+    </Suspense>
+  );
+}

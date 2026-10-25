@@ -8,9 +8,9 @@ import {
 import type { ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import StewardLayout from "@/app/steward/layout";
-import ListingsPage from "@/app/steward/listings/page";
-import StewardPage from "@/app/steward/page";
+import StewardLayout from "@/app/sandbox/steward/layout";
+import ListingsPage from "@/app/sandbox/steward/listings/page";
+import StewardPage from "@/app/sandbox/steward/page";
 import { TourProvider } from "@/components/proto/tour";
 import { WorldProvider } from "@/components/world-provider";
 import type {
@@ -178,7 +178,10 @@ function setup(
     <WorldProvider dataLayer={layer}>
       <PrototypeProvider>
         <TourProvider>
-          <StewardLayout>{page}</StewardLayout>
+          {/* The sandbox shell holds the page in <main>. */}
+          <main>
+            <StewardLayout>{page}</StewardLayout>
+          </main>
         </TourProvider>
       </PrototypeProvider>
     </WorldProvider>,
@@ -239,7 +242,7 @@ describe("the Listings page", () => {
       screen.getByRole("link", { name: "View progress: Bosque Alto" }),
     ).toHaveAttribute("href", flow(RATING));
     expect(
-      screen.getByRole("link", { name: "View on Exchange: Manglar Sur" }),
+      screen.getByRole("link", { name: "View on Marketplace: Manglar Sur" }),
     ).toHaveAttribute("href", `/asset/${LIVE.asset.id}`);
     expect(screen.getByText(`Site maps: ${IMAGERY_ATTRIBUTION}`)).toBeVisible();
 

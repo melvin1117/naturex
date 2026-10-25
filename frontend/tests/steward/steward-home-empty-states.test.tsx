@@ -2,8 +2,8 @@ import { render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import StewardLayout from "@/app/steward/layout";
-import StewardPage from "@/app/steward/page";
+import StewardLayout from "@/app/sandbox/steward/layout";
+import StewardPage from "@/app/sandbox/steward/page";
 import { TourProvider } from "@/components/proto/tour";
 import { WorldProvider } from "@/components/world-provider";
 import type {
@@ -141,7 +141,10 @@ function setup(summaryResponse: () => Response | Promise<Response>) {
     <WorldProvider dataLayer={layer}>
       <PrototypeProvider>
         <TourProvider>
-          <StewardLayout>{content}</StewardLayout>
+          {/* The sandbox shell holds the page in <main>. */}
+          <main>
+            <StewardLayout>{content}</StewardLayout>
+          </main>
         </TourProvider>
       </PrototypeProvider>
     </WorldProvider>

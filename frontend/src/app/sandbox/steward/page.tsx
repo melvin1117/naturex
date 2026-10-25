@@ -1,2 +1,9 @@
-// The sandbox twin of `steward/page.tsx`: the same screen in the visitor's sandbox (lib/sandbox.ts).
-export { default, metadata } from "@/app/steward/page";
+import type { Metadata } from "next";
+
+import { StewardHomeRoute } from "@/components/steward/steward-home";
+
+export const metadata: Metadata = { title: "Community home" };
+
+export default function StewardPage() {
+  return <StewardHomeRoute />;
+}

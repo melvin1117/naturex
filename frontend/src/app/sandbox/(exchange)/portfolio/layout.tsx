@@ -1,2 +1,9 @@
-// The sandbox twin of `(exchange)/portfolio/layout.tsx`: the same screen in the visitor's sandbox (lib/sandbox.ts).
-export { default } from "@/app/(exchange)/portfolio/layout";
+import { RequireAccount } from "@/components/require-account";
+
+export default function PortfolioLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <RequireAccount allowPrototypeDemo>{children}</RequireAccount>;
+}

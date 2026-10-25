@@ -2,17 +2,16 @@ import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import AssetPage from "@/app/(exchange)/asset/[id]/page";
-import MarketplacePage from "@/app/(exchange)/(market)/page";
-import PortfolioPage from "@/app/(exchange)/portfolio/page";
-import AdminPage from "@/app/admin/page";
+import AssetPage from "@/app/sandbox/(exchange)/asset/[id]/page";
+import MarketplacePage from "@/app/sandbox/(exchange)/(market)/page";
+import PortfolioPage from "@/app/sandbox/(exchange)/portfolio/page";
+import AdminPage from "@/app/sandbox/admin/page";
 import DevUiPage from "@/app/dev/ui/page";
-import JudgePage from "@/app/judge/page";
-import LoginPage from "@/app/login/page";
+import JudgePage from "@/app/how/page";
+import HomePage from "@/app/page";
 import NotFound from "@/app/not-found";
-import RegisterPage from "@/app/register/page";
-import ListPage from "@/app/steward/list/page";
-import StewardPage from "@/app/steward/page";
+import ListPage from "@/app/sandbox/steward/list/page";
+import StewardPage from "@/app/sandbox/steward/page";
 import { TourProvider } from "@/components/proto/tour";
 import { WorldProvider } from "@/components/world-provider";
 import { createDataLayer } from "@/lib/data-layer";
@@ -105,14 +104,13 @@ function StoryProviders({ children }: { children: ReactNode }) {
   );
 }
 
-const noSearch = { searchParams: Promise.resolve({}) };
-
 describe("routes", () => {
   it.each([
-    ["/", MarketplacePage, "Rated sites"],
-    ["/portfolio", PortfolioPage, "Your stakes"],
-    ["/steward", StewardPage, "Get paid for keeping your land alive"],
-    ["/admin", AdminPage, "Time Machine"],
+    ["/", HomePage, "Welcome to WildWorth."],
+    ["/sandbox", MarketplacePage, "Rated sites"],
+    ["/sandbox/portfolio", PortfolioPage, "Your stakes"],
+    ["/sandbox/steward", StewardPage, "Get paid for keeping your land alive"],
+    ["/sandbox/admin", AdminPage, "Time Machine"],
     ["/dev/ui", DevUiPage, "UI kit"],
     ["404", NotFound, "Page not found"],
   ])("%s renders its heading", (_path, Page, heading) => {
@@ -122,7 +120,7 @@ describe("routes", () => {
     ).toBeInTheDocument();
   });
 
-  it("/judge tells the story from GET /story", async () => {
+  it("/how tells the story from GET /story", async () => {
     render(<JudgePage />, { wrapper: StoryProviders });
     expect(screen.getByRole("status")).toHaveTextContent(
       "Loading the satellite view…",
@@ -142,16 +140,6 @@ describe("routes", () => {
     );
     expect(
       await screen.findByRole("heading", { level: 1, name: "List your land" }),
-    ).toBeInTheDocument();
-  });
-
-  it.each([
-    ["/login", LoginPage, "Sign in"],
-    ["/register", RegisterPage, "Create your account"],
-  ])("%s renders its heading", async (_path, Page, heading) => {
-    render(await Page(noSearch), { wrapper: Providers });
-    expect(
-      screen.getByRole("heading", { level: 1, name: heading }),
     ).toBeInTheDocument();
   });
 

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import AdminError from "@/app/admin/error";
+import AdminError from "@/app/sandbox/admin/error";
 import AppError from "@/app/error";
 import { MAIN_ID } from "@/components/shell/skip-link";
 

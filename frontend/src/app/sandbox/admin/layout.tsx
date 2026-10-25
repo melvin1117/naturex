@@ -1,2 +1,10 @@
-// The sandbox twin of `admin/layout.tsx`: the same screen in the visitor's sandbox (lib/sandbox.ts).
-export { default } from "@/app/admin/layout";
+import { RequireAccount } from "@/components/require-account";
+
+/** Reviews and the Time Machine page (`/admin`): the Reviewer's. */
+export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <RequireAccount admin>{children}</RequireAccount>;
+}

@@ -55,7 +55,7 @@ function ExchangeLink({
 }: { assetId: string } & Omit<React.ComponentProps<typeof Link>, "href">) {
   return (
     <Link href={assetHref(assetId)} {...props}>
-      See it on the Exchange
+      See it on the Marketplace
       <ArrowRight aria-hidden="true" />
     </Link>
   );

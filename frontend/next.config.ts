@@ -18,9 +18,27 @@ const nextConfig: NextConfig = {
   // uses <Button> ships every Radix primitive (~75 kB gzipped) on every page.
   experimental: { optimizePackageImports: ["radix-ui"] },
   async redirects() {
-    // ADR-0005: listing moved into the Steward app.
+    // WildWorth runs in the visitor's sandbox (no sign-up): the welcome is `/`, the story
+    // `/how`, and every app page lives under `/sandbox`. Old addresses still land somewhere.
+    const temporary = (source: string, destination: string) => ({
+      source,
+      destination,
+      permanent: false,
+    });
     return [
-      { source: "/list", destination: "/steward/list", permanent: false },
+      temporary("/judge", "/how"),
+      temporary("/login", "/sandbox"),
+      temporary("/register", "/sandbox"),
+      temporary("/list", "/sandbox/steward/list"),
+      temporary("/ai", "/sandbox"),
+      temporary("/sandbox/ai", "/sandbox"),
+      temporary("/asset/:path*", "/sandbox/asset/:path*"),
+      temporary("/trace/:path*", "/sandbox/trace/:path*"),
+      temporary("/portfolio", "/sandbox/portfolio"),
+      temporary("/steward", "/sandbox/steward"),
+      temporary("/steward/:path*", "/sandbox/steward/:path*"),
+      temporary("/admin", "/sandbox/admin"),
+      temporary("/admin/:path*", "/sandbox/admin/:path*"),
     ];
   },
   async rewrites() {

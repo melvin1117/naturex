@@ -402,7 +402,7 @@ function CreateCommunityEmptyState({
             <AccountIdCopy id={meId} />
           </div>
           <Button asChild variant="outline" className="mt-6">
-            <Link href="/">Back to the Exchange</Link>
+            <Link href="/">Back to the Marketplace</Link>
           </Button>
         </div>
         <div className="rounded-[1.75rem] bg-card p-6 shadow-lift sm:p-8">

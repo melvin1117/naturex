@@ -1,26 +1,13 @@
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { renderToString } from "react-dom/server";
-
-import PortfolioLayout from "@/app/(exchange)/portfolio/layout";
-import AdminLayout from "@/app/admin/layout";
-import StewardLayout from "@/app/steward/layout";
-import { AccountMenu } from "@/components/account-menu";
-import { JudgeLanding } from "@/components/proto/judge-landing";
-import { AuthForm } from "@/components/proto/auth-form";
-import { PasswordField } from "@/components/proto/password-field";
+import PortfolioLayout from "@/app/sandbox/(exchange)/portfolio/layout";
+import AdminLayout from "@/app/sandbox/admin/layout";
+import StewardLayout from "@/app/sandbox/steward/layout";
 import { TourProvider } from "@/components/proto/tour";
 import { RequireAccount } from "@/components/require-account";
 import { WorldProvider } from "@/components/world-provider";
-import { PASSWORD_RULE } from "@/lib/auth";
 import { createDataLayer, type DataLayer } from "@/lib/data-layer";
 import {
   usePortfolio,
@@ -94,349 +81,6 @@ function setup(ui: ReactNode, routes: Routes = {}) {
   return { ...utils, backend, layer };
 }
 
-function fill(label: RegExp | string, value: string) {
-  fireEvent.change(screen.getByLabelText(label), { target: { value } });
-}
-
-const submit = (name: RegExp) =>
-  fireEvent.click(screen.getByRole("button", { name }));
-
-describe("AuthForm", () => {
-  it("posts, so a submit before hydration never puts the password in the URL", () => {
-    const { container } = setup(<AuthForm mode="login" />);
-    expect(container.querySelector("form")).toHaveAttribute("method", "post");
-  });
-
-  it("uses the right autocomplete hints and shows or hides the password", () => {
-    setup(<AuthForm mode="register" />);
-    expect(screen.getByLabelText("Email")).toHaveAttribute(
-      "autocomplete",
-      "email",
-    );
-    const password = screen.getByLabelText("Password");
-    expect(password).toHaveAttribute("autocomplete", "new-password");
-    expect(password).toHaveAttribute("type", "password");
-    const toggle = screen.getByRole("button", { name: "Show password" });
-    fireEvent.click(toggle);
-    expect(password).toHaveAttribute("type", "text");
-    expect(toggle).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(toggle);
-    expect(password).toHaveAttribute("type", "password");
-  });
-
-  it("checks the fields before sending anything", async () => {
-    const { backend } = setup(<AuthForm mode="register" />);
-    fill("Email", "rosa@");
-    fill("Password", "short");
-    submit(/create account/i);
-
-    expect(await screen.findByText("Enter a display name.")).toBeVisible();
-    expect(
-      screen.getByText("Use at least 10 characters for your password."),
-    ).toBeVisible();
-    expect(screen.getByLabelText("Display name")).toHaveFocus();
-    expect(screen.getByLabelText("Password")).toHaveAttribute(
-      "aria-invalid",
-      "true",
-    );
-    expect(backend.calls("POST /auth/register")).toBe(0);
-  });
-
-  it("signs in, re-reads the world and returns to a safe next path", async () => {
-    const { backend, layer } = setup(
-      <AuthForm mode="login" next="/portfolio" />,
-      {
-        "GET /world": sequence(
-          () => json(WORLD),
-          () => json(SIGNED_IN_WORLD),
-        ),
-        "POST /auth/login": () => json(SIGNED_IN_WORLD.me),
-      },
-    );
-    await waitFor(() => expect(backend.calls("GET /world")).toBe(1));
-    fill("Email", "rosa@example.org");
-    fill("Password", "correct horse battery");
-    submit(/^sign in$/i);
-
-    await waitFor(() =>
-      expect(router.replace).toHaveBeenCalledWith("/portfolio"),
-    );
-    expect(backend.calls("GET /world")).toBe(2);
-    expect(layer.session.getSnapshot().world?.me?.name).toBe("Rosa");
-    const login = backend.requests.find((r) => r.url.endsWith("/auth/login"))!;
-    expect(login.credentials).toBe("same-origin");
-    expect(await login.json()).toEqual({
-      email: "rosa@example.org",
-      password: "correct horse battery",
-    });
-    // The session is the HttpOnly cookie only: nothing lands in JS-readable storage.
-    const stored = JSON.stringify({
-      ...window.localStorage,
-      ...window.sessionStorage,
-    });
-    expect(stored).not.toContain("correct horse battery");
-    expect(document.cookie).toBe("");
-  });
-
-  it("never follows an open redirect after sign-in", async () => {
-    setup(<AuthForm mode="login" next="//evil.com" />, {
-      "GET /world": sequence(
-        () => json(WORLD),
-        () => json(SIGNED_IN_WORLD),
-      ),
-      "POST /auth/login": () => json(SIGNED_IN_WORLD.me),
-    });
-    fill("Email", "rosa@example.org");
-    fill("Password", "correct horse battery");
-    submit(/^sign in$/i);
-    await waitFor(() => expect(router.replace).toHaveBeenCalled());
-    expect(router.replace).toHaveBeenCalledWith("/");
-    expect(router.replace).not.toHaveBeenCalledWith(
-      expect.stringContaining("evil"),
-    );
-  });
-
-  it("disables submit while the request is pending", async () => {
-    let respond!: (response: Response) => void;
-    setup(<AuthForm mode="login" />, {
-      "POST /auth/login": () => new Promise<Response>((r) => (respond = r)),
-    });
-    fill("Email", "rosa@example.org");
-    fill("Password", "whatever-password");
-    submit(/^sign in$/i);
-    const pending = await screen.findByRole("button", { name: /signing in/i });
-    expect(pending).toBeDisabled();
-    await act(async () =>
-      respond(
-        json({ detail: "Email or password is incorrect" }, { status: 401 }),
-      ),
-    );
-    expect(
-      await screen.findByRole("button", { name: /^sign in$/i }),
-    ).toBeEnabled();
-  });
-
-  it.each([
-    [
-      "login",
-      "POST /auth/login",
-      () => json({ detail: "Email or password is incorrect" }, { status: 401 }),
-      "Email or password is incorrect.",
-    ],
-    [
-      "login",
-      "POST /auth/login",
-      () =>
-        json(
-          { detail: "too_many_attempts" },
-          { status: 429, headers: { "Retry-After": "600" } },
-        ),
-      "Too many attempts. For your security, wait 10 minutes and try again.",
-    ],
-    [
-      "register",
-      "POST /auth/register",
-      () =>
-        json(
-          { detail: "This email can't be used to create an account" },
-          { status: 409 },
-        ),
-      "This email can't be used to create an account. If it's yours, sign in instead.",
-    ],
-    [
-      "register",
-      "POST /auth/register",
-      () =>
-        json(
-          {
-            detail: [
-              {
-                loc: ["body", "password"],
-                type: "string_too_short",
-                msg: "String should have at least 10 characters",
-              },
-            ],
-          },
-          { status: 422 },
-        ),
-      "Use at least 10 characters for your password.",
-    ],
-    [
-      "login",
-      "POST /auth/login",
-      () => Promise.reject(new TypeError("Failed to fetch")),
-      "Can't reach WildWorth. Check your connection and try again.",
-    ],
-  ] as const)(
-    "%s shows a clear message for %s failures",
-    async (mode, route, handler, message) => {
-      setup(<AuthForm mode={mode} />, { [route]: handler });
-      if (mode === "register") fill("Display name", "Rosa");
-      fill("Email", "rosa@example.org");
-      fill("Password", "a-long-enough-password");
-      submit(mode === "register" ? /create account/i : /^sign in$/i);
-      expect(await screen.findByText(message)).toBeVisible();
-      expect(router.replace).not.toHaveBeenCalled();
-    },
-  );
-
-  it("keeps submit disabled in the server HTML, so nothing is sent before hydration", () => {
-    const layer = createDataLayer({
-      baseUrl: BASE,
-      fetch: fakeBackend({}).fetch,
-    });
-    const html = renderToString(
-      <WorldProvider dataLayer={layer}>
-        <PrototypeProvider>
-          <TourProvider>
-            <AuthForm mode="login" />
-          </TourProvider>
-        </PrototypeProvider>
-      </WorldProvider>,
-    );
-    expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
-  });
-
-  it("sends one request however often the form is submitted", async () => {
-    const { backend, container } = setup(<AuthForm mode="login" />, {
-      "POST /auth/login": () => new Promise<Response>(() => {}),
-    });
-    fill("Email", "rosa@example.org");
-    fill("Password", "whatever-password");
-    const form = container.querySelector("form")!;
-    fireEvent.submit(form);
-    fireEvent.submit(form);
-    fireEvent.submit(form);
-    await waitFor(() => expect(backend.calls("POST /auth/login")).toBe(1));
-    await new Promise((r) => setTimeout(r, 20));
-    expect(backend.calls("POST /auth/login")).toBe(1);
-  });
-
-  it("focuses the password after wrong credentials", async () => {
-    setup(<AuthForm mode="login" />, {
-      "POST /auth/login": () =>
-        json({ detail: "Email or password is incorrect" }, { status: 401 }),
-    });
-    fill("Email", "rosa@example.org");
-    fill("Password", "wrong-password");
-    submit(/^sign in$/i);
-    await screen.findByText("Email or password is incorrect.");
-    await waitFor(() =>
-      expect(screen.getByLabelText("Password")).toHaveFocus(),
-    );
-    // The form's error stays attached to the fields, so it's heard on return too.
-    expect(screen.getByLabelText("Password")).toHaveAccessibleDescription(
-      "Email or password is incorrect.",
-    );
-    expect(screen.getByLabelText("Email")).toHaveAccessibleDescription(
-      "Email or password is incorrect.",
-    );
-  });
-
-  it("describes the register password by its rule, its error and the form's error", async () => {
-    setup(<AuthForm mode="register" />, {
-      "POST /auth/register": () =>
-        json(
-          { detail: "busy" },
-          { status: 503, headers: { "Retry-After": "60" } },
-        ),
-    });
-    const password = screen.getByLabelText("Password");
-    expect(password).toHaveAccessibleDescription(PASSWORD_RULE);
-
-    // The rule and the field's own error.
-    fill("Display name", "Rosa");
-    fill("Email", "rosa@example.org");
-    fill("Password", "short");
-    submit(/create account/i);
-    await screen.findByText("Use at least 10 characters for your password.");
-    expect(password).toHaveAttribute(
-      "aria-describedby",
-      "password-hint password-error",
-    );
-
-    // The rule and the form's error.
-    fill("Password", "long-enough-password");
-    submit(/create account/i);
-    await screen.findByText(/WildWorth is busy right now/);
-    expect(password).toHaveAttribute(
-      "aria-describedby",
-      "password-hint form-error",
-    );
-    expect(password).toHaveAccessibleDescription(
-      `${PASSWORD_RULE} WildWorth is busy right now. Try again in a minute.`,
-    );
-  });
-
-  it("combines all three on the password field", () => {
-    render(
-      <>
-        <PasswordField
-          autoComplete="new-password"
-          hint={PASSWORD_RULE}
-          error="Use at least 10 characters for your password."
-          describedBy="form-error"
-          onEdit={() => {}}
-        />
-        <p id="form-error">Something went wrong on our side. Try again.</p>
-      </>,
-    );
-    const password = screen.getByLabelText("Password");
-    expect(password).toHaveAttribute(
-      "aria-describedby",
-      "password-hint password-error form-error",
-    );
-    expect(password).toHaveAccessibleDescription(
-      `${PASSWORD_RULE} Use at least 10 characters for your password. ` +
-        "Something went wrong on our side. Try again.",
-    );
-  });
-
-  it("focuses the alert for other form-level errors", async () => {
-    setup(<AuthForm mode="login" />, {
-      "POST /auth/login": () =>
-        json(
-          { detail: "too_many_attempts" },
-          { status: 429, headers: { "Retry-After": "60" } },
-        ),
-    });
-    fill("Email", "rosa@example.org");
-    fill("Password", "wrong-password");
-    submit(/^sign in$/i);
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("wait a minute");
-    await waitFor(() => expect(alert).toHaveFocus());
-    expect(alert).toHaveAttribute("tabindex", "-1");
-  });
-
-  it("carries next to the other auth page, but only when it's safe", () => {
-    setup(<AuthForm mode="login" next="/steward/list" />);
-    expect(
-      screen.getByRole("link", { name: "Create an account" }),
-    ).toHaveAttribute("href", "/register?next=%2Fsteward%2Flist");
-  });
-
-  it.each(["/.//evil.com", "/a/..//evil.com", "/%2e%2e//evil.com"])(
-    "keeps a signed-in visit to /login?next=%s on the site",
-    async (next) => {
-      setup(<AuthForm mode="login" next={next} />, {
-        "GET /world": () => json(SIGNED_IN_WORLD),
-      });
-      await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/"));
-      expect(router.replace).not.toHaveBeenCalledWith(
-        expect.stringContaining("evil"),
-      );
-    },
-  );
-
-  it("sends a visitor who is already signed in straight on", async () => {
-    setup(<AuthForm mode="login" next="/admin" />, {
-      "GET /world": () => json(SIGNED_IN_WORLD),
-    });
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/admin"));
-  });
-});
-
 describe("RequireAccount", () => {
   const Secret = () => <p>Your stakes</p>;
 
@@ -467,7 +111,7 @@ describe("RequireAccount", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
-  it("explains a 403 instead of looping when the account isn't an admin", async () => {
+  it("offers to switch to the Reviewer instead of looping on a 403", async () => {
     setup(
       <RequireAccount admin>
         <Secret />
@@ -477,11 +121,14 @@ describe("RequireAccount", () => {
     expect(
       await screen.findByRole("heading", {
         level: 1,
-        name: "The control room is for platform admins",
+        name: "Only the Reviewer sees this page",
       }),
     ).toBeVisible();
     expect(
-      screen.getByRole("link", { name: "Go to Rated sites" }),
+      screen.getByRole("button", { name: "Switch to the Reviewer" }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("link", { name: "Go to the Marketplace" }),
     ).toHaveAttribute("href", "/");
     expect(screen.queryByText("Your stakes")).not.toBeInTheDocument();
     expect(router.replace).not.toHaveBeenCalled();
@@ -542,21 +189,6 @@ describe("RequireAccount", () => {
     expect(
       await screen.findByText("Something went wrong on our side. Try again."),
     ).toBeVisible();
-  });
-
-  it("never enters the scripted demo from the judge landing while signed in", async () => {
-    const { layer } = setup(<JudgeLanding />, {
-      "GET /world": () => json(SIGNED_IN_WORLD),
-    });
-    await waitFor(() =>
-      expect(layer.session.getSnapshot().world?.me).not.toBeNull(),
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: /Explore as a community steward/ }),
-    );
-    expect(router.push).toHaveBeenCalledWith("/steward");
-    await new Promise((r) => setTimeout(r, 0));
-    expect(window.sessionStorage.getItem("ww-prototype-demo")).toBeNull();
   });
 });
 
@@ -622,86 +254,6 @@ describe("protected layouts", () => {
       },
     );
     expect(await screen.findByText("Protected content")).toBeVisible();
-  });
-});
-
-describe("AccountMenu", () => {
-  function Viewer() {
-    const { world } = useWorld();
-    const portfolio = usePortfolio();
-    return (
-      <p>
-        Viewer {world?.me?.name ?? "anonymous"}, cash{" "}
-        {portfolio.data?.cash_balance ?? "none"}
-      </p>
-    );
-  }
-
-  it("offers sign-in, with a return path and its query, to anonymous visitors", async () => {
-    nav.pathname = "/asset/abc";
-    nav.search = "tab=report";
-    setup(<AccountMenu />);
-    expect(
-      await screen.findByRole("link", { name: "Sign in" }),
-    ).toHaveAttribute("href", "/login?next=%2Fasset%2Fabc%3Ftab%3Dreport");
-  });
-
-  it("moves focus to Sign in and ends the scripted demo after sign-out", async () => {
-    window.sessionStorage.setItem("ww-prototype-demo", "1");
-    setup(<AccountMenu />, {
-      "GET /world": sequence(
-        () => json(SIGNED_IN_WORLD),
-        () => json(WORLD),
-      ),
-      "POST /auth/logout": () => new Response(null, { status: 204 }),
-    });
-    const trigger = await screen.findByRole("button", {
-      name: "Account: Rosa",
-    });
-    fireEvent.keyDown(trigger, { key: "Enter" });
-    fireEvent.click(await screen.findByRole("menuitem", { name: /sign out/i }));
-
-    const signIn = await screen.findByRole("link", { name: "Sign in" });
-    await waitFor(() => expect(signIn).toHaveFocus());
-    expect(window.sessionStorage.getItem("ww-prototype-demo")).toBeNull();
-  });
-
-  it("shows the account and signs out, resetting the world and cache", async () => {
-    const { backend, layer } = setup(
-      <>
-        <AccountMenu />
-        <Viewer />
-      </>,
-      {
-        "GET /world": sequence(
-          () => json(SIGNED_IN_WORLD),
-          () => json(WORLD),
-        ),
-        "GET /portfolio": sequence(
-          () => json({ cash_balance: "9000.00", holdings: [], impact: {} }),
-          () => json({ detail: "auth_required" }, { status: 401 }),
-        ),
-        "POST /auth/logout": () => new Response(null, { status: 204 }),
-      },
-    );
-    expect(await screen.findByText("Viewer Rosa, cash 9000.00")).toBeVisible();
-
-    const trigger = screen.getByRole("button", { name: "Account: Rosa" });
-    // Just her initials in the bar; the name is the button's accessible name and in the menu.
-    expect(trigger).toHaveAccessibleName("Account: Rosa");
-    fireEvent.keyDown(trigger, { key: "Enter" });
-    expect(await screen.findByText("rosa@example.org")).toBeVisible();
-    fireEvent.click(screen.getByRole("menuitem", { name: /sign out/i }));
-
-    expect(await screen.findByRole("link", { name: "Sign in" })).toBeVisible();
-    expect(backend.calls("POST /auth/logout")).toBe(1);
-    expect(backend.calls("GET /world")).toBe(2);
-    expect(layer.session.getSnapshot().world?.me).toBeNull();
-    // The cache was reset: Rosa's answer is gone and refetched as the anonymous visitor.
-    expect(
-      await screen.findByText("Viewer anonymous, cash none"),
-    ).toBeVisible();
-    await waitFor(() => expect(backend.calls("GET /portfolio")).toBe(2));
   });
 });
 

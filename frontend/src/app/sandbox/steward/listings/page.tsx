@@ -1,2 +1,9 @@
-// The sandbox twin of `steward/listings/page.tsx`: the same screen in the visitor's sandbox (lib/sandbox.ts).
-export { default, metadata } from "@/app/steward/listings/page";
+import type { Metadata } from "next";
+
+import { ListingsRoute } from "@/components/steward/listings-page";
+
+export const metadata: Metadata = { title: "Listings" };
+
+export default function ListingsPage() {
+  return <ListingsRoute />;
+}

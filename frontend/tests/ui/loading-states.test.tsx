@@ -185,6 +185,10 @@ const LOADERS = Object.entries(
   return { route, Loading: mod.default };
 });
 
+/** An app route as the sandbox serves it. */
+const inSandbox = (route: string) =>
+  route === "/" ? "/sandbox" : `/sandbox${route}`;
+
 describe("route loading states", () => {
   it("covers the Marketplace, asset page, portfolio, steward and admin routes", () => {
     const app = [
@@ -201,17 +205,16 @@ describe("route loading states", () => {
       "/steward/list",
       "/steward/listings",
     ];
-    // ...and each one's twin in the sandbox (`/sandbox/*`).
-    const twins = app.map((r) => (r === "/" ? "/sandbox" : `/sandbox${r}`));
+    // All of them live in the sandbox (`/sandbox/*`): there's no sign-in app outside it.
     expect(LOADERS.map((l) => l.route).sort()).toEqual(
-      [...app, ...twins].sort(),
+      app.map(inSandbox).sort(),
     );
   });
 
   it("draws the Marketplace's skeleton only for the Marketplace", () => {
     // A loading.tsx is a Suspense boundary for every page below its folder: in
     // `(exchange)/` it would flash the Marketplace on the way to a site or Your stakes.
-    const exchange = join(process.cwd(), "src/app/(exchange)");
+    const exchange = join(process.cwd(), "src/app/sandbox/(exchange)");
     expect(existsSync(join(exchange, "loading.tsx"))).toBe(false);
     const market = join(exchange, "(market)");
     expect(existsSync(join(market, "loading.tsx"))).toBe(true);
@@ -245,7 +248,7 @@ describe("route loading states", () => {
     ["/portfolio", "Your stakes"],
     ["/steward/listings", "Listings"],
   ])("%s draws its real heading", (route, heading) => {
-    const { Loading } = LOADERS.find((l) => l.route === route)!;
+    const { Loading } = LOADERS.find((l) => l.route === inSandbox(route))!;
     render(<Loading />, { wrapper: Shell });
     expect(
       screen.getByRole("heading", { name: heading, level: 1 }),
@@ -256,7 +259,7 @@ describe("route loading states", () => {
     ["/asset/x", "Rated sites", "/"],
     ["/steward/community", "Community home", "/steward"],
   ])("%s keeps its real back link", (route, name, href) => {
-    const { Loading } = LOADERS.find((l) => l.route === route)!;
+    const { Loading } = LOADERS.find((l) => l.route === inSandbox(route))!;
     render(<Loading />);
     expect(screen.getByRole("link", { name })).toHaveAttribute("href", href);
   });

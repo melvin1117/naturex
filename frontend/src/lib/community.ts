@@ -241,7 +241,7 @@ export function listingAction(
       };
     case "view_on_exchange":
       return {
-        label: "View on Exchange",
+        label: "View on Marketplace",
         href: assetHref(assetId),
         primary: false,
       };

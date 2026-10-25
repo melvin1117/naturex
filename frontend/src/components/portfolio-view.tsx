@@ -2,12 +2,11 @@
 
 import { Leaf, RefreshCwIcon, Sprout, Trees } from "lucide-react";
 import Link from "@/components/app-link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "cn";
 
 import { AlertsList } from "@/components/alerts-list";
 import { ICON_FRAME } from "@/components/boundary-map";
-import { CopilotChat } from "@/components/copilot-chat";
 import { CountTo } from "@/components/live-number";
 import { PortfolioBodySkeleton } from "@/components/page-skeletons";
 import { Delta, SiteThumb, Stat } from "@/components/proto/bits";
@@ -65,7 +64,7 @@ export function PortfolioView({ name }: { name: string }) {
         Your stakes
       </h1>
       <p className="mt-3 text-muted-foreground">
-        {name}&apos;s sandbox account. Everything here is play money.
+        The sites {name} backs, and how they&apos;re doing.
       </p>
       {portfolio.data ? (
         <PortfolioBody data={portfolio.data} />
@@ -140,8 +139,8 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
                   aria-hidden="true"
                 />
                 <p className="mt-3 text-muted-foreground">
-                  No stakes yet. Every site on Rated sites is open for
-                  play-money stakes.
+                  No stakes yet. Back a site on the Marketplace and it shows
+                  here.
                 </p>
                 <Button asChild className="mt-4">
                   <Link href="/">Back your first site</Link>
@@ -151,9 +150,6 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
               <Holdings holdings={data.holdings} cards={cards} fresh={fresh} />
             )}
           </Panel>
-          <Suspense fallback={null}>
-            <CopilotChat />
-          </Suspense>
         </div>
         <div className="min-w-0 space-y-8">
           <Panel title="WildWatch alerts" headingLevel="h2">

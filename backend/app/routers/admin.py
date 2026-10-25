@@ -2,8 +2,8 @@
 
 The Time Machine (`GET /admin/time-machine`, `POST /admin/simulate/quarter` and its job,
 `GET /admin/simulate/quarter/{job_id}`) and event injection (`POST /admin/simulate/event`) are
-operator actions: admins only, in their own world (`Action.OPERATE`; a demo admin persona
-operates only its sandbox). Their logic is `app/services/time_machine.py` (T38) and
+`Action.SIMULATE`: in a sandbox anyone acting in it may run them (it's the demo's control);
+elsewhere only an admin of the world. Their logic is `app/services/time_machine.py` (T38) and
 `app/services/quarter_jobs.py` (#201: a quarter runs in the background). `GET /admin/alerts`
 shows the operator the alerts a simulation sent (T43). The agent trace is a read
 (`Action.BROWSE`, ADR-0005 §3 matrix row 1).
@@ -76,7 +76,7 @@ from app.tools.scenarios import ScenarioVersion, load_scenario_spec, timeline_ve
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-OPERATE = require(Action.OPERATE)
+SIMULATE = require(Action.SIMULATE)
 ADMIN_ONLY_RESPONSE: dict[int | str, dict[str, Any]] = denied(DenyReason.ADMIN_ONLY)
 
 
@@ -284,7 +284,7 @@ def _run_error(exc: Exception) -> HTTPException:
 @router.get(
     "/time-machine",
     response_model=TimeMachineOut,
-    dependencies=[OPERATE],
+    dependencies=[SIMULATE],
     responses=ADMIN_ONLY_RESPONSE,
 )
 def get_time_machine(
@@ -326,7 +326,7 @@ def get_time_machine(
     "/simulate/quarter",
     response_model=QuarterJobOut,
     status_code=status.HTTP_202_ACCEPTED,
-    dependencies=[OPERATE],
+    dependencies=[SIMULATE],
     responses={
         **ADMIN_ONLY_RESPONSE,
         409: {
@@ -382,7 +382,7 @@ def simulate_quarter(
 @router.get(
     "/simulate/quarter/{job_id}",
     response_model=QuarterJobOut,
-    dependencies=[OPERATE],
+    dependencies=[SIMULATE],
     responses={**ADMIN_ONLY_RESPONSE, 404: {"description": "Not a quarter job of this world"}},
 )
 def get_quarter_job(
@@ -412,8 +412,9 @@ def get_quarter_job(
 @router.post(
     "/simulate/event",
     response_model=SimulateEventResponse,
-    # On the asset, so an admin in the asset's community is refused (`conflict_of_interest`).
-    dependencies=[require(Action.OPERATE, injected_asset_ref)],
+    # On the asset, so outside a sandbox an admin in the asset's community is refused
+    # (`conflict_of_interest`).
+    dependencies=[require(Action.SIMULATE, injected_asset_ref)],
     responses={
         **denied(DenyReason.ADMIN_ONLY, DenyReason.CONFLICT_OF_INTEREST),
         409: {
@@ -489,7 +490,7 @@ MAX_SENT_ALERTS = 50
 @router.get(
     "/alerts",
     response_model=list[SentAlertOut],
-    dependencies=[OPERATE],
+    dependencies=[SIMULATE],
     responses=ADMIN_ONLY_RESPONSE,
 )
 def get_sent_alerts(

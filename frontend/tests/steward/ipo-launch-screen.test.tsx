@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import IpoPage from "@/app/steward/assets/[id]/ipo/page";
+import IpoPage from "@/app/sandbox/steward/assets/[id]/ipo/page";
 import { IpoLaunchScreen } from "@/components/ipo-launch-screen";
 import { WorldProvider } from "@/components/world-provider";
 import type {
@@ -317,7 +317,7 @@ describe("IpoLaunchScreen", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /See it on the Exchange/ }),
+      screen.getByRole("link", { name: /See it on the Marketplace/ }),
     ).toHaveAttribute("href", `/asset/${ASSET_ID}`);
     expect(
       screen.getAllByRole("link", { name: "Community home" })[0],
@@ -821,7 +821,7 @@ describe("IpoLaunchScreen", () => {
         await screen.findByText("This opening offer has launched"),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole("link", { name: /See it on the Exchange/ }),
+        screen.getByRole("link", { name: /See it on the Marketplace/ }),
       ).toHaveAttribute("href", `/asset/${ASSET_ID}`);
       expect(screen.queryByLabelText("Units to issue")).not.toBeInTheDocument();
     },

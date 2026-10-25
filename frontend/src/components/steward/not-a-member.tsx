@@ -41,7 +41,7 @@ export function NotACommunityMember({
       </h1>
       <p className="mt-4 max-w-prose text-pretty text-muted-foreground">
         Only the owner and stewards of the community that lists {name} manage it
-        here. You can still follow it and back it on the Exchange with play
+        here. You can still follow it and back it on the Marketplace with play
         money.
       </p>
       <div className="mt-6 flex flex-wrap gap-2">
@@ -51,7 +51,7 @@ export function NotACommunityMember({
           className="h-auto min-h-10 max-w-full shrink py-2 text-left whitespace-normal"
         >
           <Link href={assetHref(assetId)}>
-            See {name} on the Exchange
+            See {name} on the Marketplace
             <ArrowRight aria-hidden="true" />
           </Link>
         </Button>

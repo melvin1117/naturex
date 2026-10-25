@@ -1,2 +1,9 @@
-// The sandbox twin of `steward/community/page.tsx`: the same screen in the visitor's sandbox (lib/sandbox.ts).
-export { default, metadata } from "@/app/steward/community/page";
+import type { Metadata } from "next";
+
+import { CommunitySettings } from "@/components/steward/community-settings";
+
+export const metadata: Metadata = { title: "Community settings" };
+
+export default function CommunityPage() {
+  return <CommunitySettings />;
+}

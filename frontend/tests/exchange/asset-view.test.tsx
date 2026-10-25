@@ -163,10 +163,7 @@ describe("AssetView", () => {
     expect(
       await screen.findByRole("link", { name: "Sign in to trade" }),
     ).toHaveAttribute("href", "/login?next=%2Fasset%2Fx");
-    // The real Copilot (T39) asks anonymous visitors to sign in; the real trace opens (T34).
-    expect(
-      screen.getByRole("link", { name: "Sign in to ask Bea" }),
-    ).toHaveAttribute("href", "/login?next=%2Fasset%2Fx");
+    // Bea is global (the floating button), not a card on the page; the real trace opens (T34).
     // No run, and the recording didn't load: once that's settled, the card says so.
     const trace = screen.getByRole("region", { name: "How the AI rated it" });
     expect(

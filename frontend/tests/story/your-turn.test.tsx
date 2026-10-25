@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import JudgePage from "@/app/judge/page";
+import JudgePage from "@/app/how/page";
 import { TourProvider } from "@/components/proto/tour";
 import { WorldProvider } from "@/components/world-provider";
 import type { WorldOut } from "@/lib/api/types";
@@ -152,9 +152,9 @@ describe("/judge: your turn", () => {
       name: "What you can do in your sandbox",
     });
     expect(steps).toHaveTextContent("List your land");
-    expect(steps).toHaveTextContent("as Rosa (Community steward)");
+    expect(steps).toHaveTextContent("as Rosa (Community)");
     expect(steps).toHaveTextContent("as Arjun (Supporter)");
-    expect(steps).toHaveTextContent("as Admin (WildWorth team)");
+    expect(steps).toHaveTextContent("as Reviewer (WildWorth team)");
   });
 
   it.each([

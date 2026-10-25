@@ -9,7 +9,7 @@ import { RouteSkeleton } from "@/components/page-skeletons";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { loginHref, protectedAccess } from "@/lib/auth";
-import { useWorld } from "@/lib/hooks";
+import { useSwitchPersona, useWorld } from "@/lib/hooks";
 import { usePrototype } from "@/lib/prototype/store";
 
 function currentPath(): string {
@@ -56,28 +56,7 @@ export function RequireAccount({
 
   if (access === "allowed") return children;
 
-  if (access === "forbidden") {
-    return (
-      <div className="mx-auto max-w-xl px-4 py-16 sm:px-6">
-        <Alert>
-          <LockKeyhole aria-hidden="true" />
-          {/* The page's only heading: the guarded screen (and its h1) isn't rendered. */}
-          <AlertTitle>
-            <h1>The control room is for platform admins</h1>
-          </AlertTitle>
-          <AlertDescription>
-            <p>
-              You&apos;re signed in as {world?.me?.name}, which doesn&apos;t
-              have admin access. Admin accounts are created by an operator.
-            </p>
-            <Button asChild variant="outline" size="sm" className="mt-2">
-              <Link href="/">Go to Rated sites</Link>
-            </Button>
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
+  if (access === "forbidden") return <ReviewerOnly name={world?.me?.name} />;
 
   if (access === "unavailable") {
     return (
@@ -115,5 +94,39 @@ export function RequireAccount({
           : "Checking your session…"
       }
     />
+  );
+}
+
+/** A sandbox page for the Reviewer, opened as someone else: one tap to become the Reviewer. */
+function ReviewerOnly({ name }: { name: string | undefined }) {
+  const switcher = useSwitchPersona();
+  return (
+    <div className="mx-auto max-w-xl px-4 py-16 sm:px-6">
+      <Alert>
+        <LockKeyhole aria-hidden="true" />
+        {/* The page's only heading: the guarded screen (and its h1) isn't rendered. */}
+        <AlertTitle>
+          <h1>Only the Reviewer sees this page</h1>
+        </AlertTitle>
+        <AlertDescription>
+          <p>
+            You&apos;re {name ?? "someone else"} right now. Switch to the
+            Reviewer to approve new listings.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              disabled={switcher.isPending}
+              onClick={() => void switcher.mutate("admin")}
+            >
+              Switch to the Reviewer
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/">Go to the Marketplace</Link>
+            </Button>
+          </div>
+        </AlertDescription>
+      </Alert>
+    </div>
   );
 }

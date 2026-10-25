@@ -29,14 +29,15 @@ import {
   QUARTER_POLL_MS,
 } from "./time-machine";
 
-/** The world's quarter, the next one, the timeline and the presets. Admins only. */
+/** The world's quarter, the next one, the timeline and the presets: anyone in a sandbox
+ * (the backend's `SIMULATE`), admins elsewhere. */
 export function useTimeMachine(): QueryResult<TimeMachine> {
   const { world } = useWorld();
   const me = world?.me;
   return useApiQuery(
     queryKeys.timeMachine(me?.id ?? null),
     (api, signal) => unwrap(api.GET("/admin/time-machine", { signal })),
-    { enabled: Boolean(me?.is_admin) },
+    { enabled: Boolean(me?.persona || me?.is_admin) },
   );
 }
 

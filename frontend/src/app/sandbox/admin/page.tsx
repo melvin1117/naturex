@@ -1,2 +1,9 @@
-// The sandbox twin of `admin/page.tsx`: the same screen in the visitor's sandbox (lib/sandbox.ts).
-export { default, metadata } from "@/app/admin/page";
+import type { Metadata } from "next";
+
+import { AdminScreen } from "@/components/time-machine/time-machine-screen";
+
+export const metadata: Metadata = { title: "Time Machine" };
+
+export default function AdminPage() {
+  return <AdminScreen />;
+}

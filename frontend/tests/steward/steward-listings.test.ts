@@ -269,7 +269,7 @@ describe("rowActions", () => {
       next_action: "view_on_exchange",
     });
     expect(rowActions(live, COMMUNITY).next).toMatchObject({
-      label: "View on Exchange",
+      label: "View on Marketplace",
       href: `/asset/${live.asset.id}`,
     });
   });

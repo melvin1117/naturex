@@ -1,2 +1,9 @@
-// The sandbox twin of `(exchange)/portfolio/page.tsx`: the same screen in the visitor's sandbox (lib/sandbox.ts).
-export { default, metadata } from "@/app/(exchange)/portfolio/page";
+import type { Metadata } from "next";
+
+import { PortfolioScreen } from "@/components/portfolio-view";
+
+export const metadata: Metadata = { title: "Your stakes" };
+
+export default function PortfolioPage() {
+  return <PortfolioScreen />;
+}

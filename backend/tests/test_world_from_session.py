@@ -353,11 +353,11 @@ def test_the_demo_admin_can_rate_and_simulate_in_its_own_sandbox(
 
 
 @requires_db
-def test_in_a_sandbox_investors_neither_rate_nor_simulate_and_owners_only_rate(
+def test_in_a_sandbox_investors_dont_rate_but_everyone_simulates(
     session: Session, client: TestClient, runner: RecordingRunner
 ) -> None:
-    """The matrix holds in sandboxes too (T57): a rating run is the operator's or the asset's
-    community's; the Time Machine is the admin's."""
+    """A rating run is the operator's or the asset's community's (T57); the Time Machine is the
+    sandbox's own demo control, so anyone acting in it injects events (#252)."""
     sandbox = start_demo(client, session)  # the demo investor
     asset = session.exec(
         select(Asset).where(Asset.world_id == sandbox.id).order_by(Asset.site_key)
@@ -365,16 +365,13 @@ def test_in_a_sandbox_investors_neither_rate_nor_simulate_and_owners_only_rate(
     assert asset is not None
     event = {"asset_id": str(asset.id), "preset": "fire"}
 
-    investor = [
-        client.post(f"/assets/{asset.id}/rate"),
-        client.post("/admin/simulate/event", json=event),
-    ]
+    investor_rate = client.post(f"/assets/{asset.id}/rate")
+    investor_event = client.post("/admin/simulate/event", json=event)
     start_demo(client, session, sandbox, persona_key="rosa")  # owns every seeded community
     owner_rate = client.post(f"/assets/{asset.id}/rate")
-    owner_event = client.post("/admin/simulate/event", json=event)
 
-    for res in (*investor, owner_event):
-        assert (res.status_code, res.json()["detail"]) == (403, "admin_only")
+    assert (investor_rate.status_code, investor_rate.json()["detail"]) == (403, "admin_only")
+    assert investor_event.status_code == 200, investor_event.text
     assert owner_rate.status_code == 202, owner_rate.text
     assert runner.started == [(sandbox.id, asset.id)]
 
