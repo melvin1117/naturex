@@ -244,7 +244,7 @@ describe("route loading states", () => {
   it.each([
     ["/", "Marketplace"],
     ["/admin", "Time Machine"],
-    ["/admin/verifications", "Verified land"],
+    ["/admin/verifications", "Reviews"],
     ["/portfolio", "Your stakes"],
     ["/steward/listings", "Listings"],
   ])("%s draws its real heading", (route, heading) => {

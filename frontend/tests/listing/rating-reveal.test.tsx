@@ -438,13 +438,13 @@ describe("ListedStep", () => {
     });
     expect(verify).toHaveAttribute(
       "href",
-      `/steward/assets/${ASSET_ID}/verify?community=${SELVA.id}`,
+      `/steward/list?community=${SELVA.id}&asset=${ASSET_ID}&step=prove`,
     );
     expect(
       screen.getByRole("link", { name: "Preview the opening offer" }),
     ).toHaveAttribute(
       "href",
-      `/steward/assets/${ASSET_ID}/ipo?community=${SELVA.id}`,
+      `/steward/list?community=${SELVA.id}&asset=${ASSET_ID}&step=offer`,
     );
     expect(screen.getByText("Not verified")).toBeVisible();
     expect(
@@ -480,10 +480,10 @@ describe("ListedStep", () => {
       ),
     );
     expect(
-      await screen.findByRole("link", { name: /Open to supporters/ }),
+      await screen.findByRole("link", { name: /Send your offer/ }),
     ).toHaveAttribute(
       "href",
-      `/steward/assets/${ASSET_ID}/ipo?community=${SELVA.id}`,
+      `/steward/list?community=${SELVA.id}&asset=${ASSET_ID}&step=offer`,
     );
     expect(screen.getByText("Verified land")).toBeVisible();
   });
@@ -497,7 +497,7 @@ describe("ListedStep", () => {
       await screen.findByRole("link", { name: /Set up the opening offer/ }),
     ).toHaveAttribute(
       "href",
-      `/steward/assets/${ASSET_ID}/ipo?community=${SELVA.id}`,
+      `/steward/list?community=${SELVA.id}&asset=${ASSET_ID}&step=offer`,
     );
   });
 

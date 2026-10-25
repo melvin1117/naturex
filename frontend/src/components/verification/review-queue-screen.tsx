@@ -14,6 +14,7 @@ import {
   CheckResultLabel,
   VerificationBadge,
 } from "@/components/verification/parts";
+import { OfferList } from "@/components/verification/offer-list";
 import { ReviewQueueHeading } from "@/components/verification/review-queue-heading";
 import type {
   CheckResult,
@@ -43,7 +44,8 @@ import {
 export const QUEUE_PAGE = 20;
 
 const VIEW_LABEL: Record<ReviewView, string> = {
-  waiting: "Waiting",
+  offers: "Offers",
+  waiting: "Documents",
   verified: "Verified",
   rejected: "Rejected",
   revoked: "Revoked",
@@ -73,7 +75,7 @@ export function ReviewQueueScreen() {
       >
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           <TabsList
-            aria-label="Verification views"
+            aria-label="What to review"
             className="w-max min-w-full bg-card shadow-soft sm:w-fit sm:min-w-0"
           >
             {REVIEW_VIEWS.map((v) => (
@@ -87,6 +89,9 @@ export function ReviewQueueScreen() {
             ))}
           </TabsList>
         </div>
+        <TabsContent value="offers">
+          {view === "offers" && <OfferList />}
+        </TabsContent>
         <TabsContent value="waiting">
           {view === "waiting" && <WaitingList />}
         </TabsContent>

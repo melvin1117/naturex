@@ -229,7 +229,7 @@ export function listingAction(
       return { label: "Waiting for verification", href: null, primary: false };
     case "launch_ipo":
       return {
-        label: "Open to supporters",
+        label: "Send your offer",
         href: ipoHref(assetId, communityId),
         primary: true,
       };

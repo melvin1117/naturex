@@ -1,23 +1,18 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { RequireAccount } from "@/components/require-account";
-import { StewardVerifyScreen } from "@/components/verification/steward-verify-screen";
+import { verifyHref } from "@/lib/listing/links";
+import { sandboxHref } from "@/lib/sandbox";
 
-export const metadata: Metadata = { title: "Verify your listing" };
-
-/**
- * Listing verification for the community's owner and stewards (T70, ADR-0006): upload
- * documents, submit them, read the checks and the decision. Real accounts only.
- */
+/** Land documents are the listing flow's Prove step now (ADR-0008 §5); old links land there. */
 export default async function VerifyPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { id } = await params;
-  return (
-    <RequireAccount>
-      <StewardVerifyScreen assetId={id} />
-    </RequireAccount>
-  );
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  const community =
+    typeof query.community === "string" ? query.community : null;
+  redirect(sandboxHref(verifyHref(id, community)));
 }

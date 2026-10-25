@@ -1,23 +1,18 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { IpoLaunchScreen } from "@/components/ipo-launch-screen";
-import { RequireAccount } from "@/components/require-account";
+import { ipoHref } from "@/lib/listing/links";
+import { sandboxHref } from "@/lib/sandbox";
 
-export const metadata: Metadata = { title: "Launch the opening offer" };
-
-/**
- * The opening offer (IPO) launch screen (T64): owner only. Steward home and the listing flow
- * link here; it also works opened directly. Real accounts only, never the scripted demo.
- */
+/** The opening offer is the listing flow's Offer step now (ADR-0008 §5); old links land there. */
 export default async function IpoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { id } = await params;
-  return (
-    <RequireAccount>
-      <IpoLaunchScreen assetId={id} />
-    </RequireAccount>
-  );
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  const community =
+    typeof query.community === "string" ? query.community : null;
+  redirect(sandboxHref(ipoHref(id, community)));
 }

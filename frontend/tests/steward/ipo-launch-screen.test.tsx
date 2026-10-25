@@ -8,7 +8,6 @@ import {
 } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import IpoPage from "@/app/sandbox/steward/assets/[id]/ipo/page";
 import { IpoLaunchScreen } from "@/components/ipo-launch-screen";
 import { WorldProvider } from "@/components/world-provider";
 import type {
@@ -18,7 +17,6 @@ import type {
   WorldOut,
 } from "@/lib/api/types";
 import { createDataLayer, queryKeys } from "@/lib/data-layer";
-import { PrototypeProvider } from "@/lib/prototype/store";
 
 import {
   BASE,
@@ -28,7 +26,6 @@ import {
   json,
   sequence,
   SIGNED_IN_WORLD,
-  WORLD,
 } from "../lib/helpers";
 import { asset as assetFixture, ASSET_ID } from "../trade/fixtures";
 
@@ -459,7 +456,7 @@ describe("IpoLaunchScreen", () => {
     expect(items[1]).toHaveTextContent("Documents verified · Needed");
     expect(
       within(items[1]!).getByRole("link", { name: "Verify this listing" }),
-    ).toHaveAttribute("href", `/steward/assets/${ASSET_ID}/verify`);
+    ).toHaveAttribute("href", `/steward/list?asset=${ASSET_ID}&step=prove`);
     expect(items[2]).toHaveTextContent(
       "Open to supporters · After verification",
     );
@@ -555,7 +552,7 @@ describe("IpoLaunchScreen", () => {
     expect(items[0]).toHaveTextContent(/Rated · Done/);
     expect(
       within(items[1]!).getByRole("link", { name: "Verify anyway" }),
-    ).toHaveAttribute("href", `/steward/assets/${ASSET_ID}/verify`);
+    ).toHaveAttribute("href", `/steward/list?asset=${ASSET_ID}&step=prove`);
     expect(items[2]).toHaveTextContent("Open to supporters · Ready");
     expect(
       screen.getByRole("heading", { name: "Opening price" }),
@@ -913,25 +910,5 @@ describe("IpoLaunchScreen", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Try again/ }));
     expect(await steps()).toBeInTheDocument();
-  });
-
-  it("sends anonymous visitors to sign in (the page)", async () => {
-    window.history.pushState({}, "", `/steward/assets/${ASSET_ID}/ipo`);
-    const backend = fakeBackend({ "GET /world": () => json(WORLD) });
-    const layer = createDataLayer({ baseUrl: BASE, fetch: backend.fetch });
-    render(
-      <WorldProvider dataLayer={layer}>
-        <PrototypeProvider>
-          {await IpoPage({ params: Promise.resolve({ id: ASSET_ID }) })}
-        </PrototypeProvider>
-      </WorldProvider>,
-    );
-
-    await waitFor(() =>
-      expect(router.replace).toHaveBeenCalledWith(
-        `/login?next=${encodeURIComponent(`/steward/assets/${ASSET_ID}/ipo`)}`,
-      ),
-    );
-    expect(backend.calls(PREVIEW)).toBe(0);
   });
 });

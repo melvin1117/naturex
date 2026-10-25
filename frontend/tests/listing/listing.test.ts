@@ -49,7 +49,9 @@ describe("links", () => {
   it("builds the agreed Steward links", () => {
     expect(listingHref(C)).toBe(`/steward/list?community=${C}`);
     expect(listingHref(C, A)).toBe(`/steward/list?community=${C}&asset=${A}`);
-    expect(ipoHref(A, C)).toBe(`/steward/assets/${A}/ipo?community=${C}`);
+    expect(ipoHref(A, C)).toBe(
+      `/steward/list?community=${C}&asset=${A}&step=offer`,
+    );
     expect(stewardHomeHref(C)).toBe(`/steward?community=${C}`);
     expect(stewardHomeHref(null)).toBe("/steward");
   });

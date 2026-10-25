@@ -102,7 +102,7 @@ export function ListingReviewScreen({ assetId }: { assetId: string }) {
       <Button asChild variant="ghost" size="sm" className="mb-4 -ml-3">
         <Link href={backHref}>
           <ArrowLeft aria-hidden="true" />
-          Verified land
+          Reviews
         </Link>
       </Button>
       {body}

@@ -124,17 +124,17 @@ describe("listingAction", () => {
     [
       "verify",
       "Verify this listing",
-      `/steward/assets/${ASSET}/verify?community=${COMMUNITY}`,
+      `/steward/list?community=${COMMUNITY}&asset=${ASSET}&step=prove`,
     ],
     [
       "verification_in_review",
       "See your submission",
-      `/steward/assets/${ASSET}/verify?community=${COMMUNITY}`,
+      `/steward/list?community=${COMMUNITY}&asset=${ASSET}&step=prove`,
     ],
     [
       "launch_ipo",
-      "Open to supporters",
-      `/steward/assets/${ASSET}/ipo?community=${COMMUNITY}`,
+      "Send your offer",
+      `/steward/list?community=${COMMUNITY}&asset=${ASSET}&step=offer`,
     ],
     ["awaiting_ipo", "Waiting for the owner to open it to supporters", null],
     ["awaiting_verification", "Waiting for verification", null],
@@ -149,8 +149,8 @@ describe("listingAction", () => {
 });
 
 describe("listingAction never points at a locked door (#216)", () => {
-  const ipo = `/steward/assets/${ASSET}/ipo?community=${COMMUNITY}`;
-  const verify = `/steward/assets/${ASSET}/verify?community=${COMMUNITY}`;
+  const ipo = `/steward/list?community=${COMMUNITY}&asset=${ASSET}&step=offer`;
+  const verify = `/steward/list?community=${COMMUNITY}&asset=${ASSET}&step=prove`;
 
   it("makes verifying the main action, with the offer as a preview beside it", () => {
     expect(listingAction("verify", ASSET, COMMUNITY, "listed")).toEqual({
@@ -417,8 +417,8 @@ describe("decisionNotice", () => {
       body: "A WildWorth reviewer approved your land documents on 20 Oct 2026. You can open it to supporters now.",
       reason: "Matches the map.",
       action: {
-        label: "Open to supporters",
-        href: `/steward/assets/${ASSET}/ipo?community=${COMMUNITY}`,
+        label: "Send your offer",
+        href: `/steward/list?community=${COMMUNITY}&asset=${ASSET}&step=offer`,
       },
     });
     expect(notice!.key).toBe(`r1:verified:${DECIDED}`);
@@ -462,7 +462,7 @@ describe("decisionNotice", () => {
       reason: "The minutes aren't signed.",
       action: {
         label: "Submit new documents",
-        href: `/steward/assets/${ASSET}/verify?community=${COMMUNITY}`,
+        href: `/steward/list?community=${COMMUNITY}&asset=${ASSET}&step=prove`,
       },
     });
   });
@@ -583,7 +583,7 @@ describe("openingChecklist", () => {
     communityId: COMMUNITY,
     rating: "Grade AA · 85.1 · Very strong health",
   };
-  const verify = `/steward/assets/${ASSET}/verify?community=${COMMUNITY}`;
+  const verify = `/steward/list?community=${COMMUNITY}&asset=${ASSET}&step=prove`;
   const states = (steps: ReturnType<typeof openingChecklist>) =>
     steps.map((s) => `${s.id}:${s.state}:${s.status}`);
   const SANDBOX = /sandbox/i;

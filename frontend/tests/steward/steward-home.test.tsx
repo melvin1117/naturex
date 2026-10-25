@@ -552,10 +552,10 @@ describe("the community home", () => {
       within(sites).getByRole("link", { name: /View on Marketplace/ }),
     ).toHaveAttribute("href", `/asset/${trading.asset.id}`);
     expect(
-      within(sites).getByRole("link", { name: /Open to supporters/ }),
+      within(sites).getByRole("link", { name: /Send your offer/ }),
     ).toHaveAttribute(
       "href",
-      `/steward/assets/${awaiting.asset.id}/ipo?community=${SELVA.id}`,
+      `/steward/list?community=${SELVA.id}&asset=${awaiting.asset.id}&step=offer`,
     );
     expect(
       within(sites).getByRole("link", { name: /Continue listing/ }),
@@ -567,7 +567,7 @@ describe("the community home", () => {
       within(sites).getByRole("link", { name: "Verification of Bosque Alto" }),
     ).toHaveAttribute(
       "href",
-      `/steward/assets/${awaiting.asset.id}/verify?community=${SELVA.id}`,
+      `/steward/list?community=${SELVA.id}&asset=${awaiting.asset.id}&step=prove`,
     );
     expect(
       within(sites).getByRole("link", { name: "Field photos of Bosque Alto" }),
@@ -805,9 +805,7 @@ describe("the community home", () => {
     expect(
       await screen.findByText("Waiting for the owner to open it to supporters"),
     ).toBeVisible();
-    expect(
-      screen.queryByRole("link", { name: /Open to supporters/ }),
-    ).toBeNull();
+    expect(screen.queryByRole("link", { name: /Send your offer/ })).toBeNull();
   });
 
   it("refetches live: once per burst of trades, at once on a status change", async () => {
@@ -1165,7 +1163,7 @@ describe("the next step and what changed (#216)", () => {
       within(hero).getByRole("link", { name: /^Verify this listing/ }),
     ).toHaveAttribute(
       "href",
-      `/steward/assets/${pending.asset.id}/verify?community=${SELVA.id}`,
+      `/steward/list?community=${SELVA.id}&asset=${pending.asset.id}&step=prove`,
     );
     expect(
       within(hero).getByRole("link", {
@@ -1173,14 +1171,14 @@ describe("the next step and what changed (#216)", () => {
       }),
     ).toHaveAttribute(
       "href",
-      `/steward/assets/${pending.asset.id}/ipo?community=${SELVA.id}`,
+      `/steward/list?community=${SELVA.id}&asset=${pending.asset.id}&step=offer`,
     );
     expect(within(hero).getByText("Not verified")).toBeVisible();
     expect(hero).toHaveTextContent(
       "Verify the land documents to open it to supporters.",
     );
     expect(
-      within(hero).queryByRole("link", { name: /Open to supporters/ }),
+      within(hero).queryByRole("link", { name: /Send your offer/ }),
     ).toBeNull();
   });
 
@@ -1240,7 +1238,7 @@ describe("the next step and what changed (#216)", () => {
       within(notice).getByRole("link", { name: /Submit new documents/ }),
     ).toHaveAttribute(
       "href",
-      `/steward/assets/${decided.asset.id}/verify?community=${SELVA.id}`,
+      `/steward/list?community=${SELVA.id}&asset=${decided.asset.id}&step=prove`,
     );
     expect(screen.getByText("Not approved")).toBeVisible();
 
@@ -1291,10 +1289,10 @@ describe("the next step and what changed (#216)", () => {
       name: "Xochimilco Wetland is verified",
     });
     expect(
-      within(approved).getByRole("link", { name: /Open to supporters/ }),
+      within(approved).getByRole("link", { name: /Send your offer/ }),
     ).toHaveAttribute(
       "href",
-      `/steward/assets/${decided.asset.id}/ipo?community=${SELVA.id}`,
+      `/steward/list?community=${SELVA.id}&asset=${decided.asset.id}&step=offer`,
     );
     expect(screen.getAllByText("Verified land").length).toBeGreaterThan(0);
   });

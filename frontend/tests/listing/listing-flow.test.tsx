@@ -457,20 +457,17 @@ describe("rating progress", () => {
         listing_status: "listed",
       });
     });
-    const offer = await screen.findByRole("link", {
-      name: /Set up the opening offer/,
-    });
-    expect(offer).toHaveAttribute(
-      "href",
-      `/steward/assets/${ASSET_ID}/ipo?community=${SELVA.id}`,
-    );
+    // The result leads on in the same flow: proof, then the offer (ADR-0008 §5).
+    expect(
+      await screen.findByRole("button", { name: /Continue: show it.s yours/ }),
+    ).toBeVisible();
     expect(screen.getByText("Laguna Verde is listed")).toBeVisible();
     expect(screen.getByText("Mock data")).toBeVisible();
     expect(screen.getByText(/placeholder metrics/)).toBeVisible();
     // The run's card gave way to the listed step: focus follows (T48).
     await waitFor(() =>
       expect(
-        screen.getByRole("region", { name: "Step 4 of 4: Opening offer" }),
+        screen.getByRole("region", { name: "Step 3 of 5: Rate" }),
       ).toHaveFocus(),
     );
   });
@@ -1339,7 +1336,7 @@ describe("focus between steps (T48)", () => {
     ).toBeVisible();
     await fillDetails();
     expect(
-      await screen.findByRole("region", { name: "Step 2 of 4: Boundary" }),
+      await screen.findByRole("region", { name: "Step 2 of 5: Draw" }),
     ).toHaveFocus();
 
     await drawSquare();
@@ -1347,13 +1344,13 @@ describe("focus between steps (T48)", () => {
     expect(await screen.findByText("Ready to rate")).toBeVisible();
     await waitFor(() =>
       expect(
-        screen.getByRole("region", { name: "Step 3 of 4: Rating" }),
+        screen.getByRole("region", { name: "Step 3 of 5: Rate" }),
       ).toHaveFocus(),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Edit boundary" }));
     expect(
-      screen.getByRole("region", { name: "Step 2 of 4: Boundary" }),
+      screen.getByRole("region", { name: "Step 2 of 5: Draw" }),
     ).toHaveFocus();
   });
 });

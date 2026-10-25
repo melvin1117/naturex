@@ -98,6 +98,8 @@ export const queryKeys = {
   /** Its own prefix: a re-encoded photo never changes, so it's never refetched on a change. */
   fieldPhotoImage: (assetId: string, photoId: string) =>
     ["field-photo-image", assetId, photoId] as const,
+  /** The opening offers waiting for the Reviewer (ADR-0008 §5), per account. */
+  pendingOffers: (meId: string | null) => ["offers", meId] as const,
   /** Every page of the reviewer queue, for every account (a prefix, for invalidation). */
   reviewQueueAll: () => ["review-queue"] as const,
   /** One page of the reviewer queue, per account. */

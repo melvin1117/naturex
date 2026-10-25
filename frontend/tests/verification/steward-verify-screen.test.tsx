@@ -419,7 +419,7 @@ describe("StewardVerifyScreen", () => {
     ).not.toHaveLength(0);
     expect(
       screen.getByRole("link", { name: /Launch the opening offer/ }),
-    ).toHaveAttribute("href", `/steward/assets/${ASSET_ID}/ipo`);
+    ).toHaveAttribute("href", `/steward/list?asset=${ASSET_ID}&step=offer`);
   });
 
   it("uses the API's sample wording for a verified run of sample documents", async () => {

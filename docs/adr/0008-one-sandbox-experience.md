@@ -40,12 +40,13 @@ Accepted (2026-10-25). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) 
 - **The community sends its offer instead of launching it** (`POST /assets/{id}/offer`): the units to issue and the share it keeps, at the price the rating sets. The terms are stored on the asset with `offer_sent_at`.
 - **The Reviewer decides** (`GET /admin/offers`, then `…/offer/approve` or `…/offer/send-back` with a note). Approval launches the offer through the existing launch, at the price the latest report sets then, so its gates and ledger entry are unchanged; until then the site isn't public, so it isn't on the Marketplace. A note sends it back for the community to change and resend.
 - `POST /assets/{id}/ipo` stays for the operator's tools and older clients; the sandbox doesn't call it.
+- The old opening-offer and verification pages (`/steward/assets/<id>/ipo` and `/verify`) redirect to the flow's Offer and Prove steps. The Reviewer's **Reviews** page opens on **Offers**; land documents are under **Documents**.
 
 ## Consequences
 - **Good:** a judge reads what WildWorth is in one sentence, reaches a working app in one click and never meets a sign-in. Every page has the same three choices.
 - **Real accounts are dormant, not deleted.** The backend's auth routes, the live world and their tests stay; nothing in the frontend reaches them. Bringing accounts back later means a header for them, not a rebuild.
 - **The live world has no public page.** The deployed URL shows the welcome, the story and the sandbox only.
-- **Slices still to come** (each its own PR): the one-screen listing flow with drafts and optional documents, launched on the Reviewer's approval; Communities and Your stakes; then removing the code nothing reaches (the scripted prototype, its tour) and updating the specs.
+- **Slices still to come** (each its own PR): Communities and Your stakes; then removing the code nothing reaches (the scripted prototype, its tour) and updating the specs.
 
 ## Alternatives considered
 - **Keep a read-only live Marketplace beside the sandbox:** two kinds of page to explain to a judge for little gain. Rejected for the hackathon.
