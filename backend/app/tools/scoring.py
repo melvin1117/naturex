@@ -25,7 +25,7 @@ from typing import Literal, Protocol
 
 from app.tools.earth_obs import EarthObsMetrics
 
-SCORING_METHOD_VERSION = "naturex-scoring/1.0 (dev-spec §7.4)"
+SCORING_METHOD_VERSION = "wildworth-scoring/1.0 (dev-spec §7.4)"
 
 _ZERO = Decimal(0)
 _ONE = Decimal(1)

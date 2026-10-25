@@ -212,13 +212,51 @@ def test_ledger_is_append_only() -> None:
             conn.execute(text(statement))
 
     with engine.begin() as conn:
-        conn.execute(text("SET LOCAL naturex.allow_ledger_delete = 'on'"))
+        conn.execute(text("SET LOCAL wildworth.allow_ledger_delete = 'on'"))
         deleted = conn.execute(text("DELETE FROM ledger_entries")).rowcount
     engine.dispose()
     assert deleted == len(DEMO_SITES) + 1
     # The template's report v1 entries are gone now; start later tests from an empty schema.
     command.downgrade(cfg, "base")
     command.upgrade(cfg, "head")
+
+
+FUNCTIONS_READING_THE_SETTING = """
+    SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = current_schema() AND p.prosrc LIKE :pattern ORDER BY 1
+"""
+
+
+@requires_db
+def test_the_ledger_delete_setting_is_renamed_and_the_rename_reverses() -> None:
+    """0030 rewrites every trigger function that reads the opt-in to its new name, and its
+    downgrade gives them the old one back."""
+    cfg = alembic_cfg()
+    command.upgrade(cfg, "head")
+    engine = create_engine(get_settings().database_url)
+
+    def reading(name: str) -> list[str]:
+        with engine.connect() as conn:
+            found = conn.execute(text(FUNCTIONS_READING_THE_SETTING), {"pattern": f"%{name}%"})
+            return list(found.scalars())
+
+    old, new = "naturex.allow_ledger_delete", "wildworth.allow_ledger_delete"
+    try:
+        renamed = reading(new)
+        assert renamed == [
+            "document_fingerprints_retire_only",
+            "ledger_entries_append_only",
+            "listing_documents_write_once",
+            "verification_immutable",
+            "verification_runs_write_once",
+        ]
+        assert reading(old) == []
+        command.downgrade(cfg, "0029")
+        assert (reading(old), reading(new)) == (renamed, [])
+    finally:
+        command.upgrade(cfg, "head")
+        engine.dispose()
+    assert (reading(new), reading(old)) == (renamed, [])
 
 
 def test_world_id_present_on_mutable_models() -> None:

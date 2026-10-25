@@ -861,7 +861,7 @@ def test_concurrent_pay_quarter_applies_once_for_one_asset_quarter() -> None:
             assert verify(entries).valid
     finally:
         with engine.begin() as conn:
-            conn.execute(text("SET LOCAL naturex.allow_ledger_delete = 'on'"))
+            conn.execute(text("SET LOCAL wildworth.allow_ledger_delete = 'on'"))
             params = {"world_id": world_id, "asset_id": asset_id}
             conn.execute(text("DELETE FROM ledger_entries WHERE asset_id = :asset_id"), params)
             conn.execute(text("DELETE FROM payout_lines WHERE world_id = :world_id"), params)

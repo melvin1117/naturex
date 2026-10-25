@@ -67,7 +67,7 @@ from app.tools.scoring import (
 )
 from app.tools.valuation import ValuationResult, value_metrics
 
-RATING_METHOD_VERSION = "naturex-rating/1.0 (T19)"
+RATING_METHOD_VERSION = "wildworth-rating/1.0 (T19)"
 SANDBOX_NOTE = "Sandbox prices are play money only; nothing here is a real security or investment."
 SIMULATED_DATA_VERSION_PREFIX = "sim-"
 

@@ -64,7 +64,7 @@ from app.tools.document_fields import (
     overall_suggestion,
 )
 
-METHOD_VERSION = "naturex-document-check-v1"
+METHOD_VERSION = "wildworth-document-check-v1"
 AGENT_PERCEPTION = "document_check_read"
 AGENT_COMPARE = "document_check_compare"
 MOCK_MODEL = "mock"

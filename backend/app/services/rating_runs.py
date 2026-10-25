@@ -145,7 +145,7 @@ from app.tools.signals import Signal, find_signals
 
 log = logging.getLogger(__name__)
 
-ORCHESTRATION_VERSION = "naturex-orchestrator/1.0 (T27)"
+ORCHESTRATION_VERSION = "wildworth-orchestrator/1.0 (T27)"
 # A rating weighs a year of news; the daily sweep looks at the latest week.
 RATING_NEWS_LOOKBACK_DAYS = 365
 RUN_WINDOW = timedelta(hours=1)

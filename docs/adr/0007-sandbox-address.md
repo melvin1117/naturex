@@ -25,7 +25,7 @@ Accepted (2026-10-23). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) 
 
 ### 3. What the visitor sees
 - **The real app has no demo bar.** `/` is the marketplace with "See how it works" (the story at `/judge`) and "Try it yourself" (`/sandbox`). Play money is still said everywhere: the footer on every shell ("Nothing here is a real security or investment"), the auth forms, the trade panel and the marketplace heading.
-- **The sandbox bar** (under `/sandbox/*` only) shows who the visitor acts as, labelled with a role ("Rosa (Community steward)", "Arjun (Supporter)", "Admin (NatureX team)"), "What to try" (NatureX's loop as five steps, each opening its real screen as the right person), the story, Reset, and the way back to NatureX. The account menu offers "Leave the sandbox" instead of signing out, which would lose it.
+- **The sandbox bar** (under `/sandbox/*` only) shows who the visitor acts as, labelled with a role ("Rosa (Community steward)", "Arjun (Supporter)", "Admin (WildWorth team)"), "What to try" (WildWorth's loop as five steps, each opening its real screen as the right person), the story, Reset, and the way back to WildWorth. The account menu offers "Leave the sandbox" instead of signing out, which would lose it.
 - **The story ends with a guide, not a script:** "Open my sandbox" plus the same five steps.
 
 ## Consequences

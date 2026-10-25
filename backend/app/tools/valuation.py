@@ -50,7 +50,7 @@ from app.tools.coastline import (
 )
 from app.tools.earth_obs import EarthObsMetrics
 
-METHODS_VERSION = "naturex-valuation/1.1.0 (T14)"
+METHODS_VERSION = "wildworth-valuation/1.1.0 (T14)"
 PRICE_BASIS = "Int$2020/ha/yr"
 """Brander 2024's basis: international dollars at 2020 price levels. One Int$ buys what one
 US$ buys in the United States, so Int$2020 equals US$2020 at US prices. Only this basis
@@ -119,7 +119,7 @@ SOURCES: Mapping[str, str] = {
     ),
     "naturalearth_10m": COASTLINE_SOURCE,
     "soilgrids": "ISRIC SoilGrids soil organic carbon stock, 0-30 cm (site input)",
-    "naturex_policy": "WildWorth dev-spec §7.3: class not valued as natural capital",
+    "wildworth_policy": "WildWorth dev-spec §7.3: class not valued as natural capital",
     "giri2021": (
         "Giri, C. (2021) Recent advancement in mangrove forests mapping and monitoring of the "
         "world using Earth observation satellite data. Remote Sensing 13:563. "

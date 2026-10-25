@@ -88,7 +88,7 @@ Relevant items by `impact_type`: encroachment 4, fire 4, drought 2, pollution 4,
 **Sources:**
 - **Real articles** come from one run of News Scout's own search code (Nominatim, then Tavily with `build_queries`, plus one Spanish query per site, over a 365-day window) on 2026-10-07, and from the recorded T24 fixture.
 - **Content is a short paraphrase** of Tavily's snippet, marked `Paráfrasis:` / `Paraphrase:`, plus the URL. Article text isn't copied.
-- **Synthetic items** fill the gaps that real news didn't cover: drought, protection changes, sport near-misses and injections. Their URLs use the reserved `synthetic.naturex.invalid` domain.
+- **Synthetic items** fill the gaps that real news didn't cover: drought, protection changes, sport near-misses and injections. Their URLs use the reserved `synthetic.wildworth.invalid` domain.
 
 **Labelling guide:**
 - **`relevant`:** the item reports a concrete event or decision that changes, or credibly threatens or improves, the ecological condition or protection status of *this* asset or its immediate surroundings. These don't count:

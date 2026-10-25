@@ -37,7 +37,7 @@ from shapely.geometry import MultiPolygon, Point, Polygon, shape
 
 from app.tools.scoring import CONFIDENCE_WEIGHTS, EVIDENCE_NONE, EVIDENCE_VALIDATED
 
-METHOD_VERSION = "naturex-field-evidence/1.0"
+METHOD_VERSION = "wildworth-field-evidence/1.0"
 MAX_PHOTOS_PER_ASSET = 5
 GPS_BUFFER_M = 100
 """Phone GPS is good to a few metres in the open, worse under canopy; a boundary path counts."""

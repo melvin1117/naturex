@@ -8,9 +8,7 @@ from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, Settings
 
 # WILDWORTH_ENV_FILE=none makes Settings ignore every .env file and read only the process
 # environment (and defaults), so a developer's .env can't leak into an isolated run (T74's E2E).
-# The pre-rename name, NATUREX_ENV_FILE, still works.
 ENV_FILE_SWITCH = "WILDWORTH_ENV_FILE"
-LEGACY_ENV_FILE_SWITCH = "NATUREX_ENV_FILE"
 
 
 class Settings(BaseSettings):
@@ -148,10 +146,7 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        if any(
-            os.environ.get(name, "").strip().lower() == "none"
-            for name in (ENV_FILE_SWITCH, LEGACY_ENV_FILE_SWITCH)
-        ):
+        if os.environ.get(ENV_FILE_SWITCH, "").strip().lower() == "none":
             return init_settings, env_settings, file_secret_settings
         return init_settings, env_settings, dotenv_settings, file_secret_settings
 
@@ -186,7 +181,7 @@ def get_settings() -> Settings:
 
 
 # Only ever used when ENVIRONMENT is explicitly development or test.
-DEV_RATE_LIMIT_SECRET = "naturex-dev-only-rate-limit-secret"
+DEV_RATE_LIMIT_SECRET = "wildworth-dev-only-rate-limit-secret"
 
 
 def rate_limit_secret(settings: Settings) -> str:
@@ -201,7 +196,7 @@ def rate_limit_secret(settings: Settings) -> str:
 
 
 # Only ever used when ENVIRONMENT is explicitly development or test.
-DEV_DOCUMENT_FINGERPRINT_SECRET = "naturex-dev-only-document-fingerprint-secret"
+DEV_DOCUMENT_FINGERPRINT_SECRET = "wildworth-dev-only-document-fingerprint-secret"
 
 
 def document_fingerprint_secret(settings: Settings) -> str:

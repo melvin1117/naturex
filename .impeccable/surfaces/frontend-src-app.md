@@ -5,9 +5,9 @@ primary_target: "frontend/src/app"
 related_targets: []
 ---
 
-# Surface brief: NatureX prototype (Exchange, Steward, Control room, Judge)
+# Surface brief: WildWorth prototype (Exchange, Steward, Control room, Judge)
 
-Scope: every screen of the clickable prototype (ADR-0005 IA). Mode: Operate for Exchange, Steward and Control room; Persuade for /judge. Audience: a hackathon judge seeing NatureX cold (PRODUCT.md). Data: frontend-only scripted sandbox world seeded from real cached ratings (backend rate_site over demo_sites).
+Scope: every screen of the clickable prototype (ADR-0005 IA). Mode: Operate for Exchange, Steward and Control room; Persuade for /judge. Audience: a hackathon judge seeing WildWorth cold (PRODUCT.md). Data: frontend-only scripted sandbox world seeded from real cached ratings (backend rate_site over demo_sites).
 
 ## Direction contract
 THESIS: Living land as a calm, credible instrument: the site's own satellite image is the ground of every key card, numbers sit on it like a field instrument's readout. Refuses the trading-terminal default (dense red/green tickers, dark neon) and the eco-cliché (leaf icons, cream paper).

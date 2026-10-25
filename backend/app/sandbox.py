@@ -303,7 +303,7 @@ def _delete_world_rows(
         .values(**detach)
     )
     kept = list(keep_users)
-    session.execute(text("SET LOCAL naturex.allow_ledger_delete = 'on'"))
+    session.execute(text("SET LOCAL wildworth.allow_ledger_delete = 'on'"))
     try:
         for model in _DELETE_ORDER:
             stmt = delete(model).where(_world_col(model) == world_id)
@@ -313,7 +313,7 @@ def _delete_world_rows(
                 stmt = stmt.where(col(User.id).not_in(kept))
             session.execute(stmt)
     finally:
-        session.execute(text("SET LOCAL naturex.allow_ledger_delete = 'off'"))
+        session.execute(text("SET LOCAL wildworth.allow_ledger_delete = 'off'"))
 
 
 def create_world(session: Session, max_new_per_hour: int | None = None) -> World:

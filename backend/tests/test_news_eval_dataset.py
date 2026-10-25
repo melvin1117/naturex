@@ -20,7 +20,7 @@ from app.seed import DEMO_SITES
 
 EVALS_DIR = Path(__file__).resolve().parents[2] / "evals"
 NANO = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
-SYNTHETIC_URL = "https://synthetic.naturex.invalid/"
+SYNTHETIC_URL = "https://synthetic.wildworth.invalid/"
 REQUIRED = {
     "id": str,
     "site": str,

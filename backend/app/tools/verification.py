@@ -34,7 +34,7 @@ from uuid import UUID
 from app.models import DocumentType, EvidenceKind, VerificationLevel, VerificationMode
 from app.tools.geometry import geometry_sha256
 
-METHOD_VERSION = "naturex-verification-v1"
+METHOD_VERSION = "wildworth-verification-v1"
 """Bump when a check or the fingerprint changes: every run made before then stops matching."""
 MAX_DOCUMENTS_PER_RUN = 3
 CONSENT_DOCUMENT_TYPES = frozenset({DocumentType.ASSEMBLY_MINUTES})
@@ -103,7 +103,7 @@ class ListingFacts:
 def world_document_key(secret: str, world_id: UUID) -> bytes:
     """The per-world key for private document fingerprints."""
     return hmac.new(
-        secret.encode(), b"naturex/document-fingerprint/v1:" + world_id.bytes, hashlib.sha256
+        secret.encode(), b"wildworth/document-fingerprint/v1:" + world_id.bytes, hashlib.sha256
     ).digest()
 
 

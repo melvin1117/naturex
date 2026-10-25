@@ -13,7 +13,7 @@ Four owners need to work in parallel without colliding. The planned layout in [d
 Use a **plain-folder monorepo** (no Turborepo/Nx):
 
 ```
-naturex/
+wildworth/
 ├── LICENSE
 ├── README.md, AGENTS.md, CLAUDE.md, Makefile, compose.yml, .env.example
 ├── docs/          # specs, diagrams, adr/
@@ -44,7 +44,7 @@ Conventions:
 - Cons: overhead with one JS package and one Python package
 - Rejected per research.md §2
 
-### Backend as `src/naturex` package layout
+### Backend as `src/wildworth` package layout
 - Pros: default `uv init --package` layout
 - Cons: diverges from dev-spec paths (`backend/app/...`) used everywhere in tasks
 - Rejected: keep `backend/app` as the import root

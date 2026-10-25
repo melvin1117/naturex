@@ -106,8 +106,8 @@ Each row is an `authz.Action`; the route → action mapping, including the ratin
 ### 5. Two experiences in one Next.js app
 | App | Routes | For | Main screens |
 |---|---|---|---|
-| **NatureX Exchange** | `/` (route group `(exchange)`) | Investors, everyone | Marketplace, asset page with trade panel, portfolio and impact, alerts, Copilot |
-| **NatureX Steward** | `/steward` (`app/steward/`) | Community owners and stewards | Community home (wallet, IPO proceeds, holders, payouts, alerts, stewardship actions), communities and members, list land (`/steward/list`), listing status, evidence upload, IPO launch |
+| **WildWorth Exchange** | `/` (route group `(exchange)`) | Investors, everyone | Marketplace, asset page with trade panel, portfolio and impact, alerts, Copilot |
+| **WildWorth Steward** | `/steward` (`app/steward/`) | Community owners and stewards | Community home (wallet, IPO proceeds, holders, payouts, alerts, stewardship actions), communities and members, list land (`/steward/list`), listing status, evidence upload, IPO launch |
 | Control room | `/admin` | Admins | Time Machine, event presets, suspend or resume |
 | Access | `/login`, `/register`, `/judge` | Everyone | Sign in, sign up, one-click demo |
 
