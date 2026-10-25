@@ -1622,6 +1622,222 @@
         }
       }
     },
+    "/assets/{asset_id}/offer": {
+      "post": {
+        "tags": [
+          "ipo"
+        ],
+        "summary": "Send Offer",
+        "description": "Send the opening offer for review: the shares to issue and the share the community keeps,\nat the price the owner saw (`expected_price`). Sending again replaces the terms. Nothing\ntrades until the Reviewer approves it, which launches it (`/admin/assets/{id}/offer/approve`).",
+        "operationId": "send_offer_assets__asset_id__offer_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IpoLaunch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfferOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "owner_only (stewards too), treasury_cannot_act"
+          },
+          "404": {
+            "description": "Not found in the session's world, or not visible to the caller"
+          },
+          "409": {
+            "description": "`ipo_already_launched`, `asset_not_listed`, `no_rating`, `ipo_price_too_low`, `ipo_price_too_high` or `ipo_price_changed` (`expected_price` is stale)"
+          },
+          "422": {
+            "description": "total_shares outside 10,000\u201310,000,000 or retained_pct outside 10\u201390"
+          }
+        }
+      }
+    },
+    "/admin/offers": {
+      "get": {
+        "tags": [
+          "ipo",
+          "admin"
+        ],
+        "summary": "Offer Queue",
+        "description": "The offers waiting for a decision in the caller's world, oldest first, each priced as an\napproval would launch it now, with where its verification stands.",
+        "operationId": "offer_queue_admin_offers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PendingOfferOut"
+                  },
+                  "type": "array",
+                  "title": "Response Offer Queue Admin Offers Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "admin_only"
+          }
+        }
+      }
+    },
+    "/admin/assets/{asset_id}/offer/approve": {
+      "post": {
+        "tags": [
+          "ipo",
+          "admin"
+        ],
+        "summary": "Approve Offer",
+        "description": "Approve the community's offer: it launches with its terms at the price the latest report\nsets now (the launch's own transaction, ledger entry and price tick), and the site opens on\nthe Marketplace.",
+        "operationId": "approve_offer_admin_assets__asset_id__offer_approve_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IpoOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "admin_only, conflict_of_interest (the Reviewer is in its community)"
+          },
+          "404": {
+            "description": "Not found in the session's world"
+          },
+          "409": {
+            "description": "`offer_not_sent` (nothing waits for review), `ipo_already_launched`, `asset_not_listed` (draft, under review, suspended\u2026), `no_rating` (no usable report) or `ipo_price_too_low` (the price per share rounds to zero: issue fewer shares), or `ipo_price_too_high` (a share would cost more than a new account's starting cash: issue more shares), `run_in_progress` (a rating run is active) or `not_verified` (the live world needs a verified listing; a revoked verification blocks everywhere; T69)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/assets/{asset_id}/offer/send-back": {
+      "post": {
+        "tags": [
+          "ipo",
+          "admin"
+        ],
+        "summary": "Send Back Offer",
+        "description": "Return the offer to its community with a note; they can change it and send it again.",
+        "operationId": "send_back_offer_admin_assets__asset_id__offer_send_back_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferSendBack"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListingOfferOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "auth_required"
+          },
+          "403": {
+            "description": "admin_only, conflict_of_interest (the Reviewer is in its community)"
+          },
+          "404": {
+            "description": "Not found in the session's world"
+          },
+          "409": {
+            "description": "`offer_not_sent`, `ipo_already_launched` or `asset_not_listed`"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/assets/{asset_id}/documents": {
       "post": {
         "tags": [
@@ -5603,6 +5819,17 @@
             ],
             "title": "Latest Run Id",
             "description": "A private listing's latest rating run (follow it with `GET /runs/{id}`): under review, or listed but not launched yet, for its community's members and same-world admins, who alone can load it (T33). Null for public (launched) assets and before any run."
+          },
+          "offer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ListingOfferOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The opening offer its community sent for review, or the Reviewer sent back (ADR-0008 \u00a75), for the community and same-world admins only, until it launches."
           }
         },
         "type": "object",
@@ -8107,6 +8334,51 @@
         "title": "ListingManageAction",
         "description": "A change a member may make to a listing now, as the lifecycle allows it (#233)."
       },
+      "ListingOfferOut": {
+        "properties": {
+          "total_shares": {
+            "type": "integer",
+            "title": "Total Shares"
+          },
+          "retained_pct": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Retained Pct"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At",
+            "description": "When it was sent for review; null once sent back."
+          },
+          "review_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Note",
+            "description": "The Reviewer's reason for sending it back."
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_shares",
+          "retained_pct"
+        ],
+        "title": "ListingOfferOut",
+        "description": "A not-yet-launched listing's offer, for its own community (ADR-0008 \u00a75)."
+      },
       "ListingSummaryOut": {
         "properties": {
           "asset": {
@@ -8681,6 +8953,135 @@
         "title": "NextAction",
         "description": "What the Steward home offers to do next with a listing."
       },
+      "OfferOut": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "report_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Report Id"
+          },
+          "report_version": {
+            "type": "integer",
+            "title": "Report Version"
+          },
+          "formula": {
+            "type": "string",
+            "title": "Formula",
+            "default": "fair_value_total = value_mid \u00d7 10 \u00d7 health_factor \u00d7 confidence_factor; ipo_price = fair_value_per_share = fair_value_total / total_shares; shares_offered = total_shares \u00d7 (1 \u2212 retained_pct/100)"
+          },
+          "value_mid": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value Mid",
+            "description": "Int$2020/yr from the latest report."
+          },
+          "health": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Health"
+          },
+          "confidence": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Confidence"
+          },
+          "health_factor": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Health Factor",
+            "description": "0.5 + 0.5 \u00d7 health/100"
+          },
+          "confidence_factor": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Confidence Factor",
+            "description": "0.7 + 0.3 \u00d7 confidence/100"
+          },
+          "fair_value_total": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fair Value Total"
+          },
+          "total_shares": {
+            "type": "integer",
+            "title": "Total Shares"
+          },
+          "fair_value_per_share": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fair Value Per Share"
+          },
+          "ipo_price": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ipo Price",
+            "description": "Equals fair_value_per_share."
+          },
+          "retained_pct": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Retained Pct"
+          },
+          "shares_offered": {
+            "type": "integer",
+            "title": "Shares Offered",
+            "description": "The primary float, sold to investors first."
+          },
+          "retained_shares": {
+            "type": "integer",
+            "title": "Retained Shares",
+            "description": "Held by the community's treasury."
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Sent At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "report_id",
+          "report_version",
+          "value_mid",
+          "health",
+          "confidence",
+          "health_factor",
+          "confidence_factor",
+          "fair_value_total",
+          "total_shares",
+          "fair_value_per_share",
+          "ipo_price",
+          "retained_pct",
+          "shares_offered",
+          "retained_shares",
+          "sent_at"
+        ],
+        "title": "OfferOut",
+        "description": "An opening offer sent for review (ADR-0008 \u00a75), priced as the Reviewer's approval would\nlaunch it now: the terms are the community's, the price the latest report's."
+      },
+      "OfferSendBack": {
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "note"
+        ],
+        "title": "OfferSendBack",
+        "description": "Why the Reviewer returns an offer: shown to the community, who can send it again."
+      },
       "OrderCreate": {
         "properties": {
           "asset_id": {
@@ -9034,6 +9435,156 @@
           "paid_at"
         ],
         "title": "PayoutSummaryOut"
+      },
+      "PendingOfferOut": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "report_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Report Id"
+          },
+          "report_version": {
+            "type": "integer",
+            "title": "Report Version"
+          },
+          "formula": {
+            "type": "string",
+            "title": "Formula",
+            "default": "fair_value_total = value_mid \u00d7 10 \u00d7 health_factor \u00d7 confidence_factor; ipo_price = fair_value_per_share = fair_value_total / total_shares; shares_offered = total_shares \u00d7 (1 \u2212 retained_pct/100)"
+          },
+          "value_mid": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value Mid",
+            "description": "Int$2020/yr from the latest report."
+          },
+          "health": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Health"
+          },
+          "confidence": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Confidence"
+          },
+          "health_factor": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Health Factor",
+            "description": "0.5 + 0.5 \u00d7 health/100"
+          },
+          "confidence_factor": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Confidence Factor",
+            "description": "0.7 + 0.3 \u00d7 confidence/100"
+          },
+          "fair_value_total": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fair Value Total"
+          },
+          "total_shares": {
+            "type": "integer",
+            "title": "Total Shares"
+          },
+          "fair_value_per_share": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fair Value Per Share"
+          },
+          "ipo_price": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ipo Price",
+            "description": "Equals fair_value_per_share."
+          },
+          "retained_pct": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Retained Pct"
+          },
+          "shares_offered": {
+            "type": "integer",
+            "title": "Shares Offered",
+            "description": "The primary float, sold to investors first."
+          },
+          "retained_shares": {
+            "type": "integer",
+            "title": "Retained Shares",
+            "description": "Held by the community's treasury."
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Sent At"
+          },
+          "asset_name": {
+            "type": "string",
+            "title": "Asset Name"
+          },
+          "community_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Community Name"
+          },
+          "area_ha": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Area Ha"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/ListingVerificationOut",
+            "description": "Where the listing's verification stands: documents are optional in a sandbox, and the live world's launch still needs them verified."
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "report_id",
+          "report_version",
+          "value_mid",
+          "health",
+          "confidence",
+          "health_factor",
+          "confidence_factor",
+          "fair_value_total",
+          "total_shares",
+          "fair_value_per_share",
+          "ipo_price",
+          "retained_pct",
+          "shares_offered",
+          "retained_shares",
+          "sent_at",
+          "asset_name",
+          "area_ha",
+          "verification"
+        ],
+        "title": "PendingOfferOut",
+        "description": "An offer in the Reviewer's queue, with what they need to decide."
       },
       "PersonaOut": {
         "properties": {

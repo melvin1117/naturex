@@ -28,6 +28,12 @@ export type HoldingOut = Schemas["HoldingOut"];
 export type IpoLaunch = Schemas["IpoLaunch"];
 export type IpoOut = Schemas["IpoOut"];
 export type IpoPreview = Schemas["IpoPreviewOut"];
+/** An opening offer sent for review (ADR-0008 §5). */
+export type OfferOut = Schemas["OfferOut"];
+/** An offer in the Reviewer's queue. */
+export type PendingOffer = Schemas["PendingOfferOut"];
+/** A not-yet-launched listing's offer, for its community. */
+export type ListingOffer = Schemas["ListingOfferOut"];
 export type LedgerEntry = Schemas["LedgerEntryOut"];
 export type LandCoverOverlay = Schemas["LandCoverOverlay"];
 export type LegendEntry = Schemas["LegendEntry"];

@@ -630,6 +630,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/{asset_id}/offer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Offer
+         * @description Send the opening offer for review: the shares to issue and the share the community keeps,
+         *     at the price the owner saw (`expected_price`). Sending again replaces the terms. Nothing
+         *     trades until the Reviewer approves it, which launches it (`/admin/assets/{id}/offer/approve`).
+         */
+        post: operations["send_offer_assets__asset_id__offer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/offers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Offer Queue
+         * @description The offers waiting for a decision in the caller's world, oldest first, each priced as an
+         *     approval would launch it now, with where its verification stands.
+         */
+        get: operations["offer_queue_admin_offers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/assets/{asset_id}/offer/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Offer
+         * @description Approve the community's offer: it launches with its terms at the price the latest report
+         *     sets now (the launch's own transaction, ledger entry and price tick), and the site opens on
+         *     the Marketplace.
+         */
+        post: operations["approve_offer_admin_assets__asset_id__offer_approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/assets/{asset_id}/offer/send-back": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Back Offer
+         * @description Return the offer to its community with a note; they can change it and send it again.
+         */
+        post: operations["send_back_offer_admin_assets__asset_id__offer_send_back_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assets/{asset_id}/documents": {
         parameters: {
             query?: never;
@@ -2124,6 +2209,8 @@ export interface components {
              * @description A private listing's latest rating run (follow it with `GET /runs/{id}`): under review, or listed but not launched yet, for its community's members and same-world admins, who alone can load it (T33). Null for public (launched) assets and before any run.
              */
             latest_run_id?: string | null;
+            /** @description The opening offer its community sent for review, or the Reviewer sent back (ADR-0008 §5), for the community and same-world admins only, until it launches. */
+            offer?: components["schemas"]["ListingOfferOut"] | null;
         };
         /**
          * AssetOutline
@@ -3259,6 +3346,26 @@ export interface components {
          * @enum {string}
          */
         ListingManageAction: "edit" | "withdraw";
+        /**
+         * ListingOfferOut
+         * @description A not-yet-launched listing's offer, for its own community (ADR-0008 §5).
+         */
+        ListingOfferOut: {
+            /** Total Shares */
+            total_shares: number;
+            /** Retained Pct */
+            retained_pct: string;
+            /**
+             * Sent At
+             * @description When it was sent for review; null once sent back.
+             */
+            sent_at?: string | null;
+            /**
+             * Review Note
+             * @description The Reviewer's reason for sending it back.
+             */
+            review_note?: string | null;
+        };
         /** ListingSummaryOut */
         ListingSummaryOut: {
             asset: components["schemas"]["AssetCard"];
@@ -3506,6 +3613,85 @@ export interface components {
          * @enum {string}
          */
         NextAction: "continue_listing" | "rating_in_progress" | "add_evidence" | "verify" | "verification_in_review" | "awaiting_verification" | "launch_ipo" | "awaiting_ipo" | "view_on_exchange" | "none";
+        /**
+         * OfferOut
+         * @description An opening offer sent for review (ADR-0008 §5), priced as the Reviewer's approval would
+         *     launch it now: the terms are the community's, the price the latest report's.
+         */
+        OfferOut: {
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /** Report Version */
+            report_version: number;
+            /**
+             * Formula
+             * @default fair_value_total = value_mid × 10 × health_factor × confidence_factor; ipo_price = fair_value_per_share = fair_value_total / total_shares; shares_offered = total_shares × (1 − retained_pct/100)
+             */
+            formula: string;
+            /**
+             * Value Mid
+             * @description Int$2020/yr from the latest report.
+             */
+            value_mid: string;
+            /** Health */
+            health: string;
+            /** Confidence */
+            confidence: string;
+            /**
+             * Health Factor
+             * @description 0.5 + 0.5 × health/100
+             */
+            health_factor: string;
+            /**
+             * Confidence Factor
+             * @description 0.7 + 0.3 × confidence/100
+             */
+            confidence_factor: string;
+            /** Fair Value Total */
+            fair_value_total: string;
+            /** Total Shares */
+            total_shares: number;
+            /** Fair Value Per Share */
+            fair_value_per_share: string;
+            /**
+             * Ipo Price
+             * @description Equals fair_value_per_share.
+             */
+            ipo_price: string;
+            /** Retained Pct */
+            retained_pct: string;
+            /**
+             * Shares Offered
+             * @description The primary float, sold to investors first.
+             */
+            shares_offered: number;
+            /**
+             * Retained Shares
+             * @description Held by the community's treasury.
+             */
+            retained_shares: number;
+            /**
+             * Sent At
+             * Format: date-time
+             */
+            sent_at: string;
+        };
+        /**
+         * OfferSendBack
+         * @description Why the Reviewer returns an offer: shown to the community, who can send it again.
+         */
+        OfferSendBack: {
+            /** Note */
+            note: string;
+        };
         /** OrderCreate */
         OrderCreate: {
             /**
@@ -3679,6 +3865,86 @@ export interface components {
              * Format: date-time
              */
             paid_at: string;
+        };
+        /**
+         * PendingOfferOut
+         * @description An offer in the Reviewer's queue, with what they need to decide.
+         */
+        PendingOfferOut: {
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /** Report Version */
+            report_version: number;
+            /**
+             * Formula
+             * @default fair_value_total = value_mid × 10 × health_factor × confidence_factor; ipo_price = fair_value_per_share = fair_value_total / total_shares; shares_offered = total_shares × (1 − retained_pct/100)
+             */
+            formula: string;
+            /**
+             * Value Mid
+             * @description Int$2020/yr from the latest report.
+             */
+            value_mid: string;
+            /** Health */
+            health: string;
+            /** Confidence */
+            confidence: string;
+            /**
+             * Health Factor
+             * @description 0.5 + 0.5 × health/100
+             */
+            health_factor: string;
+            /**
+             * Confidence Factor
+             * @description 0.7 + 0.3 × confidence/100
+             */
+            confidence_factor: string;
+            /** Fair Value Total */
+            fair_value_total: string;
+            /** Total Shares */
+            total_shares: number;
+            /** Fair Value Per Share */
+            fair_value_per_share: string;
+            /**
+             * Ipo Price
+             * @description Equals fair_value_per_share.
+             */
+            ipo_price: string;
+            /** Retained Pct */
+            retained_pct: string;
+            /**
+             * Shares Offered
+             * @description The primary float, sold to investors first.
+             */
+            shares_offered: number;
+            /**
+             * Retained Shares
+             * @description Held by the community's treasury.
+             */
+            retained_shares: number;
+            /**
+             * Sent At
+             * Format: date-time
+             */
+            sent_at: string;
+            /** Asset Name */
+            asset_name: string;
+            /** Community Name */
+            community_name?: string | null;
+            /** Area Ha */
+            area_ha: string;
+            /** Grade */
+            grade?: string | null;
+            /** @description Where the listing's verification stands: documents are optional in a sandbox, and the live world's launch still needs them verified. */
+            verification: components["schemas"]["ListingVerificationOut"];
         };
         /** PersonaOut */
         PersonaOut: {
@@ -6724,6 +6990,223 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    send_offer_assets__asset_id__offer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IpoLaunch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description owner_only (stewards too), treasury_cannot_act */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the session's world, or not visible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `ipo_already_launched`, `asset_not_listed`, `no_rating`, `ipo_price_too_low`, `ipo_price_too_high` or `ipo_price_changed` (`expected_price` is stale) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description total_shares outside 10,000–10,000,000 or retained_pct outside 10–90 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    offer_queue_admin_offers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingOfferOut"][];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description admin_only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    approve_offer_admin_assets__asset_id__offer_approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IpoOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description admin_only, conflict_of_interest (the Reviewer is in its community) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the session's world */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `offer_not_sent` (nothing waits for review), `ipo_already_launched`, `asset_not_listed` (draft, under review, suspended…), `no_rating` (no usable report) or `ipo_price_too_low` (the price per share rounds to zero: issue fewer shares), or `ipo_price_too_high` (a share would cost more than a new account's starting cash: issue more shares), `run_in_progress` (a rating run is active) or `not_verified` (the live world needs a verified listing; a revoked verification blocks everywhere; T69) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_back_offer_admin_assets__asset_id__offer_send_back_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OfferSendBack"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingOfferOut"];
+                };
+            };
+            /** @description auth_required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description admin_only, conflict_of_interest (the Reviewer is in its community) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found in the session's world */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `offer_not_sent`, `ipo_already_launched` or `asset_not_listed` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

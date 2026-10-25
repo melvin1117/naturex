@@ -514,6 +514,19 @@ class SiteViews(BaseModel):
     attributions: list[str]
 
 
+class ListingOfferOut(BaseModel):
+    """A not-yet-launched listing's offer, for its own community (ADR-0008 §5)."""
+
+    total_shares: int
+    retained_pct: Decimal
+    sent_at: datetime | None = Field(
+        default=None, description="When it was sent for review; null once sent back."
+    )
+    review_note: str | None = Field(
+        default=None, description="The Reviewer's reason for sending it back."
+    )
+
+
 class AssetDetail(BaseModel):
     id: UUID
     name: str
@@ -578,6 +591,11 @@ class AssetDetail(BaseModel):
         "under review, or listed but not launched yet, for its community's members and "
         "same-world admins, who alone can load it (T33). Null for public (launched) assets "
         "and before any run.",
+    )
+    offer: ListingOfferOut | None = Field(
+        default=None,
+        description="The opening offer its community sent for review, or the Reviewer sent "
+        "back (ADR-0008 §5), for the community and same-world admins only, until it launches.",
     )
 
 
@@ -679,6 +697,34 @@ class IpoPreviewOut(IpoTermsOut):
 
 class IpoOut(IpoTermsOut):
     launched_at: datetime
+
+
+class OfferOut(IpoTermsOut):
+    """An opening offer sent for review (ADR-0008 §5), priced as the Reviewer's approval would
+    launch it now: the terms are the community's, the price the latest report's."""
+
+    sent_at: datetime
+
+
+class PendingOfferOut(OfferOut):
+    """An offer in the Reviewer's queue, with what they need to decide."""
+
+    asset_name: str
+    community_name: str | None = None
+    area_ha: Decimal
+    grade: str | None = None
+    verification: ListingVerificationOut = Field(
+        description="Where the listing's verification stands: documents are optional in a "
+        "sandbox, and the live world's launch still needs them verified."
+    )
+
+
+class OfferSendBack(BaseModel):
+    """Why the Reviewer returns an offer: shown to the community, who can send it again."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    note: str = Field(min_length=1, max_length=500)
 
 
 # ----- Field evidence (T40) -----

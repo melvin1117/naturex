@@ -393,6 +393,11 @@ class Asset(SQLModel, table=True):
     submitted_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     # When the IPO opened trading (T59); NULL: no shares issued yet, orders are `not_trading`.
     ipo_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    # When the community sent its opening offer for review (ADR-0008); its terms are
+    # `total_shares` and `retained_pct`. NULL: nothing waits for the Reviewer.
+    offer_sent_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    # The Reviewer's reason for sending an offer back; cleared when the community sends again.
+    offer_review_note: str | None = Field(default=None, max_length=500)
     # When a verification was revoked (ADR-0006, T69); cleared only by an admin's approval of a
     # new run. While set, the asset can't resume trading or launch its IPO in any world.
     verification_revoked_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))

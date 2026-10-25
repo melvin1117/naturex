@@ -35,6 +35,12 @@ Accepted (2026-10-25). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) 
 - **The Agent Trace and the Proof of Life drawer open over the page** instead of on their own pages, so the visitor never loses the site they were reading. The page's `?tab=` names the open drawer (`trace`, or `report` · `ledger` · `verification` · `photos` · `sources`), so links into a report, a ledger entry or the news keep working; `?tab=news` and `?tab=price` scroll to that part of the page.
 - `/trace/<run>` and `/trace/recorded/<site>` stay as pages for deep links; nothing on the site page links to them.
 
+### 5. A community sends its opening offer; the Reviewer's approval lists the site
+- Listing is one screen a community can leave and come back to at the same step: **Name → Draw → Rate → Prove (optional) → Offer → Send for review**. Documents are optional in a sandbox (the live world's launch still needs a verified listing).
+- **The community sends its offer instead of launching it** (`POST /assets/{id}/offer`): the units to issue and the share it keeps, at the price the rating sets. The terms are stored on the asset with `offer_sent_at`.
+- **The Reviewer decides** (`GET /admin/offers`, then `…/offer/approve` or `…/offer/send-back` with a note). Approval launches the offer through the existing launch, at the price the latest report sets then, so its gates and ledger entry are unchanged; until then the site isn't public, so it isn't on the Marketplace. A note sends it back for the community to change and resend.
+- `POST /assets/{id}/ipo` stays for the operator's tools and older clients; the sandbox doesn't call it.
+
 ## Consequences
 - **Good:** a judge reads what WildWorth is in one sentence, reaches a working app in one click and never meets a sign-in. Every page has the same three choices.
 - **Real accounts are dormant, not deleted.** The backend's auth routes, the live world and their tests stay; nothing in the frontend reaches them. Bringing accounts back later means a header for them, not a rebuild.

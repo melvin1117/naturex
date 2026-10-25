@@ -217,6 +217,12 @@ def test_admin_routes_require_their_own_actions() -> None:
     for step in ("approve", "reject", "revoke"):
         path = f"/admin/assets/{{asset_id}}/verification/{{run_id}}/{step}"
         assert actions[("POST", path)] == {Action.REVIEW_LISTING}
+    # ADR-0008 §5: offers sent for review.
+    assert actions[("POST", "/assets/{asset_id}/offer")] == {Action.LAUNCH_IPO}
+    assert actions[("GET", "/admin/offers")] == {Action.REVIEW_LISTING}
+    for step in ("approve", "send-back"):
+        path = f"/admin/assets/{{asset_id}}/offer/{step}"
+        assert actions[("POST", path)] == {Action.REVIEW_LISTING}
 
 
 def test_the_order_request_body_is_unchanged_by_its_loader() -> None:
@@ -380,6 +386,10 @@ OBJECT_ROUTES: dict[tuple[str, str], tuple[str, Callable[[Objects], Any] | None]
     # T59's IPO: the community owner's (LAUNCH_IPO), on an asset the caller can see.
     ("GET", "/assets/{asset_id}/ipo/preview"): ("rosa", None),
     ("POST", "/assets/{asset_id}/ipo"): ("rosa", lambda o: {"expected_price": "1"}),
+    # ADR-0008 §5: the owner sends the offer; the Reviewer (an impartial admin) decides on it.
+    ("POST", "/assets/{asset_id}/offer"): ("rosa", lambda o: {"expected_price": "1"}),
+    ("POST", "/admin/assets/{asset_id}/offer/approve"): ("admin", None),
+    ("POST", "/admin/assets/{asset_id}/offer/send-back"): ("admin", lambda o: {"note": "x"}),
     # T69's verification: the steward's uploads and runs, the community's and admins' reads,
     # the public panel and the reviewer's decisions.
     ("POST", "/assets/{asset_id}/documents"): ("rosa", None),
