@@ -56,7 +56,7 @@ def warn_if_cookies_insecure(settings: Settings) -> None:
     """Say loudly when session cookies go out without `Secure` (local development and tests)."""
     if not secure_cookies(settings):
         logging.getLogger("app").warning(
-            "ENVIRONMENT=%s: the nx_session cookie is not Secure. "
+            "ENVIRONMENT=%s: the ww_session cookie is not Secure. "
             "Every deployment must set ENVIRONMENT=production.",
             settings.environment,
         )

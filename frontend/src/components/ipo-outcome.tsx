@@ -107,7 +107,7 @@ export function IpoLaunched({
             reveal={{ duration: DURATION.reveal }}
             label={`Your community keeps ${pct(kept)} of the stake; ${pct(offered)} is on offer to supporters.`}
           >
-            <div className="nx-fade" style={{ animationDelay: "240ms" }}>
+            <div className="ww-fade" style={{ animationDelay: "240ms" }}>
               <div className="tabular text-4xl leading-none font-light tracking-tight">
                 {pct(kept)}
               </div>
@@ -123,7 +123,7 @@ export function IpoLaunched({
             <Check className="size-7" aria-hidden="true" />
           </span>
         )}
-        <Heading focus className="nx-rise mt-6 text-4xl text-balance">
+        <Heading focus className="ww-rise mt-6 text-4xl text-balance">
           {name} is open to supporters
         </Heading>
         <p className="mx-auto mt-3 max-w-lg text-muted-foreground">
@@ -150,7 +150,7 @@ export function IpoLaunched({
           heals or comes under pressure.
         </p>
         <div
-          className="nx-rise mt-6 flex flex-wrap justify-center gap-2"
+          className="ww-rise mt-6 flex flex-wrap justify-center gap-2"
           style={{ animationDelay: "480ms" }}
         >
           <Button asChild>

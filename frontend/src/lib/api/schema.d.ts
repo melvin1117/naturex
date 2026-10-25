@@ -103,7 +103,7 @@ export interface paths {
          *
          *     A browser that already has a demo session keeps its sandbox and only switches to `persona`,
          *     so returning to the story never loses what the judge did. Otherwise a new sandbox is made
-         *     from the template. Only through `/sandbox` (cookie `nx_demo`): a real account signed in
+         *     from the template. Only through `/sandbox` (cookie `ww_demo`): a real account signed in
          *     in this browser stays signed in.
          */
         post: operations["start_demo_demo_start_post"];

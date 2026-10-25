@@ -624,7 +624,7 @@ async function afterSessionChange(
 /**
  * No sign-up (T55): `POST /demo/start` opens a private sandbox and a demo session as `persona`
  * (a browser that already has one keeps its sandbox and only switches persona). Always through
- * the sandbox's layer (`/api/sandbox`, cookie `nx_demo`), wherever it's called from (the story
+ * the sandbox's layer (`/api/sandbox`, cookie `ww_demo`), wherever it's called from (the story
  * at `/judge` too), so a real account signed in in this tab stays signed in. The sandbox's world
  * and cache then follow the new viewer.
  */

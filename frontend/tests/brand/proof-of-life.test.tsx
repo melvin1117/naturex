@@ -181,11 +181,11 @@ describe("ProofOfLifeSeal", () => {
       />,
     );
     const grade = screen.getByText("A");
-    expect(grade).toHaveClass("nx-stamp");
+    expect(grade).toHaveClass("ww-stamp");
     expect(grade.style.animationDelay).toBe("550ms");
     // Stamped about its own centre, not the seal's corner.
     expect(grade.style.transformOrigin).toBe("center");
-    const lit = document.querySelectorAll("circle.nx-dot-on");
+    const lit = document.querySelectorAll("circle.ww-dot-on");
     expect(lit).toHaveLength(78);
     expect((lit[0] as SVGElement).style.animationDelay).toBe("0ms");
     expect((lit[77] as SVGElement).style.animationDelay).toBe("543ms");

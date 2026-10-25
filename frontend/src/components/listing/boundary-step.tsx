@@ -54,7 +54,7 @@ import { FailureAlert, FieldError, PolygonProblems, StepCard } from "./shared";
 /** A world view until the steward finds their land (or a saved boundary is shown). */
 const WORLD_VIEW: LatLng = [15, -40];
 /** Set once a steward has finished a shape or hidden the tips: no more first-time hints. */
-const TIPS_DONE_KEY = "nx-boundary-tips-done";
+const TIPS_DONE_KEY = "ww-boundary-tips-done";
 
 const CHECKED_TEXT: Record<
   Extract<BoundaryHint, { ok: true }>["checked"],
@@ -321,7 +321,7 @@ export function BoundaryStep({
             className={cn(
               // `isolate`: Leaflet's panes (z 400-1000) and the floating controls stay
               // under the sticky header (#232); full screen lifts the whole stage to z-50.
-              "nx-map-stage isolate overflow-hidden bg-secondary",
+              "ww-map-stage isolate overflow-hidden bg-secondary",
               expanded
                 ? "fixed inset-0 z-50 h-dvh rounded-none"
                 : "relative h-[min(64dvh,680px)] min-h-[380px] rounded-3xl lg:h-[min(76dvh,820px)]",

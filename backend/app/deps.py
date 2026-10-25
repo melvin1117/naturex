@@ -84,8 +84,8 @@ def _touch(session: Session, world: World) -> None:
 def optional_principal(request: Request, session: SessionDep) -> Principal | None:
     """The signed-in principal from the channel's session cookie, or None (ADR-0005 §1).
 
-    The real app reads `nx_session`; the sandbox channel (`/sandbox/*`, `app.channel`) reads
-    `nx_demo` and serves demo sessions only. Unknown, expired and revoked sessions all resolve
+    The real app reads `ww_session`; the sandbox channel (`/sandbox/*`, `app.channel`) reads
+    `ww_demo` and serves demo sessions only. Unknown, expired and revoked sessions all resolve
     to None; expired rows are deleted.
     """
     principal = resolve_session(session, request.cookies.get(session_cookie(request)))

@@ -746,7 +746,7 @@ describe("the form's fields", () => {
 
   it("keeps an unsaved listing in this tab, per account and community", () => {
     const key = unsavedListingKey("me", "c");
-    expect(key).toBe("nx-listing-draft:me:c");
+    expect(key).toBe("ww-listing-draft:me:c");
     writeUnsavedListing(key, {
       form: { name: "Laguna", country: "MX", description: "" },
       points: square(),

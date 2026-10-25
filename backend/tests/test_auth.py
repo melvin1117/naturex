@@ -178,7 +178,7 @@ def test_wrong_password_and_unknown_email_get_the_same_generic_401(
 
     assert wrong.status_code == unknown.status_code == 401
     assert wrong.json() == unknown.json() == {"detail": "Email or password is incorrect"}
-    assert "nx_session" not in client.cookies
+    assert "ww_session" not in client.cookies
     assert len(calls) == 2, "the unknown email still runs a password verify"
     assert calls[1] == auth.dummy_hash()
 
@@ -211,7 +211,7 @@ def test_duplicate_registration_is_a_generic_409_case_insensitively(client: Test
 
     assert again.status_code == 409
     assert again.json() == {"detail": "This email can't be used to create an account"}
-    assert "nx_session" not in again.cookies
+    assert "ww_session" not in again.cookies
 
 
 @pytest.mark.parametrize(
@@ -251,7 +251,7 @@ def test_display_name_cannot_contain_the_password(client: TestClient, name: str)
         ("name", "name_contains_password")
     ]
     assert PASSWORD.casefold() not in res.text.casefold()
-    assert "nx_session" not in res.cookies
+    assert "ww_session" not in res.cookies
 
 
 @requires_db
@@ -295,7 +295,7 @@ def test_a_too_short_password_is_only_a_password_error(client: TestClient) -> No
 @requires_db
 def test_only_the_token_hash_is_stored(session: Session, client: TestClient) -> None:
     register(client)
-    token = client.cookies["nx_session"]
+    token = client.cookies["ww_session"]
 
     row = row_for(session, token)
     assert row.token_hash == hashlib.sha256(token.encode()).hexdigest()
@@ -311,16 +311,16 @@ def test_each_login_issues_a_new_token_and_revokes_the_one_presented(
     session: Session, client: TestClient
 ) -> None:
     register(client)
-    first = client.cookies["nx_session"]
+    first = client.cookies["ww_session"]
     other_device = TestClient(app)
     login(other_device)
 
     login(client)
-    second = client.cookies["nx_session"]
+    second = client.cookies["ww_session"]
 
     assert second != first
     assert auth.hash_token(first) not in {r.token_hash for r in session_rows(session)}
-    stale = TestClient(app, cookies={"nx_session": first})
+    stale = TestClient(app, cookies={"ww_session": first})
     assert stale.get("/me").status_code == 401, "the replaced token is dead"
     assert other_device.get("/me").status_code == 200, "other devices stay signed in"
 
@@ -331,7 +331,7 @@ def test_expired_sessions_get_401_and_are_deleted(
     session: Session, client: TestClient, limit: str
 ) -> None:
     user_id = UUID(register(client).json()["id"])
-    row = row_for(session, client.cookies["nx_session"])
+    row = row_for(session, client.cookies["ww_session"])
     now = datetime.now(UTC)
     if limit == "idle":
         row.last_seen_at = now - timedelta(days=7, seconds=1)
@@ -349,7 +349,7 @@ def test_expired_sessions_get_401_and_are_deleted(
 @requires_db
 def test_a_revoked_session_gets_401(session: Session, client: TestClient) -> None:
     register(client)
-    session.delete(row_for(session, client.cookies["nx_session"]))
+    session.delete(row_for(session, client.cookies["ww_session"]))
     session.commit()
 
     assert client.get("/me").status_code == 401
@@ -358,7 +358,7 @@ def test_a_revoked_session_gets_401(session: Session, client: TestClient) -> Non
 @requires_db
 @pytest.mark.parametrize("cookie", ["", "garbage", "x" * 500])
 def test_unknown_tokens_get_401(client: TestClient, cookie: str) -> None:
-    client.cookies.set("nx_session", cookie)
+    client.cookies.set("ww_session", cookie)
 
     assert client.get("/me").status_code == 401
 
@@ -368,7 +368,7 @@ def test_last_seen_is_bumped_at_most_every_few_minutes(
     session: Session, client: TestClient
 ) -> None:
     register(client)
-    token = client.cookies["nx_session"]
+    token = client.cookies["ww_session"]
     row = row_for(session, token)
     recent = datetime.now(UTC) - timedelta(minutes=1)
     row.last_seen_at = recent
@@ -389,16 +389,16 @@ def test_last_seen_is_bumped_at_most_every_few_minutes(
 @requires_db
 def test_logout_deletes_the_row_and_clears_the_cookie(session: Session, client: TestClient) -> None:
     user_id = UUID(register(client).json()["id"])
-    token = client.cookies["nx_session"]
+    token = client.cookies["ww_session"]
 
     res = client.post("/auth/logout")
 
     assert res.status_code == 204
     cookie = res.headers["set-cookie"].lower()
-    assert cookie.startswith("nx_session=") and "max-age=0" in cookie and "path=/" in cookie
-    assert "nx_session" not in client.cookies
+    assert cookie.startswith("ww_session=") and "max-age=0" in cookie and "path=/" in cookie
+    assert "ww_session" not in client.cookies
     assert session_rows(session, user_id) == []
-    assert TestClient(app, cookies={"nx_session": token}).get("/me").status_code == 401
+    assert TestClient(app, cookies={"ww_session": token}).get("/me").status_code == 401
     assert TestClient(app).post("/auth/logout").status_code == 204, "idempotent"
 
 
@@ -866,7 +866,7 @@ def test_a_database_error_on_an_auth_route_is_a_bare_500_that_logs_no_secrets(
     assert "DataError" in caplog.text
     for secret in (hashes[0], EMAIL, PASSWORD):
         assert secret not in caplog.text and secret not in res.text
-    assert "nx_session" not in client.cookies
+    assert "ww_session" not in client.cookies
 
 
 @requires_db
@@ -898,7 +898,7 @@ def test_a_session_revoked_between_lookup_and_bump_is_a_401_not_a_500(
     conn: Connection, session: Session, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     register(client)
-    token = client.cookies["nx_session"]
+    token = client.cookies["ww_session"]
     row = row_for(session, token)
     row.last_seen_at = datetime.now(UTC) - timedelta(hours=1)  # due for a bump
     session.add(row)
@@ -957,7 +957,7 @@ def test_cookie_flags_with_environment_production(
     cleared = TestClient(app).post("/auth/logout").headers["set-cookie"].lower()
 
     for cookie in (signed_up, cleared):
-        assert cookie.startswith("nx_session=")
+        assert cookie.startswith("ww_session=")
         for flag in ("secure", "httponly", "samesite=lax", "path=/"):
             assert flag in cookie, (flag, cookie)
 

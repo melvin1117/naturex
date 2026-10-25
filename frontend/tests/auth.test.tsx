@@ -518,11 +518,11 @@ describe("RequireAccount", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Explore" }));
     expect(await screen.findByText("Your stakes")).toBeVisible();
-    expect(window.sessionStorage.getItem("nx-prototype-demo")).toBe("1");
+    expect(window.sessionStorage.getItem("ww-prototype-demo")).toBe("1");
   });
 
   it("ignores the scripted demo unless the route opts in", async () => {
-    window.sessionStorage.setItem("nx-prototype-demo", "1");
+    window.sessionStorage.setItem("ww-prototype-demo", "1");
     setup(
       <RequireAccount>
         <Secret />
@@ -556,7 +556,7 @@ describe("RequireAccount", () => {
     );
     expect(router.push).toHaveBeenCalledWith("/steward");
     await new Promise((r) => setTimeout(r, 0));
-    expect(window.sessionStorage.getItem("nx-prototype-demo")).toBeNull();
+    expect(window.sessionStorage.getItem("ww-prototype-demo")).toBeNull();
   });
 });
 
@@ -595,7 +595,7 @@ describe("protected layouts", () => {
     async (path, Layout, opens) => {
       window.history.replaceState(null, "", path);
       nav.pathname = path;
-      window.sessionStorage.setItem("nx-prototype-demo", "1");
+      window.sessionStorage.setItem("ww-prototype-demo", "1");
       setup(
         <Layout>
           <Child />
@@ -647,7 +647,7 @@ describe("AccountMenu", () => {
   });
 
   it("moves focus to Sign in and ends the scripted demo after sign-out", async () => {
-    window.sessionStorage.setItem("nx-prototype-demo", "1");
+    window.sessionStorage.setItem("ww-prototype-demo", "1");
     setup(<AccountMenu />, {
       "GET /world": sequence(
         () => json(SIGNED_IN_WORLD),
@@ -663,7 +663,7 @@ describe("AccountMenu", () => {
 
     const signIn = await screen.findByRole("link", { name: "Sign in" });
     await waitFor(() => expect(signIn).toHaveFocus());
-    expect(window.sessionStorage.getItem("nx-prototype-demo")).toBeNull();
+    expect(window.sessionStorage.getItem("ww-prototype-demo")).toBeNull();
   });
 
   it("shows the account and signs out, resetting the world and cache", async () => {

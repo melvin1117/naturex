@@ -157,7 +157,7 @@ Pick the lowest rung that's enough (#216; `frontend/src/lib/feedback.ts`). One a
 | Rung | Use for | How |
 |---|---|---|
 | 1. Inline | Field validity, a refused order | Text under the field (`aria-describedby`, polite), with the fix next to it |
-| 2. In place | The surface the user acted on | A receipt, a row that washes (`nx-wash`), a number counting to its new value; a link to where the consequence also lives ("View your stakes") |
+| 2. In place | The surface the user acted on | A receipt, a row that washes (`ww-wash`), a number counting to its new value; a link to where the consequence also lives ("View your stakes") |
 | 3. Toast | A consequence on another page, or from the background | Signed in or out, a new alert. Sonner, ≤ 4 s (the welcome 2.5 s, alerts 7 s), at most one action. Never an error the user has to fix |
 | 4. Milestone | Listed, opened to supporters, a first stake | A staged reveal, once per journey step |
 

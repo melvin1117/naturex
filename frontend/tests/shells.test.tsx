@@ -113,7 +113,7 @@ function setup(
 }
 
 const ROSA_ID = SIGNED_IN_WORLD.me!.id;
-const REMEMBERED = `nx-steward-community:${ROSA_ID}`;
+const REMEMBERED = `ww-steward-community:${ROSA_ID}`;
 
 const Page = () => <p>Page content</p>;
 
@@ -227,7 +227,7 @@ describe("Exchange navigation per role", () => {
   });
 
   it("anonymous in the scripted demo: Stewards too", async () => {
-    window.sessionStorage.setItem("nx-prototype-demo", "1");
+    window.sessionStorage.setItem("ww-prototype-demo", "1");
     setup(
       <ExchangeLayout>
         <Page />
@@ -866,10 +866,10 @@ describe("play-money framing without a demo bar", () => {
   });
 
   it("leaves the scripted prototype demo", async () => {
-    window.sessionStorage.setItem("nx-prototype-demo", "1");
+    window.sessionStorage.setItem("ww-prototype-demo", "1");
     setup(<DemoBar />, WORLD);
     await waitFor(() =>
-      expect(window.sessionStorage.getItem("nx-prototype-demo")).toBeNull(),
+      expect(window.sessionStorage.getItem("ww-prototype-demo")).toBeNull(),
     );
   });
 

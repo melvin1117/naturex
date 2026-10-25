@@ -189,7 +189,7 @@ export function TradeForm({
                   <span
                     key={receipt.id}
                     aria-hidden="true"
-                    className="nx-wash pointer-events-none absolute inset-0 -z-10 rounded-full"
+                    className="ww-wash pointer-events-none absolute inset-0 -z-10 rounded-full"
                     data-testid="trade-balance-wash"
                   />
                 )}

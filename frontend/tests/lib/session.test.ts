@@ -17,9 +17,9 @@ describe("forwardedCookieHeader", () => {
   it("forwards only the session cookie", () => {
     expect(
       forwardedCookieHeader(
-        store({ nx_session: "s-1", theme: "dark", _ga: "tracking" }),
+        store({ ww_session: "s-1", theme: "dark", _ga: "tracking" }),
       ),
-    ).toBe("nx_session=s-1");
+    ).toBe("ww_session=s-1");
   });
 
   it("never forwards the retired nx_world cookie (T73)", () => {

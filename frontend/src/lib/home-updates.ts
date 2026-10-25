@@ -14,7 +14,7 @@ import type { AlertList, CommunitySummary } from "./api/types";
 import { useCommunitySummary } from "./community-hooks";
 import { useAlerts, useWorld } from "./hooks";
 
-const PREFIX = "nx-community-home-seen:";
+const PREFIX = "ww-community-home-seen:";
 const listeners = new Set<() => void>();
 
 export function homeSeenKey(meId: string, communityId: string): string {

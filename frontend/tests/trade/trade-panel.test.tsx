@@ -685,7 +685,7 @@ describe("TradePanel", () => {
       fireEvent.click(buyButton());
       await screen.findByText(/Stake added/);
       expect(screen.getByTestId("trade-balance")).toBe(balance);
-      expect(screen.getByTestId("trade-balance-wash")).toHaveClass("nx-wash");
+      expect(screen.getByTestId("trade-balance-wash")).toHaveClass("ww-wash");
       expect(screen.getByTestId("trade-balance-wash")).toHaveAttribute(
         "aria-hidden",
         "true",

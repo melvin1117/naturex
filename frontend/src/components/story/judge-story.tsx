@@ -295,7 +295,7 @@ function StoryStage({
       {alertCard && (
         <div
           role="status"
-          className="nx-rise absolute right-4 bottom-32 z-[650] w-[min(340px,calc(100vw-2rem))] rounded-2xl bg-card p-4 text-foreground shadow-[0_18px_40px_-16px_rgba(0,0,0,0.6)] min-[900px]:top-20 min-[900px]:right-7 min-[900px]:bottom-auto"
+          className="ww-rise absolute right-4 bottom-32 z-[650] w-[min(340px,calc(100vw-2rem))] rounded-2xl bg-card p-4 text-foreground shadow-[0_18px_40px_-16px_rgba(0,0,0,0.6)] min-[900px]:top-20 min-[900px]:right-7 min-[900px]:bottom-auto"
         >
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <BellRing className="size-3.5" aria-hidden="true" />
@@ -456,7 +456,7 @@ function Row({
   return (
     <li
       ref={ref}
-      className="nx-rise grid grid-cols-[2rem_1fr] gap-3 rounded-2xl bg-machine-raised px-3.5 py-3"
+      className="ww-rise grid grid-cols-[2rem_1fr] gap-3 rounded-2xl bg-machine-raised px-3.5 py-3"
     >
       <span
         aria-hidden="true"
@@ -709,7 +709,7 @@ function Measure({ stage }: { stage: Stage }) {
       </Feed>
       {step >= 6 && (
         <>
-          <div className="nx-rise mt-4 rounded-2xl bg-card p-4 text-foreground">
+          <div className="ww-rise mt-4 rounded-2xl bg-card p-4 text-foreground">
             <p className="font-serif text-[1.7rem] leading-tight">
               Healthy, and worth keeping.
             </p>
@@ -950,7 +950,7 @@ function Watch({ stage }: { stage: Stage }) {
       )}
       {step >= 7 && (
         <>
-          <p className="nx-rise mt-4 text-[15px] text-machine-ink">
+          <p className="ww-rise mt-4 text-[15px] text-machine-ink">
             Damaging the land cost Arjun. Restoring it paid both of them.
             That&apos;s the whole idea.
           </p>

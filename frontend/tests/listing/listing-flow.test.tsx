@@ -1265,7 +1265,7 @@ describe("the boundary step (review fixes)", () => {
     );
     const kept = JSON.parse(
       window.sessionStorage.getItem(
-        `nx-listing-draft:${SIGNED_IN_WORLD.me!.id}:${SELVA.id}`,
+        `ww-listing-draft:${SIGNED_IN_WORLD.me!.id}:${SELVA.id}`,
       )!,
     );
     expect(kept.form.name).toBe("Laguna Verde");
@@ -1274,7 +1274,7 @@ describe("the boundary step (review fixes)", () => {
 
   it("restores a listing kept in this tab, with the attestation to confirm again", async () => {
     window.sessionStorage.setItem(
-      `nx-listing-draft:${SIGNED_IN_WORLD.me!.id}:${SELVA.id}`,
+      `ww-listing-draft:${SIGNED_IN_WORLD.me!.id}:${SELVA.id}`,
       JSON.stringify({
         form: { name: "Laguna Verde", country: "MX", description: "" },
         points: CORNERS,
@@ -1446,7 +1446,7 @@ describe("the full-screen map (#215)", () => {
     const box = await screen.findByRole("searchbox", {
       name: "Search for a place",
     });
-    const stage = box.closest(".nx-map-stage") as HTMLElement;
+    const stage = box.closest(".ww-map-stage") as HTMLElement;
     // Leaflet panes and the z-[1000] controls can't escape an isolated stage.
     expect(stage).toHaveClass("isolate", "relative");
     expect(stage).not.toHaveClass("fixed");
@@ -1465,7 +1465,7 @@ describe("the full-screen map (#215)", () => {
     await fullScreen();
     const box = screen.getByRole("searchbox", { name: "Search for a place" });
     const exit = screen.getByRole("button", { name: "Exit full screen" });
-    const stage = box.closest(".nx-map-stage") as HTMLElement;
+    const stage = box.closest(".ww-map-stage") as HTMLElement;
     const focusable = stage.querySelectorAll<HTMLElement>(
       'button:not([disabled]), input:not([disabled]), [tabindex="0"]',
     );

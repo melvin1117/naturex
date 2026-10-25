@@ -358,19 +358,19 @@ export function BoundaryMap({
           : "Drag to move. Right-click to delete.",
         icon: L.divIcon({
           className: cn(
-            "nx-handle nx-handle--vertex",
-            closer && "nx-handle--closer",
-            !valid && "nx-handle--invalid",
-            selectedRef.current === i && "nx-handle--selected",
+            "ww-handle ww-handle--vertex",
+            closer && "ww-handle--closer",
+            !valid && "ww-handle--invalid",
+            selectedRef.current === i && "ww-handle--selected",
           ),
-          html: '<span class="nx-handle__dot"></span>',
+          html: '<span class="ww-handle__dot"></span>',
           iconSize: [size, size],
         }),
       }).addTo(layer);
       let dragging = false;
       marker.on("dragstart", () => {
         dragging = true;
-        el.classList.add("nx-map--dragging");
+        el.classList.add("ww-map--dragging");
         latest.current.onSelect?.(i);
       });
       marker.on("drag", () => {
@@ -379,7 +379,7 @@ export function BoundaryMap({
       });
       marker.on("dragend", () => {
         dragging = false;
-        el.classList.remove("nx-map--dragging");
+        el.classList.remove("ww-map--dragging");
         const { lat, lng } = marker.getLatLng();
         latest.current.dispatch({ type: "move", index: i, point: [lat, lng] });
       });
@@ -419,8 +419,8 @@ export function BoundaryMap({
           keyboard: false,
           title: "Drag or click to add a corner here",
           icon: L.divIcon({
-            className: "nx-handle nx-handle--midpoint",
-            html: '<span class="nx-handle__dot"></span>',
+            className: "ww-handle ww-handle--midpoint",
+            html: '<span class="ww-handle__dot"></span>',
             iconSize: [size - 6, size - 6],
           }),
         }).addTo(layer);
@@ -429,13 +429,13 @@ export function BoundaryMap({
           [lat, lng],
           ...points.slice(i + 1),
         ];
-        marker.on("dragstart", () => el.classList.add("nx-map--dragging"));
+        marker.on("dragstart", () => el.classList.add("ww-map--dragging"));
         marker.on("drag", () => {
           const { lat, lng } = marker.getLatLng();
           reshape(insertAt(lat, lng));
         });
         marker.on("dragend", () => {
-          el.classList.remove("nx-map--dragging");
+          el.classList.remove("ww-map--dragging");
           const { lat, lng } = marker.getLatLng();
           latest.current.dispatch({
             type: "insert",
@@ -503,7 +503,7 @@ export function BoundaryMap({
     handlesRef.current.forEach((handle, i) =>
       handle
         .getElement()
-        ?.classList.toggle("nx-handle--selected", i === selected),
+        ?.classList.toggle("ww-handle--selected", i === selected),
     );
   }, [selected]);
 

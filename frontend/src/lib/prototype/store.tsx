@@ -24,9 +24,9 @@ import {
 } from "./world";
 import type { Side } from "./market";
 
-const STORAGE_KEY = "nx-prototype-world";
+const STORAGE_KEY = "ww-prototype-world";
 /** Per tab: a fresh tab starts outside the demo, so protected routes ask to sign in. */
-const DEMO_KEY = "nx-prototype-demo";
+const DEMO_KEY = "ww-prototype-demo";
 
 type Ui = {
   traceOpen: boolean;

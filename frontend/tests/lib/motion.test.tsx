@@ -200,7 +200,7 @@ describe("helpers", () => {
 
 describe("the dotted rings", () => {
   const litColumns = (container: HTMLElement) =>
-    container.querySelectorAll("g.nx-dot-on").length;
+    container.querySelectorAll("g.ww-dot-on").length;
 
   it("a new health score lights its dots and counts up to the exact score", async () => {
     motion = stubMotion();

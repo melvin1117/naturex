@@ -220,7 +220,7 @@ export function PlaceSearch({
         </p>
       )}
       {showing && (
-        <div className={cn("nx-rise mt-2 overflow-hidden rounded-2xl", FLOAT)}>
+        <div className={cn("ww-rise mt-2 overflow-hidden rounded-2xl", FLOAT)}>
           <ul
             aria-label="Places found"
             className="max-h-64 overflow-y-auto p-1"
@@ -476,7 +476,7 @@ export function DrawingDock({
       {hint && (
         <p
           className={cn(
-            "nx-rise flex max-w-sm items-start gap-2 rounded-2xl py-2 pr-1.5 pl-3.5 text-sm",
+            "ww-rise flex max-w-sm items-start gap-2 rounded-2xl py-2 pr-1.5 pl-3.5 text-sm",
             FLOAT,
           )}
         >
@@ -523,7 +523,7 @@ export function DrawingDock({
                 onClick={() => dispatch({ type: "finish" })}
                 disabled={disabled}
                 aria-keyshortcuts="Enter"
-                className="nx-rise mr-1"
+                className="ww-rise mr-1"
               >
                 <Check aria-hidden="true" />
                 Finish
@@ -537,7 +537,7 @@ export function DrawingDock({
                 onClick={() => dispatch({ type: "remove", index: selected })}
                 disabled={disabled}
                 aria-label={`Delete corner ${selected + 1}`}
-                className="nx-rise rounded-full"
+                className="ww-rise rounded-full"
               >
                 <Trash2 aria-hidden="true" />
                 Delete corner

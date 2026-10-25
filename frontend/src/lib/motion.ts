@@ -2,8 +2,8 @@
  * WildWorth's motion vocabulary (DESIGN.md; interaction principles in #216). Motion is purely
  * presentational: it may delay or replay what the API returned, never invent a value or a step.
  *
- * - `DURATION` mirrors the CSS tokens in `app/globals.css` (`--nx-duration-*`; the ease-out curve
- *   is `--nx-ease-out`).
+ * - `DURATION` mirrors the CSS tokens in `app/globals.css` (`--ww-duration-*`; the ease-out curve
+ *   is `--ww-ease-out`).
  * - `usePrefersReducedMotion()`: true when the visitor asked for less motion (and on the
  *   server, so the first paint is always the final state).
  * - `useCountUp(value)`: a newly computed number counting up once, landing exactly on `value`.
@@ -11,7 +11,7 @@
  *   so a burst of real events reads as a sequence.
  * - `useValueTick(value)`: which way a live value (a price) last moved, and a count of its moves,
  *   so a numeral can flash once per move and keep a direction arrow.
- * - `stagger(index)`: the inline style that delays a CSS keyframe (`nx-rise`, `nx-fade`…) for
+ * - `stagger(index)`: the inline style that delays a CSS keyframe (`ww-rise`, `ww-fade`…) for
  *   item `index` of a list that appears as a list, e.g. new portfolio rows.
  *
  * Under reduced motion every helper returns its final state at once: same information, no motion.
@@ -28,11 +28,11 @@ import {
 export const DURATION = {
   /** Tabs, popovers, hover: a routine change of state. */
   ui: 160,
-  /** A live value that moved (`nx-flash`), or a number counting to its new value after a fill. */
+  /** A live value that moved (`ww-flash`), or a number counting to its new value after a fill. */
   tick: 600,
-  /** Content arriving (`nx-rise`). */
+  /** Content arriving (`ww-rise`). */
   content: 360,
-  /** The grade stamp pressing onto the card (`nx-stamp`). */
+  /** The grade stamp pressing onto the card (`ww-stamp`). */
   stamp: 520,
   /** A milestone's instrument filling up (the health dial, the opening-offer ring). */
   reveal: 900,
@@ -40,7 +40,7 @@ export const DURATION = {
 
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 
-/** The ease-out curve (`--nx-ease-out`) for values driven frame by frame: a quartic ease-out. */
+/** The ease-out curve (`--ww-ease-out`) for values driven frame by frame: a quartic ease-out. */
 export function easeOut(t: number): number {
   return 1 - (1 - clamp01(t)) ** 4;
 }

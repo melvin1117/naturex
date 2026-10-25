@@ -210,7 +210,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 ### T54 · Accounts and sessions (#97) — D1 · M · Must · K1 K2
 - [x] `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /me`; argon2id via `pwdlib`, with a dummy-hash verify for unknown emails; `users.kind` (person | persona | treasury) and a partial unique index on lower(email) per world
-- [x] Server-side `sessions` (with `world_id`): a 256-bit token whose SHA-256 hash is stored; `nx_session` cookie `HttpOnly`, `Secure` (outside dev/test), `SameSite=Lax`; 7 d idle / 30 d absolute; new ID on login; logout deletes the row and clears the cookie
+- [x] Server-side `sessions` (with `world_id`): a 256-bit token whose SHA-256 hash is stored; `ww_session` cookie `HttpOnly`, `Secure` (outside dev/test), `SameSite=Lax`; 7 d idle / 30 d absolute; new ID on login; logout deletes the row and clears the cookie
 - [x] The live world is created and the 3 curated sites are copied into it from the template (T56 attaches their communities and treasuries); live admins are created only with a CLI command that reads the password via `getpass` (never via the API, never by matching an email); no password or token in logs
 
 **Verify:** `make test`, including wrong password, unknown email, expired and revoked sessions, and logout; manual register → login → `/me` → logout with `curl` · **Deps:** T31 · **Files:** `backend/app/auth.py`, `backend/app/routers/auth.py`, `backend/app/cli.py`, `backend/app/models.py`, `backend/migrations/versions/*_accounts.py`, `backend/tests/test_auth.py`

@@ -5,8 +5,8 @@ reaches its sandbox through `/sandbox/<route>` (the frontend proxies `/api/sandb
 this pure-ASGI middleware strips the prefix and marks the request, so every route serves both
 channels unchanged. The session cookie depends on the channel:
 
-- the real app: `nx_session`, any session kind (password sessions in practice);
-- the sandbox: `nx_demo`, demo sessions only.
+- the real app: `ww_session`, any session kind (password sessions in practice);
+- the sandbox: `ww_demo`, demo sessions only.
 
 A browser can hold both, so trying the sandbox never signs a real account out, and the real
 app's pages never turn into a sandbox. Pure ASGI, not `BaseHTTPMiddleware`, so streaming
@@ -21,7 +21,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from app.auth import SESSION_COOKIE
 
 SANDBOX_PREFIX = "/sandbox"
-DEMO_COOKIE = "nx_demo"
+DEMO_COOKIE = "ww_demo"
 SANDBOX_PATH_ONLY = "sandbox_path_only"
 NOT_IN_SANDBOX = "not_in_sandbox"
 _SCOPE_KEY = "wildworth.sandbox"

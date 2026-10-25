@@ -292,7 +292,7 @@ export function ValueRange({
         <div
           className={cn(
             "absolute inset-y-0 rounded-full bg-lime",
-            revealDelay !== undefined && "nx-grow-x",
+            revealDelay !== undefined && "ww-grow-x",
           )}
           style={{
             left: `${at(low)}%`,
@@ -304,13 +304,13 @@ export function ValueRange({
           className={cn(
             "absolute -top-1 h-4 w-1 rounded-full",
             tone === "light" ? "bg-primary" : "bg-white",
-            revealDelay !== undefined && "nx-fade",
+            revealDelay !== undefined && "ww-fade",
           )}
           style={{ left: `calc(${at(mid)}% - 2px)`, ...reveal(160) }}
         />
       </div>
       <p
-        className={cn("text-xs", muted, revealDelay !== undefined && "nx-fade")}
+        className={cn("text-xs", muted, revealDelay !== undefined && "ww-fade")}
         style={reveal(220)}
       >
         {confidence.toFixed(0)}% confidence · screening estimate, not an

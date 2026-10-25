@@ -79,7 +79,7 @@ export function LedgerPanel({
           <div
             role="status"
             className={cn(
-              "nx-rise mt-5 flex items-start gap-3 rounded-2xl p-4",
+              "ww-rise mt-5 flex items-start gap-3 rounded-2xl p-4",
               check.valid ? "bg-lime/15" : "bg-clay/25",
             )}
           >

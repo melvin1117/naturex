@@ -94,7 +94,7 @@ export function RatingProgress({
               value={(position.step / position.of) * 100}
               aria-label="Rating progress"
               getValueLabel={() => `Step ${position.step} of ${position.of}`}
-              className="h-1.5 flex-1 bg-machine-line *:data-[slot=progress-indicator]:bg-lime *:data-[slot=progress-indicator]:duration-300 *:data-[slot=progress-indicator]:ease-(--nx-ease-out)"
+              className="h-1.5 flex-1 bg-machine-line *:data-[slot=progress-indicator]:bg-lime *:data-[slot=progress-indicator]:duration-300 *:data-[slot=progress-indicator]:ease-(--ww-ease-out)"
             />
             <span className="tabular shrink-0 text-xs text-machine-muted">
               Step {position.step} of {position.of}
@@ -135,7 +135,7 @@ export function RatingProgress({
           variant="ghost"
           size="sm"
           onClick={() => onOpenTrace(runId)}
-          className="nx-fade mx-1 mt-3 text-machine-ink hover:bg-machine-raised hover:text-machine-ink"
+          className="ww-fade mx-1 mt-3 text-machine-ink hover:bg-machine-raised hover:text-machine-ink"
         >
           <Bot aria-hidden="true" />
           See every step in the Agent Trace
@@ -219,7 +219,7 @@ function StageRow({
           )}
         </div>
         {state === "running" && (
-          <div className="nx-flow mt-2 h-0.5 rounded-full" />
+          <div className="ww-flow mt-2 h-0.5 rounded-full" />
         )}
       </div>
       <span className="sr-only">{STATE_TEXT[state]}</span>

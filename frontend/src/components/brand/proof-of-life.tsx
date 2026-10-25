@@ -64,7 +64,7 @@ export function ProofOfLifeSeal({
           cx={d.cx}
           cy={d.cy}
           r={SEAL.dot}
-          className={d.lit ? cn(litFill, rise && "nx-dot-on") : "fill-current"}
+          className={d.lit ? cn(litFill, rise && "ww-dot-on") : "fill-current"}
           opacity={d.lit ? undefined : SEAL.unlitOpacity}
           style={
             d.lit && rise
@@ -101,7 +101,7 @@ export function ProofOfLifeSeal({
         x={SEAL.center}
         y={SEAL.grade.y}
         textAnchor="middle"
-        className={cn("font-serif", rise && "nx-stamp")}
+        className={cn("font-serif", rise && "ww-stamp")}
         fontSize={grade.length > 2 ? SEAL.grade.longSize : SEAL.grade.size}
         fill="currentColor"
         style={

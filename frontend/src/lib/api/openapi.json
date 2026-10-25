@@ -148,7 +148,7 @@
           "demo"
         ],
         "summary": "Start Demo",
-        "description": "Start a demo: a private sandbox and a session as `persona`, with no sign-up.\n\nA browser that already has a demo session keeps its sandbox and only switches to `persona`,\nso returning to the story never loses what the judge did. Otherwise a new sandbox is made\nfrom the template. Only through `/sandbox` (cookie `nx_demo`): a real account signed in\nin this browser stays signed in.",
+        "description": "Start a demo: a private sandbox and a session as `persona`, with no sign-up.\n\nA browser that already has a demo session keeps its sandbox and only switches to `persona`,\nso returning to the story never loses what the judge did. Otherwise a new sandbox is made\nfrom the template. Only through `/sandbox` (cookie `ww_demo`): a real account signed in\nin this browser stays signed in.",
         "operationId": "start_demo_demo_start_post",
         "requestBody": {
           "content": {

@@ -67,7 +67,7 @@ describe("Slider", () => {
     const world = rateDraft(
       registerCommunity(createInitialWorld("steward"), "Selva Viva"),
     );
-    window.localStorage.setItem("nx-prototype-world", JSON.stringify(world));
+    window.localStorage.setItem("ww-prototype-world", JSON.stringify(world));
     const layer = createDataLayer({
       baseUrl: BASE,
       fetch: fakeBackend({ "GET /world": () => json(WORLD) }).fetch,

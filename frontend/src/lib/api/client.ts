@@ -3,7 +3,7 @@
  * run ./scripts/generate-client.sh).
  *
  * - Browser: base URL `/api`, the same-origin proxy in next.config.ts, so the HttpOnly
- *   `nx_session` cookie is first-party and sent automatically. Every request first waits for
+ *   `ww_session` cookie is first-party and sent automatically. Every request first waits for
  *   the world bootstrap (`GET /world`, single-flight). A 401 `auth_required` on a request
  *   sent signed in re-reads the world; only GET and HEAD are then retried, once.
  * - Server (RSC, route handlers): use `createServerApi()` from `./server`, which calls
@@ -33,7 +33,7 @@ export function serverBaseUrl(): string {
 
 /**
  * Browser code goes through the same-origin `/api` proxy (next.config.ts) so the
- * `nx_session` cookie is sent. Server code calls the backend directly and must
+ * `ww_session` cookie is sent. Server code calls the backend directly and must
  * forward the visitor's cookie itself (see ./server.ts).
  */
 export function defaultBaseUrl(): string {
