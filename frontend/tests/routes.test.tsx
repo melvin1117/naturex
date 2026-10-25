@@ -128,7 +128,7 @@ describe("routes", () => {
     expect(
       await screen.findByRole("heading", {
         level: 1,
-        name: /This wetland is alive/,
+        name: /What is it worth alive\?/,
       }),
     ).toBeInTheDocument();
   });
