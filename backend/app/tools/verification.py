@@ -34,8 +34,9 @@ from uuid import UUID
 from app.models import DocumentType, EvidenceKind, VerificationLevel, VerificationMode
 from app.tools.geometry import geometry_sha256
 
-METHOD_VERSION = "naturex-verification-v1"
-"""Bump when a check or the fingerprint changes: every run made before then stops matching."""
+METHOD_VERSION = "wildworth-verification-v1"
+"""Bump when a check or the fingerprint changes. Each run keeps the version it was made with, and
+its fingerprint is recomputed with that version, so older runs keep matching."""
 MAX_DOCUMENTS_PER_RUN = 3
 CONSENT_DOCUMENT_TYPES = frozenset({DocumentType.ASSEMBLY_MINUTES})
 NOT_VERIFIED = "not_verified"
@@ -101,9 +102,12 @@ class ListingFacts:
 
 
 def world_document_key(secret: str, world_id: UUID) -> bytes:
-    """The per-world key for private document fingerprints."""
+    """The per-world key for private document fingerprints. Never change the domain once a
+    database holds documents: their stored fingerprints couldn't be recomputed (the bindings are
+    write-once), so a reused file would no longer be caught. It was last changed in Oct 2026,
+    when no database held one."""
     return hmac.new(
-        secret.encode(), b"naturex/document-fingerprint/v1:" + world_id.bytes, hashlib.sha256
+        secret.encode(), b"wildworth/document-fingerprint/v1:" + world_id.bytes, hashlib.sha256
     ).digest()
 
 

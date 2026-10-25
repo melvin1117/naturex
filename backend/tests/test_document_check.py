@@ -1211,7 +1211,7 @@ def test_a_stored_row_that_no_longer_validates_doesnt_break_the_queue(world: Wor
             status="completed",
             suggestion="consistent",
             result={"comparisons": "not a list"},
-            method_version="naturex-document-check-v0",
+            method_version="wildworth-document-check-v0",
         )
     )
     world.session.flush()

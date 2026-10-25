@@ -1,6 +1,6 @@
 # WildWorth
 
-*Worth more wild.* The repository and a few stored identifiers (method versions, database setting names) keep the working name, `naturex`.
+*Worth more wild.*
 
 **The AI rating agency for living nature, with a sandbox exchange.** WildWorth uses NVIDIA Nemotron agents on Nebius Token Factory to rate land from satellite data and local news, turn it into a graded site that supporters can back with play money, and keep watching it, so keeping nature alive pays more than destroying it. Every quarter, WildWorth issues a Proof of Life for each site.
 

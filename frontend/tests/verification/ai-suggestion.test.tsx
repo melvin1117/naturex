@@ -245,7 +245,7 @@ describe("AI suggestion on the review page", () => {
         "openbmb/MiniCPM-V-4_5, nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
       ),
     ).toBeInTheDocument();
-    expect(within(section).getByText("naturex-doc-check-v1")).toBeVisible();
+    expect(within(section).getByText("wildworth-doc-check-v1")).toBeVisible();
     expect(within(section).getByText("18 Oct 2026, 11:04 UTC")).toBeVisible();
   });
 

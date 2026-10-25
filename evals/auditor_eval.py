@@ -117,7 +117,7 @@ def _event(site: str, case: str, name: str) -> AuditEvent | None:
         return None
     impact, direction, severity, title, summary = kinds[case]
     return AuditEvent(
-        id=str(uuid5(NAMESPACE_URL, f"https://eval.naturex/{site}/{case}")),
+        id=str(uuid5(NAMESPACE_URL, f"https://eval.wildworth/{site}/{case}")),
         source="news",
         relevant=True,
         impact_type=impact,  # type: ignore[arg-type]

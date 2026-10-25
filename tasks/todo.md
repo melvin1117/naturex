@@ -1,6 +1,6 @@
 # WildWorth task list
 
-> **Tracked in GitHub Issues** ([melvin1117/naturex](https://github.com/melvin1117/naturex/issues)): epics #1–#6, tasks #7–#65 (issue number shown after each title). **The issues are the source of truth for status**; update this file only when scope changes.
+> **Tracked in GitHub Issues** ([melvin1117/wildworth](https://github.com/melvin1117/wildworth/issues)): epics #1–#6, tasks #7–#65 (issue number shown after each title). **The issues are the source of truth for status**; update this file only when scope changes.
 > **What can I pick?** Open [task-map.html](./task-map.html) (auto-synced from the issues): 🟢 ready tasks have every dependency closed. Keep the heading format and `**Deps:**` lines below intact; `scripts/task_map.py` parses them.
 > Plan and team roles: [plan.md](./plan.md). Owners: **PD** (product designer + frontend), **D1** (platform & market), **D2** (geo & rating data), **D3** (AI agents).
 > Each task shows **owner · size · priority · stories covered**. Sizes: XS/S (1–2 files), M (3–5 files); nothing larger. Priorities: Must / Should / Could (from `pm-spec.md` §5).
@@ -514,7 +514,7 @@ Confirm how Nemotron actually behaves on Token Factory before building on it.
 
 ### T70 · Verification screens and transparency panel (#114) — PD + D1 · S · Must · A9
 - [ ] Steward: upload documents ("Use sample documents (demo)" is T76); see the checklist and the decision; the IPO screen explains why launch is blocked until verified
-- [ ] Exchange: a badge with precise wording by evidence, not deployment mode (sample runs: "Demo verification: sample documents, no real ownership checked"; human-reviewed real documents: "Documents reviewed by NatureX (hackathon process)"; "Self-attested by the community"; "Verification revoked"); a site footer note when demo mode is on and a public "How this listing was verified" panel: level, date, reviewer role, each check's result, everything not checked, link to the ledger entry
+- [ ] Exchange: a badge with precise wording by evidence, not deployment mode (sample runs: "Demo verification: sample documents, no real ownership checked"; human-reviewed real documents: "Documents reviewed by WildWorth (hackathon process)"; "Self-attested by the community"; "Verification revoked"); a site footer note when demo mode is on and a public "How this listing was verified" panel: level, date, reviewer role, each check's result, everything not checked, link to the ledger entry
 - [ ] Admin: a review queue with document previews, the checklist, any AI suggestion labelled as an untrusted heuristic with source excerpts, and the map; approve, reject or revoke with a reason
 
 - As built: steward `/steward/assets/[id]/verify` (upload, submit, checklist, decision; linked from Steward home and the IPO screen's `not_verified` alert); Exchange hero badge and "How this listing was verified" panel (`components/verification/verification-panel.tsx`, the API's `badge` verbatim; the ledger link scrolls to the entry); admin `/admin/verifications` queue and `/admin/verifications/[id]` review (previews, checklist, map, approve/reject/revoke). The AI suggestion area shows T71's untrusted suggestion with its states and excerpts, and the upload card the uploader notice (#196, dev-spec §6.4); the sample button, sample badge source and footer switch stay with T76.

@@ -212,13 +212,66 @@ def test_ledger_is_append_only() -> None:
             conn.execute(text(statement))
 
     with engine.begin() as conn:
-        conn.execute(text("SET LOCAL naturex.allow_ledger_delete = 'on'"))
+        conn.execute(text("SET LOCAL wildworth.allow_ledger_delete = 'on'"))
         deleted = conn.execute(text("DELETE FROM ledger_entries")).rowcount
     engine.dispose()
     assert deleted == len(DEMO_SITES) + 1
     # The template's report v1 entries are gone now; start later tests from an empty schema.
     command.downgrade(cfg, "base")
     command.upgrade(cfg, "head")
+
+
+DEFINITIONS_READING = """
+    SELECT pg_get_functiondef(p.oid) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = current_schema() AND p.prosrc LIKE :pattern ORDER BY p.proname
+"""
+
+
+@requires_db
+def test_0030_renames_the_ledger_delete_setting_and_nothing_else() -> None:
+    """0030 rewrites every trigger function that reads the opt-in, changing only the setting's
+    name; afterwards only the new name opens the ledger, and the downgrade reverses both."""
+    cfg = alembic_cfg()
+    command.upgrade(cfg, "head")
+    engine = create_engine(get_settings().database_url)
+    old, new = "naturex.allow_ledger_delete", "wildworth.allow_ledger_delete"
+
+    def definitions(setting: str) -> list[str]:
+        with engine.connect() as conn:
+            found = conn.execute(text(DEFINITIONS_READING), {"pattern": f"%{setting}%"})
+            return list(found.scalars())
+
+    def opens_the_ledger(setting: str) -> bool:
+        """Whether a transaction with `setting` on may delete the seeded ledger (rolled back)."""
+        with engine.connect() as conn:
+            outer = conn.begin()
+            try:
+                with Session(bind=conn, join_transaction_mode="create_savepoint") as session:
+                    seed(session)
+                attempt = conn.begin_nested()
+                try:
+                    conn.execute(text(f"SET LOCAL {setting} = 'on'"))
+                    return bool(conn.execute(text("DELETE FROM ledger_entries")).rowcount)
+                except DBAPIError:
+                    return False
+                finally:
+                    attempt.rollback()
+            finally:
+                outer.rollback()
+
+    try:
+        renamed = definitions(new)
+        assert len(renamed) == 5 and definitions(old) == []
+        assert (opens_the_ledger(new), opens_the_ledger(old)) == (True, False)
+
+        command.downgrade(cfg, "0029")
+        original = definitions(old)
+        assert definitions(new) == []
+        assert [definition.replace(old, new) for definition in original] == renamed
+        assert (opens_the_ledger(old), opens_the_ledger(new)) == (True, False)
+    finally:
+        command.upgrade(cfg, "head")
+        engine.dispose()
 
 
 def test_world_id_present_on_mutable_models() -> None:

@@ -7,7 +7,7 @@ Accepted. Partly superseded: models and embeddings by [ADR-0003](./0003-model-ro
 2026-10-04
 
 ## Context
-NatureX needs a fixed stack for a five-week hackathon so CI, AI assistants and parallel owners (D1–D3, PD) do not drift. Open items from [research.md](../research.md) §6 and [plan.md](../../tasks/plan.md) must be decided before schema and frontend scaffold land.
+WildWorth needs a fixed stack for a five-week hackathon so CI, AI assistants and parallel owners (D1–D3, PD) do not drift. Open items from [research.md](../research.md) §6 and [plan.md](../../tasks/plan.md) must be decided before schema and frontend scaffold land.
 
 Constraints from [AGENTS.md](../../AGENTS.md): Python 3.12 + FastAPI + SQLModel; Next.js App Router + Tailwind + shadcn/ui; Nemotron only via Nebius Token Factory; free tiers unless covered by hackathon credits.
 

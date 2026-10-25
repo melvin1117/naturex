@@ -337,7 +337,7 @@ def test_the_prefix_is_stripped_and_marked(path: str, seen: str, sandbox: bool) 
 
     asyncio.run(run())
     assert (got["path"], got["raw_path"]) == (seen, seen.encode())
-    assert bool(got.get("naturex.sandbox")) is sandbox
+    assert bool(got.get("wildworth.sandbox")) is sandbox
 
 
 def test_uploads_through_the_sandbox_pass_the_csrf_body_check() -> None:
@@ -365,7 +365,7 @@ def test_the_live_stream_follows_the_channel(session: Session, client: TestClien
             "headers": [(b"cookie", f"{DEMO_COOKIE}={token}".encode())],
         }
         if sandbox:
-            scope["naturex.sandbox"] = True
+            scope["wildworth.sandbox"] = True
         return stream_access(Request(scope), Response(), session)
 
     # Through /sandbox the stream follows the demo session and re-checks it on every poll.

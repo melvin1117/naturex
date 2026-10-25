@@ -142,12 +142,12 @@ describe("a demo site's recorded run", () => {
 
     expect(
       screen.getByText(
-        /^The satellite metrics show a stable, healthy mangrove/,
+        /^Multiple encroachment events and a June 2025 greenness dip/,
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /A recorded run, .*2026 · Health −3 with cited evidence/,
+        /A recorded run, .*2026 · Health −2 with cited evidence/,
       ),
     ).toBeInTheDocument();
     expect(

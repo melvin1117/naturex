@@ -115,7 +115,7 @@
         "confidence": "71.0",
         "is_wetland": true,
         "base_health": "76.2",
-        "method_version": "naturex-scoring/1.0 (dev-spec §7.4)",
+        "method_version": "wildworth-scoring/1.0 (dev-spec §7.4)",
         "ndvi_trend_used": "0",
         "agreement_source": "default",
         "adjustment_reason": null,
@@ -447,7 +447,7 @@
         "price_basis": "Int$2020/ha/yr",
         "range_basis": "mid = high = Brander et al. 2024 Table 1 biome mean; low = indicative median-equivalent (mean x median/mean ratio from Costanza et al. 2014 Table 4)",
         "landcover_sum": "1.0000",
-        "methods_version": "naturex-valuation/1.1.0 (T14)",
+        "methods_version": "wildworth-valuation/1.1.0 (T14)",
         "context_multiplier": "1",
         "landcover_renormalised": false,
         "carbon_included_in_value": false
@@ -463,7 +463,7 @@
       },
       "is_wetland": true,
       "data_age_days": 0,
-      "method_version": "naturex-rating/1.0 (T19)"
+      "method_version": "wildworth-rating/1.0 (T19)"
     },
     "greenwashing_risk": null,
     "run_id": null,

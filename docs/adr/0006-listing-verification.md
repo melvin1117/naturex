@@ -99,7 +99,7 @@ Every asset page in the Exchange has a panel showing:
 - a link to the matching ledger entry.
 
 The badge text is precise:
-- `verified`: "Documents reviewed by NatureX (hackathon process)";
+- `verified`: "Documents reviewed by WildWorth (hackathon process)";
 - `unverified`: "Self-attested by the community".
 
 It never says "Ownership proven".
@@ -158,7 +158,7 @@ Nobody can upload real land papers to a hackathon deployment or a test run, so t
 - **Always disclosed:**
   - the ledger entry records `mode` and `evidence_kind`;
   - sample runs show the badge **"Demo verification: sample documents, no real ownership checked"**, repeated at the top of the public panel;
-  - real documents reviewed in a demo deployment show "Documents reviewed by NatureX (hackathon process)";
+  - real documents reviewed in a demo deployment show "Documents reviewed by WildWorth (hackathon process)";
   - the site footer shows "Verification: demo mode" whenever demo mode is on.
 
 ### 7. The real-world path (not built in the hackathon)

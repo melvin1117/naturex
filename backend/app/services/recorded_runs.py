@@ -24,12 +24,12 @@ RECORDED_DIR = DATA_DIR / "recorded_runs"
 
 def placeholder_asset_id(site_key: str) -> UUID:
     """The recorded trace's `asset_id`: stable per site and never an asset of any world."""
-    return uuid5(NAMESPACE_URL, f"naturex:recorded-run:{site_key}")
+    return uuid5(NAMESPACE_URL, f"wildworth:recorded-run:{site_key}")
 
 
 def placeholder_run_id(site_key: str) -> UUID:
     """The recorded trace's `run_id`: stable per site and never a run of any world."""
-    return uuid5(NAMESPACE_URL, f"naturex:recorded-run:{site_key}:run")
+    return uuid5(NAMESPACE_URL, f"wildworth:recorded-run:{site_key}:run")
 
 
 def recorded_run_path(site_key: str) -> Path | None:

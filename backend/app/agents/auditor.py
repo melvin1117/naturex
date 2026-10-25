@@ -391,7 +391,7 @@ def _derived_event_id(item: NewsScoutItem) -> str:
     """The ID News Scout would give the item (uuid5 of its URL), for items built without one."""
     if item.url:
         return str(uuid5(NAMESPACE_URL, item.url.strip().rstrip("/")))
-    key = f"naturex:event:{item.title or ''}|{item.summary}|{item.published_at or ''}"
+    key = f"wildworth:event:{item.title or ''}|{item.summary}|{item.published_at or ''}"
     return str(uuid5(NAMESPACE_URL, key))
 
 

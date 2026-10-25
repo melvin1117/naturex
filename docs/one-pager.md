@@ -1,6 +1,6 @@
 # WildWorth — The AI rating agency for living nature
 
-*Worth more wild.* (Formerly NatureX; brand: [wildworth-brand-guidelines.html](design/wildworth-brand-guidelines.html).)
+*Worth more wild.* (Brand: [wildworth-brand-guidelines.html](design/wildworth-brand-guidelines.html).)
 
 **Nebius × NVIDIA Global AI Hackathon** · Track: **Best Apps & Agents** · Built on **NVIDIA Nemotron via Nebius Token Factory** + **Tavily**
 

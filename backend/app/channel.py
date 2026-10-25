@@ -24,7 +24,7 @@ SANDBOX_PREFIX = "/sandbox"
 DEMO_COOKIE = "nx_demo"
 SANDBOX_PATH_ONLY = "sandbox_path_only"
 NOT_IN_SANDBOX = "not_in_sandbox"
-_SCOPE_KEY = "naturex.sandbox"
+_SCOPE_KEY = "wildworth.sandbox"
 _RAW_PREFIX = SANDBOX_PREFIX.encode()
 
 

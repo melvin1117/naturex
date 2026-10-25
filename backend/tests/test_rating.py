@@ -325,11 +325,11 @@ def test_seed_is_idempotent_for_reports(session: Session) -> None:
 @requires_db
 def test_seed_upgrades_a_database_seeded_before_t19(session: Session) -> None:
     """An older template has IPO prices but no reports: `make seed` adds report v1 only."""
-    session.execute(text("SET LOCAL naturex.allow_ledger_delete = 'on'"))
+    session.execute(text("SET LOCAL wildworth.allow_ledger_delete = 'on'"))
     session.execute(delete(LedgerEntry).where(col(LedgerEntry.world_id) == WORLD_ID))
     session.execute(delete(Report).where(col(Report.world_id) == WORLD_ID))
     session.execute(delete(Metrics).where(col(Metrics.world_id) == WORLD_ID))
-    session.execute(text("SET LOCAL naturex.allow_ledger_delete = 'off'"))
+    session.execute(text("SET LOCAL wildworth.allow_ledger_delete = 'off'"))
     session.commit()
 
     seed(session)

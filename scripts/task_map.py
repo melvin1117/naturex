@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TODO = ROOT / "tasks" / "todo.md"
 OUT_HTML = ROOT / "tasks" / "task-map.html"
 OUT_JSON = ROOT / "tasks" / "task-map.json"
-REPO = "melvin1117/naturex"
+REPO = "melvin1117/wildworth"
 ROLES = ["PD", "D1", "D2", "D3"]
 PRIORITY_RANK = {"Must": 0, "Should": 1, "Could": 2}
 

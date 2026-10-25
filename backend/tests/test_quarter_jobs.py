@@ -536,7 +536,7 @@ def test_a_crash_before_the_quarter_runs_is_logged_and_the_job_recovers(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     def broken(*_: Any, **__: Any) -> Any:
-        raise RuntimeError("could not connect to postgres://naturex:hunter2@db")
+        raise RuntimeError("could not connect to postgres://wildworth:hunter2@db")
 
     monkeypatch.setattr(qj, "listed_assets", broken)
     jobs = QuarterJobs()

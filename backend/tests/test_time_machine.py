@@ -222,6 +222,12 @@ def test_the_rerate_shock_is_deterministic_and_bounded() -> None:
     assert len(set(shocks)) > 400  # a real spread, not a constant
 
 
+def test_the_rerate_shock_seed_never_changes() -> None:
+    """Stored re-anchors were drawn from this seed: a past shock must stay reproducible from its
+    report ID, so changing the seed's formula (or its prefix) is a breaking change."""
+    assert seeded_shock("report-1") == Decimal("0.000240")
+
+
 @pytest.mark.parametrize(
     ("price", "fair_value"),
     [("10", "20"), ("20", "10"), ("21.4723", "16.1653"), ("0.0001", "0"), ("285.15", "300")],
