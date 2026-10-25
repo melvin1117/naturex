@@ -385,7 +385,7 @@ function StatusCard({
           )}
           {onExchange && (
             <Button asChild variant="outline">
-              <Link href={`${assetHref(asset.id)}#verification`}>
+              <Link href={`${assetHref(asset.id)}?tab=verification`}>
                 See the public verification panel
               </Link>
             </Button>

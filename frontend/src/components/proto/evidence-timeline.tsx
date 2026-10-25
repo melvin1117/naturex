@@ -17,7 +17,7 @@ import {
 import { cn } from "cn";
 
 import { ChartTooltip, ndviSummary } from "@/components/proto/charts";
-import { Panel, safeHref } from "@/components/proto/report-panels";
+import { Panel } from "@/components/proto/report-panels";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import type { RecordedRun, RunTrace } from "@/lib/api/types";
@@ -32,6 +32,7 @@ import {
 import { date } from "@/lib/prototype/format";
 import { useRunTrace } from "@/lib/hooks";
 import type { ReportFacts } from "@/lib/report-facts";
+import { safeHref } from "@/lib/safe-href";
 import type { BeforeAfterViews } from "@/lib/site-views";
 import {
   type Vision,

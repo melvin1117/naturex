@@ -826,6 +826,60 @@ describe("AssetView", () => {
     window.history.replaceState(null, "", "/");
   });
 
+  it("opens the Agent Trace from a `?tab=trace` link", async () => {
+    nav.search = new URLSearchParams("tab=trace");
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        "GET /media/demo-sites/wetland_mx/recorded-run.json": () =>
+          json({ ...recorded, site_key: "wetland_mx" }),
+      }),
+    );
+    const drawer = await screen.findByRole("dialog", {
+      name: "How Xochimilco Wetland was rated",
+    });
+    expect(
+      await within(drawer).findByRole("tab", { name: "Story" }),
+    ).toBeInTheDocument();
+  });
+
+  it("makes opening a drawer a step back can undo", async () => {
+    window.history.replaceState(null, "", `/asset/${ID}`);
+    renderExchange(<AssetView id={ID} />, routes());
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Proof of Life report" }),
+    );
+    await screen.findByRole("dialog", { name: "Xochimilco Wetland" });
+    expect(window.location.search).toBe("?tab=report");
+
+    // Back closes it, and the page is still the site.
+    window.history.back();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(window.location.search).toBe("");
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Xochimilco Wetland" }),
+    ).toBeInTheDocument();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("says a recorded run isn't what rated the page", async () => {
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        "GET /media/demo-sites/wetland_mx/recorded-run.json": () =>
+          json({ ...recorded, site_key: "wetland_mx" }),
+      }),
+    );
+    const band = await screen.findByRole("region", {
+      name: "How it was rated",
+    });
+    expect(
+      within(band).getByText(
+        /The rating on this page comes from the formula alone/,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("leads a phone from the hero to Back this site", async () => {
     renderExchange(<AssetView id={ID} />, routes());
     const hero = await screen.findByRole("region", {

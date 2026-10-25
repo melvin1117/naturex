@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * What a site page opens over itself instead of sending the visitor elsewhere (ADR-0008): the
@@ -40,10 +40,17 @@ export const RECORD_TAB_LABEL: Record<RecordTab, string> = {
 export const BACK_THIS_SITE = "back-this-site";
 
 /** Places on the page itself that a `?tab=` can point at: scrolled to, never a drawer. */
-export const SITE_ANCHORS: Record<string, string> = {
+export const SITE_ANCHORS = {
   news: "what-happened",
   price: "price",
-};
+} as const;
+
+/** The page anchor a `?tab=` names, if it names one (never an inherited key). */
+export function siteAnchor(tab: string | null): string | null {
+  return tab !== null && Object.hasOwn(SITE_ANCHORS, tab)
+    ? SITE_ANCHORS[tab as keyof typeof SITE_ANCHORS]
+    : null;
+}
 
 export function parseSiteDrawer(tab: string | null): SiteDrawer | null {
   return SITE_DRAWERS.find((d) => d === tab) ?? null;
@@ -62,7 +69,8 @@ export function withSiteDrawer(
   if (drawer) url.searchParams.set("tab", drawer);
   else url.searchParams.delete("tab");
   if (!drawer || drawer !== "report") url.searchParams.delete("version");
-  return `${url.pathname}${url.search}${drawer ? url.hash : ""}`;
+  // A ledger entry's hash belongs to The Record only.
+  return `${url.pathname}${url.search}${drawer === "ledger" ? url.hash : ""}`;
 }
 
 /**
@@ -81,22 +89,41 @@ export function useSiteDrawer() {
     setDrawer(parseSiteDrawer(tab));
   }
   // A link followed in place (the verification panel's ledger link pushes `?tab=ledger#…` and
-  // announces the hash) moves the drawer too, before the router catches up.
+  // announces the hash), or Back and Forward, move the drawer too.
+  const pushed = useRef(false);
   useEffect(() => {
-    const follow = () =>
-      setDrawer(
-        parseSiteDrawer(new URL(window.location.href).searchParams.get("tab")),
+    const follow = () => {
+      const next = parseSiteDrawer(
+        new URL(window.location.href).searchParams.get("tab"),
       );
+      if (!next) pushed.current = false;
+      setDrawer(next);
+    };
     window.addEventListener("hashchange", follow);
-    return () => window.removeEventListener("hashchange", follow);
+    window.addEventListener("popstate", follow);
+    return () => {
+      window.removeEventListener("hashchange", follow);
+      window.removeEventListener("popstate", follow);
+    };
   }, []);
-  const show = useCallback((next: SiteDrawer | null) => {
-    setDrawer(next);
-    window.history.replaceState(
-      null,
-      "",
-      withSiteDrawer(window.location.href, next),
-    );
-  }, []);
+  // Opening a drawer is a step in the history, so Back closes it rather than leaving the site
+  // (on a phone the drawer is the whole screen). One opened on arrival (`?tab=` in the link) has
+  // no step of its own: closing it only rewrites the URL.
+  const show = useCallback(
+    (next: SiteDrawer | null) => {
+      const url = withSiteDrawer(window.location.href, next);
+      if (next && !drawer) {
+        window.history.pushState(null, "", url);
+        pushed.current = true;
+      } else if (!next && pushed.current) {
+        pushed.current = false;
+        window.history.back();
+      } else {
+        window.history.replaceState(null, "", url);
+      }
+      setDrawer(next);
+    },
+    [drawer],
+  );
   return { drawer, tab, show };
 }

@@ -149,6 +149,8 @@ export function evidenceTimeline(
   signals: Signal[],
   news: NewsItem[],
   followUps: FollowUp[],
+  /** "YYYY-MM": nothing dated later is listed. */
+  thisMonth: string = new Date().toISOString().slice(0, 7),
 ): EvidenceTimeline {
   const months = series
     .map(([m]) => m.slice(0, 7))
@@ -186,8 +188,11 @@ export function evidenceTimeline(
   }
 
   // News from after the last satellite month (this quarter's, or a simulated event) is still
-  // part of what happened: listed, without a pin on the chart. Older than the series, it isn't.
-  const listed = (m: string) => inRange(m) || Boolean(last && m > last);
+  // part of what happened: listed, without a pin on the chart. Older than the series, it isn't;
+  // without a series, every dated item is listed. Nothing dated after this month (a web result's
+  // bad date) is.
+  const listed = (m: string) =>
+    m <= thisMonth && (!first || inRange(m) || Boolean(last && m > last));
   const dated: TimelineNews[] = news
     .filter(
       (n) => MONTH_RE.test(n.date.slice(0, 7)) && listed(n.date.slice(0, 7)),

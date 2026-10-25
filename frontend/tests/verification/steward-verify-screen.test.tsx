@@ -460,6 +460,19 @@ describe("StewardVerifyScreen", () => {
     expect(screen.getByText("A boundary dispute.")).toBeInTheDocument();
   });
 
+  it("leads a listing on the Marketplace to its public panel, in the site's drawer", async () => {
+    renderScreen({
+      [ASSET]: () => json(unlaunched({ status: "suspended", trading: true })),
+      [RUNS]: () => json([run(), REVOKED_RUN]),
+      [PANEL]: () => json(revokedPanel),
+    });
+    expect(
+      await screen.findByRole("link", {
+        name: "See the public verification panel",
+      }),
+    ).toHaveAttribute("href", `/asset/${ASSET_ID}?tab=verification`);
+  });
+
   it("drops the revocation once a later run was approved, even with a newer submission", async () => {
     const approved = verifiedRun({
       id: "aaaaaaaa-0000-4000-8000-000000000000",

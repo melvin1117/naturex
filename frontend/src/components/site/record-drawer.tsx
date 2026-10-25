@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { FieldEvidencePanel } from "@/components/evidence/field-evidence-panel";
 import { ApiLedgerTab } from "@/components/proto/ledger-panels";
 import { ReportTab, ScorePanel } from "@/components/proto/report-panels";
@@ -52,6 +54,9 @@ export function RecordDrawer({
   images: SiteImages | undefined;
   landCover: AssetLandCover | null;
 }) {
+  // While it slides out, the drawer keeps the tab it was on.
+  const [shown, setShown] = useState<RecordTab>(tab ?? "report");
+  if (tab !== null && tab !== shown) setShown(tab);
   return (
     <Sheet open={tab !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
@@ -59,7 +64,7 @@ export function RecordDrawer({
         className="w-full gap-0 overflow-y-auto overscroll-contain bg-background p-0 sm:max-w-3xl"
       >
         <Tabs
-          value={tab ?? "report"}
+          value={shown}
           onValueChange={(v) => onTab(v as RecordTab)}
           className="gap-0"
         >
@@ -162,10 +167,10 @@ function DataSources({
       aria-labelledby="data-sources"
       className="text-sm text-muted-foreground"
     >
-      <h2 id="data-sources" className="font-medium text-foreground">
+      <h3 id="data-sources" className="font-medium text-foreground">
         Data behind this page
         {facts?.period && ` · ${quarterLabel(facts.period)} report`}
-      </h2>
+      </h3>
       <ul className="mt-3 space-y-2 leading-relaxed">
         {lines.map((line) => (
           <li key={line}>{line}</li>

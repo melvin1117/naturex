@@ -55,9 +55,7 @@ export function TraceDrawer({
           </SheetDescription>
         </SheetHeader>
         <div className="px-5 pb-10 sm:px-8">
-          {open && (
-            <SiteTrace asset={asset} runId={runId} recorded={recorded} />
-          )}
+          <SiteTrace asset={asset} runId={runId} recorded={recorded} />
         </div>
       </SheetContent>
     </Sheet>
@@ -74,7 +72,7 @@ function SiteTrace({
   recorded: RecordedRun | null | undefined;
 }) {
   const apiBase = useApiBase();
-  const live = useRunTrace(runId ?? undefined);
+  const live = useRunTrace(runId);
   const views = beforeAfterViews(asset, apiBase);
   const recordedTrace = useMemo(
     () =>

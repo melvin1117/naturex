@@ -13,10 +13,13 @@ import {
 
 import { ActorChip } from "./actor";
 
+const AUDITOR_MODEL = "nvidia/Nemotron-3-Ultra-550b-a55b";
+
 /**
- * Under a site's header: the Auditor's verdict in one line, the models that worked on it, and
- * the way into the Agent Trace, which opens over the page. The site's own rated report wins; a
- * demo site nobody has rated in this sandbox shows its recorded run, labelled with its date.
+ * Under a site's header: the Auditor's verdict in one line, the models that worked on it (from
+ * the run's own receipt) and the way into the Agent Trace, which opens over the page. The site's
+ * own rated report wins; a demo site nobody has rated in this sandbox shows its recorded run,
+ * labelled with its date and as not the source of the page's rating.
  */
 export function VerdictStrip({
   report,
@@ -36,6 +39,11 @@ export function VerdictStrip({
     !report?.run_id && recorded ? auditCase(recorded.trace) : null;
   const verdict = own?.auditor?.verdict ?? recordedCase?.verdict;
   const crew = useMemo(() => (trace ? crewOf(trace) : []), [trace]);
+  // Who judged it, from the run when it's here; the Auditor's model otherwise.
+  const judge = useMemo(() => {
+    const model = (trace ? auditCase(trace) : null)?.model;
+    return model ? modelLabel(model) : modelLabel(AUDITOR_MODEL);
+  }, [trace]);
   if (!verdict) return null;
   const adjustment = own
     ? (own.auditor?.auditor_adjustment ?? 0)
@@ -48,7 +56,7 @@ export function VerdictStrip({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <ActorChip
           actor="ultra"
-          name={`Judged by ${modelLabel("nvidia/Nemotron-3-Ultra-550b-a55b")}`}
+          name={`Judged by ${judge}`}
           note="reasoning on"
         />
         <span className="text-xs text-machine-muted">
@@ -63,6 +71,12 @@ export function VerdictStrip({
       <p className="mt-4 max-w-[62ch] font-serif text-xl leading-snug text-balance sm:text-[1.65rem]">
         {withoutCitations(verdict)}
       </p>
+      {recordedCase && (
+        <p className="mt-2 max-w-[62ch] text-sm text-machine-muted">
+          A real run of this site, recorded to show the agents at work. The
+          rating on this page comes from the formula alone.
+        </p>
+      )}
       <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
         {crew.length > 0 ? (
           <ul aria-label="Who worked on it" className="flex flex-wrap gap-1.5">
@@ -72,13 +86,12 @@ export function VerdictStrip({
               </li>
             ))}
           </ul>
-        ) : (
-          <span />
-        )}
+        ) : null}
         <Button
           variant="on-image"
+          aria-haspopup="dialog"
           onClick={onOpen}
-          className="focus-visible:ring-card focus-visible:ring-offset-2 focus-visible:ring-offset-machine"
+          className="ml-auto focus-visible:ring-card focus-visible:ring-offset-2 focus-visible:ring-offset-machine"
         >
           <PanelRight aria-hidden="true" />
           Open the Agent Trace
@@ -95,7 +108,7 @@ type CrewMember = {
   note: string;
 };
 
-/** The run's models by how many calls they made, then the web searches and code's checks. */
+/** The run's models by how many calls they made, then its web searches. */
 function crewOf(trace: RunTrace): CrewMember[] {
   const receipt = costReceipt(trace);
   const models = [...receipt.models]

@@ -11,6 +11,8 @@ import {
   Layers,
 } from "lucide-react";
 import { useId, useState } from "react";
+
+import { safeHref } from "@/lib/safe-href";
 import { cn } from "cn";
 
 import {
@@ -66,7 +68,8 @@ export function Panel({
   const headingId = useId();
   return (
     <section
-      aria-labelledby={headingId}
+      // A page's own sections are named landmarks; panels nested inside them aren't.
+      aria-labelledby={Heading === "h2" ? headingId : undefined}
       className={cn("rounded-3xl bg-card p-6 shadow-soft", className)}
       {...rest}
     >
@@ -696,19 +699,6 @@ export type NewsItem = {
   /** Illustrative prototype content, tagged "Sample". */
   sample?: boolean;
 };
-
-/** A news link only if it is http(s): anything else (`javascript:`, `data:`) is dropped. */
-export function safeHref(url: string | null | undefined) {
-  if (!url) return null;
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "https:" || parsed.protocol === "http:"
-      ? parsed.href
-      : null;
-  } catch {
-    return null;
-  }
-}
 
 export function NewsList({
   events,

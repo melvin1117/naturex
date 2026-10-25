@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   isRecordTab,
   parseSiteDrawer,
+  siteAnchor,
   withSiteDrawer,
 } from "@/lib/site-drawer";
 
@@ -36,6 +37,10 @@ describe("a site page's drawers in its URL", () => {
     expect(withSiteDrawer(`${base}?tab=ledger#ledger-entry-3`, null)).toBe(
       "/sandbox/asset/1",
     );
+    // …and doesn't follow to another tab (it would refocus the entry on the way back).
+    expect(
+      withSiteDrawer(`${base}?tab=ledger#ledger-entry-3`, "verification"),
+    ).toBe("/sandbox/asset/1?tab=verification");
     // A report version belongs to the report tab only.
     expect(withSiteDrawer(`${base}?tab=report&version=2`, "report")).toBe(
       "/sandbox/asset/1?tab=report&version=2",
@@ -43,5 +48,13 @@ describe("a site page's drawers in its URL", () => {
     expect(withSiteDrawer(`${base}?tab=report&version=2`, "ledger")).toBe(
       "/sandbox/asset/1?tab=ledger",
     );
+  });
+
+  it("scrolls only to the page's own parts, never an inherited key", () => {
+    expect(siteAnchor("news")).toBe("what-happened");
+    expect(siteAnchor("price")).toBe("price");
+    for (const crafted of ["toString", "__proto__", "constructor", "trace"])
+      expect(siteAnchor(crafted)).toBeNull();
+    expect(siteAnchor(null)).toBeNull();
   });
 });

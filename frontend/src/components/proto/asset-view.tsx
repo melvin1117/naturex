@@ -13,6 +13,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Link from "@/components/app-link";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 
@@ -28,7 +29,6 @@ import {
   useSiteRun,
 } from "@/components/proto/evidence-timeline";
 import { VerdictStrip } from "@/components/trace/verdict-strip";
-import { TraceDrawer } from "@/components/trace/trace-drawer";
 import { LoadError } from "@/components/proto/load-error";
 import { PriceTick } from "@/components/live-number";
 import {
@@ -36,7 +36,6 @@ import {
   Panel,
   ServicesPanel,
 } from "@/components/proto/report-panels";
-import { RecordDrawer } from "@/components/site/record-drawer";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TradePanel } from "@/components/trade-panel";
@@ -75,8 +74,17 @@ import {
   RECORD_TABS,
   type RecordTab,
   SITE_ANCHORS,
+  siteAnchor,
   useSiteDrawer,
 } from "@/lib/site-drawer";
+
+// The drawers' content (the whole Agent Trace, the report, The Record) loads when one opens.
+const TraceDrawer = dynamic(() =>
+  import("@/components/trace/trace-drawer").then((m) => m.TraceDrawer),
+);
+const RecordDrawer = dynamic(() =>
+  import("@/components/site/record-drawer").then((m) => m.RecordDrawer),
+);
 
 /** The asset page for a real asset: report, charts, map, prices and ledger from the API. */
 export function AssetView({ id }: { id: string }) {
@@ -206,16 +214,21 @@ function AssetLoaded({
     .filter(Boolean)
     .join(" · ");
 
-  // `?tab=news` and `?tab=price` point at a part of the page, not a drawer.
+  // `?tab=news` and `?tab=price` point at a part of the page, not a drawer: scroll there once
+  // what loads above it (the verdict band, the price chart) has settled.
+  const anchor = siteAnchor(tab);
+  const settled =
+    prices.data !== undefined &&
+    recorded.status !== "loading" &&
+    (site.run !== undefined || !asset.latest_report?.run_id);
   useEffect(() => {
-    const anchor = tab ? SITE_ANCHORS[tab] : undefined;
-    if (!anchor) return;
+    if (!anchor || !settled) return;
     // Before any trades there's no price chart: the trade panel has the price.
     const target =
       document.getElementById(anchor) ??
       document.getElementById(BACK_THIS_SITE);
     target?.scrollIntoView({ block: "start" });
-  }, [tab]);
+  }, [anchor, settled]);
 
   return (
     <>
@@ -313,6 +326,7 @@ function AssetLoaded({
                 {hasTrace && (
                   <Button
                     variant="on-image"
+                    aria-haspopup="dialog"
                     // Phones lead with "Back this site": this one steps back to an outline.
                     className="max-lg:border max-lg:border-card/45 max-lg:bg-machine/30 max-lg:text-card max-lg:backdrop-blur-sm"
                     onClick={() => show("trace")}
@@ -324,6 +338,7 @@ function AssetLoaded({
                 {latest && (
                   <Button
                     variant="on-image-outline"
+                    aria-haspopup="dialog"
                     onClick={() => show("report")}
                   >
                     Proof of Life report
@@ -513,6 +528,7 @@ function MoreAboutRating({ onOpen }: { onOpen: (tab: RecordTab) => void }) {
             variant="outline"
             size="sm"
             className="rounded-full"
+            aria-haspopup="dialog"
             onClick={() => onOpen(t)}
           >
             <Icon aria-hidden="true" />
@@ -588,14 +604,8 @@ function PricePanel({
         />
       ) : loading ? (
         <PriceChartSkeleton />
-      ) : points.length > 1 ? (
-        <PriceChart prices={points} events={news} perDay={false} />
       ) : (
-        <p className="py-10 text-center text-sm text-muted-foreground">
-          {points[0]
-            ? `Opened at ${fmtPrice(points[0].price)}. The chart fills in as supporters trade.`
-            : "No trades yet."}
-        </p>
+        <PriceChart prices={points} events={news} perDay={false} />
       )}
       {facts.fairValuePerUnit !== null && (
         <p className="mt-4 text-xs text-muted-foreground">
