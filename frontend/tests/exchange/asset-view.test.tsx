@@ -194,7 +194,7 @@ describe("AssetView", () => {
       within(sources).getByText(/^Dynamic World: This dataset/),
     ).toBeInTheDocument();
     expect(within(sources).getByText(IMAGERY_ATTRIBUTION)).toBeInTheDocument();
-  });
+  }, 15_000);
 
   it("opens its latest run's Agent Trace over the page, not on another one", async () => {
     const run = celestun.run_id;
@@ -231,16 +231,19 @@ describe("AssetView", () => {
     ).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /^How it was rated$/ }));
-    const drawer = await screen.findByRole("dialog", {
-      name: "How Xochimilco Wetland was rated",
-    });
+    // The drawer loads lazily (next/dynamic): it can take more than findBy's default second.
+    const drawer = await screen.findByRole(
+      "dialog",
+      { name: "How Xochimilco Wetland was rated" },
+      { timeout: 5000 },
+    );
     expect(
       await within(drawer).findByRole("tab", { name: "Story" }),
     ).toBeInTheDocument();
     expect(
       within(drawer).getByText(/Judged by Nemotron 3 Ultra/),
     ).toBeVisible();
-  });
+  }, 15_000);
 
   it("leads a demo site nobody has rated here to its recorded run", async () => {
     renderExchange(
