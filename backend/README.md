@@ -17,34 +17,6 @@ Health check: `GET http://localhost:8000/healthz`
 Postgres (local): `docker compose up -d` from the repo root. The database, user and password are
 all `wildworth` (Compose project `wildworth`, volume `wildworth_pgdata`), as in `.env.example`.
 
-**Moving from the old `naturex` database?** The old Compose project was named after the checkout
-folder, so its container and volume are usually `naturex-db-1` and `naturex_naturex_pgdata` (find
-yours with `docker ps -a --filter label=com.docker.compose.service=db` and
-`docker volume ls | grep pgdata`). Copy each database you want to keep into the new container
-once, then set `DATABASE_URL` in `.env` as in `.env.example`. Don't run
-`docker compose -p naturex up`: that mounts a new, empty volume.
-
-```bash
-umask 077                     # the dumps hold accounts and sessions
-docker compose stop           # the new container, if it's up (frees port 5432)
-docker start naturex-db-1     # the old one, with its data; if it was removed, run instead:
-# docker run -d --name naturex-db-1 -v naturex_naturex_pgdata:/var/lib/postgresql/data pgvector/pgvector:pg16
-docker exec naturex-db-1 psql -U naturex -l      # the databases you have
-# one dump per database to keep: naturex (dev data), wildworth (a seeded live world), ...
-docker exec naturex-db-1 pg_dump -U naturex -Fc naturex > ~/old-naturex.dump
-docker stop naturex-db-1      # kept as it is, for a rollback
-docker compose up -d --wait
-# `wildworth` may already hold a fresh setup: recreate it empty, then restore into it
-docker compose exec -T db sh -c \
-  'dropdb -U wildworth --force --if-exists wildworth && createdb -U wildworth wildworth'
-docker compose exec -T db pg_restore -U wildworth -d wildworth \
-  --single-transaction --no-owner --no-acl < ~/old-naturex.dump
-```
-
-Restore another dump the same way into its own database (`createdb -U wildworth wildworth_live`,
-then `pg_restore -d wildworth_live …`). Once you've checked them: `rm ~/old-*.dump`,
-`docker rm naturex-db-1` and `docker volume rm naturex_naturex_pgdata`.
-
 Tests create their own `wildworth_test` database (and E2E `wildworth_e2e`) on demand.
 
 Seed (template world, and the live world with the 3 curated sites; idempotent): `make migrate && make seed`.

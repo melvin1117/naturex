@@ -88,7 +88,6 @@ cp .env.example .env    # first time only; add keys for live services
 make dev                # uses .env as is (USE_MOCKS=true: mock agents and data)
 make dev LIVE=1         # real services: Token Factory models, Tavily, Earth Engine (needs keys)
 ```
-Moving from the old `naturex` database? See [backend/README.md](backend/README.md#setup).
 
 ### Quick start (backend)
 ```bash
