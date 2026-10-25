@@ -92,7 +92,7 @@ function Summary({ summary }: { summary: FieldEvidencePublic }) {
     return (
       <p className="mt-4 text-sm">
         {summary.photos === 0
-          ? "No field photos yet. Members of the site's community add them from the Stewards app: photos taken on the land in the last year, with the phone's location on."
+          ? "No field photos yet. Members of the site's community add them from Communities: photos taken on the land in the last year, with the phone's location on."
           : "None of the community's field photos has passed the checks yet."}
       </p>
     );

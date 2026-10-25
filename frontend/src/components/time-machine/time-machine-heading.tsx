@@ -2,10 +2,7 @@
 export function TimeMachineHeading() {
   return (
     <>
-      <p className="text-sm text-muted-foreground">
-        Control room · play money only
-      </p>
-      <h1 className="mt-1 font-serif text-5xl leading-none tracking-tight sm:text-6xl">
+      <h1 className="font-serif text-5xl leading-none tracking-tight sm:text-6xl">
         Time Machine
       </h1>
       <p className="mt-3 max-w-2xl text-muted-foreground">

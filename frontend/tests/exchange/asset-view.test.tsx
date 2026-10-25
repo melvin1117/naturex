@@ -196,11 +196,10 @@ describe("AssetView", () => {
     expect(
       within(trace).getByRole("link", { name: /Open the Agent Trace/ }),
     ).toHaveAttribute("href", `/trace/${run}`);
+    // "AI at work" is gone (ADR-0008): the trace is the way into the models.
     expect(
-      within(trace).getByRole("link", {
-        name: "Every model at work, with live costs",
-      }),
-    ).toHaveAttribute("href", "/ai");
+      within(trace).queryByRole("link", { name: /Every model at work/ }),
+    ).toBeNull();
     fireEvent.click(within(trace).getByRole("button", { name: "Quick look" }));
     expect(
       await screen.findByRole("dialog", { name: "Agent Trace" }),

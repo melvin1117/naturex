@@ -64,9 +64,9 @@ describe("IpoLaunched, the opening bell (#216)", () => {
       }),
     ).toBeInTheDocument();
     expect(litColumns(container)).toBe(0);
-    expect(
-      screen.getByText("Opening price · play money").parentElement,
-    ).toHaveTextContent("$10.5173 per unit");
+    expect(screen.getByText("Opening price").parentElement).toHaveTextContent(
+      "$10.5173 per unit",
+    );
   });
 
   it("takes both shares from the API's figures, decimals included", () => {

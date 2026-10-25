@@ -94,8 +94,7 @@ export default function RootLayout({
             <TooltipProvider delayDuration={200}>
               <TourProvider>
                 <SkipLink />
-                {/* The sandbox bar under /sandbox/* only; the real app has none (its
-                    footer, auth forms and trade panel say it's play money). */}
+                {/* Outside the sandbox: only tidies a leftover scripted-demo session. */}
                 <DemoBar />
                 <div className="flex flex-1 flex-col">{children}</div>
                 <TraceSheet />

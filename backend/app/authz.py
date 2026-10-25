@@ -328,7 +328,11 @@ def _impartial_admin(actor: Actor, resource: Resource) -> Decision:
 def _simulate(actor: Actor, resource: Resource) -> Decision:
     """In a sandbox, anyone acting in it moves its time and injects its events: a sandbox is
     one visitor's private copy, so the Time Machine is a demo control there. Elsewhere it's an
-    operator's action, like OPERATE."""
+    operator's action, like OPERATE.
+
+    This also lets every persona read the alerts the Time Machine sent to the others
+    (`GET /admin/alerts`). That's safe only while a sandbox belongs to one visitor; revisit it
+    if sandboxes are ever shared."""
     if actor.session_kind == SessionKind.DEMO and is_sandbox_world(resource.world_id):
         return ALLOW
     return _impartial_admin(actor, resource)

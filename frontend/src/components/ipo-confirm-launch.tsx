@@ -70,7 +70,7 @@ export function IpoConfirmLaunch({
               <DialogTitle>Open {name} to supporters?</DialogTitle>
               <DialogDescription>
                 An opening offer launches once and can&apos;t be undone. Trading
-                opens on the Exchange straight away.
+                opens on the Marketplace straight away.
               </DialogDescription>
             </DialogHeader>
             <dl className="tabular grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-sm">

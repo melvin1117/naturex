@@ -84,7 +84,7 @@ export function AssetView({ id }: { id: string }) {
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
-        Rated sites
+        Marketplace
       </Link>
       <div className="mt-4">
         <WorldGate
@@ -135,7 +135,7 @@ function NotFound() {
         when the demo was reset.
       </p>
       <Button asChild className="mt-6">
-        <Link href="/">Back to Rated sites</Link>
+        <Link href="/">Back to the Marketplace</Link>
       </Button>
     </div>
   );

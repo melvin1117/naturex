@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import NextLink from "next/link";
 import { useState } from "react";
+import { toast } from "sonner";
 import { cn } from "cn";
 
 import {
@@ -83,6 +84,19 @@ export function PersonaMenu({ persona }: { persona: SwitchablePersona }) {
     if (key === persona || switcher.isPending) return;
     const world = await switcher.mutate(key);
     if (world) router.push(SANDBOX_PERSONAS[key].home);
+    else
+      toast(`Couldn't switch to ${SANDBOX_PERSONAS[key].name} just now`, {
+        description: "Try again in a moment.",
+      });
+  };
+
+  const startOver = async () => {
+    const world = await resetWorld();
+    if (world) router.push(me.home);
+    else
+      toast("Couldn't start the sandbox over just now", {
+        description: "Nothing changed. Try again in a moment.",
+      });
   };
 
   return (
@@ -158,11 +172,6 @@ export function PersonaMenu({ persona }: { persona: SwitchablePersona }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {switcher.error && (
-        <p role="alert" className="sr-only">
-          Couldn&apos;t switch just now. Try again.
-        </p>
-      )}
       <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
         <AlertDialogContent className="rounded-3xl">
           <AlertDialogHeader>
@@ -174,12 +183,7 @@ export function PersonaMenu({ persona }: { persona: SwitchablePersona }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep it</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                void resetWorld();
-                router.push(SANDBOX_PERSONAS[persona].home);
-              }}
-            >
+            <AlertDialogAction onClick={() => void startOver()}>
               Start over
             </AlertDialogAction>
           </AlertDialogFooter>

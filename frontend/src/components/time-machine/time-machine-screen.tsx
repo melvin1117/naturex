@@ -22,9 +22,8 @@ import { ResetSection } from "./reset-section";
 import { TimeMachineHeading } from "./time-machine-heading";
 
 /**
- * `/admin`: the real Time Machine for a signed-in admin (the layout lets only admins in, and a
- * signed-in non-admin gets an "Admins only" note); the scripted prototype control room
- * otherwise, like the other screens.
+ * `/admin`: the Time Machine as a page, for anyone in the sandbox (the header's sheet is the
+ * usual way in); the scripted prototype control room without an account.
  */
 export function AdminScreen() {
   const { world } = useWorld();
@@ -71,7 +70,7 @@ export function TimeMachinePanel({
     <div
       className={
         variant === "sheet"
-          ? "time-machine-sheet"
+          ? undefined
           : "mx-auto max-w-7xl px-4 pt-10 pb-16 sm:px-6"
       }
     >

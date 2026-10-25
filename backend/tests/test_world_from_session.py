@@ -357,7 +357,7 @@ def test_in_a_sandbox_investors_dont_rate_but_everyone_simulates(
     session: Session, client: TestClient, runner: RecordingRunner
 ) -> None:
     """A rating run is the operator's or the asset's community's (T57); the Time Machine is the
-    sandbox's own demo control, so anyone acting in it injects events (#252)."""
+    sandbox's own demo control, so anyone acting in it injects events (ADR-0008)."""
     sandbox = start_demo(client, session)  # the demo investor
     asset = session.exec(
         select(Asset).where(Asset.world_id == sandbox.id).order_by(Asset.site_key)
@@ -368,12 +368,34 @@ def test_in_a_sandbox_investors_dont_rate_but_everyone_simulates(
     investor_rate = client.post(f"/assets/{asset.id}/rate")
     investor_event = client.post("/admin/simulate/event", json=event)
     start_demo(client, session, sandbox, persona_key="rosa")  # owns every seeded community
+    owner_event = client.post("/admin/simulate/event", json={**event, "preset": "restoration"})
     owner_rate = client.post(f"/assets/{asset.id}/rate")
 
     assert (investor_rate.status_code, investor_rate.json()["detail"]) == (403, "admin_only")
     assert investor_event.status_code == 200, investor_event.text
+    assert owner_event.status_code == 200, owner_event.text
     assert owner_rate.status_code == 202, owner_rate.text
     assert runner.started == [(sandbox.id, asset.id)]
+
+
+@requires_db
+def test_outside_a_sandbox_the_time_machine_stays_the_operators(
+    session: Session, client: TestClient
+) -> None:
+    """ADR-0008 opens the Time Machine to everyone only inside a sandbox: a live-world account
+    still can't read it, its alerts, or move the world."""
+    asset = live_listed_asset(session)
+    register(client)
+
+    refused = [
+        client.get("/admin/time-machine"),
+        client.get("/admin/alerts", params={"ids": [str(uuid4())]}),
+        client.post("/admin/simulate/quarter", json={"period": "2026Q4"}),
+        client.post("/admin/simulate/event", json={"asset_id": str(asset.id), "preset": "fire"}),
+    ]
+
+    for res in refused:
+        assert (res.status_code, res.json()["detail"]) == (403, "admin_only"), res.text
 
 
 # --- Sessions that must never be served --------------------------------------------------------

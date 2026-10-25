@@ -299,7 +299,7 @@ describe("IpoLaunchScreen", () => {
     expect(backend.calls(PREVIEW)).toBe(1);
   });
 
-  it("launches at the previewed price and links to the Exchange", async () => {
+  it("launches at the previewed price and links to the Marketplace", async () => {
     const { backend } = renderLaunch();
     await steps();
     await confirmLaunch();
@@ -308,9 +308,9 @@ describe("IpoLaunchScreen", () => {
       name: "Río Claro Forest is open to supporters",
     });
     await waitFor(() => expect(heading).toHaveFocus());
-    expect(
-      screen.getByText("Opening price · play money").parentElement,
-    ).toHaveTextContent("$10.5173 per unit");
+    expect(screen.getByText("Opening price").parentElement).toHaveTextContent(
+      "$10.5173 per unit",
+    );
     expect(
       screen.getByRole("img", {
         name: "Your community keeps 51% of the stake; 49% is on offer to supporters.",

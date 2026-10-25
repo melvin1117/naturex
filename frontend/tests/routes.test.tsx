@@ -107,7 +107,7 @@ function StoryProviders({ children }: { children: ReactNode }) {
 describe("routes", () => {
   it.each([
     ["/", HomePage, "Welcome to WildWorth."],
-    ["/sandbox", MarketplacePage, "Rated sites"],
+    ["/sandbox", MarketplacePage, "Marketplace"],
     ["/sandbox/portfolio", PortfolioPage, "Your stakes"],
     ["/sandbox/steward", StewardPage, "Get paid for keeping your land alive"],
     ["/sandbox/admin", AdminPage, "Time Machine"],

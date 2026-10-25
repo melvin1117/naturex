@@ -1108,7 +1108,7 @@ def test_the_api_runs_the_time_machine_for_the_demo_admin(
 def test_anyone_in_a_sandbox_uses_its_time_machine(
     client: TestClient, api_session: Session
 ) -> None:
-    """The sandbox's own demo control (#252); signed-out visitors still can't."""
+    """The sandbox's own demo control (ADR-0008); signed-out visitors still can't."""
     start_demo(client, api_session)  # the demo investor
 
     res = client.get("/admin/time-machine")

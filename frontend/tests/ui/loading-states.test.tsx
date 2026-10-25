@@ -242,7 +242,7 @@ describe("route loading states", () => {
   );
 
   it.each([
-    ["/", "Rated sites"],
+    ["/", "Marketplace"],
     ["/admin", "Time Machine"],
     ["/admin/verifications", "Verified land"],
     ["/portfolio", "Your stakes"],
@@ -256,7 +256,7 @@ describe("route loading states", () => {
   });
 
   it.each([
-    ["/asset/x", "Rated sites", "/"],
+    ["/asset/x", "Marketplace", "/"],
     ["/steward/community", "Community home", "/steward"],
   ])("%s keeps its real back link", (route, name, href) => {
     const { Loading } = LOADERS.find((l) => l.route === inSandbox(route))!;

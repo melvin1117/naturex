@@ -19,13 +19,13 @@ describe("error boundaries", () => {
     expect(screen.queryByText(/Reference/)).toBeNull();
     expect(screen.getByRole("main")).toHaveAttribute("id", MAIN_ID);
     expect(
-      screen.getByRole("link", { name: "Back to Rated sites" }),
+      screen.getByRole("link", { name: "Back to the Marketplace" }),
     ).toHaveAttribute("href", "/");
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(reset).toHaveBeenCalledOnce();
   });
 
-  it("keeps the control room's main and links back to it", () => {
+  it("keeps the Time Machine's main and links back to it", () => {
     const error = Object.assign(new Error("db password=x"), {
       digest: "2814452096",
     });

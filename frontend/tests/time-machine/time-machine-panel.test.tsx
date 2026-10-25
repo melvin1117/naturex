@@ -773,7 +773,7 @@ describe("TimeMachinePanel", () => {
     expect(status.textContent).toMatch(/stake price \$/);
   });
 
-  it("lets anyone in the sandbox use it, not only the Reviewer (#252)", async () => {
+  it("lets anyone in the sandbox use it, not only the Reviewer (ADR-0008)", async () => {
     renderPanel(
       {},
       {

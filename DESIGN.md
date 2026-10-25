@@ -120,7 +120,7 @@ The brand's source of truth is [docs/design/wildworth-brand-guidelines.html](doc
 
 Living land as a calm, credible instrument. The site's own Sentinel-2 image, blurred, is the ground of every key card, and numbers sit on it like readouts on a field instrument. The world is pinned by the team's references: a soft lichen-grey ground, off-white cards with generous radii and soft offset shadows, deep forest-green ink, lime for the reading and lilac as the second data colour. It refuses the trading-terminal default (dense red/green tickers on black) and the eco cliché (leaf icons on cream paper).
 
-Two layers share one palette. The **land layer** (Rated sites, site pages, the Stewards home) is light, because judges use it on laptops in daylight and it is recorded for video. The **machine layer** (rating pipeline, Agent Trace, The Record, impact card, Time Machine timeline) is a dark forest green with pale lime text, so the AI's work reads as a distinct, inspectable surface.
+Two layers share one palette. The **land layer** (the Marketplace, site pages, Communities) is light, because judges use it on laptops in daylight and it is recorded for video. The **machine layer** (rating pipeline, Agent Trace, The Record, impact card, Time Machine timeline) is a dark forest green with pale lime text, so the AI's work reads as a distinct, inspectable surface.
 
 Voice follows PRODUCT.md: sober on rating and market surfaces, warm on community and tour surfaces. Every value carries its range and confidence.
 
@@ -153,7 +153,7 @@ Three free (OFL) faces from Google Fonts, loaded with `next/font`: **Gloock** (d
 
 ### Hierarchy
 - **Display-xl** (Gloock 400, 88–104px, -0.025em): the judge story's opening title.
-- **Display** (Gloock 400, 3.75–4rem, -0.025em): page titles ("Rated sites", "Time Machine") and the wordmark's "Wild".
+- **Display** (Gloock 400, 3.75–4rem, -0.025em): page titles ("Marketplace", "Time Machine") and the wordmark's "Wild".
 - **Title** (Gloock 400, 2–2.5rem, 1.1): site names on feature cards and report cards, drawer titles, grade verdicts ("A · Strong health").
 - **Numeral** (Hanken Grotesk 300, tabular, -0.03em): prices, health scores, value ranges, stats, and the wordmark's "Worth". Big numbers are light, never bold.
 - **Body** (Hanken Grotesk 400, 1rem, 1.6): prose capped at 65ch.

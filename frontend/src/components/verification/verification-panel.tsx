@@ -42,7 +42,7 @@ function followLedgerLink(event: React.MouseEvent<HTMLAnchorElement>) {
 }
 
 /**
- * "How this listing was verified" (ADR-0006 §4), on every Exchange asset page: the API's
+ * "How this listing was verified" (ADR-0006 §4), on every site page: the API's
  * badge, level, date, reviewer role, each check's result, everything not checked and the
  * ledger entry. Public, so it never shows documents, values or reasons.
  */
@@ -196,7 +196,7 @@ function PanelBody({ data }: { data: VerificationPublic }) {
             href={adminReviewHref(data.asset_id)}
             className="inline-flex items-center gap-1.5 font-medium underline underline-offset-4"
           >
-            Review in the control room
+            Review it
             <ArrowRight className="size-4" aria-hidden="true" />
           </Link>
         )}

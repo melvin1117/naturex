@@ -77,7 +77,7 @@ function ListingFromUrl() {
           <AlertDescription>
             <p>Land is listed by a community. Create one, then come back.</p>
             <Button asChild variant="outline" size="sm" className="mt-2">
-              <Link href="/steward">Go to the Stewards home</Link>
+              <Link href="/steward">Go to Communities</Link>
             </Button>
           </AlertDescription>
         </Alert>

@@ -238,12 +238,6 @@ function TraceBody({
               </>
             )}
           </span>
-          <Link
-            href="/ai"
-            className="text-sm font-medium text-lime underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-lime focus-visible:outline-none"
-          >
-            Every model at work
-          </Link>
         </div>
       </header>
 

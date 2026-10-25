@@ -83,12 +83,6 @@ export function RatingTraceCard({
           Its trace appears here after its first rating.
         </p>
       )}
-      <Link
-        href="/ai"
-        className="mt-3 inline-flex text-sm font-medium text-lime underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-lime focus-visible:outline-none"
-      >
-        Every model at work, with live costs
-      </Link>
     </section>
   );
 }

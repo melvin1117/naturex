@@ -16,8 +16,8 @@ import { modelLabel } from "@/lib/trace-view";
  * footnote that says what she runs on. The real chat and the scripted preview share these.
  */
 
-/** "Play money only; not advice." Bea never gives advice, and her world is play money. */
-export const NOT_ADVICE = "Play money only; not advice.";
+/** Bea explains; she never gives advice. */
+export const NOT_ADVICE = "Not advice.";
 
 export function BeaQuestion({ children }: { children: ReactNode }) {
   return (

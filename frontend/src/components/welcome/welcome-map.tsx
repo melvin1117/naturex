@@ -33,6 +33,8 @@ export function WelcomeMap() {
         touchZoom: false,
         zoomSnap: 0.25,
       });
+      // The picture is decoration; the imagery credit stays readable and reachable.
+      map.getPanes().mapPane.setAttribute("aria-hidden", "true");
       L.tileLayer(IMAGERY_URL, {
         maxZoom: 19,
         attribution: IMAGERY_ATTRIBUTION,
@@ -63,7 +65,7 @@ export function WelcomeMap() {
     };
   }, []);
   return (
-    <div className="welcome-drift absolute inset-0" aria-hidden="true">
+    <div className="welcome-drift absolute inset-0">
       <div ref={container} className="size-full bg-machine" />
     </div>
   );

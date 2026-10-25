@@ -236,7 +236,7 @@ def test_a_demo_admin_is_admin_only_inside_its_sandbox() -> None:
 
 
 def test_anyone_in_a_sandbox_runs_its_time_machine_and_injects_its_events() -> None:
-    """The sandbox's own demo control (#252): not an operator's power there."""
+    """The sandbox's own demo control (ADR-0008): not an operator's power there."""
     own_asset = AssetRef(SANDBOX, ASSET, COMMUNITY, public=True)
     for persona in (
         sandbox_actor(),

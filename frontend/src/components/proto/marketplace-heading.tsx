@@ -21,11 +21,11 @@ export function MarketplaceHeading({ stats }: { stats?: ReactNode }) {
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div>
           <h1 className="font-serif text-5xl leading-none tracking-tight sm:text-6xl">
-            Rated sites
+            Marketplace
           </h1>
           <p className="mt-3 max-w-xl text-muted-foreground">
             Living land, rated by AI from satellite data and local news. Back a
-            site with play money and follow its health every quarter.
+            site and follow its health every quarter.
           </p>
         </div>
         {stats}

@@ -487,7 +487,7 @@ def test_quarter_jobs_stay_in_their_world(client: TestClient, api_session: Sessi
     assert (elsewhere.status_code, elsewhere.json()["detail"]) == (404, "not_found")
     assert (unknown.status_code, unknown.json()["detail"]) == (404, "not_found")
     assert client.get("/admin/time-machine").json()["quarter_job"] is None
-    # Anyone acting in the sandbox follows its quarter (#252), the demo investor too.
+    # Anyone acting in the sandbox follows its quarter (ADR-0008), the demo investor too.
     start_demo(client, api_session, sandbox, persona_key="arjun")
     investor = client.get(f"/admin/simulate/quarter/{job['id']}")
     assert (investor.status_code, investor.json()["id"]) == (200, job["id"])

@@ -19,7 +19,8 @@ export function SandboxFooter() {
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-6 pr-20 text-xs text-muted-foreground sm:px-6 sm:pr-24">
         <Lockup size={16} />
         <span>
-          A hackathon prototype. Values are screening estimates, not appraisals.
+          A hackathon prototype with play money. Values are screening estimates,
+          not appraisals.
         </span>
         <Dialog>
           <DialogTrigger className="rounded-sm underline underline-offset-4 hover:text-foreground">

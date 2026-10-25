@@ -72,7 +72,7 @@ describe("VerificationPanel", () => {
     // Public: no values, documents or reviewer names.
     expect(panelEl.textContent).not.toMatch(/no overlap|bound to this listing/);
     expect(
-      within(panelEl).queryByRole("link", { name: /control room/ }),
+      within(panelEl).queryByRole("link", { name: /Review it/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -148,7 +148,7 @@ describe("VerificationPanel", () => {
   it("offers an admin the review screen", async () => {
     show(verifiedPanel(), { "GET /world": () => json(ADMIN_WORLD) });
     expect(
-      await screen.findByRole("link", { name: /Review in the control room/ }),
+      await screen.findByRole("link", { name: /Review it/ }),
     ).toHaveAttribute("href", `/admin/verifications/${ASSET_ID}`);
   });
 });

@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 export function RouteError({
   reset,
   digest,
-  home = { href: "/", label: "Back to Rated sites" },
+  home = { href: "/", label: "Back to the Marketplace" },
 }: {
   reset: () => void;
   digest?: string;

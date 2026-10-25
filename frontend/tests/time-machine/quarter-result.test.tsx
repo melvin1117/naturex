@@ -36,7 +36,7 @@ describe("QuarterResult", () => {
       screen.getByRole("link", { name: "Xochimilco Wetland" }),
     ).toHaveAttribute("href", `/asset/${HERO}?tab=price`);
     expect(
-      screen.getByRole("link", { name: "See Rated sites" }),
+      screen.getByRole("link", { name: "See the Marketplace" }),
     ).toHaveAttribute("href", "/");
   });
 

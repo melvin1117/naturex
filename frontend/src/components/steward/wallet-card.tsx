@@ -6,7 +6,7 @@ import { moneyText } from "@/lib/trade";
  * The community's money (T63), every figure from `GET /communities/{id}/summary`: the
  * community fund (`community_wallet`) is what supporters paid in the opening offer plus the
  * quarterly payouts; the payouts on the units the community keeps (the API's retained-stake
- * dividends, held by its treasury) are a separate line. Play money, in steward words
+ * dividends, held by its treasury) are a separate line. In steward words
  * (docs/design/ux-writing.md §7).
  */
 export function WalletCard({
@@ -18,9 +18,7 @@ export function WalletCard({
 }) {
   return (
     <StewardPanel title={title}>
-      <p className="text-xs text-muted-foreground">
-        Community fund balance · play money
-      </p>
+      <p className="text-xs text-muted-foreground">Balance</p>
       <p className="tabular mt-1 text-4xl font-light tracking-tight">
         {moneyText(wallet.balance)}
       </p>

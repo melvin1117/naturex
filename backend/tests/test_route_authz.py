@@ -172,7 +172,7 @@ def test_the_inventory_catches_a_route_without_authorization() -> None:
     ]
 
 
-def test_admin_routes_are_operator_only() -> None:
+def test_admin_routes_require_their_own_actions() -> None:
     actions = route_actions(app)
     assert actions[("GET", "/admin/time-machine")] == {Action.SIMULATE}
     assert actions[("POST", "/admin/simulate/quarter")] == {Action.SIMULATE}
@@ -810,14 +810,25 @@ def test_an_admin_in_the_assets_community_rates_as_its_steward_not_as_operator(
 def test_anyone_in_a_sandbox_injects_events_even_on_their_own_communitys_asset(
     session: Session, client: TestClient
 ) -> None:
-    """In a sandbox the Time Machine is the visitor's demo control (#252), so the operator's
+    """In a sandbox the Time Machine is the visitor's demo control (ADR-0008), so the operator's
     conflict-of-interest rule doesn't apply there (it still does in other worlds: test_authz)."""
     mine = objects(session, create_world(session))
+    # Not the asset `objects()` started a run on: nothing else stands in the event's way.
+    asset = session.exec(
+        select(Asset)
+        .where(
+            Asset.world_id == mine.world.id,
+            Asset.id != mine.asset,
+            Asset.status == AssetStatus.LISTED,
+        )
+        .order_by(Asset.site_key)
+    ).first()
+    assert asset is not None and asset.community_id is not None
     admin = persona(session, mine.world.id, "admin")
     session.add(
         CommunityMember(
             world_id=mine.world.id,
-            community_id=mine.community,
+            community_id=asset.community_id,
             user_id=admin.id,
             role=CommunityRole.STEWARD,
         )
@@ -825,16 +836,12 @@ def test_anyone_in_a_sandbox_injects_events_even_on_their_own_communitys_asset(
     session.commit()
     start_demo(client, session, mine.world, persona_key="admin")
     as_member_admin = client.post(
-        "/admin/simulate/event", json={"asset_id": str(mine.asset), "preset": "fire"}
+        "/admin/simulate/event", json={"asset_id": str(asset.id), "preset": "fire"}
     )
     start_demo(client, session, mine.world, persona_key="arjun")
     as_supporter = client.get("/admin/time-machine")
 
-    # Past authorization: the only refusal left is the run `objects()` started on the asset.
-    assert (as_member_admin.status_code, as_member_admin.json()["detail"]) == (
-        409,
-        "run_in_progress",
-    )
+    assert as_member_admin.status_code == 200, as_member_admin.text
     assert as_supporter.status_code == 200, as_supporter.text
 
 

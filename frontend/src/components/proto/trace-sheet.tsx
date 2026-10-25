@@ -1,7 +1,6 @@
 "use client";
 
 import { ChevronDown, Cpu, Lock, Wrench } from "lucide-react";
-import Link from "@/components/app-link";
 import { usePathname } from "@/lib/nav";
 import { useState } from "react";
 import { cn } from "cn";
@@ -251,13 +250,6 @@ export function TraceSheet() {
             className="machine-scroll min-h-0 overflow-y-auto px-6 pt-4 pb-8"
           >
             <EvalResults />
-            <Link
-              href="/ai"
-              onClick={() => closeTrace()}
-              className="mt-4 inline-block text-sm font-medium text-lime underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-lime focus-visible:outline-none"
-            >
-              Every model at work, with live costs
-            </Link>
           </TabsContent>
         </Tabs>
       </SheetContent>

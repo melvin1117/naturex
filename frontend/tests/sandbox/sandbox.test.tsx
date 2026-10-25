@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ReactNode } from "react";
@@ -6,6 +12,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Link from "@/components/app-link";
 import { SandboxHeader } from "@/components/shell/sandbox-header";
+import { TimeMachineSheet } from "@/components/shell/time-machine-sheet";
+import { Toaster } from "@/components/ui/sonner";
 import { TourProvider } from "@/components/proto/tour";
 import { SandboxGate } from "@/components/sandbox/sandbox-gate";
 import { WorldProvider } from "@/components/world-provider";
@@ -24,6 +32,8 @@ import {
   createFakeEventSource,
   fakeBackend,
   json,
+  sequence,
+  SIGNED_IN_WORLD,
   WORLD,
 } from "../lib/helpers";
 
@@ -266,6 +276,100 @@ describe("the sandbox header", () => {
     expect(
       screen.getByRole("menuitem", { name: /Start the sandbox over/ }),
     ).toBeVisible();
+  });
+});
+
+describe("the persona menu, when something fails", () => {
+  async function openMenu(name: RegExp) {
+    fireEvent.pointerDown(await screen.findByRole("button", { name }), {
+      button: 0,
+      ctrlKey: false,
+    });
+  }
+
+  it("says so when a switch fails, and stays where it was", async () => {
+    setup(
+      <>
+        <SandboxHeader />
+        <Toaster />
+      </>,
+      {
+        "GET /world": () => json(demoWorld("arjun")),
+        "GET /alerts": NO_ALERTS,
+        "POST /demo/persona": () =>
+          json({ detail: "demo_busy" }, { status: 503 }),
+      },
+    );
+    await openMenu(/You're Arjun/);
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Rosa/ }));
+
+    expect(
+      await screen.findByText("Couldn't switch to Rosa just now"),
+    ).toBeVisible();
+    expect(nav.push).not.toHaveBeenCalled();
+  });
+
+  it("goes home only once the sandbox has started over", async () => {
+    let finish!: (response: Response) => void;
+    setup(
+      <>
+        <SandboxHeader />
+        <Toaster />
+      </>,
+      {
+        "GET /world": () => json(demoWorld("rosa")),
+        "GET /alerts": NO_ALERTS,
+        "POST /world/reset": sequence(
+          () => new Promise<Response>((resolve) => (finish = resolve)),
+          () => json({ detail: "demo_busy" }, { status: 503 }),
+        ),
+      },
+    );
+    await openMenu(/You're Rosa/);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Start the sandbox over/ }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Start over" }));
+
+    await waitFor(() => expect(finish).toBeDefined());
+    expect(nav.push).not.toHaveBeenCalled();
+    finish(json(demoWorld("rosa")));
+    await waitFor(() =>
+      expect(nav.push).toHaveBeenCalledWith("/sandbox/steward", undefined),
+    );
+
+    // A failed reset says so and goes nowhere.
+    nav.push.mockReset();
+    await openMenu(/You're Rosa/);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Start the sandbox over/ }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Start over" }));
+    expect(
+      await screen.findByText("Couldn't start the sandbox over just now"),
+    ).toBeVisible();
+    expect(nav.push).not.toHaveBeenCalled();
+  });
+});
+
+describe("the Time Machine in the header", () => {
+  it("is anyone's in a sandbox, and asks nothing for a live-world account", async () => {
+    const { backend } = setup(<TimeMachineSheet />, {
+      "GET /world": () => json(demoWorld("arjun")),
+      "GET /admin/time-machine": () =>
+        json({ detail: "boom" }, { status: 503 }),
+    });
+    await waitFor(() =>
+      expect(backend.calls("GET /admin/time-machine")).toBe(1),
+    );
+    cleanup();
+
+    const live = setup(<TimeMachineSheet />, {
+      "GET /world": () => json(SIGNED_IN_WORLD),
+    });
+    await screen.findByRole("button", { name: "Time Machine" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(live.backend.calls("GET /admin/time-machine")).toBe(0);
   });
 });
 

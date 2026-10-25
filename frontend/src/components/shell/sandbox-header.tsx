@@ -25,6 +25,8 @@ export function SandboxHeader() {
   const { world } = useWorld();
   const pathname = usePathname();
   const persona = world?.me?.persona;
+  // Sandboxes start as Arjun and switch only between the three; an older session's other
+  // persona (Mia) is a supporter too, so it gets Arjun's bar.
   const key = isSwitchable(persona) ? persona : "arjun";
   const items = SANDBOX_NAV[key];
   return (

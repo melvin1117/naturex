@@ -170,9 +170,7 @@ describe("Header Bea, signed in", () => {
       "Answers only from the Record of your sites",
     );
     expect(
-      within(sheet).getByText(
-        "Runs on NVIDIA Nemotron 3 Nano · Play money only; not advice.",
-      ),
+      within(sheet).getByText("Runs on NVIDIA Nemotron 3 Nano · Not advice."),
     ).toBeVisible();
 
     fireEvent.click(
@@ -309,6 +307,37 @@ describe("Header Bea, signed in", () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(opener).toHaveFocus();
+  });
+
+  it("starts a fresh chat, with its starter questions, every time it opens", async () => {
+    renderHeader(signedIn);
+    await screen.findByRole("button", { name: /Alerts/ });
+    let { sheet } = await openCopilot();
+    fireEvent.click(
+      within(sheet).getByRole("button", {
+        name: "Which sites were downgraded?",
+      }),
+    );
+    await within(sheet).findByRole("link", {
+      name: new RegExp(`Source ${REPORT_SOURCE.ref}`),
+    });
+
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    ({ sheet } = await openCopilot());
+
+    expect(
+      within(sheet).queryByText("Which sites were downgraded?", {
+        selector: "p",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(sheet).getByRole("button", {
+        name: "Which sites were downgraded?",
+      }),
+    ).toBeVisible();
   });
 });
 

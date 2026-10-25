@@ -1,7 +1,7 @@
 # ADR-0005: Accounts, roles and two app experiences
 
 ## Status
-Proposed (2026-10-06); §1, §4 and §5 amended by [ADR-0007](./0007-sandbox-address.md) (the sandbox's own address and cookie, no demo bar on the real app). Changes [pm-spec](../specs/pm-spec.md) §2–§5 and Epic J, [dev-spec](../specs/dev-spec.md) §5, §6, §11 and §15, and [demo-plan](../specs/demo-plan.md) §3. Builds on T31 (per-visitor sandbox worlds).
+Proposed (2026-10-06); §1, §4 and §5 amended by [ADR-0007](./0007-sandbox-address.md) (the sandbox's own address and cookie, no demo bar on the real app); §3 and §5 amended by [ADR-0008](./0008-one-sandbox-experience.md) (inside a sandbox, anyone may use the Time Machine; one app, no sign-in). Changes [pm-spec](../specs/pm-spec.md) §2–§5 and Epic J, [dev-spec](../specs/dev-spec.md) §5, §6, §11 and §15, and [demo-plan](../specs/demo-plan.md) §3. Builds on T31 (per-visitor sandbox worlds).
 
 ## Date
 2026-10-06
@@ -89,7 +89,7 @@ Proposed (2026-10-06); §1, §4 and §5 amended by [ADR-0007](./0007-sandbox-add
 | Draft or edit a listing, submit for rating, upload evidence | ❌ | ❌ | ✅ | ✅ | ❌ (suspend only) |
 | Launch the IPO, manage members, edit the community | ❌ | ❌ | ❌ | ✅ | ❌ |
 | Wallet, holders, payouts | ❌ | ❌ | ✅ | ✅ | ✅ (read) |
-| Time Machine, inject events, suspend or resume an asset | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Time Machine, inject events, suspend or resume an asset (inside a sandbox, anyone may use the Time Machine: [ADR-0008](./0008-one-sandbox-experience.md)) | ❌ | ❌ | ❌ | ❌ | ✅ |
 | Ledger tamper demo | ❌ | ❌ | ❌ | ❌ | ✅ sandbox only |
 | Reset my demo, switch persona | ❌ | demo sessions only | demo sessions only | demo sessions only | demo sessions only |
 

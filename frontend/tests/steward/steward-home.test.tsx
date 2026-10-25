@@ -27,7 +27,7 @@ import { createDataLayer, queryKeys } from "@/lib/data-layer";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { PrototypeProvider } from "@/lib/prototype/store";
 import { stewardAssetId } from "@/components/shell/steward-community";
-import { COPIED_MS } from "@/components/account-id";
+import { AccountIdCopy, COPIED_MS } from "@/components/account-id";
 
 import { dropFocus } from "../focus";
 import {
@@ -347,14 +347,13 @@ describe("creating a community", () => {
     await expectNoFocus(await home());
   }, 15_000);
 
-  it("shows the account ID to share with an owner, with Copy", async () => {
+  it("shows an account ID to share with an owner, with Copy (community settings)", async () => {
     const writeText = vi.fn(() => Promise.resolve());
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText },
       configurable: true,
     });
-    setup(<StewardPage />, { communities: [] });
-    await screen.findByRole("heading", { level: 1, name: "Start a community" });
+    render(<AccountIdCopy id={ROSA.id} />);
     expect(screen.getByText(ROSA.id)).toBeVisible();
     const button = screen.getByRole("button", { name: "Copy account ID" });
     fireEvent.click(button);
@@ -379,10 +378,8 @@ describe("creating a community", () => {
         value: { writeText: vi.fn(() => Promise.resolve()) },
         configurable: true,
       });
-      setup(<StewardPage />, { communities: [] });
-      const button = await screen.findByRole("button", {
-        name: "Copy account ID",
-      });
+      render(<AccountIdCopy id={ROSA.id} />);
+      const button = screen.getByRole("button", { name: "Copy account ID" });
       fireEvent.click(button);
       await waitFor(() => expect(button).toHaveAccessibleName("Copied"));
       act(() => vi.advanceTimersByTime(COPIED_MS));
@@ -580,9 +577,7 @@ describe("the community home", () => {
     );
 
     const wallet = screen.getByRole("region", { name: "Community fund" });
-    expect(
-      within(wallet).getByText(/Community fund balance · play money/),
-    ).toBeVisible();
+    expect(within(wallet).getByText("Balance")).toBeVisible();
     expect(
       within(wallet).getByText("From supporters").closest("div"),
     ).toHaveTextContent("$1,500.00");

@@ -2,7 +2,7 @@
 
 import { RouteError } from "@/components/route-error";
 
-/** A crash in the control room: shown inside its header and main, with a way back to it. */
+/** A crash on the Time Machine or Reviews pages: shown inside the shell, with a way back. */
 export default function AdminError({
   error,
   reset,

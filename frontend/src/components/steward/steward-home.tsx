@@ -178,7 +178,7 @@ function Home({ summary }: { summary: CommunitySummary }) {
           <Stat
             label="Community fund"
             value={moneyText(summary.wallet.balance)}
-            sub="From supporters and quarterly payouts · play money"
+            sub="From supporters and quarterly payouts"
           />
           <Stat
             label="Payouts on kept units"
@@ -533,7 +533,6 @@ function FeaturedListing({
               <span className="tabular">
                 {unitPriceText(listing.asset.price)}
               </span>{" "}
-              <span className="text-xs">(play money)</span>{" "}
               {card.changePct !== null && (
                 <Delta
                   value={card.changePct}
@@ -683,7 +682,7 @@ function Payouts({ summary }: { summary: CommunitySummary }) {
           >
             <table className="w-full min-w-[34rem] text-sm">
               <caption className="sr-only">
-                The latest quarterly payouts, play money
+                The latest quarterly payouts
               </caption>
               <thead className="text-left text-xs text-muted-foreground">
                 <tr>

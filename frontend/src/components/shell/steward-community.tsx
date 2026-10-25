@@ -21,7 +21,6 @@ import {
 } from "react";
 import { cn } from "cn";
 
-import { AccountIdCopy } from "@/components/account-id";
 import { RouteSkeleton } from "@/components/page-skeletons";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -174,8 +173,8 @@ export function useStewardCommunity(): StewardCommunityValue {
 }
 
 /**
- * The community the Steward app shows, in its header. With more than one, a menu switches
- * between them; with one, its name; with none (or anonymous), nothing.
+ * The community the Communities pages show. With more than one, a menu switches between
+ * them; with one, its name; with none, nothing.
  */
 export function CommunitySwitcher({ className }: { className?: string }) {
   const steward = useOptionalStewardCommunity();
@@ -205,7 +204,7 @@ export function CommunitySwitcher({ className }: { className?: string }) {
         <Button
           variant="ghost"
           size="sm"
-          className={cn("max-w-56 min-w-0 justify-between", className)}
+          className={cn("max-w-80 min-w-0 justify-between", className)}
           aria-label={`${active.name}, switch community`}
         >
           <span className="truncate">{active.name}</span>
@@ -215,7 +214,7 @@ export function CommunitySwitcher({ className }: { className?: string }) {
           />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64 rounded-2xl p-1.5">
+      <DropdownMenuContent align="start" className="w-80 rounded-2xl p-1.5">
         <DropdownMenuLabel>Your communities</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup value={active.id} onValueChange={select}>
@@ -230,6 +229,21 @@ export function CommunitySwitcher({ className }: { className?: string }) {
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * Above the Communities pages for someone in more than one community: which one they're
+ * looking at, and a menu to switch. Hidden with one or none (the page's heading names it).
+ */
+export function CommunityBar() {
+  const steward = useOptionalStewardCommunity();
+  if (!steward?.active || steward.communities.length < 2) return null;
+  return (
+    <div className="mx-auto flex max-w-7xl items-center gap-1 px-4 pt-6 text-sm text-muted-foreground sm:px-6">
+      <span>Community</span>
+      <CommunitySwitcher className="-my-1" />
+    </div>
   );
 }
 
@@ -287,12 +301,7 @@ export function StewardGate({ children }: { children: ReactNode }) {
     }
 
     if (assetId === null) {
-      return (
-        <CreateCommunityEmptyState
-          meId={world.me.id}
-          onCreated={() => setCreatedBy(meId)}
-        />
-      );
+      return <CreateCommunityEmptyState onCreated={() => setCreatedBy(meId)} />;
     }
   }
 
@@ -344,13 +353,7 @@ function AssetMembershipGate({
   );
 }
 
-function CreateCommunityEmptyState({
-  meId,
-  onCreated,
-}: {
-  meId: string;
-  onCreated: () => void;
-}) {
+function CreateCommunityEmptyState({ onCreated }: { onCreated: () => void }) {
   const { select } = useStewardCommunity();
   return (
     <section
@@ -372,10 +375,8 @@ function CreateCommunityEmptyState({
             Start a community
           </h1>
           <p className="mt-4 max-w-prose text-pretty text-muted-foreground">
-            Stewards is the app for the people who look after the land. Create a
-            community to list your land, get it rated and receive what
-            supporters pay into its fund. You&apos;ll be its owner and can add
-            stewards.
+            A community looks after its land. Create one to list that land, get
+            it rated and grow a fund from what supporters pay in.
           </p>
           <ol className="mt-6 space-y-3 text-sm">
             {[
@@ -391,16 +392,6 @@ function CreateCommunityEmptyState({
               </li>
             ))}
           </ol>
-          <div className="mt-8 max-w-md rounded-2xl border border-dashed border-border p-4">
-            <h2 className="text-sm font-medium">
-              Joining someone else&apos;s community?
-            </h2>
-            <p className="mt-1 mb-3 text-sm text-muted-foreground">
-              Give its owner your account ID. Once they&apos;ve added you as a
-              steward, reload this page.
-            </p>
-            <AccountIdCopy id={meId} />
-          </div>
           <Button asChild variant="outline" className="mt-6">
             <Link href="/">Back to the Marketplace</Link>
           </Button>
@@ -408,7 +399,7 @@ function CreateCommunityEmptyState({
         <div className="rounded-[1.75rem] bg-card p-6 shadow-lift sm:p-8">
           <h2 className="text-lg font-semibold">Create your community</h2>
           <p className="mt-1 mb-5 text-sm text-muted-foreground">
-            Play money only: nothing here is a real security or investment.
+            You&apos;ll be its owner.
           </p>
           <CreateCommunityForm
             onCreated={(community) => {

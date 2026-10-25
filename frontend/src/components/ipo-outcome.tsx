@@ -49,7 +49,7 @@ function Heading({
 }
 
 /** Forwards props, so `<Button asChild>` can style it. */
-function ExchangeLink({
+function MarketplaceLink({
   assetId,
   ...props
 }: { assetId: string } & Omit<React.ComponentProps<typeof Link>, "href">) {
@@ -67,7 +67,7 @@ function pct(value: number): string {
 }
 
 /**
- * The launch went through: the opening offer is live on the Exchange (#216's opening bell).
+ * The launch went through: the opening offer is live on the Marketplace (#216's opening bell).
  * The dotted ring lights the stake's split: the community's kept share in forest, then the
  * share on offer in lime. Every number is the launch's own; under reduced motion it shows at once.
  */
@@ -127,11 +127,11 @@ export function IpoLaunched({
           {name} is open to supporters
         </Heading>
         <p className="mx-auto mt-3 max-w-lg text-muted-foreground">
-          Your opening offer is live on the Exchange. Supporters can take a
-          stake from now on; your community keeps all of the land.
+          It&apos;s live on the Marketplace. Supporters can take a stake from
+          now on; your community keeps all of the land.
         </p>
         <dl className="mx-auto mt-6 grid max-w-2xl gap-2 rounded-2xl bg-secondary p-2 text-left sm:grid-cols-3">
-          <OfferFact label="Opening price · play money">
+          <OfferFact label="Opening price">
             {unitPriceText(ipo.ipo_price)}
             <span className="text-sm text-muted-foreground"> per unit</span>
           </OfferFact>
@@ -154,7 +154,7 @@ export function IpoLaunched({
           style={{ animationDelay: "480ms" }}
         >
           <Button asChild>
-            <ExchangeLink assetId={assetId} />
+            <MarketplaceLink assetId={assetId} />
           </Button>
           <Button asChild variant="outline">
             <Link href={homeHref}>Community home</Link>
@@ -218,11 +218,11 @@ export function IpoOutcome({
         return {
           explanation: {
             title: "This opening offer has launched",
-            body: `${name ?? "This site"} is already open to supporters. An opening offer launches only once; trading continues on the Exchange.`,
+            body: `${name ?? "This site"} is already open to supporters. An opening offer launches only once; trading continues on the Marketplace.`,
           },
           action: (
             <Button asChild size="sm" className="mt-3">
-              <ExchangeLink assetId={assetId} />
+              <MarketplaceLink assetId={assetId} />
             </Button>
           ),
         };

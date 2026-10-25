@@ -1,7 +1,7 @@
 # ADR-0008: One sandbox experience: a welcome, a story, and one app with no sign-in
 
 ## Status
-Accepted (2026-10-25). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) §5 (three apps) and [ADR-0007](./0007-sandbox-address.md) §2–§3 (the real app's screens and the sandbox bar). Changes [demo-plan](../specs/demo-plan.md) §3 and PRODUCT.md's operating context.
+Accepted (2026-10-25). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) §3 (the Time Machine row of the role matrix) and §5 (three apps) and [ADR-0007](./0007-sandbox-address.md) §2–§3 (the real app's screens and the sandbox bar). Changes [demo-plan](../specs/demo-plan.md) §3 and PRODUCT.md's operating context.
 
 ## Date
 2026-10-25

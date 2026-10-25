@@ -37,7 +37,7 @@ Everywhere:
 - Area in hectares with a thousands separator: `500 ha`, `12,400 ha`.
 - Changes show direction in text, not only colour: `▲ 4.2%`, `▼ 1.8%`, or "up 4.2%".
 - Dates: `12 Sep 2026`; relative time only for under 24 h ("3 min ago").
-- Prices are play money and always labelled as such the first time they appear on a screen ("Sandbox price").
+- Prices are play money; the trade panel says so, so prices elsewhere need no label.
 
 ## 3. Grades
 | Grade | Health score | Label (plain language) |
@@ -57,7 +57,7 @@ Everywhere:
 - AI adjustments are explicit: "Auditor adjusted −6.0 (cited: event #3, NDVI trend)." Adjustments outside ±10 cannot happen; don't imply they could.
 
 ## 4. Sandbox wording
-- The sandbox line: **"Sandbox · play money only."** It sits in the forest strip above every app's header, always, because "Exchange" alone could suggest a real securities exchange. The footer adds "Nothing here is a real security or investment." The trade panel repeats it near the confirm button; inside `/sandbox` the sandbox bar says it too (ADR-0007).
+- The sandbox line: **"Sandbox · play money only."** Say it where it matters and nowhere else (ADR-0008): once on the welcome, in the sandbox footer, and in the trade panel near the confirm button. Headings, stats, cards and Bea's footnote don't repeat it; a judge gets it the first time.
 - Use "play money", "sandbox balance". Never "funds", "deposit", "withdraw", "wallet" for the user's own money.
 - Mock or cached data is labelled: "Cached result (live service busy)" or "Mock mode: no API keys configured". Live AI steps get a **Live** badge.
 
@@ -77,7 +77,7 @@ Name only what a judge should be able to repeat (guidelines chapter 9). Everythi
 | **Auditor** | The model that may move a score by ±10 with evidence | Auditor adjusted −6.0 (cited: event #3) |
 | **News Scout** | Finds and classifies local news | News Scout found 3 events near the site |
 | **Ask Bea** | Bea, the field guide, answering from the site's own Record (was "Copilot") | Ask Bea · Bea · your field guide |
-| **Rated sites** | The marketplace page (was "Marketplace") | Rated sites · 3 sites |
+| **Marketplace** | The page of rated sites to back (was "Rated sites"; ADR-0008) | Marketplace · 3 sites |
 | **Back this site** | Buying units, outside the trade panel | Back this site |
 | **Your stakes** | The portfolio page | Your stakes · $10,000 play money |
 | **Opening offer** | The IPO | Opened 5 Oct at $10.00 per unit |
@@ -109,7 +109,7 @@ The API and database keep their names (`shares`, `ipo`, `orders`, `community_wal
 | buy / sell | **Back this site** / **Reduce stake** | Buy units / Sell units |
 | order | action ("Your stake was added") | order |
 | price | **stake price** | price per unit |
-| market / exchange | **Rated sites** (the page); **Exchange** only as the app's name, with the sandbox line | |
+| market / exchange / rated sites | **Marketplace** (the page). There is no "Exchange" app any more (ADR-0008) | |
 | portfolio | **Your stakes** (page title), route stays `/portfolio` | |
 | holdings | stakes | |
 | community wallet | **Community fund** | |
@@ -147,7 +147,7 @@ Say and don't say, everywhere:
 - Waking server: "Waking up the WildWorth servers… this can take about 30 seconds."
 - Loading: a page-shaped skeleton, never a centred spinner for a page; one status names what's loading ("Loading the site…"). After 8 seconds without an answer it says why, without claiming what it can't know: "Still loading. The WildWorth servers may be waking up, which can take about 30 seconds."
 - Fallbacks are never errors: "Live satellite service is busy, so we're showing a cached example from a nearby site."
-- Empty states invite the next action: "No stakes yet. Explore Rated sites to back a site."
+- Empty states invite the next action: "No stakes yet. Back a site on the Marketplace and it shows here."
   - In one or two sentences they say what will appear, what makes it appear and, where there is one, the next action.
   - They never contradict the screen: under a rated site, not "once a site has been rated" but "Mock ratings don't include the Auditor's recommendations. A live rating may list concrete steps here that would strengthen the grade."
 
@@ -163,7 +163,7 @@ Pick the lowest rung that's enough (#216; `frontend/src/lib/feedback.ts`). One a
 
 - **Trades:** the receipt is the confirmation, not a toast. After a fill the trade panel's balance and units count to their new values, and the stake's row on *Your stakes* washes once when the user next opens it, with a text badge ("+60 units just now").
 - **Refused orders** are announced once, by their alert; the numbers under the field stay on screen without being read out again.
-- **Live prices:** on the asset page's hero, a moved price flashes its colour for 600 ms, then settles back to ink and keeps a ▲/▼ arrow (with text for screen readers). Refreshing a cached price on arrival isn't a move. Ticks aren't announced, and Rated sites cards don't flash.
+- **Live prices:** on the asset page's hero, a moved price flashes its colour for 600 ms, then settles back to ink and keeps a ▲/▼ arrow (with text for screen readers). Refreshing a cached price on arrival isn't a move. Ticks aren't announced, and Marketplace cards don't flash.
 - **Toasts sit at the bottom:** bottom-left on wide screens, full width at the bottom on phones, so they never cover the header, the account menu or the trade panel.
 - **Reduced motion:** washes, flashes and counts show their final state at once; the arrow and the text stay.
 
