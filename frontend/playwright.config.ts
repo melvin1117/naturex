@@ -1,8 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
 import {
-  ADMIN_EMAIL,
-  ADMIN_PASSWORD,
   API_PORT,
   API_URL,
   DATABASE_URL,
@@ -20,7 +18,8 @@ const CI = Boolean(process.env.CI);
  */
 export default defineConfig({
   testDir: "./e2e",
-  // One journey through shared state: run it once, in order, in one worker.
+  // Each spec starts its own sandbox; run them in order, in one worker, to stay within the
+  // per-IP sandbox-start limit and keep the trace readable.
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -43,8 +42,6 @@ export default defineConfig({
         E2E_DATABASE_URL: DATABASE_URL,
         E2E_API_PORT: String(API_PORT),
         E2E_WEB_ORIGIN: WEB_ORIGIN,
-        E2E_ADMIN_EMAIL: ADMIN_EMAIL,
-        E2E_ADMIN_PASSWORD: ADMIN_PASSWORD,
       },
       stdout: "pipe",
       timeout: 3 * 60_000,

@@ -139,29 +139,21 @@ export function useUploadDocument(
 export interface SubmitVerification {
   /** New documents, never submitted before (1–3). */
   documentIds: string[];
-  /** Documents of the waiting run to leave out; the rest stay in the new run (#210). */
-  removeDocumentIds?: string[];
 }
 
 /**
  * Submit uploaded documents for review: a new current run with its checklist. While the
- * current run waits for a decision, its documents stay in the new one unless removed.
+ * current run waits for a decision, its documents stay in the new one (#210).
  */
 export function useSubmitVerification(
   assetId: string,
 ): MutationResult<SubmitVerification, VerificationRun> {
   return useApiMutation(
-    (api, { documentIds, removeDocumentIds = [] }: SubmitVerification) =>
+    (api, { documentIds }: SubmitVerification) =>
       unwrap(
         api.POST("/assets/{asset_id}/verification/runs", {
           params: { path: { asset_id: assetId } },
-          body:
-            removeDocumentIds.length > 0
-              ? {
-                  document_ids: documentIds,
-                  remove_document_ids: removeDocumentIds,
-                }
-              : { document_ids: documentIds },
+          body: { document_ids: documentIds },
         }),
       ),
     {

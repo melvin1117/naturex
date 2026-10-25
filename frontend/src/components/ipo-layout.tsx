@@ -6,8 +6,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
 /**
- * Building blocks shared by the steward's focused screens (T64): the opening offer's form and
- * outcomes, and the verification and field evidence screens that reuse its shell.
+ * Building blocks for a community's focused screens (T64): the shell, card and error alert the
+ * field evidence screen uses.
  */
 
 export function IpoShell({

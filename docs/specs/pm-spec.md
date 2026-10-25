@@ -123,7 +123,7 @@ Principle: **one flawless end-to-end story on 3 real sites** beats a wide app wi
 ### Epic K — Accounts and access ([ADR-0005](../adr/0005-accounts-roles-and-two-apps.md))
 | ID | Story | Acceptance criteria |
 |---|---|---|
-| K1 | I sign up, sign in and sign out | Email + password; generic login errors; rate-limited; signing out ends the session immediately, open live streams included (registration enumeration is an accepted risk without email verification) |
+| K1 | I sign up, sign in and sign out | *Dormant since [ADR-0008](../adr/0008-one-sandbox-experience.md): the API keeps it, the frontend has no sign-in.* Email + password; generic login errors; rate-limited; signing out ends the session immediately, open live streams included (registration enumeration is an accepted risk without email verification) |
 | K2 | My session is safe | Server-side session in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie; no tokens in browser storage; cross-site writes rejected |
 | K3 | I can only do what my role allows | Every API route, reads included, checks the ADR-0005 matrix; 401 / 403 with a reason / 404 across worlds; a test fails if a route has no check; the database rejects rows that link across worlds |
 | K4 | Each audience has its own app | *Superseded by [ADR-0008](../adr/0008-one-sandbox-experience.md):* one app inside the visitor's sandbox (Marketplace, Communities, Your stakes; Reviews for the Reviewer), with a person menu instead of sign-in |

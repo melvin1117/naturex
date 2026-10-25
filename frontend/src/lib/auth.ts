@@ -1,9 +1,14 @@
+/**
+ * Return paths and access rules for the dormant sign-in (ADR-0005; ADR-0008 keeps the sandbox
+ * free of it): `safeReturnPath` keeps a `?next=` on this site, `protectedAccess` says who may see
+ * a protected page.
+ */
 import type { components } from "./api/schema";
 
 export type Me = components["schemas"]["MeOut"];
 
 export const LOGIN_PATH = "/login";
-export const REGISTER_PATH = "/register";
+const REGISTER_PATH = "/register";
 
 const MAX_RETURN_PATH = 2048;
 // Any base works: it only tells a same-origin path apart from one that leaves the site.
@@ -97,8 +102,6 @@ export function protectedAccess({
   if (status === "error") return "unavailable";
   return "checking";
 }
-export type AuthField = "name" | "email" | "password";
-export type FieldErrors = Partial<Record<AuthField, string>>;
 
 /** Initials for the account button: "Rosa Díaz" → "RD", "rosa" → "R". */
 export function initials(name: string): string {

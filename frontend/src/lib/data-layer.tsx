@@ -73,8 +73,6 @@ export const queryKeys = {
   runTrace: (runId: string) => ["run", runId, "trace"] as const,
   /** The world's latest logged model calls (`GET /admin/trace`), per account. */
   worldTrace: (meId: string | null) => ["world-trace", meId] as const,
-  /** The AI control room (`GET /admin/ai-usage`): this world's model calls, per account. */
-  aiUsage: (meId: string | null) => ["ai-usage", meId] as const,
   /** A demo site's recorded run (curated data: the same for every account). */
   recordedRun: (siteKey: string) => ["recorded-run", siteKey] as const,
   story: () => ["story"] as const,

@@ -1,13 +1,15 @@
 /**
  * T48 · Accessibility check of the sandbox on the real stack (ADR-0008): axe (WCAG 2.2 A/AA
- * rules) on the welcome, the story, the Marketplace, a site page with its Agent Trace open, a
- * missing site, Your stakes empty and after a buy, Communities and a community's page, and the
- * Reviewer's Reviews, on desktop and at 390 px, with reduced motion. Fails on any serious or
+ * rules, plus label-in-name) on the welcome, the story, the Marketplace, a site page with its
+ * Agent Trace open, a missing site, Your stakes empty and after a buy, Communities, a
+ * community's page, List land, the community's settings and the Reviewer's Reviews, on desktop
+ * and at 390 px, with reduced motion. Fails on any serious or
  * critical violation, and on horizontal overflow at 390 px.
  */
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 
+import { WEB_ORIGIN } from "./env";
 import { closeSessions, newSession } from "./session";
 
 const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
@@ -32,6 +34,8 @@ async function expectNoBlockingViolations(
 ): Promise<void> {
   const { violations } = await new AxeBuilder({ page })
     .withTags(WCAG)
+    // Tagged experimental, so the tags alone skip it: a control's name must contain its text.
+    .options({ rules: { "label-content-name-mismatch": { enabled: true } } })
     .analyze();
   const blocking = violations
     .filter((v) => v.impact === "serious" || v.impact === "critical")
@@ -181,6 +185,7 @@ test("the sandbox has no serious accessibility violations", async ({
       .getByRole("link")
       .first()
       .getAttribute("href");
+    expect(community).toMatch(/[?&]community=/);
     await checkPage(page, community!, async (p) => {
       await expect(
         p.getByRole("link", { name: "All communities" }),
@@ -189,6 +194,21 @@ test("the sandbox has no serious accessibility violations", async ({
         p.getByRole("link", { name: "List more land" }),
       ).toBeVisible();
     });
+    const id = new URL(community!, WEB_ORIGIN).searchParams.get("community");
+    await checkPage(
+      page,
+      `/sandbox/steward/list?community=${id}`,
+      async (p) => {
+        await expect(p.getByLabel("Site name")).toBeVisible();
+      },
+    );
+    await checkPage(
+      page,
+      `/sandbox/steward/community?community=${id}`,
+      async (p) => {
+        await expect(p.getByLabel("Community name")).toBeVisible();
+      },
+    );
   });
 
   await test.step("the Reviewer's Reviews", async () => {

@@ -54,9 +54,8 @@ export function TradePanel({ id }: { id: string }) {
 | `usePlaceOrder()`                                             | `mutate(order)`, `data` (`OrderOut`), `error`, `isPending`                           | Refetches the portfolio, the asset, its prices, its quotes and the market list. Never retried.                                             |
 | `useQuote(id, side, qty)`                                     | `QuoteOut`                                                                           | The backend's price for an order now (T18). Skips until `qty` is a positive integer. Live: `price_tick`.                                   |
 | `useIpoPreview(id, shares, retainedPct)`                      | `IpoPreview`                                                                         | T64: each IPO formula term, `launchable`, `blocked_reason`. Idle until inputs are valid. Live: run ends.                                   |
-| `useLaunchIpo(id)`                                            | `mutate({ total_shares, retained_pct, expected_price })`, `data` (`IpoOut`)          | `expected_price` = the preview's `ipo_price` (else 409 `ipo_price_changed`). Never retried.                                                |
 | `useVerificationPanel(id)` (`verification-hooks.ts`)          | `VerificationPublic`                                                                 | T70: "How this listing was verified": the API's badge, level, dates, reviewer role, check results, not-checked list, ledger entry. Public. |
-| `useVerificationRuns(id)` / `useListingDocuments(id)`         | `VerificationRun[]` / `ListingDocument[]`                                            | The community's members and same-world admins (404 otherwise). Runs newest first, with checklist values and reasons.                       |
+| `useVerificationRuns(id)`                                     | `VerificationRun[]`                                                                  | The community's members and same-world admins (404 otherwise). Runs newest first, with checklist values and reasons.                       |
 | `useDocumentPreview(id, doc)`                                 | `{ url, error, isLoading }`                                                          | The sanitised PNG preview as a blob URL (revoked on unmount); idle when `has_preview` is false.                                            |
 | `useUploadDocument(id)` / `useSubmitVerification(id)`         | `mutate({ file, docType })` / `mutate(documentIds)`                                  | The upload body is the file itself. Submitting refetches the listing's verification, asset, ledger, IPO previews and the queue.            |
 | `useReviewQueue(offset, limit)` / `useDecideVerification(id)` | `ReviewQueueItem[]` / `mutate({ decision, runId, reason })`                          | Admins. `decision`: `approve` (optional note), `reject` or `revoke` (reason required). Never retried.                                      |
@@ -84,31 +83,11 @@ const prices = useApiQuery(queryKeys.prices(id), (api, signal) =>
 
 Use the keys in `queryKeys` (`data-layer.tsx`) so mutations and live events refresh your data.
 
-## Signing in (T61)
+## The sandbox shell and who you are (ADR-0008)
 
-```tsx
-const signIn = useSignIn(); // also useRegister(), useSignOut()
-await signIn.mutateAsync({ email, password }); // then world.me is the account
-```
+There's no sign-in: every app page is under `/sandbox`, where `components/sandbox/sandbox-gate.tsx` starts the visitor's private sandbox (`POST /sandbox/demo/start`, cookie `ww_demo`) and the person menu (`components/shell/persona-menu.tsx`) switches between Rosa, Arjun and the Reviewer (`useSwitchPersona`, then the persona's home from `lib/sandbox-personas.ts`). Each switch re-reads `GET /world` and resets the query cache, so nothing of the previous person stays on screen. The bar's pages come from `lib/sandbox-nav.ts`. Screens keep writing app paths (`/asset/…`); links and the router add `/sandbox` (`lib/sandbox.ts`, `lib/nav.ts`).
 
-Each calls the auth route, then re-reads `GET /world` (`session.reload()`) and resets the cache (`QueryCache.reset()`), so `useWorld().world.me` and every query follow the new account and nothing from the previous one stays on screen. The session is the HttpOnly `ww_session` cookie only; never store a token or `me` in browser storage.
-
-`lib/auth.ts` has the pure helpers: `safeReturnPath(next)` (same-origin relative paths only; use it for every `?next=`), `loginHref(path)`, `validateAuthInput` and `authFailure` (form messages for 401, 409, 422, 429, 403, 503 and network errors). Wrap a page that needs an account in `<RequireAccount>` (`<RequireAccount admin>` for platform admins; `allowPrototypeDemo` only for prototype screens that the scripted demo must keep open until T65, never `/admin`); the backend still authorizes every request.
-
-## App shells and roles (T62)
-
-`app/(exchange)`, `app/steward` and `app/admin` each have a layout with the shell header (`components/shell/app-header.tsx`; the Copilot and alerts go in its `tools` slot (the Agent Trace opens from a site's "How the AI rated it" card, and "AI at work" (`/ai`) is in the Exchange's pages) from `components/proto/header-tools.tsx`) and a `<main id="main">` that the skip link in `app/layout.tsx` jumps to (standalone pages such as `/login` and `/judge` have one too). The root layout also holds the demo bar slot (T65): the sandbox notice on every page, plus the scripted demo's controls for anonymous visitors.
-
-What the header offers comes from `appAccess()` in `navigation.ts` (pure, unit-tested), through `useAppAccess()` (`components/shell/app-switcher.tsx`):
-
-| Visitor                    | Apps offered                                | Also                                                                           |
-| -------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------ |
-| Anonymous                  | Exchange                                    | Steward app too in the scripted prototype demo (T61)                           |
-| Signed in, no community    | Exchange                                    | "Create a community" → `/steward`, whose empty state has the create form (T63) |
-| Community owner or steward | Exchange, Steward app                       | Community switcher in the Steward header if more than one                      |
-| Platform admin             | Exchange, Admin (+ Steward app if a member) | "Create a community" without one                                               |
-
-Nothing that depends on `/me/communities` shows until it answers; if it fails, signed-in accounts still get the Steward app link, whose error screen explains and retries. This only decides what the UI shows: the backend authorizes every request (a non-admin on `/admin` gets `RequireAccount`'s 403 message, and every admin route checks `is_admin`).
+The dormant sign-in keeps `lib/auth.ts`'s `safeReturnPath(next)` (same-origin relative paths only; use it for every `?next=`) and `loginHref(path)`, and `<RequireAccount>` still guards `/steward`, `/portfolio` and `/admin` (`<RequireAccount admin>` for the Reviewer's pages: anyone else sees "Only the Reviewer sees this page"). The backend authorizes every request either way.
 
 Steward pages read the community they show with `useStewardCommunity()` (`components/shell/steward-community.tsx`): `{ communities, active, select(id), href(path) }`. The `?community=<id>` URL parameter wins, then the one remembered for this account (`localStorage` key `ww-steward-community:<account id>`, only the ID, cleared on sign-out; `lib/active-community.ts`), then the account's first community; each only if `/me/communities` lists it. `select` puts the choice in the URL and remembers it; build Steward links with `href("/steward/...")` so they keep the parameter, which lets pages link to a community and keeps two tabs from disagreeing. `<StewardGate>` shows a signed-in account without a community the "Start a community" empty state, with the create form (T63), instead of the pages.
 
@@ -174,7 +153,7 @@ It forwards only the session cookie, never calls `GET /world` (the browser owns 
 | `events.ts`                           | SSE with polling fallback.                                                                                                                                                                  |
 | `data-layer.tsx`, `hooks.ts`          | React context, cache wiring for live events, and the hooks.                                                                                                                                 |
 | `auth.ts`                             | Sign-in helpers: safe return paths, the protected-route rule, form validation and error messages (T61).                                                                                     |
-| `navigation.ts`                       | The apps, their navigation and `appAccess()`: which apps a visitor is offered (T62).                                                                                                        |
+| `navigation.ts`                       | Communities' links: the community a page shows (`?community=`, `pickCommunity`, `withCommunity`) and the role words.                                                                        |
 | `trade.ts`                            | Trade panel helpers (T18): units input, validation against the quote and portfolio, order error messages, money and per-unit formatting, `assetHref`. Parses API decimals for display only. |
 | `report-facts.ts`                     | `reportFacts(ReportOut)`: the report card's numbers from the stored report and its `rating` snapshot (null when missing, never made up).                                                    |
 | `ipo.ts`, `use-ipo-offer.ts`          | IPO launch screen (T64): offering bounds (tested against `openapi.json`), parsing, refusals in words; `useIpoOffer` debounces the preview and decides what can launch.                      |

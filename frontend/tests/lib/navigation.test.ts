@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { MyCommunity } from "@/lib/api/types";
-import { isActive, pickCommunity, withCommunity } from "@/lib/navigation";
+import { pickCommunity, withCommunity } from "@/lib/navigation";
 
 function community(id: string, role: MyCommunity["role"]): MyCommunity {
   return {
@@ -37,16 +37,5 @@ describe("withCommunity", () => {
       "/steward?tab=x&community=c1",
     );
     expect(withCommunity("/steward", null)).toBe("/steward");
-  });
-});
-
-describe("isActive", () => {
-  it("matches an app home exactly and other items by segment", () => {
-    expect(isActive("/", "/")).toBe(true);
-    expect(isActive("/portfolio", "/")).toBe(false);
-    expect(isActive("/steward/list", "/steward")).toBe(false);
-    expect(isActive("/steward/list", "/steward/list")).toBe(true);
-    expect(isActive("/steward/list/new", "/steward/list")).toBe(true);
-    expect(isActive("/portfolios", "/portfolio")).toBe(false);
   });
 });

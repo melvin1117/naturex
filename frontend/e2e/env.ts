@@ -11,11 +11,3 @@ export const API_URL = `http://127.0.0.1:${API_PORT}`;
 export const DATABASE_URL =
   process.env.E2E_DATABASE_URL ??
   "postgresql+psycopg://wildworth:wildworth@localhost:5432/wildworth_e2e";
-
-/**
- * There's no admin sign-up: scripts/e2e-backend.sh creates this account with the operator CLI
- * (`python -m app.cli create-admin --password-stdin`) in the throwaway E2E database.
- */
-export const ADMIN_EMAIL = "e2e-admin@wildworth.test";
-export const ADMIN_PASSWORD =
-  process.env.E2E_ADMIN_PASSWORD ?? "e2e admin password, test only";

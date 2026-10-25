@@ -240,6 +240,22 @@ describe("the sandbox header", () => {
     expect(screen.getByRole("button", { name: "Time Machine" })).toBeVisible();
   });
 
+  it("names the person button with what it shows, without the avatar's letter", async () => {
+    setup(<SandboxHeader />, {
+      "GET /world": () => json(demoWorld("arjun")),
+      "GET /alerts": NO_ALERTS,
+    });
+    const trigger = await screen.findByRole("button", {
+      name: /You're Arjun, Supporter/,
+    });
+    // axe's label-in-name: the visible "Arjun Supporter" is in the name, words apart, and
+    // the avatar draws its initial with CSS, so no stray "A" joins the visible text.
+    expect(trigger).toHaveTextContent(/^Arjun Supporter$/);
+    const avatar = trigger.querySelector("[data-initial]");
+    expect(avatar).toHaveAttribute("data-initial", "A");
+    expect(avatar).toHaveTextContent("");
+  });
+
   it("switches person from the menu and goes to their home", async () => {
     const { backend } = setup(<SandboxHeader />, {
       "GET /world": () => json(demoWorld("arjun")),

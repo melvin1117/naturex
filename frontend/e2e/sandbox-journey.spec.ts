@@ -16,6 +16,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { WEB_ORIGIN } from "./env";
+import { uniquePng } from "./png";
 import { closeSessions, newSession } from "./session";
 
 // Unique per run, so a site name never collides with an earlier run's.
@@ -42,13 +43,14 @@ async function become(page: Page, person: "Rosa" | "Arjun" | "Reviewer") {
 function sandboxPost(
   page: Page,
   path: string,
-  data: Record<string, unknown>,
+  data: Buffer | Record<string, unknown>,
+  contentType = "application/json",
 ): Promise<APIResponse> {
   return page.request.fetch(`/api/sandbox${path}`, {
     method: "POST",
     data,
     // The backend's CSRF check wants an allowed Origin; without it a 403 would prove nothing.
-    headers: { Origin: WEB_ORIGIN, "Content-Type": "application/json" },
+    headers: { Origin: WEB_ORIGIN, "Content-Type": contentType },
   });
 }
 
@@ -72,6 +74,7 @@ test("the sandbox: list, review, back and follow a site", async ({
   const page = await context.newPage();
   let assetId = "";
   let sentAt = "";
+  let communityHref = "";
 
   await test.step("the welcome opens a sandbox, no sign-up", async () => {
     await page.goto("/");
@@ -90,11 +93,14 @@ test("the sandbox: list, review, back and follow a site", async ({
     await expect(
       page.getByRole("heading", { level: 1, name: "Communities" }),
     ).toBeVisible();
-    await page
+    // Whichever community comes first: the journey comes back to this one at the end.
+    const first = page
       .getByRole("list", { name: "Your communities" })
       .getByRole("link")
-      .first()
-      .click();
+      .first();
+    communityHref = (await first.getAttribute("href")) ?? "";
+    expect(communityHref).toMatch(/[?&]community=/);
+    await first.click();
     await page.getByRole("link", { name: "List more land" }).click();
 
     await page.getByLabel("Site name").fill(SITE);
@@ -169,6 +175,7 @@ test("the sandbox: list, review, back and follow a site", async ({
       page.getByRole("heading", { name: "Waiting for the Reviewer" }),
     ).toBeVisible();
     const detail = await page.request.get(`/api/sandbox/assets/${assetId}`);
+    expect(detail.ok()).toBe(true);
     sentAt = (await detail.json()).offer.sent_at;
     expect(sentAt).toBeTruthy();
   });
@@ -186,6 +193,7 @@ test("the sandbox: list, review, back and follow a site", async ({
       .filter({ hasText: SITE });
     await offer.getByRole("button", { name: /Approve and list/ }).click();
     await expect(page.getByText(`${SITE} is on the Marketplace`)).toBeVisible();
+    await expect(offer).toHaveCount(0);
   });
 
   await test.step("Arjun is refused the community's and the Reviewer's actions", async () => {
@@ -207,10 +215,31 @@ test("the sandbox: list, review, back and follow a site", async ({
       403,
       "admin_only",
     );
+    await expectRefused(
+      await sandboxPost(
+        page,
+        `/assets/${assetId}/documents?doc_type=title`,
+        uniquePng(),
+        "image/png",
+      ),
+      403,
+      "members_only",
+    );
+    // The Reviewer's page tells a supporter it isn't theirs, rather than showing the queue.
+    await page.goto("/sandbox/admin/verifications");
+    await expect(
+      page.getByRole("heading", { name: "Only the Reviewer sees this page" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("list", { name: "Offers waiting for review" }),
+    ).toHaveCount(0);
   });
 
   await test.step("Arjun backs the site from its page", async () => {
-    await page.getByRole("link", { name: "Marketplace", exact: true }).click();
+    await page
+      .getByRole("banner")
+      .getByRole("link", { name: "Marketplace", exact: true })
+      .click();
     await page
       .getByRole("link", { name: new RegExp(SITE) })
       .first()
@@ -253,11 +282,7 @@ test("the sandbox: list, review, back and follow a site", async ({
 
   await test.step("Rosa's community shows the site on the Marketplace", async () => {
     await become(page, "Rosa");
-    await page
-      .getByRole("list", { name: "Your communities" })
-      .getByRole("link")
-      .first()
-      .click();
+    await page.goto(communityHref);
     await expect(
       page.getByRole("link", {
         name: new RegExp(`^${SITE}\\s*: On the Marketplace\\. See it$`),
