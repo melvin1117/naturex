@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -27,14 +33,20 @@ import {
 /** Communities (ADR-0008): the list of your communities, and one community's page. */
 
 const nav = vi.hoisted(() => ({ pathname: "/steward", search: "" }));
+// Like the app router: replacing the URL changes what the page reads from it.
+const router = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn((href: string) => {
+    const [path, query = ""] = href.split("?");
+    nav.pathname = path!;
+    nav.search = query;
+  }),
+  back: vi.fn(),
+  prefetch: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    back: vi.fn(),
-    prefetch: vi.fn(),
-  }),
+  useRouter: () => router,
   usePathname: () => nav.pathname,
   useSearchParams: () => new URLSearchParams(nav.search),
 }));
@@ -48,8 +60,11 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  vi.clearAllMocks();
   FakeEventSource.reset();
   window.localStorage.clear();
+  nav.pathname = "/steward";
+  nav.search = "";
 });
 
 const SELVA = community();
@@ -129,13 +144,13 @@ function setup(
   routes: Routes = {},
 ) {
   const backend = fakeBackend({
-    ...routes,
     "GET /world": () => json(SIGNED_IN_WORLD),
     "GET /me/communities": () => json([SELVA]),
     [`GET /communities/${SELVA.id}/members`]: () => json([]),
     [`GET /communities/${SELVA.id}/summary`]: summaryResponse,
     "GET /alerts": () =>
       json({ alerts: [], unread_count: 0, next_before: null }),
+    ...routes,
   });
   const layer = createDataLayer({
     baseUrl: BASE,
@@ -265,20 +280,21 @@ describe("a community's page", () => {
     );
     const list = await tiles();
     const link = (name: string) => within(list).getByRole("link", { name });
-    expect(link("Laguna: Draft")).toHaveAttribute(
+    expect(link("Laguna: Draft. Continue")).toHaveAttribute(
       "href",
       `/steward/list?community=${SELVA.id}&asset=a1`,
     );
-    expect(link("Cerro: Waiting for the Reviewer")).toHaveAttribute(
+    expect(
+      link("Cerro: Waiting for the Reviewer. See your offer"),
+    ).toHaveAttribute(
       "href",
       `/steward/list?community=${SELVA.id}&asset=a2&step=offer`,
     );
-    expect(link("Bosque: Sent back")).toBeVisible();
+    expect(link("Bosque: Sent back. Change your offer")).toBeVisible();
     expect(within(list).getByText("“Keep more units.”")).toBeVisible();
-    expect(link("Xochimilco Wetland: On the Marketplace")).toHaveAttribute(
-      "href",
-      `/asset/${SITE}`,
-    );
+    expect(
+      link("Xochimilco Wetland: On the Marketplace. See it"),
+    ).toHaveAttribute("href", `/asset/${SITE}`);
     expect(within(list).getByText(/\$21\.4723 a unit/)).toBeVisible();
     // Withdrawn land is gone for good; the last tile lists more.
     expect(within(list).queryByText("Gone")).not.toBeInTheDocument();
@@ -323,6 +339,47 @@ describe("a community's page", () => {
       await screen.findByRole("button", { name: "Withdraw listing" }),
     );
     expect(await screen.findByText("No land listed yet.")).toBeVisible();
+    // The tile and its button are gone: the page's heading takes focus.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { level: 1, name: "Selva Viva" }),
+      ).toHaveFocus(),
+    );
+  });
+
+  it("says when nothing is on the Marketplace yet", async () => {
+    setup(() =>
+      json(
+        summary([
+          listing({
+            asset: card({ status: "draft" }),
+            next_action: "continue_listing",
+          }),
+        ]),
+      ),
+    );
+    expect(
+      await screen.findByText(
+        "Nothing on the Marketplace yet. Finish a listing and send its offer to the Reviewer.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("says trading is paused when its only launched site is", async () => {
+    setup(() =>
+      json(
+        summary([
+          listing({
+            asset: card({ status: "suspended" }),
+            ipo_at: "2026-10-18T00:00:00Z",
+            next_action: "view_on_exchange",
+          }),
+        ]),
+      ),
+    );
+    expect(
+      await screen.findByText("Trading is paused on its sites for now."),
+    ).toBeVisible();
   });
 
   it("offers Edit to the owner only", async () => {
@@ -358,9 +415,30 @@ describe("Communities", () => {
     ).toHaveAttribute("href", "/steward?new=1");
   });
 
-  it("starts another community from the list", async () => {
+  it("says when a community's sites didn't load", async () => {
+    setup(() => json({ detail: "boom" }, { status: 503 }));
+    expect(await screen.findByText("We couldn't load its sites")).toBeVisible();
+  });
+
+  it("starts another community and opens it, focused, without showing the list", async () => {
     nav.search = "new=1";
-    setup(() => json(summary([])));
+    const RIO = {
+      id: "99999999-9999-4999-8999-999999999999",
+      name: "Río Verde",
+      country: "MX",
+      description: null,
+      created_at: "2026-10-19T00:00:00Z",
+    };
+    let mine = [SELVA];
+    setup(() => json(summary([])), {
+      "GET /me/communities": () => json(mine),
+      "POST /communities": () => {
+        mine = [SELVA, { ...RIO, role: "owner" }];
+        return json(RIO, { status: 201 });
+      },
+      [`GET /communities/${RIO.id}/summary`]: () =>
+        json({ ...summary([]), community: RIO }),
+    });
     expect(
       await screen.findByRole("heading", {
         level: 1,
@@ -370,5 +448,17 @@ describe("Communities", () => {
     expect(
       screen.getByRole("link", { name: "Back to your communities" }),
     ).toHaveAttribute("href", "/steward");
+    fireEvent.change(screen.getByLabelText("Community name"), {
+      target: { value: "Río Verde" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create community" }));
+
+    const heading = await screen.findByRole("heading", {
+      level: 1,
+      name: "Río Verde",
+    });
+    await waitFor(() => expect(heading).toHaveFocus());
+    expect(nav.search).toBe(`community=${RIO.id}`);
+    expect(router.replace).toHaveBeenCalledTimes(1);
   });
 });

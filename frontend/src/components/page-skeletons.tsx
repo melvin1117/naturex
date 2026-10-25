@@ -273,41 +273,59 @@ export function MarketplaceSkeleton({ label }: { label?: string }) {
   );
 }
 
-/** Below the portfolio's heading: the stat strip, then stakes beside alerts. */
+/** A site's tile: its picture, its name and a line, as the Communities and Your stakes grids draw it. */
+function TileBones() {
+  return (
+    <div className="overflow-hidden rounded-3xl bg-card shadow-soft">
+      <Skeleton className="aspect-[16/10] w-full rounded-none" />
+      <div className="p-5">
+        <Line box="h-6" className="h-4 w-40 max-w-full" />
+        <Line box="mt-1.5 h-5" className="h-3.5 w-56 max-w-full" />
+        <Line box="mt-4 h-8" className="h-6 w-24" />
+      </div>
+    </div>
+  );
+}
+
+/** A grid of tiles, three to a row on wide screens. */
+function TileGrid() {
+  return (
+    <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {[0, 1, 2].map((i) => (
+        <TileBones key={i} />
+      ))}
+    </div>
+  );
+}
+
+/** Below the portfolio's heading: its sentence, then the stakes' tiles. */
 export function PortfolioBodySkeleton({
   label = "Loading your stakes…",
 }: {
   label?: string;
 }) {
   return (
-    <LoadingRegion name="portfolio" label={label} className="mt-8">
-      <div className="grid gap-4 rounded-3xl bg-card p-6 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <StatBones key={i} />
-        ))}
-      </div>
-      <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
-        <Panel lines={5} />
-        <Panel lines={3} />
-      </div>
+    <LoadingRegion name="portfolio" label={label} className="mt-5">
+      <Line box="h-8 sm:h-9" className="h-6 w-full max-w-2xl" />
+      <Line box="h-8 sm:h-9" className="h-6 w-2/3 max-w-xl" />
+      <TileGrid />
     </LoadingRegion>
   );
 }
 
-/** The whole portfolio: the real heading, the account line (a block), then the body. */
+/** The whole portfolio: the real heading, then the body. */
 export function PortfolioSkeleton({ label }: { label?: string }) {
   return (
     <div className="mx-auto max-w-7xl px-4 pt-10 sm:px-6">
       <h1 className="font-serif text-5xl leading-none tracking-tight sm:text-6xl">
         Your stakes
       </h1>
-      <Line box="mt-3 h-6" className="h-4 w-72 max-w-full" />
       <PortfolioBodySkeleton label={label} />
     </div>
   );
 }
 
-/** The steward home: heading and actions, stats, the featured site, then the side panels. */
+/** Communities and a community's page: the back link, the name, its sentence, then its tiles. */
 export function StewardHomeSkeleton({
   label = "Loading your community…",
 }: {
@@ -317,50 +335,18 @@ export function StewardHomeSkeleton({
     <LoadingRegion
       name="steward-home"
       label={label}
-      className="mx-auto max-w-7xl px-4 pt-10 pb-16 sm:px-6"
+      className="mx-auto max-w-7xl px-4 pt-8 pb-16 sm:px-6"
     >
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="w-full max-w-md min-w-0">
-          <Line box="h-5" className="h-3.5 w-40" />
-          <Line box="mt-1 h-12 sm:h-15" className="h-10 w-full sm:h-12" />
-        </div>
-        <div className="flex gap-2">
-          <Ground className="h-10 w-36 rounded-full" />
-          <Ground className="h-10 w-36 rounded-full" />
-        </div>
-      </div>
-      <div className="mt-8 grid gap-4 rounded-3xl bg-card p-6 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <StatBones key={i} />
-        ))}
-      </div>
-      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0 space-y-8">
-          <div className="grid gap-6 rounded-[2rem] bg-lichen p-6 shadow-lift sm:p-8 md:grid-cols-[auto_1fr]">
-            <Skeleton className="size-40 rounded-full bg-card/70" />
-            <div className="min-w-0">
-              <Skeleton className="h-8 w-40 rounded-full bg-card/70" />
-              <Skeleton className="mt-4 h-10 w-3/4 bg-card/70" />
-              <Skeleton className="mt-3 h-4 w-2/3 bg-card/70" />
-              <div className="mt-6 flex gap-2">
-                <Skeleton className="h-10 w-36 rounded-full bg-card/70" />
-                <Skeleton className="h-10 w-32 rounded-full bg-card/70" />
-              </div>
-            </div>
-          </div>
-          <Panel lines={2} />
-        </div>
-        <div className="min-w-0 space-y-6">
-          <Panel lines={4} />
-          <Panel lines={2} />
-        </div>
-      </div>
+      <Line box="h-5" className="h-3.5 w-32" />
+      <Line box="mt-5 h-12 sm:h-15" className="h-10 w-full max-w-xl sm:h-12" />
+      <Line box="mt-5 h-7" className="h-5 w-full max-w-2xl" />
+      <TileGrid />
     </LoadingRegion>
   );
 }
 
 /**
- * Community settings: the real "Community home" back button, the community's name and role
+ * Community settings: the real "Your community" back button, the community's name and role
  * (blocks), then the form beside the members.
  */
 export function CommunitySettingsSkeleton({
@@ -374,7 +360,7 @@ export function CommunitySettingsSkeleton({
       <Button asChild variant="ghost" size="sm" className="-ml-3">
         <Link href={steward?.href("/steward") ?? "/steward"}>
           <ArrowLeft aria-hidden="true" />
-          Community home
+          Your community
         </Link>
       </Button>
       <LoadingRegion name="community-settings" label={label}>
@@ -384,67 +370,6 @@ export function CommunitySettingsSkeleton({
           <Panel lines={5} />
           <Panel lines={3} />
         </div>
-      </LoadingRegion>
-    </div>
-  );
-}
-
-/** One listing's row on the Listings page: thumbnail, name, status line, then its buttons. */
-function ListingRowBones() {
-  return (
-    <div className="flex gap-4 py-4">
-      <Skeleton className="size-16 shrink-0 rounded-xl" />
-      <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-3">
-        <div className="w-full max-w-sm min-w-0">
-          <Line box="h-6" className="h-4 w-48 max-w-full" />
-          <Line box="mt-1 h-6" className="h-5 w-64 max-w-full" />
-          <Line box="mt-1 h-5" className="h-3.5 w-full" />
-        </div>
-        <div className="flex gap-2">
-          <Skeleton className="h-8 w-24 rounded-full" />
-          <Skeleton className="h-8 w-24 rounded-full" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * The Steward app's Listings page (#233): its real heading, the intro and button, then the
- * In progress and Live groups as cards of rows.
- */
-export function ListingsSkeleton({
-  label = "Loading your listings…",
-}: {
-  label?: string;
-}) {
-  return (
-    <div className="mx-auto max-w-5xl px-4 pt-10 pb-16 sm:px-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="w-full max-w-md min-w-0">
-          <div aria-hidden="true">
-            <Line box="h-5" className="h-3.5 w-40" />
-          </div>
-          <h1 className="mt-1 font-serif text-5xl leading-none tracking-tight sm:text-6xl">
-            Listings
-          </h1>
-        </div>
-        <div aria-hidden="true">
-          <Ground className="h-10 w-32 rounded-full" />
-        </div>
-      </div>
-      <LoadingRegion name="listings" label={label}>
-        <Line box="mt-3 h-6" className="h-4 w-full max-w-xl" />
-        {[3, 1].map((rows, i) => (
-          <div key={i} className="mt-8 rounded-3xl bg-card p-6 shadow-soft">
-            <Skeleton className="h-5 w-32" />
-            <div className="mt-5 divide-y divide-border">
-              {Array.from({ length: rows }, (_, row) => (
-                <ListingRowBones key={row} />
-              ))}
-            </div>
-          </div>
-        ))}
       </LoadingRegion>
     </div>
   );
@@ -693,7 +618,6 @@ const ROUTE_SKELETON: Record<
   portfolio: PortfolioSkeleton,
   "steward-home": StewardHomeSkeleton,
   "community-settings": CommunitySettingsSkeleton,
-  listings: ListingsSkeleton,
   screen: ScreenSkeleton,
   ipo: IpoSkeleton,
   review: (props) => <ScreenSkeleton {...props} wide />,

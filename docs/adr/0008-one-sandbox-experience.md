@@ -48,6 +48,7 @@ Accepted (2026-10-25). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) 
 - **Removed from the community's page:** the featured listing, the stat strip, Recovery plan, Quarterly payouts, Supporters, Members (still under **Edit community**), its alerts (the bell has them), decision notices (the tile and the flow's Prove step say it) and the community switcher. The **Listings** page redirects to the community's page.
 - **Your stakes** opens on one sentence: how many sites you back, what the stakes are worth, up or down since you bought, and the cash left; then the impact in one line and a tile per stake. The stat strip, the table and the alerts panel are gone.
 
+## Consequences
 
 - **Good:** a judge reads what WildWorth is in one sentence, reaches a working app in one click and never meets a sign-in. Every page has the same three choices.
 - **Real accounts are dormant, not deleted.** The backend's auth routes, the live world and their tests stay; nothing in the frontend reaches them. Bringing accounts back later means a header for them, not a rebuild.

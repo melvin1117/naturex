@@ -254,7 +254,7 @@ describe("route loading states", () => {
 
   it.each([
     ["/asset/x", "Marketplace", "/"],
-    ["/steward/community", "Community home", "/steward"],
+    ["/steward/community", "Your community", "/steward"],
   ])("%s keeps its real back link", (route, name, href) => {
     const { Loading } = LOADERS.find((l) => l.route === inSandbox(route))!;
     render(<Loading />);
@@ -276,7 +276,6 @@ describe("RouteSkeleton", () => {
     ["/admin/verifications", "queue"],
     ["/admin/verifications/abc", "review"],
     ["/steward/list", "page"],
-    ["/steward/listings", "listings"],
   ])("draws %s's shape with the gate's label", (path, shape) => {
     nav.pathname = path;
     render(<RouteSkeleton label="Checking your session…" />, {

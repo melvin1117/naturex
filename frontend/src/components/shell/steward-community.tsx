@@ -117,6 +117,7 @@ function CommunityProvider({
       if (meId) rememberCommunity(meId, id);
       const params = new URLSearchParams(window.location.search);
       params.set(COMMUNITY_PARAM, id);
+      params.delete("new"); // Start a community (`?new=1`) gives way to the new one.
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
     [meId, pathname, router],
@@ -136,6 +137,20 @@ function CommunityProvider({
       {children}
     </StewardCommunityContext.Provider>
   );
+}
+
+/** A community just created from Communities: its page takes focus once when it opens. */
+let justCreated: string | null = null;
+
+export function markJustCreated(id: string): void {
+  justCreated = id;
+}
+
+/** Whether `id` was just created here; true once. */
+export function takeJustCreated(id: string): boolean {
+  if (justCreated !== id) return false;
+  justCreated = null;
+  return true;
 }
 
 /** Null outside the Steward app (no provider). */

@@ -2,15 +2,18 @@
 
 import { ArrowLeft, ArrowRight, MapPinned, Plus, Settings } from "lucide-react";
 import Link from "@/components/app-link";
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { cn } from "cn";
 
 import { Delta, SiteThumb } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
+import { takeJustCreated } from "@/components/shell/steward-community";
 import { WithdrawListingDialog } from "@/components/steward/withdraw-listing-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { CommunitySummary, ListingSummary } from "@/lib/api/types";
 import {
+  roleLine,
   shownSites,
   type SiteState,
   type SiteTone,
@@ -38,23 +41,24 @@ export function CommunityPage({
 }: {
   summary: CommunitySummary;
   /** A listing was withdrawn, or the list is out of date: load it again. */
-  onChanged: () => void;
+  onChanged: () => Promise<unknown>;
 }) {
   const { community, listings, role } = summary;
-  const member = role !== null;
   const sites = shownSites(listings, community.id);
   const listHref = withCommunity("/steward/list", community.id);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const meta = [
-    countryName(community.country ?? null),
-    role === "owner"
-      ? "You're the owner"
-      : role === "steward"
-        ? "You're a steward"
-        : "You're viewing it as the Reviewer",
-  ]
+  const meta = [countryName(community.country ?? null), roleLine(role)]
     .filter(Boolean)
     .join(" · ");
+  // Just created from Communities: the form that held focus is gone, so the page takes it.
+  useEffect(() => {
+    if (takeJustCreated(community.id)) headingRef.current?.focus();
+  }, [community.id]);
+  // A withdrawn tile is gone, and the dialog leaves focus to the page: the heading takes it.
+  const afterWithdraw = async () => {
+    await onChanged();
+    headingRef.current?.focus();
+  };
 
   return (
     <div className="mx-auto max-w-7xl px-4 pt-8 pb-16 sm:px-6">
@@ -75,7 +79,7 @@ export function CommunityPage({
             {community.name}
           </h1>
           <p className="mt-5 max-w-2xl text-lg text-pretty text-muted-foreground">
-            <Lede summary={summary} />
+            <Lede summary={summary} owner={role === "owner"} />
           </p>
           <p className="mt-2 text-sm text-muted-foreground">{meta}</p>
         </div>
@@ -97,11 +101,9 @@ export function CommunityPage({
             Draw your land on the map and WildWorth rates it from satellite data
             and local news.
           </p>
-          {member && (
-            <Button asChild className="mt-6">
-              <Link href={listHref}>List your first site</Link>
-            </Button>
-          )}
+          <Button asChild className="mt-6">
+            <Link href={listHref}>List your first site</Link>
+          </Button>
         </div>
       ) : (
         <ul
@@ -113,21 +115,20 @@ export function CommunityPage({
               key={site.asset.id}
               site={site}
               state={state}
-              canWithdraw={member && site.manage_actions.includes("withdraw")}
-              onChanged={onChanged}
+              canWithdraw={site.manage_actions.includes("withdraw")}
+              onWithdrawn={afterWithdraw}
+              onStale={() => void onChanged()}
             />
           ))}
-          {member && (
-            <li>
-              <Link
-                href={listHref}
-                className="flex h-full min-h-48 flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-foreground/20 p-6 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-              >
-                <Plus className="size-6" aria-hidden="true" />
-                List more land
-              </Link>
-            </li>
-          )}
+          <li>
+            <Link
+              href={listHref}
+              className="flex h-full min-h-48 flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-foreground/20 p-6 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <Plus className="size-6" aria-hidden="true" />
+              List more land
+            </Link>
+          </li>
         </ul>
       )}
     </div>
@@ -141,7 +142,13 @@ function Num({ children }: { children: ReactNode }) {
 }
 
 /** How the community's land is doing, in one sentence with its numbers in it. */
-function Lede({ summary }: { summary: CommunitySummary }) {
+function Lede({
+  summary,
+  owner,
+}: {
+  summary: CommunitySummary;
+  owner: boolean;
+}) {
   const live = summary.listings.filter((l) => l.asset.trading).length;
   const supporters = summary.holder_count;
   if (live > 0)
@@ -165,8 +172,12 @@ function Lede({ summary }: { summary: CommunitySummary }) {
         <Num>{moneyText(summary.wallet.balance)}</Num>.
       </>
     );
+  if (summary.listings.some((l) => l.ipo_at && l.asset.status === "suspended"))
+    return "Trading is paused on its sites for now.";
   if (summary.listings.some((l) => l.asset.status !== "withdrawn"))
-    return "Nothing on the Marketplace yet. Finish a listing and send its offer to the Reviewer.";
+    return owner
+      ? "Nothing on the Marketplace yet. Finish a listing and send its offer to the Reviewer."
+      : "Nothing on the Marketplace yet. Finish a listing; the owner sends its offer to the Reviewer.";
   return "No land listed yet.";
 }
 
@@ -174,12 +185,14 @@ function SiteTile({
   site,
   state,
   canWithdraw,
-  onChanged,
+  onWithdrawn,
+  onStale,
 }: {
   site: ListingSummary;
   state: SiteState;
   canWithdraw: boolean;
-  onChanged: () => void;
+  onWithdrawn: () => Promise<void>;
+  onStale: () => void;
 }) {
   const card = marketCard(site.asset);
   const icon = siteIcon(site.asset);
@@ -200,14 +213,16 @@ function SiteTile({
             <MapPinned className="size-8 text-lime-ink/70" aria-hidden="true" />
           </div>
         )}
-        <span
+        {/* The link says it too: read once. */}
+        <Badge
+          aria-hidden="true"
           className={cn(
-            "absolute top-3 left-3 rounded-full px-2.5 py-1 text-xs font-medium shadow-soft",
+            "absolute top-3 left-3 border-transparent shadow-soft",
             TONE[state.tone],
           )}
         >
           {state.label}
-        </span>
+        </Badge>
         {card.grade && (
           <div className="absolute right-3 bottom-3">
             <GradeBadge grade={card.grade} />
@@ -221,7 +236,9 @@ function SiteTile({
             className="outline-none after:absolute after:inset-0 after:rounded-3xl focus-visible:after:ring-2 focus-visible:after:ring-ring"
           >
             {site.asset.name}
-            <span className="sr-only">: {state.label}</span>
+            <span className="sr-only">
+              : {state.label}. {state.cta}
+            </span>
           </Link>
         </h3>
         {state.tone === "live" && card.price !== null ? (
@@ -233,7 +250,7 @@ function SiteTile({
           </p>
         ) : (
           <p className="text-sm text-pretty text-muted-foreground">
-            {state.detail ?? `${ha(card.areaHa)}`}
+            {state.detail ?? ha(card.areaHa)}
           </p>
         )}
         <div className="mt-auto flex items-center justify-between gap-3 pt-3 text-sm">
@@ -252,8 +269,8 @@ function SiteTile({
               <WithdrawListingDialog
                 assetId={site.asset.id}
                 name={site.asset.name}
-                onWithdrawn={onChanged}
-                onStale={onChanged}
+                onWithdrawn={onWithdrawn}
+                onStale={onStale}
               />
             </div>
           )}

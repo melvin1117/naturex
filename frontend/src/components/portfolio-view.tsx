@@ -79,7 +79,8 @@ function Num({ children }: { children: React.ReactNode }) {
 
 /** "up $12.30 (2.9%)", "down $4.50 (1.1%)" or "level", in the trend's colour. */
 function Change({ pnl, pct }: { pnl: string; pct: number | null }) {
-  const n = decimal(pnl) ?? 0;
+  const n = decimal(pnl);
+  if (n === null) return <Num>—</Num>;
   if (n === 0) return <Num>level</Num>;
   const pctText = pct === null ? "" : ` (${Math.abs(pct).toFixed(1)}%)`;
   return (

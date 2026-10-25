@@ -191,6 +191,20 @@ describe("PortfolioView", () => {
     );
   });
 
+  it("says a gain as up, in the trend's colour", async () => {
+    renderPortfolio({
+      "GET /portfolio": () =>
+        json({
+          ...HELD,
+          holdings: [holding()],
+          unrealized_pnl: "12.30",
+          unrealized_pnl_pct: "2.94",
+        }),
+    });
+    const up = await screen.findByText("up $12.30 (2.9%)");
+    expect(up).toHaveClass("text-lime-ink");
+  });
+
   it("says a stake that hasn't moved is level", async () => {
     renderPortfolio({
       "GET /portfolio": () =>

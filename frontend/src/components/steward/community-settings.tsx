@@ -52,7 +52,7 @@ export function CommunitySettings() {
       <Button asChild variant="ghost" size="sm" className="-ml-3">
         <Link href={href("/steward")}>
           <ArrowLeft aria-hidden="true" />
-          Community home
+          Your community
         </Link>
       </Button>
       <h1 className="mt-2 font-serif text-5xl leading-none tracking-tight text-balance break-words">

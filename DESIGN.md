@@ -179,7 +179,7 @@ Three free (OFL) faces from Google Fonts, loaded with `next/font`: **Gloock** (d
 
 ## Layout
 
-Max width 1280px with a 16px gutter on phones and 24px from `sm`. Pages open with a serif title row, a stat strip in one card, then a full-width feature card on a photographic ground. Detail pages use a two-column grid (content plus a 360px sticky aside for the trade panel) from `lg`. Headers wrap navigation onto a second row below 640px. No horizontal page scroll at 390px.
+Max width 1280px with a 16px gutter on phones and 24px from `sm`. Pages open with a serif title, then one sentence that carries their numbers inline (no stat strip, no boxed metrics), then their content: the Marketplace's feature card and site cards, a community's site tiles, the stakes' tiles. Lists of sites are grids of picture tiles (the site's satellite view first), three to a row from `lg`. Detail pages use a two-column grid (content plus a 360px sticky aside for the trade panel) from `lg`. Headers wrap navigation onto a second row below 640px. No horizontal page scroll at 390px.
 
 ## Elevation & Depth
 
@@ -200,7 +200,7 @@ Pills for every control (buttons, tabs, toggles, chips, selects). 12px for input
 Primary: forest pill, 40px. On a photograph or the machine layer: paper (`card`) pill with forest ink. Outline: card pill with input border. Ghost for tertiary actions. Pressed state nudges down 1px. Never lime (lime is the reading).
 
 ### Chips
-Ecosystem, verification and status chips are small pills; on images they are white at 15% with white text.
+Ecosystem and verification chips are small pills; on images they are white at 15% with white text. A site tile's state chip (top left of its picture) is solid and says where the site stands at a glance: forest for On the Marketplace, lime for Rated, sky for in progress (Being rated, Waiting for the Reviewer), clay for what needs the community (Sent back, Needs more evidence), card for a draft. The tile's link says the state too, so the chip is hidden from screen readers.
 
 ### Cards / Containers
 `panel`: card surface, 24px radius, soft shadow, 24px padding, a semibold 16px title row with an optional action. Never nested inside another panel; inner groupings use the `secondary` band with 16px radius.

@@ -3,81 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   curatedSite,
   MODEL_CALLS_EMPTY,
-  payoutsEmptyText,
   QUARTER_NO_SITES,
-  recommendationsEmptyText,
 } from "@/lib/empty-states";
 import { skeletonKind } from "@/lib/route-skeleton";
-
-function listing({
-  rated = true,
-  mock = false,
-  launched = false,
-}: { rated?: boolean; mock?: boolean; launched?: boolean } = {}) {
-  return {
-    report_version: rated ? 1 : null,
-    ipo_at: launched ? "2026-10-10T00:00:00Z" : null,
-    asset: { mock },
-  };
-}
-
-describe("recommendationsEmptyText", () => {
-  it("says recommendations follow the first rating when nothing is rated", () => {
-    expect(recommendationsEmptyText([listing({ rated: false })])).toMatch(
-      /^A Recovery plan appears after a site's first rating/,
-    );
-  });
-
-  it("never tells a rated site's steward to wait for a rating (#216)", () => {
-    for (const listings of [
-      [listing({ mock: true })],
-      [listing({ mock: false })],
-      [listing({ rated: false }), listing({ mock: true })],
-    ]) {
-      expect(recommendationsEmptyText(listings)).not.toMatch(
-        /once a site has been rated|after a site's first rating/,
-      );
-    }
-  });
-
-  it("explains that mock ratings carry no recommendations", () => {
-    expect(
-      recommendationsEmptyText([
-        listing({ mock: true }),
-        listing({ rated: false }),
-      ]),
-    ).toBe(
-      "Mock ratings don't include the Auditor's recommendations. A live rating may list concrete steps here that would strengthen the grade.",
-    );
-  });
-
-  it("stays neutral for a live rating without recommendations", () => {
-    // A live rating may have run without the Auditor (model unavailable, budget, failed
-    // validation), so the copy claims nothing about why.
-    for (const listings of [
-      [listing({ mock: false })],
-      [listing({ mock: true }), listing({ mock: false })],
-    ]) {
-      expect(recommendationsEmptyText(listings)).toBe(
-        "The latest rating lists no recovery steps.",
-      );
-    }
-  });
-});
-
-describe("payoutsEmptyText", () => {
-  it("names the opening offer as the trigger before one has happened", () => {
-    expect(payoutsEmptyText([listing()])).toMatch(
-      /^Payouts start after a site's opening offer/,
-    );
-  });
-
-  it("names the next quarter once a site is open to supporters", () => {
-    expect(payoutsEmptyText([listing(), listing({ launched: true })])).toMatch(
-      /^The first payout comes when the next quarter runs/,
-    );
-  });
-});
 
 describe("other empty states", () => {
   it("teach what appears, why it's empty and what makes it appear", () => {

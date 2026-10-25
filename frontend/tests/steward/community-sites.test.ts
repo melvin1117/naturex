@@ -59,11 +59,12 @@ describe("siteState", () => {
     [
       "listed",
       { ipo_at: "2026-10-21T10:00:00Z" },
-      {},
+      { trading: true },
       "On the Marketplace",
       "See it",
       `/asset/${A}`,
     ],
+    ["listed", { next_action: "awaiting_ipo" }, {}, "Rated", "Open", flow],
     ["listed", { next_action: "launch_ipo" }, {}, "Rated", "Continue", flow],
     [
       "listed",
@@ -88,6 +89,45 @@ describe("siteState", () => {
       expect([state.label, state.cta, state.href]).toEqual([label, cta, href]);
     },
   );
+
+  it("leads a revoked site back to its documents, even once trading", () => {
+    const revoked = {
+      level: "revoked" as const,
+      in_review: false,
+      required: true,
+      decision: "revoked" as const,
+      decided_at: "2026-10-21T10:00:00Z",
+      reason: "The title was forged.",
+      run_id: null,
+    };
+    for (const [status, extra] of [
+      ["suspended", { ipo_at: "2026-10-20T10:00:00Z" }],
+      ["listed", { ipo_at: "2026-10-20T10:00:00Z" }],
+    ] as const) {
+      const state = siteState(
+        site(
+          status,
+          { next_action: "verify", verification: revoked, ...extra },
+          { trading: status === "listed" },
+        ),
+        C,
+      );
+      expect([state.label, state.cta, state.href]).toEqual([
+        "Verify again",
+        "Add documents",
+        `${flow}&step=prove`,
+      ]);
+    }
+    expect(
+      siteState(
+        site("suspended", {
+          next_action: "verify",
+          verification: revoked,
+        }),
+        C,
+      ).detail,
+    ).toBe("Trading is paused until new documents are approved.");
+  });
 
   it("quotes the Reviewer's note on an offer sent back", () => {
     const state = siteState(
@@ -114,7 +154,11 @@ describe("siteState", () => {
 describe("shownSites", () => {
   it("puts what needs the community first, then the newest, and drops withdrawn ones", () => {
     const sites = [
-      site("listed", { ipo_at: "2026-10-21T10:00:00Z" }, { id: "live" }),
+      site(
+        "listed",
+        { ipo_at: "2026-10-21T10:00:00Z" },
+        { id: "live", trading: true },
+      ),
       site("withdrawn", {}, { id: "gone" }),
       site("draft", { updated_at: "2026-10-22T10:00:00Z" }, { id: "new" }),
       site("draft", {}, { id: "old" }),
@@ -136,7 +180,7 @@ describe("sitesLine", () => {
     expect(
       sitesLine([
         site("draft"),
-        site("listed", { ipo_at: "2026-10-21T10:00:00Z" }),
+        site("listed", { ipo_at: "2026-10-21T10:00:00Z" }, { trading: true }),
         site("withdrawn"),
       ]),
     ).toBe("2 sites · 1 on the Marketplace");

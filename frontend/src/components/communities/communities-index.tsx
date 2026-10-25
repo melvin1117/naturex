@@ -6,15 +6,15 @@ import { useSearchParams } from "next/navigation";
 
 import { SiteThumb } from "@/components/proto/bits";
 import {
+  markJustCreated,
   StartCommunity,
   useStewardCommunity,
 } from "@/components/shell/steward-community";
 import { Button } from "@/components/ui/button";
 import type { MyCommunity } from "@/lib/api/types";
-import { sitesLine } from "@/lib/community-sites";
+import { roleLine, sitesLine } from "@/lib/community-sites";
 import { useCommunitySummary } from "@/lib/community-hooks";
 import { countryName, siteIcon } from "@/lib/market-cards";
-import { useRouter } from "@/lib/nav";
 import { withCommunity } from "@/lib/navigation";
 
 /**
@@ -24,15 +24,12 @@ import { withCommunity } from "@/lib/navigation";
 export function CommunitiesIndex() {
   const { communities } = useStewardCommunity();
   const starting = useSearchParams().get("new") === "1";
-  const router = useRouter();
 
   if (starting)
     return (
       <StartCommunity
         back={{ href: "/steward", label: "Back to your communities" }}
-        onCreated={(community) =>
-          router.replace(withCommunity("/steward", community.id))
-        }
+        onCreated={(community) => markJustCreated(community.id)}
       />
     );
 
@@ -77,7 +74,7 @@ function CommunityCard({ community }: { community: MyCommunity }) {
       .find((i) => i !== null) ?? null;
   const meta = [
     countryName(community.country ?? null),
-    community.role === "owner" ? "You're the owner" : "You're a steward",
+    roleLine(community.role),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -108,7 +105,11 @@ function CommunityCard({ community }: { community: MyCommunity }) {
           <p className="text-sm text-muted-foreground">{meta}</p>
           <p className="mt-auto flex items-center justify-between gap-3 pt-4 text-sm font-medium">
             <span className="tabular">
-              {summary.data ? sitesLine(listings) : "\u00a0"}
+              {summary.data
+                ? sitesLine(listings)
+                : summary.error
+                  ? "We couldn't load its sites"
+                  : "\u00a0"}
             </span>
             <ArrowRight
               className="size-4 shrink-0 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"

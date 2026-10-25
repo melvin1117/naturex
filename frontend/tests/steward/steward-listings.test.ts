@@ -4,7 +4,6 @@ import { ApiError } from "@/lib/api/errors";
 import type { ListingSummary } from "@/lib/api/types";
 import {
   groupListings,
-  inProgressText,
   listingGroup,
   listingStatusWords,
   rowActions,
@@ -172,19 +171,6 @@ describe("groupListings", () => {
     expect(groups.in_progress).toEqual([newer, older]);
     expect(groups.live).toEqual([live]);
     expect(groups.closed).toEqual([closed]);
-  });
-});
-
-describe("inProgressText", () => {
-  it.each<[Status[], string | null]>([
-    [[], null],
-    [["listed"], "1 in progress"],
-    [["draft"], "1 draft"],
-    [["draft", "draft"], "2 drafts"],
-    [["draft", "rating", "needs_evidence"], "1 draft and 2 more in progress"],
-    [["withdrawn", "ineligible"], null],
-  ])("%j → %s", (statuses, text) => {
-    expect(inProgressText(statuses.map((s) => listing(s)))).toBe(text);
   });
 });
 

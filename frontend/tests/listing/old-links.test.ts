@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import IpoPage from "@/app/sandbox/steward/assets/[id]/ipo/page";
 import VerifyPage from "@/app/sandbox/steward/assets/[id]/verify/page";
+import ListingsPage from "@/app/sandbox/steward/listings/page";
 
 const redirect = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -31,6 +32,15 @@ describe("old listing screens", () => {
     });
     expect(redirect).toHaveBeenCalledWith(
       `/sandbox/steward/list?asset=${ASSET}&step=prove`,
+    );
+  });
+
+  it("sends the Listings page to the community's page", async () => {
+    await ListingsPage({
+      searchParams: Promise.resolve({ community: COMMUNITY }),
+    });
+    expect(redirect).toHaveBeenCalledWith(
+      `/sandbox/steward?community=${COMMUNITY}`,
     );
   });
 });

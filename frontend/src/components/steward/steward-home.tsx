@@ -29,9 +29,12 @@ export function StewardHomeRoute() {
 
 function Communities() {
   const param = useSearchParams().get(COMMUNITY_PARAM);
-  const { active } = useStewardCommunity();
+  const { active, query } = useStewardCommunity();
+  if (param && active?.id === param) return <StewardHome />;
+  // One just created: wait for the membership, rather than flash the list.
+  if (param && query.isFetching) return <StewardHomeSkeleton />;
   // A community you're not in (or none asked for) shows the list instead.
-  return param && active?.id === param ? <StewardHome /> : <CommunitiesIndex />;
+  return <CommunitiesIndex />;
 }
 
 export function StewardHome() {
@@ -53,10 +56,5 @@ export function StewardHome() {
   if (!summary.data || summary.data.community.id !== active.id) {
     return <StewardHomeSkeleton label={`Loading ${active.name}…`} />;
   }
-  return (
-    <CommunityPage
-      summary={summary.data}
-      onChanged={() => void summary.refetch()}
-    />
-  );
+  return <CommunityPage summary={summary.data} onChanged={summary.refetch} />;
 }

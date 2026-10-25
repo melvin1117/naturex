@@ -3,7 +3,7 @@
  * words, and the one place it leads. Pure, so the rules are unit tested; what a listing waits
  * for comes from the API (`next_action`, `offer`), never guessed here.
  */
-import type { ListingSummary } from "./api/types";
+import type { CommunityRole, ListingSummary } from "./api/types";
 import { ipoHref, listingHref, verifyHref } from "./listing/links";
 import { assetHref } from "./trade";
 
@@ -29,6 +29,12 @@ export function siteState(site: Site, communityId: string): SiteState {
   const id = asset.id;
   const flow = listingHref(communityId, id);
   const reason = asset.status_reason ?? "";
+  // Documents come first wherever they block it: before its offer, and after a revocation
+  // paused its trading (the site is still on the Marketplace, but can't trade).
+  if (asset.status === "listed" || asset.status === "suspended") {
+    const documents = documentsState(site, communityId);
+    if (documents) return documents;
+  }
   switch (asset.status) {
     case "draft":
       return {
@@ -97,7 +103,7 @@ export function siteState(site: Site, communityId: string): SiteState {
     case "listed":
       break;
   }
-  if (site.ipo_at)
+  if (asset.trading)
     return {
       label: "On the Marketplace",
       detail: null,
@@ -122,26 +128,6 @@ export function siteState(site: Site, communityId: string): SiteState {
         cta: "Change your offer",
         href: ipoHref(id, communityId),
       };
-    case "verify":
-      return {
-        label:
-          site.verification.decision === "rejected"
-            ? "Documents not approved"
-            : "Needs land documents",
-        detail: null,
-        tone: "attention",
-        cta: "Add documents",
-        href: verifyHref(id, communityId),
-      };
-    case "verification_in_review":
-    case "awaiting_verification":
-      return {
-        label: "Documents in review",
-        detail: null,
-        tone: "working",
-        cta: "Open",
-        href: verifyHref(id, communityId),
-      };
     case "awaiting_ipo":
       return {
         label: "Rated",
@@ -158,6 +144,40 @@ export function siteState(site: Site, communityId: string): SiteState {
         cta: "Continue",
         href: flow,
       };
+  }
+}
+
+/** What its land documents need, when they're what holds it up; else null. */
+function documentsState(site: Site, communityId: string): SiteState | null {
+  const href = verifyHref(site.asset.id, communityId);
+  switch (site.next_action) {
+    case "verify":
+      return {
+        label:
+          site.verification.level === "revoked"
+            ? "Verify again"
+            : site.verification.decision === "rejected"
+              ? "Documents not approved"
+              : "Needs land documents",
+        detail:
+          site.asset.status === "suspended"
+            ? "Trading is paused until new documents are approved."
+            : null,
+        tone: "attention",
+        cta: "Add documents",
+        href,
+      };
+    case "verification_in_review":
+    case "awaiting_verification":
+      return {
+        label: "Documents in review",
+        detail: null,
+        tone: "working",
+        cta: "Open",
+        href,
+      };
+    default:
+      return null;
   }
 }
 
@@ -191,9 +211,12 @@ export function shownSites<T extends Site & Pick<ListingSummary, "updated_at">>(
 export function sitesLine(sites: readonly Site[]): string {
   const shown = sites.filter((s) => s.asset.status !== "withdrawn");
   if (shown.length === 0) return "No land listed yet";
-  const live = shown.filter(
-    (s) => s.asset.status === "listed" && s.ipo_at,
-  ).length;
+  const live = shown.filter((s) => s.asset.trading).length;
   const count = `${shown.length} ${shown.length === 1 ? "site" : "sites"}`;
   return live ? `${count} · ${live} on the Marketplace` : count;
+}
+
+/** Who you are in this community, for its page and its card. */
+export function roleLine(role: CommunityRole | null): string {
+  return role === "steward" ? "You're a steward" : "You're the owner";
 }

@@ -9,7 +9,6 @@
 import type { ApiError } from "./api/errors";
 import type {
   AssetCard,
-  ListingSummary,
   ListingVerification,
   NextAction,
   VerificationLevel,
@@ -283,172 +282,6 @@ export function verificationChip(
   return verification.in_review ? "In review" : CHIP[verification.level];
 }
 
-/** The line under a listing's name on the Steward home: where it stands and what comes next. */
-export function listingStatusLine(
-  listing: Pick<ListingSummary, "next_action" | "verification">,
-  status: AssetStatus,
-  trading: boolean,
-): string {
-  if (trading) return "Open to supporters";
-  const { level, decision } = listing.verification;
-  const action = listing.next_action;
-  const verifying =
-    action === "verify" ||
-    action === "verification_in_review" ||
-    action === "awaiting_verification";
-  // A suspended listing has opened (or was revoked before it could): it's about trading.
-  if (status === "suspended" && verifying) {
-    return action === "verify"
-      ? "Verification revoked. Trading is paused until new documents are approved."
-      : "Verification revoked. Trading is paused until a WildWorth reviewer approves new documents.";
-  }
-  switch (action) {
-    case "verify":
-      if (decision === "rejected")
-        return "Documents not approved. Submit new ones to open it to supporters.";
-      if (level === "revoked")
-        return "Verification revoked. Verify it again to open it to supporters.";
-      return "Rated and listed. Verify the land documents to open it to supporters.";
-    case "verification_in_review":
-      return "A WildWorth reviewer is checking your land documents.";
-    case "awaiting_verification":
-      return "Rated and listed. It opens to supporters once its land documents are verified.";
-    case "launch_ipo":
-      return level === "verified"
-        ? "Verified. Open it to supporters when you're ready."
-        : "Rated and listed. Open it to supporters when you're ready.";
-    case "awaiting_ipo":
-      return "Rated and listed. The owner opens it to supporters.";
-    case "offer_in_review":
-      return "Offer sent. It goes on the Marketplace once a WildWorth reviewer approves it.";
-    case "offer_sent_back":
-      return "The Reviewer sent the offer back with a note. Change it and send it again.";
-  }
-  return STATUS_LABEL[status] ?? status;
-}
-
-/** How long a decision with nothing left to do stays on the Steward home. */
-export const NOTICE_DAYS = 14;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-export interface DecisionNotice {
-  /** Changes with every decision, so a dismissed notice comes back for the next one. */
-  key: string;
-  assetId: string;
-  level: "verified" | "rejected" | "revoked";
-  decidedAt: string;
-  title: string;
-  body: string;
-  /** The reviewer's words, quoted as they wrote them. */
-  reason: string | null;
-  action: ListingLink | null;
-}
-
-/**
- * What a reviewer last decided about a listing, as the Steward home tells its members (#216):
- * verified (and the way to open it), not approved or revoked (and the way to verify again),
- * with the reviewer's reason. Only while it still asks something of them (verify, or open it)
- * or for `NOTICE_DAYS` after the decision; null otherwise, or while nothing was decided.
- */
-export function decisionNotice(
-  listing: Pick<ListingSummary, "asset" | "next_action" | "verification">,
-  communityId: string,
-  { owner = true, now = Date.now() }: { owner?: boolean; now?: number } = {},
-): DecisionNotice | null {
-  const { verification, asset } = listing;
-  const level = verification.decision;
-  if (!level || level === "unverified" || level === "documents_submitted")
-    return null;
-  if (!verification.decided_at) return null;
-  const pending =
-    listing.next_action === "verify" || listing.next_action === "launch_ipo";
-  const recent =
-    now - Date.parse(verification.decided_at) < NOTICE_DAYS * DAY_MS;
-  if (!pending && !recent) return null;
-  const on = date(verification.decided_at);
-  const key = `${verification.run_id ?? "none"}:${level}:${verification.decided_at}`;
-  const action = listingAction(
-    listing.next_action,
-    asset.id,
-    communityId,
-    asset.status,
-    { owner, verification },
-  );
-  const link =
-    action.primary && action.href
-      ? { label: action.label, href: action.href }
-      : null;
-  const base = {
-    key,
-    assetId: asset.id,
-    level,
-    decidedAt: verification.decided_at,
-    reason: verification.reason ?? null,
-  };
-  switch (level) {
-    case "verified":
-      return {
-        ...base,
-        title: `${asset.name} is verified`,
-        body:
-          listing.next_action === "launch_ipo"
-            ? `A WildWorth reviewer approved your land documents on ${on}. You can open it to supporters now.`
-            : `A WildWorth reviewer approved your land documents on ${on}.`,
-        action: link,
-      };
-    case "rejected":
-      return {
-        ...base,
-        title: `${asset.name}: documents not approved`,
-        body: `A WildWorth reviewer didn't approve the documents on ${on}. Upload corrected ones and submit them again.`,
-        action: link,
-      };
-    case "revoked":
-      return {
-        ...base,
-        title: `${asset.name}: verification revoked`,
-        body:
-          asset.status === "suspended"
-            ? `A WildWorth reviewer revoked the verification on ${on}. Trading is paused until new documents are approved.`
-            : `A WildWorth reviewer revoked the verification on ${on}. It can't open to supporters until new documents are approved.`,
-        action: link,
-      };
-  }
-}
-
-/** The notices not dismissed yet: `seen` maps a listing to the last notice key dismissed. */
-export function unseenNotices(
-  notices: (DecisionNotice | null)[],
-  seen: Record<string, string>,
-): DecisionNotice[] {
-  return notices.filter(
-    (n): n is DecisionNotice => n !== null && seen[n.assetId] !== n.key,
-  );
-}
-
-/** The unread verification alerts a dismissed notice already told the member about. */
-export function noticeAlerts(
-  alerts: readonly {
-    id: string;
-    asset_id: string;
-    kind: string;
-    created_at: string;
-    read_at?: string | null;
-  }[],
-  notice: Pick<DecisionNotice, "assetId" | "decidedAt">,
-): string[] {
-  const decided = Date.parse(notice.decidedAt);
-  return alerts
-    .filter(
-      (a) =>
-        a.kind === "verification" &&
-        a.asset_id === notice.assetId &&
-        !a.read_at &&
-        Date.parse(a.created_at) >= decided - 60_000,
-    )
-    .map((a) => a.id);
-}
-
 export type ChecklistState =
   "done" | "current" | "waiting" | "upcoming" | "optional" | "pending";
 
@@ -628,11 +461,6 @@ export function openingChecklist({
     };
   }
   return [rated, verified, open];
-}
-
-/** A holding's share of the total, from the API's 2-dp percentage: "0.25%", "<0.01%". */
-export function sharePct(pct: string): string {
-  return Number(pct) === 0 ? "<0.01%" : `${pct}%`;
 }
 
 /** "1,234" for share counts from the API. */

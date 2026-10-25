@@ -23,8 +23,8 @@ import { withdrawFailure, type WithdrawFailure } from "@/lib/steward-listings";
 
 /**
  * Withdraw a listing that never opened (#233): a confirmation that says what happens, the
- * refusal inline in the dialog (feedback rung 1), and on success the caller moves the row to
- * Closed in place (rung 2) and takes focus there, since the button that had it is gone.
+ * refusal inline in the dialog (feedback rung 1), and on success the caller drops the site's
+ * tile and moves focus to its page (rung 2), since the button that had it is gone.
  */
 export function WithdrawListingDialog({
   assetId,
@@ -43,9 +43,9 @@ export function WithdrawListingDialog({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<WithdrawFailure | null>(null);
-  // Focus moves to the withdrawn row, not back to a trigger that no longer exists.
+  // Focus moves to the caller's page, not back to a trigger that no longer exists.
   const done = useRef(false);
-  // Refreshing behind an open dialog could remove its row (and the dialog) mid-read.
+  // Refreshing behind an open dialog could remove its tile (and the dialog) mid-read.
   const stale = useRef(false);
 
   async function confirm(event: MouseEvent) {

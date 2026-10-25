@@ -199,21 +199,6 @@ export function groupListings<T extends Listing>(
   return groups;
 }
 
-/**
- * The Community home's line about unfinished listings: "2 drafts", "1 draft and 2 more in
- * progress", "3 in progress"; null when there are none.
- */
-export function inProgressText(listings: readonly Listing[]): string | null {
-  const open = listings.filter((l) => listingGroup(l) === "in_progress");
-  const drafts = open.filter((l) => l.asset.status === "draft").length;
-  const others = open.length - drafts;
-  const draftWords = `${drafts} ${drafts === 1 ? "draft" : "drafts"}`;
-  if (drafts && others) return `${draftWords} and ${others} more in progress`;
-  if (drafts) return draftWords;
-  if (others) return `${others} in progress`;
-  return null;
-}
-
 /** "View progress" while it's rated, "Try again" when the rating stopped and can be retried. */
 function viewLabel({ asset }: Listing): string {
   if (asset.status !== "rating") return "View";

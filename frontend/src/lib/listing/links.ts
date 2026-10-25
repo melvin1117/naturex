@@ -11,11 +11,7 @@ export function listingHref(
   return `/steward/list?${params.toString()}`;
 }
 
-/** Where a community's listings are: its page, every site by where it stands. */
-export function listingsHref(communityId: string | null): string {
-  return withCommunity("/steward", communityId);
-}
-
+/** A community's page: every site by where it stands (Communities without one). */
 export function stewardHomeHref(communityId: string | null): string {
   return withCommunity("/steward", communityId);
 }

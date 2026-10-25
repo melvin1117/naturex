@@ -1,32 +1,8 @@
 /**
  * Empty-state copy that teaches (WP4, #216; ux-writing §8): what will appear, what makes it
- * appear and, where there is one, the next action. It must never contradict the screen, so
- * the steward home's copy depends on whether its sites are rated yet, and claims nothing it
- * can't know (a live rating may have run without the Auditor).
+ * appear and, where there is one, the next action. It must never contradict the screen, and
+ * claims nothing it can't know.
  */
-
-type ListingFacts = {
-  report_version: number | null;
-  ipo_at: string | null;
-  asset: { mock?: boolean };
-};
-
-/** The steward home's "Recovery plan" panel with no recommendation to show. */
-export function recommendationsEmptyText(listings: readonly ListingFacts[]) {
-  const rated = listings.filter((l) => l.report_version !== null);
-  if (rated.length === 0)
-    return "A Recovery plan appears after a site's first rating: concrete steps from the Auditor that would strengthen its grade.";
-  if (rated.every((l) => l.asset.mock))
-    return "Mock ratings don't include the Auditor's recommendations. A live rating may list concrete steps here that would strengthen the grade.";
-  return "The latest rating lists no recovery steps.";
-}
-
-/** The steward home's "Quarterly payouts" panel before any payout. */
-export function payoutsEmptyText(listings: readonly ListingFacts[]) {
-  if (listings.some((l) => l.ipo_at !== null))
-    return "The first payout comes when the next quarter runs: half of the simulated revenue goes to the community fund and half to the units' holders, the treasury included.";
-  return "Payouts start after a site's opening offer. Each quarter, half of the simulated revenue goes to the community fund and half to the units' holders, the treasury included.";
-}
 
 /** The Agent Trace away from a site, before any model call is logged in the world. */
 export const MODEL_CALLS_EMPTY = {
