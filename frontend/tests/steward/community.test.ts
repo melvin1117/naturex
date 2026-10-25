@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
-import type { ListingVerification } from "@/lib/api/types";
 import {
   communityBody,
   communityFailure,
   listingAction,
   memberFailure,
-  openingChecklist,
   validateCommunity,
   verificationChip,
 } from "@/lib/community";
@@ -218,21 +216,6 @@ describe("listingAction never points at a locked door (#216)", () => {
   });
 });
 
-function verificationOf(
-  overrides: Partial<ListingVerification> = {},
-): ListingVerification {
-  return {
-    level: "unverified",
-    in_review: false,
-    required: true,
-    decision: null,
-    decided_at: null,
-    reason: null,
-    run_id: null,
-    ...overrides,
-  };
-}
-
 describe("verificationChip", () => {
   it.each([
     [{ level: "unverified", in_review: false }, "Not verified"],
@@ -246,184 +229,6 @@ describe("verificationChip", () => {
     ],
   ] as const)("%o → %s", (verification, chip) => {
     expect(verificationChip(verification)).toBe(chip);
-  });
-});
-
-describe("openingChecklist", () => {
-  const base = {
-    assetId: ASSET,
-    communityId: COMMUNITY,
-    rating: "Grade AA · 85.1 · Very strong health",
-  };
-  const verify = `/steward/list?community=${COMMUNITY}&asset=${ASSET}&step=prove`;
-  const states = (steps: ReturnType<typeof openingChecklist>) =>
-    steps.map((s) => `${s.id}:${s.state}:${s.status}`);
-  const SANDBOX = /sandbox/i;
-  const text = (steps: ReturnType<typeof openingChecklist>) =>
-    steps.map((s) => `${s.status} ${s.detail}`).join(" ");
-
-  it("puts verification first while the live offer waits for it", () => {
-    const steps = openingChecklist({
-      ...base,
-      verification: verificationOf(),
-      launchable: false,
-      blockedReason: "not_verified",
-    });
-    expect(states(steps)).toEqual([
-      "rated:done:Done",
-      "verified:current:Needed",
-      "open:upcoming:After verification",
-    ]);
-    expect(steps[0]!.detail).toBe("Grade AA · 85.1 · Very strong health");
-    expect(steps[1]!.action).toEqual({
-      label: "Verify this listing",
-      href: verify,
-    });
-    expect(text(steps)).not.toMatch(SANDBOX);
-  });
-
-  it("is neutral until the preview answers: never says sandbox", () => {
-    const steps = openingChecklist({ ...base, verification: undefined });
-    expect(states(steps)).toEqual([
-      "rated:done:Done",
-      "verified:pending:Checking…",
-      "open:pending:Checking…",
-    ]);
-    expect(text(steps)).not.toMatch(SANDBOX);
-  });
-
-  it("never says sandbox when the preview failed", () => {
-    const steps = openingChecklist({ ...base, verification: null });
-    expect(states(steps)[1]).toBe("verified:upcoming:Not checked");
-    expect(text(steps)).not.toMatch(SANDBOX);
-  });
-
-  it("trusts the gate's blocked reason over a verification that says otherwise", () => {
-    const steps = openingChecklist({
-      ...base,
-      verification: verificationOf({ required: false }),
-      launchable: false,
-      blockedReason: "not_verified",
-    });
-    expect(states(steps).slice(1)).toEqual([
-      "verified:current:Needed",
-      "open:upcoming:After verification",
-    ]);
-    expect(text(steps)).not.toMatch(SANDBOX);
-  });
-
-  it("never shows Ready while verification is required", () => {
-    const steps = openingChecklist({
-      ...base,
-      verification: verificationOf({ level: "verified", required: true }),
-      launchable: true,
-    });
-    expect(states(steps)[2]).toBe("open:upcoming:After verification");
-  });
-
-  it("waits while a reviewer checks the documents", () => {
-    const steps = openingChecklist({
-      ...base,
-      verification: verificationOf({
-        level: "documents_submitted",
-        in_review: true,
-      }),
-      launchable: false,
-      blockedReason: "not_verified",
-    });
-    expect(states(steps)[1]).toBe("verified:waiting:In review");
-    expect(steps[1]!.action?.label).toBe("See your submission");
-  });
-
-  it("quotes a rejection's or a revocation's reason", () => {
-    const rejected = openingChecklist({
-      ...base,
-      verification: verificationOf({
-        level: "rejected",
-        decision: "rejected",
-        reason: "Unsigned minutes.",
-      }),
-    });
-    expect(rejected[1]).toMatchObject({
-      state: "current",
-      status: "Not approved",
-      detail: expect.stringContaining("Reason: “Unsigned minutes.”"),
-      action: { label: "Submit new documents" },
-    });
-    const revoked = openingChecklist({
-      ...base,
-      verification: verificationOf({
-        level: "revoked",
-        decision: "revoked",
-        reason: "Disputed title.",
-      }),
-    });
-    expect(revoked[1]).toMatchObject({
-      status: "Revoked",
-      action: { label: "Verify again" },
-    });
-  });
-
-  it("marks a verified listing done and the launch ready", () => {
-    const steps = openingChecklist({
-      ...base,
-      verification: verificationOf({
-        level: "verified",
-        decision: "verified",
-        required: false,
-        decided_at: "2026-10-20T15:00:00Z",
-      }),
-      launchable: true,
-    });
-    expect(states(steps)).toEqual([
-      "rated:done:Done",
-      "verified:done:Done",
-      "open:current:Ready",
-    ]);
-    expect(steps[1]!.detail).toMatch(/on 20 Oct 2026/);
-  });
-
-  it("calls verification optional only when the gate says it isn't required", () => {
-    const steps = openingChecklist({
-      ...base,
-      verification: verificationOf({ required: false }),
-      launchable: true,
-    });
-    expect(steps[1]).toMatchObject({
-      state: "optional",
-      detail: expect.stringMatching(SANDBOX),
-      action: { label: "Verify anyway", href: verify },
-    });
-    const inReview = openingChecklist({
-      ...base,
-      verification: verificationOf({
-        level: "documents_submitted",
-        in_review: true,
-        required: false,
-      }),
-      launchable: true,
-    });
-    expect(states(inReview).slice(1)).toEqual([
-      "verified:optional:In review",
-      "open:current:Ready",
-    ]);
-  });
-
-  it("names another blocker without blaming verification", () => {
-    expect(
-      states(
-        openingChecklist({
-          ...base,
-          verification: verificationOf({ required: false }),
-          launchable: false,
-          blockedReason: "run_in_progress",
-        }),
-      ),
-    ).toEqual([
-      "rated:done:Done",
-      "verified:optional:Optional here",
-      "open:upcoming:Not yet",
-    ]);
   });
 });
 

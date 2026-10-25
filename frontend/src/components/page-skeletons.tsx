@@ -382,17 +382,14 @@ export function CommunitySettingsSkeleton({
 export function ScreenSkeleton({
   label = "Loading…",
   wide = false,
-  checklist = false,
 }: {
   label?: string;
   /** The admin's listing review is wider than the steward's screens. */
   wide?: boolean;
-  /** The opening offer's "Before you open to supporters" band between header and columns. */
-  checklist?: boolean;
 }) {
   return (
     <LoadingRegion
-      name={checklist ? "ipo" : wide ? "review" : "screen"}
+      name={wide ? "review" : "screen"}
       label={label}
       className={cn(
         "mx-auto px-4 pt-8 pb-16 sm:px-6",
@@ -404,49 +401,12 @@ export function ScreenSkeleton({
       <Line box="mt-1 h-[2.8125rem] sm:h-15" className="h-9 w-full max-w-md" />
       <Line box="mt-2 h-6" className="h-4 w-full max-w-2xl" />
       <Line box="h-6" className="h-4 w-2/3 max-w-xl" />
-      {checklist && <ChecklistBand />}
-      <div
-        className={cn(
-          "grid lg:grid-cols-2",
-          checklist ? "mt-6 gap-6" : "mt-8 gap-8",
-        )}
-      >
+      <div className="mt-8 grid gap-8 lg:grid-cols-2">
         <Panel className="rounded-[1.75rem]" lines={6} />
         <Panel className="rounded-[1.75rem]" lines={4} />
       </div>
     </LoadingRegion>
   );
-}
-
-/** The opening offer's checklist band, as `OpeningChecklist` draws it: a heading, three steps. */
-function ChecklistBand() {
-  return (
-    <div className="mt-8 rounded-[1.75rem] bg-card p-5 shadow-soft sm:p-6">
-      <div className="flex h-7 items-center">
-        <Skeleton className="h-5 w-64 max-w-full" />
-      </div>
-      <div className="mt-4 grid gap-4 md:grid-cols-3 md:gap-6">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="flex gap-3 p-3 md:flex-col md:gap-2">
-            <Skeleton className="size-5 shrink-0 rounded-full" />
-            <div className="min-w-0 flex-1 space-y-2">
-              <Skeleton className="h-4 w-40 max-w-full" />
-              <Skeleton className="h-3.5 w-full max-w-56" />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** The opening offer: the focused screen with its checklist band. */
-export function IpoSkeleton({
-  label = "Checking this site…",
-}: {
-  label?: string;
-}) {
-  return <ScreenSkeleton label={label} checklist />;
 }
 
 /** The Time Machine's dark panel: the quarter, the timeline and the run button. */
@@ -619,7 +579,6 @@ const ROUTE_SKELETON: Record<
   "steward-home": StewardHomeSkeleton,
   "community-settings": CommunitySettingsSkeleton,
   screen: ScreenSkeleton,
-  ipo: IpoSkeleton,
   review: (props) => <ScreenSkeleton {...props} wide />,
   "time-machine": TimeMachineSkeleton,
   queue: QueueSkeleton,

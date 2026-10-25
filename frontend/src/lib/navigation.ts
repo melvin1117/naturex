@@ -4,7 +4,7 @@
  * shows; the backend authorizes every request.
  */
 import { COMMUNITY_PARAM } from "./active-community";
-import type { MeOut, MyCommunity } from "./api/types";
+import type { MyCommunity } from "./api/types";
 
 export type AppKey = "exchange" | "steward" | "admin";
 
@@ -17,80 +17,11 @@ export const APPS: Record<
   admin: { name: "Control room", switchLabel: "Control room", href: "/admin" },
 };
 
-export interface NavItem {
-  href: string;
-  label: string;
-  /** Guided-tour anchor (`data-tour`). */
-  tour?: string;
-}
-
-export const APP_NAV: Record<AppKey, NavItem[]> = {
-  exchange: [
-    { href: "/", label: "Rated sites", tour: "nav-marketplace" },
-    { href: "/portfolio", label: "Your stakes", tour: "nav-portfolio" },
-    { href: "/ai", label: "AI at work" },
-  ],
-  steward: [
-    { href: "/steward", label: "Community home" },
-    { href: "/steward/list", label: "List your land", tour: "nav-list" },
-  ],
-  admin: [
-    { href: "/admin", label: "Time Machine" },
-    { href: "/admin/verifications", label: "Verified land" },
-  ],
-};
-
 /** An app's home matches only itself; other items match their subpaths too. */
 export function isActive(pathname: string, href: string): boolean {
   if (Object.values(APPS).some((app) => app.href === href))
     return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
-}
-
-export interface AppAccess {
-  /** Apps this visitor may open, in display order. The Exchange is open to everyone. */
-  apps: AppKey[];
-  /** Signed in without a community: offer "Create a community" (the Steward app's empty state). */
-  canCreateCommunity: boolean;
-}
-
-/**
- * Navigation follows the signed-in account's roles:
- * - anonymous: the Exchange only (plus the Steward app in the scripted prototype demo, T61);
- * - signed in without a community: the Exchange and "Create a community";
- * - a community owner or steward: the Exchange and the Steward app;
- * - a platform admin: also Admin.
- * `communities` is undefined until `GET /me/communities` answers; until then nothing that
- * depends on it shows, so the header never offers the wrong thing. If it failed
- * (`communitiesFailed`), the Steward app is still offered: its error screen explains and retries.
- */
-export function appAccess({
-  me,
-  communities,
-  communitiesFailed = false,
-  prototypeDemo = false,
-}: {
-  me: MeOut | null | undefined;
-  communities: readonly MyCommunity[] | undefined;
-  communitiesFailed?: boolean;
-  prototypeDemo?: boolean;
-}): AppAccess {
-  if (!me) {
-    return {
-      apps: prototypeDemo ? ["exchange", "steward"] : ["exchange"],
-      canCreateCommunity: false,
-    };
-  }
-  const apps: AppKey[] = ["exchange"];
-  if (communities?.length || (communities === undefined && communitiesFailed))
-    apps.push("steward");
-  if (me.is_admin) apps.push("admin");
-  return { apps, canCreateCommunity: communities?.length === 0 };
-}
-
-/** The other apps to offer from `current`, in display order. */
-export function switchTargets(current: AppKey, access: AppAccess): AppKey[] {
-  return access.apps.filter((app) => app !== current);
 }
 
 /**

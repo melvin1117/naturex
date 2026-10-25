@@ -12,7 +12,7 @@ import {
 
 import { AiUploadNotice } from "@/components/verification/ai-upload-notice";
 import { ListingReviewScreen } from "@/components/verification/listing-review-screen";
-import { StewardVerifyScreen } from "@/components/verification/steward-verify-screen";
+import { ProveStep } from "@/components/listing/prove-step";
 import { WorldProvider } from "@/components/world-provider";
 import { AI_POLL_MS } from "@/lib/ai-suggestion";
 import type { DocumentAiCheck } from "@/lib/api/types";
@@ -607,19 +607,21 @@ describe("Uploader notice (ADR-0006 §5)", () => {
     });
     render(
       <WorldProvider dataLayer={layer}>
-        <StewardVerifyScreen assetId={ASSET_ID} />
+        <ProveStep
+          asset={assetFixture({ name: "Río Claro Forest" })}
+          onBack={() => {}}
+          onContinue={() => {}}
+        />
       </WorldProvider>,
     );
   }
 
+  /** The listing flow's Prove step: the notice, then the upload form. */
   async function notice(): Promise<HTMLElement> {
-    const upload = await screen.findByRole("heading", {
-      name: "Upload a document",
-    });
-    const card = upload.closest("section, [aria-labelledby]") as HTMLElement;
-    const note = within(card).getByRole("note");
+    await screen.findByRole("heading", { name: "Show it's yours" });
+    const note = screen.getByRole("note");
     // Before the upload form: read first.
-    const file = within(card).getByLabelText("File");
+    const file = await screen.findByLabelText("File");
     expect(
       note.compareDocumentPosition(file) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();

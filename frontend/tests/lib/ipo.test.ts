@@ -7,7 +7,6 @@ import {
   CONFIDENCE_FACTOR_FORMULA,
   FORMULA_YEARS,
   HEALTH_FACTOR_FORMULA,
-  isPageRefusal,
   sharesDisplay,
   trimDecimal,
   DEFAULT_RETAINED_PCT,
@@ -161,22 +160,6 @@ describe("ipoRefusal", () => {
     [500, null, "error"],
   ])("%s %s → %s", (status, code, kind) => {
     expect(ipoRefusal(error(status, code)).kind).toBe(kind);
-  });
-
-  it("tells refusals that replace the form from ones the owner can fix", () => {
-    const kinds = (
-      [
-        [409, "ipo_already_launched"],
-        [409, "asset_not_listed"],
-        [409, "no_rating"],
-        [403, "owner_only"],
-        [404, "not_found"],
-        [409, "ipo_price_changed"],
-        [409, "run_in_progress"],
-        [500, null],
-      ] as const
-    ).map(([status, code]) => isPageRefusal(ipoRefusal(error(status, code))));
-    expect(kinds).toEqual([true, true, true, true, true, false, false, false]);
   });
 
   it("never shows a code to the owner", () => {

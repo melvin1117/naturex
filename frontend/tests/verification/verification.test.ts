@@ -10,12 +10,11 @@ import {
   fileProblem,
   ledgerEntryHref,
   reviewerLabel,
-  stewardStatus,
   submitFailure,
   uploadFailure,
 } from "@/lib/verification";
 
-import { CHECKLIST, document, run, verifiedRun } from "./fixtures";
+import { CHECKLIST, document, run } from "./fixtures";
 
 describe("labels", () => {
   it("names checks, reviewer roles and documents", () => {
@@ -72,24 +71,6 @@ describe("fileProblem", () => {
   });
 });
 
-describe("stewardStatus", () => {
-  it("explains each state", () => {
-    expect(stewardStatus(null).title).toBe("Not verified yet");
-    expect(stewardStatus(run()).title).toBe("Waiting for a reviewer");
-    expect(stewardStatus(verifiedRun()).title).toBe("Verified by a reviewer");
-    expect(stewardStatus(null).body).toMatch(
-      /On the live Exchange, the opening offer needs a verified listing/,
-    );
-    expect(
-      stewardStatus(verifiedRun({ fingerprint_matches: false })).title,
-    ).toBe("The listing changed since its last review");
-    expect(stewardStatus(run({ level: "rejected" })).tone).toBe("negative");
-    expect(stewardStatus(run({ level: "revoked" })).title).toBe(
-      "Verification revoked",
-    );
-  });
-});
-
 describe("refusals in words", () => {
   const err = (status: number, code: string, retry: number | null = null) =>
     new ApiError(status, "fallback", code, code, retry);
@@ -111,6 +92,7 @@ describe("refusals in words", () => {
     expect(submitFailure(err(409, "document_already_submitted"))).toMatch(
       /already submitted/,
     );
+    expect(submitFailure(err(409, "submission_full"))).toMatch(/at most 3/);
     expect(decisionFailure(err(409, "stale_run"))).toMatch(
       /needs to submit again/,
     );

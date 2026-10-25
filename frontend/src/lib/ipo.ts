@@ -6,7 +6,6 @@
  * plain words (docs/design/ux-writing.md: units, opening offer, play money).
  */
 import type { ApiError } from "./api/errors";
-import type { AssetDetail } from "./api/types";
 import { int } from "./prototype/format";
 
 export const MIN_TOTAL_SHARES = 10_000;
@@ -131,50 +130,6 @@ export function blockedExplanation(code: string): Explanation {
   }
 }
 
-/** Why a listing that isn't `listed` can't open to supporters yet, by its status. */
-export function notListedExplanation(
-  status: AssetDetail["status"] | undefined,
-): Explanation {
-  const title = "This site isn't listed yet";
-  switch (status) {
-    case "draft":
-      return {
-        title,
-        body: "This listing is still a draft. Submit it for rating; once it's listed, you can open it to supporters.",
-      };
-    case "rating":
-      return {
-        title,
-        body: "The AI rating is still running. If the site passes the listing gate, it's listed and you can launch here.",
-      };
-    case "needs_evidence":
-      return {
-        title,
-        body: "The rating needs more evidence before the site can be listed. Add field evidence and submit it again.",
-      };
-    case "ineligible":
-      return {
-        title: "This site can't be listed",
-        body: "It didn't pass the listing gate (grade C or better, no significant forest loss this year), so it can't open to supporters.",
-      };
-    case "suspended":
-      return {
-        title: "This site is suspended",
-        body: "A suspended site can't open to supporters. It can launch once it's listed again.",
-      };
-    case "withdrawn":
-      return {
-        title: "This listing was withdrawn",
-        body: "A withdrawn listing can't open to supporters.",
-      };
-    default:
-      return {
-        title,
-        body: "Only a listed site can open to supporters.",
-      };
-  }
-}
-
 /** What a failed preview or launch means for the page. */
 export type IpoRefusal =
   /** `ipo_already_launched`: show the way to the Exchange. */
@@ -224,32 +179,9 @@ export function ipoRefusal(error: ApiError): IpoRefusal {
   return { kind: "error", message: error.message };
 }
 
-/** The refusals that replace the form with an explanation (nothing to change or retry). */
-export type PageRefusal = Extract<
-  IpoRefusal,
-  { kind: "launched" | "not_listed" | "no_rating" | "owner_only" | "not_found" }
->;
-
-const PAGE_KINDS: ReadonlySet<IpoRefusal["kind"]> = new Set([
-  "launched",
-  "not_listed",
-  "no_rating",
-  "owner_only",
-  "not_found",
-]);
-
-export function isPageRefusal(refusal: IpoRefusal): refusal is PageRefusal {
-  return PAGE_KINDS.has(refusal.kind);
-}
-
 export const PRICE_CHANGED: Explanation = {
   title: "The opening price changed",
   body: "A newer rating report moved the price since your preview, so nothing was launched. Check the new price below and confirm again.",
-};
-
-export const OWNER_ONLY: Explanation = {
-  title: "Only the owner can launch",
-  body: "Only the owner of the community that lists this site can open it to supporters. If you're one of its stewards, ask the owner to launch it.",
 };
 
 export const NO_RATING: Explanation = {
@@ -261,6 +193,3 @@ export const NOT_FOUND: Explanation = {
   title: "We couldn't find this site",
   body: "It may have been removed, or it belongs to a community you're not part of.",
 };
-
-export const SANDBOX_NOTE =
-  "Sandbox: play money, not a real security. Supporters get a stake in the rating's sandbox market, never the land.";

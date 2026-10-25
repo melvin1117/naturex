@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+import { AiUploadNotice } from "@/components/verification/ai-upload-notice";
 import { DocumentUploadForm } from "@/components/verification/document-upload-form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import {
   currentRun,
   DOC_TYPE_LABEL,
   MAX_RUN_DOCUMENTS,
+  submitFailure,
   waitingRun,
 } from "@/lib/verification";
 import {
@@ -90,7 +92,9 @@ export function ProveStep({
       )}
 
       {!full && (
-        <div className="mt-6 max-w-xl">
+        <div className="mt-6 max-w-xl space-y-4">
+          {/* ADR-0006 §5: who may read the documents, before they're uploaded. */}
+          <AiUploadNotice />
           <DocumentUploadForm
             assetId={asset.id}
             disabled={sending !== null}
@@ -108,7 +112,7 @@ export function ProveStep({
           <TriangleAlert aria-hidden="true" />
           <AlertTitle>We couldn&apos;t send that document</AlertTitle>
           <AlertDescription>
-            <p>{submit.error.message}</p>
+            <p>{submitFailure(submit.error)}</p>
           </AlertDescription>
         </Alert>
       )}

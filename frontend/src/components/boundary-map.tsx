@@ -16,8 +16,6 @@ export type BoundaryFrame = { width: number; height: number };
 
 /** A marketplace card's 16:9 thumbnail: at most 3 × 2 tiles. */
 export const CARD_FRAME: BoundaryFrame = { width: 384, height: 216 };
-/** A small square thumbnail (e.g. a stake's row): one to four tiles, the whole boundary. */
-export const ICON_FRAME: BoundaryFrame = { width: 96, height: 96 };
 /** A backdrop's frame before it's measured, or where layout isn't available. */
 export const BACKDROP_FRAME: BoundaryFrame = { width: 960, height: 540 };
 /** A measured frame larger than this is drawn smaller and scaled up, to bound the tiles. */

@@ -59,23 +59,6 @@ export function useVerificationRuns(
   );
 }
 
-/** A listing's uploaded documents, submitted or not, oldest first. */
-export function useListingDocuments(
-  assetId: string | undefined,
-): QueryResult<ListingDocument[]> {
-  return useApiQuery(
-    queryKeys.verificationDocuments(assetId ?? ""),
-    (api, signal) =>
-      unwrap(
-        api.GET("/assets/{asset_id}/documents", {
-          params: { path: { asset_id: assetId ?? "" } },
-          signal,
-        }),
-      ),
-    { enabled: Boolean(assetId) },
-  );
-}
-
 /**
  * A document's sanitised PNG preview as an object URL (revoked on unmount), never the
  * original bytes. Idle when the document has no preview.

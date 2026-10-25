@@ -13,7 +13,6 @@ export type SkeletonKind =
   | "steward-home"
   | "community-settings"
   | "screen"
-  | "ipo"
   | "review"
   | "time-machine"
   | "queue"
@@ -27,7 +26,6 @@ export function skeletonKind(pathname: string): SkeletonKind {
   if (path === "/portfolio") return "portfolio";
   if (path === "/steward") return "steward-home";
   if (path === "/steward/community") return "community-settings";
-  if (/^\/steward\/assets\/[^/]+\/ipo$/.test(path)) return "ipo";
   if (/^\/steward\/assets\/[^/]+\/[^/]+$/.test(path)) return "screen";
   if (path === "/admin") return "time-machine";
   if (path === "/admin/verifications") return "queue";

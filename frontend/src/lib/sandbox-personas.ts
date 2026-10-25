@@ -34,11 +34,6 @@ export type SwitchablePersona = keyof typeof SANDBOX_PERSONAS;
 
 export const SWITCHABLE: SwitchablePersona[] = ["rosa", "arjun", "admin"];
 
-export function personaLabel(key: SwitchablePersona): string {
-  const p = SANDBOX_PERSONAS[key];
-  return `${p.name} (${p.role})`;
-}
-
 export function isSwitchable(
   persona: DemoPersona | null | undefined,
 ): persona is SwitchablePersona {

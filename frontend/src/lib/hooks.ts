@@ -17,7 +17,6 @@ import { forgetCommunity } from "./active-community";
 import type { ApiClient } from "./api/client";
 import { toApiError, unwrap, type ApiError } from "./api/errors";
 import type {
-  AiUsage,
   AlertList,
   AlertOut,
   AlertsMarked,
@@ -27,12 +26,9 @@ import type {
   AssetOutlines,
   AssetSubmitted,
   AssetUpdate,
-  IpoLaunch,
-  IpoOut,
   IpoPreview,
   LedgerEntry,
   LedgerVerify,
-  LoginIn,
   MeOut,
   MyCommunity,
   OrderCreate,
@@ -45,7 +41,6 @@ import type {
   RatingRun,
   RatingRunAccepted,
   RecordedRun,
-  RegisterIn,
   ReportDiff,
   RunTrace,
   ReportOut,
@@ -692,26 +687,6 @@ export function useStory(): QueryResult<Story> {
   );
 }
 
-/** `POST /auth/login`, then the world and cache follow the new account. */
-export function useSignIn(): MutationResult<LoginIn, MeOut> {
-  const layer = useDataLayer();
-  return useApiMutation(async (api, body: LoginIn) => {
-    const me = await unwrap(api.POST("/auth/login", { body }));
-    await afterSessionChange(layer, me);
-    return me;
-  });
-}
-
-/** `POST /auth/register` (signs in too), then the world and cache follow the new account. */
-export function useRegister(): MutationResult<RegisterIn, MeOut> {
-  const layer = useDataLayer();
-  return useApiMutation(async (api, body: RegisterIn) => {
-    const me = await unwrap(api.POST("/auth/register", { body }));
-    await afterSessionChange(layer, me);
-    return me;
-  });
-}
-
 /** `POST /auth/logout`, then the world (`me` becomes null) and the cache reset. */
 export function useSignOut(): MutationResult<void, void> {
   const layer = useDataLayer();
@@ -753,33 +728,6 @@ export function useIpoPreview(
         }),
       ),
     { enabled: on },
-  );
-}
-
-/**
- * Launch the opening offer at the previewed price (`POST /assets/{id}/ipo`; `expected_price`
- * is required, so a newer report gets 409 `ipo_price_changed` instead of a surprise price).
- * Then the asset, its prices and ledger and the market list refetch. Never retried.
- */
-export function useLaunchIpo(
-  assetId: string,
-): MutationResult<IpoLaunch, IpoOut> {
-  return useApiMutation(
-    (api, body: IpoLaunch) =>
-      unwrap(
-        api.POST("/assets/{asset_id}/ipo", {
-          params: { path: { asset_id: assetId } },
-          body,
-        }),
-      ),
-    {
-      onSuccess: (_ipo, _vars, { cache }) => {
-        cache.invalidate(queryKeys.asset(assetId));
-        cache.invalidate(queryKeys.prices(assetId));
-        cache.invalidate(queryKeys.ledger(assetId));
-        cache.invalidate(queryKeys.assets());
-      },
-    },
   );
 }
 
@@ -877,15 +825,6 @@ export function useRecordedRun(
         }),
       ),
     { enabled },
-  );
-}
-
-/** The AI control room: this world's calls per model, the deployment's spend and Tavily credits. */
-export function useAiUsage(): QueryResult<AiUsage> {
-  const { world } = useWorld();
-  const meId = world?.me?.id ?? null;
-  return useApiQuery(queryKeys.aiUsage(meId), (api, signal) =>
-    unwrap(api.GET("/admin/ai-usage", { signal })),
   );
 }
 

@@ -12,7 +12,7 @@ import { CountTo, PriceTick } from "@/components/live-number";
 import { Receipt } from "@/components/trade-summary";
 import { Toaster } from "@/components/ui/sonner";
 import type { OrderOut } from "@/lib/api/types";
-import { TOAST_MS, TOASTER_PROPS, WELCOME_TOAST_MS } from "@/lib/feedback";
+import { TOAST_MS, TOASTER_PROPS } from "@/lib/feedback";
 import { useValueTick } from "@/lib/motion";
 
 import { stubMotion } from "../motion";
@@ -195,7 +195,7 @@ describe("toast placement", () => {
     vi.useRealTimers();
     render(<Toaster {...TOASTER_PROPS} />);
     act(() => {
-      toast("Welcome back, Arjun", { duration: WELCOME_TOAST_MS });
+      toast("You're Rosa now");
     });
     await waitFor(() =>
       expect(
@@ -208,9 +208,8 @@ describe("toast placement", () => {
     act(() => toast.dismiss());
   });
 
-  it("keeps routine toasts short, and the welcome shorter", () => {
+  it("keeps routine toasts short", () => {
     expect(TOASTER_PROPS.duration).toBeLessThanOrEqual(4000);
     expect(TOAST_MS).toBeLessThanOrEqual(4000);
-    expect(WELCOME_TOAST_MS).toBeLessThan(TOAST_MS);
   });
 });

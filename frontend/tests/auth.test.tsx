@@ -9,13 +9,7 @@ import { TourProvider } from "@/components/proto/tour";
 import { RequireAccount } from "@/components/require-account";
 import { WorldProvider } from "@/components/world-provider";
 import { createDataLayer, type DataLayer } from "@/lib/data-layer";
-import {
-  usePortfolio,
-  useRegister,
-  useSignIn,
-  useSignOut,
-  useWorld,
-} from "@/lib/hooks";
+import { usePortfolio, useSignOut, useWorld } from "@/lib/hooks";
 import { PrototypeProvider, usePrototype } from "@/lib/prototype/store";
 
 import {
@@ -265,56 +259,16 @@ describe("when GET /world fails after the session changed", () => {
   function Harness() {
     const { world } = useWorld();
     const cash = usePortfolio().data?.cash_balance ?? "none";
-    const signIn = useSignIn();
-    const register = useRegister();
     const signOut = useSignOut();
-    const credentials = {
-      email: "rosa@example.org",
-      password: "a-long-password",
-    };
     return (
       <>
         <p>
           Viewer {world?.me?.name ?? "anonymous"}, cash {cash}
         </p>
-        <button onClick={() => void signIn.mutate(credentials)}>In</button>
-        <button
-          onClick={() => void register.mutate({ ...credentials, name: "Rosa" })}
-        >
-          Up
-        </button>
         <button onClick={() => void signOut.mutate()}>Out</button>
       </>
     );
   }
-
-  it.each([
-    ["sign-in", "In", "POST /auth/login"],
-    ["sign-up", "Up", "POST /auth/register"],
-  ])(
-    "after %s, uses the account from the auth response and resets the cache",
-    async (_name, button, route) => {
-      const { backend, layer } = setup(<Harness />, {
-        "GET /world": sequence(() => json(WORLD), serverError),
-        "GET /portfolio": sequence(portfolio("10.00"), portfolio("20.00")),
-        [route]: () => json(SIGNED_IN_WORLD.me, { status: 201 }),
-      });
-      expect(
-        await screen.findByText("Viewer anonymous, cash 10.00"),
-      ).toBeVisible();
-
-      fireEvent.click(screen.getByRole("button", { name: button }));
-
-      expect(await screen.findByText("Viewer Rosa, cash 20.00")).toBeVisible();
-      expect(backend.calls("GET /world")).toBe(2);
-      expect(backend.calls("GET /portfolio")).toBe(2);
-      expect(layer.session.getSnapshot()).toMatchObject({
-        status: "ready",
-        error: null,
-        world: { id: WORLD.id, me: { name: "Rosa" } },
-      });
-    },
-  );
 
   it("after sign-out, drops the account locally and resets the cache", async () => {
     const { backend, layer } = setup(<Harness />, {
