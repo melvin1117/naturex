@@ -3,7 +3,7 @@
  * validation and the messages for every auth failure. Pure, so they're unit tested; the React
  * side is `useAuth()` in ./hooks.ts and `<RequireAccount>` in components/require-account.tsx.
  *
- * The session is the HttpOnly `nx_session` cookie only: nothing here reads or stores a token.
+ * The session is the HttpOnly `ww_session` cookie only: nothing here reads or stores a token.
  */
 import { formatWait, type ApiError } from "./api/errors";
 import type { components } from "./api/schema";

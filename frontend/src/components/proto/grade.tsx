@@ -108,7 +108,7 @@ export function GradeStamp({
         "relative grid size-24 shrink-0 -rotate-3 place-items-center rounded-full border-[3px] border-dashed",
         GRADE_TEXT[grade],
         "border-current",
-        animate && "nx-stamp",
+        animate && "ww-stamp",
         className,
       )}
       style={animate && delay ? { animationDelay: `${delay}ms` } : undefined}

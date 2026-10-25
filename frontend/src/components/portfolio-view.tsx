@@ -252,7 +252,7 @@ function HoldingCard({
     <li
       className={cn(
         "-mx-2 flex items-center gap-3 rounded-2xl px-2 py-3 first:pt-0 last:pb-0",
-        fill && "nx-wash",
+        fill && "ww-wash",
       )}
       data-fresh={fill ? "" : undefined}
     >
@@ -343,7 +343,7 @@ function HoldingsTable({
           return (
             <TableRow
               key={h.asset_id}
-              className={cn(fill && "nx-wash")}
+              className={cn(fill && "ww-wash")}
               data-fresh={fill ? "" : undefined}
             >
               <TableCell>

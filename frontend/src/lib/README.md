@@ -4,7 +4,7 @@ Screens stay presentational: they call a hook and render `data`, `isLoading` or 
 
 ## Setup you get for free
 
-`app/layout.tsx` wraps every page in `<WorldProvider>` (`components/world-provider.tsx`). It calls `GET /world` **once** when the app loads and always renders the page, so server HTML, static pages and the 404 page don't depend on the backend. The backend derives the world from the `nx_session` cookie (T73): anonymous visitors and password accounts get the live world, a demo session its own sandbox; `world.me` is the signed-in account or `null`. The API client and live events wait for the world first, so screens never handle "no world yet". Anonymous visitors are read-only: unsafe requests get 401 `auth_required`.
+`app/layout.tsx` wraps every page in `<WorldProvider>` (`components/world-provider.tsx`). It calls `GET /world` **once** when the app loads and always renders the page, so server HTML, static pages and the 404 page don't depend on the backend. The backend derives the world from the `ww_session` cookie (T73): anonymous visitors and password accounts get the live world, a demo session its own sandbox; `world.me` is the signed-in account or `null`. The API client and live events wait for the world first, so screens never handle "no world yet". Anonymous visitors are read-only: unsafe requests get 401 `auth_required`.
 
 For a section that shows world data, wrap it in `<WorldGate>`. It shows an accessible loading state until the world is ready, or an error with "Try again" if it can't be opened (e.g. the backend is down). Keep the gate around the data, not the whole page:
 
@@ -91,7 +91,7 @@ const signIn = useSignIn(); // also useRegister(), useSignOut()
 await signIn.mutateAsync({ email, password }); // then world.me is the account
 ```
 
-Each calls the auth route, then re-reads `GET /world` (`session.reload()`) and resets the cache (`QueryCache.reset()`), so `useWorld().world.me` and every query follow the new account and nothing from the previous one stays on screen. The session is the HttpOnly `nx_session` cookie only; never store a token or `me` in browser storage.
+Each calls the auth route, then re-reads `GET /world` (`session.reload()`) and resets the cache (`QueryCache.reset()`), so `useWorld().world.me` and every query follow the new account and nothing from the previous one stays on screen. The session is the HttpOnly `ww_session` cookie only; never store a token or `me` in browser storage.
 
 `lib/auth.ts` has the pure helpers: `safeReturnPath(next)` (same-origin relative paths only; use it for every `?next=`), `loginHref(path)`, `validateAuthInput` and `authFailure` (form messages for 401, 409, 422, 429, 403, 503 and network errors). Wrap a page that needs an account in `<RequireAccount>` (`<RequireAccount admin>` for platform admins; `allowPrototypeDemo` only for prototype screens that the scripted demo must keep open until T65, never `/admin`); the backend still authorizes every request.
 
@@ -108,11 +108,11 @@ What the header offers comes from `appAccess()` in `navigation.ts` (pure, unit-t
 | Community owner or steward | Exchange, Steward app                       | Community switcher in the Steward header if more than one                      |
 | Platform admin             | Exchange, Admin (+ Steward app if a member) | "Create a community" without one                                               |
 
-In the Steward app, "Community home" carries a dot (described as "New updates", also on the phone menu's button) when the home changed since this browser last showed it to this account: `useCommunityHomeUpdates` (`lib/home-updates.ts`) hashes each listing's next step and latest verification decision plus the newest community alert, and remembers the hash per account and community in `localStorage` (`nx-community-home-seen:<account>:<community>`) while the home is on screen. Without a remembered hash there's no dot. Off the home, the header's summary listens to status changes but not to trades.
+In the Steward app, "Community home" carries a dot (described as "New updates", also on the phone menu's button) when the home changed since this browser last showed it to this account: `useCommunityHomeUpdates` (`lib/home-updates.ts`) hashes each listing's next step and latest verification decision plus the newest community alert, and remembers the hash per account and community in `localStorage` (`ww-community-home-seen:<account>:<community>`) while the home is on screen. Without a remembered hash there's no dot. Off the home, the header's summary listens to status changes but not to trades.
 
 Nothing that depends on `/me/communities` shows until it answers; if it fails, signed-in accounts still get the Steward app link, whose error screen explains and retries. This only decides what the UI shows: the backend authorizes every request (a non-admin on `/admin` gets `RequireAccount`'s 403 message, and every admin route checks `is_admin`).
 
-Steward pages read the community they show with `useStewardCommunity()` (`components/shell/steward-community.tsx`): `{ communities, active, select(id), href(path) }`. The `?community=<id>` URL parameter wins, then the one remembered for this account (`localStorage` key `nx-steward-community:<account id>`, only the ID, cleared on sign-out; `lib/active-community.ts`), then the account's first community; each only if `/me/communities` lists it. `select` puts the choice in the URL and remembers it; build Steward links with `href("/steward/...")` so they keep the parameter, which lets pages link to a community and keeps two tabs from disagreeing. `<StewardGate>` shows a signed-in account without a community the "Start a community" empty state, with the create form (T63), instead of the pages.
+Steward pages read the community they show with `useStewardCommunity()` (`components/shell/steward-community.tsx`): `{ communities, active, select(id), href(path) }`. The `?community=<id>` URL parameter wins, then the one remembered for this account (`localStorage` key `ww-steward-community:<account id>`, only the ID, cleared on sign-out; `lib/active-community.ts`), then the account's first community; each only if `/me/communities` lists it. `select` puts the choice in the URL and remembers it; build Steward links with `href("/steward/...")` so they keep the parameter, which lets pages link to a community and keeps two tabs from disagreeing. `<StewardGate>` shows a signed-in account without a community the "Start a community" empty state, with the create form (T63), instead of the pages.
 
 `useMyCommunities()` is cached per account (`queryKeys.myCommunities(me.id)`) and never fetched while signed out. **Roles change only when this query refetches:** anything that creates, joins or leaves a community (T63's create form, adding or removing a steward) must invalidate it, e.g. `onSuccess: (_d, _v, { cache }) => cache.invalidate(queryKeys.myCommunities(meId))`, or the header keeps the old roles until the next page load.
 
@@ -157,7 +157,7 @@ Every failure is an `ApiError` (`api/errors.ts`): `status` (0 = offline), `code`
 ```ts
 import { createServerApi } from "@/lib/api/server";
 
-const api = await createServerApi(); // BACKEND_URL + the visitor's nx_session cookie
+const api = await createServerApi(); // BACKEND_URL + the visitor's ww_session cookie
 const { data, error } = await api.GET("/portfolio");
 ```
 

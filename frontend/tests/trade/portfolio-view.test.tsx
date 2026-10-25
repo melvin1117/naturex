@@ -103,14 +103,14 @@ describe("PortfolioView", () => {
     renderPortfolio({ "GET /portfolio": () => json(HELD) });
 
     const row = await tableRow();
-    expect(row).toHaveClass("nx-wash");
+    expect(row).toHaveClass("ww-wash");
     expect(row).toHaveAttribute("data-fresh");
     // Its units land on the API's value (reduced motion in jsdom: at once).
     expect(within(row).getByText("10")).toBeInTheDocument();
     const card = screen
       .getByRole("list", { name: "Stakes" })
       .querySelector("li")!;
-    expect(card).toHaveClass("nx-wash");
+    expect(card).toHaveClass("ww-wash");
     // Shown once: coming back later doesn't replay it.
     await waitFor(() => expect(freshFills(ME).size).toBe(0));
   });
@@ -153,7 +153,7 @@ describe("PortfolioView", () => {
     );
     renderPortfolio({ "GET /portfolio": () => json(HELD) });
 
-    expect(await tableRow()).not.toHaveClass("nx-wash");
+    expect(await tableRow()).not.toHaveClass("ww-wash");
     expect(screen.queryByText(/just now/)).not.toBeInTheDocument();
   });
 
@@ -170,7 +170,7 @@ describe("PortfolioView", () => {
     );
     renderPortfolio({ "GET /portfolio": () => json(HELD) });
 
-    expect(await tableRow()).not.toHaveClass("nx-wash");
+    expect(await tableRow()).not.toHaveClass("ww-wash");
   });
 
   it("shows my alerts next to my stakes (T75)", async () => {

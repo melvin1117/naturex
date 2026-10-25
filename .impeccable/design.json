@@ -35,16 +35,16 @@
       "kind": "chip",
       "refersTo": "grade-badge",
       "description": "Grade letter on its ramp colour; pair with health and label on first mention.",
-      "html": "<span class=\"nx-grade\">A</span>",
-      "css": ".nx-grade { display:inline-flex; align-items:center; justify-content:center; height:28px; min-width:44px; padding:0 10px; border-radius:9999px; background:oklch(0.58 0.125 138); color:#fff; font:600 14px/1 'Hanken Grotesk', sans-serif; font-variant-numeric: tabular-nums; }"
+      "html": "<span class=\"ww-grade\">A</span>",
+      "css": ".ww-grade { display:inline-flex; align-items:center; justify-content:center; height:28px; min-width:44px; padding:0 10px; border-radius:9999px; background:oklch(0.58 0.125 138); color:#fff; font:600 14px/1 'Hanken Grotesk', sans-serif; font-variant-numeric: tabular-nums; }"
     },
     {
       "name": "Primary button",
       "kind": "button",
       "refersTo": "button-primary",
       "description": "Forest pill for the main action on light surfaces.",
-      "html": "<button class=\"nx-btn\">Back this site</button>",
-      "css": ".nx-btn { height:40px; padding:0 20px; border:0; border-radius:9999px; background:oklch(0.31 0.062 148); color:oklch(0.97 0.025 118); font:500 14px 'Hanken Grotesk', sans-serif; } .nx-btn:active { transform: translateY(1px); }"
+      "html": "<button class=\"ww-btn\">Back this site</button>",
+      "css": ".ww-btn { height:40px; padding:0 20px; border:0; border-radius:9999px; background:oklch(0.31 0.062 148); color:oklch(0.97 0.025 118); font:500 14px 'Hanken Grotesk', sans-serif; } .ww-btn:active { transform: translateY(1px); }"
     }
   ],
   "narrative": {

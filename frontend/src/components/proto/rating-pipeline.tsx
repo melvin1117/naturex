@@ -118,7 +118,7 @@ export function RatingPipeline({
                   </span>
                 )}
               </div>
-              {running && <div className="nx-flow mt-2 h-0.5 rounded-full" />}
+              {running && <div className="ww-flow mt-2 h-0.5 rounded-full" />}
             </div>
             <span className="sr-only">
               {done ? "done" : running ? "running" : "waiting"}

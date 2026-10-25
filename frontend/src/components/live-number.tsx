@@ -114,10 +114,10 @@ export function PriceTick({
     >
       <span
         key={moves}
-        className={moves > 0 ? "nx-flash" : undefined}
+        className={moves > 0 ? "ww-flash" : undefined}
         style={
           direction
-            ? ({ "--nx-flash-color": FLASH[tone][direction] } as CSSProperties)
+            ? ({ "--ww-flash-color": FLASH[tone][direction] } as CSSProperties)
             : undefined
         }
       >

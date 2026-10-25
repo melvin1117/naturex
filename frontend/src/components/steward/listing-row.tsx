@@ -79,7 +79,7 @@ export function ListingRow({
       <div
         className={cn(
           "-mx-3 flex gap-4 rounded-2xl px-3 py-2",
-          fresh && "nx-wash",
+          fresh && "ww-wash",
         )}
       >
         <Thumb card={asset} />

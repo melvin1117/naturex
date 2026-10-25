@@ -114,7 +114,7 @@ export function DotRing({
             className={cn(
               column.fill ??
                 (tone === "dark" ? "fill-machine-line" : "fill-foreground/12"),
-              column.at !== null && "nx-dot-on",
+              column.at !== null && "ww-dot-on",
             )}
             style={
               column.at !== null

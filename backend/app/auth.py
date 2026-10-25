@@ -39,7 +39,7 @@ from app.models import (
 
 log = logging.getLogger(__name__)
 
-SESSION_COOKIE = "nx_session"
+SESSION_COOKIE = "ww_session"
 IDLE_TIMEOUT = timedelta(days=7)
 ABSOLUTE_TIMEOUT = timedelta(days=30)
 # last_seen_at only needs to be roughly right for the idle limit; avoid a write per request.

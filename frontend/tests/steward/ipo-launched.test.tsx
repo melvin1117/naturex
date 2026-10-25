@@ -36,7 +36,7 @@ function renderLaunched(offer: IpoOut) {
 }
 
 const litColumns = (container: HTMLElement) =>
-  container.querySelectorAll("g.nx-dot-on").length;
+  container.querySelectorAll("g.ww-dot-on").length;
 
 describe("IpoLaunched, the opening bell (#216)", () => {
   it("lights the split of the stake as the launch set it", () => {

@@ -114,7 +114,7 @@ export function VerificationNotices({
               key={notice.key}
               aria-labelledby={`notice-${notice.assetId}`}
               data-level={notice.level}
-              className="nx-rise flex items-start gap-3 rounded-3xl bg-card p-5 shadow-soft sm:gap-4 sm:p-6"
+              className="ww-rise flex items-start gap-3 rounded-3xl bg-card p-5 shadow-soft sm:gap-4 sm:p-6"
             >
               <span
                 className={cn(

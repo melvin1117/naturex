@@ -7,14 +7,14 @@ Accepted (2026-10-23). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) 
 2026-10-23
 
 ## Context
-- **A demo session took over the whole app.** ADR-0005 put demo sessions in the same `nx_session` cookie as real accounts, so the session decided the world for every URL. After a judge opened a sandbox, `/` was their sandbox's marketplace, with no way back to the real homepage. Starting a demo also signed out a real account in that browser.
+- **A demo session took over the whole app.** ADR-0005 put demo sessions in the same `ww_session` cookie as real accounts, so the session decided the world for every URL. After a judge opened a sandbox, `/` was their sandbox's marketplace, with no way back to the real homepage. Starting a demo also signed out a real account in that browser.
 - **The homepage wasn't a homepage.** Every page carried a bar: the scripted demo's persona switcher (Rosa, Arjun) for anonymous visitors, or the sandbox notice for accounts. The product owner asked for a simple homepage with a start / learn-more option instead.
 - **Judges need the real flows, not a script.** They should list land, rate it and switch between people freely, with no sign-up, and always know who they are acting as.
 
 ## Decision
 ### 1. Two channels of one API
 - Every route is also served under `/sandbox/*`. A pure-ASGI middleware (`app/channel.py`, outermost) strips the prefix and marks the request, so routes don't change.
-- **The real app** reads `nx_session` (any session kind, so existing tests and tooling keep working). **The sandbox** reads `nx_demo` and resolves demo sessions only.
+- **The real app** reads `ww_session` (any session kind, so existing tests and tooling keep working). **The sandbox** reads `ww_demo` and resolves demo sessions only.
 - Demo sessions start only through `/sandbox/demo/*` (403 `sandbox_path_only` otherwise). `/sandbox/auth/register` and `/login` are 403 `not_in_sandbox`; `/sandbox/auth/logout` ends only the demo session.
 - A browser can hold both cookies: a real account trying the sandbox stays signed in.
 
@@ -31,8 +31,8 @@ Accepted (2026-10-23). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) 
 ## Consequences
 - **Good:** the real app and the sandbox can't leak into each other by URL or cookie; judges always have a way home; real accounts survive trying the demo.
 - **Cost:** about 30 one-line route twins and a codemod to `app-link`/`lib/nav`; new screens need a twin (the test catches it).
-- **Leftovers:** a demo session already in `nx_session` from the previous version is signed out on the real app's pages (frontend cleanup). The scripted prototype demo (persona switcher, guided tour, `JudgeLanding`) is unreachable and can be removed in a follow-up.
-- **Not changed:** the real channel still resolves a demo session in `nx_session`, which only tests and the leftover above create. Rejecting it in the backend would rewrite about 140 tests for no user-visible gain.
+- **Leftovers:** a demo session already in `ww_session` from the previous version is signed out on the real app's pages (frontend cleanup). The scripted prototype demo (persona switcher, guided tour, `JudgeLanding`) is unreachable and can be removed in a follow-up.
+- **Not changed:** the real channel still resolves a demo session in `ww_session`, which only tests and the leftover above create. Rejecting it in the backend would rewrite about 140 tests for no user-visible gain.
 
 ## Alternatives considered
 - **Middleware rewrite of `/sandbox/*` onto the same routes** (no twin files): `usePathname` differs between server and client under rewrites, and links would still leave the sandbox. Rejected.

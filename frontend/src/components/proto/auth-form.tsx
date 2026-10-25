@@ -38,7 +38,7 @@ const FORM_ERROR_ID = "form-error";
 
 /**
  * `/login` and `/register` (T61), on the real auth API. The session is the HttpOnly
- * `nx_session` cookie the backend sets; this form never sees or stores a token. After success
+ * `ww_session` cookie the backend sets; this form never sees or stores a token. After success
  * it goes to `next` if that's a safe same-origin path, else the Exchange.
  */
 export function AuthForm({

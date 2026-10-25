@@ -41,7 +41,7 @@ const leaflet = vi.hoisted(() => {
       state.zoom = 14;
       state.flewTo = null;
       state.tiles = [];
-      document.querySelectorAll(".nx-handle").forEach((el) => el.remove());
+      document.querySelectorAll(".ww-handle").forEach((el) => el.remove());
     },
   };
   function marker(
@@ -525,9 +525,9 @@ describe("BoundaryMap", () => {
         label="Boundary map"
       />,
     );
-    expect(vertices()[2].element.className).toContain("nx-handle--selected");
+    expect(vertices()[2].element.className).toContain("ww-handle--selected");
     expect(vertices()[1].element.className).not.toContain(
-      "nx-handle--selected",
+      "ww-handle--selected",
     );
   });
 });

@@ -16,7 +16,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useWorld } from "@/lib/hooks";
 
 /**
- * Everything under `/sandbox` needs the visitor's own sandbox (a demo session in `nx_demo`).
+ * Everything under `/sandbox` needs the visitor's own sandbox (a demo session in `ww_demo`).
  * Without one, this offers to open it instead of showing the live world or a sign-in.
  */
 export function SandboxGate({ children }: { children: ReactNode }) {

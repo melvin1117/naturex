@@ -288,7 +288,7 @@ export const TOUR_STEPS: TourStep[] = [
 ];
 
 const CHAPTERS = 10;
-const STORAGE = "nx-prototype-tour";
+const STORAGE = "ww-prototype-tour";
 
 type TourApi = {
   active: boolean;
@@ -521,7 +521,7 @@ function TourOverlay({
         aria-hidden="true"
       >
         <defs>
-          <mask id="nx-tour-mask">
+          <mask id="ww-tour-mask">
             <rect width="100%" height="100%" fill="white" />
             {rect && (
               <rect
@@ -539,7 +539,7 @@ function TourOverlay({
           width="100%"
           height="100%"
           fill="oklch(0.2 0.03 155 / 0.42)"
-          mask="url(#nx-tour-mask)"
+          mask="url(#ww-tour-mask)"
         />
         {rect && (
           <rect
@@ -559,7 +559,7 @@ function TourOverlay({
         role="dialog"
         aria-modal="false"
         aria-labelledby="tour-title"
-        className="nx-rise fixed z-[70] rounded-[1.6rem] bg-card p-5 shadow-lift ring-1 ring-border"
+        className="ww-rise fixed z-[70] rounded-[1.6rem] bg-card p-5 shadow-lift ring-1 ring-border"
         style={cardStyle}
       >
         <div className="flex items-center gap-3">

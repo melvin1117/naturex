@@ -67,13 +67,13 @@ describe("PriceTick", () => {
     const { rerender, container } = render(
       <PriceTick value={20} format={(n) => `$${n.toFixed(2)}`} />,
     );
-    expect(container.querySelector(".nx-flash")).toBeNull();
+    expect(container.querySelector(".ww-flash")).toBeNull();
     expect(screen.queryByText(/from the previous price/)).toBeNull();
 
     rerender(<PriceTick value={21.5} format={(n) => `$${n.toFixed(2)}`} />);
-    const flash = container.querySelector(".nx-flash") as HTMLElement;
+    const flash = container.querySelector(".ww-flash") as HTMLElement;
     expect(flash).toHaveTextContent("$21.50");
-    expect(flash.style.getPropertyValue("--nx-flash-color")).toBe(
+    expect(flash.style.getPropertyValue("--ww-flash-color")).toBe(
       "var(--lime-ink)",
     );
     expect(screen.getByText(/up from the previous price/)).toHaveClass(
@@ -83,9 +83,9 @@ describe("PriceTick", () => {
     expect(container.querySelector("[aria-live]")).toBeNull();
 
     rerender(<PriceTick value={19} format={(n) => `$${n.toFixed(2)}`} />);
-    const next = container.querySelector(".nx-flash") as HTMLElement;
+    const next = container.querySelector(".ww-flash") as HTMLElement;
     expect(next).not.toBe(flash);
-    expect(next.style.getPropertyValue("--nx-flash-color")).toBe(
+    expect(next.style.getPropertyValue("--ww-flash-color")).toBe(
       "var(--clay-ink)",
     );
     expect(
@@ -102,10 +102,10 @@ describe("PriceTick before the value is fresh", () => {
     );
     // The first read since the page opened lands, and arms it in the same render.
     rerender(<PriceTick value={21} format={fmt} armed />);
-    expect(container.querySelector(".nx-flash")).toBeNull();
+    expect(container.querySelector(".ww-flash")).toBeNull();
     expect(container.querySelector("[data-tick]")).toBeNull();
     rerender(<PriceTick value={22} format={fmt} armed />);
-    expect(container.querySelector(".nx-flash")).toHaveTextContent("$22.00");
+    expect(container.querySelector(".ww-flash")).toHaveTextContent("$22.00");
   });
 });
 

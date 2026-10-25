@@ -267,9 +267,9 @@ describe("the rating reveal (#216)", () => {
       ),
     ).toBeVisible();
     const dial = screen.getByRole("img", { name: "Health 85.1 out of 100" });
-    expect(dial.querySelectorAll("g.nx-dot-on").length).toBeGreaterThan(0);
+    expect(dial.querySelectorAll("g.ww-dot-on").length).toBeGreaterThan(0);
     expect(screen.getByRole("img", { name: /^Grade AA/ })).toHaveClass(
-      "nx-stamp",
+      "ww-stamp",
     );
     await waitFor(() => expect(dial).toHaveTextContent("85.1"), {
       timeout: DURATION.reveal + 1000,
@@ -306,7 +306,7 @@ describe("the rating reveal (#216)", () => {
       screen.getByRole("img", { name: "Health 85.1 out of 100" }),
     ).toHaveTextContent("85.1");
     expect(screen.getByRole("img", { name: /^Grade AA/ })).not.toHaveClass(
-      "nx-stamp",
+      "ww-stamp",
     );
     expect(await screen.findByText(ANNOUNCED)).toHaveAttribute(
       "role",
@@ -523,7 +523,7 @@ describe("ListedStep", () => {
       screen.getByRole("img", { name: "Health 85.1 out of 100" }),
     ).toHaveTextContent("85.1");
     expect(screen.getByRole("img", { name: /^Grade AA/ })).not.toHaveClass(
-      "nx-stamp",
+      "ww-stamp",
     );
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(screen.queryByText(ANNOUNCED)).not.toBeInTheDocument();

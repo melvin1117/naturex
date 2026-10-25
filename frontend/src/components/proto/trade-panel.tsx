@@ -206,7 +206,7 @@ export function TradePanel({ site }: { site: Site }) {
 
       {receipt && (
         <div
-          className="nx-rise mt-5 rounded-2xl border border-lime/60 bg-lime/10 p-4"
+          className="ww-rise mt-5 rounded-2xl border border-lime/60 bg-lime/10 p-4"
           data-tour="trade-receipt"
           role="status"
         >

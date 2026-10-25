@@ -1,4 +1,4 @@
-"""No-sign-up demo sessions (T55): the sandbox channel (`/sandbox/*`, cookie `nx_demo`),
+"""No-sign-up demo sessions (T55): the sandbox channel (`/sandbox/*`, cookie `ww_demo`),
 `POST /sandbox/demo/start`, `POST /sandbox/demo/persona`, and the hidden per-sandbox model spend
 cap (`SANDBOX_LLM_BUDGET_USD`)."""
 

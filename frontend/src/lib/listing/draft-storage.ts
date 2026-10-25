@@ -12,7 +12,7 @@ export interface UnsavedListing {
   points: LatLng[];
 }
 
-const PREFIX = "nx-listing-draft:";
+const PREFIX = "ww-listing-draft:";
 
 export function unsavedListingKey(meId: string, communityId: string): string {
   return `${PREFIX}${meId}:${communityId}`;

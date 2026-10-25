@@ -72,8 +72,8 @@ def _act_as(
     world: World,
     user: User,
 ) -> WorldOut:
-    """End this browser's demo session (if any) and start one for `user` (`nx_demo`); a real
-    account's session in `nx_session` is never touched."""
+    """End this browser's demo session (if any) and start one for `user` (`ww_demo`); a real
+    account's session in `ww_session` is never touched."""
     end_session(session, request.cookies.get(DEMO_COOKIE))
     token = start_session(session, user, SessionKind.DEMO)
     _set_session_cookie(response, token, settings, DEMO_COOKIE)
@@ -82,7 +82,7 @@ def _act_as(
 
 
 def _sandbox_path_only(request: Request) -> None:
-    """Demo sessions live in the sandbox channel (`/sandbox/demo/...`, cookie `nx_demo`), so
+    """Demo sessions live in the sandbox channel (`/sandbox/demo/...`, cookie `ww_demo`), so
     the real app's pages never turn into a sandbox."""
     if not in_sandbox(request):
         raise HTTPException(status.HTTP_403_FORBIDDEN, SANDBOX_PATH_ONLY)
@@ -146,7 +146,7 @@ def start_demo(
 
     A browser that already has a demo session keeps its sandbox and only switches to `persona`,
     so returning to the story never loses what the judge did. Otherwise a new sandbox is made
-    from the template. Only through `/sandbox` (cookie `nx_demo`): a real account signed in
+    from the template. Only through `/sandbox` (cookie `ww_demo`): a real account signed in
     in this browser stays signed in.
     """
     _sandbox_path_only(request)

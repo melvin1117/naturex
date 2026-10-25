@@ -1,6 +1,6 @@
 /**
  * World bootstrap: the one place that knows how the app learns its world. The backend derives
- * the world from the `nx_session` cookie (ADR-0005 §2, T73): anonymous visitors and password
+ * the world from the `ww_session` cookie (ADR-0005 §2, T73): anonymous visitors and password
  * accounts read the live world, a demo session its own sandbox. `GET /world` returns that
  * world plus `me` (the signed-in account, or null). Screens, hooks and the API client go
  * through this module, so session changes (T55 demo sessions) stay here.
@@ -14,7 +14,7 @@ export type World = components["schemas"]["WorldOut"];
 export const BOOTSTRAP_PATH = "/world";
 
 /** Cookies a server-side fetch forwards to the backend (the world comes from the session). */
-export const SESSION_COOKIES = ["nx_session"] as const;
+export const SESSION_COOKIES = ["ww_session"] as const;
 
 /**
  * 401 `detail` codes that mean "the session ended" (deps.py AUTH_REQUIRED) when the request

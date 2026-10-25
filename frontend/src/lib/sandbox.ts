@@ -1,7 +1,7 @@
 /**
  * The sandbox's URL space (`/sandbox/*`): a no-sign-up visitor's private sandbox runs the same
  * screens as the real app under this prefix, against the API's sandbox channel
- * (`/api/sandbox/*`, cookie `nx_demo`). Screens keep writing app paths (`/asset/…`); links and
+ * (`/api/sandbox/*`, cookie `ww_demo`). Screens keep writing app paths (`/asset/…`); links and
  * the router add the prefix inside the sandbox (`@/lib/nav`, `@/components/app-link`).
  */
 

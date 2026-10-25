@@ -6,7 +6,7 @@
 
 export const COMMUNITY_PARAM = "community";
 
-const PREFIX = "nx-steward-community:";
+const PREFIX = "ww-steward-community:";
 const listeners = new Set<() => void>();
 
 export function rememberedCommunityKey(meId: string): string {

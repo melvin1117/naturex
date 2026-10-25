@@ -1299,7 +1299,7 @@ def test_a_streams_reader_is_rechecked_against_its_session(session: Session) -> 
     arjun = persona(session, world.id, "arjun")
     client = TestClient(app)
     start_demo(client, session, world)
-    token = client.cookies["nx_session"]
+    token = client.cookies["ww_session"]
     session_id = session.exec(select(UserSession.id).where(UserSession.user_id == arjun.id)).one()
 
     auth = events.StreamAuth(token, session_id)

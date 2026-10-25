@@ -108,7 +108,7 @@ export function Receipt({
     <div
       className={cn(
         "mt-5 rounded-2xl border border-lime/60 bg-lime/10 p-4",
-        opened ? "nx-wash" : "nx-rise",
+        opened ? "ww-wash" : "ww-rise",
       )}
       data-tour="trade-receipt"
     >

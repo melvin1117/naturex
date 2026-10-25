@@ -131,11 +131,11 @@
   --grade-d: oklch(0.52 0.16 30);
 
   /* Motion (mirrored by lib/motion.ts): UI state, content arriving, milestone reveals */
-  --nx-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --nx-duration-ui: 160ms;
-  --nx-duration-content: 360ms;
-  --nx-duration-stamp: 520ms;
-  --nx-duration-reveal: 900ms;
+  --ww-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ww-duration-ui: 160ms;
+  --ww-duration-content: 360ms;
+  --ww-duration-stamp: 520ms;
+  --ww-duration-reveal: 900ms;
 
   --sidebar: var(--card);
   --sidebar-foreground: var(--foreground);
@@ -187,7 +187,7 @@
   }
 }
 
-@keyframes nx-stamp {
+@keyframes ww-stamp {
   0% {
     transform: scale(1.6) rotate(-8deg);
     opacity: 0;
@@ -204,7 +204,7 @@
   }
 }
 
-@keyframes nx-pulse-line {
+@keyframes ww-pulse-line {
   0% {
     background-position: 0% 50%;
   }
@@ -213,7 +213,7 @@
   }
 }
 
-@keyframes nx-rise {
+@keyframes ww-rise {
   from {
     opacity: 0;
     transform: translateY(6px);
@@ -225,7 +225,7 @@
 }
 
 /* Milestone reveals (#216): a dot lights, a bar opens from its centre, a line settles in. */
-@keyframes nx-dot-on {
+@keyframes ww-dot-on {
   from {
     opacity: 0.16;
   }
@@ -234,7 +234,7 @@
   }
 }
 
-@keyframes nx-grow-x {
+@keyframes ww-grow-x {
   from {
     transform: scaleX(0);
   }
@@ -243,7 +243,7 @@
   }
 }
 
-@keyframes nx-fade {
+@keyframes ww-fade {
   from {
     opacity: 0;
   }
@@ -253,42 +253,42 @@
 }
 
 /* A new row or receipt: a lime wash that fades into the element's own background. */
-@keyframes nx-wash {
+@keyframes ww-wash {
   from {
     background-color: color-mix(in oklch, var(--lime) 40%, transparent);
   }
 }
 
 /* A live value that moved: its numeral takes the move's colour, then settles back to ink. */
-@keyframes nx-flash {
+@keyframes ww-flash {
   from {
-    color: var(--nx-flash-color, var(--lime-ink));
+    color: var(--ww-flash-color, var(--lime-ink));
   }
 }
 
-.nx-stamp {
-  animation: nx-stamp var(--nx-duration-stamp) var(--nx-ease-out) both;
+.ww-stamp {
+  animation: ww-stamp var(--ww-duration-stamp) var(--ww-ease-out) both;
 }
-.nx-rise {
-  animation: nx-rise var(--nx-duration-content) var(--nx-ease-out) both;
+.ww-rise {
+  animation: ww-rise var(--ww-duration-content) var(--ww-ease-out) both;
 }
-.nx-dot-on {
-  animation: nx-dot-on 280ms var(--nx-ease-out) both;
+.ww-dot-on {
+  animation: ww-dot-on 280ms var(--ww-ease-out) both;
 }
-.nx-grow-x {
+.ww-grow-x {
   transform-origin: center;
-  animation: nx-grow-x 480ms var(--nx-ease-out) both;
+  animation: ww-grow-x 480ms var(--ww-ease-out) both;
 }
-.nx-fade {
-  animation: nx-fade var(--nx-duration-content) var(--nx-ease-out) both;
+.ww-fade {
+  animation: ww-fade var(--ww-duration-content) var(--ww-ease-out) both;
 }
-.nx-wash {
-  animation: nx-wash 1.5s var(--nx-ease-out);
+.ww-wash {
+  animation: ww-wash 1.5s var(--ww-ease-out);
 }
-.nx-flash {
-  animation: nx-flash 600ms var(--nx-ease-out);
+.ww-flash {
+  animation: ww-flash 600ms var(--ww-ease-out);
 }
-.nx-flow {
+.ww-flow {
   background-image: linear-gradient(
     90deg,
     transparent,
@@ -296,7 +296,7 @@
     transparent 80%
   );
   background-size: 200% 100%;
-  animation: nx-pulse-line 1.4s linear infinite;
+  animation: ww-pulse-line 1.4s linear infinite;
 }
 
 /* The WildWorth icon pack (brand guidelines ch. 8): each icon lights one part. Filled accents
@@ -427,7 +427,7 @@
   }
 }
 .bea-react-up {
-  animation: bea-react-up 0.75s var(--nx-ease-out);
+  animation: bea-react-up 0.75s var(--ww-ease-out);
 }
 .bea-react-down {
   animation: bea-react-down 0.6s ease;
@@ -525,16 +525,16 @@
    and its dot pops. Only when a rating lands, never on hover or as a loader. */
 .ww-play .ww-ink {
   stroke-dasharray: 100;
-  animation: ww-draw 1.1s var(--nx-ease-out) both;
+  animation: ww-draw 1.1s var(--ww-ease-out) both;
 }
 .ww-play .ww-read {
   stroke-dasharray: 100;
-  animation: ww-draw 0.55s var(--nx-ease-out) 1s both;
+  animation: ww-draw 0.55s var(--ww-ease-out) 1s both;
 }
 .ww-play .ww-dot {
   transform-box: fill-box;
   transform-origin: center;
-  animation: ww-pop 0.5s var(--nx-ease-out) 1.45s both;
+  animation: ww-pop 0.5s var(--ww-ease-out) 1.45s both;
 }
 @keyframes ww-draw {
   from {
@@ -565,14 +565,14 @@
   .ww-play .ww-dot {
     animation: none;
   }
-  .nx-stamp,
-  .nx-rise,
-  .nx-flow,
-  .nx-dot-on,
-  .nx-grow-x,
-  .nx-fade,
-  .nx-wash,
-  .nx-flash {
+  .ww-stamp,
+  .ww-rise,
+  .ww-flow,
+  .ww-dot-on,
+  .ww-grow-x,
+  .ww-fade,
+  .ww-wash,
+  .ww-flash {
     animation: none;
   }
   /* Sheets, dialogs, menus and skeletons: settle at once instead of sliding or pulsing. */
@@ -598,7 +598,7 @@
 
 /* Phones pinch to zoom: the zoom buttons give their corner to the drawing dock. */
 @media (max-width: 639px) {
-  .nx-map-stage .leaflet-control-zoom {
+  .ww-map-stage .leaflet-control-zoom {
     display: none;
   }
 }
@@ -606,12 +606,12 @@
 /* Boundary editor handles (#215): a dot inside a larger hit area, so hover can scale the dot
    without fighting Leaflet's positioning transform on the marker itself.
    Doubled class: leaflet.css (loaded after this file) sets markers to display: block. */
-.nx-handle.nx-handle {
+.ww-handle.ww-handle {
   display: grid;
   place-items: center;
   outline: none;
 }
-.nx-handle__dot {
+.ww-handle__dot {
   display: block;
   width: 14px;
   height: 14px;
@@ -626,67 +626,67 @@
     background-color 180ms ease-out,
     opacity 180ms ease-out;
 }
-.nx-handle--vertex {
+.ww-handle--vertex {
   cursor: grab;
 }
-.nx-handle--vertex:hover .nx-handle__dot {
+.ww-handle--vertex:hover .ww-handle__dot {
   transform: scale(1.3);
   background: var(--lime);
 }
-.nx-handle:focus-visible .nx-handle__dot {
+.ww-handle:focus-visible .ww-handle__dot {
   transform: scale(1.3);
   background: var(--lime);
   box-shadow:
     0 0 0 3px var(--card),
     0 0 0 5.5px var(--forest);
 }
-.nx-handle--invalid .nx-handle__dot {
+.ww-handle--invalid .ww-handle__dot {
   border-color: var(--clay-ink);
 }
 /* The corner the dock's "Delete corner" acts on (tapped or focused). */
-.nx-handle--selected .nx-handle__dot {
+.ww-handle--selected .ww-handle__dot {
   transform: scale(1.3);
   background: var(--lime);
   box-shadow:
     0 0 0 3px var(--card),
     0 0 0 5.5px var(--forest);
 }
-.leaflet-dragging .nx-handle--vertex,
-.nx-handle.leaflet-drag-target {
+.leaflet-dragging .ww-handle--vertex,
+.ww-handle.leaflet-drag-target {
   cursor: grabbing;
 }
-.nx-handle.leaflet-drag-target .nx-handle__dot {
+.ww-handle.leaflet-drag-target .ww-handle__dot {
   transform: scale(1.4);
   background: var(--lime);
 }
-.nx-handle--midpoint {
+.ww-handle--midpoint {
   cursor: copy;
 }
-.nx-handle--midpoint .nx-handle__dot {
+.ww-handle--midpoint .ww-handle__dot {
   width: 10px;
   height: 10px;
   border-width: 1.5px;
   background: oklch(0.988 0.005 118 / 0.75);
 }
-.nx-handle--midpoint:hover .nx-handle__dot {
+.ww-handle--midpoint:hover .ww-handle__dot {
   transform: scale(1.5);
   background: var(--card);
 }
-.nx-map--dragging
-  .nx-handle--midpoint:not(.leaflet-drag-target)
-  .nx-handle__dot {
+.ww-map--dragging
+  .ww-handle--midpoint:not(.leaflet-drag-target)
+  .ww-handle__dot {
   opacity: 0;
 }
 /* The first corner, once it can close the shape: larger, lime, with a slow ring. */
-.nx-handle--closer {
+.ww-handle--closer {
   cursor: pointer;
 }
-.nx-handle--closer .nx-handle__dot {
+.ww-handle--closer .ww-handle__dot {
   width: 18px;
   height: 18px;
   background: var(--lime);
 }
-.nx-handle--closer::after {
+.ww-handle--closer::after {
   content: "";
   position: absolute;
   inset: 50% auto auto 50%;
@@ -696,9 +696,9 @@
   border-radius: 9999px;
   border: 2px solid var(--lime);
   pointer-events: none;
-  animation: nx-ring 1.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  animation: ww-ring 1.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
 }
-@keyframes nx-ring {
+@keyframes ww-ring {
   from {
     transform: scale(1);
     opacity: 0.9;
@@ -709,7 +709,7 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .nx-handle--closer::after {
+  .ww-handle--closer::after {
     animation: none;
     opacity: 0;
   }
