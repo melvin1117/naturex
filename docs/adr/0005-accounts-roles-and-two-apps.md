@@ -28,7 +28,7 @@ Proposed (2026-10-06); §1, §4 and §5 amended by [ADR-0007](./0007-sandbox-add
 ### 1. Identity and sessions belong to the backend
 - **Sign-in:** email and password, handled by FastAPI. Passwords are hashed with **argon2id via `pwdlib`**, as the FastAPI security tutorial recommends (https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/#password-hashing). An unknown email still runs a dummy-hash verify, so response time doesn't reveal which emails exist.
 - **Sessions are server-side**, not JWTs:
-  - a random 256-bit token (`secrets.token_urlsafe(32)`) is set in the `ww_session` cookie;
+  - a random 256-bit token (`secrets.token_urlsafe(32)`) is set in the `ww_session` cookie (named `nx_session` until the WildWorth rename);
   - only its SHA-256 hash is stored, in `sessions`, with the session's `world_id` and `user_id`;
   - logout deletes the row and clears the cookie; logout and admin revocation take effect immediately, including on open SSE streams, which recheck the session on every poll and heartbeat.
 - **Cookie:** `HttpOnly`, `Secure` outside development and test, `SameSite=Lax`, `Path=/`.

@@ -7,7 +7,7 @@ Accepted (2026-10-23). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) 
 2026-10-23
 
 ## Context
-- **A demo session took over the whole app.** ADR-0005 put demo sessions in the same `ww_session` cookie as real accounts, so the session decided the world for every URL. After a judge opened a sandbox, `/` was their sandbox's marketplace, with no way back to the real homepage. Starting a demo also signed out a real account in that browser.
+- **A demo session took over the whole app.** ADR-0005 put demo sessions in the same `nx_session` cookie (now `ww_session`) as real accounts, so the session decided the world for every URL. After a judge opened a sandbox, `/` was their sandbox's marketplace, with no way back to the real homepage. Starting a demo also signed out a real account in that browser.
 - **The homepage wasn't a homepage.** Every page carried a bar: the scripted demo's persona switcher (Rosa, Arjun) for anonymous visitors, or the sandbox notice for accounts. The product owner asked for a simple homepage with a start / learn-more option instead.
 - **Judges need the real flows, not a script.** They should list land, rate it and switch between people freely, with no sign-up, and always know who they are acting as.
 
@@ -31,7 +31,7 @@ Accepted (2026-10-23). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) 
 ## Consequences
 - **Good:** the real app and the sandbox can't leak into each other by URL or cookie; judges always have a way home; real accounts survive trying the demo.
 - **Cost:** about 30 one-line route twins and a codemod to `app-link`/`lib/nav`; new screens need a twin (the test catches it).
-- **Leftovers:** a demo session already in `ww_session` from the previous version is signed out on the real app's pages (frontend cleanup). The scripted prototype demo (persona switcher, guided tour, `JudgeLanding`) is unreachable and can be removed in a follow-up.
+- **Leftovers:** a demo session already in `nx_session` (now `ww_session`) from the previous version is signed out on the real app's pages (frontend cleanup). The scripted prototype demo (persona switcher, guided tour, `JudgeLanding`) is unreachable and can be removed in a follow-up.
 - **Not changed:** the real channel still resolves a demo session in `ww_session`, which only tests and the leftover above create. Rejecting it in the backend would rewrite about 140 tests for no user-visible gain.
 
 ## Alternatives considered
