@@ -57,7 +57,7 @@ Everywhere:
 - AI adjustments are explicit: "Auditor adjusted −6.0 (cited: event #3, NDVI trend)." Adjustments outside ±10 cannot happen; don't imply they could.
 
 ## 4. Sandbox wording
-- The sandbox line: **"Sandbox · play money only."** Say it where it matters and nowhere else (ADR-0008): once on the welcome, in the sandbox footer, and in the trade panel near the confirm button. Headings, stats, cards and Bea's footnote don't repeat it; a judge gets it the first time.
+- The sandbox line: **"Sandbox · play money only."** Say it where it matters and nowhere else (ADR-0008): once on the welcome, once in the story at `/how` (beside the first backing), in the sandbox footer, and in the trade panel near the confirm button. Headings, stats, cards and Bea's footnote don't repeat it; a judge gets it the first time.
 - Use "play money", "sandbox balance". Never "funds", "deposit", "withdraw", "wallet" for the user's own money.
 - Mock or cached data is labelled: "Cached result (live service busy)" or "Mock mode: no API keys configured". Live AI steps get a **Live** badge.
 

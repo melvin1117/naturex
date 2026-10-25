@@ -82,8 +82,8 @@ function useWide(): boolean {
 }
 
 /**
- * `/judge`: why WildWorth exists, told on one real wetland in a couple of minutes, then the
- * judge's own private sandbox (no sign-up). Every number comes from `GET /story` (the product's
+ * `/how`: how WildWorth works, shown on one real wetland in four short parts, then a link into
+ * the visitor's own sandbox (no sign-up). Every number comes from `GET /story` (the product's
  * own rating, market and ledger code) and the wetland's recorded run (a real run of the agents).
  */
 export function JudgeStory() {
@@ -132,7 +132,9 @@ type Stage = {
   setChain: (update: (c: ChainState) => ChainState) => void;
   alert: (a: AlertCard | null) => void;
   next: () => void;
-  /** False once the scene is left (skip, back): stop the running sequence. */
+  /** Focus the story panel: the button that held focus has just gone. */
+  focus: () => void;
+  /** False once the scene is left (restart, or the page closes): stop its sequence. */
   alive: () => boolean;
   reduced: boolean;
 };
@@ -155,14 +157,28 @@ function StoryStage({
   const generation = useRef(0);
   const heading = useRef<HTMLDivElement>(null);
 
+  // A scene change replaces the button that was pressed: focus moves into the panel, never to
+  // the page (the first scene, on arrival, leaves focus where the browser put it).
+  const moved = useRef(false);
   const go = useCallback((to: number) => {
     generation.current += 1;
+    moved.current = true;
     setAlert(null);
     setScene(to);
   }, []);
   useEffect(() => {
-    if (scene > 0) heading.current?.focus();
+    if (!moved.current) return;
+    moved.current = false;
+    heading.current?.focus();
   }, [scene]);
+  // Leaving the page (Skip, Try it yourself) stops the running sequence.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!alertCard) return;
@@ -179,7 +195,8 @@ function StoryStage({
       setChain: setChainState,
       alert: setAlert,
       next: () => go(scene + 1),
-      alive: () => generation.current === mine,
+      focus: () => heading.current?.focus(),
+      alive: () => mounted.current && generation.current === mine,
       reduced,
     };
     // A new stage object per scene, so a sequence started in one scene stops when it's left.
@@ -360,23 +377,25 @@ function Actions({ children }: { children: ReactNode }) {
   );
 }
 
+const PRIMARY =
+  "font-semibold focus-visible:ring-card focus-visible:ring-offset-2 focus-visible:ring-offset-machine";
+
+/** The scene's next step: a button, or with `href` a link (out of the story). */
 function Primary({
   children,
   onClick,
-  disabled,
+  href,
 }: {
   children: ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
+  onClick?: () => void;
+  href?: string;
 }) {
-  return (
-    <Button
-      size="lg"
-      onClick={onClick}
-      disabled={disabled}
-      variant="on-image"
-      className="font-semibold focus-visible:ring-card focus-visible:ring-offset-2 focus-visible:ring-offset-machine"
-    >
+  return href ? (
+    <Button asChild size="lg" variant="on-image" className={PRIMARY}>
+      <NextLink href={href}>{children}</NextLink>
+    </Button>
+  ) : (
+    <Button size="lg" onClick={onClick} variant="on-image" className={PRIMARY}>
       {children}
     </Button>
   );
@@ -385,18 +404,15 @@ function Primary({
 function Secondary({
   children,
   onClick,
-  disabled,
 }: {
   children: ReactNode;
   onClick: () => void;
-  disabled?: boolean;
 }) {
   return (
     <Button
       size="lg"
       variant="ghost"
       onClick={onClick}
-      disabled={disabled}
       className="bg-machine-raised text-machine-ink hover:bg-machine-line hover:text-machine-ink focus-visible:ring-lime"
     >
       {children}
@@ -541,8 +557,8 @@ function Measure({ stage }: { stage: Stage }) {
   return (
     <>
       <Title>
-        {Math.round(Number(story.site.area_ha))} hectares of wetland. What is it
-        worth alive?
+        {Math.round(Number(story.site.area_ha))} hectares of wetland in{" "}
+        {story.site.place}. What is it worth alive?
       </Title>
       <Why>
         AI agents read it from space and from local news. Tested code turns what
@@ -550,7 +566,12 @@ function Measure({ stage }: { stage: Stage }) {
       </Why>
       {!started ? (
         <Actions>
-          <Primary onClick={() => setStarted(true)}>
+          <Primary
+            onClick={() => {
+              setStarted(true);
+              stage.focus();
+            }}
+          >
             Rate it
             <ArrowRight aria-hidden="true" />
           </Primary>
@@ -725,20 +746,21 @@ function Fund({ stage }: { stage: Stage }) {
                 ...c,
                 fund: Number(market.backing.to_community),
               }));
+              stage.focus();
             }}
           >
             Back it as Arjun · {market.backing.units} units
           </Primary>
+          {/* The sandbox line, once in the story, where money first changes hands. */}
+          <Tag>Play money</Tag>
         </Actions>
       ) : (
-        <>
-          <Actions>
-            <Primary onClick={stage.next}>
-              What if the land changes?
-              <ArrowRight aria-hidden="true" />
-            </Primary>
-          </Actions>
-        </>
+        <Actions>
+          <Primary onClick={stage.next}>
+            What if the land changes?
+            <ArrowRight aria-hidden="true" />
+          </Primary>
+        </Actions>
       )}
     </>
   );
@@ -829,7 +851,12 @@ function Watch({ stage }: { stage: Stage }) {
       </Why>
       {step === 0 && (
         <Actions>
-          <Secondary onClick={() => void damage()}>
+          <Secondary
+            onClick={() => {
+              stage.focus();
+              void damage();
+            }}
+          >
             <TriangleAlert aria-hidden="true" />
             Damage the north edge
           </Secondary>
@@ -869,7 +896,12 @@ function Watch({ stage }: { stage: Stage }) {
       </Feed>
       {step === 4 && (
         <Actions>
-          <Secondary onClick={() => void restore()}>
+          <Secondary
+            onClick={() => {
+              stage.focus();
+              void restore();
+            }}
+          >
             <Sprout aria-hidden="true" />
             Restore it
           </Secondary>
@@ -877,14 +909,12 @@ function Watch({ stage }: { stage: Stage }) {
         </Actions>
       )}
       {step >= 7 && (
-        <>
-          <Actions>
-            <Primary onClick={stage.next}>
-              Can anyone fake a rating?
-              <ArrowRight aria-hidden="true" />
-            </Primary>
-          </Actions>
-        </>
+        <Actions>
+          <Primary onClick={stage.next}>
+            Can anyone fake a rating?
+            <ArrowRight aria-hidden="true" />
+          </Primary>
+        </Actions>
       )}
     </>
   );
@@ -952,19 +982,22 @@ function Trust({ stage }: { stage: Stage }) {
       </p>
       {!tampered ? (
         <Actions>
-          <Secondary onClick={() => setTampered(true)}>
+          <Secondary
+            onClick={() => {
+              setTampered(true);
+              stage.focus();
+            }}
+          >
             Try to turn the {ledger.tampered_from} into an {ledger.tampered_to}
           </Secondary>
         </Actions>
       ) : (
-        <>
-          <Actions>
-            <Primary onClick={stage.next}>
-              Now you try
-              <ArrowRight aria-hidden="true" />
-            </Primary>
-          </Actions>
-        </>
+        <Actions>
+          <Primary onClick={stage.next}>
+            Want to try it yourself?
+            <ArrowRight aria-hidden="true" />
+          </Primary>
+        </Actions>
       )}
     </>
   );
@@ -978,17 +1011,10 @@ export function YourTurn({ onReplay }: { onReplay: () => void }) {
         Back a site, list your own land, or move time forward. No sign-up.
       </Why>
       <Actions>
-        <Button
-          asChild
-          size="lg"
-          variant="on-image"
-          className="font-semibold focus-visible:ring-card focus-visible:ring-offset-2 focus-visible:ring-offset-machine"
-        >
-          <NextLink href="/sandbox">
-            Try it yourself
-            <ArrowRight aria-hidden="true" />
-          </NextLink>
-        </Button>
+        <Primary href="/sandbox">
+          Try it yourself
+          <ArrowRight aria-hidden="true" />
+        </Primary>
         <Button
           variant="link"
           className="h-auto px-0 text-machine-muted hover:text-machine-ink"
