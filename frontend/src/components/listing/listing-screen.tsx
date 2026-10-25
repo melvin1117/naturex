@@ -316,10 +316,12 @@ function ListingWizard({
     setRevealListed(true);
     setRatingHeld(holding);
   }, []);
-  // A rated listing: its result, then Prove, then Offer; an offer sent (or the site launched)
-  // always opens on Offer. Coming back resumes where the community left off.
+  // A rated listing: its result, then Prove, then Offer. An offer sent or sent back opens on
+  // Offer unless a link asks for a step; a launched site always shows Offer. Coming back
+  // resumes where the community left off.
   const [listedStep, setListedStep] = useState(
-    () => onListedStep ?? (asset ? readListedStep(asset.id) : 2),
+    () =>
+      onListedStep ?? (asset?.offer ? 4 : asset ? readListedStep(asset.id) : 2),
   );
   const goListed = (n: number) => {
     setListedStep(n);
@@ -331,7 +333,7 @@ function ListingWizard({
       ? draftStep
       : !rated || ratingHeld
         ? 2
-        : asset?.ipo_at || asset?.offer
+        : asset?.ipo_at
           ? 4
           : listedStep;
 
@@ -468,9 +470,15 @@ function ListingWizard({
           />
         )}
         {step === 3 && asset && (
-          <ProveStep asset={asset} onContinue={() => goListed(4)} />
+          <ProveStep
+            asset={asset}
+            onBack={() => goListed(2)}
+            onContinue={() => goListed(4)}
+          />
         )}
-        {step === 4 && asset && <OfferStep asset={asset} />}
+        {step === 4 && asset && (
+          <OfferStep asset={asset} onBack={() => goListed(3)} />
+        )}
       </section>
     </Page>
   );

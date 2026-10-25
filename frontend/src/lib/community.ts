@@ -239,6 +239,18 @@ export function listingAction(
         href: null,
         primary: false,
       };
+    case "offer_in_review":
+      return {
+        label: "Waiting for the Reviewer",
+        href: ipoHref(assetId, communityId),
+        primary: false,
+      };
+    case "offer_sent_back":
+      return {
+        label: "Read the Reviewer's note",
+        href: ipoHref(assetId, communityId),
+        primary: true,
+      };
     case "view_on_exchange":
       return {
         label: "View on Marketplace",
@@ -307,6 +319,10 @@ export function listingStatusLine(
         : "Rated and listed. Open it to supporters when you're ready.";
     case "awaiting_ipo":
       return "Rated and listed. The owner opens it to supporters.";
+    case "offer_in_review":
+      return "Offer sent. It goes on the Marketplace once a WildWorth reviewer approves it.";
+    case "offer_sent_back":
+      return "The Reviewer sent the offer back with a note. Change it and send it again.";
   }
   return STATUS_LABEL[status] ?? status;
 }

@@ -14,6 +14,7 @@ from pydantic import (
     ConfigDict,
     Field,
     SecretStr,
+    StringConstraints,
     ValidationInfo,
     field_validator,
     model_validator,
@@ -706,25 +707,48 @@ class OfferOut(IpoTermsOut):
     sent_at: datetime
 
 
-class PendingOfferOut(OfferOut):
+class PendingOfferOut(BaseModel):
     """An offer in the Reviewer's queue, with what they need to decide."""
 
+    asset_id: UUID
     asset_name: str
     community_name: str | None = None
     area_ha: Decimal
     grade: str | None = None
+    sent_at: datetime = Field(
+        description="Names this offer: a decision sends it back, and a newer one is refused."
+    )
+    total_shares: int
+    retained_pct: Decimal
+    terms: IpoTermsOut | None = Field(
+        description="Priced as approving it now would launch it; null when it can't be priced "
+        "(`blocked_reason` says why)."
+    )
+    blocked_reason: str | None = Field(
+        description="Why approving it now would be refused, as the launch's code (no_rating, "
+        "ipo_price_too_low, ipo_price_too_high, not_verified): send it back with a note."
+    )
     verification: ListingVerificationOut = Field(
         description="Where the listing's verification stands: documents are optional in a "
         "sandbox, and the live world's launch still needs them verified."
     )
 
 
-class OfferSendBack(BaseModel):
-    """Why the Reviewer returns an offer: shown to the community, who can send it again."""
+class OfferDecision(BaseModel):
+    """Which offer the Reviewer decides: the `sent_at` they read in the queue."""
 
     model_config = ConfigDict(extra="forbid")
 
-    note: str = Field(min_length=1, max_length=500)
+    sent_at: datetime
+
+
+ReviewNote = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+
+
+class OfferSendBack(OfferDecision):
+    """Why the Reviewer returns an offer: shown to the community, who can send it again."""
+
+    note: ReviewNote
 
 
 # ----- Field evidence (T40) -----
@@ -1752,6 +1776,8 @@ class NextAction(StrEnum):
     AWAITING_VERIFICATION = "awaiting_verification"
     LAUNCH_IPO = "launch_ipo"
     AWAITING_IPO = "awaiting_ipo"
+    OFFER_IN_REVIEW = "offer_in_review"
+    OFFER_SENT_BACK = "offer_sent_back"
     VIEW_ON_EXCHANGE = "view_on_exchange"
     NONE = "none"
 
@@ -1809,7 +1835,9 @@ class ListingSummaryOut(BaseModel):
         "trading; upload and submit documents), verification_in_review (the same, with a "
         "submission waiting for a reviewer), awaiting_verification (the same for same-world "
         "admins, who aren't members), launch_ipo (listed, not launched; owner), awaiting_ipo "
-        "(the same for stewards and admins), view_on_exchange (trading or suspended), none "
+        "(the same for stewards and admins), offer_in_review (its offer waits for the "
+        "Reviewer), offer_sent_back (members: the Reviewer returned it with a note, in "
+        "`offer`), view_on_exchange (trading or suspended), none "
         "(ineligible, withdrawn)."
     )
     verification: ListingVerificationOut
@@ -1831,6 +1859,11 @@ class ListingSummaryOut(BaseModel):
         description="The Auditor's stewardship recommendations from the latest report."
     )
     report_version: int | None
+    offer: ListingOfferOut | None = Field(
+        default=None,
+        description="Members only, until it launches: the offer sent for review, or sent back "
+        "with the Reviewer's note (ADR-0008 §5).",
+    )
 
 
 class PayoutSummaryOut(BaseModel):

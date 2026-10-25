@@ -77,10 +77,14 @@ def next_action(
     can_manage: bool,
     can_launch: bool,
     verification: Standing,
+    offer_sent: bool = False,
+    offer_sent_back: bool = False,
 ) -> NextAction:
     """draft → continue listing; rating → rating in progress; needs_evidence → add evidence;
     listed before its IPO → verify it while verification blocks the offer (in review while a
-    submission waits), else launch it (the owner) or wait for the owner (stewards, admins);
+    submission waits), else wait for the Reviewer while its offer is sent, show members the
+    Reviewer's note once sent back, else send it (the owner) or wait for the owner (stewards,
+    admins);
     listed or suspended with a revocation standing → verify again (trading is paused until an
     approval); listed and launched, or suspended after its IPO (public, trading paused) → view
     on the Exchange; suspended before its IPO, ineligible and withdrawn → none. Only members
@@ -101,6 +105,10 @@ def next_action(
         case AssetStatus.LISTED if not launched:
             if verification.required:
                 return verify
+            if offer_sent:
+                return NextAction.OFFER_IN_REVIEW
+            if offer_sent_back and can_manage:
+                return NextAction.OFFER_SENT_BACK
             return NextAction.LAUNCH_IPO if can_launch else NextAction.AWAITING_IPO
         case AssetStatus.LISTED | AssetStatus.SUSPENDED if verification.revoked:
             return verify
@@ -435,6 +443,8 @@ def summarize(
                     can_manage=can_manage,
                     can_launch=can_launch,
                     verification=verification,
+                    offer_sent=asset.offer_sent_at is not None,
+                    offer_sent_back=asset.offer_review_note is not None,
                 ),
                 manage_actions=manage_actions(
                     asset.status, can_manage=can_manage, run_active=asset.id in active_runs

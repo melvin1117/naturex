@@ -19,9 +19,11 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { PendingOffer } from "@/lib/api/types";
-import { trimDecimal } from "@/lib/ipo";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import type { PendingOffer, VerificationLevel } from "@/lib/api/types";
+import { blockedExplanation, trimDecimal } from "@/lib/ipo";
 import {
+  offerDecisionFailure,
   useApproveOffer,
   usePendingOffers,
   useSendBackOffer,
@@ -50,23 +52,38 @@ export function OfferList() {
   return (
     <ul aria-label="Offers waiting for review" className="space-y-4">
       {offers.data.map((offer) => (
-        <OfferRow key={offer.asset_id} offer={offer} />
+        <OfferRow
+          key={offer.asset_id}
+          offer={offer}
+          onStale={() => void offers.refetch()}
+        />
       ))}
     </ul>
   );
 }
 
-const DOCUMENTS: Record<string, string> = {
+const DOCUMENTS: Partial<Record<VerificationLevel, string>> = {
   verified: "Documents verified",
   documents_submitted: "Documents to read",
   rejected: "Documents rejected",
   revoked: "Verification revoked",
 };
 
-function OfferRow({ offer }: { offer: PendingOffer }) {
+function OfferRow({
+  offer,
+  onStale,
+}: {
+  offer: PendingOffer;
+  /** A decision was refused: the queue may be out of date. */
+  onStale: () => void;
+}) {
   const approve = useApproveOffer(offer.asset_id);
   const [sendingBack, setSendingBack] = useState(false);
   const level = offer.verification.level;
+  const terms = offer.terms;
+  const blocked = offer.blocked_reason
+    ? blockedExplanation(offer.blocked_reason)
+    : null;
   return (
     <li className="rounded-3xl bg-card p-5 shadow-soft sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -97,12 +114,16 @@ function OfferRow({ offer }: { offer: PendingOffer }) {
         <div>
           <dt className="text-xs text-muted-foreground">Price a unit</dt>
           <dd className="text-xl font-light">
-            {unitPriceText(offer.ipo_price)}
+            {terms ? unitPriceText(terms.ipo_price) : "—"}
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">Units on offer</dt>
-          <dd className="text-xl font-light">{int(offer.shares_offered)}</dd>
+          <dt className="text-xs text-muted-foreground">
+            {terms ? "Units on offer" : "Units issued"}
+          </dt>
+          <dd className="text-xl font-light">
+            {int(terms ? terms.shares_offered : offer.total_shares)}
+          </dd>
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">Community keeps</dt>
@@ -111,20 +132,32 @@ function OfferRow({ offer }: { offer: PendingOffer }) {
           </dd>
         </div>
       </dl>
+      {blocked && (
+        <Alert className="mt-4">
+          <AlertTitle>It can&apos;t open as it is</AlertTitle>
+          <AlertDescription>
+            <p>
+              {blocked.title}. Send it back with a note so the community can
+              change it.
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
       {approve.error && (
         <p role="alert" className="mt-3 text-sm text-destructive">
-          {approve.error.message}
+          {offerDecisionFailure(approve.error)}
         </p>
       )}
       <div className="mt-5 flex flex-wrap gap-3">
         <Button
-          disabled={approve.isPending}
+          disabled={approve.isPending || blocked !== null}
           onClick={async () => {
-            const done = await approve.mutate();
+            const done = await approve.mutate(offer.sent_at);
             if (done)
               toast(`${offer.asset_name} is on the Marketplace`, {
                 description: "Supporters can back it from now on.",
               });
+            else onStale();
           }}
         >
           <Check aria-hidden="true" />
@@ -143,6 +176,7 @@ function OfferRow({ offer }: { offer: PendingOffer }) {
         offer={offer}
         open={sendingBack}
         onOpenChange={setSendingBack}
+        onStale={onStale}
       />
     </li>
   );
@@ -152,10 +186,12 @@ function SendBackDialog({
   offer,
   open,
   onOpenChange,
+  onStale,
 }: {
   offer: PendingOffer;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onStale: () => void;
 }) {
   const sendBack = useSendBackOffer(offer.asset_id);
   const [note, setNote] = useState("");
@@ -167,10 +203,12 @@ function SendBackDialog({
           onSubmit={async (event) => {
             event.preventDefault();
             if (!trimmed) return;
-            if (await sendBack.mutate(trimmed)) {
+            if (
+              await sendBack.mutate({ sentAt: offer.sent_at, note: trimmed })
+            ) {
               onOpenChange(false);
               setNote("");
-            }
+            } else onStale();
           }}
         >
           <DialogHeader>
@@ -196,7 +234,7 @@ function SendBackDialog({
           </div>
           {sendBack.error && (
             <p role="alert" className="mt-3 text-sm text-destructive">
-              {sendBack.error.message}
+              {offerDecisionFailure(sendBack.error)}
             </p>
           )}
           <DialogFooter className="mt-6">

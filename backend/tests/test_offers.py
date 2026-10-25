@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+import pytest
 from sqlmodel import col, select
 
-from app.models import Asset, AssetStatus, Holding, Price
+from app.models import Asset, AssetStatus, Holding, Price, UserRole
+from app.schemas import NextAction
 from tests import test_lifecycle as lifecycle
 from tests.conftest import requires_db
 from tests.test_ipo import listed, preview, set_fair_value
-from tests.test_lifecycle import World_, client_as
+from tests.test_lifecycle import World_, _member, _person, client_as
 
 conn = lifecycle.conn
 world = lifecycle.world
@@ -31,10 +34,20 @@ def queue(w: World_, user: Any = None) -> Any:
     return client_as(w, user or w.admin).get("/admin/offers")
 
 
+NEVER_SENT = "2026-01-01T00:00:00Z"
+
+
+def sent_at(w: World_, asset_id: str) -> str:
+    """The offer's `sent_at` as the queue shows it (a placeholder when nothing is sent)."""
+    w.session.expire_all()
+    at = w.session.exec(select(Asset.offer_sent_at).where(Asset.id == UUID(asset_id))).one()
+    return at.isoformat() if at else NEVER_SENT
+
+
 def decide(w: World_, asset_id: str, step: str, user: Any = None, **body: Any) -> Any:
-    return client_as(w, user or w.admin).post(
-        f"/admin/assets/{asset_id}/offer/{step}", json=body or None
-    )
+    """POST a decision on the offer; `sent_at` defaults to the one waiting now."""
+    body.setdefault("sent_at", sent_at(w, asset_id))
+    return client_as(w, user or w.admin).post(f"/admin/assets/{asset_id}/offer/{step}", json=body)
 
 
 def detail(w: World_, asset_id: str, user: Any = None) -> Any:
@@ -102,7 +115,9 @@ def test_the_reviewer_sees_what_waits_and_approving_launches_it(world: World_) -
     [item] = [i for i in waiting.json() if i["asset_id"] == asset["id"]]
     assert item["asset_name"] == asset["name"]
     assert item["community_name"]
-    assert item["ipo_price"] == terms["ipo_price"]
+    assert item["terms"]["ipo_price"] == terms["ipo_price"]
+    assert item["blocked_reason"] is None
+    assert item["sent_at"] == terms["sent_at"]
     assert (item["total_shares"], Decimal(item["retained_pct"])) == (2_000_000, Decimal(40))
     assert item["verification"]["level"]
 
@@ -173,3 +188,122 @@ def test_a_launched_or_unsent_listing_has_nothing_to_decide(world: World_) -> No
         ).one()
         is None
     )
+
+
+@requires_db
+def test_a_decision_names_the_offer_the_reviewer_read(world: World_) -> None:
+    asset = listed(world)
+    first = send(world, asset["id"], total_shares=2_000_000).json()
+    # The community sends new terms while the Reviewer still reads the first ones.
+    assert send(world, asset["id"], total_shares=1_000_000).status_code == 200
+
+    for step, body in (("approve", {}), ("send-back", {"note": "Too many units."})):
+        stale = decide(world, asset["id"], step, sent_at=first["sent_at"], **body)
+        assert (stale.status_code, stale.json()["detail"]) == (409, "offer_changed")
+    world.session.expire_all()
+    row = world.session.get_one(Asset, UUID(asset["id"]))
+    assert (row.ipo_at, row.offer_review_note, row.total_shares) == (None, None, 1_000_000)
+
+    approved = decide(world, asset["id"], "approve")
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["total_shares"] == 1_000_000
+
+
+@requires_db
+def test_the_reviewer_never_decides_their_own_communitys_offer(world: World_) -> None:
+    asset = listed(world)
+    send(world, asset["id"])
+    _member(world.session, world.id, world.community_id, world.admin)
+    impartial = _person(world.session, world.id, "Second Admin", UserRole.ADMIN)
+
+    assert queue(world).json() == [], "an admin never sees their own community's offers"
+    assert [i["asset_id"] for i in queue(world, impartial).json()] == [asset["id"]]
+    for step, body in (("approve", {}), ("send-back", {"note": "x"})):
+        refused = decide(world, asset["id"], step, **body)
+        assert (refused.status_code, refused.json()["detail"]) == (403, "conflict_of_interest")
+    assert decide(world, asset["id"], "approve", impartial).status_code == 200
+
+
+@requires_db
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"note": ""},
+        {"note": "   \n "},
+        {"note": "x" * 501},
+        {"note": "fine", "extra": 1},
+        {"note": "fine", "sent_at": None},
+    ],
+)
+def test_a_send_back_needs_a_note_and_the_offer(world: World_, body: dict[str, Any]) -> None:
+    asset = listed(world)
+    send(world, asset["id"])
+    response = decide(world, asset["id"], "send-back", **body)
+    assert response.status_code == 422
+    assert sent_at(world, asset["id"]) != NEVER_SENT, "still waiting"
+
+
+@requires_db
+def test_a_note_is_trimmed(world: World_) -> None:
+    asset = listed(world)
+    send(world, asset["id"])
+    back = decide(world, asset["id"], "send-back", note="  Keep more units.  ")
+    assert back.json()["review_note"] == "Keep more units."
+
+
+@requires_db
+def test_an_offer_the_launch_would_refuse_stays_in_the_queue(world: World_) -> None:
+    """A re-rate can price the offer at zero, and a revocation blocks its launch: either way
+    the Reviewer still sees it, with why, and can send it back."""
+    asset = listed(world)
+    send(world, asset["id"], total_shares=10_000_000)
+    set_fair_value(world, asset["id"], value_mid="1", health="1", confidence="1")
+
+    [item] = queue(world).json()
+    assert (item["terms"], item["blocked_reason"]) == (None, "ipo_price_too_low")
+    refused = decide(world, asset["id"], "approve")
+    assert (refused.status_code, refused.json()["detail"]) == (409, "ipo_price_too_low")
+    assert decide(world, asset["id"], "send-back", note="Issue fewer units.").status_code == 200
+
+
+@requires_db
+def test_a_revoked_listing_cant_send_or_launch_its_offer(world: World_) -> None:
+    asset = listed(world)
+    send(world, asset["id"])
+    row = world.session.get_one(Asset, UUID(asset["id"]))
+    row.verification_revoked_at = datetime.now(UTC)
+    world.session.add(row)
+    world.session.commit()
+
+    [item] = queue(world).json()
+    assert item["terms"] is not None and item["blocked_reason"] == "not_verified"
+    refused = decide(world, asset["id"], "approve")
+    assert (refused.status_code, refused.json()["detail"]) == (409, "not_verified")
+    assert sent_at(world, asset["id"]) != NEVER_SENT, "the offer still waits"
+    again = send(world, asset["id"])
+    assert (again.status_code, again.json()["detail"]) == (409, "not_verified")
+
+
+@requires_db
+def test_a_steward_reads_the_offer_and_the_summary_says_where_it_stands(
+    world: World_,
+) -> None:
+    asset = listed(world)
+
+    def action(user: Any = None) -> tuple[str, Any]:
+        summary = client_as(world, user or world.owner).get(
+            f"/communities/{world.community_id}/summary"
+        )
+        [listing] = [x for x in summary.json()["listings"] if x["asset"]["id"] == asset["id"]]
+        return listing["next_action"], listing["offer"]
+
+    assert action() == (NextAction.LAUNCH_IPO, None)
+    send(world, asset["id"])
+    assert detail(world, asset["id"], world.steward).json()["offer"]["sent_at"]
+    assert action()[0] == NextAction.OFFER_IN_REVIEW
+    decide(world, asset["id"], "send-back", note="Keep more units.")
+    next_action, offer = action(world.steward)
+    assert next_action == NextAction.OFFER_SENT_BACK
+    assert offer["review_note"] == "Keep more units."
+    # A same-world admin reads the home but not the community's offer.
+    assert action(world.admin) == (NextAction.AWAITING_IPO, None)

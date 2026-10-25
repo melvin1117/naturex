@@ -48,12 +48,14 @@ from app.market.offering import (
     MIN_TOTAL_SHARES,
     Offering,
 )
-from app.models import Asset, Community
+from app.models import Community
 from app.schemas import (
     IpoLaunch,
     IpoOut,
     IpoPreviewOut,
+    IpoTermsOut,
     ListingOfferOut,
+    OfferDecision,
     OfferOut,
     OfferSendBack,
     PendingOfferOut,
@@ -73,7 +75,6 @@ from app.services.ipo import (
     preview,
 )
 from app.services.listings import RUN_IN_PROGRESS
-from app.services.rating import latest_report
 from app.services.verification import listing_standing, verification_out
 
 router = APIRouter(tags=["ipo"])
@@ -239,9 +240,9 @@ _DECIDE: Responses = {
     responses={
         **_COMMON,
         409: {
-            "description": f"`{ALREADY_LAUNCHED}`, `{NOT_LISTED}`, `{NO_RATING}`, "
-            f"`{PRICE_TOO_LOW}`, `{PRICE_TOO_HIGH}` or `{PRICE_CHANGED}` (`expected_price` is "
-            "stale)"
+            "description": f"`{ALREADY_LAUNCHED}`, `{NOT_LISTED}`, `{NOT_VERIFIED}` (the "
+            f"launch's verification gate), `{NO_RATING}`, `{PRICE_TOO_LOW}`, `{PRICE_TOO_HIGH}` "
+            f"or `{PRICE_CHANGED}` (`expected_price` is stale)"
         },
         422: {
             "description": "total_shares outside 10,000–10,000,000 or retained_pct outside 10–90"
@@ -257,7 +258,7 @@ def send_offer(
     """
     ref = _ref(granted)
     try:
-        q = offers.send(
+        sent = offers.send(
             session,
             ref.world_id,
             ref.asset_id,
@@ -271,10 +272,8 @@ def send_offer(
         session.rollback()
         raise _missing() from None
     session.commit()
-    asset = session.get_one(Asset, ref.asset_id)
     response.headers["Cache-Control"] = NO_STORE
-    assert asset.offer_sent_at is not None  # just sent
-    return OfferOut(**_terms_out(q), sent_at=asset.offer_sent_at)
+    return OfferOut(**_terms_out(sent.quote), sent_at=sent.sent_at)
 
 
 @router.get(
@@ -287,9 +286,11 @@ def offer_queue(
     granted: ReviewQueue, session: SessionDep, response: Response
 ) -> list[PendingOfferOut]:
     """The offers waiting for a decision in the caller's world, oldest first, each priced as an
-    approval would launch it now, with where its verification stands."""
-    world_id = granted.resource.world_id
-    waiting = offers.pending(session, world_id)
+    approval would launch it now (or why it can't be), with where its verification stands.
+    Offers of the Reviewer's own communities are left out (conflict of interest)."""
+    actor = granted.signed_in
+    world_id = actor.world_id
+    waiting = offers.pending(session, world_id, list(actor.memberships))
     names = dict(
         session.exec(
             select(Community.id, Community.name).where(
@@ -301,16 +302,19 @@ def offer_queue(
     response.headers["Cache-Control"] = PRIVATE_NO_STORE
     out: list[PendingOfferOut] = []
     for p in waiting:
-        report = latest_report(session, world_id, p.asset.id)
         assert p.asset.offer_sent_at is not None  # pending offers are sent
         out.append(
             PendingOfferOut(
-                **_terms_out(p.quote),
-                sent_at=p.asset.offer_sent_at,
+                asset_id=p.asset.id,
                 asset_name=p.asset.name,
                 community_name=names.get(p.asset.community_id) if p.asset.community_id else None,
                 area_ha=p.asset.area_ha,
-                grade=report.grade if report else None,
+                grade=p.report.grade if p.report else None,
+                sent_at=p.asset.offer_sent_at,
+                total_shares=p.asset.total_shares,
+                retained_pct=p.asset.retained_pct,
+                terms=IpoTermsOut(**_terms_out(p.quote)) if p.quote else None,
+                blocked_reason=p.blocked_reason,
                 verification=verification_out(listing_standing(session, p.asset)),
             )
         )
@@ -324,18 +328,21 @@ def offer_queue(
     responses={
         **_DECIDE,
         409: {
-            "description": f"`{offers.NOT_SENT}` (nothing waits for review), {_REFUSED}, or "
+            "description": f"`{offers.NOT_SENT}` (nothing waits for review), "
+            f"`{offers.CHANGED}` (sent again or decided since `sent_at`), {_REFUSED}, or "
             f"{_BLOCKED}"
         },
     },
 )
-def approve_offer(granted: ReviewOffer, session: SessionDep, response: Response) -> IpoOut:
-    """Approve the community's offer: it launches with its terms at the price the latest report
-    sets now (the launch's own transaction, ledger entry and price tick), and the site opens on
-    the Marketplace."""
+def approve_offer(
+    body: OfferDecision, granted: ReviewOffer, session: SessionDep, response: Response
+) -> IpoOut:
+    """Approve the offer sent at `sent_at`: it launches with its terms at the price the latest
+    report sets now (the launch's own transaction, ledger entry and price tick), and the site
+    opens on the Marketplace."""
     ref = _ref(granted)
     try:
-        done = offers.approve(session, ref.world_id, ref.asset_id)
+        done = offers.approve(session, ref.world_id, ref.asset_id, sent_at=body.sent_at)
     except IpoRefused as exc:
         session.rollback()
         raise _refused(exc) from None
@@ -354,7 +361,10 @@ def approve_offer(granted: ReviewOffer, session: SessionDep, response: Response)
     tags=["admin"],
     responses={
         **_DECIDE,
-        409: {"description": f"`{offers.NOT_SENT}`, `{ALREADY_LAUNCHED}` or `{NOT_LISTED}`"},
+        409: {
+            "description": f"`{offers.NOT_SENT}`, `{offers.CHANGED}`, `{ALREADY_LAUNCHED}` or "
+            f"`{NOT_LISTED}`"
+        },
     },
 )
 def send_back_offer(
@@ -363,7 +373,9 @@ def send_back_offer(
     """Return the offer to its community with a note; they can change it and send it again."""
     ref = _ref(granted)
     try:
-        asset = offers.send_back(session, ref.world_id, ref.asset_id, note=body.note)
+        asset = offers.send_back(
+            session, ref.world_id, ref.asset_id, sent_at=body.sent_at, note=body.note
+        )
     except IpoRefused as exc:
         session.rollback()
         raise _refused(exc) from None
@@ -372,9 +384,6 @@ def send_back_offer(
         raise _missing() from None
     session.commit()
     response.headers["Cache-Control"] = NO_STORE
-    return ListingOfferOut(
-        total_shares=asset.total_shares,
-        retained_pct=asset.retained_pct,
-        sent_at=None,
-        review_note=asset.offer_review_note,
-    )
+    sent_back = offers.offer_out(asset)
+    assert sent_back is not None  # it carries the note
+    return sent_back

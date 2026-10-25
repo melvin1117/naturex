@@ -724,6 +724,44 @@ describe("resuming", () => {
     });
   });
 
+  it("resumes a rated listing at the step the community left", async () => {
+    window.localStorage.setItem(`ww-listing-step:${ASSET_ID}`, "3");
+    nav.search = `community=${SELVA.id}&asset=${ASSET_ID}`;
+    setup({
+      [ASSET]: () => json(asset({ status: "listed" })),
+      [`GET /assets/${ASSET_ID}/verification/runs`]: () => json([]),
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Show it's yours" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("region", { name: "Step 4 of 5: Prove" }),
+    ).toBeVisible();
+    window.localStorage.clear();
+  });
+
+  it("reaches Prove from a link even after the Reviewer sent the offer back", async () => {
+    nav.search = `community=${SELVA.id}&asset=${ASSET_ID}&step=prove`;
+    setup({
+      [ASSET]: () =>
+        json(
+          asset({
+            status: "listed",
+            offer: {
+              total_shares: 1_000_000,
+              retained_pct: "51.00",
+              sent_at: null,
+              review_note: "Add the assembly minutes.",
+            },
+          }),
+        ),
+      [`GET /assets/${ASSET_ID}/verification/runs`]: () => json([]),
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Show it's yours" }),
+    ).toBeVisible();
+  });
+
   it("opens a draft on its details from the Listings page's Edit details", async () => {
     nav.search = `community=${SELVA.id}&asset=${ASSET_ID}&step=details`;
     setup({ [ASSET]: () => json(asset()) });

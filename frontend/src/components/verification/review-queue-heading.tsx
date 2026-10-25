@@ -9,10 +9,8 @@ export function ReviewQueueHeading() {
         Reviews
       </h1>
       <p className="mt-3 max-w-2xl text-muted-foreground">
-        Communities send their opening offers here. Approve one to put the site
-        on the Marketplace, or send it back with a note. Land documents, when a
-        community sends them, wait under Documents. Your own communities&apos;
-        listings never appear here.
+        Approve an offer to put its site on the Marketplace, or send it back
+        with a note.
       </p>
     </>
   );

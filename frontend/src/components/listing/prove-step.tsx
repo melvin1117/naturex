@@ -1,13 +1,21 @@
 "use client";
 
-import { ArrowRight, FileCheck2, TriangleAlert } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  BadgeCheck,
+  FileCheck2,
+  FileWarning,
+  TriangleAlert,
+} from "lucide-react";
 import { useState } from "react";
 
 import { DocumentUploadForm } from "@/components/verification/document-upload-form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import type { AssetDetail } from "@/lib/api/types";
+import type { AssetDetail, VerificationRun } from "@/lib/api/types";
 import {
+  currentRun,
   DOC_TYPE_LABEL,
   MAX_RUN_DOCUMENTS,
   waitingRun,
@@ -26,14 +34,18 @@ import { StepCard } from "./shared";
  */
 export function ProveStep({
   asset,
+  onBack,
   onContinue,
 }: {
   asset: AssetDetail;
+  onBack: () => void;
   onContinue: () => void;
 }) {
   const runs = useVerificationRuns(asset.id);
   const submit = useSubmitVerification(asset.id);
   const waiting = runs.data ? waitingRun(runs.data) : null;
+  const current = currentRun(runs.data);
+  const decided = current && current !== waiting ? current : null;
   const sent = waiting?.documents ?? [];
   const full = sent.length >= MAX_RUN_DOCUMENTS;
   const [sending, setSending] = useState<string | null>(null);
@@ -52,6 +64,8 @@ export function ProveStep({
         For the hackathon this step is optional: you can skip it, and the
         Reviewer can still approve.
       </p>
+
+      {decided && <Decision run={decided} />}
 
       {sent.length > 0 && (
         <ul className="mt-6 space-y-2" aria-label="Sent to the Reviewer">
@@ -101,6 +115,15 @@ export function ProveStep({
 
       <div className="mt-8 flex flex-wrap items-center gap-3">
         <Button
+          variant="ghost"
+          size="lg"
+          onClick={onBack}
+          disabled={sending !== null}
+        >
+          <ArrowLeft aria-hidden="true" />
+          Back
+        </Button>
+        <Button
           size="lg"
           variant={sent.length > 0 ? "default" : "outline"}
           onClick={onContinue}
@@ -117,4 +140,52 @@ export function ProveStep({
       </div>
     </StepCard>
   );
+}
+
+/** The Reviewer's latest decision on the documents, and what to do about it. */
+function Decision({ run }: { run: VerificationRun }) {
+  if (!run.fingerprint_matches && run.level !== "revoked")
+    return (
+      <Alert className="mt-6">
+        <FileWarning aria-hidden="true" />
+        <AlertTitle>The listing changed since its review</AlertTitle>
+        <AlertDescription>
+          <p>Send the documents again for a new review.</p>
+        </AlertDescription>
+      </Alert>
+    );
+  switch (run.level) {
+    case "verified":
+      return (
+        <Alert className="mt-6">
+          <BadgeCheck aria-hidden="true" />
+          <AlertTitle>The Reviewer verified your documents</AlertTitle>
+          {run.reason && (
+            <AlertDescription>
+              <p>&ldquo;{run.reason}&rdquo;</p>
+            </AlertDescription>
+          )}
+        </Alert>
+      );
+    case "rejected":
+    case "revoked": {
+      const reason = run.level === "revoked" ? run.revoke_reason : run.reason;
+      return (
+        <Alert variant="destructive" className="mt-6">
+          <FileWarning aria-hidden="true" />
+          <AlertTitle>
+            {run.level === "revoked"
+              ? "The Reviewer revoked the verification"
+              : "The Reviewer rejected these documents"}
+          </AlertTitle>
+          <AlertDescription>
+            {reason && <p>&ldquo;{reason}&rdquo;</p>}
+            <p>Upload new documents below for a new review.</p>
+          </AlertDescription>
+        </Alert>
+      );
+    }
+    default:
+      return null;
+  }
 }

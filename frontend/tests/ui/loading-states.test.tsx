@@ -200,7 +200,6 @@ describe("route loading states", () => {
       "/portfolio",
       "/steward",
       "/steward/assets/x",
-      "/steward/assets/x/ipo",
       "/steward/community",
       "/steward/list",
       "/steward/listings",

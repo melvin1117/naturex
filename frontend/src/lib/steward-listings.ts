@@ -145,6 +145,18 @@ export function listingStatusWords(listing: Listing): StatusWords {
         detail: "It opens to supporters once its land documents are verified.",
         tone: "working",
       };
+    case "offer_in_review":
+      return {
+        label: "Offer in review",
+        detail: "A WildWorth reviewer is checking the offer.",
+        tone: "working",
+      };
+    case "offer_sent_back":
+      return {
+        label: "Offer sent back",
+        detail: "Read the Reviewer's note, then send it again.",
+        tone: "attention",
+      };
     case "awaiting_ipo":
       return {
         label: "Ready for its opening offer",

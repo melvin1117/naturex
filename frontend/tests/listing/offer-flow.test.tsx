@@ -129,10 +129,13 @@ beforeEach(() => nav.push.mockReset());
 
 describe("the Offer step (ADR-0008 §5)", () => {
   it("sends the community's terms at the price the rating sets", async () => {
-    const backend = renderWith(<OfferStep asset={unlaunched()} />, {
-      [PREVIEW]: previewFor,
-      [SEND]: () => json({ ...preview(), sent_at: "2026-10-25T10:00:00Z" }),
-    });
+    const backend = renderWith(
+      <OfferStep asset={unlaunched()} onBack={vi.fn()} />,
+      {
+        [PREVIEW]: previewFor,
+        [SEND]: () => json({ ...preview(), sent_at: "2026-10-25T10:00:00Z" }),
+      },
+    );
     expect(
       await screen.findByRole("heading", { name: "Set your offer" }),
     ).toBeVisible();
@@ -154,9 +157,45 @@ describe("the Offer step (ADR-0008 §5)", () => {
     });
   });
 
+  it("says why an offer can't be priced instead of waiting forever", async () => {
+    renderWith(<OfferStep asset={unlaunched()} onBack={vi.fn()} />, {
+      [PREVIEW]: () => json({ detail: "ipo_price_too_low" }, { status: 409 }),
+    });
+    expect(
+      await screen.findByText("The price per unit rounds to zero"),
+    ).toBeVisible();
+    expect(screen.queryByText("Working out the price…")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /Send for review/ }),
+    ).toBeDisabled();
+  });
+
+  it("shows the new price when a newer rating moved it", async () => {
+    let price = "10.5173";
+    const backend = renderWith(
+      <OfferStep asset={unlaunched()} onBack={vi.fn()} />,
+      {
+        [PREVIEW]: () =>
+          json(preview({ ipo_price: price, fair_value_per_share: price })),
+        [SEND]: () => {
+          price = "12.3456";
+          return json({ detail: "ipo_price_changed" }, { status: 409 });
+        },
+      },
+    );
+    const send = await screen.findByRole("button", { name: /Send for review/ });
+    await waitFor(() => expect(send).toBeEnabled());
+    fireEvent.click(send);
+
+    expect(await screen.findByText("The opening price changed")).toBeVisible();
+    expect(await screen.findAllByText("$12.3456")).not.toHaveLength(0);
+    expect(backend.calls(PREVIEW)).toBeGreaterThan(1);
+  });
+
   it("waits for the Reviewer once sent, and leads to their side", async () => {
     renderWith(
       <OfferStep
+        onBack={vi.fn()}
         asset={unlaunched({
           offer: {
             total_shares: 2_000_000,
@@ -191,6 +230,7 @@ describe("the Offer step (ADR-0008 §5)", () => {
   it("shows the Reviewer's note on an offer sent back, with its terms to change", async () => {
     renderWith(
       <OfferStep
+        onBack={vi.fn()}
         asset={unlaunched({
           offer: {
             total_shares: 2_000_000,
@@ -212,6 +252,7 @@ describe("the Offer step (ADR-0008 §5)", () => {
   it("says where the site is once the Reviewer approved it", async () => {
     renderWith(
       <OfferStep
+        onBack={vi.fn()}
         asset={unlaunched({ ipo_at: "2026-10-25T11:00:00Z", trading: true })}
       />,
       {},
@@ -230,9 +271,16 @@ describe("the Offer step (ADR-0008 §5)", () => {
 describe("the Prove step", () => {
   it("can be skipped: documents are optional in the sandbox", async () => {
     const onContinue = vi.fn();
-    renderWith(<ProveStep asset={unlaunched()} onContinue={onContinue} />, {
-      [`GET /assets/${ASSET_ID}/verification/runs`]: () => json([]),
-    });
+    renderWith(
+      <ProveStep
+        asset={unlaunched()}
+        onBack={vi.fn()}
+        onContinue={onContinue}
+      />,
+      {
+        [`GET /assets/${ASSET_ID}/verification/runs`]: () => json([]),
+      },
+    );
     expect(
       await screen.findByRole("heading", { name: "Show it's yours" }),
     ).toBeVisible();
@@ -240,17 +288,56 @@ describe("the Prove step", () => {
     fireEvent.click(screen.getByRole("button", { name: /Skip for now/ }));
     expect(onContinue).toHaveBeenCalledOnce();
   });
+
+  it("shows why the Reviewer rejected the documents", async () => {
+    renderWith(
+      <ProveStep asset={unlaunched()} onBack={vi.fn()} onContinue={vi.fn()} />,
+      {
+        [`GET /assets/${ASSET_ID}/verification/runs`]: () =>
+          json([
+            {
+              id: "77777777-7777-4777-8777-777777777777",
+              asset_id: ASSET_ID,
+              level: "rejected",
+              effective_level: "rejected",
+              is_current: true,
+              fingerprint_matches: true,
+              reason: "The title names another parcel.",
+              documents: [],
+              checks: [],
+              submitted_at: "2026-10-24T10:00:00Z",
+              decided_at: "2026-10-25T10:00:00Z",
+            },
+          ]),
+      },
+    );
+    expect(
+      await screen.findByText("The Reviewer rejected these documents"),
+    ).toBeVisible();
+    expect(screen.getByText(/The title names another parcel\./)).toBeVisible();
+  });
 });
 
-const pending = (overrides: Partial<PendingOffer> = {}): PendingOffer => ({
-  ...preview(),
-  sent_at: "2026-10-25T10:00:00Z",
-  asset_name: "Río Claro Forest",
-  community_name: "Río Claro Community",
-  area_ha: "412.00",
-  grade: "AA",
-  ...overrides,
-});
+const SENT_AT = "2026-10-25T10:00:00.123456Z";
+
+const pending = (overrides: Partial<PendingOffer> = {}): PendingOffer => {
+  // The queue's terms are a preview's, without the launch's own verdict.
+  const { verification, ...terms } = preview();
+  return {
+    asset_id: ASSET_ID,
+    asset_name: "Río Claro Forest",
+    community_name: "Río Claro Community",
+    area_ha: "412.00",
+    grade: "AA",
+    sent_at: SENT_AT,
+    total_shares: 1_000_000,
+    retained_pct: "51.00",
+    terms,
+    blocked_reason: null,
+    verification,
+    ...overrides,
+  };
+};
 
 describe("the Reviewer's offers", () => {
   const APPROVE = `POST /admin/assets/${ASSET_ID}/offer/approve`;
@@ -288,7 +375,67 @@ describe("the Reviewer's offers", () => {
       await screen.findByText("Río Claro Forest is on the Marketplace"),
     ).toBeVisible();
     expect(backend.calls(APPROVE)).toBe(1);
+    const approval = (await backend.requests
+      .find((r) => r.url.endsWith("/approve"))!
+      .clone()
+      .json()) as Record<string, unknown>;
+    expect(approval).toEqual({ sent_at: SENT_AT });
     expect(await screen.findByText(/No offer is waiting/)).toBeVisible();
+  });
+
+  it("refuses an offer changed since it was read, and shows the new one", async () => {
+    let waiting = [pending()];
+    const backend = renderWith(
+      <OfferList />,
+      {
+        "GET /admin/offers": () => json(waiting),
+        [APPROVE]: () => {
+          waiting = [
+            pending({
+              total_shares: 2_000_000,
+              sent_at: "2026-10-25T10:05:00Z",
+            }),
+          ];
+          return json({ detail: "offer_changed" }, { status: 409 });
+        },
+      },
+      ADMIN_WORLD,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Approve and list/ }),
+    );
+    expect(
+      await screen.findByText(/The community changed this offer/),
+    ).toBeVisible();
+    await waitFor(() => expect(backend.calls("GET /admin/offers")).toBe(2));
+  });
+
+  it("can't approve an offer the launch would refuse, only send it back", async () => {
+    renderWith(
+      <OfferList />,
+      {
+        "GET /admin/offers": () =>
+          json([
+            pending({
+              terms: null,
+              total_shares: 10_000_000,
+              blocked_reason: "ipo_price_too_low",
+            }),
+          ]),
+      },
+      ADMIN_WORLD,
+    );
+    const row = await screen.findByRole("listitem");
+    expect(
+      within(row).getByText(/The price per unit rounds to zero/),
+    ).toBeVisible();
+    expect(within(row).getByText("10,000,000")).toBeVisible();
+    expect(
+      within(row).getByRole("button", { name: /Approve and list/ }),
+    ).toBeDisabled();
+    expect(
+      within(row).getByRole("button", { name: /Send back/ }),
+    ).toBeEnabled();
   });
 
   it("sends an offer back with a note for its community", async () => {
@@ -323,7 +470,7 @@ describe("the Reviewer's offers", () => {
       .find((r) => r.url.endsWith("/send-back"))!
       .clone()
       .json()) as Record<string, unknown>;
-    expect(body).toEqual({ note: "Keep more units." });
+    expect(body).toEqual({ sent_at: SENT_AT, note: "Keep more units." });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 });

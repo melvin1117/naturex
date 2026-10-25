@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  ArrowLeft,
   ArrowRight,
   BadgeCheck,
+  ChevronDown,
   Clock,
   PencilLine,
   Sprout,
@@ -15,10 +17,24 @@ import { IpoOfferInputs } from "@/components/ipo-offer-inputs";
 import { IpoPriceSteps } from "@/components/ipo-preview";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { toApiError } from "@/lib/api/errors";
 import type { AssetDetail } from "@/lib/api/types";
 import { int } from "@/lib/prototype/format";
 import { useIpoPreview, useSwitchPersona } from "@/lib/hooks";
-import { blockedExplanation, trimDecimal } from "@/lib/ipo";
+import {
+  blockedExplanation,
+  ipoRefusal,
+  NO_RATING,
+  PRICE_CHANGED,
+  trimDecimal,
+  type Explanation,
+  type IpoRefusal,
+} from "@/lib/ipo";
 import { useSendOffer } from "@/lib/offer-hooks";
 import { assetHref, unitPriceText } from "@/lib/trade";
 import { useIpoOffer } from "@/lib/use-ipo-offer";
@@ -31,21 +47,81 @@ import { StepCard } from "./shared";
  * on the Marketplace. Sent, it waits (and can still change); sent back, it shows the note; once
  * approved, it says where the site is.
  */
-export function OfferStep({ asset }: { asset: AssetDetail }) {
+export function OfferStep({
+  asset,
+  onBack,
+}: {
+  asset: AssetDetail;
+  onBack: () => void;
+}) {
   const offer = asset.offer ?? null;
   const [editing, setEditing] = useState(false);
   if (asset.ipo_at) return <Launched asset={asset} />;
   if (offer?.sent_at && !editing)
-    return <Waiting asset={asset} onChange={() => setEditing(true)} />;
-  return <Compose asset={asset} onSent={() => setEditing(false)} />;
+    return (
+      <Waiting
+        asset={asset}
+        onChange={() => setEditing(true)}
+        onBack={onBack}
+      />
+    );
+  return (
+    <Compose
+      asset={asset}
+      onSent={() => setEditing(false)}
+      onBack={onBack}
+      onKeep={offer?.sent_at ? () => setEditing(false) : undefined}
+    />
+  );
+}
+
+/** Why the offer can't be priced or sent, in words; null when nothing stops it. */
+function refusalText(refusal: IpoRefusal | null): Explanation | null {
+  switch (refusal?.kind) {
+    case undefined:
+      return null;
+    case "blocked":
+      return refusal.explanation;
+    case "price_changed":
+      return PRICE_CHANGED;
+    case "no_rating":
+      return NO_RATING;
+    case "launched":
+      return {
+        title: "It's already on the Marketplace",
+        body: "Reload the page to see it.",
+      };
+    case "not_listed":
+      return {
+        title: "It isn't ready for an offer",
+        body: "Only a rated listing can send an offer. Go back to its rating.",
+      };
+    case "owner_only":
+      return {
+        title: "Only the community's owner sends the offer",
+        body: "Ask the owner to send it.",
+      };
+    case "not_found":
+      return {
+        title: "We couldn't find this site",
+        body: "It may have been removed.",
+      };
+    case "error":
+      return { title: "Something went wrong", body: refusal.message };
+  }
 }
 
 function Compose({
   asset,
   onSent,
+  onBack,
+  onKeep,
 }: {
   asset: AssetDetail;
   onSent: () => void;
+  onBack: () => void;
+  /** Editing a sent offer: keep the one the Reviewer has instead. */
+  onKeep?: () => void;
 }) {
   const offer = asset.offer ?? null;
   const send = useSendOffer(asset.id);
@@ -57,17 +133,32 @@ function Compose({
       : null,
   });
   const preview = terms.current ?? terms.shown;
+  const previewRefusal = terms.preview.error
+    ? ipoRefusal(terms.preview.error)
+    : null;
+  const working = !terms.current && !previewRefusal;
   const blocked = terms.current?.blocked_reason;
+  // Why it can't go now: the settled preview's block, a refused preview, or a refused send.
+  const problem = blocked
+    ? blockedExplanation(blocked)
+    : (refusalText(previewRefusal) ??
+      refusalText(send.error ? ipoRefusal(send.error) : null));
 
   const submit = async () => {
     if (!terms.current || terms.totalShares === null || !terms.retainedPct)
       return;
-    const sent = await send.mutate({
-      total_shares: terms.totalShares,
-      retained_pct: terms.retainedPct,
-      expected_price: terms.current.ipo_price,
-    });
-    if (sent) onSent();
+    try {
+      await send.mutateAsync({
+        total_shares: terms.totalShares,
+        retained_pct: terms.retainedPct,
+        expected_price: terms.current.ipo_price,
+      });
+      onSent();
+    } catch (error) {
+      // A newer rating moved the price: show the new one to send again.
+      if (ipoRefusal(toApiError(error)).kind === "price_changed")
+        void terms.preview.refetch();
+    }
   };
 
   return (
@@ -92,7 +183,7 @@ function Compose({
         {preview ? (
           <div
             className={terms.current ? "mt-6" : "mt-6 opacity-60"}
-            aria-busy={!terms.current}
+            aria-busy={working}
           >
             <p className="text-sm text-muted-foreground">Price a unit</p>
             <p className="tabular text-4xl font-light tracking-tight">
@@ -103,31 +194,45 @@ function Compose({
               keeps {int(preview.retained_shares)} (
               {trimDecimal(preview.retained_pct)}%)
             </p>
-            <IpoPriceSteps preview={preview} className="mt-5" />
+            <Collapsible className="mt-4">
+              <CollapsibleTrigger className="group inline-flex items-center gap-1.5 rounded-lg text-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+                How the rating sets this price
+                <ChevronDown
+                  aria-hidden="true"
+                  className="size-4 transition-transform group-data-[state=open]:rotate-180"
+                />
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <IpoPriceSteps preview={preview} className="mt-4" />
+              </CollapsibleContent>
+            </Collapsible>
           </div>
         ) : (
-          <p className="mt-6 text-sm text-muted-foreground" role="status">
-            Working out the price…
-          </p>
+          working && (
+            <p className="mt-6 text-sm text-muted-foreground" role="status">
+              Working out the price…
+            </p>
+          )
         )}
       </div>
-      {blocked && (
-        <Alert className="mt-6">
-          <AlertTitle>{blockedExplanation(blocked).title}</AlertTitle>
+      {problem && (
+        <Alert className="mt-6" role="alert">
+          <AlertTitle>{problem.title}</AlertTitle>
           <AlertDescription>
-            <p>{blockedExplanation(blocked).body}</p>
-          </AlertDescription>
-        </Alert>
-      )}
-      {send.error && (
-        <Alert variant="destructive" className="mt-6">
-          <AlertTitle>We couldn&apos;t send your offer</AlertTitle>
-          <AlertDescription>
-            <p>{send.error.message}</p>
+            <p>{problem.body}</p>
           </AlertDescription>
         </Alert>
       )}
       <div className="mt-8 flex flex-wrap items-center gap-3">
+        <Button
+          variant="ghost"
+          size="lg"
+          onClick={onBack}
+          disabled={send.isPending}
+        >
+          <ArrowLeft aria-hidden="true" />
+          Documents
+        </Button>
         <Button
           size="lg"
           disabled={!terms.canLaunch}
@@ -136,11 +241,21 @@ function Compose({
           {send.isPending ? "Sending…" : "Send for review"}
           <ArrowRight aria-hidden="true" />
         </Button>
-        <p className="text-sm text-muted-foreground">
-          A WildWorth reviewer checks it. Once they approve, the site opens on
-          the Marketplace.
-        </p>
+        {onKeep && (
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={onKeep}
+            disabled={send.isPending}
+          >
+            Keep the sent offer
+          </Button>
+        )}
       </div>
+      <p className="mt-3 text-sm text-muted-foreground">
+        A WildWorth reviewer checks it. Once they approve, the site opens on the
+        Marketplace.
+      </p>
     </StepCard>
   );
 }
@@ -148,9 +263,11 @@ function Compose({
 function Waiting({
   asset,
   onChange,
+  onBack,
 }: {
   asset: AssetDetail;
   onChange: () => void;
+  onBack: () => void;
 }) {
   const offer = asset.offer!;
   const router = useRouter();
@@ -203,6 +320,9 @@ function Waiting({
         <Button variant="outline" size="lg" onClick={onChange}>
           Change the offer
         </Button>
+        <Button variant="ghost" size="lg" onClick={onBack}>
+          Add documents
+        </Button>
       </div>
       <p className="mt-3 text-sm text-muted-foreground">
         In the sandbox you can be the Reviewer too, to see the other side.
@@ -219,8 +339,8 @@ function Launched({ asset }: { asset: AssetDetail }) {
         {asset.name} is on the Marketplace
       </h2>
       <p className="mt-2 max-w-prose text-muted-foreground">
-        The Reviewer approved your offer. Supporters can back it from now on,
-        and what they pay goes to your community&apos;s fund.
+        Supporters can back it from now on, and what they pay goes to your
+        community&apos;s fund.
       </p>
       <div className="mt-8 flex flex-wrap gap-3">
         <Button asChild size="lg">

@@ -175,9 +175,10 @@ describe("TimeMachinePanel", () => {
     expect(
       await screen.findByText("The Time Machine runs in demo sandboxes only"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Go to the verification queue" }),
-    ).toHaveAttribute("href", "/admin/verifications");
+    expect(screen.getByRole("link", { name: "Go to Reviews" })).toHaveAttribute(
+      "href",
+      "/admin/verifications",
+    );
     expect(screen.getByText(/Real listings in the live world/)).toBeVisible();
     expect(screen.queryByRole("button", { name: /Next quarter/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Reset/ })).toBeNull();

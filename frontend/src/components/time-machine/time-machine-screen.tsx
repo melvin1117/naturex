@@ -85,7 +85,7 @@ export function TimeMachinePanel({
             {/* Not a dead end: in the live world, the admin's work is the review queue. */}
             <Button asChild variant="outline" size="sm" className="mt-2">
               <Link href="/admin/verifications">
-                Go to the verification queue
+                Go to Reviews
                 <ArrowRight aria-hidden="true" />
               </Link>
             </Button>

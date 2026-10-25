@@ -60,6 +60,8 @@ export const queryKeys = {
   ipoPreview: (assetId: string, totalShares: number, retainedPct: string) =>
     ["ipo-preview", assetId, totalShares, retainedPct] as const,
   /** Every query of one community (a prefix, for invalidation), T63. */
+  /** Everything about every community (a prefix, for invalidation). */
+  communityAll: () => ["community"] as const,
   community: (id: string) => ["community", id] as const,
   communityProfile: (id: string) => ["community", id, "profile"] as const,
   /** The Steward home (T63) and a community's members (T68). */
@@ -100,6 +102,8 @@ export const queryKeys = {
     ["field-photo-image", assetId, photoId] as const,
   /** The opening offers waiting for the Reviewer (ADR-0008 §5), per account. */
   pendingOffers: (meId: string | null) => ["offers", meId] as const,
+  /** Every account's offers queue (a prefix, for invalidation). */
+  pendingOffersAll: () => ["offers"] as const,
   /** Every page of the reviewer queue, for every account (a prefix, for invalidation). */
   reviewQueueAll: () => ["review-queue"] as const,
   /** One page of the reviewer queue, per account. */

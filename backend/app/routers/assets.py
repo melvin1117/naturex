@@ -40,6 +40,7 @@ from app.schemas import (
     ReportOut,
     SiteViews,
 )
+from app.services import offers
 from app.services.asset_cards import (
     cards,
     change_pct,
@@ -190,16 +191,7 @@ def asset_detail(
 
 def _offer(asset: Asset, actor: Actor | None) -> ListingOfferOut | None:
     """The offer waiting for (or sent back by) the Reviewer, for those who manage the listing."""
-    if asset.ipo_at is not None or not visible_to(actor, asset):
-        return None
-    if asset.offer_sent_at is None and asset.offer_review_note is None:
-        return None
-    return ListingOfferOut(
-        total_shares=asset.total_shares,
-        retained_pct=asset.retained_pct,
-        sent_at=asset.offer_sent_at,
-        review_note=asset.offer_review_note,
-    )
+    return offers.offer_out(asset) if visible_to(actor, asset) else None
 
 
 def _image_version(image: AssetOverlay | AssetView) -> str:

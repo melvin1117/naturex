@@ -71,6 +71,7 @@ from app.schemas import (
     TopHolderOut,
     WalletOut,
 )
+from app.services import offers
 from app.services.asset_cards import cards, latest_reports
 from app.services.community_summary import Wallet, summarize
 from app.services.rating_runs import assets_with_active_runs
@@ -422,6 +423,7 @@ def summary(granted: CommunityData, session: SessionDep, response: Response) -> 
                 ),
                 recommendations=list(listing.recommendations),
                 report_version=listing.report_version,
+                offer=offers.offer_out(listing.asset) if role is not None else None,
             )
             for listing in facts.listings
         ],
