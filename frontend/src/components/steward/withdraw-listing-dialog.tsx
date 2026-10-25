@@ -100,7 +100,7 @@ export function WithdrawListingDialog({
           <AlertDialogDescription asChild>
             <div className="space-y-2">
               <p>
-                It stops here and moves to Closed. Withdrawing is final: it
+                It leaves your community&apos;s page. Withdrawing is final: it
                 can&apos;t be submitted again, but you can list the same land as
                 a new listing.
               </p>

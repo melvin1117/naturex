@@ -72,7 +72,11 @@ const REMEMBERED = `ww-steward-community:${ROSA_ID}`;
 
 type Routes = Parameters<typeof fakeBackend>[0];
 
-const Page = () => <p>Page content</p>;
+/** A Communities page: which community the provider picked for it. */
+function Page() {
+  const { active } = useStewardCommunity();
+  return <p>Page content{active ? `: ${active.name}` : ""}</p>;
+}
 
 function setup(communities: MyCommunity[] = [], routes: Routes = {}) {
   const backend = fakeBackend({
@@ -95,50 +99,29 @@ function setup(communities: MyCommunity[] = [], routes: Routes = {}) {
   return { backend, layer };
 }
 
-function switcher(name: string) {
-  return screen.findByRole("button", { name: `${name}, switch community` });
-}
+const showing = (name: string) => screen.findByText(`Page content: ${name}`);
 
 describe("Communities: which community", () => {
-  it("shows one community's pages without a switcher", async () => {
-    setup([SELVA]);
-    expect(await screen.findByText("Page content")).toBeVisible();
-    // The page's heading names it; a menu of one would be noise.
+  it("shows the community's pages, with no switcher over them", async () => {
+    setup([SELVA, RIO]);
+    expect(await showing("Selva Viva")).toBeVisible();
+    // Communities lists them all; a community's page links back to it.
     expect(
       screen.queryByRole("button", { name: /switch community/i }),
     ).not.toBeInTheDocument();
   });
 
-  it("switches between communities and remembers the choice", async () => {
-    setup([SELVA, RIO]);
-    fireEvent.keyDown(await switcher("Selva Viva"), { key: "Enter" });
-    const items = await screen.findAllByRole("menuitemradio");
-    expect(items.map((item) => item.textContent)).toEqual([
-      "Selva VivaOwner",
-      "Río ClaroSteward",
-    ]);
-    expect(items[0]).toHaveAttribute("aria-checked", "true");
-    fireEvent.click(items[1]!);
-
-    expect(await switcher("Río Claro")).toBeVisible();
-    expect(window.localStorage.getItem(REMEMBERED)).toBe(RIO.id);
-    expect(router.replace).toHaveBeenCalledWith(
-      `/steward?community=${RIO.id}`,
-      { scroll: false },
-    );
-  });
-
   it("opens on the remembered community, if still a member", async () => {
     window.localStorage.setItem(REMEMBERED, RIO.id);
     setup([SELVA, RIO]);
-    expect(await switcher("Río Claro")).toBeVisible();
+    expect(await showing("Río Claro")).toBeVisible();
   });
 
   it("lets the URL win over the remembered community", async () => {
     window.localStorage.setItem(REMEMBERED, SELVA.id);
     nav.search = `community=${RIO.id}`;
     setup([SELVA, RIO]);
-    expect(await switcher("Río Claro")).toBeVisible();
+    expect(await showing("Río Claro")).toBeVisible();
   });
 
   it.each([
@@ -148,7 +131,7 @@ describe("Communities: which community", () => {
     if (id) window.localStorage.setItem(REMEMBERED, id);
     nav.search = search;
     setup([SELVA, RIO]);
-    expect(await switcher("Selva Viva")).toBeVisible();
+    expect(await showing("Selva Viva")).toBeVisible();
   });
 
   it("shows the remembered community from the first render", async () => {
@@ -201,7 +184,7 @@ describe("Communities: none yet, or a failed read", () => {
       "grid-cols-[minmax(0,1fr)]",
       "lg:grid-cols-[minmax(0,1fr)_440px]",
     );
-    expect(screen.queryByText("Page content")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Page content/)).not.toBeInTheDocument();
     // No account IDs to pass around in a sandbox, and no repeated sandbox line.
     expect(screen.queryByText(/account ID/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/play money/i)).not.toBeInTheDocument();
@@ -218,7 +201,7 @@ describe("Communities: none yet, or a failed read", () => {
     ).toBeVisible();
     fail = false;
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByText("Page content")).toBeVisible();
+    expect(await showing("Selva Viva")).toBeVisible();
   });
 });
 
@@ -243,13 +226,13 @@ describe("Communities: switching who you are", () => {
         () => new Promise<Response>((resolve) => (answerArjun = resolve)),
       ),
     });
-    expect(await switcher("Selva Viva")).toBeVisible();
+    expect(await showing("Selva Viva")).toBeVisible();
 
     await act(() => layer.session.reload());
     // Arjun's answer hasn't come back: nothing of Rosa's, nothing guessed.
     await waitFor(() => expect(backend.calls("GET /me/communities")).toBe(2));
-    expect(screen.queryByText("Selva Viva")).not.toBeInTheDocument();
-    expect(screen.queryByText("Page content")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Selva Viva/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Page content/)).not.toBeInTheDocument();
 
     await act(async () => answerArjun(json([])));
     expect(

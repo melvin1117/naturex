@@ -5,25 +5,14 @@ import Link from "@/components/app-link";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "cn";
 
-import { AlertsList } from "@/components/alerts-list";
-import { ICON_FRAME } from "@/components/boundary-map";
 import { CountTo } from "@/components/live-number";
 import { PortfolioBodySkeleton } from "@/components/page-skeletons";
-import { Delta, SiteThumb, Stat } from "@/components/proto/bits";
+import { Delta, SiteThumb } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
 import { Portfolio as PrototypePortfolio } from "@/components/proto/portfolio";
-import { Panel } from "@/components/proto/report-panels";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import type { AssetCard, HoldingOut, PortfolioOut } from "@/lib/api/types";
 import { useAssets, usePortfolio, useWorld } from "@/lib/hooks";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
@@ -49,23 +38,16 @@ import {
  */
 export function PortfolioScreen() {
   const { world } = useWorld();
-  return world?.me ? (
-    <PortfolioView name={world.me.name} />
-  ) : (
-    <PrototypePortfolio />
-  );
+  return world?.me ? <PortfolioView /> : <PrototypePortfolio />;
 }
 
-export function PortfolioView({ name }: { name: string }) {
+export function PortfolioView() {
   const portfolio = usePortfolio();
   return (
     <div className="mx-auto max-w-7xl px-4 pt-10 sm:px-6">
       <h1 className="font-serif text-5xl leading-none tracking-tight sm:text-6xl">
         Your stakes
       </h1>
-      <p className="mt-3 text-muted-foreground">
-        The sites {name} backs, and how they&apos;re doing.
-      </p>
       {portfolio.data ? (
         <PortfolioBody data={portfolio.data} />
       ) : portfolio.error ? (
@@ -91,78 +73,71 @@ export function PortfolioView({ name }: { name: string }) {
   );
 }
 
+function Num({ children }: { children: React.ReactNode }) {
+  return <span className="tabular text-foreground">{children}</span>;
+}
+
+/** "up $12.30 (2.9%)", "down $4.50 (1.1%)" or "level", in the trend's colour. */
+function Change({ pnl, pct }: { pnl: string; pct: number | null }) {
+  const n = decimal(pnl) ?? 0;
+  if (n === 0) return <Num>level</Num>;
+  const pctText = pct === null ? "" : ` (${Math.abs(pct).toFixed(1)}%)`;
+  return (
+    <span className={cn("tabular", n > 0 ? "text-lime-ink" : "text-clay-ink")}>
+      {n > 0 ? "up" : "down"} {money(Math.abs(n))}
+      {pctText}
+    </span>
+  );
+}
+
 function PortfolioBody({ data }: { data: PortfolioOut }) {
   const assets = useAssets();
   const cards = new Map((assets.data ?? []).map((card) => [card.id, card]));
   const pnlPct = decimal(data.unrealized_pnl_pct);
+  const sites = data.holdings.length;
   // A trade made a moment ago on an asset page: show its stake changing here (#216 WP2).
   const account = useWorld().world?.me?.id;
   const [fresh] = useState(() => freshFills(account));
   useEffect(() => forgetFills(fresh.values()), [fresh]);
   return (
     <>
-      <dl className="mt-8 grid gap-4 rounded-3xl bg-card p-6 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
-        <Stat
-          label="Play money available"
-          value={moneyText(data.cash_balance)}
-        />
-        <Stat
-          label="Value of stakes"
-          value={moneyText(data.holdings_value)}
-          sub={
-            pnlPct !== null && (
-              <Delta value={pnlPct} suffix="vs cost" className="text-xs" />
-            )
-          }
-        />
-        <Stat
-          label="Total"
-          value={moneyText(data.total_value)}
-          sub={`${signedMoneyText(data.since_start)} since you started with ${moneyText(
-            data.starting_cash,
-          )}`}
-        />
-        <Stat
-          label="Change in value"
-          value={signedMoneyText(data.unrealized_pnl)}
-          sub="on the stakes you hold, at today's prices"
-        />
-      </dl>
-
-      <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
-        <div className="min-w-0 space-y-8">
-          <Panel title="Stakes" headingLevel="h2">
-            {data.holdings.length === 0 ? (
-              <div className="py-8 text-center">
-                <Sprout
-                  className="mx-auto size-8 text-lime-ink"
-                  aria-hidden="true"
-                />
-                <p className="mt-3 text-muted-foreground">
-                  No stakes yet. Back a site on the Marketplace and it shows
-                  here.
-                </p>
-                <Button asChild className="mt-4">
-                  <Link href="/">Back your first site</Link>
-                </Button>
-              </div>
-            ) : (
-              <Holdings holdings={data.holdings} cards={cards} fresh={fresh} />
-            )}
-          </Panel>
+      <p className="mt-5 max-w-3xl text-xl leading-snug text-pretty text-muted-foreground sm:text-2xl">
+        {sites === 0 ? (
+          <>
+            You have <Num>{moneyText(data.cash_balance)}</Num> to back living
+            land.
+          </>
+        ) : (
+          <>
+            You back{" "}
+            <Num>
+              {sites} {sites === 1 ? "site" : "sites"}
+            </Num>{" "}
+            with stakes worth <Num>{moneyText(data.holdings_value)}</Num>,{" "}
+            <Change pnl={data.unrealized_pnl} pct={pnlPct} /> since you bought.{" "}
+            <Num>{moneyText(data.cash_balance)}</Num> is left to back more.
+          </>
+        )}
+      </p>
+      {sites > 0 && <Impact data={data} />}
+      {sites === 0 ? (
+        <div className="mt-10 grid place-items-center rounded-3xl border border-dashed border-foreground/20 px-6 py-16 text-center">
+          <Sprout className="size-8 text-lime-ink" aria-hidden="true" />
+          <p className="mt-4 max-w-md text-pretty text-muted-foreground">
+            Back a site on the Marketplace and you&apos;ll follow its health
+            here, rating by rating.
+          </p>
+          <Button asChild className="mt-6">
+            <Link href="/">Back your first site</Link>
+          </Button>
         </div>
-        <div className="min-w-0 space-y-8">
-          <Panel title="WildWatch alerts" headingLevel="h2">
-            <AlertsList empty="No alerts yet. When a site you back is re-rated or in the news, you'll hear about it here." />
-          </Panel>
-          <ImpactCard data={data} />
-        </div>
-      </div>
+      ) : (
+        <Holdings holdings={data.holdings} cards={cards} fresh={fresh} />
+      )}
     </>
   );
 }
 
-/** Phones get a card per stake (site, units, value, change); wider screens get the table. */
 function Holdings({
   holdings,
   cards,
@@ -174,9 +149,12 @@ function Holdings({
 }) {
   return (
     <>
-      <ul className="divide-y divide-border sm:hidden" aria-label="Stakes">
+      <ul
+        aria-label="Stakes"
+        className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+      >
         {holdings.map((h) => (
-          <HoldingCard
+          <HoldingTile
             key={h.asset_id}
             holding={h}
             card={cards.get(h.asset_id)}
@@ -184,9 +162,6 @@ function Holdings({
           />
         ))}
       </ul>
-      <div className="-mx-6 hidden overflow-x-auto px-6 sm:block">
-        <HoldingsTable holdings={holdings} cards={cards} fresh={fresh} />
-      </div>
       {showsMap(holdings, cards) && (
         <p className="mt-3 text-[11px] text-muted-foreground">
           Site maps: {IMAGERY_ATTRIBUTION}
@@ -234,7 +209,7 @@ function Units({
   return <CountTo value={h.shares} from={fill?.unitsBefore} format={int} />;
 }
 
-function HoldingCard({
+function HoldingTile({
   holding: h,
   card,
   fill,
@@ -244,39 +219,77 @@ function HoldingCard({
   fill?: FreshFill;
 }) {
   const pnlPct = decimal(h.unrealized_pnl_pct);
+  const icon = useMemo(() => siteIcon(card), [card]);
+  const grade = asGrade(card?.grade);
   return (
     <li
       className={cn(
-        "-mx-2 flex items-center gap-3 rounded-2xl px-2 py-3 first:pt-0 last:pb-0",
+        "group relative flex flex-col overflow-hidden rounded-3xl bg-card shadow-soft transition-shadow focus-within:shadow-lift hover:shadow-lift",
         fill && "ww-wash",
       )}
       data-fresh={fill ? "" : undefined}
     >
-      <SiteIcon card={card} />
-      <div className="min-w-0 flex-1">
+      <div className="relative">
+        {icon ? (
+          <SiteThumb
+            siteKey={icon.siteKey}
+            src={icon.src}
+            outline={icon.outline}
+            alt=""
+            credit={false}
+            className="aspect-[16/10]"
+          />
+        ) : (
+          <div className="grid aspect-[16/10] place-items-center bg-lichen">
+            <Leaf className="size-8 text-lime-ink/70" aria-hidden="true" />
+          </div>
+        )}
+        {grade && (
+          <div className="absolute right-3 bottom-3">
+            <GradeBadge grade={grade} />
+          </div>
+        )}
+      </div>
+      <div className="flex flex-1 flex-col gap-1.5 p-5">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <Link
-            href={assetHref(h.asset_id)}
-            className="font-medium hover:underline"
-          >
-            {h.asset_name}
-          </Link>
+          <h2 className="text-lg leading-tight font-semibold text-balance">
+            <Link
+              href={assetHref(h.asset_id)}
+              className="outline-none after:absolute after:inset-0 after:rounded-3xl focus-visible:after:ring-2 focus-visible:after:ring-ring"
+            >
+              {h.asset_name}
+            </Link>
+          </h2>
           {fill && <FreshBadge fill={fill} />}
         </div>
-        <p className="tabular text-xs text-muted-foreground">
+        <p className="tabular text-sm text-muted-foreground">
           <Units holding={h} fill={fill} /> {h.shares === 1 ? "unit" : "units"}{" "}
-          · {unitPriceText(h.mark_price)}
+          · {unitPriceText(h.mark_price)} a unit
         </p>
+        <dl className="mt-auto flex items-end justify-between gap-3 pt-4">
+          <div>
+            <dt className="sr-only">Value</dt>
+            <dd className="tabular text-2xl font-light">
+              {moneyText(h.market_value)}
+            </dd>
+          </div>
+          <div className="text-right">
+            <dt className="sr-only">Change since you bought</dt>
+            <dd className="tabular text-sm">
+              {decimal(h.unrealized_pnl) ? (
+                <>
+                  {signedMoneyText(h.unrealized_pnl)}
+                  {pnlPct !== null && (
+                    <Delta value={pnlPct} className="ml-1.5 text-xs" />
+                  )}
+                </>
+              ) : (
+                <span className="text-muted-foreground">Level</span>
+              )}
+            </dd>
+          </div>
+        </dl>
       </div>
-      <dl className="text-right">
-        <dt className="sr-only">Value</dt>
-        <dd className="tabular font-medium">{moneyText(h.market_value)}</dd>
-        <dt className="sr-only">Change in value</dt>
-        <dd className="tabular text-xs">
-          {signedMoneyText(h.unrealized_pnl)}
-          {pnlPct !== null && <Delta value={pnlPct} className="ml-1 text-xs" />}
-        </dd>
-      </dl>
     </li>
   );
 }
@@ -289,153 +302,46 @@ function showsMap(holdings: HoldingOut[], cards: Map<string, AssetCard>) {
   });
 }
 
-function SiteIcon({ card }: { card: AssetCard | undefined }) {
-  const icon = useMemo(() => siteIcon(card), [card]);
-  return icon ? (
-    <SiteThumb
-      siteKey={icon.siteKey}
-      src={icon.src}
-      outline={icon.outline}
-      alt=""
-      frame={ICON_FRAME}
-      credit={false}
-      className="size-10 shrink-0 rounded-xl"
-    />
-  ) : (
-    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-lichen">
-      <Leaf className="size-4 text-lime-ink" aria-hidden="true" />
-    </span>
-  );
+/** A share of land: hectares, or square metres below a tenth of one. */
+function area(hectares: number): string {
+  return hectares >= 0.1
+    ? `${hectares.toFixed(2)} ha`
+    : `${int(Math.max(1, Math.round(hectares * 10_000)))} m²`;
 }
 
-function HoldingsTable({
-  holdings,
-  cards,
-  fresh,
-}: {
-  holdings: HoldingOut[];
-  cards: Map<string, AssetCard>;
-  fresh: Map<string, FreshFill>;
-}) {
-  return (
-    <Table scrollLabel="Your stakes, by site">
-      <TableHeader>
-        <TableRow>
-          <TableHead>Site</TableHead>
-          <TableHead>Grade</TableHead>
-          <TableHead className="text-right">Units</TableHead>
-          <TableHead className="text-right">Avg cost</TableHead>
-          <TableHead className="text-right">Price</TableHead>
-          <TableHead className="text-right">Value</TableHead>
-          <TableHead className="text-right">Change</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {holdings.map((h) => {
-          const card = cards.get(h.asset_id);
-          const grade = asGrade(card?.grade);
-          const pnlPct = decimal(h.unrealized_pnl_pct);
-          const fill = fillFor(h, fresh);
-          return (
-            <TableRow
-              key={h.asset_id}
-              className={cn(fill && "ww-wash")}
-              data-fresh={fill ? "" : undefined}
-            >
-              <TableCell>
-                <div className="flex items-center gap-3">
-                  <Link
-                    href={assetHref(h.asset_id)}
-                    className="flex items-center gap-3 font-medium hover:underline"
-                  >
-                    <SiteIcon card={card} />
-                    {h.asset_name}
-                  </Link>
-                  {fill && <FreshBadge fill={fill} />}
-                </div>
-              </TableCell>
-              <TableCell>
-                {grade ? (
-                  <GradeBadge grade={grade} size="sm" />
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </TableCell>
-              <TableCell className="tabular text-right">
-                <Units holding={h} fill={fill} />
-              </TableCell>
-              <TableCell className="tabular text-right">
-                {unitPriceText(h.avg_cost)}
-              </TableCell>
-              <TableCell className="tabular text-right">
-                {unitPriceText(h.mark_price)}
-              </TableCell>
-              <TableCell className="tabular text-right">
-                {moneyText(h.market_value)}
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="tabular">
-                  {signedMoneyText(h.unrealized_pnl)}
-                </div>
-                {pnlPct !== null && (
-                  <Delta value={pnlPct} className="text-xs" />
-                )}
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
-  );
-}
-
-function ImpactCard({ data }: { data: PortfolioOut }) {
+/** The holder's share of the land, carbon and services their stakes stand for, in one line. */
+function Impact({ data }: { data: PortfolioOut }) {
   const hectares = decimal(data.impact.ha_protected) ?? 0;
   const carbon = decimal(data.impact.t_co2_stored) ?? 0;
   const services = decimal(data.impact.services_usd_yr) ?? 0;
-  const known = hectares > 0 || carbon > 0 || services > 0;
-  return (
-    <section
-      aria-labelledby="impact-title"
-      className="relative self-start overflow-hidden rounded-3xl bg-machine p-6 text-machine-ink shadow-soft"
-    >
-      <h2 id="impact-title" className="text-base font-semibold">
-        Your share of the impact
-      </h2>
-      <p className="mt-1 text-sm text-machine-muted">
-        Your units as a share of each site&apos;s land, stored carbon and
-        nature&apos;s services.
+  if (hectares <= 0 && carbon <= 0 && services <= 0)
+    return (
+      <p className="mt-4 text-sm text-muted-foreground">
+        Impact figures for your stakes aren&apos;t available yet.
       </p>
-      {known ? (
-        <ul className="mt-5 space-y-4">
-          <ImpactLine
-            icon={<Trees className="size-5" aria-hidden="true" />}
-            tone="bg-lime"
-            value={`${hectares.toFixed(2)} ha`}
-            label="of living land supported"
-          />
-          <ImpactLine
-            icon={<Leaf className="size-5" aria-hidden="true" />}
-            tone="bg-lilac"
-            value={`${carbon.toFixed(1)} tCO₂`}
-            label="stored carbon, attributable share"
-          />
-          <ImpactLine
-            icon={<Sprout className="size-5" aria-hidden="true" />}
-            tone="bg-sky"
-            value={`${money(services)}/yr`}
-            label="of nature's services"
-          />
-        </ul>
-      ) : (
-        <p className="mt-5 text-sm text-machine-muted">
-          {data.holdings.length === 0
-            ? "Back a site to see the hectares, carbon and services your stake supports."
-            : "Impact figures for your stakes aren't available yet."}
-        </p>
-      )}
-      <p className="mt-5 text-xs text-machine-muted">
-        Attribution only. Not a carbon credit or offset.
+    );
+  return (
+    <section aria-label="Your share of the impact" className="mt-6">
+      <ul className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
+        <ImpactLine
+          icon={<Trees className="size-4" aria-hidden="true" />}
+          value={area(hectares)}
+          label="of living land"
+        />
+        <ImpactLine
+          icon={<Leaf className="size-4" aria-hidden="true" />}
+          value={`${carbon.toFixed(1)} tCO₂`}
+          label="stored carbon"
+        />
+        <ImpactLine
+          icon={<Sprout className="size-4" aria-hidden="true" />}
+          value={`${money(services)}/yr`}
+          label="of nature's services"
+        />
+      </ul>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Your share, by the units you hold. Attribution only, not a carbon credit
+        or offset.
       </p>
     </section>
   );
@@ -443,26 +349,20 @@ function ImpactCard({ data }: { data: PortfolioOut }) {
 
 function ImpactLine({
   icon,
-  tone,
   value,
   label,
 }: {
   icon: React.ReactNode;
-  tone: string;
   value: string;
   label: string;
 }) {
   return (
-    <li className="flex items-center gap-3">
-      <span
-        className={`grid size-10 place-items-center rounded-2xl text-machine ${tone}`}
-      >
+    <li className="flex items-center gap-2">
+      <span className="grid size-7 place-items-center rounded-full bg-lime/50 text-lime-ink">
         {icon}
       </span>
-      <div>
-        <div className="tabular text-2xl font-light">{value}</div>
-        <div className="text-xs text-machine-muted">{label}</div>
-      </div>
+      <span className="tabular font-medium">{value}</span>
+      <span className="text-muted-foreground">{label}</span>
     </li>
   );
 }

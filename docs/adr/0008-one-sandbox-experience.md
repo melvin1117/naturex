@@ -43,11 +43,16 @@ Accepted (2026-10-25). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) 
 - `POST /assets/{id}/ipo` stays for the operator's tools and older clients; the sandbox doesn't call it.
 - The old opening-offer and verification pages (`/steward/assets/<id>/ipo` and `/verify`) redirect to the flow's Offer and Prove steps. The Reviewer's **Reviews** page opens on **Offers**; land documents are under **Documents**.
 
-## Consequences
+### 6. Communities and Your stakes say how things stand, in a sentence and a picture
+- **Communities** (`/steward`) lists the communities you're in, each with a glimpse of its land and how many of its sites are on the Marketplace; **Start a community** opens the same form a newcomer sees (`?new=1`). Opening one (`?community=<id>`) shows its name, one sentence with its numbers (sites on the Marketplace, supporters, the fund) and a tile per site: its satellite view, where it stands (Draft, Being rated, Waiting for the Reviewer, Sent back with the note, On the Marketplace with its price) and the one place it leads. Drafts are withdrawn from their tile; **List more land** closes the grid.
+- **Removed from the community's page:** the featured listing, the stat strip, Recovery plan, Quarterly payouts, Supporters, Members (still under **Edit community**), its alerts (the bell has them), decision notices (the tile and the flow's Prove step say it) and the community switcher. The **Listings** page redirects to the community's page.
+- **Your stakes** opens on one sentence: how many sites you back, what the stakes are worth, up or down since you bought, and the cash left; then the impact in one line and a tile per stake. The stat strip, the table and the alerts panel are gone.
+
+
 - **Good:** a judge reads what WildWorth is in one sentence, reaches a working app in one click and never meets a sign-in. Every page has the same three choices.
 - **Real accounts are dormant, not deleted.** The backend's auth routes, the live world and their tests stay; nothing in the frontend reaches them. Bringing accounts back later means a header for them, not a rebuild.
 - **The live world has no public page.** The deployed URL shows the welcome, the story and the sandbox only.
-- **Slices still to come** (each its own PR): Communities and Your stakes; then removing the code nothing reaches (the scripted prototype, its tour) and updating the specs.
+- **Slice still to come** (its own PR): removing the code nothing reaches (the scripted prototype, its tour, the old opening-offer and verification screens, the sign-in path), rewriting the E2E journey for the sandbox, and updating the specs.
 
 ## Alternatives considered
 - **Keep a read-only live Marketplace beside the sandbox:** two kinds of page to explain to a judge for little gain. Rejected for the hackathon.

@@ -70,7 +70,9 @@ export function FailureAlert({
         <p>{failure.message}</p>
         {failure.limitReached && (
           <Button asChild variant="outline" size="sm" className="mt-2">
-            <Link href={listingsHref(community.id)}>See your listings</Link>
+            <Link href={listingsHref(community.id)}>
+              See your community&apos;s sites
+            </Link>
           </Button>
         )}
         {failure.signIn && (

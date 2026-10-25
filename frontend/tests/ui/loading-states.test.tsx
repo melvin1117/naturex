@@ -202,7 +202,6 @@ describe("route loading states", () => {
       "/steward/assets/x",
       "/steward/community",
       "/steward/list",
-      "/steward/listings",
     ];
     // All of them live in the sandbox (`/sandbox/*`): there's no sign-in app outside it.
     expect(LOADERS.map((l) => l.route).sort()).toEqual(
@@ -245,7 +244,6 @@ describe("route loading states", () => {
     ["/admin", "Time Machine"],
     ["/admin/verifications", "Reviews"],
     ["/portfolio", "Your stakes"],
-    ["/steward/listings", "Listings"],
   ])("%s draws its real heading", (route, heading) => {
     const { Loading } = LOADERS.find((l) => l.route === inSandbox(route))!;
     render(<Loading />, { wrapper: Shell });

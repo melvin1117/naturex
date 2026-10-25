@@ -50,7 +50,7 @@ function renderPortfolio(routes: Routes = {}) {
   });
   render(
     <WorldProvider dataLayer={layer}>
-      <PortfolioView name="Rosa" />
+      <PortfolioView />
     </WorldProvider>,
   );
   return backend;
@@ -75,11 +75,11 @@ const HELD = portfolio({
   since_start: "-1.50",
 });
 
-/** The wetland's row in the wide-screen table (phones get the card list instead). */
+/** The wetland's tile among the stakes. */
 async function tableRow() {
-  return within(await screen.findByRole("table"))
+  return within(await screen.findByRole("list", { name: "Stakes" }))
     .getByRole("link", { name: "Xochimilco Wetland" })
-    .closest("tr")!;
+    .closest("li")!;
 }
 
 beforeEach(() => {
@@ -105,11 +105,7 @@ describe("PortfolioView", () => {
     expect(row).toHaveClass("ww-wash");
     expect(row).toHaveAttribute("data-fresh");
     // Its units land on the API's value (reduced motion in jsdom: at once).
-    expect(within(row).getByText("10")).toBeInTheDocument();
-    const card = screen
-      .getByRole("list", { name: "Stakes" })
-      .querySelector("li")!;
-    expect(card).toHaveClass("ww-wash");
+    expect(row).toHaveTextContent("10 units");
     // Shown once: coming back later doesn't replay it.
     await waitFor(() => expect(freshFills(ME).size).toBe(0));
   });
@@ -131,12 +127,7 @@ describe("PortfolioView", () => {
 
     const row = await tableRow();
     expect(within(row).getByText("−40 units just now")).toBeVisible();
-    expect(within(row).getByText("10")).toBeInTheDocument();
-    expect(
-      within(screen.getByRole("list", { name: "Stakes" })).getByText(
-        "−40 units just now",
-      ),
-    ).toBeVisible();
+    expect(row).toHaveTextContent("10 units");
   });
 
   it("never shows another account's fill", async () => {
@@ -172,67 +163,25 @@ describe("PortfolioView", () => {
     expect(await tableRow()).not.toHaveClass("ww-wash");
   });
 
-  it("shows my alerts next to my stakes (T75)", async () => {
-    renderPortfolio({
-      "GET /alerts": () =>
-        json({
-          alerts: [
-            {
-              id: "11111111-1111-4111-8111-111111111111",
-              asset_id: ASSET_ID,
-              asset_name: "Xochimilco Wetland",
-              kind: "health_change",
-              title: "Xochimilco Wetland: health fell 6.0 points",
-              message: "Health 76.2 → 70.2 (−6.0 points).",
-              severity: 3,
-              url: null,
-              report_id: null,
-              created_at: "2026-10-19T08:00:00Z",
-              read_at: null,
-            },
-          ],
-          unread_count: 1,
-          next_before: null,
-        }),
-    });
-
-    const alerts = await screen.findByRole("list", { name: "Alerts" });
-    expect(
-      within(alerts).getByText("Xochimilco Wetland: health fell 6.0 points"),
-    ).toBeVisible();
-    expect(screen.getByRole("button", { name: "Mark all read" })).toBeVisible();
-  });
-
-  it("shows cash, totals and each holding exactly as the API sends them", async () => {
+  it("says in one sentence what's held, how it's doing and what's left", async () => {
     renderPortfolio({ "GET /portfolio": () => json(HELD) });
 
     const row = await tableRow();
     expect(
-      screen.getByText("Play money available").nextSibling,
-    ).toHaveTextContent("$9,799.80");
-    expect(screen.getByText("Value of stakes").nextSibling).toHaveTextContent(
-      "$198.70",
-    );
-    expect(screen.getByText("Total").nextSibling).toHaveTextContent(
-      "$9,998.50",
-    );
-    expect(screen.getByText("Total").parentElement).toHaveTextContent(
-      "−$1.50 since you started with $10,000.00",
+      screen.getByText((_, el) =>
+        el?.tagName === "P"
+          ? el.textContent ===
+            "You back 1 site with stakes worth $198.70, down $1.50 (0.8%) since you bought. $9,799.80 is left to back more."
+          : false,
+      ),
+    ).toBeVisible();
+    expect(row).toHaveTextContent("10 units · $20.00 a unit");
+    expect(within(row).getByText("Value").nextSibling).toHaveTextContent(
+      "$100.00",
     );
     expect(
-      screen.getByText("Change in value", { selector: "dt:not(.sr-only)" })
-        .nextSibling,
+      within(row).getByText("Change since you bought").nextSibling,
     ).toHaveTextContent("−$1.50");
-    const cells = within(row)
-      .getAllByRole("cell")
-      .map((c) => c.textContent);
-    expect(cells.slice(2)).toEqual([
-      "10",
-      "$19.00",
-      "$20.00",
-      "$100.00",
-      "−$1.50down −0.8%",
-    ]);
     expect(within(row).getByRole("link")).toHaveAttribute(
       "href",
       `/asset/${ASSET_ID}`,
@@ -240,6 +189,23 @@ describe("PortfolioView", () => {
     await waitFor(() =>
       expect(within(row).getByText("BBB")).toBeInTheDocument(),
     );
+  });
+
+  it("says a stake that hasn't moved is level", async () => {
+    renderPortfolio({
+      "GET /portfolio": () =>
+        json({
+          ...HELD,
+          holdings: [
+            holding({ unrealized_pnl: "0.00", unrealized_pnl_pct: "0.00" }),
+          ],
+          unrealized_pnl: "0.00",
+          unrealized_pnl_pct: "0.00",
+        }),
+    });
+    const row = await tableRow();
+    expect(within(row).getByText("Level")).toBeVisible();
+    expect(screen.getByText(/level/, { selector: "span" })).toBeVisible();
   });
 
   it("writes losses with a true minus sign", async () => {
@@ -254,10 +220,7 @@ describe("PortfolioView", () => {
 
     const row = await tableRow();
     expect(row).toHaveTextContent("\u2212$1,234.50");
-    expect(
-      screen.getByText("Change in value", { selector: "dt:not(.sr-only)" })
-        .nextSibling,
-    ).toHaveTextContent(/^\u2212\$1,234\.50$/);
+    expect(screen.getByText(/^down \$1,234\.50/)).toBeVisible();
   });
 
   it("shows per-unit prices to 4 decimals", async () => {
@@ -270,32 +233,7 @@ describe("PortfolioView", () => {
     });
 
     const row = await tableRow();
-    expect(row).toHaveTextContent("$21.4723");
-    expect(row).toHaveTextContent("$21.5001");
-  });
-
-  it("lists a card per holding on phones with its value and P&L", async () => {
-    renderPortfolio({ "GET /portfolio": () => json(HELD) });
-
-    const list = await screen.findByRole("list", { name: "Stakes" });
-    // CSS shows the list below `sm` and the table from `sm` up.
-    expect(list).toHaveClass("sm:hidden");
-    expect(screen.getByRole("table").parentElement?.parentElement).toHaveClass(
-      "hidden",
-      "sm:block",
-    );
-    const card = within(list).getByRole("listitem");
-    expect(within(card).getByRole("link")).toHaveAttribute(
-      "href",
-      `/asset/${ASSET_ID}`,
-    );
-    expect(card).toHaveTextContent("10 units · $20.00");
-    expect(within(card).getByText("Value").nextSibling).toHaveTextContent(
-      "$100.00",
-    );
-    expect(
-      within(card).getByText("Change in value").nextSibling,
-    ).toHaveTextContent("−$1.50");
+    expect(row).toHaveTextContent("$21.5001 a unit");
   });
 
   it("shows a new listing's boundary map as its thumbnail, with the map credit", async () => {
@@ -314,7 +252,7 @@ describe("PortfolioView", () => {
     await waitFor(() =>
       expect(row.querySelector("[data-boundary-map] img")).not.toBeNull(),
     );
-    // Too small for the map's own credit: it's under the stakes instead.
+    // One credit for every map, under the stakes, not one per tile.
     expect(within(row).queryByText(IMAGERY_ATTRIBUTION)).toBeNull();
     expect(screen.getByText(`Site maps: ${IMAGERY_ATTRIBUTION}`)).toBeVisible();
   });
@@ -361,7 +299,14 @@ describe("PortfolioView", () => {
       name: "Back your first site",
     });
     expect(link).toHaveAttribute("href", "/");
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        (_, el) =>
+          el?.tagName === "P" &&
+          el.textContent === "You have $10,000.00 to back living land.",
+      ),
+    ).toBeVisible();
+    expect(screen.queryByRole("list", { name: "Stakes" })).toBeNull();
   });
 
   it("says impact figures aren't available while the API reports none", async () => {

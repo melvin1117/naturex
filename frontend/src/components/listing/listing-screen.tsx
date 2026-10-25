@@ -355,7 +355,7 @@ function ListingWizard({
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
-        Community home
+        {community.name}
       </Link>
       <h1 className="mt-3 font-serif text-5xl leading-none tracking-tight sm:text-6xl">
         {asset ? asset.name : "List your land"}
