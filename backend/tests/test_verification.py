@@ -142,6 +142,13 @@ def test_private_fingerprints_are_keyed_per_world_and_commitments_are_randomised
     assert commitment_of(b"\x01" * 32, data) != commitment_of(b"\x02" * 32, data)
 
 
+def test_the_fingerprint_key_never_changes() -> None:
+    """Stored fingerprints were keyed with this domain and can't be recomputed (write-once), so a
+    change would stop a reused document being caught: see `world_document_key`."""
+    key = world_document_key("test-secret", UUID("44444444-4444-4444-4444-444444444444"))
+    assert key.hex() == "d665d66a984bd0b9f996691b44be0db375c1ace81e6e77705b8054a3d5f08ca8"
+
+
 def test_production_needs_a_document_fingerprint_secret() -> None:
     with pytest.raises(RuntimeError, match="DOCUMENT_FINGERPRINT_SECRET"):
         document_fingerprint_secret(Settings(_env_file=None, environment="production"))  # type: ignore[call-arg]

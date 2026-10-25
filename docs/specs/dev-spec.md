@@ -485,7 +485,8 @@ create table ledger_entries (         -- Nature Ledger: append-only, hash-chaine
   created_at timestamptz default now(),
   unique (asset_id, seq)
 );
--- Append-only at DB level (migration 0003): a trigger rejects UPDATE, DELETE and TRUNCATE.
+-- Append-only at DB level (migration 0003; the setting below was renamed in 0030): a trigger
+-- rejects UPDATE, DELETE and TRUNCATE.
 -- Only a sandbox reset (T31) may delete, by opting in for its own transaction:
 --   SET LOCAL wildworth.allow_ledger_delete = 'on';
 

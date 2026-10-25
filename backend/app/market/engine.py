@@ -413,7 +413,9 @@ def seeded_shock(key: str) -> Decimal:
 
     The same key always gives the same draw, so a re-anchor can be recomputed from its ledger
     entry and a replayed re-rate never moves the price differently. 6 decimal places."""
-    seed = int.from_bytes(hashlib.sha256(f"wildworth-reanchor:{key}".encode()).digest()[:8], "big")
+    # The prefix keeps the project's old working name on purpose: it's part of every stored
+    # re-anchor, so changing it would stop past shocks being reproducible from their report IDs.
+    seed = int.from_bytes(hashlib.sha256(f"naturex-reanchor:{key}".encode()).digest()[:8], "big")
     draw = Decimal(str(random.Random(seed).gauss(0.0, float(NOISE_SIGMA))))
     return clamp_shock(draw).quantize(Decimal("0.000001"))
 

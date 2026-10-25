@@ -15,7 +15,7 @@
       "value_high": "2669511",
       "data_version": "2026Q3",
       "health_score": "76.2",
-      "method_version": "wildworth-rating/1.0 (T19)",
+      "method_version": "naturex-rating/1.0 (T19)",
       "summary_sha256": "341dffee2dad2dc954233458652d4323be0d0e8bd598108cccefec84094bba6e",
       "value_breakdown": {
         "water_supply": 461645,

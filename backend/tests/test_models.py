@@ -221,42 +221,57 @@ def test_ledger_is_append_only() -> None:
     command.upgrade(cfg, "head")
 
 
-FUNCTIONS_READING_THE_SETTING = """
-    SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-    WHERE n.nspname = current_schema() AND p.prosrc LIKE :pattern ORDER BY 1
+DEFINITIONS_READING = """
+    SELECT pg_get_functiondef(p.oid) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = current_schema() AND p.prosrc LIKE :pattern ORDER BY p.proname
 """
 
 
 @requires_db
-def test_the_ledger_delete_setting_is_renamed_and_the_rename_reverses() -> None:
-    """0030 rewrites every trigger function that reads the opt-in to its new name, and its
-    downgrade gives them the old one back."""
+def test_0030_renames_the_ledger_delete_setting_and_nothing_else() -> None:
+    """0030 rewrites every trigger function that reads the opt-in, changing only the setting's
+    name; afterwards only the new name opens the ledger, and the downgrade reverses both."""
     cfg = alembic_cfg()
     command.upgrade(cfg, "head")
     engine = create_engine(get_settings().database_url)
+    old, new = "naturex.allow_ledger_delete", "wildworth.allow_ledger_delete"
 
-    def reading(name: str) -> list[str]:
+    def definitions(setting: str) -> list[str]:
         with engine.connect() as conn:
-            found = conn.execute(text(FUNCTIONS_READING_THE_SETTING), {"pattern": f"%{name}%"})
+            found = conn.execute(text(DEFINITIONS_READING), {"pattern": f"%{setting}%"})
             return list(found.scalars())
 
-    old, new = "naturex.allow_ledger_delete", "wildworth.allow_ledger_delete"
+    def opens_the_ledger(setting: str) -> bool:
+        """Whether a transaction with `setting` on may delete the seeded ledger (rolled back)."""
+        with engine.connect() as conn:
+            outer = conn.begin()
+            try:
+                with Session(bind=conn, join_transaction_mode="create_savepoint") as session:
+                    seed(session)
+                attempt = conn.begin_nested()
+                try:
+                    conn.execute(text(f"SET LOCAL {setting} = 'on'"))
+                    return bool(conn.execute(text("DELETE FROM ledger_entries")).rowcount)
+                except DBAPIError:
+                    return False
+                finally:
+                    attempt.rollback()
+            finally:
+                outer.rollback()
+
     try:
-        renamed = reading(new)
-        assert renamed == [
-            "document_fingerprints_retire_only",
-            "ledger_entries_append_only",
-            "listing_documents_write_once",
-            "verification_immutable",
-            "verification_runs_write_once",
-        ]
-        assert reading(old) == []
+        renamed = definitions(new)
+        assert len(renamed) == 5 and definitions(old) == []
+        assert (opens_the_ledger(new), opens_the_ledger(old)) == (True, False)
+
         command.downgrade(cfg, "0029")
-        assert (reading(old), reading(new)) == (renamed, [])
+        original = definitions(old)
+        assert definitions(new) == []
+        assert [definition.replace(old, new) for definition in original] == renamed
+        assert (opens_the_ledger(old), opens_the_ledger(new)) == (True, False)
     finally:
         command.upgrade(cfg, "head")
         engine.dispose()
-    assert (reading(new), reading(old)) == (renamed, [])
 
 
 def test_world_id_present_on_mutable_models() -> None:
