@@ -55,7 +55,6 @@ describe("skeletonKind", () => {
     ["/portfolio", "portfolio"],
     ["/portfolio/", "portfolio"],
     ["/steward", "steward-home"],
-    ["/steward/assets/abc/ipo", "ipo"],
     ["/steward/assets/abc/verify", "screen"],
     ["/steward/assets/abc/verify", "screen"],
     ["/steward/assets/abc/evidence", "screen"],

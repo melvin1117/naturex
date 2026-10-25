@@ -176,7 +176,11 @@ export function MarketBoard() {
               ))}
             </ToggleGroup>
             <Select value={sort} onValueChange={(v) => isSort(v) && setSort(v)}>
-              <SelectTrigger className="w-44" aria-label="Sort sites">
+              {/* Its name is what it shows, so speech and sight agree (axe: label in name). */}
+              <SelectTrigger
+                className="w-44"
+                aria-label={`Sort: ${SORTS[sort].label}`}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

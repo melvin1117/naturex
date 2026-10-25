@@ -247,7 +247,7 @@ describe("the sandbox header", () => {
       "POST /demo/persona": () => json(demoWorld("admin")),
     });
     const trigger = await screen.findByRole("button", {
-      name: /You're Arjun \(Supporter\)/,
+      name: /You're Arjun, Supporter/,
     });
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
     fireEvent.click(await screen.findByRole("menuitem", { name: /Reviewer/ }));
@@ -267,7 +267,7 @@ describe("the sandbox header", () => {
       "GET /alerts": NO_ALERTS,
     });
     fireEvent.pointerDown(
-      await screen.findByRole("button", { name: /You're Rosa \(Community\)/ }),
+      await screen.findByRole("button", { name: /You're Rosa, Community/ }),
       { button: 0, ctrlKey: false },
     );
     expect(

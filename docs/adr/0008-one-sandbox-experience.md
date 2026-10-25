@@ -53,7 +53,7 @@ Accepted (2026-10-25). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) 
 - **Good:** a judge reads what WildWorth is in one sentence, reaches a working app in one click and never meets a sign-in. Every page has the same three choices.
 - **Real accounts are dormant, not deleted.** The backend's auth routes, the live world and their tests stay; nothing in the frontend reaches them. Bringing accounts back later means a header for them, not a rebuild.
 - **The live world has no public page.** The deployed URL shows the welcome, the story and the sandbox only.
-- **Slice still to come** (its own PR): removing the code nothing reaches (the scripted prototype, its tour, the old opening-offer and verification screens, the sign-in path), rewriting the E2E journey for the sandbox, and updating the specs.
+- **Cleaned up:** the old opening-offer and verification screens, the control room, the sign-in helpers and the app switcher's rules are gone, and the E2E is one sandbox journey plus an axe pass over every page. **Still in the code, unreached:** the scripted prototype (`lib/prototype`, the `components/proto` views a page shows before the sandbox has a session) and `RequireAccount`'s sign-in redirect; they can go once the sandbox gate is the only way in.
 
 ## Alternatives considered
 - **Keep a read-only live Marketplace beside the sandbox:** two kinds of page to explain to a judge for little gain. Rejected for the hackathon.

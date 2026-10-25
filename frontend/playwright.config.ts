@@ -13,7 +13,7 @@ import {
 const CI = Boolean(process.env.CI);
 
 /**
- * The real-account E2E (T74): Playwright starts the real stack on its own ports, with a fresh
+ * The sandbox E2E (T74): Playwright starts the real stack on its own ports, with a fresh
  * database (scripts/e2e-backend.sh) and a production build of the frontend in `.next-e2e`, and
  * stops both afterwards. `USE_MOCKS=true`, so no keys are needed. Run with `make e2e`.
  * E2E_SKIP_BUILD=1 reuses the last `.next-e2e` build (same E2E_API_PORT) to iterate faster.
@@ -55,7 +55,7 @@ export default defineConfig({
       name: "web",
       // `next start` directly: through pnpm, the stop at the end logs a misleading failure.
       command: `${process.env.E2E_SKIP_BUILD === "1" ? "" : "pnpm build && "}exec ./node_modules/.bin/next start --port ${WEB_PORT}`,
-      url: `${WEB_ORIGIN}/login`,
+      url: `${WEB_ORIGIN}/`,
       env: {
         // The /api proxy target is baked in at build time (next.config.ts).
         BACKEND_URL: API_URL,

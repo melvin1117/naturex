@@ -189,9 +189,9 @@ describe("Marketplace", () => {
     await screen.findByRole("region", { name: "All sites" });
 
     expect(screen.getByRole("radio", { name: "AAA–A" })).toBeChecked();
-    expect(
-      screen.getByRole("combobox", { name: "Sort sites" }),
-    ).toHaveTextContent("Sort: Annual value");
+    expect(screen.getByRole("combobox", { name: /^Sort: / })).toHaveTextContent(
+      "Sort: Annual value",
+    );
     const names = within(grid())
       .getAllByRole("link")
       .map((l) => l.querySelector("h3")?.textContent);
@@ -212,9 +212,9 @@ describe("Marketplace", () => {
 
     expect(screen.getByRole("radio", { name: "All" })).toBeChecked();
     expect(within(grid()).getAllByRole("link")).toHaveLength(3);
-    expect(
-      screen.getByRole("combobox", { name: "Sort sites" }),
-    ).toHaveTextContent("Sort: Best grade");
+    expect(screen.getByRole("combobox", { name: /^Sort: / })).toHaveTextContent(
+      "Sort: Best grade",
+    );
   });
 
   it("draws each sparkline from the card, with no per-card price request", async () => {

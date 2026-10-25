@@ -60,9 +60,9 @@ Living ecosystems produce enormous value (water filtration, flood protection, ca
 | A4 | I upload field evidence | Up to 5 geotagged photos (audio is post-hackathon); analysis appears in report; confidence increases |
 | A5 | If not eligible, I get a stewardship plan | 3–5 concrete, location-specific recommendations |
 | A6 | My listing moves through clear states | draft → rating → listed / needs evidence / ineligible; each state shows the next action; admins can suspend and resume; every change is in the ledger |
-| A7 | I launch the IPO | Owner only, once the asset is listed: choose shares offered and % retained, see the price formula step by step, confirm; trading opens in the Exchange |
+| A7 | I launch the IPO | Owner only, once the asset is listed: choose shares offered and % retained, see the price formula step by step, and send the offer for review; the Reviewer's approval opens trading on the Marketplace ([ADR-0008](../adr/0008-one-sandbox-experience.md) §5) |
 | A9 | My listing is verified, visibly | I upload documents (title or agrarian certificate, assembly minutes); an automated checklist shows each result; an admin approves or rejects with a reason; the decision is in the ledger; in the live world the IPO needs `verified`, any later change to the listing resets it, and revoking suspends trading. **For the hackathon deployment and tests, a labelled demo mode** generates fictional sample documents for the listing and auto-approves when every check passes; the badge and panel say "Demo verification: sample documents, no real ownership checked" Investors see a precise badge and a public "How this listing was verified" panel, including what was **not** checked ([ADR-0006](../adr/0006-listing-verification.md)) |
-| A8 | I see what the community earns | Steward home shows the wallet, IPO proceeds, holders, quarterly payouts, alerts and stewardship actions |
+| A8 | I see what the community earns | The community's page says, in one sentence, how many sites are on the Marketplace, how many supporters back them and what the fund holds, and shows where each site stands ([ADR-0008](../adr/0008-one-sandbox-experience.md) §6) |
 
 ### Epic B — AI rating & report
 | ID | Story | Acceptance criteria |
@@ -126,7 +126,7 @@ Principle: **one flawless end-to-end story on 3 real sites** beats a wide app wi
 | K1 | I sign up, sign in and sign out | Email + password; generic login errors; rate-limited; signing out ends the session immediately, open live streams included (registration enumeration is an accepted risk without email verification) |
 | K2 | My session is safe | Server-side session in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie; no tokens in browser storage; cross-site writes rejected |
 | K3 | I can only do what my role allows | Every API route, reads included, checks the ADR-0005 matrix; 401 / 403 with a reason / 404 across worlds; a test fails if a route has no check; the database rejects rows that link across worlds |
-| K4 | Each audience has its own app | Exchange at `/` and Steward at `/steward`, each with its own navigation; an app switcher for community members |
+| K4 | Each audience has its own app | *Superseded by [ADR-0008](../adr/0008-one-sandbox-experience.md):* one app inside the visitor's sandbox (Marketplace, Communities, Your stakes; Reviews for the Reviewer), with a person menu instead of sign-in |
 | K5 *(should)* | I can delete my account | Credentials and sessions deleted, name pseudonymised; market history stays consistent |
 
 ### Epic G — Engineering visibility (for Technological Implementation score)

@@ -141,7 +141,9 @@ export function StoryChain({
   return (
     <section
       aria-label="How the land's health reaches its community"
-      className="pointer-events-auto flex max-w-full items-stretch overflow-x-auto rounded-3xl bg-machine p-2 text-machine-ink shadow-[0_18px_44px_-16px_rgba(0,0,0,0.65)]"
+      // On a phone the chain scrolls sideways: the keyboard can reach and scroll it too.
+      tabIndex={0}
+      className="pointer-events-auto flex max-w-full items-stretch overflow-x-auto rounded-3xl bg-machine p-2 text-machine-ink shadow-[0_18px_44px_-16px_rgba(0,0,0,0.65)] outline-none focus-visible:ring-2 focus-visible:ring-lime"
     >
       <Cell label="Land health" flash={flash.health}>
         {chain.health ? (

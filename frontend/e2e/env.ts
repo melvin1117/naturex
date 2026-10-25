@@ -1,5 +1,5 @@
 /**
- * Where the real-account E2E (T74) runs: its own ports and its own database, so it never
+ * Where the sandbox E2E (T74) runs: its own ports and its own database, so it never
  * touches a developer's servers or the `wildworth` database. Read by playwright.config.ts (to
  * start the servers) and by the specs; override with E2E_* environment variables.
  */

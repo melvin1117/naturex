@@ -52,7 +52,7 @@ check-client:
 eval:
 	@echo "eval: harness lands in T47; to run the News Scout eval now, see evals/README.md" >&2; exit 1
 
-# T74 real-account E2E: Playwright starts the API and a production frontend build on their own
+# T74 sandbox E2E: Playwright starts the API and a production frontend build on their own
 # ports (8100, 3100) with a freshly recreated wildworth_e2e database, then stops them. Start
 # Postgres first: docker compose up -d. Override with E2E_API_PORT, E2E_WEB_PORT,
 # E2E_DATABASE_URL; E2E_SKIP_BUILD=1 reuses the last build. Report: frontend/playwright-report.

@@ -47,11 +47,16 @@ export function PersonaAvatar({
   persona: SwitchablePersona;
   className?: string;
 }) {
+  // The initial is drawn by CSS, not as text, so it never joins a button's visible name.
+  const initial =
+    persona === "admin" ? undefined : SANDBOX_PERSONAS[persona].name[0];
   return (
     <span
       aria-hidden="true"
+      data-initial={initial}
       className={cn(
         "grid size-8 shrink-0 place-items-center rounded-full text-[13px] font-semibold",
+        initial && "before:content-[attr(data-initial)]",
         persona === "admin"
           ? "bg-machine text-lime"
           : persona === "rosa"
@@ -60,11 +65,7 @@ export function PersonaAvatar({
         className,
       )}
     >
-      {persona === "admin" ? (
-        <BadgeCheck className="size-4" />
-      ) : (
-        SANDBOX_PERSONAS[persona].name[0]
-      )}
+      {persona === "admin" && <BadgeCheck className="size-4" />}
     </span>
   );
 }
@@ -107,11 +108,11 @@ export function PersonaMenu({ persona }: { persona: SwitchablePersona }) {
             variant="ghost"
             className="h-11 gap-2 rounded-full py-1 pr-2.5 pl-1.5"
             disabled={switcher.isPending}
-            aria-label={`You're ${me.name} (${me.role}). Switch person or reset the sandbox`}
+            aria-label={`You're ${me.name}, ${me.role}. Switch person or reset the sandbox`}
           >
             <PersonaAvatar persona={persona} />
             <span className="hidden flex-col items-start leading-tight sm:flex">
-              <span className="text-[13.5px] font-semibold">{me.name}</span>
+              <span className="text-[13.5px] font-semibold">{me.name}</span>{" "}
               <span className="text-[11.5px] font-normal text-muted-foreground">
                 {me.role}
               </span>
