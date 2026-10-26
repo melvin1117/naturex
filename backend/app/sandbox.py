@@ -139,6 +139,17 @@ def _rows(session: Session, model: type[SQLModel], world_id: UUID) -> list[Any]:
     return list(session.exec(select(model).where(_world_col(model) == world_id)).all())
 
 
+def _remap_ids(value: Any, remap: dict[str, str]) -> Any:
+    """`value` (JSON) with every string that is a copied row's ID replaced by the copy's."""
+    if isinstance(value, str):
+        return remap.get(value, value)
+    if isinstance(value, list):
+        return [_remap_ids(item, remap) for item in value]
+    if isinstance(value, dict):
+        return {key: _remap_ids(item, remap) for key, item in value.items()}
+    return value
+
+
 def _ensure_template(session: Session) -> None:
     """Seed the template once. Tolerates two first visitors seeding an empty DB at once."""
     if session.get(World, TEMPLATE_WORLD_ID) is not None:
@@ -160,14 +171,16 @@ def _copy_world_rows(
 ) -> None:
     """Copy every world-scoped row from `source` into `target`, remapping IDs.
 
-    Inserts are flushed table by table in foreign-key order. Orders, sessions and LLM call logs
-    are visitor activity, not template content, so they are not copied. Payouts and listing
-    verification (documents and runs) are activity too, and the source must hold none (T67,
-    T69). With `communities_only`, only the communities'
-    treasuries and members (and their holdings) are copied, so demo investors and the demo
-    admin persona never reach the live world. `keep_personas` maps `persona_key` to a persona
-    already in `target`: that user keeps its ID and gets the source persona's fields, so its
-    sessions survive a reset.
+    Inserts are flushed table by table in foreign-key order. Orders, sessions, LLM call logs and
+    progress events are visitor activity, not template content, so they are not copied (a
+    sealed report keeps its run's trace). Payouts and listing verification (documents and runs)
+    are activity too, and the source must hold none (T67, T69). Field photos, live views and
+    land-cover overlays are copied with their assets, and IDs named inside reports' JSON
+    (cited events and photos, the archived trace) are remapped to the copies. With
+    `communities_only`, only the communities' treasuries and members (and their holdings) are
+    copied, so demo investors and the demo admin persona never reach the live world.
+    `keep_personas` maps `persona_key` to a persona already in `target`: that user keeps its
+    ID and gets the source persona's fields, so its sessions survive a reset.
     """
     # A payout's leaf hashes cover its holders' user IDs, which a copy remaps, so copied lines
     # could never verify against the copied ledger commitment. Templates never pay out; payouts
@@ -186,9 +199,6 @@ def _copy_world_rows(
     ):
         if session.exec(select(model).where(_world_col(model) == source).limit(1)).first():
             raise RuntimeError(f"world {source} holds verification records, which can't be copied")
-    # Field photos (T40) are a community's activity, uploaded in its own world.
-    if session.exec(select(FieldPhoto).where(FieldPhoto.world_id == source).limit(1)).first():
-        raise RuntimeError(f"world {source} holds field photos, which can't be copied")
     ids: dict[UUID, UUID] = {}
     copied_users: set[UUID] | None = None
     if communities_only:
@@ -204,7 +214,8 @@ def _copy_world_rows(
             raise RuntimeError(f"reference {old} was not copied before it was used")
         return ids[old]
 
-    def copy_with_new_id(model: type[SQLModel], *fk_fields: str) -> None:
+    def copy_with_new_id(model: type[SQLModel], *fk_fields: str) -> list[Any]:
+        clones: list[Any] = []
         for row in _rows(session, model, source):
             if model is User and copied_users is not None and row.id not in copied_users:
                 continue
@@ -225,7 +236,9 @@ def _copy_world_rows(
             )
             ids[row.id] = clone.id
             session.add(clone)
+            clones.append(clone)
         session.flush()
+        return clones
 
     copy_with_new_id(User)
     copy_with_new_id(Community, "treasury_user_id")
@@ -244,10 +257,51 @@ def _copy_world_rows(
     session.flush()
     copy_with_new_id(Asset, "community_id", "community_user_id")
     copy_with_new_id(Metrics, "asset_id")
-    copy_with_new_id(Report, "asset_id", "metrics_id")
+    reports = copy_with_new_id(Report, "asset_id", "metrics_id")
     copy_with_new_id(Event, "asset_id")
     copy_with_new_id(Alert, "asset_id", "report_id")
     copy_with_new_id(DocChunk, "asset_id", "report_id", "event_id")
+    for photo in _rows(session, FieldPhoto, source):
+        uploader = photo.uploaded_by
+        clone = FieldPhoto(
+            **_clone(
+                photo,
+                {"id", "world_id"},
+                world_id=target,
+                asset_id=fk(photo.asset_id),
+                # The live world doesn't get the template's people: the photo stays, unsigned.
+                uploaded_by=fk(uploader) if uploader is None or uploader in ids else None,
+                event_id=fk(photo.event_id),
+            )
+        )
+        ids[photo.id] = clone.id
+        session.add(clone)
+    session.flush()
+    for blob in _rows(session, FieldPhotoBlob, source):
+        session.add(
+            FieldPhotoBlob(
+                **_clone(
+                    blob,
+                    {"world_id"},
+                    world_id=target,
+                    photo_id=fk(blob.photo_id),
+                    asset_id=fk(blob.asset_id),
+                )
+            )
+        )
+    for view_model in (AssetView, AssetOverlay):
+        for image in _rows(session, view_model, source):
+            session.add(
+                view_model(
+                    **_clone(image, {"world_id"}, world_id=target, asset_id=fk(image.asset_id))
+                )
+            )
+    remap = {str(old): str(new) for old, new in ids.items()}
+    for report in reports:
+        for field in ("value_breakdown", "flags", "recommendations", "auditor_json"):
+            value = getattr(report, field)
+            if value is not None:
+                setattr(report, field, _remap_ids(value, remap))
 
     for price in _rows(session, Price, source):
         session.add(
