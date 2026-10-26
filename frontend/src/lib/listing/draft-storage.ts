@@ -3,7 +3,7 @@
  * (a 401 while saving) or a reload. Per account and community; the attestation is never kept,
  * so it's confirmed again. Cleared once the draft exists on the server.
  */
-import type { LatLng } from "../prototype/data";
+import type { LatLng } from "../site-data";
 import type { ListingDetailsForm } from "./details";
 import { MAX_BOUNDARY_POINTS } from "./boundary";
 

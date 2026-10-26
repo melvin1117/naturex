@@ -14,7 +14,6 @@ import { WorldProvider } from "@/components/world-provider";
 import type { AssetDetail, RatingRun, ReportOut } from "@/lib/api/types";
 import { listingAction } from "@/lib/community";
 import { createDataLayer } from "@/lib/data-layer";
-import { PrototypeProvider } from "@/lib/prototype/store";
 
 import { dropFocus } from "../focus";
 import {
@@ -83,20 +82,6 @@ vi.mock("@/components/listing/boundary-map", () => ({
     </>
   ),
 }));
-vi.mock("@/components/proto/draw-map", () => ({
-  DrawMap: ({
-    points,
-    onAdd,
-  }: {
-    points: [number, number][];
-    onAdd: (p: [number, number]) => void;
-  }) => (
-    <button type="button" onClick={() => onAdd(CORNERS[points.length % 4])}>
-      Add test corner
-    </button>
-  ),
-}));
-
 beforeAll(() => {
   // jsdom lacks these; Radix dialogs and checkboxes ask for them.
   globalThis.ResizeObserver ??= class {
@@ -218,11 +203,9 @@ function setup(routes: Routes = {}) {
   });
   render(
     <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <StewardCommunityProvider>
-          <ListingScreen />
-        </StewardCommunityProvider>
-      </PrototypeProvider>
+      <StewardCommunityProvider>
+        <ListingScreen />
+      </StewardCommunityProvider>
     </WorldProvider>,
   );
   return backend;
@@ -1284,7 +1267,7 @@ describe("the boundary step (review fixes)", () => {
     expect(await screen.findByText("Ready to rate")).toBeVisible();
   });
 
-  it("a 401 while saving offers sign-in and keeps the listing in this tab", async () => {
+  it("a 401 while saving offers a new sandbox and keeps the listing in this tab", async () => {
     window.history.replaceState({}, "", `/steward/list?community=${SELVA.id}`);
     setup({
       "POST /assets": () => json({ detail: "auth_required" }, { status: 401 }),
@@ -1292,12 +1275,10 @@ describe("the boundary step (review fixes)", () => {
     await fillDetails();
     await drawSquare();
     fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));
-    expect(await screen.findByText("Your session has ended")).toBeVisible();
+    expect(await screen.findByText("Your sandbox has ended")).toBeVisible();
     expect(
-      screen.getByRole("link", { name: /Sign in again/ }).getAttribute("href"),
-    ).toBe(
-      `/login?next=${encodeURIComponent(`/steward/list?community=${SELVA.id}`)}`,
-    );
+      screen.getByRole("link", { name: /Open a new sandbox/ }),
+    ).toHaveAttribute("href", "/sandbox");
     const kept = JSON.parse(
       window.sessionStorage.getItem(
         `ww-listing-draft:${SIGNED_IN_WORLD.me!.id}:${SELVA.id}`,

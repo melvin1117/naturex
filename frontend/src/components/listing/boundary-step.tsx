@@ -10,7 +10,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "cn";
 
-import type { MapFocus } from "@/components/proto/draw-map";
+import type { MapFocus } from "@/lib/listing/boundary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,9 +43,9 @@ import {
   type ListingDetailsForm,
   type ListingFailure,
 } from "@/lib/listing";
-import type { LatLng } from "@/lib/prototype/data";
-import { ha } from "@/lib/prototype/format";
-import { perimeterKm, type PolygonProblemCode } from "@/lib/prototype/geo";
+import type { LatLng } from "@/lib/site-data";
+import { ha } from "@/lib/format";
+import { perimeterKm, type PolygonProblemCode } from "@/lib/geo";
 
 import { BoundaryMap, type Basemap } from "./boundary-map";
 import { DrawingDock, MapActions, PlaceSearch } from "./map-controls";

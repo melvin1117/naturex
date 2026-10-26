@@ -1,6 +1,6 @@
 "use client";
 
-import { FlaskConical, LogIn, TriangleAlert } from "lucide-react";
+import { FlaskConical, RotateCcw, TriangleAlert } from "lucide-react";
 import Link from "@/components/app-link";
 import type { ReactNode } from "react";
 import { cn } from "cn";
@@ -10,7 +10,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { MyCommunity } from "@/lib/api/types";
-import { loginHref } from "@/lib/auth";
 import {
   stewardHomeHref,
   type ListingFailure,
@@ -47,12 +46,6 @@ export function StepCard({
   );
 }
 
-function currentPath(): string {
-  if (typeof window === "undefined") return "/steward/list";
-  const { pathname, search } = window.location;
-  return `${pathname}${search}`;
-}
-
 export function FailureAlert({
   failure,
   community,
@@ -77,10 +70,11 @@ export function FailureAlert({
         )}
         {failure.signIn && (
           <Button asChild variant="outline" size="sm" className="mt-2">
-            <Link href={loginHref(currentPath())}>
-              <LogIn aria-hidden="true" />
-              Sign in again
-            </Link>
+            {/* A plain link, not the app's: a full load lets the gate open a new sandbox. */}
+            <a href="/sandbox">
+              <RotateCcw aria-hidden="true" />
+              Open a new sandbox
+            </a>
           </Button>
         )}
       </AlertDescription>

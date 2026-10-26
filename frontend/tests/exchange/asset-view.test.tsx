@@ -162,10 +162,11 @@ describe("AssetView", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Trees").parentElement).toHaveTextContent("35.7%");
 
-    // The real trade panel (T18): anonymous visitors are asked to sign in and come back here.
+    // The real trade panel (T18) is on the page; it trades once the sandbox has a person.
     expect(
-      await screen.findByRole("link", { name: "Sign in to trade" }),
-    ).toHaveAttribute("href", "/login?next=%2Fasset%2Fx");
+      screen.getByRole("region", { name: "Back this site" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /sign in/i })).toBeNull();
     // No run, and the recording didn't load: no way into a trace that doesn't exist.
     await waitFor(() =>
       expect(

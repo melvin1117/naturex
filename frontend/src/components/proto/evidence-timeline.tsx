@@ -29,7 +29,7 @@ import {
   mergeNews,
   traceNews,
 } from "@/lib/evidence-timeline";
-import { date } from "@/lib/prototype/format";
+import { date } from "@/lib/format";
 import { useRunTrace } from "@/lib/hooks";
 import type { ReportFacts } from "@/lib/report-facts";
 import { safeHref } from "@/lib/safe-href";

@@ -1,4 +1,4 @@
-import { RequireAccount } from "@/components/require-account";
+import { ReviewerGate } from "@/components/reviewer-gate";
 
 /** Reviews (`/admin/verifications`): the Reviewer's. */
 export default function ReviewsLayout({
@@ -6,5 +6,5 @@ export default function ReviewsLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <RequireAccount admin>{children}</RequireAccount>;
+  return <ReviewerGate>{children}</ReviewerGate>;
 }

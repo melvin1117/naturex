@@ -47,7 +47,6 @@ import type {
   SiteImages,
   Story,
   WorldOut,
-  WorldTrace,
 } from "./api/types";
 import {
   getSandboxDataLayer,
@@ -792,18 +791,6 @@ export function useRunTrace(
     return () => clearInterval(timer);
   }, [active, refetch]);
   return query;
-}
-
-/**
- * The world's latest logged model calls (`GET /admin/trace`, up to 50, metadata only), for
- * the Agent Trace drawer away from a site.
- */
-export function useWorldTrace(): QueryResult<WorldTrace> {
-  const { world } = useWorld();
-  const meId = world?.me?.id ?? null;
-  return useApiQuery(queryKeys.worldTrace(meId), (api, signal) =>
-    unwrap(api.GET("/admin/trace", { signal })),
-  );
 }
 
 /**

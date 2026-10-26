@@ -7,8 +7,8 @@ import { useRouter } from "@/lib/nav";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
-import { ListingFlow as PrototypeListingFlow } from "@/components/proto/listing-flow";
 import { useStewardCommunity } from "@/components/shell/steward-community";
+import { TraceDrawer } from "@/components/trace/trace-drawer";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { isApiAssetId } from "@/lib/asset-detail";
@@ -26,8 +26,7 @@ import {
   type FieldErrors,
   type ListingDetailsForm,
 } from "@/lib/listing";
-import type { LatLng } from "@/lib/prototype/data";
-import { usePrototype } from "@/lib/prototype/store";
+import type { LatLng } from "@/lib/site-data";
 
 import { BoundaryStep } from "./boundary-step";
 import { DetailsStep } from "./details-step";
@@ -60,15 +59,12 @@ function writeListedStep(assetId: string, step: number) {
 }
 
 /**
- * `/steward/list`: list land for the active community (T33). Signed in, the real listing
- * lifecycle (T58) and live rating progress (T27); an anonymous visitor in the scripted demo
- * gets the prototype's flow until T65 gives the demo real sessions.
+ * `/steward/list`: list land for the active community (T33): the listing lifecycle (T58) with
+ * live rating progress (T27), in the visitor's sandbox (the gate opens one first).
  */
 export function ListingScreen() {
   const { world } = useWorld();
-  // Until the session answers, signed-in stewards must not glimpse the prototype.
-  if (!world) return <Loading>Loading the listing form…</Loading>;
-  if (!world.me) return <PrototypeListingFlow />;
+  if (!world?.me) return <Loading>Loading the listing form…</Loading>;
   return (
     <Suspense fallback={<Loading>Loading the listing form…</Loading>}>
       <ListingFromUrl />
@@ -264,7 +260,9 @@ function ListingWizard({
   onCreated: (asset: AssetDetail) => void;
 }) {
   const storageKey = unsavedListingKey(meId, community.id);
-  const { openTrace } = usePrototype();
+  // The Agent Trace of a run watched here, over the flow (the site page's drawer).
+  const [traceRun, setTraceRun] = useState<string | null>(null);
+  const openTrace = (runId: string) => setTraceRun(runId);
   // A new listing picks up what was entered in this tab before (a sign-in, a reload).
   const [restored] = useState(() =>
     asset ? null : readUnsavedListing(storageKey),
@@ -480,6 +478,15 @@ function ListingWizard({
           <OfferStep asset={asset} onBack={() => goListed(3)} />
         )}
       </section>
+      {asset && (
+        <TraceDrawer
+          open={traceRun !== null}
+          onOpenChange={(open) => !open && setTraceRun(null)}
+          asset={asset}
+          runId={traceRun}
+          recorded={null}
+        />
+      )}
     </Page>
   );
 }

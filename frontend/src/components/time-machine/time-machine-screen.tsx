@@ -8,11 +8,10 @@ import {
   PanelSkeleton,
   TimeMachineBodySkeleton,
 } from "@/components/page-skeletons";
-import { ControlRoom } from "@/components/proto/control-room";
 import { LoadError } from "@/components/proto/load-error";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { useAssets, useWorld } from "@/lib/hooks";
+import { useAssets } from "@/lib/hooks";
 import { SANDBOX_ONLY, unavailableReason } from "@/lib/time-machine";
 import { useTimeMachine } from "@/lib/time-machine-hooks";
 
@@ -21,13 +20,9 @@ import { QuarterSection } from "./quarter-section";
 import { ResetSection } from "./reset-section";
 import { TimeMachineHeading } from "./time-machine-heading";
 
-/**
- * `/admin`: the Time Machine as a page, for anyone in the sandbox (the header's sheet is the
- * usual way in); the scripted prototype control room without an account.
- */
+/** `/admin`: the Time Machine as a page, for anyone in the sandbox (the bar's sheet is the usual way in). */
 export function AdminScreen() {
-  const { world } = useWorld();
-  return world?.me ? <TimeMachinePanel /> : <ControlRoom />;
+  return <TimeMachinePanel />;
 }
 
 /**

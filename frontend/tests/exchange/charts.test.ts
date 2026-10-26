@@ -8,8 +8,6 @@ import {
   priceSeries,
   priceSummary,
 } from "@/components/proto/charts";
-import { prototypeFacts } from "@/lib/prototype/rating";
-import { createInitialWorld, latestReport } from "@/lib/prototype/world";
 
 const PRICES = [
   { t: "2026-10-19T00:00:00Z", price: 20, reason: "ipo" },
@@ -198,17 +196,5 @@ describe("ChartTooltip", () => {
       });
     expect(tip()).not.toBeNull();
     expect(tip(true)).toBeNull();
-  });
-});
-
-describe("prototypeFacts", () => {
-  it("labels the NDVI trend with the same significance rule as the API", () => {
-    for (const site of createInitialWorld().sites) {
-      const report = latestReport(site);
-      if (!report) continue;
-      const label = prototypeFacts(report).trendLabel;
-      if (report.ndviP >= 0.05) expect(label).toBe("Stable");
-      else expect(label).toBe(report.ndviTrend > 0 ? "Improving" : "Declining");
-    }
   });
 });

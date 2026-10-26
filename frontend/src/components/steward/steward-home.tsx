@@ -7,19 +7,15 @@ import { CommunitiesIndex } from "@/components/communities/communities-index";
 import { CommunityPage } from "@/components/communities/community-page";
 import { StewardHomeSkeleton } from "@/components/page-skeletons";
 import { LoadError } from "@/components/proto/load-error";
-import { StewardHome as PrototypeStewardHome } from "@/components/proto/steward-home";
 import { useStewardCommunity } from "@/components/shell/steward-community";
 import { COMMUNITY_PARAM } from "@/lib/active-community";
 import { useCommunitySummary } from "@/lib/community-hooks";
-import { useWorld } from "@/lib/hooks";
 
 /**
  * `/steward` (Communities): the communities you're in; `?community=<id>` opens one with its
- * sites. The scripted prototype stands in until the sandbox has a session.
+ * sites.
  */
 export function StewardHomeRoute() {
-  const { world } = useWorld();
-  if (!world?.me) return <PrototypeStewardHome />;
   return (
     <Suspense fallback={<StewardHomeSkeleton />}>
       <Communities />

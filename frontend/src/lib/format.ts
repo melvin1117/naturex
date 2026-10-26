@@ -1,4 +1,4 @@
-import type { Grade } from "./data";
+import type { Grade } from "./site-data";
 
 export function money(value: number, opts: { compact?: boolean } = {}) {
   const compact = opts.compact ?? Math.abs(value) >= 100_000;
@@ -96,22 +96,6 @@ export const GRADE_LABEL: Record<Grade, string> = {
   C: "Serious pressure",
   D: "Critical",
 };
-
-export function gradeFor(health: number): Grade {
-  if (health >= 90) return "AAA";
-  if (health >= 80) return "AA";
-  if (health >= 70) return "A";
-  if (health >= 60) return "BBB";
-  if (health >= 50) return "BB";
-  if (health >= 40) return "B";
-  if (health >= 30) return "C";
-  return "D";
-}
-
-/** Positive when `a` is a better grade than `b`. */
-export function compareGrades(a: Grade, b: Grade) {
-  return GRADE_ORDER.indexOf(b) - GRADE_ORDER.indexOf(a);
-}
 
 export function valueRange(low: number, mid: number, high: number) {
   return `${money(low)}–${money(high)} /yr · mid ${money(mid)}`;

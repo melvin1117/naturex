@@ -5,8 +5,8 @@
 import type { AssetCard } from "./api/types";
 import { type LonLatRing, outlineRings } from "./boundary-map";
 import { demoSiteMediaUrl } from "./demo-site-images";
-import type { Grade } from "./prototype/data";
-import { GRADE_ORDER } from "./prototype/format";
+import type { Grade } from "./site-data";
+import { GRADE_ORDER } from "./format";
 import { asGrade, num } from "./report-facts";
 
 export type HealthTrend = "improving" | "declining" | "stable";

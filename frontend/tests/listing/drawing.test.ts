@@ -10,8 +10,8 @@ import {
   type EditorAction,
   type EditorState,
 } from "@/lib/listing";
-import type { LatLng } from "@/lib/prototype/data";
-import { checkPolygon, crossingEdges, perimeterKm } from "@/lib/prototype/geo";
+import type { LatLng } from "@/lib/site-data";
+import { checkPolygon, crossingEdges, perimeterKm } from "@/lib/geo";
 
 const SQUARE: LatLng[] = [
   [0, 0],

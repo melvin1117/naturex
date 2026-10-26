@@ -30,7 +30,7 @@ import {
   stewardHomeHref,
   toPolygonGeoJson,
 } from "@/lib/listing";
-import type { LatLng } from "@/lib/prototype/data";
+import type { LatLng } from "@/lib/site-data";
 
 const C = "66666666-6666-4666-8666-666666666666";
 const A = "33333333-3333-4333-8333-333333333333";
@@ -780,10 +780,10 @@ describe("the form's fields", () => {
 });
 
 describe("more error wording", () => {
-  it("401 offers to sign in again", () => {
+  it("401 says the sandbox ended and offers a new one", () => {
     expect(listingFailure(err(401, "auth_required"))).toMatchObject({
       signIn: true,
-      title: "Your session has ended",
+      title: "Your sandbox has ended",
     });
   });
 

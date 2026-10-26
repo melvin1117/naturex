@@ -3,7 +3,7 @@ import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { RecordedRun, ReportOut, RunTrace } from "@/lib/api/types";
-import { date } from "@/lib/prototype/format";
+import { date } from "@/lib/format";
 import {
   auditCase,
   costReceipt,

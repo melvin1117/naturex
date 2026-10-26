@@ -10,7 +10,6 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import StewardLayout from "@/app/sandbox/steward/layout";
 import StewardPage from "@/app/sandbox/steward/page";
-import { TourProvider } from "@/components/proto/tour";
 import { WorldProvider } from "@/components/world-provider";
 import type {
   AssetCard,
@@ -18,7 +17,6 @@ import type {
   ListingSummary,
 } from "@/lib/api/types";
 import { createDataLayer } from "@/lib/data-layer";
-import { PrototypeProvider } from "@/lib/prototype/store";
 
 import {
   BASE,
@@ -160,14 +158,10 @@ function setup(
   });
   const tree = (content: ReactNode) => (
     <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <TourProvider>
-          {/* The sandbox shell holds the page in <main>. */}
-          <main>
-            <StewardLayout>{content}</StewardLayout>
-          </main>
-        </TourProvider>
-      </PrototypeProvider>
+      {/* The sandbox shell holds the page in <main>. */}
+      <main>
+        <StewardLayout>{content}</StewardLayout>
+      </main>
     </WorldProvider>
   );
   render(tree(<StewardPage />));

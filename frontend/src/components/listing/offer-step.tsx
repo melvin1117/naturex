@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/collapsible";
 import { toApiError } from "@/lib/api/errors";
 import type { AssetDetail } from "@/lib/api/types";
-import { int } from "@/lib/prototype/format";
+import { int } from "@/lib/format";
 import { useIpoPreview, useSwitchPersona } from "@/lib/hooks";
 import {
   blockedExplanation,

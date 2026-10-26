@@ -5,7 +5,7 @@ import { Download, FileText } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import type { ListingDocument } from "@/lib/api/types";
 import { useApiBase } from "@/lib/hooks";
-import { date } from "@/lib/prototype/format";
+import { date } from "@/lib/format";
 import {
   DOC_TYPE_LABEL,
   documentDownloadUrl,

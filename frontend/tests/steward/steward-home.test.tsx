@@ -12,7 +12,6 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import CommunityPage from "@/app/sandbox/steward/community/page";
 import StewardLayout from "@/app/sandbox/steward/layout";
 import StewardPage from "@/app/sandbox/steward/page";
-import { TourProvider } from "@/components/proto/tour";
 import { WorldProvider } from "@/components/world-provider";
 import type {
   CommunityMember,
@@ -21,7 +20,6 @@ import type {
   WorldOut,
 } from "@/lib/api/types";
 import { createDataLayer } from "@/lib/data-layer";
-import { PrototypeProvider } from "@/lib/prototype/store";
 import { stewardAssetId } from "@/components/shell/steward-community";
 import { AccountIdCopy, COPIED_MS } from "@/components/account-id";
 
@@ -146,11 +144,7 @@ function setup(
   });
   const tree = (content: ReactNode) => (
     <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <TourProvider>
-          <StewardLayout>{content}</StewardLayout>
-        </TourProvider>
-      </PrototypeProvider>
+      <StewardLayout>{content}</StewardLayout>
     </WorldProvider>
   );
   const view = render(tree(page));

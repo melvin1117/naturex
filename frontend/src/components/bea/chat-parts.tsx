@@ -153,7 +153,6 @@ export function BeaComposer({
   placeholder,
   sendDisabled,
   maxLength,
-  tourAnchor,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -162,8 +161,6 @@ export function BeaComposer({
   placeholder: string;
   sendDisabled?: boolean;
   maxLength?: number;
-  /** Guided-tour anchor (`data-tour`) on the field. */
-  tourAnchor?: string;
 }) {
   const id = useId();
   return (
@@ -185,7 +182,6 @@ export function BeaComposer({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           autoComplete="off"
-          data-tour={tourAnchor}
           className="h-12 rounded-2xl pr-14 pl-4 shadow-none"
         />
         <Button

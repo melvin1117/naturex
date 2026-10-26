@@ -118,7 +118,7 @@ Principle: **one flawless end-to-end story on 3 real sites** beats a wide app wi
 | ID | Story | Acceptance criteria |
 |---|---|---|
 | J1 | Each judge gets a private sandbox in one click | `/judge` → "Explore as a community steward / an investor / the platform admin" starts a demo session with its own world (personas, holdings, demo assets) and opens the matching app; no sign-up; "Reset my demo" restores it; visitors never affect each other |
-| J2 | A judge can follow an optional guided tour | A demo bar with a persona switcher (demo sessions only); the 10-chapter tour is an overlay on demo mode, with spotlight hints, "Do it for me" and Live badges; completes in ~7 minutes; "Create a real account" shows real sign-up |
+| J2 | A judge can follow an optional guided tour | *Dropped by [ADR-0008](../adr/0008-one-sandbox-experience.md): the welcome and the story at `/how` explain it, then the sandbox opens.* A demo bar with a persona switcher (demo sessions only); the 10-chapter tour is an overlay on demo mode, with spotlight hints, "Do it for me" and Live badges; completes in ~7 minutes; "Create a real account" shows real sign-up |
 
 ### Epic K — Accounts and access ([ADR-0005](../adr/0005-accounts-roles-and-two-apps.md))
 | ID | Story | Acceptance criteria |

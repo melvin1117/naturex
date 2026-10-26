@@ -1,7 +1,8 @@
 import { FileCheck2, FileClock, FileQuestion } from "lucide-react";
 import { cn } from "cn";
 
-import type { Verification } from "@/lib/prototype/world";
+/** How far a demo site's land documents got (the scripted levels ADR-0006 §6 badges). */
+export type Verification = "verified" | "documents_submitted" | "unverified";
 
 const TEXT: Record<Verification, { short: string; long: string }> = {
   // Every document in the prototype is a sample, so the ADR-0006 §6 demo badge applies.

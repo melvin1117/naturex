@@ -10,7 +10,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
-import { DATA_ATTRIBUTIONS } from "@/lib/prototype/data";
+import { DATA_ATTRIBUTIONS } from "@/lib/site-data";
 
 /** One quiet line under every sandbox page; the data credits sit behind "Data sources". */
 export function SandboxFooter() {

@@ -79,7 +79,7 @@ Context7 works without a key but is rate-limited. For higher limits, get a free 
 `brag-slim` ([latent-spaces/brag](https://github.com/latent-spaces/brag), MIT) is vendored in `.agents/skills/` like the other skills. Ask for "/brag-slim" or "make a launch video" to get a 15–25 s teaser built from the codebase.
 - Needs Node 22+ and FFmpeg. If FFmpeg isn't on `PATH`, install `ffmpeg-static` inside `brag-output/work/` rather than globally.
 - It has no bundled assets: the model writes the visuals and **synthesises its own soundtrack**, so there's no third-party music to clear. Still check the result against the hackathon video rules (no third-party logos, play-money framing on screen).
-- Numbers on screen must come from the engine (for example `frontend/src/lib/prototype/sites.json`), never invented.
+- Numbers on screen must come from the engine (for example `frontend/src/lib/sites.json`), never invented.
 - It's a teaser only; **it doesn't replace the 3-minute demo video**, which must show the real app running (see [specs/demo-plan.md](./specs/demo-plan.md)).
 - Output goes to `brag-output/` (git-ignored).
 

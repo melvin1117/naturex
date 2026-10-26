@@ -195,7 +195,7 @@ const TRADE_BLOCKED: Record<TradeBlockedReason, string> = {
   insider_trading_blocked:
     "Members of this site's community can't trade its units. Your community earns from its retained stake instead.",
   admins_cannot_trade:
-    "Admin accounts can't trade. Use a separate investor account to back sites.",
+    "The Reviewer doesn't back sites. Switch to Arjun to back this one.",
   treasury_cannot_act: "Community treasury accounts can't trade.",
 };
 
@@ -215,7 +215,7 @@ export function orderFailure(
   switch (error.code) {
     case "auth_required":
       return {
-        message: "Your session has ended. Sign in again to trade.",
+        message: "Your sandbox has ended. Open a new one to keep going.",
         signIn: true,
       };
     case "insider_trading_blocked":
@@ -266,7 +266,7 @@ export function orderFailure(
   switch (error.status) {
     case 401:
       return {
-        message: "Your session has ended. Sign in again to trade.",
+        message: "Your sandbox has ended. Open a new one to keep going.",
         signIn: true,
       };
     case 403:

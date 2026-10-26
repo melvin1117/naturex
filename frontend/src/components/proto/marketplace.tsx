@@ -35,7 +35,7 @@ import {
   type MarketCard,
   type SortKey,
 } from "@/lib/market-cards";
-import { ha, money } from "@/lib/prototype/format";
+import { ha, money } from "@/lib/format";
 
 function useMarketCards() {
   const query = useAssets();

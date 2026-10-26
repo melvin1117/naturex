@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 
-import { TraceError } from "@/components/agent-trace";
+import { TraceError } from "@/components/trace/trace-error";
 import { MachineRowsSkeleton } from "@/components/page-skeletons";
 import {
   Sheet,
@@ -13,9 +13,10 @@ import {
 } from "@/components/ui/sheet";
 import type { AssetDetail, RecordedRun } from "@/lib/api/types";
 import { useApiBase, useRunTrace } from "@/lib/hooks";
-import { date } from "@/lib/prototype/format";
+import { date } from "@/lib/format";
 import { beforeAfterViews } from "@/lib/site-views";
 
+import { HowTheAgentsWork } from "./how-the-agents-work";
 import { TraceBody } from "./run-trace-page";
 
 /**
@@ -56,6 +57,7 @@ export function TraceDrawer({
         </SheetHeader>
         <div className="px-5 pb-10 sm:px-8">
           <SiteTrace asset={asset} runId={runId} recorded={recorded} />
+          <HowTheAgentsWork />
         </div>
       </SheetContent>
     </Sheet>

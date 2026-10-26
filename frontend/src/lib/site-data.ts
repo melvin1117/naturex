@@ -1,5 +1,7 @@
 /**
- * Static data for the clickable prototype. Numbers come from `sites.json`, produced by running
+ * Static data shared by the app: grades, land-cover classes and colours, service groups, score
+ * components, data attributions, the model routing (ADR-0003), and the three demo sites the
+ * welcome and the story draw on. Their numbers come from `sites.json`, produced by running
  * the backend's deterministic `rate_site()` over the cached Earth Engine metrics in
  * `backend/data/demo_sites` (baseline + Time Machine scenarios). Names of communities and
  * people are fictional sandbox personas.
@@ -80,65 +82,6 @@ export type SiteData = {
 export const SITE_DATA = (raw as unknown as { sites: SiteData[] }).sites;
 
 export type Ecosystem = "Wetland" | "Mangrove" | "Forest";
-
-export type SiteMeta = {
-  id: string;
-  key: string;
-  ecosystem: Ecosystem;
-  place: string;
-  region: string;
-  community: string;
-  description: string;
-  /** Sandbox world: listed before the visit, or a draft the steward lists during the demo. */
-  initiallyListed: boolean;
-  /** The steward persona's own community. */
-  stewardOwned: boolean;
-};
-
-export const SITE_META: SiteMeta[] = [
-  {
-    id: "xochimilco-wetland",
-    key: "wetland_mx",
-    ecosystem: "Wetland",
-    place: "Xochimilco, Mexico City",
-    region: "Mexico City, Mexico",
-    community: "Xochimilco Wetland Cooperative",
-    description:
-      "Canals, chinampa plots and willow-lined marsh at the southern edge of Mexico City. The cooperative keeps the canals flowing and the plots farmed by hand, next to a growing industrial zone.",
-    initiallyListed: false,
-    stewardOwned: true,
-  },
-  {
-    id: "celestun-mangrove",
-    key: "mangrove_mx",
-    ecosystem: "Mangrove",
-    place: "Ría Celestún, Yucatán",
-    region: "Yucatán, Mexico",
-    community: "Celestún Mangrove Collective",
-    description:
-      "A coastal mangrove lagoon on the Gulf of Mexico. Fishing families monitor the tidal channels and replant mangrove on cleared patches.",
-    initiallyListed: true,
-    stewardOwned: false,
-  },
-  {
-    id: "sumidero-forest",
-    key: "restoration_forest",
-    ecosystem: "Forest",
-    place: "Sumidero Canyon, Chiapas",
-    region: "Chiapas, Mexico",
-    community: "Sumidero Restoration Ejido",
-    description:
-      "Dry tropical forest and scrub above the Grijalva river canyon, recovering from past clearing. The ejido runs fire breaks and native tree nurseries.",
-    initiallyListed: true,
-    stewardOwned: false,
-  },
-];
-
-export function siteDataFor(key: string): SiteData {
-  const site = SITE_DATA.find((s) => s.key === key);
-  if (!site) throw new Error(`Unknown demo site ${key}`);
-  return site;
-}
 
 export const LANDCOVER_ORDER: LandcoverKey[] = [
   "trees",
@@ -237,9 +180,6 @@ export const DATA_ATTRIBUTIONS = [
   "Mangroves: Global Mangrove Watch v3.0 (CC BY 4.0)",
   "Soil carbon: SoilGrids 2.0 (CC BY 4.0)",
 ];
-
-export const QUARTERS = ["2026Q3", "2026Q4", "2027Q1"] as const;
-export const QUARTER_DATES = ["2026-10-15", "2027-01-15", "2027-04-15"];
 
 export const MODELS = {
   orchestrator: {

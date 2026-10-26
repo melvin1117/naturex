@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Checklist, VerificationBadge } from "@/components/verification/parts";
 import type { VerificationPublic } from "@/lib/api/types";
 import { useWorld } from "@/lib/hooks";
-import { date } from "@/lib/prototype/format";
+import { date } from "@/lib/format";
 import {
   adminReviewHref,
   LEVEL_LABEL,

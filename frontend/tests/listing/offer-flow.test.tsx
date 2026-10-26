@@ -139,6 +139,12 @@ describe("the Offer step (ADR-0008 §5)", () => {
     expect(
       await screen.findByRole("heading", { name: "Set your offer" }),
     ).toBeVisible();
+    // The slider is named on its thumb (ui/slider.tsx, T64).
+    expect(
+      screen.getByRole("slider", {
+        name: "Share of the stake the community keeps",
+      }),
+    ).toBeInTheDocument();
     // The price is the backend's preview, never the browser's.
     expect(await screen.findAllByText("$10.5173")).not.toHaveLength(0);
     const send = screen.getByRole("button", { name: /Send for review/ });

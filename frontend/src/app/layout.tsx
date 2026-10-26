@@ -1,17 +1,12 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Gloock, Hanken_Grotesk } from "next/font/google";
 
-import { AlertToaster } from "@/components/proto/alert-toaster";
-import { CopilotSheet } from "@/components/proto/copilot-sheet";
-import { DemoBar } from "@/components/proto/demo-bar";
+import { LeftoverDemo } from "@/components/shell/leftover-demo";
 import { SkipLink } from "@/components/shell/skip-link";
-import { TourProvider } from "@/components/proto/tour";
-import { TraceSheet } from "@/components/proto/trace-sheet";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WorldProvider } from "@/components/world-provider";
 import { TOASTER_PROPS } from "@/lib/feedback";
-import { PrototypeProvider } from "@/lib/prototype/store";
 
 import "./globals.css";
 
@@ -90,21 +85,13 @@ export default function RootLayout({
         className={`${hanken.variable} ${gloock.variable} ${geistMono.variable} flex min-h-dvh flex-col font-sans antialiased`}
       >
         <WorldProvider>
-          <PrototypeProvider>
-            <TooltipProvider delayDuration={200}>
-              <TourProvider>
-                <SkipLink />
-                {/* Outside the sandbox: only tidies a leftover scripted-demo session. */}
-                <DemoBar />
-                <div className="flex flex-1 flex-col">{children}</div>
-                <TraceSheet />
-                <CopilotSheet />
-                <AlertToaster />
-                {/* Bottom, clear of the header, account menu and trade panel (lib/feedback). */}
-                <Toaster {...TOASTER_PROPS} />
-              </TourProvider>
-            </TooltipProvider>
-          </PrototypeProvider>
+          <TooltipProvider delayDuration={200}>
+            <SkipLink />
+            <LeftoverDemo />
+            <div className="flex flex-1 flex-col">{children}</div>
+            {/* Bottom, clear of the header, person menu and trade panel (lib/feedback). */}
+            <Toaster {...TOASTER_PROPS} />
+          </TooltipProvider>
         </WorldProvider>
       </body>
     </html>

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BoundaryMap, MAX_HANDLES } from "@/components/listing/boundary-map";
 import type { DrawMode, EditorAction } from "@/lib/listing";
-import type { LatLng } from "@/lib/prototype/data";
+import type { LatLng } from "@/lib/site-data";
 
 // Leaflet doesn't run in jsdom: a fake records layers and lets tests fire their events.
 const leaflet = vi.hoisted(() => {

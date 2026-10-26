@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ShieldCheck, ShieldX } from "lucide-react";
+import { ShieldCheck, ShieldX } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "cn";
 
@@ -9,10 +9,7 @@ import { LoadError } from "@/components/proto/load-error";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useLedger, useVerifyLedger } from "@/lib/hooks";
-import { date } from "@/lib/prototype/format";
-import { verify, type VerifyResult } from "@/lib/prototype/ledger";
-import { usePrototype } from "@/lib/prototype/store";
-import { tamperLedger, type Site } from "@/lib/prototype/world";
+import { date } from "@/lib/format";
 import { ledgerEntryId } from "@/lib/verification";
 
 export type LedgerRow = {
@@ -158,64 +155,6 @@ export function LedgerPanel({
 
 export const LEDGER_OUTLINE =
   "border-machine-line bg-transparent text-machine-ink hover:bg-machine-raised hover:text-machine-ink";
-
-function prototypeCheck(result: VerifyResult): LedgerCheck {
-  return result.valid
-    ? {
-        valid: true,
-        entries: result.entries,
-        brokenAt: null,
-        note: "Every hash was recomputed in your browser and matches.",
-      }
-    : {
-        valid: false,
-        entries: result.entries,
-        brokenAt: result.brokenAt,
-        note: `${result.reason} This entry and every entry after it can't be trusted.`,
-      };
-}
-
-/** The prototype's ledger, verified in the browser, with the tamper demo. */
-export function LedgerTab({ site }: { site: Site }) {
-  const { world, act } = usePrototype();
-  const chain = world.ledger[site.id] ?? [];
-  const [result, setResult] = useState<VerifyResult | null>(null);
-  const tamperedAt = world.tampered[site.id];
-  return (
-    <div className="space-y-6">
-      <LedgerPanel
-        entries={chain}
-        check={result && prototypeCheck(result)}
-        tamperedAt={tamperedAt}
-        actions={
-          <>
-            <Button
-              variant="on-image"
-              onClick={() => setResult(verify(chain))}
-              data-tour="ledger-verify"
-            >
-              <ShieldCheck aria-hidden="true" />
-              Verify the Record
-            </Button>
-            <Button
-              variant="outline"
-              className={LEDGER_OUTLINE}
-              onClick={() => {
-                act((w) => tamperLedger(w, site.id));
-                setResult(null);
-              }}
-              disabled={tamperedAt !== undefined}
-              data-tour="ledger-tamper"
-            >
-              <AlertTriangle aria-hidden="true" />
-              Tamper demo
-            </Button>
-          </>
-        }
-      />
-    </div>
-  );
-}
 
 /** The real asset's ledger: entries from the API, verified on the server. */
 export function ApiLedgerTab({ assetId }: { assetId: string }) {

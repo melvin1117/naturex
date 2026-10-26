@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
 import { GradeBadge } from "@/components/proto/grade";
-import type { Grade } from "@/lib/prototype/data";
+import type { Grade } from "@/lib/site-data";
 import { dollars } from "@/lib/story";
 
 export type ChainState = {

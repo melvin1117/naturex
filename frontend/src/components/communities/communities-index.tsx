@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowRight, Plus, Sprout } from "lucide-react";
+import { ArrowRight, Plus } from "lucide-react";
 import Link from "@/components/app-link";
 import { useSearchParams } from "next/navigation";
 
+import { StewardsIcon } from "@/components/icons";
 import { SiteThumb } from "@/components/proto/bits";
 import {
   markJustCreated,
@@ -95,11 +96,11 @@ function CommunityCard({ community }: { community: MyCommunity }) {
           />
         ) : (
           <div className="grid aspect-[16/9] place-items-center bg-lichen">
-            <Sprout className="size-8 text-lime-ink" aria-hidden="true" />
+            <StewardsIcon size={32} aria-hidden="true" />
           </div>
         )}
         <div className="flex flex-1 flex-col gap-1 p-5">
-          <h2 className="text-lg leading-tight font-semibold text-balance">
+          <h2 className="font-serif text-2xl leading-[1.1] tracking-tight text-balance">
             {community.name}
           </h2>
           <p className="text-sm text-muted-foreground">{meta}</p>

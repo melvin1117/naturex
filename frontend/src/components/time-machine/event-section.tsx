@@ -29,7 +29,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { toApiError } from "@/lib/api/errors";
 import type { AssetCard, EventPreset, SimulateEvent } from "@/lib/api/types";
-import { quarterLabel } from "@/lib/prototype/format";
+import { quarterLabel } from "@/lib/format";
 import { eventFailure, eventOutcomeText, eventTitle } from "@/lib/time-machine";
 import { useSimulateEvent } from "@/lib/time-machine-hooks";
 
@@ -206,7 +206,6 @@ export function EventSection({
                   <Button
                     aria-disabled={inject.isPending || undefined}
                     className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-primary aria-disabled:active:translate-y-0"
-                    data-tour="inject-encroachment"
                   >
                     {inject.isPending ? (
                       <Spinner aria-hidden="true" role="presentation" />

@@ -3,10 +3,8 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import JudgePage from "@/app/how/page";
-import { TourProvider } from "@/components/proto/tour";
 import { WorldProvider } from "@/components/world-provider";
 import { createDataLayer } from "@/lib/data-layer";
-import { PrototypeProvider } from "@/lib/prototype/store";
 import { dollars } from "@/lib/story";
 
 import {
@@ -64,11 +62,7 @@ function setup() {
     createEventSource: createFakeEventSource,
   });
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <TourProvider>{children}</TourProvider>
-      </PrototypeProvider>
-    </WorldProvider>
+    <WorldProvider dataLayer={layer}>{children}</WorldProvider>
   );
   render(<JudgePage />, { wrapper });
   return live;

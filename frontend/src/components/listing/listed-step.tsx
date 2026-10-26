@@ -19,7 +19,7 @@ import {
 import { useCommunitySummary } from "@/lib/community-hooks";
 import { ipoHref, listingOutcome } from "@/lib/listing";
 import { DURATION, usePrefersReducedMotion } from "@/lib/motion";
-import { GRADE_LABEL, money } from "@/lib/prototype/format";
+import { GRADE_LABEL, money } from "@/lib/format";
 import { reportFacts, type ReportFacts } from "@/lib/report-facts";
 import { assetHref } from "@/lib/trade";
 

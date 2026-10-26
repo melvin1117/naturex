@@ -13,7 +13,7 @@ import type {
 import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "cn";
 
-import type { MapFocus } from "@/components/proto/draw-map";
+import type { MapFocus } from "@/lib/listing/boundary";
 import { IMAGERY_ATTRIBUTION, IMAGERY_URL } from "@/lib/imagery";
 import {
   midpoint,
@@ -24,7 +24,7 @@ import {
   type EditorAction,
   type Outline,
 } from "@/lib/listing";
-import type { LatLng } from "@/lib/prototype/data";
+import type { LatLng } from "@/lib/site-data";
 
 /** Corners get drag handles only up to this many (a pasted boundary can have thousands). */
 export const MAX_HANDLES = 300;

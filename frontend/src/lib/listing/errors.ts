@@ -113,9 +113,9 @@ export function listingFailure(error: ApiError): ListingFailure {
   if (error.status === 401)
     return {
       ...base,
-      title: "Your session has ended",
+      title: "Your sandbox has ended",
       message:
-        "Sign in again to save. What you've entered stays in this tab meanwhile.",
+        "Open a new one to keep going. What you've entered stays in this tab meanwhile.",
       signIn: true,
     };
   switch (code) {

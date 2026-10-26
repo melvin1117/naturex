@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "@/components/app-link";
 import { useEffect, useMemo } from "react";
 
-import { TraceError } from "@/components/agent-trace";
+import { TraceError } from "@/components/trace/trace-error";
 import { MachineRowsSkeleton } from "@/components/page-skeletons";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,7 +18,7 @@ import {
   useShowCost,
 } from "@/lib/hooks";
 import { beforeAfterViews, type BeforeAfterViews } from "@/lib/site-views";
-import { date } from "@/lib/prototype/format";
+import { date } from "@/lib/format";
 import {
   auditCase,
   auditChecks,

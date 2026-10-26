@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { ReportTab } from "@/components/proto/report-panels";
 import type { AssetDetail, ReportDiff, ReportOut } from "@/lib/api/types";
-import { reportQuarter } from "@/lib/prototype/format";
+import { reportQuarter } from "@/lib/format";
 import { reportFacts, type ReportFacts } from "@/lib/report-facts";
 
 import { json, sequence } from "../lib/helpers";
@@ -100,7 +100,7 @@ const BODY: ReportDiff = {
 
 const live = (body: Partial<ReportDiff> = {}) =>
   renderExchange(
-    <ReportTab siteName="Xochimilco wetland" versions={VERSIONS} live />,
+    <ReportTab siteName="Xochimilco wetland" versions={VERSIONS} />,
     {
       [DIFF]: () => json({ ...BODY, ...body }),
     },
@@ -137,7 +137,6 @@ describe("ReportTab's Proof of Life seal", () => {
         siteName="Xochimilco wetland"
         versions={VERSIONS}
         initialVersion={1}
-        live
       />,
       {},
     );
@@ -261,7 +260,7 @@ describe("ReportTab changes from the diff API (#189)", () => {
 
   it("shows a loading state while the diff loads", async () => {
     renderExchange(
-      <ReportTab siteName="Xochimilco wetland" versions={VERSIONS} live />,
+      <ReportTab siteName="Xochimilco wetland" versions={VERSIONS} />,
       {
         [DIFF]: () => new Promise<Response>(() => {}),
       },
@@ -273,7 +272,7 @@ describe("ReportTab changes from the diff API (#189)", () => {
 
   it("says so when the diff can't load, and retries", async () => {
     const { backend } = renderExchange(
-      <ReportTab siteName="Xochimilco wetland" versions={VERSIONS} live />,
+      <ReportTab siteName="Xochimilco wetland" versions={VERSIONS} />,
       {
         [DIFF]: sequence(
           () => json({ detail: "boom" }, { status: 500 }),
@@ -341,7 +340,6 @@ describe("ReportTab changes from the diff API (#189)", () => {
       <ReportTab
         siteName="Xochimilco wetland"
         versions={[V3, V2, V1].map((r) => reportFacts(r)) as ReportFacts[]}
-        live
       />,
       { [DIFF32]: () => json(v3Body), [DIFF]: () => json(BODY) },
     );
@@ -378,21 +376,5 @@ describe("ReportTab changes from the diff API (#189)", () => {
       screen.getByText("Replanting raised vegetation vigour.").closest("li")!
         .className,
     ).not.toMatch(/ring-lime/);
-  });
-
-  it("keeps the prototype's own comparison and never calls the diff API", async () => {
-    const { backend } = renderExchange(
-      <ReportTab siteName="Xochimilco wetland" versions={VERSIONS} />,
-      {
-        [DIFF]: () => json(BODY),
-      },
-    );
-    expect(
-      await screen.findByText("What changed since v1"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Fair price per unit")).toBeInTheDocument();
-    expect(screen.queryByText("Loading what changed…")).toBeNull();
-    expect(screen.queryByText("Why it changed")).toBeNull();
-    expect(backend.calls(DIFF)).toBe(0);
   });
 });

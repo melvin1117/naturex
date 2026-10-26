@@ -1,10 +1,9 @@
 import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AlertToaster } from "@/components/proto/alert-toaster";
+import { AlertToaster } from "@/components/alert-toaster";
 import { WorldProvider } from "@/components/world-provider";
 import { createDataLayer } from "@/lib/data-layer";
-import { PrototypeProvider } from "@/lib/prototype/store";
 
 import {
   BASE,
@@ -57,9 +56,7 @@ async function renderToaster() {
   });
   render(
     <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <AlertToaster />
-      </PrototypeProvider>
+      <AlertToaster />
     </WorldProvider>,
   );
   await waitFor(() => expect(FakeEventSource.instances).not.toHaveLength(0));

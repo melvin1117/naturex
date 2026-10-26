@@ -14,7 +14,6 @@ import Link from "@/components/app-link";
 import { SandboxHeader } from "@/components/shell/sandbox-header";
 import { TimeMachineSheet } from "@/components/shell/time-machine-sheet";
 import { Toaster } from "@/components/ui/sonner";
-import { TourProvider } from "@/components/proto/tour";
 import { SandboxGate } from "@/components/sandbox/sandbox-gate";
 import { WorldProvider } from "@/components/world-provider";
 import type { WorldOut } from "@/lib/api/types";
@@ -24,7 +23,6 @@ import { assetOverlayUrl } from "@/lib/land-cover-overlay";
 import { beforeAfterViews } from "@/lib/site-views";
 import { documentDownloadUrl } from "@/lib/verification";
 import { useRouter } from "@/lib/nav";
-import { PrototypeProvider } from "@/lib/prototype/store";
 import { appPath, isSandboxPath, sandboxHref } from "@/lib/sandbox";
 
 import {
@@ -84,13 +82,7 @@ function setup(
     createEventSource: createFakeEventSource,
   });
   sandboxLayer.current = layer;
-  render(
-    <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <TourProvider>{ui}</TourProvider>
-      </PrototypeProvider>
-    </WorldProvider>,
-  );
+  render(<WorldProvider dataLayer={layer}>{ui}</WorldProvider>);
   return { backend, layer };
 }
 

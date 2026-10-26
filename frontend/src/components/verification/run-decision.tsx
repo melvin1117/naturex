@@ -1,7 +1,7 @@
 import { History } from "lucide-react";
 
 import type { VerificationRun } from "@/lib/api/types";
-import { date } from "@/lib/prototype/format";
+import { date } from "@/lib/format";
 import {
   DOC_TYPE_LABEL,
   LEVEL_LABEL,

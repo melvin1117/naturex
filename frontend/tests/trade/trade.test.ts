@@ -19,7 +19,7 @@ import {
   unitPrice,
   unitsInput,
 } from "@/lib/trade";
-import { price } from "@/lib/prototype/format";
+import { price } from "@/lib/format";
 
 const quote = (overrides: Partial<QuoteOut> = {}): QuoteOut => ({
   asset_id: "a",

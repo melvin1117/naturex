@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 
+import { AlertToaster } from "@/components/alert-toaster";
 import { BeaFab } from "@/components/bea/bea-fab";
 import { SandboxFooter } from "@/components/shell/sandbox-footer";
 import { SandboxHeader } from "@/components/shell/sandbox-header";
 import { MAIN_ID } from "@/components/shell/skip-link";
 
-/** Every sandbox page: the bar, the page, a quiet footer and Bea, one tap away. */
+/** Every sandbox page: the bar, the page, a quiet footer, Bea one tap away, and alerts as they come. */
 export function SandboxShell({ children }: { children: ReactNode }) {
   return (
     <>
@@ -15,6 +16,7 @@ export function SandboxShell({ children }: { children: ReactNode }) {
       </main>
       <SandboxFooter />
       <BeaFab />
+      <AlertToaster />
     </>
   );
 }

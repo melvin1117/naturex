@@ -4,14 +4,14 @@
  */
 import type { AssetDetail, AssetOutlines } from "../api/types";
 import { boundaryLatLngs } from "../asset-detail";
-import type { LatLng } from "../prototype/data";
+import type { LatLng } from "../site-data";
 import {
   areaHa,
   checkPolygon,
   crossingEdges,
   overlaps,
   type PolygonProblemCode,
-} from "../prototype/geo";
+} from "../geo";
 
 /** T36 refuses polygons with more points than this. */
 export const MAX_BOUNDARY_POINTS = 10_000;
@@ -24,6 +24,9 @@ const MIN_HA = 10;
 const MAX_HA = 50_000;
 
 export type Outline = { name: string; polygon: LatLng[] };
+
+/** Where the boundary map should look: a point at a zoom, or the bounds of some corners. */
+export type MapFocus = { center: LatLng; zoom: number } | { bounds: LatLng[] };
 
 /** What the hint could check: everything, everything but overlap, or only the size. */
 export type HintScope = "all" | "no-overlap" | "size";

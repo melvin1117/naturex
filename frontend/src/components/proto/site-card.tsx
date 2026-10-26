@@ -15,7 +15,7 @@ import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
 import { Button } from "@/components/ui/button";
 import { countryName, type MarketCard } from "@/lib/market-cards";
-import { ha, money, price } from "@/lib/prototype/format";
+import { ha, money, price } from "@/lib/format";
 
 const TREND_TEXT = {
   improving: "Health improving",
@@ -141,7 +141,9 @@ export function SiteCard({ card }: { card: MarketCard }) {
       </div>
       <div className="flex flex-1 flex-col gap-4 p-5">
         <div>
-          <h3 className="text-lg leading-tight font-semibold">{card.name}</h3>
+          <h3 className="font-serif text-2xl leading-[1.1] tracking-tight text-balance">
+            {card.name}
+          </h3>
           <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
             <MapPin className="size-3.5" aria-hidden="true" />
             {place(card)}
@@ -203,7 +205,6 @@ export function FeatureSiteCard({ card }: { card: MarketCard }) {
     <section
       aria-labelledby={`feature-${card.id}`}
       className="relative isolate overflow-hidden rounded-[2rem] text-white shadow-lift"
-      data-tour="feature-card"
     >
       <SiteBackdrop src={card.imageUrl} outline={card.outline} />
       <div className="relative grid gap-8 p-6 sm:p-8 lg:grid-cols-[auto_1fr_auto] lg:items-center lg:gap-10 lg:p-10">

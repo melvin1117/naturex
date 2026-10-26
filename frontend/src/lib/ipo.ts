@@ -6,7 +6,7 @@
  * plain words (docs/design/ux-writing.md: units, opening offer, play money).
  */
 import type { ApiError } from "./api/errors";
-import { int } from "./prototype/format";
+import { int } from "./format";
 
 export const MIN_TOTAL_SHARES = 10_000;
 export const MAX_TOTAL_SHARES = 10_000_000;

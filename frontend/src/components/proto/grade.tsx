@@ -1,7 +1,7 @@
 import { cn } from "cn";
 
-import type { Grade } from "@/lib/prototype/data";
-import { GRADE_LABEL } from "@/lib/prototype/format";
+import type { Grade } from "@/lib/site-data";
+import { GRADE_LABEL } from "@/lib/format";
 
 export const GRADE_BG: Record<Grade, string> = {
   AAA: "bg-grade-aaa",

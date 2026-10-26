@@ -14,10 +14,8 @@ import {
   MachineRowsSkeleton,
   RouteSkeleton,
 } from "@/components/page-skeletons";
-import { TourProvider } from "@/components/proto/tour";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HANDOFF_MS, resetLoadingChains } from "@/lib/loading-chain";
-import { PrototypeProvider } from "@/lib/prototype/store";
 import { skeletonKind } from "@/lib/route-skeleton";
 
 declare global {
@@ -46,11 +44,7 @@ afterEach(() => {
 
 /** Like app/layout.tsx: the Marketplace heading offers the guided tour. */
 function Shell({ children }: { children: ReactNode }) {
-  return (
-    <PrototypeProvider>
-      <TourProvider>{children}</TourProvider>
-    </PrototypeProvider>
-  );
+  return <>{children}</>;
 }
 
 /** The one region on screen. */

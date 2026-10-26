@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 
-import { AlertCard } from "@/components/proto/alert-toaster";
+import { AlertCard } from "@/components/alert-toaster";
 import { LoadError } from "@/components/proto/load-error";
 import { Spinner } from "@/components/ui/spinner";
 import { useSentAlerts } from "@/lib/time-machine-hooks";

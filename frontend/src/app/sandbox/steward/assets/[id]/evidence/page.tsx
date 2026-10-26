@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
 import { FieldEvidenceScreen } from "@/components/evidence/field-evidence-screen";
-import { RequireAccount } from "@/components/require-account";
 
 export const metadata: Metadata = { title: "Field evidence" };
 
@@ -15,9 +14,5 @@ export default async function EvidencePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return (
-    <RequireAccount>
-      <FieldEvidenceScreen assetId={id} />
-    </RequireAccount>
-  );
+  return <FieldEvidenceScreen assetId={id} />;
 }

@@ -1,10 +1,11 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, MapPinned, Plus, Settings } from "lucide-react";
+import { ArrowLeft, ArrowRight, Settings } from "lucide-react";
 import Link from "@/components/app-link";
 import { useEffect, useRef, type ReactNode } from "react";
 import { cn } from "cn";
 
+import { ListLandIcon } from "@/components/icons";
 import { Delta, SiteThumb } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
 import { takeJustCreated } from "@/components/shell/steward-community";
@@ -20,7 +21,7 @@ import {
 } from "@/lib/community-sites";
 import { countryName, marketCard, siteIcon } from "@/lib/market-cards";
 import { withCommunity } from "@/lib/navigation";
-import { ha } from "@/lib/prototype/format";
+import { ha } from "@/lib/format";
 import { moneyText, unitPriceText } from "@/lib/trade";
 
 const TONE: Record<SiteTone, string> = {
@@ -96,7 +97,7 @@ export function CommunityPage({
       <h2 className="sr-only">Sites</h2>
       {sites.length === 0 ? (
         <div className="mt-10 grid place-items-center rounded-3xl border border-dashed border-foreground/20 px-6 py-16 text-center">
-          <MapPinned className="size-8 text-lime-ink" aria-hidden="true" />
+          <ListLandIcon size={32} aria-hidden="true" />
           <p className="mt-4 max-w-md text-pretty text-muted-foreground">
             Draw your land on the map and WildWorth rates it from satellite data
             and local news.
@@ -125,7 +126,7 @@ export function CommunityPage({
               href={listHref}
               className="flex h-full min-h-48 flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-foreground/20 p-6 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
-              <Plus className="size-6" aria-hidden="true" />
+              <ListLandIcon size={24} aria-hidden="true" />
               List more land
             </Link>
           </li>
@@ -210,7 +211,7 @@ function SiteTile({
           />
         ) : (
           <div className="grid aspect-[16/10] place-items-center bg-lichen">
-            <MapPinned className="size-8 text-lime-ink/70" aria-hidden="true" />
+            <ListLandIcon size={32} aria-hidden="true" />
           </div>
         )}
         {/* The link says it too: read once. */}
@@ -230,7 +231,7 @@ function SiteTile({
         )}
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-5">
-        <h3 className="text-lg leading-tight font-semibold text-balance">
+        <h3 className="font-serif text-2xl leading-[1.1] tracking-tight text-balance">
           <Link
             href={state.href}
             className="outline-none after:absolute after:inset-0 after:rounded-3xl focus-visible:after:ring-2 focus-visible:after:ring-ring"

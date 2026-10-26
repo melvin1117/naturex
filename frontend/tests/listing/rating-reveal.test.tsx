@@ -30,7 +30,6 @@ import type {
 import { createDataLayer } from "@/lib/data-layer";
 import { PIPELINE_SETTLE_MS, PIPELINE_STEP_MS } from "@/lib/listing/pacing";
 import { DURATION } from "@/lib/motion";
-import { PrototypeProvider } from "@/lib/prototype/store";
 
 import {
   BASE,
@@ -180,11 +179,9 @@ async function rateInABurst({ finishedOnFirstRead = false } = {}) {
   });
   render(
     <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <StewardCommunityProvider>
-          <ListingScreen />
-        </StewardCommunityProvider>
-      </PrototypeProvider>
+      <StewardCommunityProvider>
+        <ListingScreen />
+      </StewardCommunityProvider>
     </WorldProvider>,
   );
   fireEvent.click(

@@ -13,7 +13,7 @@ import type {
   SimulateQuarter,
   TimeMachine,
 } from "./api/types";
-import { price, quarterLabel } from "./prototype/format";
+import { price, quarterLabel } from "./format";
 import { num } from "./report-facts";
 
 export type TimeMachineFailure = {

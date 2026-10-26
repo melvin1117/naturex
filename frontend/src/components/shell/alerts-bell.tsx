@@ -48,7 +48,6 @@ function AccountAlertsBell({ accountId }: { accountId: string | null }) {
             size="icon-sm"
             className="relative"
             aria-label={label}
-            data-tour="alerts-bell"
           >
             <AlertsIcon aria-hidden="true" />
             {unread > 0 && (
@@ -89,13 +88,7 @@ function AccountAlertsBell({ accountId }: { accountId: string | null }) {
 /** The bell while the world loads: no count and nothing to open yet. */
 function PendingAlertsBell() {
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      aria-label="Alerts"
-      disabled
-      data-tour="alerts-bell"
-    >
+    <Button variant="ghost" size="icon-sm" aria-label="Alerts" disabled>
       <AlertsIcon aria-hidden="true" />
     </Button>
   );

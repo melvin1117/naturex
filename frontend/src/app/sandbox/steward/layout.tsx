@@ -1,4 +1,3 @@
-import { RequireAccount } from "@/components/require-account";
 import {
   StewardCommunityProvider,
   StewardGate,
@@ -15,9 +14,7 @@ export default function StewardLayout({
 }) {
   return (
     <StewardCommunityProvider>
-      <RequireAccount allowPrototypeDemo>
-        <StewardGate>{children}</StewardGate>
-      </RequireAccount>
+      <StewardGate>{children}</StewardGate>
     </StewardCommunityProvider>
   );
 }

@@ -1,15 +1,20 @@
 "use client";
 
-import { Leaf, RefreshCwIcon, Sprout, Trees } from "lucide-react";
+import { RefreshCwIcon } from "lucide-react";
 import Link from "@/components/app-link";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "cn";
 
+import {
+  CarbonIcon,
+  HabitatIcon,
+  WorthRangeIcon,
+  YourStakesIcon,
+} from "@/components/icons";
 import { CountTo } from "@/components/live-number";
 import { PortfolioBodySkeleton } from "@/components/page-skeletons";
 import { Delta, SiteThumb } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
-import { Portfolio as PrototypePortfolio } from "@/components/proto/portfolio";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,8 +22,8 @@ import type { AssetCard, HoldingOut, PortfolioOut } from "@/lib/api/types";
 import { useAssets, usePortfolio, useWorld } from "@/lib/hooks";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { siteIcon } from "@/lib/market-cards";
-import type { Grade } from "@/lib/prototype/data";
-import { GRADE_ORDER, int } from "@/lib/prototype/format";
+import type { Grade } from "@/lib/site-data";
+import { GRADE_ORDER, int } from "@/lib/format";
 import {
   assetHref,
   decimal,
@@ -31,14 +36,9 @@ import {
   type FreshFill,
 } from "@/lib/trade";
 
-/**
- * `/portfolio`: the signed-in account's real stakes. `<RequireAccount allowPrototypeDemo>`
- * also lets an anonymous visitor in the scripted demo through; they see the prototype's
- * scripted portfolio until T65 gives the demo real sessions.
- */
+/** `/portfolio`: Your stakes, for whoever the visitor is in their sandbox. */
 export function PortfolioScreen() {
-  const { world } = useWorld();
-  return world?.me ? <PortfolioView /> : <PrototypePortfolio />;
+  return <PortfolioView />;
 }
 
 export function PortfolioView() {
@@ -123,7 +123,7 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
       {sites > 0 && <Impact data={data} />}
       {sites === 0 ? (
         <div className="mt-10 grid place-items-center rounded-3xl border border-dashed border-foreground/20 px-6 py-16 text-center">
-          <Sprout className="size-8 text-lime-ink" aria-hidden="true" />
+          <YourStakesIcon size={32} aria-hidden="true" />
           <p className="mt-4 max-w-md text-pretty text-muted-foreground">
             Back a site on the Marketplace and you&apos;ll follow its health
             here, rating by rating.
@@ -242,7 +242,7 @@ function HoldingTile({
           />
         ) : (
           <div className="grid aspect-[16/10] place-items-center bg-lichen">
-            <Leaf className="size-8 text-lime-ink/70" aria-hidden="true" />
+            <HabitatIcon size={32} aria-hidden="true" />
           </div>
         )}
         {grade && (
@@ -253,7 +253,7 @@ function HoldingTile({
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-5">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <h2 className="text-lg leading-tight font-semibold text-balance">
+          <h2 className="font-serif text-2xl leading-[1.1] tracking-tight text-balance">
             <Link
               href={assetHref(h.asset_id)}
               className="outline-none after:absolute after:inset-0 after:rounded-3xl focus-visible:after:ring-2 focus-visible:after:ring-ring"
@@ -325,17 +325,17 @@ function Impact({ data }: { data: PortfolioOut }) {
     <section aria-label="Your share of the impact" className="mt-6">
       <ul className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
         <ImpactLine
-          icon={<Trees className="size-4" aria-hidden="true" />}
+          icon={<HabitatIcon size={16} aria-hidden="true" />}
           value={area(hectares)}
           label="of living land"
         />
         <ImpactLine
-          icon={<Leaf className="size-4" aria-hidden="true" />}
+          icon={<CarbonIcon size={16} aria-hidden="true" />}
           value={`${carbon.toFixed(1)} tCO₂`}
           label="stored carbon"
         />
         <ImpactLine
-          icon={<Sprout className="size-4" aria-hidden="true" />}
+          icon={<WorthRangeIcon size={16} aria-hidden="true" />}
           value={`${money(services)}/yr`}
           label="of nature's services"
         />
@@ -359,7 +359,7 @@ function ImpactLine({
 }) {
   return (
     <li className="flex items-center gap-2">
-      <span className="grid size-7 place-items-center rounded-full bg-lime/50 text-lime-ink">
+      <span className="grid size-7 place-items-center rounded-full bg-lichen text-foreground">
         {icon}
       </span>
       <span className="tabular font-medium">{value}</span>

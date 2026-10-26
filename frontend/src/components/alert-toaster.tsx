@@ -6,16 +6,13 @@ import { toast } from "sonner";
 import { cn } from "cn";
 
 import { useLiveEvent, useWorld } from "@/lib/hooks";
-import { usePrototype } from "@/lib/prototype/store";
-import { PERSONAS } from "@/lib/prototype/world";
 
 /** How old (vs. page load) a replayed alert may be and still toast; allows some clock skew. */
 const REPLAY_GRACE_MS = 30_000;
 
 /**
- * New alerts arrive as a phone-style notification. Signed in, they're the account's real
- * `alert` events (T75: only the asset's holders and community get them); the anonymous
- * scripted demo shows the prototype persona's alerts.
+ * New alerts arrive as a phone-style notification: the sandbox person's real `alert` events
+ * (T75: only the asset's holders and community get them).
  */
 export function AlertToaster() {
   const { world } = useWorld();
@@ -45,36 +42,6 @@ export function AlertToaster() {
     },
     { enabled: signedIn },
   );
-  return signedIn ? null : <PrototypeAlertToaster />;
-}
-
-function PrototypeAlertToaster() {
-  const { world, hydrated } = usePrototype();
-  const seen = useRef<Set<string> | null>(null);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    if (!seen.current) {
-      seen.current = new Set(world.alerts.map((a) => a.id));
-      return;
-    }
-    for (const alert of world.alerts) {
-      if (seen.current.has(alert.id)) continue;
-      seen.current.add(alert.id);
-      toast.custom(
-        () => (
-          <AlertCard
-            from={`WildWatch · ${PERSONAS[alert.persona].name}'s phone`}
-            title={alert.title}
-            message={alert.message}
-            urgent={alert.severity === "critical"}
-          />
-        ),
-        { duration: 7000 },
-      );
-    }
-  }, [world.alerts, hydrated]);
-
   return null;
 }
 

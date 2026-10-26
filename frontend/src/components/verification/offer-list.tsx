@@ -28,7 +28,7 @@ import {
   usePendingOffers,
   useSendBackOffer,
 } from "@/lib/offer-hooks";
-import { date, int } from "@/lib/prototype/format";
+import { date, int } from "@/lib/format";
 import { assetHref, unitPriceText } from "@/lib/trade";
 
 /** The opening offers waiting for the Reviewer, oldest first (ADR-0008 §5). */

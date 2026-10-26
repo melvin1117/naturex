@@ -8,7 +8,6 @@ import {
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import StewardLayout from "@/app/sandbox/steward/layout";
-import { TourProvider } from "@/components/proto/tour";
 import {
   StewardCommunityProvider,
   useStewardCommunity,
@@ -16,7 +15,6 @@ import {
 import { WorldProvider } from "@/components/world-provider";
 import type { MyCommunity, WorldOut } from "@/lib/api/types";
 import { createDataLayer, queryKeys } from "@/lib/data-layer";
-import { PrototypeProvider } from "@/lib/prototype/store";
 
 import {
   BASE,
@@ -87,13 +85,9 @@ function setup(communities: MyCommunity[] = [], routes: Routes = {}) {
   const layer = createDataLayer({ baseUrl: BASE, fetch: backend.fetch });
   render(
     <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <TourProvider>
-          <StewardLayout>
-            <Page />
-          </StewardLayout>
-        </TourProvider>
-      </PrototypeProvider>
+      <StewardLayout>
+        <Page />
+      </StewardLayout>
     </WorldProvider>,
   );
   return { backend, layer };
@@ -153,11 +147,9 @@ describe("Communities: which community", () => {
     );
     render(
       <WorldProvider dataLayer={layer}>
-        <PrototypeProvider>
-          <StewardCommunityProvider>
-            <Probe />
-          </StewardCommunityProvider>
-        </PrototypeProvider>
+        <StewardCommunityProvider>
+          <Probe />
+        </StewardCommunityProvider>
       </WorldProvider>,
     );
     await waitFor(() => expect(seen).toContain(RIO.id));

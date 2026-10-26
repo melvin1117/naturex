@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
 import { IMAGERY_ATTRIBUTION, IMAGERY_URL } from "@/lib/imagery";
-import type { LatLng } from "@/lib/prototype/data";
+import type { LatLng } from "@/lib/site-data";
 
 /** Satellite basemap, the site boundary and (optionally) the Dynamic World overlay. */
 export function SiteMap({

@@ -90,30 +90,6 @@ beforeEach(() => {
 });
 
 describe("TradePanel", () => {
-  it("asks anonymous visitors to sign in and come back here", async () => {
-    const { backend } = renderPanel({}, WORLD);
-
-    const link = await screen.findByRole("link", { name: /sign in to trade/i });
-    expect(link).toHaveAttribute(
-      "href",
-      `/login?next=${encodeURIComponent(`/asset/${ASSET_ID}`)}`,
-    );
-    expect(screen.queryByLabelText("Units")).not.toBeInTheDocument();
-    expect(backend.calls("GET /portfolio")).toBe(0);
-    expect(backend.calls(QUOTE)).toBe(0);
-  });
-
-  it("keeps the query string in the sign-in link", async () => {
-    nav.search = "asset=abc&tab=trade";
-    renderPanel({}, WORLD);
-
-    const link = await screen.findByRole("link", { name: /sign in to trade/i });
-    expect(link).toHaveAttribute(
-      "href",
-      `/login?next=${encodeURIComponent(`/asset/${ASSET_ID}?asset=abc&tab=trade`)}`,
-    );
-  });
-
   it.each([
     [{ status: "suspended" as const }, /paused/],
     [{ price: null }, /opening offer/],
@@ -147,7 +123,17 @@ describe("TradePanel", () => {
     expect(screen.queryByText(/^of /)).not.toBeInTheDocument();
   });
 
-  it("tells admins they can't trade", async () => {
+  it("waits for the sandbox's person instead of offering a sign-in", async () => {
+    const { backend } = renderPanel({}, WORLD);
+    await waitFor(() => expect(backend.calls(ASSET)).toBe(1));
+    expect(
+      screen.queryByRole("button", { name: /^Buy/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /sign in/i })).toBeNull();
+    expect(backend.calls("GET /portfolio")).toBe(0);
+  });
+
+  it("tells the Reviewer they don't back sites", async () => {
     renderPanel(
       {},
       {
@@ -157,7 +143,7 @@ describe("TradePanel", () => {
     );
 
     expect(
-      await screen.findByText(/Admin accounts can't trade/),
+      await screen.findByText(/The Reviewer doesn't back sites/),
     ).toBeInTheDocument();
   });
 
@@ -521,9 +507,9 @@ describe("TradePanel", () => {
   });
 
   it.each([
-    [401, "auth_required", /session has ended/, "Sign in again"],
+    [401, "auth_required", /sandbox has ended/, "Open a new sandbox"],
     [403, "insider_trading_blocked", /community can't trade its units/, null],
-    [403, "admins_cannot_trade", /Admin accounts can't trade/, null],
+    [403, "admins_cannot_trade", /Reviewer doesn't back sites/, null],
     [409, "not_trading", /isn't trading yet/, null],
     [409, "insufficient_cash", /enough play money/, null],
     [409, "insufficient_shares", /more units than you hold/, null],

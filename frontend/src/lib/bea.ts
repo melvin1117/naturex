@@ -4,8 +4,8 @@
  */
 import type { BeaState } from "@/components/bea/states";
 import type { ReportOut } from "@/lib/api/types";
-import type { Grade } from "@/lib/prototype/data";
-import { GRADE_ORDER } from "@/lib/prototype/format";
+import type { Grade } from "@/lib/site-data";
+import { GRADE_ORDER } from "@/lib/format";
 
 /** The model Bea runs on: the backend's `MODEL_FAST` (Tier.FAST, ADR-0003). */
 export const BEA_MODEL = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B";
@@ -82,13 +82,4 @@ export function greetingFor(siteName: string, change: GradeChange): string {
   return change.direction === "down"
     ? `${siteName} was lowered ${change.from} → ${change.to}. Ask me why.`
     : `${siteName} was raised ${change.from} → ${change.to}. Ask me what changed.`;
-}
-
-/** How Bea appears in the Agent Trace: labelled with the model she ran on, when it's known. */
-export function agentLabel(
-  agent: string | null | undefined,
-  modelName: string | null,
-): string | null {
-  if (agent === "copilot") return modelName ? `Bea (${modelName})` : "Bea";
-  return agent ?? null;
 }

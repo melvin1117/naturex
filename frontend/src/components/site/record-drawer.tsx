@@ -18,7 +18,7 @@ import type { ApiError } from "@/lib/api/errors";
 import type { AssetDetail, SiteImages } from "@/lib/api/types";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import type { AssetLandCover } from "@/lib/land-cover-overlay";
-import { quarterLabel } from "@/lib/prototype/format";
+import { quarterLabel } from "@/lib/format";
 import type { ReportFacts } from "@/lib/report-facts";
 import {
   RECORD_TAB_LABEL,
@@ -104,7 +104,6 @@ export function RecordDrawer({
                     versions={versions}
                     siteName={asset.name}
                     initialVersion={versionParam}
-                    live
                   />
                   <ScorePanel facts={latest} />
                 </>

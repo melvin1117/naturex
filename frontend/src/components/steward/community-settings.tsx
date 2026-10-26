@@ -10,7 +10,6 @@ import { StewardPanel } from "@/components/steward/panel";
 import { useStewardCommunity } from "@/components/shell/steward-community";
 import { EditCommunityForm } from "@/components/steward/community-form";
 import { MembersPanel } from "@/components/steward/members-panel";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useCommunity, useMeId } from "@/lib/community-hooks";
@@ -27,21 +26,8 @@ export function CommunitySettings() {
   const profile = useCommunity(active?.id);
   const [saved, setSaved] = useState(false);
 
-  if (!meId) {
-    return (
-      <div className="mx-auto max-w-xl px-4 py-16 sm:px-6">
-        <Alert>
-          <AlertTitle>Sign in to manage a community</AlertTitle>
-          <AlertDescription>
-            <p>The scripted demo has no community settings.</p>
-            <Button asChild variant="outline" size="sm" className="mt-2">
-              <Link href="/login?next=%2Fsteward%2Fcommunity">Sign in</Link>
-            </Button>
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
+  // The gate shows a loader until the sandbox's person is known.
+  if (!meId) return null;
   if (!active) return null;
 
   const community = profile.data;

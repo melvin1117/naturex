@@ -9,7 +9,7 @@ import { LoadError } from "@/components/proto/load-error";
 import { Button } from "@/components/ui/button";
 import type { AlertOut } from "@/lib/api/types";
 import { useAlerts, useMarkAlertRead, useMarkAllAlertsRead } from "@/lib/hooks";
-import { date } from "@/lib/prototype/format";
+import { date } from "@/lib/format";
 import { assetHref } from "@/lib/trade";
 
 /** Severity 4–5 (a downgrade, a big drop, serious news) reads as a warning. */

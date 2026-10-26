@@ -1,51 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  curatedSite,
-  MODEL_CALLS_EMPTY,
-  QUARTER_NO_SITES,
-} from "@/lib/empty-states";
+import { QUARTER_NO_SITES } from "@/lib/empty-states";
 import { skeletonKind } from "@/lib/route-skeleton";
 
 describe("other empty states", () => {
   it("teach what appears, why it's empty and what makes it appear", () => {
-    expect(MODEL_CALLS_EMPTY.body).toMatch(
-      /^Live ratings log their model calls/,
-    );
-    // Fallback runs may log none, so it never promises every live rating logs calls.
-    expect(MODEL_CALLS_EMPTY.body).toMatch(/may not either/);
-    expect(MODEL_CALLS_EMPTY.body).not.toMatch(/Nemotron/);
     expect(QUARTER_NO_SITES).toMatch(/Once a community lists land/);
-  });
-});
-
-describe("curatedSite", () => {
-  const card = (over: Record<string, unknown>) => ({
-    id: "a",
-    name: "Site",
-    site_key: "hero",
-    grade: "A",
-    status: "listed",
-    ...over,
-  });
-
-  it("picks a rated curated site, listed first", () => {
-    expect(
-      curatedSite([
-        card({ id: "user", site_key: null }),
-        card({ id: "draft", status: "draft" }),
-        card({ id: "hero" }),
-      ])?.id,
-    ).toBe("hero");
-    expect(curatedSite([card({ id: "draft", status: "draft" })])?.id).toBe(
-      "draft",
-    );
-  });
-
-  it("is null without one", () => {
-    expect(curatedSite(undefined)).toBeNull();
-    expect(curatedSite([card({ site_key: null })])).toBeNull();
-    expect(curatedSite([card({ grade: null })])).toBeNull();
   });
 });
 

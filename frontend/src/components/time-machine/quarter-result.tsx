@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import type { SimulateQuarter } from "@/lib/api/types";
 import { QUARTER_NO_SITES } from "@/lib/empty-states";
-import { quarterLabel } from "@/lib/prototype/format";
+import { quarterLabel } from "@/lib/format";
 import {
   ASSET_STATUS_LABEL,
   detailText,

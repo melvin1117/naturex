@@ -38,7 +38,7 @@ import { evidenceHref } from "@/lib/field-evidence";
 import { focusIfLost, useRestoreFocusAfterPending } from "@/lib/focus";
 import { usePacedRun } from "@/lib/listing/use-paced-run";
 import { usePrefersReducedMotion } from "@/lib/motion";
-import { ha } from "@/lib/prototype/format";
+import { ha } from "@/lib/format";
 import { num, reportFacts } from "@/lib/report-facts";
 
 import { RatingProgress } from "./rating-progress";

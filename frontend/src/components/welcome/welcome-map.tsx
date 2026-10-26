@@ -4,7 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { useEffect, useRef } from "react";
 
 import { IMAGERY_ATTRIBUTION, IMAGERY_URL } from "@/lib/imagery";
-import { SITE_DATA } from "@/lib/prototype/data";
+import { SITE_DATA } from "@/lib/site-data";
 
 const HERO = SITE_DATA.find((s) => s.key === "wetland_mx");
 

@@ -60,12 +60,7 @@ import {
 } from "@/lib/hooks";
 import { countryName, siteImageUrl } from "@/lib/market-cards";
 import { beforeAfterViews, type BeforeAfterViews } from "@/lib/site-views";
-import {
-  GRADE_LABEL,
-  ha,
-  price as fmtPrice,
-  quarterLabel,
-} from "@/lib/prototype/format";
+import { GRADE_LABEL, ha, price as fmtPrice, quarterLabel } from "@/lib/format";
 import { num, reportFacts, type ReportFacts } from "@/lib/report-facts";
 import {
   BACK_THIS_SITE,

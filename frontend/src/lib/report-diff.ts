@@ -6,7 +6,7 @@
  * the scaling of 0-1 shares to percentages for display.
  */
 import type { MetricChange } from "@/lib/api/types";
-import { money } from "@/lib/prototype/format";
+import { money } from "@/lib/format";
 
 export type MetricGroup = MetricChange["group"];
 

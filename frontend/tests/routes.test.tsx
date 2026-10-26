@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -11,11 +11,8 @@ import JudgePage from "@/app/how/page";
 import HomePage from "@/app/page";
 import NotFound from "@/app/not-found";
 import ListPage from "@/app/sandbox/steward/list/page";
-import StewardPage from "@/app/sandbox/steward/page";
-import { TourProvider } from "@/components/proto/tour";
 import { WorldProvider } from "@/components/world-provider";
 import { createDataLayer } from "@/lib/data-layer";
-import { PrototypeProvider } from "@/lib/prototype/store";
 import story from "./story/story.json";
 
 import {
@@ -74,13 +71,7 @@ function Providers({ children }: { children: ReactNode }) {
     fetch: backend.fetch,
     createEventSource: createFakeEventSource,
   });
-  return (
-    <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <TourProvider>{children}</TourProvider>
-      </PrototypeProvider>
-    </WorldProvider>
-  );
+  return <WorldProvider dataLayer={layer}>{children}</WorldProvider>;
 }
 
 function StoryProviders({ children }: { children: ReactNode }) {
@@ -95,13 +86,7 @@ function StoryProviders({ children }: { children: ReactNode }) {
     fetch: backend.fetch,
     createEventSource: createFakeEventSource,
   });
-  return (
-    <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <TourProvider>{children}</TourProvider>
-      </PrototypeProvider>
-    </WorldProvider>
-  );
+  return <WorldProvider dataLayer={layer}>{children}</WorldProvider>;
 }
 
 describe("routes", () => {
@@ -109,7 +94,6 @@ describe("routes", () => {
     ["/", HomePage, "Welcome to WildWorth."],
     ["/sandbox", MarketplacePage, "Marketplace"],
     ["/sandbox/portfolio", PortfolioPage, "Your stakes"],
-    ["/sandbox/steward", StewardPage, "Get paid for keeping your land alive"],
     ["/sandbox/admin", AdminPage, "Time Machine"],
     ["/dev/ui", DevUiPage, "UI kit"],
     ["404", NotFound, "Page not found"],
@@ -133,32 +117,21 @@ describe("routes", () => {
     ).toBeInTheDocument();
   });
 
-  it("/steward/list shows a loader, then the prototype flow to an anonymous demo visitor", async () => {
+  it("/steward/list waits for the sandbox's session, never a scripted flow", async () => {
     render(<ListPage />, { wrapper: Providers });
     expect(screen.getByRole("status")).toHaveTextContent(
       "Loading the listing form…",
     );
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "List your land" }),
-    ).toBeInTheDocument();
-  });
-
-  it("/asset/[id] shows a prototype site from the scripted sandbox", async () => {
-    render(
-      await AssetPage({ params: Promise.resolve({ id: "sumidero-forest" }) }),
-      {
-        wrapper: Providers,
-      },
+    // The world answered without a person: still waiting for the sandbox gate.
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Loading the listing form…",
+      ),
     );
-    expect(
-      await screen.findByRole("heading", {
-        level: 1,
-        name: "Sumidero Canyon Restoration Forest",
-      }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
   });
 
-  it("/asset/[id] explains an unknown prototype site", async () => {
+  it("/asset/[id] explains an id that isn't a site", async () => {
     render(await AssetPage({ params: Promise.resolve({ id: "nope" }) }), {
       wrapper: Providers,
     });

@@ -23,7 +23,7 @@ import type {
 } from "@/lib/api/types";
 import type { ApiError } from "@/lib/api/errors";
 import { STATUS_LABEL } from "@/lib/community";
-import { date } from "@/lib/prototype/format";
+import { date } from "@/lib/format";
 import {
   adminReviewHref,
   checkCounts,

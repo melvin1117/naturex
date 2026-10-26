@@ -7,7 +7,7 @@ import {
   HEALTH_FACTOR_FORMULA,
   trimDecimal,
 } from "@/lib/ipo";
-import { int } from "@/lib/prototype/format";
+import { int } from "@/lib/format";
 import { moneyText, unitPriceText } from "@/lib/trade";
 
 function Step({

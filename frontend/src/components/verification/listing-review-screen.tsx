@@ -24,7 +24,7 @@ import { boundaryLatLngs, isApiAssetId } from "@/lib/asset-detail";
 import { STATUS_LABEL } from "@/lib/community";
 import { useAsset, useAssetOutlines } from "@/lib/hooks";
 import { outlinePolygons } from "@/lib/listing/boundary";
-import { ha } from "@/lib/prototype/format";
+import { ha } from "@/lib/format";
 import { num } from "@/lib/report-facts";
 import { toApiError } from "@/lib/api/errors";
 import {

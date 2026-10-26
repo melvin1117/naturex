@@ -51,7 +51,7 @@ Built for the Nebius × NVIDIA Global AI Hackathon (Best Apps & Agents track); s
 - Three curated demo sites (hero: a ~500 ha Xochimilco-style wetland near Mexico City; plus a mangrove and a restoration forest). Live rating of user-drawn polygons is best-effort (2 live runs per visitor).
 - Ratings: Health Score 0–100; grades AAA ≥ 90 · AA ≥ 80 · A ≥ 70 · BBB ≥ 60 · BB ≥ 50 · B ≥ 40 · C ≥ 30 · D < 30; confidence 0–100%; values as low/mid/high $/yr per service (carbon, water, flood, habitat, recreation).
 - Listing polygon: 10–50,000 ha, no self-intersection, no overlap with existing listings.
-- Stack: Next.js 15.5 App Router, TypeScript strict, Tailwind v4, **shadcn/ui components only**, react-leaflet, Recharts, Driver.js or react-joyride for the tour. API client is generated from FastAPI's OpenAPI schema.
+- Stack: Next.js 15.5 App Router, TypeScript strict, Tailwind v4, **shadcn/ui components only**, react-leaflet, Recharts (no guided tour: the welcome and the story explain the product, ADR-0008). API client is generated from FastAPI's OpenAPI schema.
 - **Play money only.** Never present anything as a real security, investment or token. No real-money flows, KYC, crypto or PDF export.
 - Responsive web; no native apps. English only (Spanish report is an undecided "Could").
 - No third-party logos in the product or the video; keep data attributions (Dynamic World, Copernicus, JRC, Hansen, OpenStreetMap).

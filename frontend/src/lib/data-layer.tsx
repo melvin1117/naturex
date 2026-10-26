@@ -71,8 +71,6 @@ export const queryKeys = {
   run: (runId: string) => ["run", runId] as const,
   /** A run's Agent Trace (T34); under `run`, so a run's progress refetches it too. */
   runTrace: (runId: string) => ["run", runId, "trace"] as const,
-  /** The world's latest logged model calls (`GET /admin/trace`), per account. */
-  worldTrace: (meId: string | null) => ["world-trace", meId] as const,
   /** A demo site's recorded run (curated data: the same for every account). */
   recordedRun: (siteKey: string) => ["recorded-run", siteKey] as const,
   story: () => ["story"] as const,
@@ -315,11 +313,6 @@ export function DataLayerProvider({
       {children}
     </DataLayerContext.Provider>
   );
-}
-
-/** The layer if one is provided, else null (for code that also runs without one). */
-export function useOptionalDataLayer(): DataLayer | null {
-  return useContext(DataLayerContext);
 }
 
 export function useDataLayer(): DataLayer {

@@ -1,19 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-
-import { ListingFlow } from "@/components/proto/listing-flow";
-import { TourProvider } from "@/components/proto/tour";
 import { Slider } from "@/components/ui/slider";
-import { WorldProvider } from "@/components/world-provider";
-import { createDataLayer } from "@/lib/data-layer";
-import { PrototypeProvider } from "@/lib/prototype/store";
-import {
-  createInitialWorld,
-  rateDraft,
-  registerCommunity,
-} from "@/lib/prototype/world";
-
-import { BASE, fakeBackend, json, WORLD } from "../lib/helpers";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
@@ -61,30 +48,5 @@ describe("Slider", () => {
       "aria-label",
       "Price range",
     );
-  });
-
-  it("is named in the listing flow's opening offer", async () => {
-    const world = rateDraft(
-      registerCommunity(createInitialWorld("steward"), "Selva Viva"),
-    );
-    window.localStorage.setItem("ww-prototype-world", JSON.stringify(world));
-    const layer = createDataLayer({
-      baseUrl: BASE,
-      fetch: fakeBackend({ "GET /world": () => json(WORLD) }).fetch,
-    });
-    render(
-      <WorldProvider dataLayer={layer}>
-        <PrototypeProvider>
-          <TourProvider>
-            <ListingFlow />
-          </TourProvider>
-        </PrototypeProvider>
-      </WorldProvider>,
-    );
-    expect(
-      await screen.findByRole("slider", {
-        name: "Share the community keeps",
-      }),
-    ).toBeInTheDocument();
   });
 });

@@ -3,7 +3,7 @@ import Link from "@/components/app-link";
 import { cn } from "cn";
 
 import type { OrderOut, QuoteOut } from "@/lib/api/types";
-import { int } from "@/lib/prototype/format";
+import { int } from "@/lib/format";
 import {
   decimal,
   moneyText,
@@ -110,7 +110,6 @@ export function Receipt({
         "mt-5 rounded-2xl border border-lime/60 bg-lime/10 p-4",
         opened ? "ww-wash" : "ww-rise",
       )}
-      data-tour="trade-receipt"
     >
       <p className="text-sm font-medium">
         {bought ? "Stake added" : "Stake reduced"}: {int(order.qty)} units at{" "}

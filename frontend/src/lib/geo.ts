@@ -1,5 +1,5 @@
 /** Listing-polygon checks mirroring T36: shape, 10–50,000 ha, no overlap. */
-import type { LatLng } from "./data";
+import type { LatLng } from "./site-data";
 
 const R = 6378137;
 const rad = (d: number) => (d * Math.PI) / 180;

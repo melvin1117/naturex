@@ -62,17 +62,6 @@ describe("CopilotChat, Bea's moments", () => {
 });
 
 describe("CopilotChat", () => {
-  it("asks signed-out visitors to sign in and come back", async () => {
-    renderExchange(chat());
-
-    expect(
-      await screen.findByRole("link", { name: "Sign in to ask Bea" }),
-    ).toHaveAttribute(
-      "href",
-      `/login?next=${encodeURIComponent(`/asset/${ASSET_ID}?tab=overview`)}`,
-    );
-  });
-
   it("renders the streamed answer with each citation linking to its source", async () => {
     // jsdom has no layout: give the answer list a height so following it is observable.
     const height = vi

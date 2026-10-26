@@ -5,7 +5,7 @@ import type {
   SiteImages,
 } from "@/lib/api/types";
 import { demoSiteMediaUrl } from "@/lib/demo-site-images";
-import type { LatLng } from "@/lib/prototype/data";
+import type { LatLng } from "@/lib/site-data";
 
 /** Shown instead of an overlay: land cover is never faked (mock data, no live rating yet). */
 export const NO_OVERLAY_NOTE =

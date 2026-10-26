@@ -175,11 +175,10 @@ export function stewardAssetId(pathname: string | null): string | null {
 }
 
 /**
- * What a signed-in account sees in the Steward app: its pages once it belongs to a community,
+ * What the sandbox's person sees under Communities: its pages once they're in a community,
  * else "Start a community" with the create form (T63). On a site's pages
- * (`/steward/assets/<id>/...`), an account outside the community that lists the site is told
- * so instead (T74); the API refuses its actions either way. Anonymous visitors only get here
- * in the scripted demo (`RequireAccount`).
+ * (`/steward/assets/<id>/...`), someone outside the community that lists the site is told so
+ * instead (T74); the API refuses their actions either way.
  */
 export function StewardGate({ children }: { children: ReactNode }) {
   const { world } = useWorld();
@@ -191,7 +190,9 @@ export function StewardGate({ children }: { children: ReactNode }) {
   const meId = world?.me?.id ?? null;
   if (createdBy !== null && createdBy !== meId) setCreatedBy(null);
 
-  if (world?.me == null) return children;
+  // The sandbox gate opens a session first; until it's known, nothing of anyone's shows.
+  if (world?.me == null)
+    return <GateLoading>Opening your sandbox…</GateLoading>;
 
   if (communities.length === 0) {
     if (query.status === "error") {

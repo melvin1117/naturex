@@ -39,8 +39,8 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import type { Story } from "@/lib/api/types";
 import { useRecordedRun, useStory } from "@/lib/hooks";
-import type { Grade } from "@/lib/prototype/data";
-import { date } from "@/lib/prototype/format";
+import type { Grade } from "@/lib/site-data";
+import { date } from "@/lib/format";
 import {
   change,
   dollars,

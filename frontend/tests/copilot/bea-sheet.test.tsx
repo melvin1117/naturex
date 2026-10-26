@@ -8,10 +8,8 @@ import {
 import type { ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CopilotSheet } from "@/components/proto/copilot-sheet";
 import { BeaFab } from "@/components/bea/bea-fab";
 import { AlertsBell } from "@/components/shell/alerts-bell";
-import { TOUR_STEPS, useTour } from "@/components/proto/tour";
 import type { CopilotStreamEvent } from "@/lib/api/types";
 
 import { renderExchange, stubBrowserApis } from "../exchange/render";
@@ -89,7 +87,6 @@ function renderHeader(routes: Routes = {}, extra: ReactNode = null) {
       {/* The bell shows once the world has loaded, so tests wait on it. */}
       <AlertsBell />
       <BeaFab />
-      <CopilotSheet />
     </>,
     routes,
   );
@@ -114,16 +111,6 @@ function hangingAnswer(signals: AbortSignal[]) {
       headers: { "Content-Type": "text/event-stream" },
     });
   };
-}
-
-function TourAtCopilot() {
-  const tour = useTour();
-  const step = TOUR_STEPS.findIndex((s) => s.target === "copilot-button");
-  return (
-    <button type="button" onClick={() => tour.go(step)}>
-      Tour step: Copilot
-    </button>
-  );
 }
 
 async function openCopilot(): Promise<{
@@ -426,57 +413,5 @@ describe("Header Bea, when the page changes under it", () => {
     expect((await requests(backend))[1]).toEqual({
       question: "Which site fell most?",
     });
-  });
-});
-
-describe("Header Bea, signed in during the guided tour", () => {
-  it("keeps the tour's scripted sheet and never calls the Copilot API", async () => {
-    const { backend } = renderHeader(signedIn, <TourAtCopilot />);
-    await screen.findByRole("button", { name: /Alerts/ });
-
-    fireEvent.click(screen.getByRole("button", { name: "Tour step: Copilot" }));
-    const { sheet } = await openCopilot();
-
-    expect(within(sheet).getByText(/scripted answers/)).toBeVisible();
-    expect(
-      within(sheet).queryByRole("radiogroup", { name: "Ask about" }),
-    ).not.toBeInTheDocument();
-    fireEvent.click(
-      within(sheet).getByRole("button", { name: "Why did the price change?" }),
-    );
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(backend.calls("POST /copilot")).toBe(0);
-  });
-});
-
-describe("Header Bea, anonymous", () => {
-  it("keeps the scripted demo and never calls the Copilot API", async () => {
-    const { backend } = renderHeader();
-    const { sheet } = await openCopilot();
-
-    expect(within(sheet).getByText(/scripted answers/)).toBeVisible();
-    expect(
-      within(sheet).getByRole("combobox", { name: "Site to ask about" }),
-    ).toBeInTheDocument();
-    expect(
-      within(sheet).queryByRole("radiogroup", { name: "Ask about" }),
-    ).not.toBeInTheDocument();
-    expect(backend.calls("POST /copilot")).toBe(0);
-  });
-
-  it("starts on a scripted site when the page's real site isn't in its world", async () => {
-    nav.pathname = `/asset/${ASSET_ID}`;
-    renderHeader();
-    const { sheet } = await openCopilot();
-    // Never a blank picker: the preview names a site it has answers for.
-    const picker = within(sheet).getByRole("combobox", {
-      name: "Site to ask about",
-    });
-    expect(picker.textContent!.trim()).not.toBe("");
-    expect(
-      within(sheet).getByLabelText(
-        `Ask Bea about ${picker.textContent!.trim()}`,
-      ),
-    ).toBeInTheDocument();
   });
 });

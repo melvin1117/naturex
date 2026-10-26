@@ -20,7 +20,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { toApiError } from "@/lib/api/errors";
 import type { TimeMachine, TimeMachineQuarter } from "@/lib/api/types";
 import { useLiveEvent } from "@/lib/hooks";
-import { quarterLabel } from "@/lib/prototype/format";
+import { quarterLabel } from "@/lib/format";
 import {
   isJobActive,
   jobFailure,
@@ -190,7 +190,6 @@ export function QuarterSection({
                 className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-card aria-disabled:active:translate-y-0"
                 disabled={!canRun && !running}
                 aria-disabled={running || undefined}
-                data-tour="next-quarter"
               >
                 {running ? (
                   <Spinner aria-hidden="true" role="presentation" />

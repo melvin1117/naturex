@@ -2,15 +2,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import PortfolioLayout from "@/app/sandbox/(exchange)/portfolio/layout";
-import AdminLayout from "@/app/sandbox/admin/layout";
 import StewardLayout from "@/app/sandbox/steward/layout";
-import { TourProvider } from "@/components/proto/tour";
-import { RequireAccount } from "@/components/require-account";
+import { ReviewerGate } from "@/components/reviewer-gate";
 import { WorldProvider } from "@/components/world-provider";
 import { createDataLayer, type DataLayer } from "@/lib/data-layer";
 import { usePortfolio, useSignOut, useWorld } from "@/lib/hooks";
-import { PrototypeProvider, usePrototype } from "@/lib/prototype/store";
 
 import {
   BASE,
@@ -65,51 +61,31 @@ function setup(ui: ReactNode, routes: Routes = {}) {
     baseUrl: BASE,
     fetch: backend.fetch,
   });
-  const utils = render(
-    <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <TourProvider>{ui}</TourProvider>
-      </PrototypeProvider>
-    </WorldProvider>,
-  );
+  const utils = render(<WorldProvider dataLayer={layer}>{ui}</WorldProvider>);
   return { ...utils, backend, layer };
 }
 
-describe("RequireAccount", () => {
+describe("ReviewerGate", () => {
   const Secret = () => <p>Your stakes</p>;
 
-  it("redirects anonymous visitors to sign in and back", async () => {
-    window.history.replaceState(null, "", "/portfolio?tab=impact");
+  it("waits for the sandbox's session rather than sending anyone to sign in", async () => {
     setup(
-      <RequireAccount>
+      <ReviewerGate>
         <Secret />
-      </RequireAccount>,
+      </ReviewerGate>,
     );
-    await waitFor(() =>
-      expect(router.replace).toHaveBeenCalledWith(
-        "/login?next=%2Fportfolio%3Ftab%3Dimpact",
-      ),
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Opening your sandbox…",
     );
     expect(screen.queryByText("Your stakes")).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(/sign in/i);
-  });
-
-  it("shows the page to a signed-in account", async () => {
-    setup(
-      <RequireAccount>
-        <Secret />
-      </RequireAccount>,
-      { "GET /world": () => json(SIGNED_IN_WORLD) },
-    );
-    expect(await screen.findByText("Your stakes")).toBeVisible();
     expect(router.replace).not.toHaveBeenCalled();
   });
 
   it("offers to switch to the Reviewer instead of looping on a 403", async () => {
     setup(
-      <RequireAccount admin>
+      <ReviewerGate>
         <Secret />
-      </RequireAccount>,
+      </ReviewerGate>,
       { "GET /world": () => json(SIGNED_IN_WORLD) },
     );
     expect(
@@ -130,9 +106,9 @@ describe("RequireAccount", () => {
 
   it("lets an admin into admin routes", async () => {
     setup(
-      <RequireAccount admin>
+      <ReviewerGate>
         <Secret />
-      </RequireAccount>,
+      </ReviewerGate>,
       {
         "GET /world": () =>
           json({
@@ -143,98 +119,10 @@ describe("RequireAccount", () => {
     );
     expect(await screen.findByText("Your stakes")).toBeVisible();
   });
-
-  it("keeps the scripted demo open after the visitor picks a persona", async () => {
-    function EnterDemo() {
-      const { setPersona } = usePrototype();
-      return <button onClick={() => setPersona("steward")}>Explore</button>;
-    }
-    setup(
-      <>
-        <EnterDemo />
-        <RequireAccount allowPrototypeDemo>
-          <Secret />
-        </RequireAccount>
-      </>,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Explore" }));
-    expect(await screen.findByText("Your stakes")).toBeVisible();
-    expect(window.sessionStorage.getItem("ww-prototype-demo")).toBe("1");
-  });
-
-  it("ignores the scripted demo unless the route opts in", async () => {
-    window.sessionStorage.setItem("ww-prototype-demo", "1");
-    setup(
-      <RequireAccount>
-        <Secret />
-      </RequireAccount>,
-    );
-    await waitFor(() => expect(router.replace).toHaveBeenCalled());
-    expect(screen.queryByText("Your stakes")).not.toBeInTheDocument();
-  });
-
-  it("shows why the session couldn't be checked", async () => {
-    setup(
-      <RequireAccount>
-        <Secret />
-      </RequireAccount>,
-      { "GET /world": () => json({ detail: "x" }, { status: 500 }) },
-    );
-    expect(
-      await screen.findByText("Something went wrong on our side. Try again."),
-    ).toBeVisible();
-  });
 });
 
-describe("protected layouts", () => {
+describe("the Communities layout", () => {
   const Child = () => <p>Protected content</p>;
-
-  it.each([
-    ["/steward", StewardLayout],
-    ["/admin", AdminLayout],
-    ["/portfolio", PortfolioLayout],
-  ] as const)(
-    "%s sends anonymous visitors to sign in",
-    async (path, Layout) => {
-      window.history.replaceState(null, "", path);
-      nav.pathname = path;
-      setup(
-        <Layout>
-          <Child />
-        </Layout>,
-      );
-      await waitFor(() =>
-        expect(router.replace).toHaveBeenCalledWith(
-          `/login?next=${encodeURIComponent(path)}`,
-        ),
-      );
-      expect(screen.queryByText("Protected content")).not.toBeInTheDocument();
-    },
-  );
-
-  it.each([
-    ["/steward", StewardLayout, true],
-    ["/portfolio", PortfolioLayout, true],
-    ["/admin", AdminLayout, false],
-  ] as const)(
-    "%s honours the scripted demo: %s",
-    async (path, Layout, opens) => {
-      window.history.replaceState(null, "", path);
-      nav.pathname = path;
-      window.sessionStorage.setItem("ww-prototype-demo", "1");
-      setup(
-        <Layout>
-          <Child />
-        </Layout>,
-      );
-      if (opens) {
-        expect(await screen.findByText("Protected content")).toBeVisible();
-      } else {
-        await waitFor(() => expect(router.replace).toHaveBeenCalled());
-        expect(screen.queryByText("Protected content")).not.toBeInTheDocument();
-      }
-    },
-  );
 
   it("/steward shows its children to a community member", async () => {
     nav.pathname = "/steward";
@@ -247,7 +135,10 @@ describe("protected layouts", () => {
         "GET /me/communities": () => json([community()]),
       },
     );
-    expect(await screen.findByText("Protected content")).toBeVisible();
+    // The layout's Suspense swaps its first render: check the settled page.
+    await waitFor(() =>
+      expect(screen.getByText("Protected content")).toBeVisible(),
+    );
   });
 });
 

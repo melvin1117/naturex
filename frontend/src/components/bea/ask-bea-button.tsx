@@ -41,7 +41,7 @@ export const AskBeaButton = forwardRef<
             <Bea size={32} label="" />
             <span className="max-sm:sr-only">Ask Bea</span>{" "}
             {/* Part of the name too ("Ask Bea AI assistant"): the disclosure isn't visual only. */}
-            <span className="hidden rounded-full bg-primary-foreground/15 px-1.5 py-0.5 font-mono text-[10px] leading-none tracking-[0.06em] sm:inline">
+            <span className="rounded-full bg-primary-foreground/15 px-1.5 py-0.5 font-mono text-[10px] leading-none tracking-[0.06em] max-sm:sr-only">
               AI
             </span>{" "}
             <span className="sr-only">assistant</span>
