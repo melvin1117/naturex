@@ -1,4 +1,4 @@
-.PHONY: ci lint test migrate seed fe-check check-client eval e2e task-map board rerate-all news-sweep
+.PHONY: ci lint test migrate seed fe-check preview check-client eval e2e task-map board rerate-all news-sweep
 
 # Run before every PR: the same checks GitHub CI runs. Start Postgres first: docker compose up -d
 ci:
@@ -24,6 +24,11 @@ migrate:
 .PHONY: dev
 dev:
 	LIVE=$(or $(LIVE),$(live)) ./scripts/dev.sh
+
+# The production build on the same ports, for trying the app as visitors get it (every page built,
+# links prefetched). Stop `make dev` first.
+preview:
+	LIVE=$(or $(LIVE),$(live)) PREVIEW=1 ./scripts/dev.sh
 
 # T01: check your .env keys work (Token Factory, Tavily, Earth Engine); spends no credits
 .PHONY: check-keys

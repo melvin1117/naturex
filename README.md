@@ -87,7 +87,9 @@ Needs Docker, `uv`, Node 22 and Corepack. One command starts Postgres, applies m
 cp .env.example .env    # first time only; add keys for live services
 make dev                # uses .env as is (USE_MOCKS=true: mock agents and data)
 make dev LIVE=1         # real services: Token Factory models, Tavily, Earth Engine (needs keys)
+make preview            # the production build, as visitors get it (stop `make dev` first)
 ```
+The dev server (Turbopack) compiles each page on its first visit, so a first click can take a second or two; `make dev` opens the main pages in the background once it's up to do that ahead of you. To judge speed or feel, use `make preview`: every page is built ahead and links prefetch.
 
 ### Quick start (backend)
 ```bash
