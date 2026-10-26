@@ -1,6 +1,6 @@
 "use client";
 
-import { History } from "lucide-react";
+import { TimeMachineIcon } from "@/components/icons";
 import { useState } from "react";
 
 import { TimeMachinePanel } from "@/components/time-machine/time-machine-screen";
@@ -33,7 +33,7 @@ export function TimeMachineSheet() {
           variant="ghost"
           className="relative h-10 gap-2 rounded-full px-3 text-[13.5px] max-sm:size-10 max-sm:px-0"
         >
-          <History aria-hidden="true" className="size-[18px]" />
+          <TimeMachineIcon aria-hidden="true" className="size-[18px]" />
           <span className="max-sm:sr-only">Time Machine</span>
           {running && (
             <>

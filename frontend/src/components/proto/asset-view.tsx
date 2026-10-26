@@ -1,19 +1,18 @@
 "use client";
 
-import {
-  ArrowLeft,
-  Camera,
-  Database,
-  FileText,
-  HandCoins,
-  Link2,
-  type LucideIcon,
-  MapPin,
-  PanelRight,
-  ShieldCheck,
-} from "lucide-react";
+import { ArrowLeft, type LucideIcon, MapPin } from "lucide-react";
 import Link from "@/components/app-link";
 import dynamic from "next/dynamic";
+
+import {
+  AgentTraceIcon,
+  BackThisSiteIcon,
+  FieldEvidenceIcon,
+  ProofOfLifeIcon,
+  RecordIcon,
+  SatelliteRecordIcon,
+  VerifiedLandIcon,
+} from "@/components/icons";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 
@@ -313,7 +312,7 @@ function AssetLoaded({
                   // Phones: the trade panel comes after the page, so the hero leads to it.
                   <Button asChild variant="on-image" className="lg:hidden">
                     <a href={`#${BACK_THIS_SITE}`}>
-                      <HandCoins aria-hidden="true" />
+                      <BackThisSiteIcon aria-hidden="true" />
                       Back this site
                     </a>
                   </Button>
@@ -326,7 +325,7 @@ function AssetLoaded({
                     className="max-lg:border max-lg:border-card/45 max-lg:bg-machine/30 max-lg:text-card max-lg:backdrop-blur-sm"
                     onClick={() => show("trace")}
                   >
-                    <PanelRight aria-hidden="true" />
+                    <AgentTraceIcon aria-hidden="true" />
                     How it was rated
                   </Button>
                 )}
@@ -336,6 +335,7 @@ function AssetLoaded({
                     aria-haspopup="dialog"
                     onClick={() => show("report")}
                   >
+                    <ProofOfLifeIcon aria-hidden="true" />
                     Proof of Life report
                   </Button>
                 )}
@@ -500,12 +500,13 @@ function SeenFromAbove({
   );
 }
 
+// The brand pack's feature icons (guidelines ch. 8): Data sources are the satellite record.
 const MORE_ICON: Record<RecordTab, LucideIcon> = {
-  report: FileText,
-  ledger: Link2,
-  verification: ShieldCheck,
-  photos: Camera,
-  sources: Database,
+  report: ProofOfLifeIcon,
+  ledger: RecordIcon,
+  verification: VerifiedLandIcon,
+  photos: FieldEvidenceIcon,
+  sources: SatelliteRecordIcon,
 };
 
 /** The way into everything behind the rating, without leaving the page. */

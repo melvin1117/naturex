@@ -1,14 +1,7 @@
-import {
-  CircleCheck,
-  CircleX,
-  FileClock,
-  ShieldCheck,
-  ShieldQuestionMark,
-  ShieldX,
-  TriangleAlert,
-} from "lucide-react";
+import { CircleCheck, CircleX, ShieldX, TriangleAlert } from "lucide-react";
 import { cn } from "cn";
 
+import { StewardsIcon, VerifiedLandIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
 import type {
   CheckResult,
@@ -17,12 +10,14 @@ import type {
 } from "@/lib/api/types";
 import { CHECK_NOTE, checkLabel, RESULT_LABEL } from "@/lib/verification";
 
+// The brand's Verified land seal only where documents were reviewed. Every other level's badge
+// reads "Self-attested by the community", so it shows the community, never a check.
 const LEVEL_ICON = {
-  verified: ShieldCheck,
+  verified: VerifiedLandIcon,
   revoked: ShieldX,
-  documents_submitted: FileClock,
-  rejected: ShieldQuestionMark,
-  unverified: ShieldQuestionMark,
+  documents_submitted: StewardsIcon,
+  rejected: StewardsIcon,
+  unverified: StewardsIcon,
 } satisfies Record<VerificationLevel, unknown>;
 
 const LEVEL_TONE: Record<VerificationLevel, string> = {
@@ -55,7 +50,9 @@ export function VerificationBadge({
       data-level={level}
       className={cn(
         "max-w-full px-2.5 py-1 text-left leading-snug whitespace-normal [&>svg]:size-3.5",
-        tone === "image" ? "bg-white/15 text-white" : LEVEL_TONE[level],
+        tone === "image"
+          ? "bg-white/15 text-white [--ww-accent:var(--color-lime)]"
+          : LEVEL_TONE[level],
         className,
       )}
     >

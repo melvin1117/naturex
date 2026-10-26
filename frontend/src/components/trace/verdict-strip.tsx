@@ -1,6 +1,6 @@
-import { PanelRight } from "lucide-react";
 import { useMemo } from "react";
 
+import { AgentTraceIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import type { RecordedRun, ReportOut, RunTrace } from "@/lib/api/types";
 import { date } from "@/lib/format";
@@ -93,7 +93,7 @@ export function VerdictStrip({
           onClick={onOpen}
           className="ml-auto focus-visible:ring-card focus-visible:ring-offset-2 focus-visible:ring-offset-machine"
         >
-          <PanelRight aria-hidden="true" />
+          <AgentTraceIcon aria-hidden="true" />
           Open the Agent Trace
         </Button>
       </div>

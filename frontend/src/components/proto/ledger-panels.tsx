@@ -4,6 +4,7 @@ import { ShieldCheck, ShieldX } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "cn";
 
+import { RecordIcon } from "@/components/icons";
 import { MachineRowsSkeleton } from "@/components/page-skeletons";
 import { LoadError } from "@/components/proto/load-error";
 import { Button } from "@/components/ui/button";
@@ -190,7 +191,7 @@ export function ApiLedgerTab({ assetId }: { assetId: string }) {
         loading
         actions={
           <Button variant="on-image" disabled>
-            <ShieldCheck aria-hidden="true" />
+            <RecordIcon aria-hidden="true" />
             Verify the Record
           </Button>
         }
@@ -224,7 +225,7 @@ export function ApiLedgerTab({ assetId }: { assetId: string }) {
             {verifier.isPending ? (
               <Spinner aria-hidden="true" role="presentation" />
             ) : (
-              <ShieldCheck aria-hidden="true" />
+              <RecordIcon aria-hidden="true" />
             )}
             Verify the Record
           </Button>
