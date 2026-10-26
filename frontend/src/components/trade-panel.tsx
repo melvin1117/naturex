@@ -85,16 +85,13 @@ export function TradePanel({ assetId }: { assetId: string }) {
       className="rounded-3xl bg-card p-6 shadow-soft"
       aria-labelledby="trade-title"
     >
-      <div className="flex items-baseline justify-between gap-3">
-        <h2
-          id="trade-title"
-          tabIndex={-1}
-          className="text-base font-semibold outline-none"
-        >
-          Back this site
-        </h2>
-        <span className="text-xs text-muted-foreground">Play money only</span>
-      </div>
+      <h2
+        id="trade-title"
+        tabIndex={-1}
+        className="text-base font-semibold outline-none"
+      >
+        Back this site
+      </h2>
       <div className="mt-4">{body}</div>
     </section>
   );

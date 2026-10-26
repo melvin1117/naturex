@@ -143,7 +143,7 @@ export function BeaSuggestion({
 
 /**
  * The question field: paper, inset, with the send button inside it, and the footnote under it
- * (what Bea answers from, the model she runs on, that it's play money and never advice).
+ * (what Bea answers from, the model she runs on, and that it's never advice).
  */
 export function BeaComposer({
   value,

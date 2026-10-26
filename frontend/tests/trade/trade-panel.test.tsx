@@ -199,6 +199,8 @@ describe("TradePanel", () => {
       "side=buy&qty=10",
     );
     expect(buyButton()).not.toHaveAttribute("aria-disabled");
+    // The sandbox line once, by the confirm button (ux-writing: never in the heading too).
+    expect(screen.getAllByText(/play money/i)).toHaveLength(1);
   });
 
   it("keeps units a positive whole number", async () => {
@@ -342,7 +344,7 @@ describe("TradePanel", () => {
     const status = await screen.findByRole("status");
     await waitFor(() =>
       expect(status).toHaveTextContent(
-        "Bought 10 units at $20.02 each. You paid $200.20. Play money now $9,799.80; 10 units held. You now hold a stake in this site.",
+        "Bought 10 units at $20.02 each. You paid $200.20. Balance now $9,799.80; 10 units held. You now hold a stake in this site.",
       ),
     );
     expect(backend.calls(ORDER)).toBe(1);
@@ -390,7 +392,7 @@ describe("TradePanel", () => {
     expect(submit).toHaveFocus();
     expect(receipt).not.toHaveAttribute("tabindex");
     expect(
-      within(receipt).getByText("Play money now").nextSibling,
+      within(receipt).getByText("Balance now").nextSibling,
     ).toHaveTextContent("$9,799.80");
     expect(
       within(receipt).getByText("Units held").nextSibling,

@@ -88,7 +88,7 @@ export function IpoPriceSteps({
           <span className="text-sm font-medium">
             Opening price per unit
             <span className="block text-xs font-normal text-muted-foreground">
-              Sandbox price · play money
+              Sandbox price
             </span>
           </span>
           <span className="tabular text-3xl font-light" data-testid="ipo-price">

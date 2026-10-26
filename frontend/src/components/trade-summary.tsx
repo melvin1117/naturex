@@ -79,7 +79,7 @@ export function announce(order: OrderOut): string {
   const opened = opensStake(order) ? " You now hold a stake in this site." : "";
   return `${verb} ${int(order.qty)} units at ${unitPriceText(order.fill_price)} each. ${paid} ${moneyText(
     order.total,
-  )}. Play money now ${moneyText(order.cash_balance)}; ${int(order.shares_held)} units held.${opened}`;
+  )}. Balance now ${moneyText(order.cash_balance)}; ${int(order.shares_held)} units held.${opened}`;
 }
 
 /**
@@ -121,7 +121,7 @@ export function Receipt({
           value={moneyText(order.total)}
         />
         <ReceiptCell
-          label="Play money now"
+          label="Balance now"
           value={moneyText(order.cash_balance)}
         />
         <ReceiptCell label="Units held" value={int(order.shares_held)} />
