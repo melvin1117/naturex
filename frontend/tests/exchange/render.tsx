@@ -2,10 +2,8 @@ import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { vi } from "vitest";
 
-import { TourProvider } from "@/components/proto/tour";
 import { WorldProvider } from "@/components/world-provider";
 import { createDataLayer } from "@/lib/data-layer";
-import { PrototypeProvider } from "@/lib/prototype/store";
 
 import {
   BASE,
@@ -49,12 +47,6 @@ export function renderExchange(
     createEventSource: createFakeEventSource,
     pollIntervalMs: 60_000,
   });
-  const utils = render(
-    <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <TourProvider>{ui}</TourProvider>
-      </PrototypeProvider>
-    </WorldProvider>,
-  );
+  const utils = render(<WorldProvider dataLayer={layer}>{ui}</WorldProvider>);
   return { ...utils, backend, layer };
 }

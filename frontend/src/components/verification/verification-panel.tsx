@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Checklist, VerificationBadge } from "@/components/verification/parts";
 import type { VerificationPublic } from "@/lib/api/types";
 import { useWorld } from "@/lib/hooks";
-import { date } from "@/lib/prototype/format";
+import { date } from "@/lib/format";
 import {
   adminReviewHref,
   LEVEL_LABEL,
@@ -42,7 +42,7 @@ function followLedgerLink(event: React.MouseEvent<HTMLAnchorElement>) {
 }
 
 /**
- * "How this listing was verified" (ADR-0006 §4), on every Exchange asset page: the API's
+ * "How this listing was verified" (ADR-0006 §4), on every site page: the API's
  * badge, level, date, reviewer role, each check's result, everything not checked and the
  * ledger entry. Public, so it never shows documents, values or reasons.
  */
@@ -114,7 +114,7 @@ function PanelBody({ data }: { data: VerificationPublic }) {
   return (
     <div className="space-y-6">
       <div>
-        <VerificationBadge level={data.level} className="text-sm">
+        <VerificationBadge level={data.level} publicBadge className="text-sm">
           {data.badge}
         </VerificationBadge>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
@@ -196,7 +196,7 @@ function PanelBody({ data }: { data: VerificationPublic }) {
             href={adminReviewHref(data.asset_id)}
             className="inline-flex items-center gap-1.5 font-medium underline underline-offset-4"
           >
-            Review in the control room
+            Review it
             <ArrowRight className="size-4" aria-hidden="true" />
           </Link>
         )}
@@ -206,18 +206,26 @@ function PanelBody({ data }: { data: VerificationPublic }) {
 }
 
 /** The page's badge, linking to the panel; nothing until the record loads. */
-export function VerificationHeroBadge({ assetId }: { assetId: string }) {
+export function VerificationHeroBadge({
+  assetId,
+  onOpen,
+}: {
+  assetId: string;
+  /** Opens "How this listing was verified" (the site's Proof of Life drawer). */
+  onOpen: () => void;
+}) {
   const panel = useVerificationPanel(assetId);
   if (!panel.data) return null;
   return (
-    <a
-      href={`#${VERIFICATION_PANEL_ID}`}
-      className="max-w-full rounded-full focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+    <button
+      type="button"
+      onClick={onOpen}
+      className="max-w-full rounded-full text-left focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
     >
-      <VerificationBadge level={panel.data.level} tone="image">
+      <VerificationBadge level={panel.data.level} tone="image" publicBadge>
         {panel.data.badge}
       </VerificationBadge>
       <span className="sr-only">: how this listing was verified</span>
-    </a>
+    </button>
   );
 }

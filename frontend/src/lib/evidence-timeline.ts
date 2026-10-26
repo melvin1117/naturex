@@ -6,7 +6,7 @@
  * Pure, so it is easy to test; every value comes from the API.
  */
 import type { RunTrace } from "./api/types";
-import type { newsItems } from "./asset-detail";
+import type { EventOrigin, newsItems } from "./asset-detail";
 import {
   type FollowUp,
   type Signal,
@@ -44,6 +44,8 @@ export type TimelineNews = {
   direction: number;
   kind: string | null;
   source: string;
+  /** Web news reads as news; Time Machine events and field evidence say what they are. */
+  origin: EventOrigin;
   read: TimelineRead | null;
   /** Found by one of Super's follow-up searches, not the first search. */
   followUp: boolean;
@@ -108,6 +110,7 @@ export function traceNews(trace: RunTrace, sourceLabel: string): NewsItem[] {
       severity: null,
       kind: ref.value,
       sourceLabel,
+      origin: "news",
       url: ref.url,
     });
   }
@@ -125,6 +128,7 @@ export function traceNews(trace: RunTrace, sourceLabel: string): NewsItem[] {
         severity: item.severity,
         kind: item.impactType,
         sourceLabel,
+        origin: "news",
         url: item.url,
       });
     }
@@ -149,6 +153,8 @@ export function evidenceTimeline(
   signals: Signal[],
   news: NewsItem[],
   followUps: FollowUp[],
+  /** "YYYY-MM": nothing dated later is listed. */
+  thisMonth: string = new Date().toISOString().slice(0, 7),
 ): EvidenceTimeline {
   const months = series
     .map(([m]) => m.slice(0, 7))
@@ -185,9 +191,15 @@ export function evidenceTimeline(
       for (const item of f.found) if (item.url) found.add(item.url);
   }
 
+  // News from after the last satellite month (this quarter's, or a simulated event) is still
+  // part of what happened: listed, without a pin on the chart. Older than the series, it isn't;
+  // without a series, every dated item is listed. Nothing dated after this month (a web result's
+  // bad date) is.
+  const listed = (m: string) =>
+    m <= thisMonth && (!first || inRange(m) || Boolean(last && m > last));
   const dated: TimelineNews[] = news
     .filter(
-      (n) => MONTH_RE.test(n.date.slice(0, 7)) && inRange(n.date.slice(0, 7)),
+      (n) => MONTH_RE.test(n.date.slice(0, 7)) && listed(n.date.slice(0, 7)),
     )
     .map((n) => ({
       id: n.id,
@@ -198,12 +210,13 @@ export function evidenceTimeline(
       direction: n.direction ?? 0,
       kind: n.kind,
       source: n.sourceLabel,
+      origin: n.origin,
       read: (n.url && reads.get(n.url)) || null,
       followUp: Boolean(n.url && found.has(n.url)),
     }));
 
   const byMonth = new Map<string, TimelineNews[]>();
-  for (const n of dated)
+  for (const n of dated.filter((d) => inRange(d.month)))
     byMonth.set(n.month, [...(byMonth.get(n.month) ?? []), n]);
   const pins = [...byMonth.entries()]
     .sort(([a], [b]) => a.localeCompare(b))

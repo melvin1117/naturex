@@ -5,8 +5,8 @@
 import type { AssetCard } from "./api/types";
 import { type LonLatRing, outlineRings } from "./boundary-map";
 import { demoSiteMediaUrl } from "./demo-site-images";
-import type { Grade } from "./prototype/data";
-import { GRADE_ORDER } from "./prototype/format";
+import type { Grade } from "./site-data";
+import { GRADE_ORDER } from "./format";
 import { asGrade, num } from "./report-facts";
 
 export type HealthTrend = "improving" | "declining" | "stable";
@@ -33,6 +33,8 @@ export type MarketCard = {
   imageUrl: string | null;
   /** The boundary, simplified, for a map when there's no image. */
   outline: LonLatRing[];
+  /** A curated demo site's key (its boundary is in `SITE_DATA`, not `outline`). */
+  siteKey: string | null;
   /** The latest prices, oldest first. */
   sparkline: number[];
 };
@@ -61,6 +63,7 @@ export function marketCard(card: AssetCard): MarketCard {
     valueHigh: num(card.value_high),
     imageUrl: siteImageUrl(card.site_key, card.cover_image_url),
     outline: outlineRings(card.outline),
+    siteKey: card.site_key ?? null,
     sparkline: (card.sparkline ?? []).flatMap((p) => {
       const n = num(p);
       return n === null ? [] : [n];

@@ -1,5 +1,5 @@
 /**
- * Where the real-account E2E (T74) runs: its own ports and its own database, so it never
+ * Where the sandbox E2E (T74) runs: its own ports and its own database, so it never
  * touches a developer's servers or the `wildworth` database. Read by playwright.config.ts (to
  * start the servers) and by the specs; override with E2E_* environment variables.
  */
@@ -11,11 +11,3 @@ export const API_URL = `http://127.0.0.1:${API_PORT}`;
 export const DATABASE_URL =
   process.env.E2E_DATABASE_URL ??
   "postgresql+psycopg://wildworth:wildworth@localhost:5432/wildworth_e2e";
-
-/**
- * There's no admin sign-up: scripts/e2e-backend.sh creates this account with the operator CLI
- * (`python -m app.cli create-admin --password-stdin`) in the throwaway E2E database.
- */
-export const ADMIN_EMAIL = "e2e-admin@wildworth.test";
-export const ADMIN_PASSWORD =
-  process.env.E2E_ADMIN_PASSWORD ?? "e2e admin password, test only";

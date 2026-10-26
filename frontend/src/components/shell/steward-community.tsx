@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  ChevronsUpDown,
-  RefreshCwIcon,
-  Sprout,
-  TriangleAlertIcon,
-} from "lucide-react";
+import { RefreshCwIcon, Sprout, TriangleAlertIcon } from "lucide-react";
 import Link from "@/components/app-link";
 import { useSearchParams } from "next/navigation";
 import { usePathname, useRouter } from "@/lib/nav";
@@ -19,21 +14,10 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { cn } from "cn";
 
-import { AccountIdCopy } from "@/components/account-id";
 import { RouteSkeleton } from "@/components/page-skeletons";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { CreateCommunityForm } from "@/components/steward/community-form";
 import { FocusFirstHeading } from "@/components/steward/focus-first-heading";
 import { NotACommunityMember } from "@/components/steward/not-a-member";
@@ -43,7 +27,7 @@ import {
   rememberCommunity,
   subscribeRememberedCommunity,
 } from "@/lib/active-community";
-import type { MyCommunity } from "@/lib/api/types";
+import type { CommunityOut, MyCommunity } from "@/lib/api/types";
 import { isApiAssetId } from "@/lib/asset-detail";
 import {
   useAsset,
@@ -51,11 +35,7 @@ import {
   useWorld,
   type QueryResult,
 } from "@/lib/hooks";
-import {
-  COMMUNITY_ROLE_LABEL,
-  pickCommunity,
-  withCommunity,
-} from "@/lib/navigation";
+import { pickCommunity, withCommunity } from "@/lib/navigation";
 
 interface StewardCommunityValue {
   query: QueryResult<MyCommunity[]>;
@@ -137,6 +117,7 @@ function CommunityProvider({
       if (meId) rememberCommunity(meId, id);
       const params = new URLSearchParams(window.location.search);
       params.set(COMMUNITY_PARAM, id);
+      params.delete("new"); // Start a community (`?new=1`) gives way to the new one.
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
     [meId, pathname, router],
@@ -158,6 +139,20 @@ function CommunityProvider({
   );
 }
 
+/** A community just created from Communities: its page takes focus once when it opens. */
+let justCreated: string | null = null;
+
+export function markJustCreated(id: string): void {
+  justCreated = id;
+}
+
+/** Whether `id` was just created here; true once. */
+export function takeJustCreated(id: string): boolean {
+  if (justCreated !== id) return false;
+  justCreated = null;
+  return true;
+}
+
 /** Null outside the Steward app (no provider). */
 export function useOptionalStewardCommunity(): StewardCommunityValue | null {
   return useContext(StewardCommunityContext);
@@ -173,66 +168,6 @@ export function useStewardCommunity(): StewardCommunityValue {
   return value;
 }
 
-/**
- * The community the Steward app shows, in its header. With more than one, a menu switches
- * between them; with one, its name; with none (or anonymous), nothing.
- */
-export function CommunitySwitcher({ className }: { className?: string }) {
-  const steward = useOptionalStewardCommunity();
-  if (!steward?.active) return null;
-  const { communities, active, select } = steward;
-
-  if (communities.length === 1) {
-    return (
-      <p
-        className={cn(
-          "flex max-w-56 min-w-0 items-baseline gap-2 text-sm",
-          className,
-        )}
-      >
-        <span className="sr-only">Community:</span>
-        <span className="truncate font-medium">{active.name}</span>
-        <span className="shrink-0 text-xs text-muted-foreground">
-          {COMMUNITY_ROLE_LABEL[active.role]}
-        </span>
-      </p>
-    );
-  }
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn("max-w-56 min-w-0 justify-between", className)}
-          aria-label={`${active.name}, switch community`}
-        >
-          <span className="truncate">{active.name}</span>
-          <ChevronsUpDown
-            aria-hidden="true"
-            className="text-muted-foreground"
-          />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64 rounded-2xl p-1.5">
-        <DropdownMenuLabel>Your communities</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuRadioGroup value={active.id} onValueChange={select}>
-          {communities.map((community) => (
-            <DropdownMenuRadioItem key={community.id} value={community.id}>
-              <span className="min-w-0 flex-1 truncate">{community.name}</span>
-              <span className="text-xs text-muted-foreground">
-                {COMMUNITY_ROLE_LABEL[community.role]}
-              </span>
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 /** The asset a Steward asset page (`/steward/assets/<id>/...`) is about; null elsewhere. */
 export function stewardAssetId(pathname: string | null): string | null {
   const match = /^\/steward\/assets\/([^/]+)(?:\/|$)/.exec(pathname ?? "");
@@ -240,11 +175,10 @@ export function stewardAssetId(pathname: string | null): string | null {
 }
 
 /**
- * What a signed-in account sees in the Steward app: its pages once it belongs to a community,
+ * What the sandbox's person sees under Communities: its pages once they're in a community,
  * else "Start a community" with the create form (T63). On a site's pages
- * (`/steward/assets/<id>/...`), an account outside the community that lists the site is told
- * so instead (T74); the API refuses its actions either way. Anonymous visitors only get here
- * in the scripted demo (`RequireAccount`).
+ * (`/steward/assets/<id>/...`), someone outside the community that lists the site is told so
+ * instead (T74); the API refuses their actions either way.
  */
 export function StewardGate({ children }: { children: ReactNode }) {
   const { world } = useWorld();
@@ -256,7 +190,9 @@ export function StewardGate({ children }: { children: ReactNode }) {
   const meId = world?.me?.id ?? null;
   if (createdBy !== null && createdBy !== meId) setCreatedBy(null);
 
-  if (world?.me == null) return children;
+  // The sandbox gate opens a session first; until it's known, nothing of anyone's shows.
+  if (world?.me == null)
+    return <GateLoading>Opening your sandbox…</GateLoading>;
 
   if (communities.length === 0) {
     if (query.status === "error") {
@@ -287,12 +223,7 @@ export function StewardGate({ children }: { children: ReactNode }) {
     }
 
     if (assetId === null) {
-      return (
-        <CreateCommunityEmptyState
-          meId={world.me.id}
-          onCreated={() => setCreatedBy(meId)}
-        />
-      );
+      return <StartCommunity onCreated={() => setCreatedBy(meId)} />;
     }
   }
 
@@ -344,12 +275,16 @@ function AssetMembershipGate({
   );
 }
 
-function CreateCommunityEmptyState({
-  meId,
+/**
+ * Start a community: what it's for, and the form. Shown to someone in none, and from the
+ * Communities page (`?new=1`), with `back` leading to it. The new community opens next.
+ */
+export function StartCommunity({
   onCreated,
+  back,
 }: {
-  meId: string;
-  onCreated: () => void;
+  onCreated: (community: CommunityOut) => void;
+  back?: { href: string; label: string };
 }) {
   const { select } = useStewardCommunity();
   return (
@@ -372,16 +307,14 @@ function CreateCommunityEmptyState({
             Start a community
           </h1>
           <p className="mt-4 max-w-prose text-pretty text-muted-foreground">
-            Stewards is the app for the people who look after the land. Create a
-            community to list your land, get it rated and receive what
-            supporters pay into its fund. You&apos;ll be its owner and can add
-            stewards.
+            A community looks after its land. Create one to list that land, get
+            it rated and grow a fund from what supporters pay in.
           </p>
           <ol className="mt-6 space-y-3 text-sm">
             {[
-              "Create your community",
-              "Draw your land and get an AI rating in minutes",
-              "Open it to supporters and grow your community fund",
+              "Name your community",
+              "Draw your land and get it rated in minutes",
+              "Send your offer: once approved, supporters can back it",
             ].map((step, i) => (
               <li key={step} className="flex items-center gap-3">
                 <span className="tabular grid size-6 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
@@ -391,29 +324,21 @@ function CreateCommunityEmptyState({
               </li>
             ))}
           </ol>
-          <div className="mt-8 max-w-md rounded-2xl border border-dashed border-border p-4">
-            <h2 className="text-sm font-medium">
-              Joining someone else&apos;s community?
-            </h2>
-            <p className="mt-1 mb-3 text-sm text-muted-foreground">
-              Give its owner your account ID. Once they&apos;ve added you as a
-              steward, reload this page.
-            </p>
-            <AccountIdCopy id={meId} />
-          </div>
           <Button asChild variant="outline" className="mt-6">
-            <Link href="/">Back to the Exchange</Link>
+            <Link href={back?.href ?? "/"}>
+              {back?.label ?? "Back to the Marketplace"}
+            </Link>
           </Button>
         </div>
         <div className="rounded-[1.75rem] bg-card p-6 shadow-lift sm:p-8">
           <h2 className="text-lg font-semibold">Create your community</h2>
           <p className="mt-1 mb-5 text-sm text-muted-foreground">
-            Play money only: nothing here is a real security or investment.
+            You&apos;ll be its owner.
           </p>
           <CreateCommunityForm
             onCreated={(community) => {
               select(community.id);
-              onCreated();
+              onCreated(community);
             }}
           />
         </div>

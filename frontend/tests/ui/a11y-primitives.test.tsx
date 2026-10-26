@@ -39,7 +39,7 @@ function StateDrivenSheet({ modal = true }: { modal?: boolean }) {
           Agent Trace
         </button>
       )}
-      {/* Like the tour's Next, outside the sheet: it closes the sheet from app state. */}
+      {/* A control outside the sheet that closes it from app state. */}
       <button type="button" onClick={() => setOpen(false)}>
         Next step
       </button>

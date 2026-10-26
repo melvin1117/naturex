@@ -1,30 +1,44 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { readdirSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join } from "node:path";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Link from "@/components/app-link";
-import { AccountMenu } from "@/components/account-menu";
-import { DemoBar } from "@/components/proto/demo-bar";
-import { TourProvider } from "@/components/proto/tour";
+import { LeftoverDemo } from "@/components/shell/leftover-demo";
+import { SandboxHeader } from "@/components/shell/sandbox-header";
+import { TimeMachineSheet } from "@/components/shell/time-machine-sheet";
+import { Toaster } from "@/components/ui/sonner";
 import { SandboxGate } from "@/components/sandbox/sandbox-gate";
 import { WorldProvider } from "@/components/world-provider";
 import type { WorldOut } from "@/lib/api/types";
-import { createDataLayer, type DataLayer } from "@/lib/data-layer";
-import { useApiBase } from "@/lib/hooks";
+import {
+  createDataLayer,
+  useDataLayer,
+  type DataLayer,
+} from "@/lib/data-layer";
+import { useApiBase, useWorld } from "@/lib/hooks";
 import { assetOverlayUrl } from "@/lib/land-cover-overlay";
 import { beforeAfterViews } from "@/lib/site-views";
 import { documentDownloadUrl } from "@/lib/verification";
 import { useRouter } from "@/lib/nav";
-import { PrototypeProvider } from "@/lib/prototype/store";
 import { appPath, isSandboxPath, sandboxHref } from "@/lib/sandbox";
 
 import {
   BASE,
   createFakeEventSource,
   fakeBackend,
+  FakeEventSource,
   json,
+  sequence,
+  SIGNED_IN_WORLD,
   WORLD,
 } from "../lib/helpers";
 
@@ -75,13 +89,7 @@ function setup(
     createEventSource: createFakeEventSource,
   });
   sandboxLayer.current = layer;
-  render(
-    <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <TourProvider>{ui}</TourProvider>
-      </PrototypeProvider>
-    </WorldProvider>,
-  );
+  render(<WorldProvider dataLayer={layer}>{ui}</WorldProvider>);
   return { backend, layer };
 }
 
@@ -152,20 +160,12 @@ describe("the sandbox's URL space", () => {
     );
   });
 
-  it("has a twin of every app screen", () => {
+  it("keeps every app screen in the sandbox: outside it, only the welcome and the story", () => {
     const app = join(__dirname, "../../src/app");
-    const files = (dir: string): string[] =>
-      readdirSync(dir).flatMap((name) => {
-        const path = join(dir, name);
-        return statSync(path).isDirectory() ? files(path) : [path];
-      });
-    const screens = ["(exchange)", "admin", "steward"].flatMap((root) =>
-      files(join(app, root)).map((f) => relative(app, f)),
+    const routes = readdirSync(app).filter((name) =>
+      statSync(join(app, name)).isDirectory(),
     );
-    const twins = new Set(
-      files(join(app, "sandbox")).map((f) => relative(join(app, "sandbox"), f)),
-    );
-    expect(screens.filter((f) => !twins.has(f))).toEqual([]);
+    expect(routes.sort()).toEqual(["dev", "how", "sandbox"]);
   });
 });
 
@@ -214,117 +214,251 @@ describe("files the browser fetches itself", () => {
   });
 });
 
-describe("the sandbox bar", () => {
-  it("says who's who, switches persona and stays in the sandbox", async () => {
-    const { backend } = setup(<DemoBar />, {
+const NO_ALERTS = () =>
+  json({ alerts: [], unread_count: 0, next_before: null });
+
+describe("the sandbox header", () => {
+  it.each([
+    ["arjun", ["Marketplace", "Communities", "Your stakes"]],
+    ["rosa", ["Marketplace", "Communities", "Your stakes"]],
+    ["admin", ["Marketplace", "Reviews"]],
+  ] as const)("gives %s the same few pages", async (persona, pages) => {
+    setup(<SandboxHeader />, {
+      "GET /world": () => json(demoWorld(persona)),
+      "GET /alerts": NO_ALERTS,
+    });
+    const nav = await screen.findByRole("navigation", { name: "Pages" });
+    await waitFor(() =>
+      expect(
+        Array.from(nav.querySelectorAll("a")).map((a) => a.textContent),
+      ).toEqual(pages),
+    );
+    expect(
+      screen.getByRole("link", { name: "Marketplace", current: "page" }),
+    ).toHaveAttribute("href", "/sandbox");
+    expect(screen.getByRole("button", { name: "Time Machine" })).toBeVisible();
+  });
+
+  it("shows the same WildWorth lockup as the welcome: the full mark, not the small W", async () => {
+    setup(<SandboxHeader />, {
       "GET /world": () => json(demoWorld("arjun")),
+      "GET /alerts": NO_ALERTS,
+    });
+    const home = await screen.findByRole("link", {
+      name: "WildWorth, Marketplace",
+    });
+    const mark = home.querySelector("svg[data-variant]");
+    expect(mark).toHaveAttribute("data-variant", "double");
+    // The welcome and the story draw it at the same size (only the reading's colour follows
+    // the ground: lime on dark, lime-ink on light).
+    expect(mark).toHaveAttribute("width", "25");
+  });
+
+  it("names the person button with what it shows, without the avatar's letter", async () => {
+    setup(<SandboxHeader />, {
+      "GET /world": () => json(demoWorld("arjun")),
+      "GET /alerts": NO_ALERTS,
+    });
+    const trigger = await screen.findByRole("button", {
+      name: /^Viewing as Arjun, Supporter/,
+    });
+    // axe's label-in-name: the visible "Viewing as Arjun Supporter" starts the name, words
+    // apart, and avatars draw their initials with CSS, so no stray letter joins the text.
+    expect(trigger).toHaveTextContent(/^Viewing as Arjun Supporter$/);
+    // It shows everyone you can be, the current person in front.
+    expect(
+      Array.from(trigger.querySelectorAll("[data-persona]")).map((el) =>
+        el.getAttribute("data-persona"),
+      ),
+    ).toEqual(["rosa", "admin", "arjun"]);
+    const avatar = trigger.querySelector("[data-persona]:last-child");
+    expect(avatar).toHaveAttribute("data-initial", "A");
+    expect(avatar).toHaveTextContent("");
+  });
+
+  it("switches person from the menu and goes to their home", async () => {
+    const { backend } = setup(<SandboxHeader />, {
+      "GET /world": () => json(demoWorld("arjun")),
+      "GET /alerts": NO_ALERTS,
       "POST /demo/persona": () => json(demoWorld("admin")),
     });
-
-    const arjun = await screen.findByRole("radio", {
-      name: "Arjun (Supporter)",
+    const trigger = await screen.findByRole("button", {
+      name: /^Viewing as Arjun, Supporter/,
     });
-    expect(arjun).toHaveAttribute("aria-checked", "true");
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+    // A switcher: everyone is a choice, and the current person is the checked one.
     expect(
-      screen.getByRole("radio", { name: "Rosa (Community steward)" }),
-    ).toHaveTextContent("Rosa(Community steward)");
-
-    fireEvent.click(
-      screen.getByRole("radio", { name: "Admin (WildWorth team)" }),
-    );
+      await screen.findByRole("menuitemradio", { name: /Arjun/ }),
+    ).toHaveAttribute("aria-checked", "true");
+    expect(
+      screen.getByRole("menuitemradio", { name: /Reviewer/ }),
+    ).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /Reviewer/ }));
 
     await waitFor(() =>
-      expect(nav.push).toHaveBeenCalledWith("/sandbox/admin", undefined),
+      expect(nav.push).toHaveBeenCalledWith(
+        "/sandbox/admin/verifications",
+        undefined,
+      ),
     );
     expect(backend.calls("POST /demo/persona")).toBe(1);
   });
 
-  it("leads back to WildWorth, the story, a guide and a reset", async () => {
-    setup(<DemoBar />, { "GET /world": () => json(demoWorld("rosa")) });
-
-    const home = await screen.findByRole("link", { name: /WildWorth/ });
-    expect(home).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: "The story" })).toHaveAttribute(
-      "href",
-      "/judge",
-    );
-    expect(screen.getByRole("button", { name: "Reset" })).toBeVisible();
-
-    fireEvent.click(screen.getByRole("button", { name: "What to try" }));
-    expect(
-      await screen.findByRole("list", {
-        name: "What you can do in your sandbox",
-      }),
-    ).toHaveTextContent("Move time forward");
-  });
-
-  it("closes the guide once a step opens, ready for the next one", async () => {
-    const { backend } = setup(<DemoBar />, {
+  it("starts the sandbox over or leaves it from the same menu", async () => {
+    setup(<SandboxHeader />, {
       "GET /world": () => json(demoWorld("rosa")),
-      "POST /demo/start": () => json(demoWorld("admin")),
+      "GET /alerts": NO_ALERTS,
     });
-    fireEvent.click(await screen.findByRole("button", { name: "What to try" }));
-    fireEvent.click(
-      await screen.findByRole("button", { name: /Move time forward/ }),
+    fireEvent.pointerDown(
+      await screen.findByRole("button", {
+        name: /^Viewing as Rosa, Community/,
+      }),
+      { button: 0, ctrlKey: false },
     );
-
-    await waitFor(() =>
-      expect(nav.push).toHaveBeenCalledWith("/sandbox/admin"),
-    );
-    expect(backend.calls("POST /demo/start")).toBe(1);
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("list", { name: "What you can do in your sandbox" }),
-      ).not.toBeInTheDocument(),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "What to try" }));
-    expect(
-      await screen.findByRole("button", { name: /List your land/ }),
-    ).toBeEnabled();
-  });
-
-  it("lets the visitor leave the sandbox instead of signing out", async () => {
-    setup(<AccountMenu />, { "GET /world": () => json(demoWorld("arjun")) });
-    const trigger = await screen.findByRole("button", {
-      name: "Account: arjun",
-    });
-    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
     expect(
       await screen.findByRole("menuitem", { name: /Leave the sandbox/ }),
     ).toHaveAttribute("href", "/");
-    expect(screen.getByText("Supporter in your sandbox")).toBeVisible();
     expect(
-      screen.queryByRole("menuitem", { name: /Sign out/ }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("menuitem", { name: /Start the sandbox over/ }),
+    ).toBeVisible();
+  });
+});
+
+describe("the persona menu, when something fails", () => {
+  async function openMenu(name: RegExp) {
+    fireEvent.pointerDown(await screen.findByRole("button", { name }), {
+      button: 0,
+      ctrlKey: false,
+    });
+  }
+
+  it("says so when a switch fails, and stays where it was", async () => {
+    setup(
+      <>
+        <SandboxHeader />
+        <Toaster />
+      </>,
+      {
+        "GET /world": () => json(demoWorld("arjun")),
+        "GET /alerts": NO_ALERTS,
+        "POST /demo/persona": () =>
+          json({ detail: "demo_busy" }, { status: 503 }),
+      },
+    );
+    await openMenu(/^Viewing as Arjun/);
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Rosa/ }));
+
+    expect(
+      await screen.findByText("Couldn't switch to Rosa just now"),
+    ).toBeVisible();
+    expect(nav.push).not.toHaveBeenCalled();
+  });
+
+  it("goes home only once the sandbox has started over", async () => {
+    let finish!: (response: Response) => void;
+    setup(
+      <>
+        <SandboxHeader />
+        <Toaster />
+      </>,
+      {
+        "GET /world": () => json(demoWorld("rosa")),
+        "GET /alerts": NO_ALERTS,
+        "POST /world/reset": sequence(
+          () => new Promise<Response>((resolve) => (finish = resolve)),
+          () => json({ detail: "demo_busy" }, { status: 503 }),
+        ),
+      },
+    );
+    await openMenu(/^Viewing as Rosa/);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Start the sandbox over/ }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Start over" }));
+
+    await waitFor(() => expect(finish).toBeDefined());
+    expect(nav.push).not.toHaveBeenCalled();
+    finish(json(demoWorld("rosa")));
+    await waitFor(() =>
+      expect(nav.push).toHaveBeenCalledWith("/sandbox/steward", undefined),
+    );
+
+    // A failed reset says so and goes nowhere.
+    nav.push.mockReset();
+    await openMenu(/^Viewing as Rosa/);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Start the sandbox over/ }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Start over" }));
+    expect(
+      await screen.findByText("Couldn't start the sandbox over just now"),
+    ).toBeVisible();
+    expect(nav.push).not.toHaveBeenCalled();
+  });
+});
+
+describe("the Time Machine in the header", () => {
+  it("is anyone's in a sandbox, and asks nothing for a live-world account", async () => {
+    const { backend } = setup(<TimeMachineSheet />, {
+      "GET /world": () => json(demoWorld("arjun")),
+      "GET /admin/time-machine": () =>
+        json({ detail: "boom" }, { status: 503 }),
+    });
+    await waitFor(() =>
+      expect(backend.calls("GET /admin/time-machine")).toBe(1),
+    );
+    cleanup();
+
+    const live = setup(<TimeMachineSheet />, {
+      "GET /world": () => json(SIGNED_IN_WORLD),
+    });
+    await screen.findByRole("button", { name: "Time Machine" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(live.backend.calls("GET /admin/time-machine")).toBe(0);
   });
 });
 
 describe("the sandbox gate", () => {
-  it("offers to open a sandbox instead of the live world", async () => {
-    setup(
+  it("opens a sandbox straight away, with no sign-up", async () => {
+    const { backend } = setup(
       <SandboxGate>
         <p>Inside</p>
       </SandboxGate>,
       {
         "GET /world": () => json(demoWorld(null)),
         "POST /demo/start": () => json(demoWorld("arjun")),
+        "GET /alerts": NO_ALERTS,
       },
     );
 
-    expect(
-      await screen.findByRole("heading", {
-        level: 1,
-        name: "Your own WildWorth, live, with no sign-up.",
-      }),
-    ).toBeVisible();
-    expect(screen.queryByText("Inside")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: /Back to WildWorth/ }),
-    ).toHaveAttribute("href", "/");
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Opening your sandbox…",
+    );
+    expect(await screen.findByText("Inside")).toBeVisible();
+    expect(backend.calls("POST /demo/start")).toBe(1);
+    expect(nav.push).not.toHaveBeenCalled();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: /Open my sandbox/ }));
+  it("says why a sandbox didn't open, and tries again", async () => {
+    let attempts = 0;
+    setup(
+      <SandboxGate>
+        <p>Inside</p>
+      </SandboxGate>,
+      {
+        "GET /world": () => json(demoWorld(null)),
+        "POST /demo/start": () =>
+          ++attempts === 1
+            ? json({ detail: "too_many_attempts" }, { status: 429 })
+            : json(demoWorld("arjun")),
+        "GET /alerts": NO_ALERTS,
+      },
+    );
 
-    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/sandbox"));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Too many sandboxes from this network this hour.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Inside")).toBeVisible();
   });
 
@@ -333,8 +467,103 @@ describe("the sandbox gate", () => {
       <SandboxGate>
         <p>Inside</p>
       </SandboxGate>,
-      { "GET /world": () => json(demoWorld("rosa")) },
+      { "GET /world": () => json(demoWorld("rosa")), "GET /alerts": NO_ALERTS },
     );
     expect(await screen.findByText("Inside")).toBeVisible();
+  });
+
+  it("opens a new sandbox when this one ends mid-session", async () => {
+    function Page() {
+      const { api } = useDataLayer();
+      const me = useWorld().world?.me;
+      return (
+        <>
+          <p>You are {me?.name}</p>
+          <button type="button" onClick={() => void api.GET("/portfolio")}>
+            Look at my stakes
+          </button>
+        </>
+      );
+    }
+    const { backend } = setup(
+      <SandboxGate>
+        <Page />
+      </SandboxGate>,
+      {
+        // The sandbox expired: the next request's 401 re-reads a world with nobody in it.
+        "GET /world": sequence(
+          () => json(demoWorld("rosa")),
+          () => json(demoWorld(null)),
+        ),
+        "GET /portfolio": () =>
+          json({ detail: "auth_required" }, { status: 401 }),
+        "POST /demo/start": () => json(demoWorld("arjun")),
+        "GET /alerts": NO_ALERTS,
+      },
+    );
+    expect(await screen.findByText("You are rosa")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Look at my stakes" }));
+
+    expect(await screen.findByText("You are arjun")).toBeVisible();
+    expect(backend.calls("POST /demo/start")).toBe(1);
+  });
+
+  it("gives every sandbox page its alert notifications", async () => {
+    FakeEventSource.reset();
+    setup(
+      <>
+        <SandboxGate>
+          <p>Inside</p>
+        </SandboxGate>
+        <Toaster />
+      </>,
+      { "GET /world": () => json(demoWorld("rosa")), "GET /alerts": NO_ALERTS },
+    );
+    expect(await screen.findByText("Inside")).toBeVisible();
+    await waitFor(() => expect(FakeEventSource.instances).not.toHaveLength(0));
+
+    act(() => {
+      for (const source of FakeEventSource.instances) {
+        source.open();
+        source.emit(
+          "alert",
+          1,
+          {
+            alert_id: "a1",
+            asset_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            asset_name: "Xochimilco Wetland",
+            kind: "news",
+            title: "Fire near the wetland",
+            message: "Smoke reported upstream.",
+            severity: 4,
+            report_id: null,
+            url: null,
+          },
+          new Date().toISOString(),
+        );
+      }
+    });
+
+    expect(await screen.findByText("Fire near the wetland")).toBeVisible();
+  });
+});
+
+describe("a browser coming back from before the redesign", () => {
+  it("drops what the old scripted prototype kept", async () => {
+    nav.pathname = "/";
+    window.localStorage.setItem("ww-prototype-world", "{}");
+    window.localStorage.setItem("ww-prototype-tour", "{}");
+    window.sessionStorage.setItem("ww-prototype-demo", "1");
+    window.localStorage.setItem("ww-steward-community:x", "kept");
+
+    setup(<LeftoverDemo />, { "GET /world": () => json(WORLD) });
+
+    await waitFor(() =>
+      expect(window.localStorage.getItem("ww-prototype-world")).toBeNull(),
+    );
+    expect(window.localStorage.getItem("ww-prototype-tour")).toBeNull();
+    expect(window.sessionStorage.getItem("ww-prototype-demo")).toBeNull();
+    expect(window.localStorage.getItem("ww-steward-community:x")).toBe("kept");
   });
 });

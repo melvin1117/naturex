@@ -1,2 +1,14 @@
-// The sandbox twin of `admin/verifications/[id]/page.tsx`: the same screen in the visitor's sandbox (lib/sandbox.ts).
-export { default, metadata } from "@/app/admin/verifications/[id]/page";
+import type { Metadata } from "next";
+
+import { ListingReviewScreen } from "@/components/verification/listing-review-screen";
+
+export const metadata: Metadata = { title: "Verification review" };
+
+export default async function VerificationReviewPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  return <ListingReviewScreen assetId={id} />;
+}

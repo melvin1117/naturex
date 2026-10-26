@@ -1,13 +1,14 @@
 import { useCallback, useLayoutEffect, useRef } from "react";
 
 /**
- * For a dialog or sheet opened from app state rather than a Radix trigger: remembers what had
- * focus when it opened and returns the `onCloseAutoFocus` handler that puts focus back there,
- * as a trigger would. The layout effect runs before Radix moves focus into the content.
+ * For a dialog or sheet opened from app state rather than a Radix trigger (the Agent Trace
+ * drawer): remembers what had focus when it opened and returns the `onCloseAutoFocus` handler
+ * that puts focus back there, as a trigger would. The layout effect runs before Radix moves
+ * focus into the content.
  *
  * Focus only goes back when it was lost with the content (on `<body>` or still inside it). A
- * non-modal sheet (the guided tour) can close because the user clicked a control outside it;
- * that control keeps focus.
+ * non-modal sheet can close because the user clicked a control outside it; that control keeps
+ * focus.
  */
 export function useReturnFocus(open: boolean): (event: Event) => void {
   const opener = useRef<HTMLElement | null>(null);

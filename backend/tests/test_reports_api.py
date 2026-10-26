@@ -493,17 +493,13 @@ def test_simulate_event_is_scoped_to_the_callers_world(
     template_asset = _world_asset(session, WORLD_ID)
     body = {"asset_id": str(template_asset.id), "preset": "encroachment"}
     no_world = TestClient(app).post("/admin/simulate/event", json=body)
-    investor = client.post(
-        "/admin/simulate/event", json={**body, "asset_id": _asset_id(_world(client))}
-    )
-    start_demo(client, session, persona_key="admin")  # the Time Machine is for admins (T57)
+    start_demo(client, session, persona_key="admin")
     world = _world(client)
     other_asset = _world_asset(session, create_world(session).id)
 
     own = client.post("/admin/simulate/event", json={**body, "asset_id": _asset_id(world)})
 
     assert (no_world.status_code, no_world.json()["detail"]) == (401, "auth_required")
-    assert (investor.status_code, investor.json()["detail"]) == (403, "admin_only")
     assert own.status_code == 200
     assert own.json()["event"]["asset_id"] == _asset_id(world)
     for asset_id in (template_asset.id, other_asset.id):

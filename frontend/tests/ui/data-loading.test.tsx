@@ -77,7 +77,7 @@ describe("WorldGate fallback", () => {
 
 describe("PortfolioView loading", () => {
   it("draws the portfolio's shape with one status under the real heading", async () => {
-    renderWithWorld(<PortfolioView name="Rosa" />, {
+    renderWithWorld(<PortfolioView />, {
       "GET /world": () => json(SIGNED_IN_WORLD),
       "GET /portfolio": pending,
     });

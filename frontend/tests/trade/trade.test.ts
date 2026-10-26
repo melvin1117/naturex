@@ -19,7 +19,7 @@ import {
   unitPrice,
   unitsInput,
 } from "@/lib/trade";
-import { price } from "@/lib/prototype/format";
+import { price } from "@/lib/format";
 
 const quote = (overrides: Partial<QuoteOut> = {}): QuoteOut => ({
   asset_id: "a",
@@ -331,9 +331,9 @@ describe("orderFailure", () => {
   });
 
   it("offers sign-in for an ended session", () => {
-    expect(orderFailure(new ApiError(401, "x", "auth_required")).signIn).toBe(
-      true,
-    );
+    expect(
+      orderFailure(new ApiError(401, "x", "auth_required")).sessionEnded,
+    ).toBe(true);
   });
 
   it("keeps a coded 403's own message", () => {

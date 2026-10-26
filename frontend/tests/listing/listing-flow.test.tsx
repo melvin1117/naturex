@@ -14,7 +14,6 @@ import { WorldProvider } from "@/components/world-provider";
 import type { AssetDetail, RatingRun, ReportOut } from "@/lib/api/types";
 import { listingAction } from "@/lib/community";
 import { createDataLayer } from "@/lib/data-layer";
-import { PrototypeProvider } from "@/lib/prototype/store";
 
 import { dropFocus } from "../focus";
 import {
@@ -27,6 +26,7 @@ import {
   sequence,
   SIGNED_IN_WORLD,
 } from "../lib/helpers";
+import celestun from "../trace/fixtures/run-celestun.json";
 
 const nav = vi.hoisted(() => ({ search: "" }));
 const router = vi.hoisted(() => ({
@@ -83,20 +83,6 @@ vi.mock("@/components/listing/boundary-map", () => ({
     </>
   ),
 }));
-vi.mock("@/components/proto/draw-map", () => ({
-  DrawMap: ({
-    points,
-    onAdd,
-  }: {
-    points: [number, number][];
-    onAdd: (p: [number, number]) => void;
-  }) => (
-    <button type="button" onClick={() => onAdd(CORNERS[points.length % 4])}>
-      Add test corner
-    </button>
-  ),
-}));
-
 beforeAll(() => {
   // jsdom lacks these; Radix dialogs and checkboxes ask for them.
   globalThis.ResizeObserver ??= class {
@@ -218,11 +204,9 @@ function setup(routes: Routes = {}) {
   });
   render(
     <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <StewardCommunityProvider>
-          <ListingScreen />
-        </StewardCommunityProvider>
-      </PrototypeProvider>
+      <StewardCommunityProvider>
+        <ListingScreen />
+      </StewardCommunityProvider>
     </WorldProvider>,
   );
   return backend;
@@ -354,7 +338,7 @@ describe("creating a listing", () => {
     );
   });
 
-  it("409 listing_limit_reached links to the Listings page", async () => {
+  it("409 listing_limit_reached links to the community's sites", async () => {
     setup({
       "POST /assets": () =>
         json({ detail: "listing_limit_reached" }, { status: 409 }),
@@ -365,8 +349,8 @@ describe("creating a listing", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Too many listings in progress");
     expect(
-      within(alert).getByRole("link", { name: "See your listings" }),
-    ).toHaveAttribute("href", `/steward/listings?community=${SELVA.id}`);
+      within(alert).getByRole("link", { name: "See your community's sites" }),
+    ).toHaveAttribute("href", `/steward?community=${SELVA.id}`);
   });
 });
 
@@ -457,20 +441,17 @@ describe("rating progress", () => {
         listing_status: "listed",
       });
     });
-    const offer = await screen.findByRole("link", {
-      name: /Set up the opening offer/,
-    });
-    expect(offer).toHaveAttribute(
-      "href",
-      `/steward/assets/${ASSET_ID}/ipo?community=${SELVA.id}`,
-    );
+    // The result leads on in the same flow: proof, then the offer (ADR-0008 §5).
+    expect(
+      await screen.findByRole("button", { name: /Continue: show it.s yours/ }),
+    ).toBeVisible();
     expect(screen.getByText("Laguna Verde is listed")).toBeVisible();
     expect(screen.getByText("Mock data")).toBeVisible();
     expect(screen.getByText(/placeholder metrics/)).toBeVisible();
     // The run's card gave way to the listed step: focus follows (T48).
     await waitFor(() =>
       expect(
-        screen.getByRole("region", { name: "Step 4 of 4: Opening offer" }),
+        screen.getByRole("region", { name: "Step 3 of 5: Rate" }),
       ).toHaveFocus(),
     );
   });
@@ -559,6 +540,56 @@ describe("rating progress", () => {
       screen.getByRole("button", { name: /Try the rating again/ }),
     );
     expect(await screen.findByText("Still no satellite data")).toBeVisible();
+  });
+
+  it("opens a finished run's Agent Trace over the flow, and Esc comes back to it", async () => {
+    nav.search = `community=${SELVA.id}&asset=${ASSET_ID}`;
+    setup({
+      [ASSET]: () =>
+        json(
+          asset({
+            status: "rating",
+            status_reason: "no_satellite_metrics",
+            latest_run_id: RUN_ID,
+          }),
+        ),
+      [`GET /runs/${RUN_ID}`]: () =>
+        json(ratingRun({ status: "failed", error: "earth_obs_failed" })),
+      [`GET /runs/${RUN_ID}/trace`]: () =>
+        json({ ...celestun, run_id: RUN_ID, asset_id: ASSET_ID }),
+    });
+    const open = await screen.findByRole("button", {
+      name: "See every step in the Agent Trace",
+    });
+    open.focus();
+    fireEvent.click(open);
+
+    const drawer = await screen.findByRole("dialog", {
+      name: "How Laguna Verde was rated",
+    });
+    expect(
+      await within(drawer).findByText("Judged by Nemotron 3 Ultra"),
+    ).toBeInTheDocument();
+    for (const name of ["Which model does what", "How the agents are tested"])
+      expect(
+        within(drawer).getByRole("heading", { level: 3, name }),
+      ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(drawer).toContainElement(document.activeElement as HTMLElement),
+    );
+
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", {
+          name: "See every step in the Agent Trace",
+        }),
+      ).toHaveFocus(),
+    );
   });
 
   it("a stale run can be retried; 429 resubmit_cooldown shows the wait", async () => {
@@ -725,6 +756,44 @@ describe("resuming", () => {
     expect(await bodyOf(backend, `PATCH /assets/${ASSET_ID}`)).toEqual({
       description: "Mangroves we restore.",
     });
+  });
+
+  it("resumes a rated listing at the step the community left", async () => {
+    window.localStorage.setItem(`ww-listing-step:${ASSET_ID}`, "3");
+    nav.search = `community=${SELVA.id}&asset=${ASSET_ID}`;
+    setup({
+      [ASSET]: () => json(asset({ status: "listed" })),
+      [`GET /assets/${ASSET_ID}/verification/runs`]: () => json([]),
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Show it's yours" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("region", { name: "Step 4 of 5: Prove" }),
+    ).toBeVisible();
+    window.localStorage.clear();
+  });
+
+  it("reaches Prove from a link even after the Reviewer sent the offer back", async () => {
+    nav.search = `community=${SELVA.id}&asset=${ASSET_ID}&step=prove`;
+    setup({
+      [ASSET]: () =>
+        json(
+          asset({
+            status: "listed",
+            offer: {
+              total_shares: 1_000_000,
+              retained_pct: "51.00",
+              sent_at: null,
+              review_note: "Add the assembly minutes.",
+            },
+          }),
+        ),
+      [`GET /assets/${ASSET_ID}/verification/runs`]: () => json([]),
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Show it's yours" }),
+    ).toBeVisible();
   });
 
   it("opens a draft on its details from the Listings page's Edit details", async () => {
@@ -1249,7 +1318,7 @@ describe("the boundary step (review fixes)", () => {
     expect(await screen.findByText("Ready to rate")).toBeVisible();
   });
 
-  it("a 401 while saving offers sign-in and keeps the listing in this tab", async () => {
+  it("a 401 while saving offers a new sandbox and keeps the listing in this tab", async () => {
     window.history.replaceState({}, "", `/steward/list?community=${SELVA.id}`);
     setup({
       "POST /assets": () => json({ detail: "auth_required" }, { status: 401 }),
@@ -1257,12 +1326,10 @@ describe("the boundary step (review fixes)", () => {
     await fillDetails();
     await drawSquare();
     fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));
-    expect(await screen.findByText("Your session has ended")).toBeVisible();
+    expect(await screen.findByText("Your sandbox has ended")).toBeVisible();
     expect(
-      screen.getByRole("link", { name: /Sign in again/ }).getAttribute("href"),
-    ).toBe(
-      `/login?next=${encodeURIComponent(`/steward/list?community=${SELVA.id}`)}`,
-    );
+      screen.getByRole("link", { name: /Open a new sandbox/ }),
+    ).toHaveAttribute("href", "/sandbox");
     const kept = JSON.parse(
       window.sessionStorage.getItem(
         `ww-listing-draft:${SIGNED_IN_WORLD.me!.id}:${SELVA.id}`,
@@ -1339,7 +1406,7 @@ describe("focus between steps (T48)", () => {
     ).toBeVisible();
     await fillDetails();
     expect(
-      await screen.findByRole("region", { name: "Step 2 of 4: Boundary" }),
+      await screen.findByRole("region", { name: "Step 2 of 5: Draw" }),
     ).toHaveFocus();
 
     await drawSquare();
@@ -1347,13 +1414,13 @@ describe("focus between steps (T48)", () => {
     expect(await screen.findByText("Ready to rate")).toBeVisible();
     await waitFor(() =>
       expect(
-        screen.getByRole("region", { name: "Step 3 of 4: Rating" }),
+        screen.getByRole("region", { name: "Step 3 of 5: Rate" }),
       ).toHaveFocus(),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Edit boundary" }));
     expect(
-      screen.getByRole("region", { name: "Step 2 of 4: Boundary" }),
+      screen.getByRole("region", { name: "Step 2 of 5: Draw" }),
     ).toHaveFocus();
   });
 });

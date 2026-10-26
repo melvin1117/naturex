@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# T74: the API for the real-account E2E, started by Playwright's webServer (frontend/playwright.config.ts).
-# Recreates a dedicated database (never the dev `wildworth` one), migrates, seeds, creates the E2E
-# admin with the supported CLI (password on stdin), then serves the API in the foreground.
+# T74: the API for the sandbox E2E, started by Playwright's webServer (frontend/playwright.config.ts).
+# Recreates a dedicated database (never the dev `wildworth` one), migrates, seeds, then serves the
+# API in the foreground. Every visitor's sandbox is started by the journey itself (no accounts).
 # WILDWORTH_ENV_FILE=none makes the backend ignore every .env file (backend/app/config.py), so a
 # developer's .env (real keys, USE_MOCKS=false, lower limits) can't leak in; the settings the
 # journey depends on are also set explicitly below, and every other one keeps its default.
@@ -10,8 +10,6 @@ set -euo pipefail
 : "${E2E_DATABASE_URL:?set by playwright.config.ts}"
 : "${E2E_API_PORT:?set by playwright.config.ts}"
 : "${E2E_WEB_ORIGIN:?set by playwright.config.ts}"
-: "${E2E_ADMIN_EMAIL:?set by playwright.config.ts}"
-: "${E2E_ADMIN_PASSWORD:?set by playwright.config.ts}"
 
 cd "$(dirname "$0")/../backend"
 
@@ -61,8 +59,5 @@ PY
 
 uv run --frozen alembic upgrade head
 uv run --frozen python -m app.seed
-printf '%s\n' "$E2E_ADMIN_PASSWORD" |
-  uv run --frozen python -m app.cli create-admin \
-    --email "$E2E_ADMIN_EMAIL" --name "E2E Admin" --password-stdin
 
 exec uv run --frozen uvicorn app.main:app --host 127.0.0.1 --port "$E2E_API_PORT" --log-level warning

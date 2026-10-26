@@ -29,13 +29,19 @@ vi.mock("next/navigation", async () => {
   };
   return {
     useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
-    usePathname: () => "/",
+    usePathname: () =>
+      useSyncExternalStore(subscribe, () => window.location.pathname),
     useSearchParams: () =>
       new URLSearchParams(
         useSyncExternalStore(subscribe, () => window.location.search),
       ),
   };
 });
+
+// Leaflet draws the map; the list beside it and the switch are what's tested here.
+vi.mock("@/components/proto/sites-map-canvas", () => ({
+  default: () => <div role="region" aria-label="Map of the sites" />,
+}));
 
 const CARDS = cards as AssetCard[];
 const WETLAND = CARDS.find((c) => c.site_key === "wetland_mx")!;
@@ -45,6 +51,11 @@ beforeEach(() => {
   FakeEventSource.reset();
   window.history.replaceState(null, "", "/");
 });
+
+/** A figure under the heading, read whole ("3 sites rated"). */
+function figure(label: string) {
+  return screen.getByText(label).closest("li");
+}
 
 function grid() {
   return screen.getByRole("region", { name: "All sites" });
@@ -112,7 +123,14 @@ describe("Marketplace", () => {
     expect(
       screen.getByRole("heading", { level: 2, name: "Ría Celestún Mangrove" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Sites listed").nextSibling).toHaveTextContent("3");
+    // The board in three figures; the worth is a range, never a single value.
+    expect(figure("sites rated")).toHaveTextContent("3 sites rated");
+    expect(figure("of living land")).toHaveTextContent(
+      "1,065 ha of living land",
+    );
+    expect(figure("a year in nature's services")).toHaveTextContent(
+      "$5.9M–$38.9M a year in nature's services",
+    );
   });
 
   it("marks a listed site awaiting its opening offer as not trading yet", async () => {
@@ -159,13 +177,10 @@ describe("Marketplace", () => {
 
     expect(within(card).getByText("Awaiting rating")).toBeInTheDocument();
     expect(within(card).getByText("Not rated yet")).toBeInTheDocument();
-    expect(screen.getByText("Sites listed").nextSibling).toHaveTextContent("4");
-    // 206.70 + 457.88 + 400.21 ha: the unrated 1,000 ha isn't "rated".
-    expect(screen.getByText("Land rated").nextSibling).toHaveTextContent(
-      "1,065 ha",
-    );
-    expect(screen.getByText("Nature's value").nextSibling).toHaveTextContent(
-      "$38.9M",
+    // 206.70 + 457.88 + 400.21 ha: the unrated site and its 1,000 ha aren't counted.
+    expect(figure("sites rated")).toHaveTextContent("3 sites rated");
+    expect(figure("of living land")).toHaveTextContent(
+      "1,065 ha of living land",
     );
   });
 
@@ -183,14 +198,49 @@ describe("Marketplace", () => {
     expect(within(grid()).getAllByRole("link")).toHaveLength(3);
   });
 
+  it("keeps the sandbox's address when filtering", async () => {
+    window.history.replaceState(null, "", "/sandbox");
+    renderExchange(<Marketplace />, { "GET /assets": () => json(CARDS) });
+    await screen.findByRole("region", { name: "All sites" });
+
+    fireEvent.click(screen.getByRole("radio", { name: "BBB–BB" }));
+
+    expect(
+      await screen.findByText("No sites rated BBB–BB yet."),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/sandbox");
+    expect(window.location.search).toBe("?grade=b");
+  });
+
+  it("shows the sites on a map as a second view, kept in the address", async () => {
+    renderExchange(<Marketplace />, { "GET /assets": () => json(CARDS) });
+    await screen.findByRole("region", { name: "All sites" });
+    expect(screen.getByRole("radio", { name: "Cards" })).toBeChecked();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Map" }));
+
+    expect(
+      await screen.findByRole("region", { name: "Map of the sites" }),
+    ).toBeInTheDocument();
+    const list = screen.getByRole("list", { name: "Sites on the map" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(3);
+    expect(
+      within(list).getByRole("link", { name: "View Xochimilco Wetland" }),
+    ).toHaveAttribute("href", `/asset/${WETLAND.id}`);
+    expect(window.location.search).toBe("?view=map");
+    // Sorting is for the cards; the grade filter still applies.
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+
   it("reads the filter and sort from the URL", async () => {
     window.history.replaceState(null, "", "/?grade=a&sort=value");
     renderExchange(<Marketplace />, { "GET /assets": () => json(CARDS) });
     await screen.findByRole("region", { name: "All sites" });
 
     expect(screen.getByRole("radio", { name: "AAA–A" })).toBeChecked();
+    // Its name is exactly what it shows (axe: label in name).
     expect(
-      screen.getByRole("combobox", { name: "Sort sites" }),
+      screen.getByRole("combobox", { name: "Sort: Annual value" }),
     ).toHaveTextContent("Sort: Annual value");
     const names = within(grid())
       .getAllByRole("link")
@@ -213,7 +263,7 @@ describe("Marketplace", () => {
     expect(screen.getByRole("radio", { name: "All" })).toBeChecked();
     expect(within(grid()).getAllByRole("link")).toHaveLength(3);
     expect(
-      screen.getByRole("combobox", { name: "Sort sites" }),
+      screen.getByRole("combobox", { name: "Sort: Best grade" }),
     ).toHaveTextContent("Sort: Best grade");
   });
 
@@ -230,12 +280,11 @@ describe("Marketplace", () => {
       name: /Xochimilco Wetland/,
     });
 
-    expect(
-      within(link).queryByText("The price chart starts with the first trade"),
-    ).toBeNull();
-    expect(
-      screen.getAllByText("The price chart starts with the first trade"),
-    ).toHaveLength(2);
+    // Only a card with two prices or more draws one; the others say nothing.
+    const charts = grid().querySelectorAll(".recharts-responsive-container");
+    expect(charts).toHaveLength(1);
+    expect(link).toContainElement(charts[0] as HTMLElement);
+    expect(screen.queryByText(/price chart starts/)).toBeNull();
     expect(
       backend.requests.filter((r) => r.url.includes("/prices")),
     ).toHaveLength(0);

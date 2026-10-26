@@ -4,6 +4,11 @@
 #
 #   make dev            # uses the values in .env (USE_MOCKS=true there means mock agents and data)
 #   make dev LIVE=1     # real services: USE_MOCKS=false and EARTH_ENGINE_LIVE=true (needs keys in .env)
+#   make preview        # the production build (`next build`, then `next start`): what visitors get
+#
+# The dev server compiles each page the first time it's opened, so a first visit can take a few
+# seconds; it runs on Turbopack (`WEBPACK=1` for webpack) and opens the main pages itself once
+# it's up (`WARM=0` to skip). The preview has every page built and prefetches links.
 #
 # Override ports with API_PORT and WEB_PORT. Works with macOS's bash 3.2.
 set -euo pipefail
@@ -45,10 +50,43 @@ prefix() { awk -v tag="$1" '{ print tag " " $0; fflush() }'; }
 # Run the servers' own binaries, not through `uv run` / `pnpm exec`: a wrapper forwards the stop
 # signal on top of the one sent to the process group, and two SIGTERMs at once can deadlock
 # uvicorn's reloader in its signal handler, leaving the port held. `make migrate` synced the venv.
-(cd backend && PYTHONUNBUFFERED=1 .venv/bin/python -m uvicorn app.main:app --reload --port "$api_port" 2>&1 | prefix "[api]") &
+preview="${PREVIEW:-0}"
+reload="--reload"
+next_flags=(dev --port "$web_port")
+if [ "$preview" = "1" ]; then
+  echo "Building the web app for production..."
+  (cd frontend && BACKEND_URL="http://localhost:$api_port" node_modules/.bin/next build)
+  reload=""
+  next_flags=(start --port "$web_port")
+elif [ "${WEBPACK:-0}" != "1" ]; then
+  next_flags+=(--turbopack)
+fi
+
+(cd backend && PYTHONUNBUFFERED=1 .venv/bin/python -m uvicorn app.main:app $reload --port "$api_port" 2>&1 | prefix "[api]") &
 api_pid=$!
-(cd frontend && BACKEND_URL="http://localhost:$api_port" node_modules/.bin/next dev --port "$web_port" 2>&1 | prefix "[web]") &
+(cd frontend && BACKEND_URL="http://localhost:$api_port" node_modules/.bin/next "${next_flags[@]}" 2>&1 | prefix "[web]") &
 web_pid=$!
+
+# The dev server compiles a page on its first request: open the main ones now, in the background,
+# so the first click on each doesn't wait. Any ID compiles the site page.
+warm() {
+  local base="http://localhost:$web_port" waited=0
+  until curl -s -o /dev/null "$base/robots.txt"; do
+    sleep 1
+    waited=$((waited + 1))
+    [ "$waited" -lt 90 ] || return 0
+  done
+  for route in / /how /sandbox /sandbox/steward /sandbox/steward/list /sandbox/portfolio \
+    /sandbox/asset/00000000-0000-4000-8000-000000000000 /sandbox/admin /sandbox/admin/verifications; do
+    curl -s -o /dev/null "$base$route" || return 0
+  done
+  echo "[web] Main pages compiled: first visits are quick now."
+}
+warm_pid=""
+if [ "$preview" != "1" ] && [ "${WARM:-1}" != "0" ]; then
+  warm &
+  warm_pid=$!
+fi
 
 running() { kill -0 -- "-$api_pid" 2>/dev/null || kill -0 -- "-$web_pid" 2>/dev/null; }
 
@@ -60,6 +98,7 @@ stop() {
   trap '' INT TERM HUP
   trap - EXIT
   echo "Stopping the API and the web app..."
+  [ -n "$warm_pid" ] && kill -TERM -- "-$warm_pid" 2>/dev/null
   kill -TERM -- "-$api_pid" 2>/dev/null || true
   kill -TERM -- "-$web_pid" 2>/dev/null || true
   local waited=0
@@ -80,7 +119,7 @@ trap 'stop 129' HUP
 trap 'stop $?' EXIT
 
 echo "API  http://localhost:$api_port/healthz  (ENVIRONMENT=$ENVIRONMENT, USE_MOCKS=${USE_MOCKS:-from .env})"
-echo "Web  http://localhost:$web_port  (Ctrl-C to stop both)"
+echo "Web  http://localhost:$web_port  (Ctrl-C to stop both)$([ "$preview" = "1" ] && echo "  · production build")"
 
 while kill -0 "$api_pid" 2>/dev/null && kill -0 "$web_pid" 2>/dev/null; do
   sleep 1

@@ -62,17 +62,6 @@ describe("CopilotChat, Bea's moments", () => {
 });
 
 describe("CopilotChat", () => {
-  it("asks signed-out visitors to sign in and come back", async () => {
-    renderExchange(chat());
-
-    expect(
-      await screen.findByRole("link", { name: "Sign in to ask Bea" }),
-    ).toHaveAttribute(
-      "href",
-      `/login?next=${encodeURIComponent(`/asset/${ASSET_ID}?tab=overview`)}`,
-    );
-  });
-
   it("renders the streamed answer with each citation linking to its source", async () => {
     // jsdom has no layout: give the answer list a height so following it is observable.
     const height = vi
@@ -153,13 +142,11 @@ describe("CopilotChat", () => {
       "POST /copilot": () => sseResponse(answerEvents()),
     });
     // The card says what she answers from; the field's footnote, what she runs on and that
-    // it's play money and never advice (once).
+    // it's never advice (once).
     expect(
-      await screen.findByText(
-        "Runs on NVIDIA Nemotron 3 Nano · Play money only; not advice.",
-      ),
+      await screen.findByText("Runs on NVIDIA Nemotron 3 Nano · Not advice."),
     ).toBeVisible();
-    expect(screen.getAllByText(/not advice/)).toHaveLength(1);
+    expect(screen.getAllByText(/Not advice/)).toHaveLength(1);
 
     fireEvent.click(
       screen.getByRole("button", { name: "Why did the price change?" }),

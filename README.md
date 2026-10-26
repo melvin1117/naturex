@@ -87,7 +87,9 @@ Needs Docker, `uv`, Node 22 and Corepack. One command starts Postgres, applies m
 cp .env.example .env    # first time only; add keys for live services
 make dev                # uses .env as is (USE_MOCKS=true: mock agents and data)
 make dev LIVE=1         # real services: Token Factory models, Tavily, Earth Engine (needs keys)
+make preview            # the production build, as visitors get it (stop `make dev` first)
 ```
+The dev server (Turbopack) compiles each page on its first visit, so a first click can take a second or two; `make dev` opens the main pages in the background once it's up to do that ahead of you. To judge speed or feel, use `make preview`: every page is built ahead and links prefetch.
 
 ### Quick start (backend)
 ```bash
@@ -105,7 +107,7 @@ docker compose up -d   # Postgres + pgvector (requires Docker)
 Needs Node 22 and Corepack (`corepack enable`), which installs the pinned pnpm.
 ```bash
 cd frontend && pnpm install
-pnpm dev               # http://localhost:3000/judge (Exchange /, /asset/[id], /portfolio · Steward /steward, /steward/list · /admin · /login, /register · /dev/ui)
+pnpm dev               # http://localhost:3000 (welcome /, story /how, the sandbox /sandbox: Marketplace, Communities /sandbox/steward, Your stakes /sandbox/portfolio, Reviews /sandbox/admin/verifications · /dev/ui)
 
 # from repo root: lint (ESLint + Prettier), types, unit tests, build
 make fe-check

@@ -4,14 +4,23 @@
   dev-spec §8's formula, from the latest sealed report.
 - `POST /assets/{id}/ipo`: launch, once, on a `listed` asset.
 
-Both are the community owner's (`LAUNCH_IPO`, ADR-0005 matrix row 6). Stewards get 403
-`owner_only` on the preview too: it is the first step of the launch, which the matrix keeps
-from them, and every input it shows is already public in the asset's report. Anonymous callers
-get 401. An asset the caller can't see is 404, as for every action on every asset route (the
-policy's `authz.can_see`, T58's rule): one outside the session's world, or a listing that isn't
-public and isn't the caller's community's, so a draft's existence never leaks. Other users who
-can see it (any public asset) and same-world admins get 403. A refused launch is 409 with a
-code; nothing is written. An asset deleted meanwhile (a "Reset my demo") is 404.
+Opening offers sent for review (ADR-0008 §5; rules in `app.services.offers`):
+
+- `POST /assets/{id}/offer`: the owner sends the terms; the listing waits for the Reviewer.
+- `GET /admin/offers`: the offers waiting in the caller's world, oldest first.
+- `POST /admin/assets/{id}/offer/approve`: launch it, with its terms, at today's price.
+- `POST /admin/assets/{id}/offer/send-back`: return it to the community with a note.
+
+The preview, the launch and sending an offer are the community owner's (`LAUNCH_IPO`, ADR-0005
+matrix row 6); deciding on an offer is the Reviewer's (`REVIEW_LISTING`: an impartial admin).
+Stewards get 403 `owner_only` on the preview too: it is the first step of the launch, which the
+matrix keeps from them, and every input it shows is already public in the asset's report.
+Anonymous callers get 401. An asset the caller can't see is 404, as for every action on every
+asset route (the policy's `authz.can_see`, T58's rule): one outside the session's world, or a
+listing that isn't public and isn't the caller's community's, so a draft's existence never
+leaks. Other users who can see it (any public asset) and same-world admins get 403. A refused
+launch is 409 with a code; nothing is written. An asset deleted meanwhile (a "Reset my demo") is
+404.
 """
 
 from __future__ import annotations
@@ -20,6 +29,7 @@ from decimal import Decimal
 from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
+from sqlmodel import col, select
 
 from app.authz import (
     Action,
@@ -38,7 +48,19 @@ from app.market.offering import (
     MIN_TOTAL_SHARES,
     Offering,
 )
-from app.schemas import IpoLaunch, IpoOut, IpoPreviewOut
+from app.models import Community
+from app.schemas import (
+    IpoLaunch,
+    IpoOut,
+    IpoPreviewOut,
+    IpoTermsOut,
+    ListingOfferOut,
+    OfferDecision,
+    OfferOut,
+    OfferSendBack,
+    PendingOfferOut,
+)
+from app.services import offers
 from app.services.ipo import (
     ALREADY_LAUNCHED,
     NO_RATING,
@@ -53,7 +75,7 @@ from app.services.ipo import (
     preview,
 )
 from app.services.listings import RUN_IN_PROGRESS
-from app.services.verification import verification_out
+from app.services.verification import listing_standing, verification_out
 
 router = APIRouter(tags=["ipo"])
 
@@ -63,6 +85,8 @@ Responses = dict[int | str, dict[str, Any]]
 
 
 LaunchIpo = Annotated[Granted, require(Action.LAUNCH_IPO, asset_ref)]
+ReviewOffer = Annotated[Granted, require(Action.REVIEW_LISTING, asset_ref)]
+ReviewQueue = Annotated[Granted, require(Action.REVIEW_LISTING)]
 
 _COMMON: Responses = {
     401: {"description": "auth_required"},
@@ -199,3 +223,167 @@ def launch_ipo(
     response.headers["Cache-Control"] = NO_STORE
     response.headers["Location"] = f"/assets/{ref.asset_id}"
     return IpoOut(**_terms_out(done.quote), launched_at=done.launched_at)
+
+
+# ----- offers sent for review (ADR-0008 §5) -----------------------------------------------------
+
+_DECIDE: Responses = {
+    401: {"description": "auth_required"},
+    403: {"description": "admin_only, conflict_of_interest (the Reviewer is in its community)"},
+    404: {"description": "Not found in the session's world"},
+}
+
+
+@router.post(
+    "/assets/{asset_id}/offer",
+    response_model=OfferOut,
+    responses={
+        **_COMMON,
+        409: {
+            "description": f"`{ALREADY_LAUNCHED}`, `{NOT_LISTED}`, `{NOT_VERIFIED}` (the "
+            f"launch's verification gate), `{NO_RATING}`, `{PRICE_TOO_LOW}`, `{PRICE_TOO_HIGH}` "
+            f"or `{PRICE_CHANGED}` (`expected_price` is stale)"
+        },
+        422: {
+            "description": "total_shares outside 10,000–10,000,000 or retained_pct outside 10–90"
+        },
+    },
+)
+def send_offer(
+    body: IpoLaunch, granted: LaunchIpo, session: SessionDep, response: Response
+) -> OfferOut:
+    """Send the opening offer for review: the shares to issue and the share the community keeps,
+    at the price the owner saw (`expected_price`). Sending again replaces the terms. Nothing
+    trades until the Reviewer approves it, which launches it (`/admin/assets/{id}/offer/approve`).
+    """
+    ref = _ref(granted)
+    try:
+        sent = offers.send(
+            session,
+            ref.world_id,
+            ref.asset_id,
+            Offering(body.total_shares, body.retained_pct),
+            expected_price=body.expected_price,
+        )
+    except IpoRefused as exc:
+        session.rollback()
+        raise _refused(exc) from None
+    except LookupError:
+        session.rollback()
+        raise _missing() from None
+    session.commit()
+    response.headers["Cache-Control"] = NO_STORE
+    return OfferOut(**_terms_out(sent.quote), sent_at=sent.sent_at)
+
+
+@router.get(
+    "/admin/offers",
+    response_model=list[PendingOfferOut],
+    tags=["admin"],
+    responses={401: {"description": "auth_required"}, 403: {"description": "admin_only"}},
+)
+def offer_queue(
+    granted: ReviewQueue, session: SessionDep, response: Response
+) -> list[PendingOfferOut]:
+    """The offers waiting for a decision in the caller's world, oldest first, each priced as an
+    approval would launch it now (or why it can't be), with where its verification stands.
+    Offers of the Reviewer's own communities are left out (conflict of interest)."""
+    actor = granted.signed_in
+    world_id = actor.world_id
+    waiting = offers.pending(session, world_id, list(actor.memberships))
+    names = dict(
+        session.exec(
+            select(Community.id, Community.name).where(
+                Community.world_id == world_id,
+                col(Community.id).in_([p.asset.community_id for p in waiting]),
+            )
+        ).all()
+    )
+    response.headers["Cache-Control"] = PRIVATE_NO_STORE
+    out: list[PendingOfferOut] = []
+    for p in waiting:
+        assert p.asset.offer_sent_at is not None  # pending offers are sent
+        out.append(
+            PendingOfferOut(
+                asset_id=p.asset.id,
+                asset_name=p.asset.name,
+                community_name=names.get(p.asset.community_id) if p.asset.community_id else None,
+                area_ha=p.asset.area_ha,
+                grade=p.report.grade if p.report else None,
+                sent_at=p.asset.offer_sent_at,
+                total_shares=p.asset.total_shares,
+                retained_pct=p.asset.retained_pct,
+                terms=IpoTermsOut(**_terms_out(p.quote)) if p.quote else None,
+                blocked_reason=p.blocked_reason,
+                verification=verification_out(listing_standing(session, p.asset)),
+            )
+        )
+    return out
+
+
+@router.post(
+    "/admin/assets/{asset_id}/offer/approve",
+    response_model=IpoOut,
+    tags=["admin"],
+    responses={
+        **_DECIDE,
+        409: {
+            "description": f"`{offers.NOT_SENT}` (nothing waits for review), "
+            f"`{offers.CHANGED}` (sent again or decided since `sent_at`), {_REFUSED}, or "
+            f"{_BLOCKED}"
+        },
+    },
+)
+def approve_offer(
+    body: OfferDecision, granted: ReviewOffer, session: SessionDep, response: Response
+) -> IpoOut:
+    """Approve the offer sent at `sent_at`: it launches with its terms at the price the latest
+    report sets now (the launch's own transaction, ledger entry and price tick), and the site
+    opens on the Marketplace."""
+    ref = _ref(granted)
+    try:
+        done = offers.approve(session, ref.world_id, ref.asset_id, sent_at=body.sent_at)
+    except IpoRefused as exc:
+        session.rollback()
+        raise _refused(exc) from None
+    except LookupError:
+        session.rollback()
+        raise _missing() from None
+    session.commit()
+    response.headers["Cache-Control"] = NO_STORE
+    response.headers["Location"] = f"/assets/{ref.asset_id}"
+    return IpoOut(**_terms_out(done.quote), launched_at=done.launched_at)
+
+
+@router.post(
+    "/admin/assets/{asset_id}/offer/send-back",
+    response_model=ListingOfferOut,
+    tags=["admin"],
+    responses={
+        **_DECIDE,
+        409: {
+            "description": f"`{offers.NOT_SENT}`, `{offers.CHANGED}`, `{ALREADY_LAUNCHED}` or "
+            f"`{NOT_LISTED}`"
+        },
+    },
+)
+def send_back_offer(
+    body: OfferSendBack, granted: ReviewOffer, session: SessionDep, response: Response
+) -> ListingOfferOut:
+    """Return the offer to its community with a note; they can change it and send it again."""
+    ref = _ref(granted)
+    try:
+        asset = offers.send_back(
+            session, ref.world_id, ref.asset_id, sent_at=body.sent_at, note=body.note
+        )
+    except IpoRefused as exc:
+        session.rollback()
+        raise _refused(exc) from None
+    except LookupError:
+        session.rollback()
+        raise _missing() from None
+    session.commit()
+    response.headers["Cache-Control"] = NO_STORE
+    sent_back = offers.offer_out(asset)
+    assert sent_back is not None  # it carries the note
+    return sent_back

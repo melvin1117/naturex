@@ -1,5 +1,6 @@
 "use client";
 
+import { safeHref } from "@/lib/safe-href";
 import { Check, ExternalLink, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "cn";
@@ -111,10 +112,11 @@ function SourceLink({
   url: string | null;
   children: React.ReactNode;
 }) {
-  if (!url) return <span className="text-machine-ink">{children}</span>;
+  const href = safeHref(url);
+  if (!href) return <span className="text-machine-ink">{children}</span>;
   return (
     <a
-      href={url}
+      href={href}
       target="_blank"
       rel="noopener noreferrer nofollow"
       className="inline-flex items-start gap-1 text-machine-ink underline decoration-machine-line underline-offset-2 hover:decoration-lime focus-visible:ring-2 focus-visible:ring-lime focus-visible:outline-none"

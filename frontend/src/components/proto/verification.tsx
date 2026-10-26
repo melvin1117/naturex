@@ -1,7 +1,10 @@
-import { FileCheck2, FileClock, FileQuestion } from "lucide-react";
+import { FileClock } from "lucide-react";
 import { cn } from "cn";
 
-import type { Verification } from "@/lib/prototype/world";
+import { StewardsIcon, VerifiedLandIcon } from "@/components/icons";
+
+/** How far a demo site's land documents got (the scripted levels ADR-0006 §6 badges). */
+export type Verification = "verified" | "documents_submitted" | "unverified";
 
 const TEXT: Record<Verification, { short: string; long: string }> = {
   // Every document in the prototype is a sample, so the ADR-0006 §6 demo badge applies.
@@ -32,16 +35,16 @@ export function VerificationBadge({
 }) {
   const Icon =
     level === "verified"
-      ? FileCheck2
+      ? VerifiedLandIcon
       : level === "documents_submitted"
         ? FileClock
-        : FileQuestion;
+        : StewardsIcon;
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
         tone === "image"
-          ? "bg-white/15 text-white"
+          ? "bg-white/15 text-white [--ww-accent:var(--color-lime)]"
           : level === "verified"
             ? "bg-lime/30 text-lime-ink"
             : "bg-secondary text-muted-foreground",

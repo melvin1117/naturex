@@ -29,7 +29,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { toApiError } from "@/lib/api/errors";
 import type { AssetCard, EventPreset, SimulateEvent } from "@/lib/api/types";
-import { quarterLabel } from "@/lib/prototype/format";
+import { quarterLabel } from "@/lib/format";
 import { eventFailure, eventOutcomeText, eventTitle } from "@/lib/time-machine";
 import { useSimulateEvent } from "@/lib/time-machine-hooks";
 
@@ -151,130 +151,134 @@ export function EventSection({
           No listed sites yet. Events can only be injected into a listed site.
         </p>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_20rem]">
-          <div className="min-w-0 space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="event-asset">Site</Label>
-              <Select
-                value={asset.id}
-                onValueChange={setAssetId}
-                disabled={inject.isPending}
+        // Columns follow the panel's width, not the window's: it also sits in a narrow sheet.
+        <div className="@container">
+          <div className="grid gap-6 @4xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_20rem]">
+            <div className="min-w-0 space-y-4">
+              <div className="grid gap-2">
+                <Label htmlFor="event-asset">Site</Label>
+                <Select
+                  value={asset.id}
+                  onValueChange={setAssetId}
+                  disabled={inject.isPending}
+                >
+                  <SelectTrigger id="event-asset" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assets.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="event-preset">Event</Label>
+                <Select
+                  value={preset.preset}
+                  onValueChange={setPresetName}
+                  disabled={inject.isPending}
+                >
+                  <SelectTrigger id="event-preset" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {presets.map((p) => (
+                      <SelectItem key={p.preset} value={p.preset}>
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <PresetFacts preset={preset} />
+              <Dialog
+                open={confirming}
+                onOpenChange={(open) =>
+                  setConfirming(open && !inject.isPending)
+                }
               >
-                <SelectTrigger id="event-asset" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {assets.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="event-preset">Event</Label>
-              <Select
-                value={preset.preset}
-                onValueChange={setPresetName}
-                disabled={inject.isPending}
-              >
-                <SelectTrigger id="event-preset" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {presets.map((p) => (
-                    <SelectItem key={p.preset} value={p.preset}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <PresetFacts preset={preset} />
-            <Dialog
-              open={confirming}
-              onOpenChange={(open) => setConfirming(open && !inject.isPending)}
-            >
-              <DialogTrigger asChild>
-                {/* aria-disabled, not disabled, while it runs: the dialog hands focus back
+                <DialogTrigger asChild>
+                  {/* aria-disabled, not disabled, while it runs: the dialog hands focus back
                     here, and a disabled button would drop it to the page. */}
-                <Button
-                  aria-disabled={inject.isPending || undefined}
-                  className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-primary aria-disabled:active:translate-y-0"
-                  data-tour="inject-encroachment"
-                >
-                  {inject.isPending ? (
-                    <Spinner aria-hidden="true" role="presentation" />
-                  ) : (
-                    <Zap aria-hidden="true" />
-                  )}
-                  {inject.isPending
-                    ? `Re-rating ${requested?.asset ?? asset.name}…`
-                    : `Inject ${preset.label.toLowerCase()}`}
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <form
-                  className="grid gap-4"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setConfirming(false);
-                    void run();
-                  }}
-                >
-                  <DialogHeader>
-                    <DialogTitle>
-                      Inject {preset.label.toLowerCase()} at {asset.name}?
-                    </DialogTitle>
-                    <DialogDescription>
-                      {preset.description} The site is re-rated now, its stake
-                      price re-anchors and the event is stored as simulated.
-                      {preset.alerts &&
-                        " Its holders and community get a news alert."}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <DialogClose asChild>
-                      <Button type="button" variant="outline">
-                        Cancel
-                      </Button>
-                    </DialogClose>
-                    <Button type="submit">Inject and re-rate</Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-            <p role="status" aria-live="polite" className="text-sm">
-              {inject.isPending
-                ? requested &&
-                  `Applying ${requested.preset} and re-rating ${requested.asset}…`
-                : inject.data && (
-                    <span className="sr-only">
-                      {eventOutcomeText(inject.data, resultName)}
-                    </span>
-                  )}
-            </p>
-          </div>
-          <div className="min-w-0">
-            {failure ? (
-              <Alert variant="destructive">
-                <TriangleAlertIcon aria-hidden="true" />
-                <AlertTitle>{failure.title}</AlertTitle>
-                <AlertDescription>
-                  <p>{failure.message}</p>
-                </AlertDescription>
-              </Alert>
-            ) : inject.data ? (
-              <EventResult result={inject.data} name={resultName} />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                The result shows here: health, grade and stake price before and
-                after, as stored.
+                  <Button
+                    aria-disabled={inject.isPending || undefined}
+                    className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-primary aria-disabled:active:translate-y-0"
+                  >
+                    {inject.isPending ? (
+                      <Spinner aria-hidden="true" role="presentation" />
+                    ) : (
+                      <Zap aria-hidden="true" />
+                    )}
+                    {inject.isPending
+                      ? `Re-rating ${requested?.asset ?? asset.name}…`
+                      : `Inject ${preset.label.toLowerCase()}`}
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <form
+                    className="grid gap-4"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setConfirming(false);
+                      void run();
+                    }}
+                  >
+                    <DialogHeader>
+                      <DialogTitle>
+                        Inject {preset.label.toLowerCase()} at {asset.name}?
+                      </DialogTitle>
+                      <DialogDescription>
+                        {preset.description} The site is re-rated now, its stake
+                        price re-anchors and the event is stored as simulated.
+                        {preset.alerts &&
+                          " Its holders and community get a news alert."}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button type="button" variant="outline">
+                          Cancel
+                        </Button>
+                      </DialogClose>
+                      <Button type="submit">Inject and re-rate</Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+              <p role="status" aria-live="polite" className="text-sm">
+                {inject.isPending
+                  ? requested &&
+                    `Applying ${requested.preset} and re-rating ${requested.asset}…`
+                  : inject.data && (
+                      <span className="sr-only">
+                        {eventOutcomeText(inject.data, resultName)}
+                      </span>
+                    )}
               </p>
-            )}
+            </div>
+            <div className="min-w-0">
+              {failure ? (
+                <Alert variant="destructive">
+                  <TriangleAlertIcon aria-hidden="true" />
+                  <AlertTitle>{failure.title}</AlertTitle>
+                  <AlertDescription>
+                    <p>{failure.message}</p>
+                  </AlertDescription>
+                </Alert>
+              ) : inject.data ? (
+                <EventResult result={inject.data} name={resultName} />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  The result shows here: health, grade and stake price before
+                  and after, as stored.
+                </p>
+              )}
+            </div>
+            {inject.data && <SentAlerts ids={inject.data.alert_ids ?? []} />}
           </div>
-          {inject.data && <SentAlerts ids={inject.data.alert_ids ?? []} />}
         </div>
       )}
     </Panel>

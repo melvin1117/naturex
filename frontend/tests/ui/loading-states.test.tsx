@@ -11,15 +11,11 @@ import {
   SLOW_NOTE,
 } from "@/components/loading-region";
 import {
-  IpoSkeleton,
   MachineRowsSkeleton,
   RouteSkeleton,
-  ScreenSkeleton,
 } from "@/components/page-skeletons";
-import { TourProvider } from "@/components/proto/tour";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HANDOFF_MS, resetLoadingChains } from "@/lib/loading-chain";
-import { PrototypeProvider } from "@/lib/prototype/store";
 import { skeletonKind } from "@/lib/route-skeleton";
 
 declare global {
@@ -48,11 +44,7 @@ afterEach(() => {
 
 /** Like app/layout.tsx: the Marketplace heading offers the guided tour. */
 function Shell({ children }: { children: ReactNode }) {
-  return (
-    <PrototypeProvider>
-      <TourProvider>{children}</TourProvider>
-    </PrototypeProvider>
-  );
+  return <>{children}</>;
 }
 
 /** The one region on screen. */
@@ -185,6 +177,10 @@ const LOADERS = Object.entries(
   return { route, Loading: mod.default };
 });
 
+/** An app route as the sandbox serves it. */
+const inSandbox = (route: string) =>
+  route === "/" ? "/sandbox" : `/sandbox${route}`;
+
 describe("route loading states", () => {
   it("covers the Marketplace, asset page, portfolio, steward and admin routes", () => {
     const app = [
@@ -196,22 +192,19 @@ describe("route loading states", () => {
       "/portfolio",
       "/steward",
       "/steward/assets/x",
-      "/steward/assets/x/ipo",
       "/steward/community",
       "/steward/list",
-      "/steward/listings",
     ];
-    // ...and each one's twin in the sandbox (`/sandbox/*`).
-    const twins = app.map((r) => (r === "/" ? "/sandbox" : `/sandbox${r}`));
+    // All of them live in the sandbox (`/sandbox/*`): there's no sign-in app outside it.
     expect(LOADERS.map((l) => l.route).sort()).toEqual(
-      [...app, ...twins].sort(),
+      app.map(inSandbox).sort(),
     );
   });
 
   it("draws the Marketplace's skeleton only for the Marketplace", () => {
     // A loading.tsx is a Suspense boundary for every page below its folder: in
     // `(exchange)/` it would flash the Marketplace on the way to a site or Your stakes.
-    const exchange = join(process.cwd(), "src/app/(exchange)");
+    const exchange = join(process.cwd(), "src/app/sandbox/(exchange)");
     expect(existsSync(join(exchange, "loading.tsx"))).toBe(false);
     const market = join(exchange, "(market)");
     expect(existsSync(join(market, "loading.tsx"))).toBe(true);
@@ -239,13 +232,12 @@ describe("route loading states", () => {
   );
 
   it.each([
-    ["/", "Rated sites"],
+    ["/", "Marketplace"],
     ["/admin", "Time Machine"],
-    ["/admin/verifications", "Verified land"],
+    ["/admin/verifications", "Reviews"],
     ["/portfolio", "Your stakes"],
-    ["/steward/listings", "Listings"],
   ])("%s draws its real heading", (route, heading) => {
-    const { Loading } = LOADERS.find((l) => l.route === route)!;
+    const { Loading } = LOADERS.find((l) => l.route === inSandbox(route))!;
     render(<Loading />, { wrapper: Shell });
     expect(
       screen.getByRole("heading", { name: heading, level: 1 }),
@@ -253,10 +245,10 @@ describe("route loading states", () => {
   });
 
   it.each([
-    ["/asset/x", "Rated sites", "/"],
-    ["/steward/community", "Community home", "/steward"],
+    ["/asset/x", "Marketplace", "/"],
+    ["/steward/community", "Your community", "/steward"],
   ])("%s keeps its real back link", (route, name, href) => {
-    const { Loading } = LOADERS.find((l) => l.route === route)!;
+    const { Loading } = LOADERS.find((l) => l.route === inSandbox(route))!;
     render(<Loading />);
     expect(screen.getByRole("link", { name })).toHaveAttribute("href", href);
   });
@@ -271,12 +263,10 @@ describe("RouteSkeleton", () => {
     ["/steward/community", "community-settings"],
     ["/steward/assets/abc/verify", "screen"],
     ["/steward/assets/abc/evidence", "screen"],
-    ["/steward/assets/abc/ipo", "ipo"],
     ["/admin", "time-machine"],
     ["/admin/verifications", "queue"],
     ["/admin/verifications/abc", "review"],
     ["/steward/list", "page"],
-    ["/steward/listings", "listings"],
   ])("draws %s's shape with the gate's label", (path, shape) => {
     nav.pathname = path;
     render(<RouteSkeleton label="Checking your session…" />, {
@@ -286,34 +276,6 @@ describe("RouteSkeleton", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "Checking your session…",
     );
-  });
-});
-
-describe("IpoSkeleton", () => {
-  /** The cards of a skeleton, in order: their radius, and their columns' parent. */
-  function cards() {
-    return [
-      ...region().querySelectorAll<HTMLElement>(".bg-card.shadow-soft"),
-    ].map((card) => ({
-      radius: [...card.classList].find((c) => c.startsWith("rounded-")),
-      inColumns: card.parentElement!.className.includes("lg:grid-cols-2"),
-    }));
-  }
-
-  it("draws the opening offer's checklist band between the header and the columns", () => {
-    render(<IpoSkeleton />);
-    expect(region()).toHaveAttribute("data-skeleton", "ipo");
-    expect(cards()).toEqual([
-      { radius: "rounded-[1.75rem]", inColumns: false },
-      { radius: "rounded-[1.75rem]", inColumns: true },
-      { radius: "rounded-[1.75rem]", inColumns: true },
-    ]);
-  });
-
-  it("keeps the other focused screens without it", () => {
-    render(<ScreenSkeleton />);
-    expect(region()).toHaveAttribute("data-skeleton", "screen");
-    expect(cards().every((c) => c.inColumns)).toBe(true);
   });
 });
 

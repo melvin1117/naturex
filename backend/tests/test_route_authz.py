@@ -172,12 +172,12 @@ def test_the_inventory_catches_a_route_without_authorization() -> None:
     ]
 
 
-def test_admin_routes_are_operator_only() -> None:
+def test_admin_routes_require_their_own_actions() -> None:
     actions = route_actions(app)
-    assert actions[("GET", "/admin/time-machine")] == {Action.OPERATE}
-    assert actions[("POST", "/admin/simulate/quarter")] == {Action.OPERATE}
-    assert actions[("GET", "/admin/simulate/quarter/{job_id}")] == {Action.OPERATE}
-    assert actions[("POST", "/admin/simulate/event")] == {Action.OPERATE}
+    assert actions[("GET", "/admin/time-machine")] == {Action.SIMULATE}
+    assert actions[("POST", "/admin/simulate/quarter")] == {Action.SIMULATE}
+    assert actions[("GET", "/admin/simulate/quarter/{job_id}")] == {Action.SIMULATE}
+    assert actions[("POST", "/admin/simulate/event")] == {Action.SIMULATE}
     assert actions[("POST", "/admin/tamper-demo")] == {Action.TAMPER_DEMO}
     assert actions[("POST", "/orders")] == {Action.TRADE}
     assert actions[("POST", "/assets")] == {Action.MANAGE_LISTING}
@@ -216,6 +216,12 @@ def test_admin_routes_are_operator_only() -> None:
     assert actions[("GET", "/admin/verifications/decided")] == {Action.REVIEW_LISTING}  # #211
     for step in ("approve", "reject", "revoke"):
         path = f"/admin/assets/{{asset_id}}/verification/{{run_id}}/{step}"
+        assert actions[("POST", path)] == {Action.REVIEW_LISTING}
+    # ADR-0008 §5: offers sent for review.
+    assert actions[("POST", "/assets/{asset_id}/offer")] == {Action.LAUNCH_IPO}
+    assert actions[("GET", "/admin/offers")] == {Action.REVIEW_LISTING}
+    for step in ("approve", "send-back"):
+        path = f"/admin/assets/{{asset_id}}/offer/{step}"
         assert actions[("POST", path)] == {Action.REVIEW_LISTING}
 
 
@@ -380,6 +386,10 @@ OBJECT_ROUTES: dict[tuple[str, str], tuple[str, Callable[[Objects], Any] | None]
     # T59's IPO: the community owner's (LAUNCH_IPO), on an asset the caller can see.
     ("GET", "/assets/{asset_id}/ipo/preview"): ("rosa", None),
     ("POST", "/assets/{asset_id}/ipo"): ("rosa", lambda o: {"expected_price": "1"}),
+    # ADR-0008 §5: the owner sends the offer; the Reviewer (an impartial admin) decides on it.
+    ("POST", "/assets/{asset_id}/offer"): ("rosa", lambda o: {"expected_price": "1"}),
+    ("POST", "/admin/assets/{asset_id}/offer/approve"): ("admin", None),
+    ("POST", "/admin/assets/{asset_id}/offer/send-back"): ("admin", lambda o: {"note": "x"}),
     # T69's verification: the steward's uploads and runs, the community's and admins' reads,
     # the public panel and the reviewer's decisions.
     ("POST", "/assets/{asset_id}/documents"): ("rosa", None),
@@ -807,34 +817,42 @@ def test_an_admin_in_the_assets_community_rates_as_its_steward_not_as_operator(
 
 
 @requires_db
-def test_an_admin_cant_inject_events_into_its_own_communitys_asset(
+def test_anyone_in_a_sandbox_injects_events_even_on_their_own_communitys_asset(
     session: Session, client: TestClient
 ) -> None:
+    """In a sandbox the Time Machine is the visitor's demo control (ADR-0008), so the operator's
+    conflict-of-interest rule doesn't apply there (it still does in other worlds: test_authz)."""
     mine = objects(session, create_world(session))
-    admin = persona(session, mine.world.id, "admin")
-    other = session.exec(
-        select(Asset.id).where(
-            Asset.world_id == mine.world.id, col(Asset.community_id) != mine.community
+    # Not the asset `objects()` started a run on: nothing else stands in the event's way.
+    asset = session.exec(
+        select(Asset)
+        .where(
+            Asset.world_id == mine.world.id,
+            Asset.id != mine.asset,
+            Asset.status == AssetStatus.LISTED,
         )
+        .order_by(Asset.site_key)
     ).first()
+    assert asset is not None and asset.community_id is not None
+    admin = persona(session, mine.world.id, "admin")
     session.add(
         CommunityMember(
             world_id=mine.world.id,
-            community_id=mine.community,
+            community_id=asset.community_id,
             user_id=admin.id,
             role=CommunityRole.STEWARD,
         )
     )
     session.commit()
     start_demo(client, session, mine.world, persona_key="admin")
-
-    own = client.post("/admin/simulate/event", json={"asset_id": str(mine.asset), "preset": "fire"})
-    impartial = client.post(
-        "/admin/simulate/event", json={"asset_id": str(other), "preset": "fire"}
+    as_member_admin = client.post(
+        "/admin/simulate/event", json={"asset_id": str(asset.id), "preset": "fire"}
     )
+    start_demo(client, session, mine.world, persona_key="arjun")
+    as_supporter = client.get("/admin/time-machine")
 
-    assert (own.status_code, own.json()["detail"]) == (403, "conflict_of_interest")
-    assert impartial.status_code == 200, impartial.text
+    assert as_member_admin.status_code == 200, as_member_admin.text
+    assert as_supporter.status_code == 200, as_supporter.text
 
 
 # --- Memberships are read only when a check needs them -----------------------------------------

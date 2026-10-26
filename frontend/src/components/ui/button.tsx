@@ -20,6 +20,9 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
         // Primary on a photograph or the machine layer: paper, never lime (DESIGN.md, Buttons).
         "on-image": "bg-card text-foreground hover:bg-card/90",
+        // Secondary on a photograph or the machine layer: a paper outline.
+        "on-image-outline":
+          "border border-card/45 bg-machine/30 text-card backdrop-blur-sm [--ww-accent:var(--color-lime)] hover:border-card/70 hover:bg-machine/50 focus-visible:ring-card",
       },
       size: {
         default: "h-10 px-5 py-2 has-[>svg]:px-4",

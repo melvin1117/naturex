@@ -8,7 +8,7 @@ import {
   ProofOfLifeSeal,
   ProofOfLifeShareCard,
 } from "@/components/brand/proof-of-life";
-import { reportQuarter } from "@/lib/prototype/format";
+import { reportQuarter } from "@/lib/format";
 
 const nav = vi.hoisted(() => ({ pathname: "/asset/x" }));
 

@@ -26,7 +26,11 @@ describe("AskBeaButton", () => {
       screen.getByRole("button", { name: "Ask Bea AI assistant" }),
     );
     expect(
-      (await screen.findAllByText(/Runs on NVIDIA Nemotron 3 Nano/))[0],
+      (
+        await screen.findAllByText(
+          /^Answers from the Record · NVIDIA Nemotron 3 Nano$/,
+        )
+      )[0],
     ).toBeInTheDocument();
   });
 

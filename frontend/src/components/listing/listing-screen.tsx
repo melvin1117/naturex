@@ -2,12 +2,12 @@
 
 import { ArrowLeft, Check, RefreshCwIcon, TriangleAlert } from "lucide-react";
 import Link from "@/components/app-link";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "@/lib/nav";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
-import { ListingFlow as PrototypeListingFlow } from "@/components/proto/listing-flow";
 import { useStewardCommunity } from "@/components/shell/steward-community";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -26,27 +26,50 @@ import {
   type FieldErrors,
   type ListingDetailsForm,
 } from "@/lib/listing";
-import type { LatLng } from "@/lib/prototype/data";
-import { usePrototype } from "@/lib/prototype/store";
+import type { LatLng } from "@/lib/site-data";
 
 import { BoundaryStep } from "./boundary-step";
 import { DetailsStep } from "./details-step";
 import { ListedStep } from "./listed-step";
+import { OfferStep } from "./offer-step";
+import { ProveStep } from "./prove-step";
 import { RatingStep } from "./rating-step";
 import { Loading, Page } from "./shared";
 
-const STEPS = ["Details", "Boundary", "Rating", "Opening offer"];
+// The whole Agent Trace loads only when it opens, as on the site page.
+const TraceDrawer = dynamic(() =>
+  import("@/components/trace/trace-drawer").then((m) => m.TraceDrawer),
+);
+
+const STEPS = ["Name", "Draw", "Rate", "Prove", "Offer"];
+
+/** Where a rated listing's community last was (Rate's result, Prove or Offer), to come back to. */
+function stepKey(assetId: string) {
+  return `ww-listing-step:${assetId}`;
+}
+function readListedStep(assetId: string): number {
+  try {
+    const n = Number(window.localStorage.getItem(stepKey(assetId)));
+    return n === 3 || n === 4 ? n : 2;
+  } catch {
+    return 2;
+  }
+}
+function writeListedStep(assetId: string, step: number) {
+  try {
+    window.localStorage.setItem(stepKey(assetId), String(step));
+  } catch {
+    // Private mode: the flow still works, it just starts on the result next time.
+  }
+}
 
 /**
- * `/steward/list`: list land for the active community (T33). Signed in, the real listing
- * lifecycle (T58) and live rating progress (T27); an anonymous visitor in the scripted demo
- * gets the prototype's flow until T65 gives the demo real sessions.
+ * `/steward/list`: list land for the active community (T33): the listing lifecycle (T58) with
+ * live rating progress (T27), in the visitor's sandbox (the gate opens one first).
  */
 export function ListingScreen() {
   const { world } = useWorld();
-  // Until the session answers, signed-in stewards must not glimpse the prototype.
-  if (!world) return <Loading>Loading the listing form…</Loading>;
-  if (!world.me) return <PrototypeListingFlow />;
+  if (!world?.me) return <Loading>Loading the listing form…</Loading>;
   return (
     <Suspense fallback={<Loading>Loading the listing form…</Loading>}>
       <ListingFromUrl />
@@ -62,6 +85,10 @@ function ListingFromUrl() {
   const assetId = raw && isApiAssetId(raw) ? raw : null;
   // "Edit details" on the Listings page (#233) opens a draft on its details, not its review.
   const onDetails = params.get("step") === "details";
+  // The Community home and older links ask for a rated listing's proof or offer.
+  const askedStep = params.get("step");
+  const onListedStep =
+    askedStep === "prove" ? 3 : askedStep === "offer" ? 4 : null;
   // A draft just created here, until the URL catches up (`router.replace`) and while it shows it.
   const [created, setCreated] = useState<string | null>(null);
   const [previous, setPrevious] = useState(assetId);
@@ -77,7 +104,7 @@ function ListingFromUrl() {
           <AlertDescription>
             <p>Land is listed by a community. Create one, then come back.</p>
             <Button asChild variant="outline" size="sm" className="mt-2">
-              <Link href="/steward">Go to the Stewards home</Link>
+              <Link href="/steward">Go to Communities</Link>
             </Button>
           </AlertDescription>
         </Alert>
@@ -94,6 +121,7 @@ function ListingFromUrl() {
       community={active}
       assetId={shown}
       onDetails={onDetails}
+      onListedStep={onListedStep}
       focusOnMount={shown !== null && shown === created}
       onCreated={(asset) => {
         setCreated(asset.id);
@@ -107,12 +135,15 @@ function ListingLoader({
   community,
   assetId,
   onDetails = false,
+  onListedStep = null,
   focusOnMount,
   onCreated,
 }: {
   community: MyCommunity;
   assetId: string | null;
   onDetails?: boolean;
+  /** A rated listing opened on Prove (3) or Offer (4). */
+  onListedStep?: number | null;
   /** The draft just saved here remounts this loader: its next step takes focus. */
   focusOnMount: boolean;
   onCreated: (asset: AssetDetail) => void;
@@ -176,6 +207,7 @@ function ListingLoader({
       meId={meId}
       asset={asset ?? null}
       onDetails={onDetails}
+      onListedStep={onListedStep}
       focusOnMount={focusOnMount}
       onCreated={onCreated}
     />
@@ -218,6 +250,7 @@ function ListingWizard({
   meId,
   asset,
   onDetails = false,
+  onListedStep = null,
   focusOnMount,
   onCreated,
 }: {
@@ -226,12 +259,21 @@ function ListingWizard({
   asset: AssetDetail | null;
   /** Open a saved draft on its details instead of its review. */
   onDetails?: boolean;
+  /** A rated listing opened on Prove (3) or Offer (4). */
+  onListedStep?: number | null;
   focusOnMount: boolean;
   onCreated: (asset: AssetDetail) => void;
 }) {
   const storageKey = unsavedListingKey(meId, community.id);
-  const { openTrace } = usePrototype();
-  // A new listing picks up what was entered in this tab before (a sign-in, a reload).
+  // The Agent Trace of a run watched here, over the flow (the site page's drawer). The run stays
+  // set while the drawer closes, so its content doesn't change mid-animation.
+  const [traceRun, setTraceRun] = useState<string | null>(null);
+  const [traceOpen, setTraceOpen] = useState(false);
+  const openTrace = (runId: string) => {
+    setTraceRun(runId);
+    setTraceOpen(true);
+  };
+  // A new listing picks up what was entered in this tab before (a reload).
   const [restored] = useState(() =>
     asset ? null : readUnsavedListing(storageKey),
   );
@@ -282,21 +324,37 @@ function ListingWizard({
     setRevealListed(true);
     setRatingHeld(holding);
   }, []);
+  // A rated listing: its result, then Prove, then Offer. An offer sent or sent back opens on
+  // Offer unless a link asks for a step; a launched site always shows Offer. Coming back
+  // resumes where the community left off.
+  const [listedStep, setListedStep] = useState(
+    () =>
+      onListedStep ?? (asset?.offer ? 4 : asset ? readListedStep(asset.id) : 2),
+  );
+  const goListed = (n: number) => {
+    setListedStep(n);
+    if (asset) writeListedStep(asset.id, n);
+  };
+  const rated = status === "listed" || status === "suspended";
   const step =
     status === "draft"
       ? draftStep
-      : (status === "listed" || status === "suspended") && !ratingHeld
-        ? 3
-        : 2;
+      : !rated || ratingHeld
+        ? 2
+        : asset?.ipo_at
+          ? 4
+          : listedStep;
 
   // A new step replaces the one that held focus: move it to the step, not back to <body>.
   const stepRef = useRef<HTMLElement>(null);
-  const shownStep = useRef<number | null>(focusOnMount ? null : step);
+  // The rating's result replaces its run in the same step: that's a new view to focus too.
+  const view = step === 2 && rated && !ratingHeld ? "result" : String(step);
+  const shownView = useRef<string | null>(focusOnMount ? null : view);
   useEffect(() => {
-    if (shownStep.current === step) return;
-    shownStep.current = step;
+    if (shownView.current === view) return;
+    shownView.current = view;
     focusIfLost(stepRef.current);
-  }, [step]);
+  }, [view]);
 
   return (
     <Page>
@@ -305,15 +363,15 @@ function ListingWizard({
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
-        Community home
+        {community.name}
       </Link>
       <h1 className="mt-3 font-serif text-5xl leading-none tracking-tight sm:text-6xl">
         {asset ? asset.name : "List your land"}
       </h1>
       <p className="mt-3 max-w-2xl text-muted-foreground">
-        Draw the land {community.name} protects. WildWorth rates it from
-        satellite data and local news, then you decide whether to open it to
-        supporters. The land always stays yours.
+        Name it, draw it, and WildWorth rates it from satellite data and local
+        news. Then send your offer for review. You can stop at any step and come
+        back to it.
       </p>
       {restored && (
         <p className="mt-3 text-sm text-muted-foreground" role="status">
@@ -397,7 +455,7 @@ function ListingWizard({
             }}
           />
         )}
-        {step === 2 && asset && (
+        {step === 2 && asset && !(rated && !ratingHeld) && (
           <RatingStep
             community={community}
             asset={asset}
@@ -410,15 +468,35 @@ function ListingWizard({
             onOpenTrace={openTrace}
           />
         )}
-        {step === 3 && asset && (
+        {step === 2 && asset && rated && !ratingHeld && (
           <ListedStep
             community={community}
             asset={asset}
             reveal={revealListed}
             onOpenTrace={openTrace}
+            onContinue={() => goListed(3)}
           />
         )}
+        {step === 3 && asset && (
+          <ProveStep
+            asset={asset}
+            onBack={() => goListed(2)}
+            onContinue={() => goListed(4)}
+          />
+        )}
+        {step === 4 && asset && (
+          <OfferStep asset={asset} onBack={() => goListed(3)} />
+        )}
       </section>
+      {asset && (
+        <TraceDrawer
+          open={traceOpen}
+          onOpenChange={setTraceOpen}
+          asset={asset}
+          runId={traceRun}
+          recorded={null}
+        />
+      )}
     </Page>
   );
 }

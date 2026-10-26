@@ -1,17 +1,28 @@
 "use client";
 
-import { RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
+import {
+  LayoutGrid,
+  Map as MapIcon,
+  RefreshCwIcon,
+  TriangleAlertIcon,
+} from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { usePathname } from "@/lib/nav";
+import { usePathname, useReplaceUrl } from "@/lib/nav";
 import { useMemo } from "react";
 
 import {
   MarketBoardSkeleton,
-  MarketStatsSkeleton,
+  MarketFiguresSkeleton,
 } from "@/components/page-skeletons";
-import { Stat } from "@/components/proto/bits";
+import { Figure, Figures } from "@/components/figures";
+import {
+  HabitatIcon,
+  RatedSitesIcon,
+  WorthRangeIcon,
+} from "@/components/icons";
 import { MarketplaceHeading } from "@/components/proto/marketplace-heading";
 import { FeatureSiteCard, SiteCard } from "@/components/proto/site-card";
+import { SitesMap } from "@/components/proto/sites-map";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,7 +46,7 @@ import {
   type MarketCard,
   type SortKey,
 } from "@/lib/market-cards";
-import { ha, money } from "@/lib/prototype/format";
+import { ha, money } from "@/lib/format";
 
 function useMarketCards() {
   const query = useAssets();
@@ -49,7 +60,7 @@ function useMarketCards() {
 export function Marketplace() {
   return (
     <div className="mx-auto max-w-7xl px-4 pt-10 sm:px-6">
-      <MarketplaceHeading stats={<MarketStats />} />
+      <MarketplaceHeading figures={<MarketFigures />} />
       <div className="mt-8">
         <WorldGate
           fallback={<MarketBoardSkeleton label="Opening your demo world…" />}
@@ -61,28 +72,40 @@ export function Marketplace() {
   );
 }
 
-function MarketStats() {
+/**
+ * The board in three figures, with the brand's icons: the sites rated, their living land, and
+ * what their nature is worth a year as a range (never a single value).
+ */
+function MarketFigures() {
   const { cards, error } = useMarketCards();
-  // Hold the strip's place while the sites load, so the heading row doesn't reflow.
-  if (!cards) return error ? null : <MarketStatsSkeleton />;
-  if (cards.length === 0) return null;
+  if (!cards) return error ? null : <MarketFiguresSkeleton />;
   const rated = cards.filter((c) => c.grade !== null);
-  const valued = rated.flatMap((c) =>
-    c.valueMid === null ? [] : [c.valueMid],
+  if (rated.length === 0) return null;
+  const valued = rated.filter(
+    (c) => c.valueLow !== null && c.valueHigh !== null,
   );
+  const low = valued.reduce((sum, c) => sum + (c.valueLow ?? 0), 0);
+  const high = valued.reduce((sum, c) => sum + (c.valueHigh ?? 0), 0);
   return (
-    <dl className="grid grid-cols-3 gap-6 rounded-3xl bg-card px-6 py-4 shadow-soft">
-      <Stat label="Sites listed" value={cards.length} />
-      <Stat
-        label="Land rated"
+    <Figures>
+      <Figure
+        icon={RatedSitesIcon}
+        value={String(rated.length)}
+        label={rated.length === 1 ? "site rated" : "sites rated"}
+      />
+      <Figure
+        icon={HabitatIcon}
         value={ha(rated.reduce((sum, c) => sum + c.areaHa, 0))}
+        label="of living land"
       />
-      <Stat
-        label="Nature's value"
-        value={valued.length ? money(valued.reduce((a, b) => a + b)) : "—"}
-        sub="a year, mid, rated sites"
-      />
-    </dl>
+      {valued.length > 0 && (
+        <Figure
+          icon={WorthRangeIcon}
+          value={`${money(low)}–${money(high)}`}
+          label="a year in nature's services"
+        />
+      )}
+    </Figures>
   );
 }
 
@@ -90,25 +113,29 @@ export function MarketBoard() {
   const { cards, error, refetch, isFetching } = useMarketCards();
   const params = useSearchParams();
   const pathname = usePathname();
+  const replaceUrl = useReplaceUrl();
   const gradeParam = params.get("grade");
   const sortParam = params.get("sort");
+  const view: "cards" | "map" = params.get("view") === "map" ? "map" : "cards";
   const band: GradeBand = isBand(gradeParam) ? gradeParam : "all";
   const sort: SortKey = isSort(sortParam) ? sortParam : "grade";
   // Filters live in the URL (shareable, survive reload); the History API updates
   // useSearchParams without a server round trip.
-  const setParam = (key: "grade" | "sort", value: string, fallback: string) => {
+  const setParam = (
+    key: "grade" | "sort" | "view",
+    value: string,
+    fallback: string,
+  ) => {
     const next = new URLSearchParams(params.toString());
     if (value === fallback) next.delete(key);
     else next.set(key, value);
     const query = next.toString();
-    window.history.replaceState(
-      null,
-      "",
-      query ? `${pathname}?${query}` : pathname,
-    );
+    replaceUrl(query ? `${pathname}?${query}` : pathname);
   };
   const setBand = (v: GradeBand) => setParam("grade", v, "all");
   const setSort = (v: SortKey) => setParam("sort", v, "grade");
+  const setView = (v: string) =>
+    (v === "cards" || v === "map") && setParam("view", v, "cards");
   const shown = useMemo(
     () => (cards ? shownCards(cards, band, sort) : []),
     [cards, band, sort],
@@ -158,6 +185,29 @@ export function MarketBoard() {
             All sites
           </h2>
           <div className="flex flex-wrap items-center gap-3">
+            {/* The map is a second way to see the board; cards stay the default. */}
+            <ToggleGroup
+              type="single"
+              value={view}
+              onValueChange={setView}
+              className="rounded-full bg-card p-1 shadow-soft"
+              aria-label="Show sites as"
+            >
+              <ToggleGroupItem
+                value="cards"
+                className="gap-1.5 rounded-full px-3.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+              >
+                <LayoutGrid aria-hidden="true" />
+                Cards
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="map"
+                className="gap-1.5 rounded-full px-3.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+              >
+                <MapIcon aria-hidden="true" />
+                Map
+              </ToggleGroupItem>
+            </ToggleGroup>
             <ToggleGroup
               type="single"
               value={band}
@@ -175,18 +225,27 @@ export function MarketBoard() {
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
-            <Select value={sort} onValueChange={(v) => isSort(v) && setSort(v)}>
-              <SelectTrigger className="w-44" aria-label="Sort sites">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(SORTS) as SortKey[]).map((k) => (
-                  <SelectItem key={k} value={k}>
-                    Sort: {SORTS[k].label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {view === "cards" && (
+              <Select
+                value={sort}
+                onValueChange={(v) => isSort(v) && setSort(v)}
+              >
+                {/* Its name is what it shows, so speech and sight agree (axe: label in name). */}
+                <SelectTrigger
+                  className="w-44"
+                  aria-label={`Sort: ${SORTS[sort].label}`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(SORTS) as SortKey[]).map((k) => (
+                    <SelectItem key={k} value={k}>
+                      Sort: {SORTS[k].label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </div>
         <p className="sr-only" aria-live="polite">
@@ -196,6 +255,8 @@ export function MarketBoard() {
           <p className="mt-6 rounded-3xl bg-card px-6 py-10 text-center text-muted-foreground shadow-soft">
             No sites rated {GRADE_BANDS[band].label} yet.
           </p>
+        ) : view === "map" ? (
+          <SitesMap cards={shown} />
         ) : (
           <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {shown.map((c) => (

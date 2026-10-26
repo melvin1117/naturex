@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MAIN_ID } from "@/components/shell/skip-link";
 import { Separator } from "@/components/ui/separator";
-import { GRADE_ORDER } from "@/lib/prototype/format";
+import { GRADE_ORDER } from "@/lib/format";
 
 export const metadata: Metadata = { title: "UI kit", robots: { index: false } };
 
@@ -306,8 +306,7 @@ export default function DevUiPage() {
       <Section title="Live API wiring (T32, T35)">
         <p className="text-sm text-muted-foreground">
           These sections call the backend through the generated client. They
-          need the API running; the prototype screens use the scripted sandbox
-          instead.
+          need the API running.
         </p>
         <DemoSiteImages />
         <DataLayerPanel />

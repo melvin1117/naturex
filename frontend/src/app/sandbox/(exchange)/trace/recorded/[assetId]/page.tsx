@@ -1,5 +1,14 @@
-// The sandbox twin of `(exchange)/trace/recorded/[assetId]/page.tsx`: the same screen in the visitor's sandbox (lib/sandbox.ts).
-export {
-  default,
-  metadata,
-} from "@/app/(exchange)/trace/recorded/[assetId]/page";
+import type { Metadata } from "next";
+
+import { RecordedTracePage } from "@/components/trace/run-trace-page";
+
+export const metadata: Metadata = { title: "How it was rated (recorded run)" };
+
+export default async function RecordedTraceRoute({
+  params,
+}: {
+  params: Promise<{ assetId: string }>;
+}) {
+  const { assetId } = await params;
+  return <RecordedTracePage assetId={assetId} />;
+}

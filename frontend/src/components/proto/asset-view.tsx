@@ -1,43 +1,46 @@
 "use client";
 
-import { ArrowLeft, MapPin } from "lucide-react";
+import { ArrowLeft, type LucideIcon, MapPin } from "lucide-react";
 import Link from "@/components/app-link";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { usePathname } from "@/lib/nav";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
-import { CopilotChat } from "@/components/copilot-chat";
-import { FieldEvidencePanel } from "@/components/evidence/field-evidence-panel";
+import {
+  AgentTraceIcon,
+  BackThisSiteIcon,
+  FieldEvidenceIcon,
+  ProofOfLifeIcon,
+  RecordIcon,
+  SatelliteRecordIcon,
+  VerifiedLandIcon,
+} from "@/components/icons";
 import { AssetBodySkeleton } from "@/components/page-skeletons";
 import { Delta, SiteBackdrop, ValueRange } from "@/components/proto/bits";
 import { PriceChart, PriceChartSkeleton } from "@/components/proto/charts";
 import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
-import { EvidenceTimelinePanel } from "@/components/proto/evidence-timeline";
+import {
+  BeforeAfter,
+  EvidenceTimelinePanel,
+  type SiteRun,
+  useSiteRun,
+} from "@/components/proto/evidence-timeline";
 import { VerdictStrip } from "@/components/trace/verdict-strip";
-import { RatingTraceCard } from "@/components/trace/rating-trace-card";
-import { ApiLedgerTab } from "@/components/proto/ledger-panels";
 import { LoadError } from "@/components/proto/load-error";
 import { PriceTick } from "@/components/live-number";
 import {
-  LandPanel,
-  NewsList,
+  LandCoverView,
   Panel,
-  ReportTab,
-  ScorePanel,
   ServicesPanel,
 } from "@/components/proto/report-panels";
-import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TradePanel } from "@/components/trade-panel";
-import {
-  VerificationHeroBadge,
-  VerificationPanel,
-} from "@/components/verification/verification-panel";
+import { VerificationHeroBadge } from "@/components/verification/verification-panel";
 import { WorldGate } from "@/components/world-provider";
 import type { ApiError } from "@/lib/api/errors";
-import type { AssetDetail, SiteImages } from "@/lib/api/types";
+import type { AssetDetail } from "@/lib/api/types";
 import { boundaryLatLngs, chartPrices, newsItems } from "@/lib/asset-detail";
 import { outlineRings } from "@/lib/boundary-map";
 import {
@@ -53,28 +56,28 @@ import {
   useRecordedRun,
   useSiteImages,
 } from "@/lib/hooks";
-import { DEMO_SITES } from "@/lib/demo-site-images";
 import { countryName, siteImageUrl } from "@/lib/market-cards";
-import { beforeAfterViews } from "@/lib/site-views";
-import {
-  GRADE_LABEL,
-  ha,
-  price as fmtPrice,
-  quarterLabel,
-} from "@/lib/prototype/format";
-import { usePrototype } from "@/lib/prototype/store";
+import { beforeAfterViews, type BeforeAfterViews } from "@/lib/site-views";
+import { GRADE_LABEL, ha, price as fmtPrice, quarterLabel } from "@/lib/format";
 import { num, reportFacts, type ReportFacts } from "@/lib/report-facts";
+import {
+  BACK_THIS_SITE,
+  isRecordTab,
+  RECORD_TAB_LABEL,
+  RECORD_TABS,
+  type RecordTab,
+  SITE_ANCHORS,
+  siteAnchor,
+  useSiteDrawer,
+} from "@/lib/site-drawer";
 
-const TABS = ["overview", "price", "report", "news", "ledger"] as const;
-type Tab = (typeof TABS)[number];
-
-const TAB_LABEL: Record<Tab, string> = {
-  overview: "Overview",
-  price: "Price",
-  report: "Proof of Life",
-  news: "News",
-  ledger: "The Record",
-};
+// The drawers' content (the whole Agent Trace, the report, The Record) loads when one opens.
+const TraceDrawer = dynamic(() =>
+  import("@/components/trace/trace-drawer").then((m) => m.TraceDrawer),
+);
+const RecordDrawer = dynamic(() =>
+  import("@/components/site/record-drawer").then((m) => m.RecordDrawer),
+);
 
 /** The asset page for a real asset: report, charts, map, prices and ledger from the API. */
 export function AssetView({ id }: { id: string }) {
@@ -85,7 +88,7 @@ export function AssetView({ id }: { id: string }) {
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
-        Rated sites
+        Marketplace
       </Link>
       <div className="mt-4">
         <WorldGate
@@ -136,7 +139,7 @@ function NotFound() {
         when the demo was reset.
       </p>
       <Button asChild className="mt-6">
-        <Link href="/">Back to Rated sites</Link>
+        <Link href="/">Back to the Marketplace</Link>
       </Button>
     </div>
   );
@@ -150,12 +153,9 @@ function AssetLoaded({
   /** The asset has been read since the page opened (see `useFetchedSinceMount`). */
   fresh: boolean;
 }) {
-  const pathname = usePathname();
-  const { openTrace } = usePrototype();
   const params = useSearchParams();
-  const tabParam = params.get("tab") as Tab | null;
-  const tab: Tab = tabParam && TABS.includes(tabParam) ? tabParam : "overview";
-  const versionParam = Number(params.get("version"));
+  const { drawer, tab, show } = useSiteDrawer();
+  const versionParam = Number(params.get("version")) || null;
 
   const reports = useAssetReports(asset.id);
   const prices = useAssetPrices(asset.id);
@@ -194,12 +194,10 @@ function AssetLoaded({
   const recorded = useRecordedRun(
     asset.latest_report?.run_id ? null : asset.site_key,
   );
+  const site = useSiteRun(asset.latest_report?.run_id, recorded.data);
   const traceRunId = asset.latest_report?.run_id ?? asset.latest_run_id ?? null;
-  // A demo site without a run of its own waits for its recording before offering a trace.
-  const findingRecording =
-    !traceRunId &&
-    DEMO_SITES.some((s) => s.key === asset.site_key) &&
-    (recorded.status === "idle" || recorded.status === "loading");
+  const hasTrace = Boolean(traceRunId || recorded.data);
+  const views = beforeAfterViews(asset, apiBase);
   const imageUrl = siteImageUrl(asset.site_key, asset.cover_image_url);
   const outline = useMemo(() => outlineRings(asset.outline), [asset.outline]);
   const place = [
@@ -208,6 +206,22 @@ function AssetLoaded({
   ]
     .filter(Boolean)
     .join(" · ");
+
+  // `?tab=news` and `?tab=price` point at a part of the page, not a drawer: scroll there once
+  // what loads above it (the verdict band, the price chart) has settled.
+  const anchor = siteAnchor(tab);
+  const settled =
+    prices.data !== undefined &&
+    recorded.status !== "loading" &&
+    (site.run !== undefined || !asset.latest_report?.run_id);
+  useEffect(() => {
+    if (!anchor || !settled) return;
+    // Before any trades there's no price chart: the trade panel has the price.
+    const target =
+      document.getElementById(anchor) ??
+      document.getElementById(BACK_THIS_SITE);
+    target?.scrollIntoView({ block: "start" });
+  }, [anchor, settled]);
 
   return (
     <>
@@ -224,7 +238,10 @@ function AssetLoaded({
                 <MapPin className="size-3.5" aria-hidden="true" />
                 {place}
               </span>
-              <VerificationHeroBadge assetId={asset.id} />
+              <VerificationHeroBadge
+                assetId={asset.id}
+                onOpen={() => show("verification")}
+              />
               {asset.status === "suspended" && (
                 <span className="rounded-full bg-clay px-2.5 py-0.5 text-xs font-medium text-white">
                   Trading paused
@@ -243,7 +260,7 @@ function AssetLoaded({
               {asset.name}
             </h1>
             {asset.description && (
-              <p className="mt-3 max-w-2xl text-white/85">
+              <p className="mt-3 line-clamp-2 max-w-2xl text-white/85">
                 {asset.description}
               </p>
             )}
@@ -269,9 +286,7 @@ function AssetLoaded({
                   </div>
                 )}
                 <div>
-                  <div className="text-sm text-white/75">
-                    Stake price · play money
-                  </div>
+                  <div className="text-sm text-white/75">Price a unit</div>
                   <div className="tabular text-4xl font-light tracking-tight">
                     <PriceTick
                       value={current}
@@ -288,6 +303,41 @@ function AssetLoaded({
                     />
                   )}
                 </div>
+              </div>
+            )}
+            {(hasTrace || latest) && (
+              <div className="mt-8 flex flex-wrap gap-3">
+                {latest && (
+                  // Phones: the trade panel comes after the page, so the hero leads to it.
+                  <Button asChild variant="on-image" className="lg:hidden">
+                    <a href={`#${BACK_THIS_SITE}`}>
+                      <BackThisSiteIcon aria-hidden="true" />
+                      Back this site
+                    </a>
+                  </Button>
+                )}
+                {hasTrace && (
+                  <Button
+                    variant="on-image"
+                    aria-haspopup="dialog"
+                    // Phones lead with "Back this site": this one steps back to an outline.
+                    className="max-lg:border max-lg:border-card/45 max-lg:bg-machine/30 max-lg:text-card max-lg:backdrop-blur-sm"
+                    onClick={() => show("trace")}
+                  >
+                    <AgentTraceIcon aria-hidden="true" />
+                    How it was rated
+                  </Button>
+                )}
+                {latest && (
+                  <Button
+                    variant="on-image-outline"
+                    aria-haspopup="dialog"
+                    onClick={() => show("report")}
+                  >
+                    <ProofOfLifeIcon aria-hidden="true" />
+                    Proof of Life report
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -317,7 +367,8 @@ function AssetLoaded({
       <VerdictStrip
         report={asset.latest_report}
         recorded={recorded.data}
-        assetId={asset.id}
+        trace={site.run}
+        onOpen={() => show("trace")}
       />
 
       {!latest ? (
@@ -326,54 +377,31 @@ function AssetLoaded({
         </p>
       ) : (
         <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <Tabs
-            value={tab}
-            // The History API keeps useSearchParams in sync without a server round trip
-            // (which would also reset the page title to the route's metadata).
-            onValueChange={(v) =>
-              window.history.replaceState(null, "", `${pathname}?tab=${v}`)
-            }
-            className="min-w-0 gap-6"
-          >
-            <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-              <TabsList className="w-max min-w-full bg-card shadow-soft sm:w-fit sm:min-w-0">
-                {TABS.map((t) => (
-                  <TabsTrigger
-                    key={t}
-                    value={t}
-                    className="px-2.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:px-4"
-                  >
-                    {TAB_LABEL[t]}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </div>
-            <TabsContent value="overview" className="space-y-6">
-              <div className="grid gap-6 xl:grid-cols-2">
-                <ServicesPanel facts={latest} />
-                <ScorePanel facts={latest} />
-              </div>
-              <LandPanel
-                polygon={polygon}
-                label={asset.name}
-                overlay={landCover?.overlay ?? null}
-                landcover={latest.landcover}
-                simulated={latest.simulated}
-                caption={
-                  landCover
-                    ? overlayCaption(landCover)
-                    : !asset.site_key && NO_OVERLAY_NOTE
-                }
-              />
-              <EvidenceTimelinePanel
-                facts={latest}
-                news={news}
-                runId={asset.latest_report?.run_id ?? null}
-                views={beforeAfterViews(asset, apiBase)}
-                recorded={recorded.data}
-              />
-            </TabsContent>
-            <TabsContent value="price">
+          <div className="min-w-0 space-y-6">
+            <ServicesPanel facts={latest} headingLevel="h2" />
+            <SeenFromAbove
+              views={views}
+              site={site}
+              land={{
+                polygon,
+                label: asset.name,
+                overlay: landCover?.overlay ?? null,
+                landcover: latest.landcover,
+                simulated: latest.simulated,
+                caption: landCover
+                  ? overlayCaption(landCover)
+                  : !asset.site_key && NO_OVERLAY_NOTE,
+              }}
+            />
+            <EvidenceTimelinePanel
+              id={SITE_ANCHORS.news}
+              className="scroll-mt-24"
+              facts={latest}
+              news={news}
+              site={site}
+            />
+            {/* Before a second price there's nothing to chart: the trade panel has the price. */}
+            {(points.length > 1 || !prices.data) && (
               <PricePanel
                 points={points}
                 news={news}
@@ -382,76 +410,128 @@ function AssetLoaded({
                 error={prices.data ? null : prices.error}
                 retry={prices.refetch}
               />
-            </TabsContent>
-            <TabsContent value="report">
-              {reports.error && !reports.data && (
-                <p role="alert" className="mb-4 text-sm text-muted-foreground">
-                  Showing the latest report only: {reports.error.message}
-                </p>
-              )}
-              <ReportTab
-                versions={versions}
-                siteName={asset.name}
-                initialVersion={versionParam || null}
-                live
-              />
-            </TabsContent>
-            <TabsContent value="news">
-              <Panel title="News and evidence near this site">
-                <NewsList
-                  events={news}
-                  empty="No news or evidence has been recorded for this site yet."
-                />
-              </Panel>
-            </TabsContent>
-            <TabsContent value="ledger">
-              <ApiLedgerTab assetId={asset.id} />
-            </TabsContent>
-          </Tabs>
+            )}
+            <MoreAboutRating onOpen={show} />
+          </div>
 
-          <aside className="min-w-0 space-y-6 lg:sticky lg:top-24 lg:self-start">
+          <aside
+            id={BACK_THIS_SITE}
+            className="min-w-0 scroll-mt-24 lg:sticky lg:top-24 lg:self-start"
+          >
             <Suspense fallback={null}>
               <TradePanel assetId={asset.id} />
-            </Suspense>
-            {traceRunId ? (
-              <RatingTraceCard
-                href={`/trace/${traceRunId}`}
-                onOpen={() => openTrace(traceRunId)}
-              />
-            ) : (
-              <RatingTraceCard
-                href={recorded.data ? `/trace/recorded/${asset.id}` : null}
-                recorded
-                pending={findingRecording}
-              />
-            )}
-            <Suspense fallback={null}>
-              <CopilotChat
-                key={asset.id}
-                assetId={asset.id}
-                assetName={asset.name}
-              />
             </Suspense>
           </aside>
         </div>
       )}
 
-      <div className="mt-8">
-        <VerificationPanel assetId={asset.id} />
-      </div>
-      <div className="mt-8">
-        <FieldEvidencePanel
-          assetId={asset.id}
-          communityId={asset.community_id ?? null}
-        />
-      </div>
-      <DataAttribution
-        facts={latest}
+      <TraceDrawer
+        open={drawer === "trace"}
+        onOpenChange={(open) => show(open ? "trace" : null)}
+        asset={asset}
+        runId={traceRunId}
+        recorded={recorded.data}
+      />
+      <RecordDrawer
+        tab={isRecordTab(drawer) ? drawer : null}
+        onTab={show}
+        onClose={() => show(null)}
+        asset={asset}
+        latest={latest}
+        versions={versions}
+        versionParam={versionParam}
+        reportsError={reports.data ? null : reports.error}
         images={images.data}
         landCover={landCover}
-        views={asset.site_views?.attributions}
       />
     </>
+  );
+}
+
+/** The site from above: its views five years apart, or its land cover, one at a time. */
+function SeenFromAbove({
+  views,
+  site,
+  land,
+}: {
+  views: BeforeAfterViews | null;
+  site: SiteRun;
+  land: Parameters<typeof LandCoverView>[0];
+}) {
+  const [view, setView] = useState<"years" | "cover">(
+    views ? "years" : "cover",
+  );
+  return (
+    <Panel
+      title="Seen from above"
+      headingLevel="h2"
+      action={
+        views && (
+          <ToggleGroup
+            type="single"
+            value={view}
+            onValueChange={(v) => v && setView(v as "years" | "cover")}
+            aria-label="What to show"
+            className="rounded-full bg-secondary p-1"
+          >
+            <ToggleGroupItem
+              value="years"
+              className="rounded-full px-3 text-sm data-[state=on]:bg-card data-[state=on]:shadow-soft"
+            >
+              Five years apart
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="cover"
+              className="rounded-full px-3 text-sm data-[state=on]:bg-card data-[state=on]:shadow-soft"
+            >
+              Land cover
+            </ToggleGroupItem>
+          </ToggleGroup>
+        )
+      }
+    >
+      {view === "years" && views ? (
+        <BeforeAfter views={views} site={site} />
+      ) : (
+        <LandCoverView {...land} />
+      )}
+    </Panel>
+  );
+}
+
+// The brand pack's feature icons (guidelines ch. 8): Data sources are the satellite record.
+const MORE_ICON: Record<RecordTab, LucideIcon> = {
+  report: ProofOfLifeIcon,
+  ledger: RecordIcon,
+  verification: VerifiedLandIcon,
+  photos: FieldEvidenceIcon,
+  sources: SatelliteRecordIcon,
+};
+
+/** The way into everything behind the rating, without leaving the page. */
+function MoreAboutRating({ onOpen }: { onOpen: (tab: RecordTab) => void }) {
+  return (
+    <nav
+      aria-label="More about this rating"
+      className="flex flex-wrap items-center gap-2 pt-2"
+    >
+      {RECORD_TABS.map((t) => {
+        const Icon = MORE_ICON[t];
+        return (
+          <Button
+            key={t}
+            variant="outline"
+            size="sm"
+            className="rounded-full"
+            aria-haspopup="dialog"
+            onClick={() => onOpen(t)}
+          >
+            <Icon aria-hidden="true" />
+            {RECORD_TAB_LABEL[t]}
+          </Button>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -481,7 +561,10 @@ function PricePanel({
 }) {
   return (
     <Panel
-      title="Stake price"
+      id={SITE_ANCHORS.price}
+      className="scroll-mt-24"
+      title="Price a unit"
+      headingLevel="h2"
       action={
         <span className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
@@ -516,66 +599,16 @@ function PricePanel({
         />
       ) : loading ? (
         <PriceChartSkeleton />
-      ) : points.length > 1 ? (
-        <PriceChart prices={points} events={news} perDay={false} />
       ) : (
-        <p className="py-10 text-center text-sm text-muted-foreground">
-          {points[0]
-            ? `Opened at ${fmtPrice(points[0].price)}. The chart fills in as supporters trade.`
-            : "No trades yet."}
-        </p>
+        <PriceChart prices={points} events={news} perDay={false} />
       )}
       {facts.fairValuePerUnit !== null && (
         <p className="mt-4 text-xs text-muted-foreground">
           The price moves with orders and drifts toward the fair price set by
           each rating ({fmtPrice(facts.fairValuePerUnit)} now); a re-rate moves
-          it part of the way there at once. Play money only.
+          it part of the way there at once.
         </p>
       )}
     </Panel>
-  );
-}
-
-function DataAttribution({
-  facts,
-  images,
-  landCover,
-  views,
-}: {
-  facts: ReportFacts | null;
-  images: SiteImages | undefined;
-  landCover: AssetLandCover | null;
-  /** A live listing's before/after views (`site_views`). */
-  views?: string[];
-}) {
-  const lines = [
-    ...new Set([
-      ...(facts?.attributions ?? []),
-      ...(landCover?.attributions ?? []),
-      ...(images?.thumbnail?.attributions ?? []),
-      ...(views ?? []),
-      IMAGERY_ATTRIBUTION,
-    ]),
-  ];
-  return (
-    <section
-      aria-labelledby="data-sources"
-      className="mt-12 rounded-3xl border border-border/70 px-6 py-5 text-xs text-muted-foreground"
-    >
-      <h2 id="data-sources" className="font-medium text-foreground">
-        Data behind this page
-        {facts?.period && ` · ${quarterLabel(facts.period)} report`}
-      </h2>
-      <ul className="mt-2 space-y-1 leading-relaxed">
-        {lines.map((line) => (
-          <li key={line}>{line}</li>
-        ))}
-      </ul>
-      <p className="mt-2">
-        Values are screening estimates from published benefit-transfer
-        coefficients, not appraisals. Prices are play money; nothing here is a
-        real security.
-      </p>
-    </section>
   );
 }

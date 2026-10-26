@@ -13,7 +13,7 @@ import {
 } from "@/components/trace/run-trace-page";
 import { EvalResults } from "@/components/trace/eval-results";
 import { VerdictStrip } from "@/components/trace/verdict-strip";
-import type { RecordedRun, ReportOut } from "@/lib/api/types";
+import type { RecordedRun, ReportOut, RunTrace } from "@/lib/api/types";
 
 import { renderExchange, stubBrowserApis } from "../exchange/render";
 import { json, WORLD } from "../lib/helpers";
@@ -56,6 +56,19 @@ describe("RunTracePage (a real run recorded on Oct 22)", () => {
     expect(
       within(story).getByText(/^Tavily ran 4 web searches \(1 in Spanish\)/),
     ).toBeVisible();
+  });
+
+  it("keeps every tab readable on the dark layer when hovered or focused", async () => {
+    renderPage();
+    const tabs = await screen.findAllByRole("tab");
+    for (const tab of tabs) {
+      // Not the light theme's ink (`hover:text-foreground`), which vanishes on the machine layer.
+      expect(tab).toHaveClass(
+        "hover:text-machine-ink",
+        "focus-visible:ring-lime",
+      );
+      expect(tab).not.toHaveClass("hover:text-foreground");
+    }
   });
 
   it("shows the weighed case with links to the news it cites", async () => {
@@ -105,8 +118,15 @@ describe("VerdictStrip", () => {
     },
   } as unknown as ReportOut;
 
-  it("shows the verdict without citations and links to the run's trace", () => {
-    render(<VerdictStrip report={report} />);
+  it("shows the verdict without citations, who worked on it, and opens the trace", () => {
+    const onOpen = vi.fn();
+    render(
+      <VerdictStrip
+        report={report}
+        trace={celestun as unknown as RunTrace}
+        onOpen={onOpen}
+      />,
+    );
 
     expect(
       screen.getByText("Clearing is reported but not yet seen."),
@@ -114,14 +134,24 @@ describe("VerdictStrip", () => {
     expect(
       screen.getByText("Health −2 with cited evidence"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: /See how it was rated/ }),
-    ).toHaveAttribute("href", `/trace/${celestun.run_id}`);
+    // The run's own models, busiest first, then its web searches.
+    const crew = within(screen.getByRole("list", { name: "Who worked on it" }))
+      .getAllByRole("listitem")
+      .map((li) => li.textContent);
+    expect(crew[0]).toMatch(/^Nemotron 3 Super\s*· \d+ calls$/);
+    expect(crew.at(-1)).toMatch(/^Tavily\s*· \d+ search/);
+    fireEvent.click(
+      screen.getByRole("button", { name: /Open the Agent Trace/ }),
+    );
+    expect(onOpen).toHaveBeenCalledOnce();
   });
 
   it("stays hidden for a report without a verdict or a run", () => {
     const { container } = render(
-      <VerdictStrip report={{ ...report, run_id: null } as ReportOut} />,
+      <VerdictStrip
+        report={{ ...report, run_id: null } as ReportOut}
+        onOpen={vi.fn()}
+      />,
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -136,7 +166,7 @@ describe("a demo site's recorded run", () => {
       <VerdictStrip
         report={{ run_id: null, auditor: null } as unknown as ReportOut}
         recorded={recordedRun}
-        assetId={assetId}
+        onOpen={vi.fn()}
       />,
     );
 
@@ -151,8 +181,8 @@ describe("a demo site's recorded run", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /See how it was rated/ }),
-    ).toHaveAttribute("href", `/trace/recorded/${assetId}`);
+      screen.getByRole("button", { name: /Open the Agent Trace/ }),
+    ).toBeVisible();
   });
 
   it("stays out of a site that has a run of its own, even without a verdict", () => {
@@ -162,7 +192,7 @@ describe("a demo site's recorded run", () => {
           { run_id: celestun.run_id, auditor: null } as unknown as ReportOut
         }
         recorded={recordedRun}
-        assetId={assetId}
+        onOpen={vi.fn()}
       />,
     );
     expect(container).toBeEmptyDOMElement();
@@ -199,7 +229,7 @@ describe("a demo site's recorded run", () => {
           } as unknown as ReportOut
         }
         recorded={recordedRun}
-        assetId={assetId}
+        onOpen={vi.fn()}
       />,
     );
     expect(screen.getByText("Own verdict.")).toBeInTheDocument();

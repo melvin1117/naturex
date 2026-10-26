@@ -1,4 +1,4 @@
-# Real-account E2E (T74): Playwright drives both apps on the real stack (Postgres + pgvector,
+# Sandbox E2E (T74, ADR-0008): Playwright drives the sandbox on the real stack (Postgres + pgvector,
 # FastAPI, a production Next.js build) with USE_MOCKS=true, so it needs no secrets. Only PRs
 # (ready for review, not drafts) and pushes to main that touch the apps (or this harness) run
 # it, and a newer push cancels the older run, to save Actions minutes. The push to main catches
@@ -31,8 +31,8 @@ permissions:
   contents: read
 
 jobs:
-  real-accounts:
-    name: e2e / real accounts
+  sandbox:
+    name: e2e / sandbox journey
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -99,7 +99,7 @@ jobs:
         working-directory: frontend
         run: pnpm exec playwright install --with-deps --only-shell chromium
 
-      - name: Run the real-account E2E
+      - name: Run the sandbox E2E
         working-directory: frontend
         run: pnpm exec playwright test
 

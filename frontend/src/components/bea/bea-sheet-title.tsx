@@ -11,8 +11,8 @@ export const WORLD_SUBTITLE = "Answers only from the Record of your sites";
 
 /**
  * Bea's panel title, as the character sheet's mock draws it: her avatar, in the state of the
- * conversation, then "Bea · your field guide" and what she answers from. That it's play money
- * and never advice is in the footnote under the question field (`BeaComposer`).
+ * conversation, then "Bea · your field guide" and what she answers from. That it's never
+ * advice is in the footnote under the question field (`BeaComposer`).
  */
 export function BeaSheetTitle({
   state,

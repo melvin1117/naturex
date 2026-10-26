@@ -9,26 +9,19 @@ import {
 import type { ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import CommunityPage from "@/app/steward/community/page";
-import StewardLayout from "@/app/steward/layout";
-import StewardPage from "@/app/steward/page";
-import { TourProvider } from "@/components/proto/tour";
+import CommunityPage from "@/app/sandbox/steward/community/page";
+import StewardLayout from "@/app/sandbox/steward/layout";
+import StewardPage from "@/app/sandbox/steward/page";
 import { WorldProvider } from "@/components/world-provider";
 import type {
-  AssetCard,
   CommunityMember,
   CommunitySummary,
-  ListingSummary,
   MyCommunity,
   WorldOut,
 } from "@/lib/api/types";
-import { SUMMARY_TICK_REFRESH_MS } from "@/lib/community-hooks";
-import { createDataLayer, queryKeys } from "@/lib/data-layer";
-import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
-import { PrototypeProvider } from "@/lib/prototype/store";
+import { createDataLayer } from "@/lib/data-layer";
 import { stewardAssetId } from "@/components/shell/steward-community";
-import { COPIED_MS } from "@/components/account-id";
-import { homeSeenKey } from "@/lib/home-updates";
+import { AccountIdCopy, COPIED_MS } from "@/components/account-id";
 
 import { dropFocus } from "../focus";
 import {
@@ -69,6 +62,13 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Like the app router: replacing the URL changes what the page reads from it.
+  router.replace.mockImplementation((href: string) => {
+    if (!href.startsWith("/steward")) return;
+    const [path, query = ""] = href.split("?");
+    nav.pathname = path!;
+    nav.search = query;
+  });
   FakeEventSource.reset();
   nav.pathname = "/steward";
   nav.search = "";
@@ -98,49 +98,6 @@ const MEMBERS: CommunityMember[] = [
     created_at: "2026-10-18T01:00:00Z",
   },
 ];
-
-function card(overrides: Partial<AssetCard> = {}): AssetCard {
-  return {
-    id: "35df5b9e-90ff-4205-a82e-9ca6e0e06729",
-    name: "Xochimilco Wetland",
-    country: "MX",
-    status: "listed",
-    trading: true,
-    area_ha: "206.70",
-    price: "21.4723",
-    price_change_pct: 0,
-    grade: "A",
-    trend: null,
-    confidence: "71.00",
-    health_score: "76.20",
-    value_low: "2121067.00",
-    value_mid: "2669511.00",
-    value_high: "2669511.00",
-    cover_image_url: null,
-    site_key: null,
-    sparkline: [],
-    mock: false,
-    status_reason: null,
-    ...overrides,
-  };
-}
-
-function listing(overrides: Partial<ListingSummary> = {}): ListingSummary {
-  return {
-    asset: card(),
-    next_action: "view_on_exchange",
-    ipo_at: "2026-10-10T00:00:00Z",
-    updated_at: "2026-10-10T00:00:00Z",
-    manage_actions: [],
-    wallet: WALLET_ZERO,
-    holders: { count: 0, shares_held: 0, top: [] },
-    shares: null,
-    recommendations: [],
-    report_version: 1,
-    verification: { level: "verified", in_review: false, required: false },
-    ...overrides,
-  };
-}
 
 function summary(overrides: Partial<CommunitySummary> = {}): CommunitySummary {
   return {
@@ -187,11 +144,7 @@ function setup(
   });
   const tree = (content: ReactNode) => (
     <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <TourProvider>
-          <StewardLayout>{content}</StewardLayout>
-        </TourProvider>
-      </PrototypeProvider>
+      <StewardLayout>{content}</StewardLayout>
     </WorldProvider>
   );
   const view = render(tree(page));
@@ -199,35 +152,6 @@ function setup(
     layer,
     showPage: (next: ReactNode) => view.rerender(tree(next)),
   });
-}
-
-const MENU_CHILD_ROLES = new Set([
-  "menuitem",
-  "menuitemcheckbox",
-  "menuitemradio",
-  "group",
-  "separator",
-  "none",
-  "presentation",
-]);
-
-/**
- * axe's aria-required-children for role="menu": every child is a menu item, a group or a
- * separator, or a plain container (a label) with no ARIA of its own; no live region inside.
- */
-function expectOnlyMenuChildren(menu: HTMLElement) {
-  expect(menu.querySelector("[aria-live]")).toBeNull();
-  for (const child of Array.from(menu.children)) {
-    const role = child.getAttribute("role");
-    if (role) {
-      expect(MENU_CHILD_ROLES, `role="${role}" in the menu`).toContain(role);
-    } else {
-      const aria = child
-        .getAttributeNames()
-        .filter((name) => name.startsWith("aria-"));
-      expect(aria, `${child.tagName} in the menu`).toEqual([]);
-    }
-  }
 }
 
 describe("creating a community", () => {
@@ -287,7 +211,7 @@ describe("creating a community", () => {
     // The form that held focus is gone: the new home's name takes it (T48).
     await waitFor(() => expect(heading).toHaveFocus());
     expect(
-      screen.getAllByRole("link", { name: /List your land/ })[0],
+      screen.getByRole("link", { name: "List your first site" }),
     ).toHaveAttribute("href", `/steward/list?community=${created.id}`);
   }, 15_000);
 
@@ -377,14 +301,13 @@ describe("creating a community", () => {
     await expectNoFocus(await home());
   }, 15_000);
 
-  it("shows the account ID to share with an owner, with Copy", async () => {
+  it("shows an account ID to share with an owner, with Copy (community settings)", async () => {
     const writeText = vi.fn(() => Promise.resolve());
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText },
       configurable: true,
     });
-    setup(<StewardPage />, { communities: [] });
-    await screen.findByRole("heading", { level: 1, name: "Start a community" });
+    render(<AccountIdCopy id={ROSA.id} />);
     expect(screen.getByText(ROSA.id)).toBeVisible();
     const button = screen.getByRole("button", { name: "Copy account ID" });
     fireEvent.click(button);
@@ -409,10 +332,8 @@ describe("creating a community", () => {
         value: { writeText: vi.fn(() => Promise.resolve()) },
         configurable: true,
       });
-      setup(<StewardPage />, { communities: [] });
-      const button = await screen.findByRole("button", {
-        name: "Copy account ID",
-      });
+      render(<AccountIdCopy id={ROSA.id} />);
+      const button = screen.getByRole("button", { name: "Copy account ID" });
       fireEvent.click(button);
       await waitFor(() => expect(button).toHaveAccessibleName("Copied"));
       act(() => vi.advanceTimersByTime(COPIED_MS));
@@ -421,38 +342,6 @@ describe("creating a community", () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it("offers the account ID in the account menu on every page", async () => {
-    const writeText = vi.fn(() => Promise.resolve());
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    });
-    setup(<StewardPage />, { communities: [] });
-    const trigger = await screen.findByRole("button", {
-      name: "Account: Rosa",
-    });
-    fireEvent.keyDown(trigger, { key: "Enter" });
-    const menu = await screen.findByRole("menu");
-    expect(within(menu).getByText(ROSA.id)).toBeVisible();
-    fireEvent.click(
-      within(menu).getByRole("menuitem", { name: "Copy account ID" }),
-    );
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(ROSA.id));
-    // In place, not a toast: the menu stays open and its item says so.
-    expect(
-      await within(menu).findByRole("menuitem", { name: "Copied" }),
-    ).toBeVisible();
-    // Announced from outside the menu (aria-required-children: a menu owns only items,
-    // groups and separators), so it's still there once the menu closes.
-    const status = screen.getByText("Account ID copied.");
-    expect(status).toHaveAttribute("aria-live", "polite");
-    expect(menu.contains(status)).toBe(false);
-    expectOnlyMenuChildren(menu);
-    fireEvent.keyDown(menu, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
-    expect(screen.getByText("Account ID copied.")).toBeInTheDocument();
   });
 
   it("checks the name before sending", async () => {
@@ -515,542 +404,6 @@ describe("creating a community", () => {
   });
 });
 
-describe("the community home", () => {
-  it("shows a new community an empty home that leads to listing land", async () => {
-    setup(<StewardPage />, {
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () => json(summary()),
-      },
-    });
-    const empty = await screen.findByRole("region", { name: "List your land" });
-    expect(
-      within(empty).getByRole("link", { name: /List your land/ }),
-    ).toHaveAttribute("href", `/steward/list?community=${SELVA.id}`);
-    expect(screen.getByText(/No alerts yet/)).toBeVisible();
-    // The owner sees the members.
-    const members = await screen.findByRole("region", { name: "Members" });
-    expect(await within(members).findByText("Tomás")).toBeVisible();
-    expect(
-      screen.getByRole("link", { name: /Edit community/ }),
-    ).toHaveAttribute("href", `/steward/community?community=${SELVA.id}`);
-    // No wallet until there's a listing.
-    expect(screen.queryByText("Payouts on kept units")).toBeNull();
-  });
-
-  it("shows each listing's next action, the wallet, payouts and supporters", async () => {
-    const trading = listing({
-      wallet: {
-        balance: "1550.25",
-        ipo_proceeds: "1500.00",
-        community_fund_payouts: "50.25",
-        retained_dividends: "25.12",
-        total_received: "1575.37",
-      },
-      holders: {
-        count: 2,
-        shares_held: 75,
-        top: [
-          { rank: 1, shares: 50, pct_of_shares: "0.01" },
-          { rank: 2, shares: 25, pct_of_shares: "0.00" },
-        ],
-      },
-      shares: {
-        shares_offered: 490_000,
-        shares_sold: 75,
-        retained_shares: 510_000,
-      },
-      recommendations: ["Fence the riverbank"],
-    });
-    const awaiting = listing({
-      asset: card({
-        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        name: "Bosque Alto",
-        trading: false,
-        price: null,
-      }),
-      next_action: "launch_ipo",
-      ipo_at: null,
-    });
-    const draft = listing({
-      asset: card({
-        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-        name: "Río Bajo",
-        status: "draft",
-        trading: false,
-        grade: null,
-        health_score: null,
-        price: null,
-      }),
-      next_action: "continue_listing",
-      ipo_at: null,
-      report_version: null,
-    });
-    setup(<StewardPage />, {
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          json(
-            summary({
-              listings: [trading, awaiting, draft],
-              wallet: trading.wallet,
-              holder_count: 2,
-              payouts: [
-                {
-                  asset_id: trading.asset.id,
-                  asset_name: "Xochimilco Wetland",
-                  quarter_label: "2026Q3",
-                  revenue: "100.50",
-                  community_fund: "50.25",
-                  dividends_total: "50.25",
-                  retained_dividend: "25.12",
-                  holder_count: 3,
-                  paid_at: "2026-10-01T00:00:00Z",
-                },
-              ],
-              payouts_count: 1,
-            }),
-          ),
-      },
-    });
-
-    const sites = await screen.findByRole("region", { name: "Your sites" });
-    expect(
-      within(sites).getByRole("link", { name: /View on Exchange/ }),
-    ).toHaveAttribute("href", `/asset/${trading.asset.id}`);
-    expect(
-      within(sites).getByRole("link", { name: /Open to supporters/ }),
-    ).toHaveAttribute(
-      "href",
-      `/steward/assets/${awaiting.asset.id}/ipo?community=${SELVA.id}`,
-    );
-    expect(
-      within(sites).getByRole("link", { name: /Continue listing/ }),
-    ).toHaveAttribute(
-      "href",
-      `/steward/list?community=${SELVA.id}&asset=${draft.asset.id}`,
-    );
-    expect(
-      within(sites).getByRole("link", { name: "Verification of Bosque Alto" }),
-    ).toHaveAttribute(
-      "href",
-      `/steward/assets/${awaiting.asset.id}/verify?community=${SELVA.id}`,
-    );
-    expect(
-      within(sites).getByRole("link", { name: "Field photos of Bosque Alto" }),
-    ).toHaveAttribute(
-      "href",
-      `/steward/assets/${awaiting.asset.id}/evidence?community=${SELVA.id}`,
-    );
-
-    const wallet = screen.getByRole("region", { name: "Community fund" });
-    expect(
-      within(wallet).getByText(/Community fund balance · play money/),
-    ).toBeVisible();
-    expect(
-      within(wallet).getByText("From supporters").closest("div"),
-    ).toHaveTextContent("$1,500.00");
-    expect(
-      within(wallet).getByText("Quarterly payouts").closest("div"),
-    ).toHaveTextContent("$50.25");
-    expect(
-      within(wallet).getByText("Payouts on the units you kept").closest("div"),
-    ).toHaveTextContent("$25.12");
-    // Steward surfaces use the softened words (ux-writing §7), never the market's.
-    expect(document.body).not.toHaveTextContent(/IPO|dividend|treasury cash/i);
-    expect(
-      within(wallet).getByText("Total received").closest("div"),
-    ).toHaveTextContent("$1,575.37");
-
-    const payouts = screen.getByRole("region", { name: "Quarterly payouts" });
-    expect(within(payouts).getByText("Q3 2026")).toBeVisible();
-    expect(within(payouts).getByText("$100.50")).toBeVisible();
-
-    const supporters = screen.getByRole("region", { name: "Supporters" });
-    expect(supporters).toHaveTextContent("2 supporters hold 75 units");
-    expect(within(supporters).getByText("Supporter 1")).toBeVisible();
-    expect(within(supporters).getByText(/50 units · 0.01%/)).toBeVisible();
-    expect(within(supporters).getByText(/25 units · <0.01%/)).toBeVisible();
-    expect(screen.getByText("Fence the riverbank")).toBeVisible();
-    expect(screen.getByText(/No alerts yet/)).toBeVisible();
-  });
-
-  it.each([
-    [1, 60, "1 supporter holds 60 units"],
-    [1, 1, "1 supporter holds 1 unit"],
-  ])(
-    "says how many supporters hold how many units (%i, %i)",
-    async (count, held, text) => {
-      const one = listing({
-        holders: {
-          count,
-          shares_held: held,
-          top: [{ rank: 1, shares: held, pct_of_shares: "0.01" }],
-        },
-        shares: {
-          shares_offered: 490_000,
-          shares_sold: held,
-          retained_shares: 510_000,
-        },
-      });
-      setup(<StewardPage />, {
-        routes: {
-          [`GET /communities/${SELVA.id}/summary`]: () =>
-            json(summary({ listings: [one], holder_count: count })),
-        },
-      });
-
-      const supporters = await screen.findByRole("region", {
-        name: "Supporters",
-      });
-      await waitFor(() => expect(supporters).toHaveTextContent(text));
-    },
-  );
-
-  it("draws a featured listing's boundary when it has no thumbnail", async () => {
-    const outline = [
-      [
-        [-99.1, 19.28],
-        [-99.09, 19.28],
-        [-99.09, 19.29],
-        [-99.1, 19.28],
-      ],
-    ];
-    setup(<StewardPage />, {
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          json(summary({ listings: [listing({ asset: card({ outline }) })] })),
-      },
-    });
-    const featured = await screen.findByRole("region", {
-      name: "Xochimilco Wetland",
-    });
-    expect(within(featured).getByText(IMAGERY_ATTRIBUTION)).toBeInTheDocument();
-    expect(
-      featured.querySelectorAll("[data-boundary-map] img").length,
-    ).toBeGreaterThan(0);
-  });
-
-  it("keeps the featured listing's placeholder without an outline", async () => {
-    setup(<StewardPage />, {
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          json(
-            summary({ listings: [listing({ asset: card({ outline: [] }) })] }),
-          ),
-      },
-    });
-    const featured = await screen.findByRole("region", {
-      name: "Xochimilco Wetland",
-    });
-    expect(featured.querySelector("[data-boundary-map]")).toBeNull();
-    expect(
-      within(featured).queryByText(IMAGERY_ATTRIBUTION),
-    ).not.toBeInTheDocument();
-  });
-
-  it("lists the alerts about the community's own sites (T75)", async () => {
-    const mine = {
-      id: "11111111-1111-4111-8111-111111111111",
-      asset_id: card().id,
-      asset_name: "Xochimilco Wetland",
-      kind: "grade_change" as const,
-      title: "Xochimilco Wetland downgraded to BBB",
-      message: "Health 72.0 → 64.5 (−7.5 points). Grade A → BBB.",
-      severity: 4,
-      url: null,
-      report_id: null,
-      created_at: "2026-10-19T08:00:00Z",
-      read_at: null,
-    };
-    const elsewhere = {
-      ...mine,
-      id: "22222222-2222-4222-8222-222222222222",
-      asset_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-      asset_name: "A site I back",
-      title: "A site I back: health fell 6.0 points",
-    };
-    setup(<StewardPage />, {
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          json(summary({ listings: [listing()] })),
-        // The API filters by community (members only); the home never sees other sites'.
-        "GET /alerts": (request) =>
-          json(
-            new URL(request.url).searchParams.get("community_id") === SELVA.id
-              ? { alerts: [mine], unread_count: 1, next_before: null }
-              : {
-                  alerts: [mine, elsewhere],
-                  unread_count: 2,
-                  next_before: null,
-                },
-          ),
-      },
-    });
-
-    const panel = await screen.findByRole("region", {
-      name: "WildWatch alerts",
-    });
-    expect(
-      await within(panel).findByText("Xochimilco Wetland downgraded to BBB"),
-    ).toBeVisible();
-    expect(within(panel).getByText("1 unread")).toBeVisible();
-    expect(
-      within(panel).queryByText("A site I back: health fell 6.0 points"),
-    ).not.toBeInTheDocument();
-    expect(
-      within(panel).getByRole("button", { name: "Mark all read" }),
-    ).toBeVisible();
-  });
-
-  it("links field photos on the featured listing, not on closed ones (#214)", async () => {
-    const closed = (status: "withdrawn" | "ineligible", id: string) =>
-      listing({
-        asset: card({
-          id,
-          name: `Closed ${status}`,
-          status,
-          trading: false,
-          price: null,
-        }),
-        next_action: "none",
-        ipo_at: null,
-      });
-    const featured = listing();
-    setup(<StewardPage />, {
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          json(
-            summary({
-              listings: [
-                featured,
-                closed("withdrawn", "cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
-                closed("ineligible", "dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
-              ],
-            }),
-          ),
-      },
-    });
-
-    const hero = await screen.findByRole("region", {
-      name: "Xochimilco Wetland",
-    });
-    expect(
-      within(hero).getByRole("link", {
-        name: "Field photos of Xochimilco Wetland",
-      }),
-    ).toHaveAttribute(
-      "href",
-      `/steward/assets/${featured.asset.id}/evidence?community=${SELVA.id}`,
-    );
-    const sites = screen.getByRole("region", { name: "Your sites" });
-    expect(within(sites).getByText("Closed withdrawn")).toBeVisible();
-    for (const name of ["Closed withdrawn", "Closed ineligible"]) {
-      expect(
-        within(sites).queryByRole("link", { name: `Field photos of ${name}` }),
-      ).not.toBeInTheDocument();
-    }
-  });
-
-  it("tells a steward the owner opens the listing to supporters", async () => {
-    setup(<StewardPage />, {
-      communities: [community({ role: "steward" })],
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          json(
-            summary({
-              role: "steward",
-              listings: [
-                listing({
-                  asset: card({ trading: false }),
-                  next_action: "awaiting_ipo",
-                  ipo_at: null,
-                }),
-              ],
-            }),
-          ),
-      },
-    });
-    expect(
-      await screen.findByText("Waiting for the owner to open it to supporters"),
-    ).toBeVisible();
-    expect(
-      screen.queryByRole("link", { name: /Open to supporters/ }),
-    ).toBeNull();
-  });
-
-  it("refetches live: once per burst of trades, at once on a status change", async () => {
-    const trading = listing();
-    const backend = setup(<StewardPage />, {
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          json(summary({ listings: [trading] })),
-      },
-    });
-    await screen.findByRole("region", { name: "Community fund" });
-    const path = `GET /communities/${SELVA.id}/summary`;
-    const before = backend.calls(path);
-
-    act(() => {
-      const source = FakeEventSource.latest();
-      source.open();
-      for (const id of [1, 2, 3]) {
-        source.emit("price_tick", id, {
-          asset_id: trading.asset.id,
-          price: "21.5000",
-          reason: "order",
-        });
-      }
-      // Another community's trade changes nothing here.
-      source.emit("price_tick", 4, {
-        asset_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-        price: "9.0000",
-        reason: "order",
-      });
-    });
-    expect(backend.calls(path)).toBe(before);
-    await waitFor(() => expect(backend.calls(path)).toBe(before + 1), {
-      timeout: SUMMARY_TICK_REFRESH_MS + 2_000,
-    });
-
-    act(() => {
-      FakeEventSource.latest().emit("listing_status", 5, {
-        asset_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-        community_id: SELVA.id,
-        transition: "create",
-        from: null,
-        to: "draft",
-        reason: null,
-      });
-    });
-    await waitFor(() => expect(backend.calls(path)).toBe(before + 2));
-  }, 15_000);
-
-  it("explains a failed summary and retries", async () => {
-    let fail = true;
-    setup(<StewardPage />, {
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          fail ? json({ detail: "boom" }, { status: 503 }) : json(summary()),
-      },
-    });
-    expect(
-      await screen.findByText("We couldn't load your community home"),
-    ).toBeVisible();
-    fail = false;
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(
-      await screen.findByRole("region", { name: "List your land" }),
-    ).toBeVisible();
-  });
-});
-
-describe("the Community home's updates dot", () => {
-  const steward = () =>
-    screen.getByRole("navigation", { name: "Stewards navigation" });
-  const homeLink = () =>
-    within(steward()).getByRole("link", { name: "Community home" });
-  const seenKey = homeSeenKey(ROSA.id, SELVA.id);
-  const inReview = listing({
-    next_action: "verification_in_review",
-    verification: {
-      level: "documents_submitted",
-      in_review: true,
-      required: true,
-    },
-  });
-  const rejected = listing({
-    next_action: "verify",
-    verification: {
-      level: "rejected",
-      in_review: false,
-      required: true,
-      decision: "rejected",
-      decided_at: "2026-10-20T15:00:00Z",
-      reason: "Blurry",
-      run_id: "run-1",
-    },
-  });
-
-  it("shows once something changed since the home was viewed, and clears there", async () => {
-    let current = summary({ listings: [inReview] });
-    const backend = setup(<StewardPage />, {
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () => json(current),
-      },
-    });
-    await screen.findByRole("heading", { level: 1, name: SELVA.name });
-    await waitFor(() => expect(localStorage.getItem(seenKey)).not.toBeNull());
-    const viewed = localStorage.getItem(seenKey);
-    expect(homeLink()).not.toHaveAccessibleDescription();
-
-    // Elsewhere in the app, a reviewer's decision arrives.
-    nav.pathname = "/steward/list";
-    backend.showPage(<p>Elsewhere</p>);
-    expect(homeLink()).not.toHaveAccessibleDescription();
-    current = summary({ listings: [rejected] });
-    act(() => {
-      const source = FakeEventSource.latest();
-      source.open();
-      source.emit("listing_status", 1, {
-        asset_id: rejected.asset.id,
-        community_id: SELVA.id,
-        transition: "suspend",
-        from: "listed",
-        to: "listed",
-        reason: null,
-      });
-    });
-    await waitFor(() =>
-      expect(homeLink()).toHaveAccessibleDescription("New updates"),
-    );
-    expect(
-      steward().querySelector("[data-updates-dot][aria-hidden='true']"),
-    ).not.toBeNull();
-    // The phone menu's button says so too.
-    expect(
-      screen.getByRole("button", { name: "Open menu" }),
-    ).toHaveAccessibleDescription("New updates");
-    expect(localStorage.getItem(seenKey)).toBe(viewed);
-
-    // Viewing the home clears it.
-    nav.pathname = "/steward";
-    backend.showPage(<StewardPage />);
-    await waitFor(() => expect(homeLink()).not.toHaveAccessibleDescription());
-    expect(localStorage.getItem(seenKey)).not.toBe(viewed);
-    expect(document.querySelector("[data-updates-dot]")).toBeNull();
-  });
-
-  it("shows nothing before the home was ever viewed in this browser", async () => {
-    nav.pathname = "/steward/list";
-    const backend = setup(<p>Elsewhere</p>, {
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          json(summary({ listings: [rejected] })),
-      },
-    });
-    await waitFor(() =>
-      expect(backend.calls(`GET /communities/${SELVA.id}/summary`)).toBe(1),
-    );
-    await waitFor(() => expect(homeLink()).toBeVisible());
-    expect(homeLink()).not.toHaveAccessibleDescription();
-    expect(localStorage.getItem(seenKey)).toBeNull();
-  });
-
-  it("stays clear when nothing changed", async () => {
-    const backend = setup(<StewardPage />, {
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          json(summary({ listings: [rejected] })),
-      },
-    });
-    await screen.findByRole("heading", { level: 1, name: SELVA.name });
-    await waitFor(() => expect(localStorage.getItem(seenKey)).not.toBeNull());
-    nav.pathname = "/steward/community";
-    backend.showPage(<p>Elsewhere</p>);
-    await waitFor(() => expect(homeLink()).not.toHaveAttribute("aria-current"));
-    expect(homeLink()).not.toHaveAccessibleDescription();
-  });
-});
-
 describe("community settings", () => {
   it("lets the owner edit the community, sending only what changed", async () => {
     nav.pathname = "/steward/community";
@@ -1072,8 +425,6 @@ describe("community settings", () => {
       expect(backend.calls("GET /me/communities")).toBeGreaterThan(0),
     );
     const before = backend.calls("GET /me/communities");
-    // The header keeps the summary, for the Community home's updates dot.
-    const summaries = backend.calls(`GET /communities/${SELVA.id}/summary`);
     fireEvent.change(input, { target: { value: "Selva Viva Norte" } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(await screen.findByText("Saved.")).toBeVisible();
@@ -1082,15 +433,9 @@ describe("community settings", () => {
         "Selva Viva Norte",
       ),
     );
-    // The edit invalidates the account's communities, so the header shows the new name.
+    // The edit invalidates the account's communities, so every page shows the new name.
     await waitFor(() =>
       expect(backend.calls("GET /me/communities")).toBe(before + 1),
-    );
-    // The edit refreshes the community's data, so the summary the header keeps too, once.
-    await waitFor(() =>
-      expect(backend.calls(`GET /communities/${SELVA.id}/summary`)).toBe(
-        summaries + 1,
-      ),
     );
     // "Saved." goes once the form changes again.
     fireEvent.change(screen.getByLabelText("Community name"), {
@@ -1253,7 +598,9 @@ describe("a site's Steward pages (T74)", () => {
       ).toBeNull();
       expect(screen.queryByText(CONTROLS)).toBeNull();
       expect(
-        screen.getByRole("link", { name: /See Cloud Forest on the Exchange/ }),
+        screen.getByRole("link", {
+          name: /See Cloud Forest on the Marketplace/,
+        }),
       ).toHaveAttribute("href", `/asset/${ASSET_ID}`);
       expect(
         screen.getByRole("link", { name: "Start a community" }),
@@ -1317,254 +664,5 @@ describe("a site's Steward pages (T74)", () => {
 
     await screen.findByRole("heading", { level: 1, name: "Start a community" });
     expect(backend.calls(`GET /assets/${ASSET_ID}`)).toBe(0);
-  });
-});
-
-describe("the next step and what changed (#216)", () => {
-  const unverified = () =>
-    listing({
-      asset: card({ trading: false, price: null }),
-      next_action: "verify",
-      ipo_at: null,
-      verification: { level: "unverified", in_review: false, required: true },
-    });
-
-  beforeEach(() => window.localStorage.clear());
-
-  it("makes verifying the main action while the offer waits for it", async () => {
-    const pending = unverified();
-    setup(<StewardPage />, {
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          json(summary({ listings: [pending] })),
-      },
-    });
-    const hero = await screen.findByRole("region", {
-      name: "Xochimilco Wetland",
-    });
-    expect(
-      within(hero).getByRole("link", { name: /^Verify this listing/ }),
-    ).toHaveAttribute(
-      "href",
-      `/steward/assets/${pending.asset.id}/verify?community=${SELVA.id}`,
-    );
-    expect(
-      within(hero).getByRole("link", {
-        name: "Preview the opening offer: Xochimilco Wetland",
-      }),
-    ).toHaveAttribute(
-      "href",
-      `/steward/assets/${pending.asset.id}/ipo?community=${SELVA.id}`,
-    );
-    expect(within(hero).getByText("Not verified")).toBeVisible();
-    expect(hero).toHaveTextContent(
-      "Verify the land documents to open it to supporters.",
-    );
-    expect(
-      within(hero).queryByRole("link", { name: /Open to supporters/ }),
-    ).toBeNull();
-  });
-
-  it("tells the steward what a reviewer decided, until dismissed", async () => {
-    let decided = listing({
-      asset: card({ trading: false, price: null }),
-      next_action: "verify",
-      ipo_at: null,
-      verification: {
-        level: "rejected",
-        in_review: false,
-        required: true,
-        decision: "rejected",
-        decided_at: "2026-10-20T15:00:00Z",
-        reason: "The assembly minutes aren't signed.",
-        run_id: "run-1",
-      },
-    });
-    const ALERT_ID = "abababab-abab-4bab-8bab-abababababab";
-    const backend = setup(<StewardPage />, {
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          json(summary({ listings: [decided] })),
-        "GET /alerts": () =>
-          json({
-            alerts: [
-              {
-                id: ALERT_ID,
-                asset_id: decided.asset.id,
-                asset_name: decided.asset.name,
-                kind: "verification",
-                title: "Xochimilco Wetland: documents not approved",
-                message:
-                  "A WildWorth reviewer didn't approve the land documents.",
-                severity: 3,
-                created_at: "2026-10-20T15:00:01Z",
-                read_at: null,
-              },
-            ],
-            unread_count: 1,
-            next_before: null,
-          }),
-        [`POST /alerts/${ALERT_ID}/read`]: () =>
-          json({ read_at: "2026-10-21T00:00:00Z" }),
-      },
-    });
-    const updates = await screen.findByRole("region", {
-      name: "Verification updates",
-    });
-    const notice = within(updates).getByRole("listitem", {
-      name: "Xochimilco Wetland: documents not approved",
-    });
-    expect(notice).toHaveTextContent(
-      "Reviewer's reason: “The assembly minutes aren't signed.”",
-    );
-    expect(
-      within(notice).getByRole("link", { name: /Submit new documents/ }),
-    ).toHaveAttribute(
-      "href",
-      `/steward/assets/${decided.asset.id}/verify?community=${SELVA.id}`,
-    );
-    expect(screen.getByText("Not approved")).toBeVisible();
-
-    fireEvent.click(
-      within(notice).getByRole("button", {
-        name: "Dismiss: Xochimilco Wetland: documents not approved",
-      }),
-    );
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("region", { name: "Verification updates" }),
-      ).toBeNull(),
-    );
-    // Focus doesn't drop to the page: it goes to the community's heading.
-    expect(
-      screen.getByRole("heading", { level: 1, name: SELVA.name }),
-    ).toHaveFocus();
-    // The bell's alert about the same decision is read too.
-    await waitFor(() =>
-      expect(backend.calls(`POST /alerts/${ALERT_ID}/read`)).toBe(1),
-    );
-    expect(
-      JSON.parse(
-        window.localStorage.getItem(
-          `wildworth:verification-notices:${SIGNED_IN_WORLD.me!.id}`,
-        )!,
-      ),
-    ).toEqual({ [decided.asset.id]: `run-1:rejected:2026-10-20T15:00:00Z` });
-
-    // The next decision brings a new notice: approved, with the way to open the offer.
-    decided = {
-      ...decided,
-      next_action: "launch_ipo",
-      verification: {
-        level: "verified",
-        in_review: false,
-        required: false,
-        decision: "verified",
-        decided_at: "2026-10-21T09:00:00Z",
-        reason: null,
-        run_id: "run-2",
-      },
-    };
-    await act(async () => {
-      backend.layer.cache.invalidate(queryKeys.communitySummary(SELVA.id));
-    });
-    const approved = await screen.findByRole("listitem", {
-      name: "Xochimilco Wetland is verified",
-    });
-    expect(
-      within(approved).getByRole("link", { name: /Open to supporters/ }),
-    ).toHaveAttribute(
-      "href",
-      `/steward/assets/${decided.asset.id}/ipo?community=${SELVA.id}`,
-    );
-    expect(screen.getAllByText("Verified land").length).toBeGreaterThan(0);
-  });
-
-  it("moves focus to the next notice, then to the heading after the last", async () => {
-    const rejected = (id: string, name: string) =>
-      listing({
-        asset: card({ id, name, trading: false, price: null }),
-        next_action: "verify",
-        ipo_at: null,
-        verification: {
-          level: "rejected",
-          in_review: false,
-          required: true,
-          decision: "rejected",
-          decided_at: "2026-10-20T15:00:00Z",
-          reason: "Unsigned.",
-          run_id: `run-${id}`,
-        },
-      });
-    setup(<StewardPage />, {
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          json(
-            summary({
-              listings: [
-                rejected("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "Bosque Alto"),
-                rejected("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "Río Bajo"),
-              ],
-            }),
-          ),
-      },
-    });
-    const first = await screen.findByRole("button", {
-      name: "Dismiss: Bosque Alto: documents not approved",
-    });
-    fireEvent.click(first);
-    const second = await screen.findByRole("button", {
-      name: "Dismiss: Río Bajo: documents not approved",
-    });
-    await waitFor(() => expect(second).toHaveFocus());
-    fireEvent.click(second);
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { level: 1, name: SELVA.name }),
-      ).toHaveFocus(),
-    );
-  });
-
-  it("tells a same-world admin what a listing waits for, without a member's notices", async () => {
-    setup(<StewardPage />, {
-      world: {
-        ...SIGNED_IN_WORLD,
-        me: { ...SIGNED_IN_WORLD.me!, is_admin: true },
-      },
-      routes: {
-        [`GET /communities/${SELVA.id}/summary`]: () =>
-          json(
-            summary({
-              role: null,
-              listings: [
-                listing({
-                  asset: card({ trading: false, price: null }),
-                  next_action: "awaiting_verification",
-                  ipo_at: null,
-                  verification: {
-                    level: "rejected",
-                    in_review: false,
-                    required: true,
-                    decision: "rejected",
-                    decided_at: "2026-10-20T15:00:00Z",
-                    reason: "Unsigned.",
-                    run_id: "run-1",
-                  },
-                }),
-              ],
-            }),
-          ),
-      },
-    });
-    const hero = await screen.findByRole("region", {
-      name: "Xochimilco Wetland",
-    });
-    expect(within(hero).getByText("Waiting for verification")).toBeVisible();
-    expect(
-      within(hero).queryByRole("link", { name: /Verify|Submit/ }),
-    ).toBeNull();
-    expect(
-      screen.queryByRole("region", { name: "Verification updates" }),
-    ).toBeNull();
   });
 });

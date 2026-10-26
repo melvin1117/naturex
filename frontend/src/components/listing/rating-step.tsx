@@ -1,10 +1,11 @@
 "use client";
 
-import { Camera, RefreshCwIcon, Sparkles } from "lucide-react";
+import { RefreshCwIcon, Sparkles } from "lucide-react";
 import Link from "@/components/app-link";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
+import { FieldEvidenceIcon } from "@/components/icons";
 import { GradeBadge } from "@/components/proto/grade";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,7 +39,7 @@ import { evidenceHref } from "@/lib/field-evidence";
 import { focusIfLost, useRestoreFocusAfterPending } from "@/lib/focus";
 import { usePacedRun } from "@/lib/listing/use-paced-run";
 import { usePrefersReducedMotion } from "@/lib/motion";
-import { ha } from "@/lib/prototype/format";
+import { ha } from "@/lib/format";
 import { num, reportFacts } from "@/lib/report-facts";
 
 import { RatingProgress } from "./rating-progress";
@@ -358,7 +359,7 @@ function Outcome({
         {outcome.kind === "needs_evidence" && (
           <Button asChild>
             <Link href={evidenceHref(asset.id, community.id)}>
-              <Camera aria-hidden="true" />
+              <FieldEvidenceIcon aria-hidden="true" />
               Add field photos
             </Link>
           </Button>

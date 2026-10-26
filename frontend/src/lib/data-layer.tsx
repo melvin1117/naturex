@@ -60,6 +60,8 @@ export const queryKeys = {
   ipoPreview: (assetId: string, totalShares: number, retainedPct: string) =>
     ["ipo-preview", assetId, totalShares, retainedPct] as const,
   /** Every query of one community (a prefix, for invalidation), T63. */
+  /** Everything about every community (a prefix, for invalidation). */
+  communityAll: () => ["community"] as const,
   community: (id: string) => ["community", id] as const,
   communityProfile: (id: string) => ["community", id, "profile"] as const,
   /** The Steward home (T63) and a community's members (T68). */
@@ -69,10 +71,6 @@ export const queryKeys = {
   run: (runId: string) => ["run", runId] as const,
   /** A run's Agent Trace (T34); under `run`, so a run's progress refetches it too. */
   runTrace: (runId: string) => ["run", runId, "trace"] as const,
-  /** The world's latest logged model calls (`GET /admin/trace`), per account. */
-  worldTrace: (meId: string | null) => ["world-trace", meId] as const,
-  /** The AI control room (`GET /admin/ai-usage`): this world's model calls, per account. */
-  aiUsage: (meId: string | null) => ["ai-usage", meId] as const,
   /** A demo site's recorded run (curated data: the same for every account). */
   recordedRun: (siteKey: string) => ["recorded-run", siteKey] as const,
   story: () => ["story"] as const,
@@ -98,6 +96,10 @@ export const queryKeys = {
   /** Its own prefix: a re-encoded photo never changes, so it's never refetched on a change. */
   fieldPhotoImage: (assetId: string, photoId: string) =>
     ["field-photo-image", assetId, photoId] as const,
+  /** The opening offers waiting for the Reviewer (ADR-0008 §5), per account. */
+  pendingOffers: (meId: string | null) => ["offers", meId] as const,
+  /** Every account's offers queue (a prefix, for invalidation). */
+  pendingOffersAll: () => ["offers"] as const,
   /** Every page of the reviewer queue, for every account (a prefix, for invalidation). */
   reviewQueueAll: () => ["review-queue"] as const,
   /** One page of the reviewer queue, per account. */
@@ -311,11 +313,6 @@ export function DataLayerProvider({
       {children}
     </DataLayerContext.Provider>
   );
-}
-
-/** The layer if one is provided, else null (for code that also runs without one). */
-export function useOptionalDataLayer(): DataLayer | null {
-  return useContext(DataLayerContext);
 }
 
 export function useDataLayer(): DataLayer {

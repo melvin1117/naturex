@@ -14,6 +14,7 @@ import {
   CheckResultLabel,
   VerificationBadge,
 } from "@/components/verification/parts";
+import { OfferList } from "@/components/verification/offer-list";
 import { ReviewQueueHeading } from "@/components/verification/review-queue-heading";
 import type {
   CheckResult,
@@ -22,7 +23,8 @@ import type {
 } from "@/lib/api/types";
 import type { ApiError } from "@/lib/api/errors";
 import { STATUS_LABEL } from "@/lib/community";
-import { date } from "@/lib/prototype/format";
+import { date } from "@/lib/format";
+import { useReplaceUrl } from "@/lib/nav";
 import {
   adminReviewHref,
   checkCounts,
@@ -43,7 +45,8 @@ import {
 export const QUEUE_PAGE = 20;
 
 const VIEW_LABEL: Record<ReviewView, string> = {
-  waiting: "Waiting",
+  offers: "Offers",
+  waiting: "Documents",
   verified: "Verified",
   rejected: "Rejected",
   revoked: "Revoked",
@@ -58,6 +61,7 @@ export function ReviewQueueScreen() {
   // The address is the state: Back and Forward, a reload and a shared link all land on the
   // view in it. Next.js keeps useSearchParams in step with history.replaceState.
   const view = reviewView(useSearchParams().get("view"));
+  const replaceUrl = useReplaceUrl();
 
   return (
     <div className="mx-auto max-w-5xl px-4 pt-10 pb-16 sm:px-6">
@@ -66,14 +70,12 @@ export function ReviewQueueScreen() {
       <Tabs
         value={view}
         // The History API keeps the address shareable without a server round trip.
-        onValueChange={(v) =>
-          window.history.replaceState(null, "", reviewViewHref(reviewView(v)))
-        }
+        onValueChange={(v) => replaceUrl(reviewViewHref(reviewView(v)))}
         className="mt-8 gap-6"
       >
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           <TabsList
-            aria-label="Verification views"
+            aria-label="What to review"
             className="w-max min-w-full bg-card shadow-soft sm:w-fit sm:min-w-0"
           >
             {REVIEW_VIEWS.map((v) => (
@@ -87,6 +89,9 @@ export function ReviewQueueScreen() {
             ))}
           </TabsList>
         </div>
+        <TabsContent value="offers">
+          {view === "offers" && <OfferList />}
+        </TabsContent>
         <TabsContent value="waiting">
           {view === "waiting" && <WaitingList />}
         </TabsContent>

@@ -54,7 +54,10 @@ class Action(StrEnum):
     VIEW_COMMUNITY_DATA = "view_community_data"
     """A community's own data: wallet, holders, payouts and its member list."""
     OPERATE = "operate"
-    """Time Machine, inject events (on the world), suspend or resume an asset (on the asset)."""
+    """Suspend or resume an asset, or re-rate it (on the asset)."""
+    SIMULATE = "simulate"
+    """The Time Machine and event injection: admins, and anyone in their own sandbox (where it
+    is the demo's control, not an operator's power)."""
     REVIEW_LISTING = "review_listing"
     """Approve, reject or revoke a listing's verification, or read the world's review queue
     (ADR-0006 §3: admin in the hackathon)."""
@@ -212,6 +215,8 @@ ACCEPTS: Mapping[Action, tuple[type[Resource], ...]] = {
     Action.EDIT_COMMUNITY: (CommunityRef,),
     Action.VIEW_COMMUNITY_DATA: (CommunityRef, AssetRef),
     Action.OPERATE: (WorldRef, AssetRef),
+    # The world for a quarter; the asset an event is injected on.
+    Action.SIMULATE: (WorldRef, AssetRef),
     # The world for the review queue; the asset for a decision on its verification.
     Action.REVIEW_LISTING: (WorldRef, AssetRef),
     Action.TAMPER_DEMO: (DemoTarget,),
@@ -320,6 +325,19 @@ def _impartial_admin(actor: Actor, resource: Resource) -> Decision:
     return ALLOW
 
 
+def _simulate(actor: Actor, resource: Resource) -> Decision:
+    """In a sandbox, anyone acting in it moves its time and injects its events: a sandbox is
+    one visitor's private copy, so the Time Machine is a demo control there. Elsewhere it's an
+    operator's action, like OPERATE.
+
+    This also lets every persona read the alerts the Time Machine sent to the others
+    (`GET /admin/alerts`). That's safe only while a sandbox belongs to one visitor; revisit it
+    if sandboxes are ever shared."""
+    if actor.session_kind == SessionKind.DEMO and is_sandbox_world(resource.world_id):
+        return ALLOW
+    return _impartial_admin(actor, resource)
+
+
 def _tamper_demo(actor: Actor, resource: Resource) -> Decision:
     if not isinstance(resource, DemoTarget) or not resource.demo_mode:
         return Deny(DenyReason.DEMO_MODE_OFF)
@@ -346,6 +364,7 @@ _RULES: Mapping[Action, Callable[[Actor, Resource], Decision]] = {
     Action.EDIT_COMMUNITY: _owner,
     Action.VIEW_COMMUNITY_DATA: _members_or_admin,
     Action.OPERATE: _impartial_admin,
+    Action.SIMULATE: _simulate,
     Action.REVIEW_LISTING: _impartial_admin,
     Action.TAMPER_DEMO: _tamper_demo,
     Action.CONTROL_DEMO: _demo_session,

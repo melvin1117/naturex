@@ -8,8 +8,8 @@ junit.xml
 src/lib/api/openapi.json
 src/lib/api/schema.d.ts
 
-# Generated from backend ratings by the prototype export; keep compact.
-src/lib/prototype/sites.json
+# Generated from backend ratings; keep compact.
+src/lib/sites.json
 
 # Generated from the brand guidelines by scripts/generate-brand-drawings.mjs.
 src/components/icons/drawings.ts

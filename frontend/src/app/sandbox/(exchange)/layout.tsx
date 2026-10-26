@@ -1,2 +1,8 @@
-// The sandbox twin of `(exchange)/layout.tsx`: the same screen in the visitor's sandbox (lib/sandbox.ts).
-export { default } from "@/app/(exchange)/layout";
+/** The Marketplace, a site's page and Your stakes: the shell comes from the sandbox layout. */
+export default function ExchangeLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return children;
+}

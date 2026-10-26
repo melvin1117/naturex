@@ -16,6 +16,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import NextLink from "next/link";
 import {
   useCallback,
   useEffect,
@@ -33,18 +34,13 @@ import {
   type ChainState,
 } from "@/components/story/story-chain";
 import { Lockup } from "@/components/brand";
-import {
-  LOOK_AROUND,
-  SandboxFlow,
-  useOpenSandbox,
-} from "@/components/sandbox/sandbox-flow";
 import { StoryMap, type StoryMapHandle } from "@/components/story/story-map";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import type { Story } from "@/lib/api/types";
 import { useRecordedRun, useStory } from "@/lib/hooks";
-import type { Grade } from "@/lib/prototype/data";
-import { date } from "@/lib/prototype/format";
+import type { Grade } from "@/lib/site-data";
+import { date } from "@/lib/format";
 import {
   change,
   dollars,
@@ -58,7 +54,7 @@ import {
   type StoryEvidence,
 } from "@/lib/story";
 
-const SCENES = 6;
+const SCENES = 5;
 const LAST = SCENES - 1;
 
 function useReducedMotion(): boolean {
@@ -86,8 +82,8 @@ function useWide(): boolean {
 }
 
 /**
- * `/judge`: why WildWorth exists, told on one real wetland in a couple of minutes, then the
- * judge's own private sandbox (no sign-up). Every number comes from `GET /story` (the product's
+ * `/how`: how WildWorth works, shown on one real wetland in four short parts, then a link into
+ * the visitor's own sandbox (no sign-up). Every number comes from `GET /story` (the product's
  * own rating, market and ledger code) and the wetland's recorded run (a real run of the agents).
  */
 export function JudgeStory() {
@@ -136,7 +132,9 @@ type Stage = {
   setChain: (update: (c: ChainState) => ChainState) => void;
   alert: (a: AlertCard | null) => void;
   next: () => void;
-  /** False once the scene is left (skip, back): stop the running sequence. */
+  /** Focus the story panel: the button that held focus has just gone. */
+  focus: () => void;
+  /** False once the scene is left (restart, or the page closes): stop its sequence. */
   alive: () => boolean;
   reduced: boolean;
 };
@@ -159,27 +157,28 @@ function StoryStage({
   const generation = useRef(0);
   const heading = useRef<HTMLDivElement>(null);
 
+  // A scene change replaces the button that was pressed: focus moves into the panel, never to
+  // the page (the first scene, on arrival, leaves focus where the browser put it).
+  const moved = useRef(false);
   const go = useCallback((to: number) => {
     generation.current += 1;
+    moved.current = true;
     setAlert(null);
     setScene(to);
   }, []);
-  const skip = useCallback(() => {
-    map.current?.reset();
-    go(LAST);
-  }, [go]);
-
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") skip();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [skip]);
-
-  useEffect(() => {
-    if (scene > 0) heading.current?.focus();
+    if (!moved.current) return;
+    moved.current = false;
+    heading.current?.focus();
   }, [scene]);
+  // Leaving the page (Skip, Try it yourself) stops the running sequence.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!alertCard) return;
@@ -196,7 +195,8 @@ function StoryStage({
       setChain: setChainState,
       alert: setAlert,
       next: () => go(scene + 1),
-      alive: () => generation.current === mine,
+      focus: () => heading.current?.focus(),
+      alive: () => mounted.current && generation.current === mine,
       reduced,
     };
     // A new stage object per scene, so a sequence started in one scene stops when it's left.
@@ -226,7 +226,7 @@ function StoryStage({
   const restart = () => {
     setChainState(EMPTY_CHAIN);
     map.current?.reset();
-    go(1);
+    go(0);
   };
 
   return (
@@ -246,18 +246,18 @@ function StoryStage({
       >
         <div className="flex items-center gap-4">
           <Lockup size={24} reading="lime" />
-          {scene > 0 && scene < LAST && (
+          {scene < LAST && (
             <span
               className="flex gap-1.5"
               role="img"
-              aria-label={`Part ${scene} of ${LAST - 1}`}
+              aria-label={`Part ${scene + 1} of ${LAST}`}
             >
-              {Array.from({ length: LAST - 1 }, (_, i) => (
+              {Array.from({ length: LAST }, (_, i) => (
                 <i
                   key={i}
                   className={cn(
                     "h-[3px] w-6 rounded-full transition-colors duration-500",
-                    i < scene ? "bg-lime" : "bg-machine-line",
+                    i <= scene ? "bg-lime" : "bg-machine-line",
                   )}
                 />
               ))}
@@ -269,26 +269,27 @@ function StoryStage({
           tabIndex={-1}
           className="machine-scroll mt-6 flex-1 overflow-y-auto pr-1 pb-4 outline-none"
         >
-          {scene === 0 && <Opening stage={stage} />}
-          {scene === 1 && <Measure stage={stage} />}
-          {scene === 2 && <Fund stage={stage} />}
-          {scene === 3 && <Watch stage={stage} />}
-          {scene === 4 && <Trust stage={stage} />}
+          {scene === 0 && <Measure stage={stage} />}
+          {scene === 1 && <Fund stage={stage} />}
+          {scene === 2 && <Watch stage={stage} />}
+          {scene === 3 && <Trust stage={stage} />}
           {scene === LAST && <YourTurn onReplay={restart} />}
         </div>
       </div>
 
       {scene < LAST && (
         <Button
+          asChild
           variant="ghost"
           className="absolute top-3 right-3 z-[600] h-9 rounded-full bg-machine-raised px-3.5 text-machine-ink hover:bg-machine-line hover:text-machine-ink min-[900px]:top-6 min-[900px]:right-7 min-[900px]:bg-machine/75 min-[900px]:px-4 min-[900px]:backdrop-blur-sm"
-          onClick={skip}
         >
-          <span className="max-[480px]:sr-only">Skip to your sandbox</span>
-          <span aria-hidden="true" className="min-[481px]:hidden">
-            Skip
-          </span>
-          <X aria-hidden="true" />
+          <NextLink href="/sandbox">
+            <span className="max-[480px]:sr-only">Skip to the sandbox</span>
+            <span aria-hidden="true" className="min-[481px]:hidden">
+              Skip
+            </span>
+            <X aria-hidden="true" />
+          </NextLink>
         </Button>
       )}
 
@@ -306,7 +307,7 @@ function StoryStage({
         </div>
       )}
 
-      {scene > 0 && scene < LAST && (
+      {scene < LAST && (
         <div
           ref={chainBox}
           className="pointer-events-none absolute inset-x-3 bottom-3 z-[500] flex justify-center min-[900px]:bottom-7 min-[900px]:left-[540px]"
@@ -376,23 +377,25 @@ function Actions({ children }: { children: ReactNode }) {
   );
 }
 
+const PRIMARY =
+  "font-semibold focus-visible:ring-card focus-visible:ring-offset-2 focus-visible:ring-offset-machine";
+
+/** The scene's next step: a button, or with `href` a link (out of the story). */
 function Primary({
   children,
   onClick,
-  disabled,
+  href,
 }: {
   children: ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
+  onClick?: () => void;
+  href?: string;
 }) {
-  return (
-    <Button
-      size="lg"
-      onClick={onClick}
-      disabled={disabled}
-      variant="on-image"
-      className="font-semibold focus-visible:ring-card focus-visible:ring-offset-2 focus-visible:ring-offset-machine"
-    >
+  return href ? (
+    <Button asChild size="lg" variant="on-image" className={PRIMARY}>
+      <NextLink href={href}>{children}</NextLink>
+    </Button>
+  ) : (
+    <Button size="lg" onClick={onClick} variant="on-image" className={PRIMARY}>
       {children}
     </Button>
   );
@@ -401,18 +404,15 @@ function Primary({
 function Secondary({
   children,
   onClick,
-  disabled,
 }: {
   children: ReactNode;
   onClick: () => void;
-  disabled?: boolean;
 }) {
   return (
     <Button
       size="lg"
       variant="ghost"
       onClick={onClick}
-      disabled={disabled}
       className="bg-machine-raised text-machine-ink hover:bg-machine-line hover:text-machine-ink focus-visible:ring-lime"
     >
       {children}
@@ -511,36 +511,12 @@ async function arrive(stage: Stage) {
   if (stage.alive()) await stage.map.current?.drawBoundary();
 }
 
-function Opening({ stage }: { stage: Stage }) {
-  const { story } = stage;
-  const run = useCallback(() => arrive(stage), [stage]);
-  useSequence(run, true);
-  const area = Math.round(Number(story.site.area_ha));
-  return (
-    <>
-      <Title>
-        This wetland is alive. Keeping it that way pays its community nothing.
-      </Title>
-      <p className="mt-5 max-w-[40ch] text-[19px] leading-relaxed">
-        {area} hectares in {story.site.place}, looked after by its community.
-        The only real offer they get is to sell it.
-      </p>
-      <Why>WildWorth gives them a better one.</Why>
-      <Actions>
-        <Primary onClick={stage.next}>
-          Show me how
-          <ArrowRight aria-hidden="true" />
-        </Primary>
-      </Actions>
-    </>
-  );
-}
-
 function Measure({ stage }: { stage: Stage }) {
   const { story, evidence, map } = stage;
   const { baseline } = storyRatings(story);
   const [step, setStep] = useState(0);
   const [visionDone, setVisionDone] = useState(false);
+  const [started, setStarted] = useState(false);
   const run = useCallback(async () => {
     const s = stage;
     const at = (n: number) => s.alive() && (setStep(n), true);
@@ -569,7 +545,7 @@ function Measure({ stage }: { stage: Stage }) {
   // A visitor who moved on mid-flight sees the boundary as soon as the map lands.
   const land = useCallback(() => arrive(stage), [stage]);
   useSequence(land, true);
-  useSequence(run, step > 0);
+  useSequence(run, started);
 
   const cover = baseline.landcover;
   const legend = Object.entries(story.images.legend)
@@ -580,22 +556,31 @@ function Measure({ stage }: { stage: Stage }) {
 
   return (
     <>
-      <Title>First, measure what the land is worth alive.</Title>
+      <Title>
+        {Math.round(Number(story.site.area_ha))} hectares of wetland in{" "}
+        {story.site.place}. What is it worth alive?
+      </Title>
       <Why>
-        Nobody pays for what nobody can measure. AI agents study the wetland
-        from space and from local news, and tested code turns what they find
-        into numbers.
+        AI agents read it from space and from local news. Tested code turns what
+        they find into a rating.
       </Why>
-      {step === 0 && (
+      {!started ? (
         <Actions>
-          <Primary onClick={() => setStep(1)}>Watch it being rated</Primary>
+          <Primary
+            onClick={() => {
+              setStarted(true);
+              stage.focus();
+            }}
+          >
+            Rate it
+            <ArrowRight aria-hidden="true" />
+          </Primary>
         </Actions>
-      )}
-      {step > 0 && (
+      ) : (
         <p className="mt-4 text-sm text-machine-muted">
-          A real rating of this wetland
-          {evidence ? `, recorded ${date(evidence.recordedOn)}` : ""}. In your
-          sandbox it runs live.
+          A real run
+          {evidence ? `, recorded ${date(evidence.recordedOn)}` : ""}. Live in
+          your sandbox.
         </p>
       )}
       <Feed>
@@ -604,21 +589,15 @@ function Measure({ stage }: { stage: Stage }) {
             icon={<BrainCircuit className="size-4" />}
             title="Plans the work"
             who={evidence?.planner}
-          >
-            Satellite data first, then local news to explain any change.
-          </Row>
+          />
         )}
         {step >= 2 && (
           <Row
             icon={<Satellite className="size-4" />}
-            title="Reads five years of satellite data"
+            title="Reads five years from space"
             who="Earth Engine"
           >
-            <p>
-              {share(baseline.natural_fraction)} of the land is natural cover.
-              Open water: {story.land.water_change > 0 ? "+" : "−"}
-              {Math.abs(story.land.water_change).toFixed(1)}% over five years.
-            </p>
+            <p>{share(baseline.natural_fraction)} natural cover.</p>
             <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[12.5px]">
               {legend.map((l) => (
                 <li key={l.key} className="flex items-center gap-1.5">
@@ -651,12 +630,12 @@ function Measure({ stage }: { stage: Stage }) {
         {step >= 3 && (
           <Row
             icon={<Newspaper className="size-4" />}
-            title="Finds what's happening on the ground"
+            title="Reads the local news"
             who={evidence?.scout ? `${evidence.scout} · Tavily` : "Tavily"}
           >
             {evidence?.news.length ? (
               <ul className="mt-1 grid gap-1.5">
-                {evidence.news.map((n) => (
+                {evidence.news.slice(0, 2).map((n) => (
                   <li
                     key={n.url ?? n.title}
                     className="border-t border-machine-line pt-1.5 first:border-0 first:pt-0"
@@ -671,39 +650,31 @@ function Measure({ stage }: { stage: Stage }) {
                 ))}
               </ul>
             ) : (
-              "Searches local news in the site's own language."
+              "In the site's own language."
             )}
           </Row>
         )}
         {step >= 4 && (
           <Row
             icon={<Eye className="size-4" />}
-            title="Compares the land five years apart"
+            title="Compares then and now"
             who={evidence?.vision?.model}
           >
             {visionDone
-              ? `${evidence?.vision?.reading ?? "Looks for clearing, water loss or regrowth."} Code checks it against the satellite numbers.`
+              ? (evidence?.vision?.reading ??
+                "Clearing, water loss or regrowth?")
               : "Looking at the two views…"}
           </Row>
         )}
         {step >= 5 && (
           <Row
             icon={<Scale className="size-4" />}
-            title="Weighs all the evidence"
+            title="Audits the evidence"
             who={evidence?.auditor?.model}
           >
-            {evidence?.auditor ? (
-              <>
-                <q className="text-machine-ink">{evidence.auditor.verdict}</q>
-                {evidence.citations != null && (
-                  <span className="mt-1 block">
-                    {evidence.citations} citations, each checked by code.
-                  </span>
-                )}
-              </>
-            ) : (
-              "Every claim must cite its source."
-            )}
+            {evidence?.citations != null
+              ? `${evidence.citations} citations, each checked by code.`
+              : "Every claim cites its source."}
           </Row>
         )}
       </Feed>
@@ -711,17 +682,17 @@ function Measure({ stage }: { stage: Stage }) {
         <>
           <div className="ww-rise mt-4 rounded-2xl bg-card p-4 text-foreground">
             <p className="font-serif text-[1.7rem] leading-tight">
-              Healthy, and worth keeping.
+              Worth {valueRange(baseline.value_low, baseline.value_high)},
+              alive.
             </p>
             <p className="mt-1.5 text-[15px]">
-              Worth <b>{valueRange(baseline.value_low, baseline.value_high)}</b>{" "}
-              to people as it is: clean water, carbon, flood protection and
-              habitat. Confidence {Number(baseline.confidence).toFixed(0)}%.
+              Water, carbon, flood protection and habitat.{" "}
+              {Number(baseline.confidence).toFixed(0)}% confidence.
             </p>
           </div>
           <Actions>
             <Primary onClick={stage.next}>
-              Now let people back it
+              Who pays for that?
               <ArrowRight aria-hidden="true" />
             </Primary>
           </Actions>
@@ -744,21 +715,16 @@ function Fund({ stage }: { stage: Stage }) {
   useSequence(run, true);
   return (
     <>
-      <Title>Then let people fund it, without buying the land.</Title>
-      <Why>
-        A rating people can trust sets a fair price. Supporters back the wetland
-        at that price, and their money goes to the community that keeps it
-        alive.
-      </Why>
+      <Title>Supporters back it. The community keeps the land.</Title>
+      <Why>The rating sets a fair price. The money goes to the community.</Why>
       <Feed>
         <Row
           icon={<Users className="size-4" />}
           title="Rosa opens her land to supporters"
-          who="Rosa · steward"
+          who="Rosa · community"
         >
-          At the rating&apos;s fair price, {dollars(market.opening_price)} a
-          unit. Her community keeps {Number(market.retained_pct).toFixed(0)}% of
-          the stake.
+          {dollars(market.opening_price)} a unit. Her community keeps{" "}
+          {Number(market.retained_pct).toFixed(0)}%.
         </Row>
         {backed && (
           <Row
@@ -766,9 +732,8 @@ function Fund({ stage }: { stage: Stage }) {
             title="Arjun backs the wetland"
             who="Arjun · supporter"
           >
-            He pays {dollars(market.backing.paid)} for {market.backing.units}{" "}
-            units. All of it reaches the community&apos;s fund, and they still
-            own every hectare.
+            {dollars(market.backing.paid)} to the community&apos;s fund. They
+            still own every hectare.
           </Row>
         )}
       </Feed>
@@ -781,23 +746,21 @@ function Fund({ stage }: { stage: Stage }) {
                 ...c,
                 fund: Number(market.backing.to_community),
               }));
+              stage.focus();
             }}
           >
             Back it as Arjun · {market.backing.units} units
           </Primary>
+          {/* The sandbox line, once in the story, where money first changes hands. */}
+          <Tag>Play money</Tag>
         </Actions>
       ) : (
-        <>
-          <p className="mt-4 text-sm text-machine-muted">
-            Play money only. Nothing here is a real investment.
-          </p>
-          <Actions>
-            <Primary onClick={stage.next}>
-              But why would Arjun care?
-              <ArrowRight aria-hidden="true" />
-            </Primary>
-          </Actions>
-        </>
+        <Actions>
+          <Primary onClick={stage.next}>
+            What if the land changes?
+            <ArrowRight aria-hidden="true" />
+          </Primary>
+        </Actions>
       )}
     </>
   );
@@ -878,21 +841,24 @@ function Watch({ stage }: { stage: Stage }) {
   };
 
   const built = (r: typeof baseline) => share(r.landcover.built ?? 0);
-  const water = (r: typeof baseline) => share(r.landcover.water ?? 0);
 
   return (
     <>
-      <Title>Because his stake moves with the land.</Title>
+      <Title>The rating follows the land.</Title>
       <Why>
-        If the wetland is damaged, Arjun&apos;s stake falls. If it recovers, it
-        rises. So the supporter and the community want the same thing, and
-        WildWatch keeps watching.
+        Damage it and the stake falls. Restore it and it rises. Supporter and
+        community want the same thing.
       </Why>
       {step === 0 && (
         <Actions>
-          <Secondary onClick={() => void damage()}>
+          <Secondary
+            onClick={() => {
+              stage.focus();
+              void damage();
+            }}
+          >
             <TriangleAlert aria-hidden="true" />
-            Simulate damage on the north edge
+            Damage the north edge
           </Secondary>
           <Tag tone="clay">Simulated</Tag>
         </Actions>
@@ -901,66 +867,54 @@ function Watch({ stage }: { stage: Stage }) {
         {step >= 2 && (
           <Row
             icon={<Satellite className="size-4" />}
-            title="The next satellite pass sees it"
-            who="Earth Engine · simulated"
+            title="Satellites see it"
+            who="simulated"
             tone="clay"
           >
-            Built-up land {built(baseline)} → {built(damaged)}. Open water{" "}
-            {water(baseline)} → {water(damaged)}.
+            Built-up land {built(baseline)} → {built(damaged)}.
           </Row>
         )}
         {step >= 3 && (
           <Row
             icon={<Scale className="size-4" />}
-            title="The rating follows the land"
+            title={`Downgraded to ${damaged.grade}`}
             tone="clay"
           >
-            Health {health(baseline.health)} → {health(damaged.health)}: the
-            formula moves it to {damaged.grade}, and the price follows.
-          </Row>
-        )}
-        {step >= 4 && (
-          <Row
-            icon={<Sprout className="size-4" />}
-            title="Rosa sees what to fix"
-            who="Rosa · steward"
-          >
-            What changed, where, and what would bring the rating back.
+            Health {health(baseline.health)} → {health(damaged.health)}. Arjun
+            gets an alert.
           </Row>
         )}
         {step >= 6 && (
           <Row
             icon={<Sprout className="size-4" />}
-            title="The land recovers"
-            who="Earth Engine · simulated"
+            title={`Restored: ${restored.grade}`}
+            who="simulated"
           >
-            Built-up land falls to {built(restored)}; trees and wetland plants
-            grow back. Health {health(restored.health)}: {restored.grade}.
+            Health {health(restored.health)}. The stake recovers.
           </Row>
         )}
       </Feed>
       {step === 4 && (
         <Actions>
-          <Secondary onClick={() => void restore()}>
+          <Secondary
+            onClick={() => {
+              stage.focus();
+              void restore();
+            }}
+          >
             <Sprout aria-hidden="true" />
-            Simulate the restoration
+            Restore it
           </Secondary>
           <Tag tone="clay">Simulated</Tag>
         </Actions>
       )}
       {step >= 7 && (
-        <>
-          <p className="ww-rise mt-4 text-[15px] text-machine-ink">
-            Damaging the land cost Arjun. Restoring it paid both of them.
-            That&apos;s the whole idea.
-          </p>
-          <Actions>
-            <Primary onClick={stage.next}>
-              But can anyone trust these ratings?
-              <ArrowRight aria-hidden="true" />
-            </Primary>
-          </Actions>
-        </>
+        <Actions>
+          <Primary onClick={stage.next}>
+            Can anyone fake a rating?
+            <ArrowRight aria-hidden="true" />
+          </Primary>
+        </Actions>
       )}
     </>
   );
@@ -975,12 +929,8 @@ function Trust({ stage }: { stage: Stage }) {
   const broken = ledger.broken_at;
   return (
     <>
-      <Title>And nobody can quietly change the record.</Title>
-      <Why>
-        Real support now rides on these ratings, so no one, WildWorth included,
-        can rewrite one afterwards. Each entry is sealed with the fingerprint of
-        the one before it.
-      </Why>
+      <Title>Nobody can rewrite the Record.</Title>
+      <Why>Each rating is sealed with the fingerprint of the one before.</Why>
       <ol className="mt-5 grid gap-2" aria-label="The Record">
         {ledger.entries.map((e) => {
           const edited = tampered && e.seq === ledger.tampered_seq;
@@ -1032,65 +982,47 @@ function Trust({ stage }: { stage: Stage }) {
       </p>
       {!tampered ? (
         <Actions>
-          <Secondary onClick={() => setTampered(true)}>
+          <Secondary
+            onClick={() => {
+              setTampered(true);
+              stage.focus();
+            }}
+          >
             Try to turn the {ledger.tampered_from} into an {ledger.tampered_to}
           </Secondary>
         </Actions>
       ) : (
-        <>
-          <p className="mt-3 text-sm text-machine-muted">
-            The real Record works the same way: anyone can verify any
-            site&apos;s history, any time.
-          </p>
-          <Actions>
-            <Primary onClick={stage.next}>
-              Now try it yourself
-              <ArrowRight aria-hidden="true" />
-            </Primary>
-          </Actions>
-        </>
+        <Actions>
+          <Primary onClick={stage.next}>
+            Want to try it yourself?
+            <ArrowRight aria-hidden="true" />
+          </Primary>
+        </Actions>
       )}
     </>
   );
 }
 
-function YourTurn({ onReplay }: { onReplay: () => void }) {
-  const sandbox = useOpenSandbox();
-  const busy = sandbox.busy === LOOK_AROUND.key;
+export function YourTurn({ onReplay }: { onReplay: () => void }) {
   return (
     <>
-      <Title>Your turn. Everything here is live.</Title>
+      <Title>Your turn. It&apos;s all live.</Title>
       <Why>
-        Your own private WildWorth, with a community steward, a supporter and
-        the WildWorth team in it. Switch between them any time. No sign-up, play
-        money only.
+        Back a site, list your own land, or move time forward. No sign-up.
       </Why>
       <Actions>
-        <Primary
-          onClick={() => void sandbox.open(LOOK_AROUND)}
-          disabled={sandbox.busy !== null}
-        >
-          {busy ? <Spinner aria-hidden="true" /> : null}
-          Open my sandbox
-          {!busy && <ArrowRight aria-hidden="true" />}
+        <Primary href="/sandbox">
+          Try it yourself
+          <ArrowRight aria-hidden="true" />
         </Primary>
         <Button
           variant="link"
           className="h-auto px-0 text-machine-muted hover:text-machine-ink"
           onClick={onReplay}
         >
-          Watch the story again
+          Watch again
         </Button>
       </Actions>
-      {sandbox.error?.key === LOOK_AROUND.key && (
-        <p role="alert" className="mt-2 text-sm text-clay">
-          {sandbox.error.text}
-        </p>
-      )}
-      <h2 className="mt-8 mb-3 text-sm font-medium text-machine-muted">
-        Or start from any step of the loop
-      </h2>
-      <SandboxFlow sandbox={sandbox} />
     </>
   );
 }

@@ -7,7 +7,7 @@ import {
   HEALTH_FACTOR_FORMULA,
   trimDecimal,
 } from "@/lib/ipo";
-import { int } from "@/lib/prototype/format";
+import { int } from "@/lib/format";
 import { moneyText, unitPriceText } from "@/lib/trade";
 
 function Step({
@@ -88,7 +88,7 @@ export function IpoPriceSteps({
           <span className="text-sm font-medium">
             Opening price per unit
             <span className="block text-xs font-normal text-muted-foreground">
-              Sandbox price · play money
+              Sandbox price
             </span>
           </span>
           <span className="tabular text-3xl font-light" data-testid="ipo-price">

@@ -30,7 +30,7 @@ import {
   stewardHomeHref,
   toPolygonGeoJson,
 } from "@/lib/listing";
-import type { LatLng } from "@/lib/prototype/data";
+import type { LatLng } from "@/lib/site-data";
 
 const C = "66666666-6666-4666-8666-666666666666";
 const A = "33333333-3333-4333-8333-333333333333";
@@ -49,7 +49,9 @@ describe("links", () => {
   it("builds the agreed Steward links", () => {
     expect(listingHref(C)).toBe(`/steward/list?community=${C}`);
     expect(listingHref(C, A)).toBe(`/steward/list?community=${C}&asset=${A}`);
-    expect(ipoHref(A, C)).toBe(`/steward/assets/${A}/ipo?community=${C}`);
+    expect(ipoHref(A, C)).toBe(
+      `/steward/list?community=${C}&asset=${A}&step=offer`,
+    );
     expect(stewardHomeHref(C)).toBe(`/steward?community=${C}`);
     expect(stewardHomeHref(null)).toBe("/steward");
   });
@@ -778,10 +780,10 @@ describe("the form's fields", () => {
 });
 
 describe("more error wording", () => {
-  it("401 offers to sign in again", () => {
+  it("401 says the sandbox ended and offers a new one", () => {
     expect(listingFailure(err(401, "auth_required"))).toMatchObject({
-      signIn: true,
-      title: "Your session has ended",
+      sessionEnded: true,
+      title: "Your sandbox has ended",
     });
   });
 

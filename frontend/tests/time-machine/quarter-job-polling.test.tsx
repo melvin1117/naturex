@@ -15,6 +15,7 @@ import {
   vi,
 } from "vitest";
 
+import { TimeMachineSheet } from "@/components/shell/time-machine-sheet";
 import { TimeMachinePanel } from "@/components/time-machine/time-machine-screen";
 import { WorldProvider } from "@/components/world-provider";
 import { createDataLayer } from "@/lib/data-layer";
@@ -221,5 +222,49 @@ describe("polling a quarter job (#201)", () => {
     await pause();
     expect(backend.calls("GET /admin/time-machine")).toBe(1);
     expect(backend.calls("GET /assets")).toBe(1);
+  });
+});
+
+describe("a quarter running behind the closed Time Machine sheet", () => {
+  it("is still followed, and refreshes the page when it settles", async () => {
+    const backend = fakeBackend({
+      "GET /world": () => json(DEMO_ADMIN_WORLD),
+      "GET /admin/time-machine": sequence(
+        () => json(WITH_JOB),
+        () => json(STATE),
+      ),
+      [JOB_ROUTE]: sequence(
+        () => json(RUNNING),
+        () => json(quarterJob()),
+      ),
+    });
+    const layer = createDataLayer({
+      baseUrl: BASE,
+      fetch: backend.fetch,
+      createEventSource: createFakeEventSource,
+      pollIntervalMs: 60_000,
+    });
+    render(
+      <WorldProvider dataLayer={layer}>
+        <TimeMachineSheet />
+      </WorldProvider>,
+    );
+
+    // The trigger says a quarter is running, without opening the sheet.
+    expect(
+      await screen.findByRole("button", {
+        name: /Time Machine, a quarter is running/,
+      }),
+    ).toBeVisible();
+    // The job settles: every cached read refetches (prices, payouts, alerts, this state).
+    await waitFor(() => expect(backend.calls(JOB_ROUTE)).toBe(2));
+    await waitFor(() =>
+      expect(backend.calls("GET /admin/time-machine")).toBe(2),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Time Machine" }),
+    ).toBeVisible();
+    await pause();
+    expect(backend.calls(JOB_ROUTE)).toBe(2);
   });
 });

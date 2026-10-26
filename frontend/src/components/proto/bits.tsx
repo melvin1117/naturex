@@ -5,7 +5,7 @@ import { cn } from "cn";
 import { BoundaryMap, type BoundaryFrame } from "@/components/boundary-map";
 import { Lockup } from "@/components/brand";
 import type { LonLatRing } from "@/lib/boundary-map";
-import { money, signedPct } from "@/lib/prototype/format";
+import { money, signedPct } from "@/lib/format";
 
 /** The app's lockup in a header: the WildWorth mark and wordmark, then the app's name. */
 export function Wordmark({

@@ -16,8 +16,8 @@ import { modelLabel } from "@/lib/trace-view";
  * footnote that says what she runs on. The real chat and the scripted preview share these.
  */
 
-/** "Play money only; not advice." Bea never gives advice, and her world is play money. */
-export const NOT_ADVICE = "Play money only; not advice.";
+/** Bea explains; she never gives advice. */
+export const NOT_ADVICE = "Not advice.";
 
 export function BeaQuestion({ children }: { children: ReactNode }) {
   return (
@@ -143,7 +143,7 @@ export function BeaSuggestion({
 
 /**
  * The question field: paper, inset, with the send button inside it, and the footnote under it
- * (what Bea answers from, the model she runs on, that it's play money and never advice).
+ * (what Bea answers from, the model she runs on, and that it's never advice).
  */
 export function BeaComposer({
   value,
@@ -153,7 +153,6 @@ export function BeaComposer({
   placeholder,
   sendDisabled,
   maxLength,
-  tourAnchor,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -162,8 +161,6 @@ export function BeaComposer({
   placeholder: string;
   sendDisabled?: boolean;
   maxLength?: number;
-  /** Guided-tour anchor (`data-tour`) on the field. */
-  tourAnchor?: string;
 }) {
   const id = useId();
   return (
@@ -185,7 +182,6 @@ export function BeaComposer({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           autoComplete="off"
-          data-tour={tourAnchor}
           className="h-12 rounded-2xl pr-14 pl-4 shadow-none"
         />
         <Button

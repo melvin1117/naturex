@@ -475,9 +475,7 @@ def test_polling_resumes_a_quarter_whose_process_died(
 
 
 @requires_db
-def test_quarter_jobs_are_admin_only_and_stay_in_their_world(
-    client: TestClient, api_session: Session
-) -> None:
+def test_quarter_jobs_stay_in_their_world(client: TestClient, api_session: Session) -> None:
     sandbox = start_demo(client, api_session, persona_key="admin")
     job = client.post("/admin/simulate/quarter", json={"period": "2026Q4"}).json()
     other = create_world(api_session)
@@ -489,9 +487,10 @@ def test_quarter_jobs_are_admin_only_and_stay_in_their_world(
     assert (elsewhere.status_code, elsewhere.json()["detail"]) == (404, "not_found")
     assert (unknown.status_code, unknown.json()["detail"]) == (404, "not_found")
     assert client.get("/admin/time-machine").json()["quarter_job"] is None
-    start_demo(client, api_session, sandbox, persona_key="arjun")  # the demo investor
+    # Anyone acting in the sandbox follows its quarter (ADR-0008), the demo investor too.
+    start_demo(client, api_session, sandbox, persona_key="arjun")
     investor = client.get(f"/admin/simulate/quarter/{job['id']}")
-    assert (investor.status_code, investor.json()["detail"]) == (403, "admin_only")
+    assert (investor.status_code, investor.json()["id"]) == (200, job["id"])
     anonymous = TestClient(app).get(f"/admin/simulate/quarter/{job['id']}")
     assert anonymous.status_code == 401
 

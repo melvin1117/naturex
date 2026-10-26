@@ -34,11 +34,13 @@ from app.schemas import (
     AssetStatusOut,
     CachedExample,
     LandCoverOverlay,
+    ListingOfferOut,
     OverlayBounds,
     PricePoint,
     ReportOut,
     SiteViews,
 )
+from app.services import offers
 from app.services.asset_cards import (
     cards,
     change_pct,
@@ -183,7 +185,13 @@ def asset_detail(
             if not is_public(asset.status, asset.ipo_at) and visible_to(actor, asset)
             else None
         ),
+        offer=_offer(asset, actor),
     )
+
+
+def _offer(asset: Asset, actor: Actor | None) -> ListingOfferOut | None:
+    """The offer waiting for (or sent back by) the Reviewer, for those who manage the listing."""
+    return offers.offer_out(asset) if visible_to(actor, asset) else None
 
 
 def _image_version(image: AssetOverlay | AssetView) -> str:

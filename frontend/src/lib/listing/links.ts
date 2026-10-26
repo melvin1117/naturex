@@ -11,24 +11,35 @@ export function listingHref(
   return `/steward/list?${params.toString()}`;
 }
 
-/** The Steward app's Listings page (#233): every listing, by where it stands. */
-export function listingsHref(communityId: string | null): string {
-  return withCommunity("/steward/listings", communityId);
-}
-
+/** A community's page: every site by where it stands (Communities without one). */
 export function stewardHomeHref(communityId: string | null): string {
   return withCommunity("/steward", communityId);
 }
 
-/** The IPO screen (T64) for a listed asset. */
-export function ipoHref(assetId: string, communityId: string | null): string {
-  return withCommunity(`/steward/assets/${assetId}/ipo`, communityId);
+/** A rated listing's step in the listing flow (ADR-0008 §5): its proof, or its offer. */
+export type ListingStep = "details" | "prove" | "offer";
+
+function flowHref(
+  assetId: string,
+  communityId: string | null,
+  step: ListingStep,
+): string {
+  const params = new URLSearchParams();
+  if (communityId) params.set("community", communityId);
+  params.set("asset", assetId);
+  params.set("step", step);
+  return `/steward/list?${params.toString()}`;
 }
 
-/** The listing's verification screen (T70): documents, checklist and decision. */
+/** Where a listed site's opening offer is set and sent for review: the flow's Offer step. */
+export function ipoHref(assetId: string, communityId: string | null): string {
+  return flowHref(assetId, communityId, "offer");
+}
+
+/** Where a listing's land documents go: the flow's Prove step. */
 export function verifyHref(
   assetId: string,
   communityId: string | null,
 ): string {
-  return withCommunity(`/steward/assets/${assetId}/verify`, communityId);
+  return flowHref(assetId, communityId, "prove");
 }

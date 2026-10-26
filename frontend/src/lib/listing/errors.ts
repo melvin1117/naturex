@@ -29,8 +29,8 @@ export interface ListingFailure {
   retryAfterSeconds: number | null;
   /** The community has too many listings in progress: point to its home. */
   limitReached?: boolean;
-  /** The session ended: offer to sign in again (the draft is kept in this tab). */
-  signIn?: boolean;
+  /** The sandbox session ended: offer a link to a new one. */
+  sessionEnded?: boolean;
 }
 
 const STATUS_LABEL: Record<AssetDetail["status"], string> = {
@@ -113,10 +113,9 @@ export function listingFailure(error: ApiError): ListingFailure {
   if (error.status === 401)
     return {
       ...base,
-      title: "Your session has ended",
-      message:
-        "Sign in again to save. What you've entered stays in this tab meanwhile.",
-      signIn: true,
+      title: "Your sandbox has ended",
+      message: "Open a new one to keep going.",
+      sessionEnded: true,
     };
   switch (code) {
     case "listing_limit_reached":
@@ -124,7 +123,7 @@ export function listingFailure(error: ApiError): ListingFailure {
         ...base,
         title: "Too many listings in progress",
         message:
-          "Your community already has as many listings in progress (drafts, ratings and ones waiting for evidence) as it can. Withdraw one on the Listings page, or finish it, then try again.",
+          "Your community already has as many listings in progress (drafts, ratings and ones waiting for evidence) as it can. Withdraw a draft on your community's page, or finish one, then try again.",
         limitReached: true,
       };
     case "metrics_unavailable":

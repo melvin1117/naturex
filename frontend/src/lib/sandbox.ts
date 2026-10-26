@@ -8,12 +8,11 @@
 export const SANDBOX_BASE = "/sandbox";
 export const SANDBOX_API_BASE = "/api/sandbox";
 
-/** First path segments the sandbox mirrors; anything else (`/judge`, `/login`) stays as is. */
+/** First path segments the sandbox mirrors; anything else (`/how`, `/dev`) stays as is. */
 const MIRRORED = new Set([
   "",
   "asset",
   "portfolio",
-  "ai",
   "trace",
   "admin",
   "steward",

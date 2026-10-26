@@ -15,7 +15,7 @@ import { GradeBadge } from "@/components/proto/grade";
 import { HealthRing } from "@/components/proto/health-ring";
 import { Button } from "@/components/ui/button";
 import { countryName, type MarketCard } from "@/lib/market-cards";
-import { ha, money, price } from "@/lib/prototype/format";
+import { ha, money, price } from "@/lib/format";
 
 const TREND_TEXT = {
   improving: "Health improving",
@@ -43,38 +43,33 @@ export function MiniPrice({
   stroke?: string;
 }) {
   const points = prices.map((p) => ({ p }));
+  if (points.length < 2) return null;
   return (
     <div className={cn("h-12 w-full", className)} aria-hidden="true">
-      {points.length < 2 ? (
-        <div className="grid h-full place-items-center rounded-xl border border-dashed text-xs text-muted-foreground">
-          The price chart starts with the first trade
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
-            data={points}
-            margin={{ top: 4, bottom: 0, left: 0, right: 0 }}
-            // Decorative (the card states the price): no keyboard stop inside aria-hidden.
-            accessibilityLayer={false}
-          >
-            <defs>
-              <linearGradient id={`mini-${id}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={stroke} stopOpacity={0.22} />
-                <stop offset="100%" stopColor={stroke} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <YAxis hide domain={["dataMin", "dataMax"]} />
-            <Area
-              type="monotone"
-              dataKey="p"
-              stroke={stroke}
-              strokeWidth={1.5}
-              fill={`url(#mini-${id})`}
-              isAnimationActive={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      )}
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart
+          data={points}
+          margin={{ top: 4, bottom: 0, left: 0, right: 0 }}
+          // Decorative (the card states the price): no keyboard stop inside aria-hidden.
+          accessibilityLayer={false}
+        >
+          <defs>
+            <linearGradient id={`mini-${id}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={stroke} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <YAxis hide domain={["dataMin", "dataMax"]} />
+          <Area
+            type="monotone"
+            dataKey="p"
+            stroke={stroke}
+            strokeWidth={1.5}
+            fill={`url(#mini-${id})`}
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -146,7 +141,9 @@ export function SiteCard({ card }: { card: MarketCard }) {
       </div>
       <div className="flex flex-1 flex-col gap-4 p-5">
         <div>
-          <h3 className="text-lg leading-tight font-semibold">{card.name}</h3>
+          <h3 className="font-serif text-2xl leading-[1.1] tracking-tight text-balance">
+            {card.name}
+          </h3>
           <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
             <MapPin className="size-3.5" aria-hidden="true" />
             {place(card)}
@@ -154,7 +151,7 @@ export function SiteCard({ card }: { card: MarketCard }) {
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <div className="text-xs text-muted-foreground">Stake price</div>
+            <div className="text-xs text-muted-foreground">Price a unit</div>
             <div className="tabular mt-0.5 text-xl font-light">
               {card.price === null ? "—" : price(card.price)}
             </div>
@@ -208,7 +205,6 @@ export function FeatureSiteCard({ card }: { card: MarketCard }) {
     <section
       aria-labelledby={`feature-${card.id}`}
       className="relative isolate overflow-hidden rounded-[2rem] text-white shadow-lift"
-      data-tour="feature-card"
     >
       <SiteBackdrop src={card.imageUrl} outline={card.outline} />
       <div className="relative grid gap-8 p-6 sm:p-8 lg:grid-cols-[auto_1fr_auto] lg:items-center lg:gap-10 lg:p-10">
@@ -256,9 +252,7 @@ export function FeatureSiteCard({ card }: { card: MarketCard }) {
         <div className="flex flex-col gap-4 rounded-3xl bg-white/12 p-5 backdrop-blur-md lg:w-64">
           {card.grade && <GradeBadge grade={card.grade} size="lg" />}
           <div>
-            <div className="text-xs text-white/75">
-              Stake price · play money
-            </div>
+            <div className="text-xs text-white/75">Price a unit</div>
             <div className="tabular text-3xl font-light">
               {card.price === null ? "—" : price(card.price)}
             </div>

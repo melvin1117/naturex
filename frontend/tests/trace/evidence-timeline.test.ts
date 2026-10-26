@@ -33,6 +33,7 @@ function news(overrides: Partial<NewsItem>): NewsItem {
     severity: 3,
     kind: "encroachment",
     sourceLabel: "Found by News Scout",
+    origin: "news",
     url: "https://example.com/a",
     ...overrides,
   };
@@ -53,8 +54,11 @@ describe("evidence timeline (a recorded investigated run)", () => {
         news({ id: "a", date: "2026-07-14" }),
         news({ id: "b", date: "2026-07-30", direction: 1 }),
         news({ id: "c", date: "2019-01-01" }),
+        news({ id: "d", date: "2026-12-05" }),
+        news({ id: "e", date: "2099-01-05" }),
       ],
       [],
+      "2027-01",
     );
     expect(t.bands).toEqual([
       expect.objectContaining({
@@ -69,11 +73,29 @@ describe("evidence timeline (a recorded investigated run)", () => {
       expect.objectContaining({ month: "2026-07", direction: -1 }),
     ]);
     expect(t.pins[0]!.items.map((i) => i.id)).toEqual(["a", "b"]);
+    // Older than the series: dropped. Newer (this quarter, a simulated event): listed, no pin.
+    // Later than this month (a bad date from the web): dropped.
     expect(t.entries.map((e) => `${e.type}:${e.month}`)).toEqual([
       "signal:2025-06",
       "news:2026-07",
       "news:2026-07",
+      "news:2026-12",
     ]);
+  });
+
+  it("lists every dated item for a report without a series", () => {
+    const t = evidenceTimeline(
+      [],
+      [],
+      [
+        news({ id: "a", date: "2024-03-02" }),
+        news({ id: "b", date: "2026-07-14" }),
+      ],
+      [],
+      "2026-10",
+    );
+    expect(t.pins).toEqual([]);
+    expect(t.entries.map((e) => e.type === "news" && e.id)).toEqual(["a", "b"]);
   });
 
   it("marks what Super's follow-ups found and read", () => {
@@ -100,8 +122,8 @@ describe("evidence timeline (a recorded investigated run)", () => {
     expect(t.followUps[1]).toMatch(/^Read “.+”: names the site/);
   });
 
-  it("is empty without a series, and words signals plainly", () => {
-    expect(evidenceTimeline([], signals, [news({})], followUps)).toMatchObject({
+  it("has no bands or pins without a series, and words signals plainly", () => {
+    expect(evidenceTimeline([], signals, [], followUps)).toMatchObject({
       bands: [],
       pins: [],
       entries: [],

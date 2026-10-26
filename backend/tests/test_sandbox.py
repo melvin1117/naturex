@@ -25,6 +25,7 @@ from app.market.revenue import pay_quarter
 from app.models import (
     Alert,
     Asset,
+    AssetView,
     ChunkSource,
     Community,
     CommunityMember,
@@ -32,6 +33,8 @@ from app.models import (
     DocChunk,
     Event,
     EventSource,
+    FieldPhoto,
+    FieldPhotoBlob,
     Holding,
     LedgerEntry,
     LedgerKind,
@@ -228,6 +231,88 @@ def test_template_holdings_prices_and_ledger_are_copied_and_remapped(session: Se
     copied_report = session.exec(select(Report).where(Report.asset_id == wetland.id)).one()
     assert copied[0].ref_id == copied_report.id
     assert verify(copied).valid, "a copied chain must still verify"
+
+
+@requires_db
+def test_template_field_photos_views_and_report_citations_are_copied_and_remapped(
+    session: Session,
+) -> None:
+    """Seeded evidence reaches every sandbox, and a report's JSON names the copies, not the
+    template's rows."""
+    rosa = session.exec(
+        select(User).where(User.world_id == WORLD_ID, User.persona_key == COMMUNITY_PERSONA.key)
+    ).one()
+    event = Event(world_id=WORLD_ID, asset_id=TEMPLATE_ASSET, source=EventSource.EVIDENCE)
+    session.add(event)
+    session.flush()
+    photo = FieldPhoto(
+        world_id=WORLD_ID,
+        asset_id=TEMPLATE_ASSET,
+        uploaded_by=rosa.id,
+        size_bytes=3,
+        width=1,
+        height=1,
+        sha256="a" * 64,
+        gps_check="inside",
+        gps_distance_m=0,
+        date_check="ok",
+        analysis_status="completed",
+        validated=True,
+        event_id=event.id,
+        method_version="test",
+    )
+    session.add(photo)
+    session.flush()
+    session.add(
+        FieldPhotoBlob(
+            photo_id=photo.id, world_id=WORLD_ID, asset_id=TEMPLATE_ASSET, content=b"img"
+        )
+    )
+    day = datetime(2026, 1, 1, tzinfo=UTC).date()
+    later = day + timedelta(days=30)
+    session.add(
+        AssetView(
+            asset_id=TEMPLATE_ASSET,
+            world_id=WORLD_ID,
+            geometry_sha256="b" * 64,
+            data_version="2026Q3",
+            before_webp=b"before",
+            after_webp=b"after",
+            width=1,
+            height=1,
+            south=0,
+            west=0,
+            north=1,
+            east=1,
+            before_start=day,
+            before_end=later,
+            after_start=later,
+            after_end=later + timedelta(days=30),
+        )
+    )
+    report = session.exec(select(Report).where(Report.asset_id == TEMPLATE_ASSET)).one()
+    report.auditor_json = {
+        **(report.auditor_json or {}),
+        "evidence": [{"event_id": str(event.id), "photo_id": str(photo.id), "note": "kept"}],
+    }
+    session.add(report)
+    session.commit()
+
+    world = create_world(session)
+
+    copied = session.exec(select(FieldPhoto).where(FieldPhoto.world_id == world.id)).one()
+    copied_event = session.get_one(Event, copied.event_id)
+    copied_rosa = session.get_one(User, copied.uploaded_by)
+    assert copied.id != photo.id and copied_event.world_id == world.id
+    assert (copied_rosa.world_id, copied_rosa.persona_key) == (world.id, COMMUNITY_PERSONA.key)
+    blob = session.exec(select(FieldPhotoBlob).where(FieldPhotoBlob.world_id == world.id)).one()
+    assert (blob.photo_id, blob.asset_id, blob.content) == (copied.id, copied.asset_id, b"img")
+    view = session.exec(select(AssetView).where(AssetView.world_id == world.id)).one()
+    assert (view.asset_id, view.after_webp) == (copied.asset_id, b"after")
+    copied_report = session.exec(select(Report).where(Report.asset_id == copied.asset_id)).one()
+    assert (copied_report.auditor_json or {})["evidence"] == [
+        {"event_id": str(copied_event.id), "photo_id": str(copied.id), "note": "kept"}
+    ]
 
 
 # --- Isolation -------------------------------------------------------------------------------

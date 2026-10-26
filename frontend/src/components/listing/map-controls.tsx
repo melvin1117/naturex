@@ -18,7 +18,7 @@ import {
 import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "cn";
 
-import type { MapFocus } from "@/components/proto/draw-map";
+import type { MapFocus } from "@/lib/listing/boundary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

@@ -7,9 +7,9 @@ from decimal import Decimal
 import pytest
 from alembic import command
 from alembic.script import ScriptDirectory
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import Connection, create_engine, inspect, text
 from sqlalchemy.exc import DBAPIError
-from sqlmodel import Session, select
+from sqlmodel import Session, SQLModel, select
 
 from app.config import get_settings
 from app.models import (
@@ -227,6 +227,20 @@ DEFINITIONS_READING = """
 """
 
 
+def add_newer_columns(conn: Connection) -> None:
+    """Adds the model columns an older schema lacks (nullable, no defaults), so the seed's ORM
+    can write to it; only inside a transaction the caller rolls back."""
+    tables = inspect(conn)
+    for table in SQLModel.metadata.sorted_tables:
+        if not tables.has_table(table.name):
+            continue
+        present = {column["name"] for column in tables.get_columns(table.name)}
+        for column in table.columns:
+            if column.name not in present:
+                kind = column.type.compile(dialect=conn.dialect)
+                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {kind}'))
+
+
 @requires_db
 def test_0030_renames_the_ledger_delete_setting_and_nothing_else() -> None:
     """0030 rewrites every trigger function that reads the opt-in, changing only the setting's
@@ -246,6 +260,7 @@ def test_0030_renames_the_ledger_delete_setting_and_nothing_else() -> None:
         with engine.connect() as conn:
             outer = conn.begin()
             try:
+                add_newer_columns(conn)
                 with Session(bind=conn, join_transaction_mode="create_savepoint") as session:
                     seed(session)
                 attempt = conn.begin_nested()

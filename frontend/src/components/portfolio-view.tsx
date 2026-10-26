@@ -1,36 +1,38 @@
 "use client";
 
-import { Leaf, RefreshCwIcon, Sprout, Trees } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  type LucideIcon,
+  Minus,
+  RefreshCwIcon,
+} from "lucide-react";
 import Link from "@/components/app-link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "cn";
 
-import { AlertsList } from "@/components/alerts-list";
-import { ICON_FRAME } from "@/components/boundary-map";
-import { CopilotChat } from "@/components/copilot-chat";
+import {
+  BackThisSiteIcon,
+  CarbonIcon,
+  HabitatIcon,
+  WorthRangeIcon,
+  YourStakesIcon,
+} from "@/components/icons";
 import { CountTo } from "@/components/live-number";
 import { PortfolioBodySkeleton } from "@/components/page-skeletons";
-import { Delta, SiteThumb, Stat } from "@/components/proto/bits";
+import { SiteThumb } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
-import { Portfolio as PrototypePortfolio } from "@/components/proto/portfolio";
-import { Panel } from "@/components/proto/report-panels";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { AssetCard, HoldingOut, PortfolioOut } from "@/lib/api/types";
 import { useAssets, usePortfolio, useWorld } from "@/lib/hooks";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { siteIcon } from "@/lib/market-cards";
-import type { Grade } from "@/lib/prototype/data";
-import { GRADE_ORDER, int } from "@/lib/prototype/format";
+import type { Grade } from "@/lib/site-data";
+import { changePct, GRADE_ORDER, ha, int, tonnesCo2 } from "@/lib/format";
+import { stakeChart } from "@/lib/stake-chart";
 import {
   assetHref,
   decimal,
@@ -39,34 +41,23 @@ import {
   money,
   moneyText,
   signedMoneyText,
+  unitPrice,
   unitPriceText,
   type FreshFill,
 } from "@/lib/trade";
 
-/**
- * `/portfolio`: the signed-in account's real stakes. `<RequireAccount allowPrototypeDemo>`
- * also lets an anonymous visitor in the scripted demo through; they see the prototype's
- * scripted portfolio until T65 gives the demo real sessions.
- */
+/** `/portfolio`: Your stakes, for whoever the visitor is in their sandbox. */
 export function PortfolioScreen() {
-  const { world } = useWorld();
-  return world?.me ? (
-    <PortfolioView name={world.me.name} />
-  ) : (
-    <PrototypePortfolio />
-  );
+  return <PortfolioView />;
 }
 
-export function PortfolioView({ name }: { name: string }) {
+export function PortfolioView() {
   const portfolio = usePortfolio();
   return (
     <div className="mx-auto max-w-7xl px-4 pt-10 sm:px-6">
       <h1 className="font-serif text-5xl leading-none tracking-tight sm:text-6xl">
         Your stakes
       </h1>
-      <p className="mt-3 text-muted-foreground">
-        {name}&apos;s sandbox account. Everything here is play money.
-      </p>
       {portfolio.data ? (
         <PortfolioBody data={portfolio.data} />
       ) : portfolio.error ? (
@@ -92,111 +83,260 @@ export function PortfolioView({ name }: { name: string }) {
   );
 }
 
+/** "+$12.30 (+2.9%)" with an arrow, "−$4.50 (−1.1%)", or "No change": direction in a sign, an
+ * icon and (for screen readers) a word, never colour alone (DESIGN.md). */
+function Change({
+  amount,
+  pct = null,
+  className,
+}: {
+  amount: string | null | undefined;
+  pct?: number | null;
+  className?: string;
+}) {
+  const n = decimal(amount);
+  if (n === null)
+    return (
+      <span className={cn("tabular", className)}>
+        —<span className="sr-only">not priced yet</span>
+      </span>
+    );
+  if (n === 0)
+    return (
+      <span
+        className={cn(
+          "tabular inline-flex items-center gap-1 text-muted-foreground",
+          className,
+        )}
+      >
+        <Minus className="size-3.5" aria-hidden="true" />
+        No change
+      </span>
+    );
+  const Arrow = n > 0 ? ArrowUpRight : ArrowDownRight;
+  const sign = n > 0 ? "+" : "−";
+  return (
+    <span
+      className={cn(
+        "tabular inline-flex items-center gap-1",
+        n > 0 ? "text-lime-ink" : "text-clay-ink",
+        className,
+      )}
+    >
+      <Arrow className="size-3.5 shrink-0" aria-hidden="true" />
+      <span className="sr-only">{n > 0 ? "up" : "down"} </span>
+      {signedMoneyText(amount)}
+      {pct !== null && " "}
+      {pct !== null && (
+        <span>
+          ({Math.abs(pct) < 0.01 ? "" : sign}
+          {changePct(pct)})
+        </span>
+      )}
+    </span>
+  );
+}
+
 function PortfolioBody({ data }: { data: PortfolioOut }) {
   const assets = useAssets();
   const cards = new Map((assets.data ?? []).map((card) => [card.id, card]));
-  const pnlPct = decimal(data.unrealized_pnl_pct);
+  const sites = data.holdings.length;
   // A trade made a moment ago on an asset page: show its stake changing here (#216 WP2).
   const account = useWorld().world?.me?.id;
   const [fresh] = useState(() => freshFills(account));
   useEffect(() => forgetFills(fresh.values()), [fresh]);
+  if (sites === 0)
+    return (
+      <>
+        <p className="mt-5 max-w-3xl text-xl leading-snug text-pretty text-muted-foreground sm:text-2xl">
+          You have{" "}
+          <span className="tabular text-foreground">
+            {moneyText(data.cash_balance)}
+          </span>{" "}
+          to back living land.
+        </p>
+        {/* Sold everything: how it went still matters. */}
+        {decimal(data.since_start) !== 0 && (
+          <p className="mt-2 flex flex-wrap items-center gap-x-1.5 text-muted-foreground">
+            <Change amount={data.since_start} className="font-medium" /> since
+            you started with {moneyText(data.starting_cash)}
+          </p>
+        )}
+        <div className="mt-10 grid place-items-center rounded-3xl border border-dashed border-foreground/20 px-6 py-16 text-center">
+          <YourStakesIcon size={32} aria-hidden="true" />
+          <p className="mt-4 max-w-md text-pretty text-muted-foreground">
+            Back a site on the Marketplace and you&apos;ll follow its health
+            here, rating by rating.
+          </p>
+          <Button asChild className="mt-6">
+            <Link href="/">Back your first site</Link>
+          </Button>
+        </div>
+      </>
+    );
   return (
     <>
-      <dl className="mt-8 grid gap-4 rounded-3xl bg-card p-6 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
-        <Stat
-          label="Play money available"
-          value={moneyText(data.cash_balance)}
-        />
-        <Stat
-          label="Value of stakes"
-          value={moneyText(data.holdings_value)}
-          sub={
-            pnlPct !== null && (
-              <Delta value={pnlPct} suffix="vs cost" className="text-xs" />
-            )
-          }
-        />
-        <Stat
-          label="Total"
-          value={moneyText(data.total_value)}
-          sub={`${signedMoneyText(data.since_start)} since you started with ${moneyText(
-            data.starting_cash,
-          )}`}
-        />
-        <Stat
-          label="Change in value"
-          value={signedMoneyText(data.unrealized_pnl)}
-          sub="on the stakes you hold, at today's prices"
-        />
-      </dl>
-
-      <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
-        <div className="min-w-0 space-y-8">
-          <Panel title="Stakes" headingLevel="h2">
-            {data.holdings.length === 0 ? (
-              <div className="py-8 text-center">
-                <Sprout
-                  className="mx-auto size-8 text-lime-ink"
-                  aria-hidden="true"
-                />
-                <p className="mt-3 text-muted-foreground">
-                  No stakes yet. Every site on Rated sites is open for
-                  play-money stakes.
-                </p>
-                <Button asChild className="mt-4">
-                  <Link href="/">Back your first site</Link>
-                </Button>
-              </div>
-            ) : (
-              <Holdings holdings={data.holdings} cards={cards} fresh={fresh} />
-            )}
-          </Panel>
-          <Suspense fallback={null}>
-            <CopilotChat />
-          </Suspense>
-        </div>
-        <div className="min-w-0 space-y-8">
-          <Panel title="WildWatch alerts" headingLevel="h2">
-            <AlertsList empty="No alerts yet. When a site you back is re-rated or in the news, you'll hear about it here." />
-          </Panel>
-          <ImpactCard data={data} />
-        </div>
+      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+        <MoneyPanel data={data} />
+        <Impact data={data} />
       </div>
+      <Holdings
+        holdings={data.holdings}
+        cards={cards}
+        cardsPending={!assets.data && !assets.error}
+        fresh={fresh}
+      />
     </>
   );
 }
 
-/** Phones get a card per stake (site, units, value, change); wider screens get the table. */
+/**
+ * Where the visitor's play money stands: the total against what they started with, split
+ * between their stakes (what they paid, what those are worth now) and their sandbox balance.
+ */
+function MoneyPanel({ data }: { data: PortfolioOut }) {
+  const total = decimal(data.total_value) ?? 0;
+  const inStakes = decimal(data.holdings_value) ?? 0;
+  const balance = decimal(data.cash_balance) ?? 0;
+  // Each part's share of the total; a sliver of stakes still shows on the bar.
+  const stakesPct =
+    total > 0 && inStakes > 0
+      ? balance > 0
+        ? Math.min(98, Math.max(2, Math.round((inStakes / total) * 100)))
+        : 100
+      : 0;
+  // The API's totals count priced stakes only: say so when one has no price yet.
+  const unpriced = data.holdings.filter((h) => h.market_value === null).length;
+  return (
+    <section
+      aria-labelledby="money-title"
+      className="rounded-3xl bg-card p-6 shadow-soft sm:p-8"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="money-title" className="text-base font-semibold">
+          Your play money
+        </h2>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/">
+            <BackThisSiteIcon aria-hidden="true" />
+            Back another site
+          </Link>
+        </Button>
+      </div>
+
+      <p className="mt-5 text-sm text-muted-foreground">Total now</p>
+      <p className="tabular mt-1 text-5xl leading-none font-light tracking-[-0.03em]">
+        {moneyText(data.total_value)}
+      </p>
+      <p className="mt-2 flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
+        <Change amount={data.since_start} className="font-medium" /> since you
+        started with {moneyText(data.starting_cash)}
+      </p>
+
+      <div
+        aria-hidden="true"
+        className="mt-7 flex h-3 gap-1 overflow-hidden rounded-full"
+      >
+        {stakesPct > 0 && (
+          <span
+            className="rounded-full bg-primary"
+            style={{ width: `${stakesPct}%` }}
+          />
+        )}
+        {stakesPct < 100 && (
+          <span className="flex-1 rounded-full bg-lichen ring-1 ring-foreground/15 ring-inset" />
+        )}
+      </div>
+
+      <dl className="mt-5 grid gap-6 sm:grid-cols-2">
+        <div>
+          <dt className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span
+              aria-hidden="true"
+              className="size-2.5 rounded-full bg-primary"
+            />
+            In stakes
+          </dt>
+          <dd className="tabular mt-1.5 text-3xl font-light tracking-[-0.03em]">
+            {moneyText(data.holdings_value)}
+          </dd>
+          <dd className="mt-1.5 text-sm text-muted-foreground">
+            You paid{" "}
+            <span className="tabular text-foreground">
+              {moneyText(data.cost_basis)}
+            </span>
+          </dd>
+          <dd className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
+            <Change
+              amount={data.unrealized_pnl}
+              pct={decimal(data.unrealized_pnl_pct)}
+            />{" "}
+            since you bought
+          </dd>
+          {unpriced > 0 && (
+            <dd className="mt-1 text-xs text-muted-foreground">
+              Not counting {unpriced} {unpriced === 1 ? "stake" : "stakes"}{" "}
+              without a price yet.
+            </dd>
+          )}
+        </div>
+        <div>
+          <dt className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span
+              aria-hidden="true"
+              className="size-2.5 rounded-full bg-lichen ring-1 ring-foreground/15"
+            />
+            Sandbox balance
+          </dt>
+          <dd className="tabular mt-1.5 text-3xl font-light tracking-[-0.03em]">
+            {moneyText(data.cash_balance)}
+          </dd>
+          <dd className="mt-1.5 text-sm text-muted-foreground">
+            Ready to back more sites
+          </dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
 function Holdings({
   holdings,
   cards,
+  cardsPending,
   fresh,
 }: {
   holdings: HoldingOut[];
   cards: Map<string, AssetCard>;
+  /** The sites' cards (pictures, grades, prices) are still on their way. */
+  cardsPending: boolean;
   fresh: Map<string, FreshFill>;
 }) {
   return (
-    <>
-      <ul className="divide-y divide-border sm:hidden" aria-label="Stakes">
+    <section aria-labelledby="stakes-title" className="mt-12">
+      <h2
+        id="stakes-title"
+        className="font-serif text-3xl leading-tight tracking-tight"
+      >
+        How each stake is doing
+      </h2>
+      <ul aria-label="Stakes" className="mt-5 space-y-3">
         {holdings.map((h) => (
-          <HoldingCard
+          <StakeRow
             key={h.asset_id}
             holding={h}
             card={cards.get(h.asset_id)}
+            cardPending={cardsPending}
             fill={fillFor(h, fresh)}
           />
         ))}
       </ul>
-      <div className="-mx-6 hidden overflow-x-auto px-6 sm:block">
-        <HoldingsTable holdings={holdings} cards={cards} fresh={fresh} />
-      </div>
       {showsMap(holdings, cards) && (
         <p className="mt-3 text-[11px] text-muted-foreground">
           Site maps: {IMAGERY_ATTRIBUTION}
         </p>
       )}
-    </>
+    </section>
   );
 }
 
@@ -238,50 +378,200 @@ function Units({
   return <CountTo value={h.shares} from={fill?.unitsBefore} format={int} />;
 }
 
-function HoldingCard({
+/**
+ * One stake: the site (picture, name, grade, units), its latest prices against what was paid,
+ * then what was paid, what it's worth now and the change. A row from `lg`, stacked below it.
+ */
+function StakeRow({
   holding: h,
   card,
+  cardPending,
   fill,
 }: {
   holding: HoldingOut;
   card: AssetCard | undefined;
+  cardPending: boolean;
   fill?: FreshFill;
 }) {
-  const pnlPct = decimal(h.unrealized_pnl_pct);
+  const icon = useMemo(() => siteIcon(card), [card]);
+  const grade = asGrade(card?.grade);
+  const health = decimal(card?.health_score);
   return (
     <li
       className={cn(
-        "-mx-2 flex items-center gap-3 rounded-2xl px-2 py-3 first:pt-0 last:pb-0",
+        "group relative grid gap-4 rounded-3xl bg-card p-4 shadow-soft transition-shadow focus-within:shadow-lift hover:shadow-lift sm:p-5",
+        "lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.6fr)] lg:items-center lg:gap-6",
         fill && "ww-wash",
       )}
       data-fresh={fill ? "" : undefined}
     >
-      <SiteIcon card={card} />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <Link
-            href={assetHref(h.asset_id)}
-            className="font-medium hover:underline"
-          >
-            {h.asset_name}
-          </Link>
-          {fill && <FreshBadge fill={fill} />}
+      <div className="flex min-w-0 items-center gap-4">
+        <div className="size-16 shrink-0 overflow-hidden rounded-2xl sm:size-20">
+          {icon ? (
+            <SiteThumb
+              siteKey={icon.siteKey}
+              src={icon.src}
+              outline={icon.outline}
+              alt=""
+              credit={false}
+              className="size-full"
+            />
+          ) : (
+            <div className="grid size-full place-items-center bg-lichen">
+              <HabitatIcon size={24} aria-hidden="true" />
+            </div>
+          )}
         </div>
-        <p className="tabular text-xs text-muted-foreground">
-          <Units holding={h} fill={fill} /> {h.shares === 1 ? "unit" : "units"}{" "}
-          · {unitPriceText(h.mark_price)}
-        </p>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h3 className="font-serif text-xl leading-[1.1] tracking-tight text-balance break-words sm:text-2xl">
+              <Link
+                href={assetHref(h.asset_id)}
+                className="outline-none after:absolute after:inset-0 after:rounded-3xl focus-visible:after:ring-2 focus-visible:after:ring-ring"
+              >
+                {h.asset_name}
+              </Link>
+            </h3>
+            {fill && <FreshBadge fill={fill} />}
+          </div>
+          <p className="tabular mt-1 text-sm text-muted-foreground">
+            <Units holding={h} fill={fill} />{" "}
+            {h.shares === 1 ? "unit" : "units"} · {unitPriceText(h.mark_price)}{" "}
+            a unit
+          </p>
+          {grade && (
+            <GradeBadge
+              grade={grade}
+              health={health ?? undefined}
+              showLabel
+              size="sm"
+              className="mt-2"
+            />
+          )}
+        </div>
       </div>
-      <dl className="text-right">
-        <dt className="sr-only">Value</dt>
-        <dd className="tabular font-medium">{moneyText(h.market_value)}</dd>
-        <dt className="sr-only">Change in value</dt>
-        <dd className="tabular text-xs">
-          {signedMoneyText(h.unrealized_pnl)}
-          {pnlPct !== null && <Delta value={pnlPct} className="ml-1 text-xs" />}
-        </dd>
+
+      {card ? (
+        <StakeChart
+          prices={card.sparkline ?? []}
+          paid={h.avg_cost}
+          name={h.asset_name}
+        />
+      ) : cardPending ? (
+        <Skeleton className="h-14 w-full" />
+      ) : (
+        // No card for this site (its list failed): no chart, and no claim about why.
+        <span aria-hidden="true" />
+      )}
+
+      <dl className="grid grid-cols-3 gap-3">
+        <div>
+          <dt className="text-xs text-muted-foreground">You paid</dt>
+          <dd className="tabular mt-1 text-lg font-light">
+            {moneyText(h.cost_basis)}
+          </dd>
+          <dd className="tabular text-xs text-muted-foreground">
+            {unitPriceText(h.avg_cost)} a unit
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Worth now</dt>
+          <dd className="tabular mt-1 text-lg font-light">
+            {moneyText(h.market_value)}
+            {h.market_value === null && (
+              <span className="sr-only">not priced yet</span>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Change in value</dt>
+          <dd className="mt-1 text-sm">
+            <Change
+              amount={h.unrealized_pnl}
+              pct={decimal(h.unrealized_pnl_pct)}
+              className="flex-wrap font-medium"
+            />
+          </dd>
+        </div>
       </dl>
     </li>
+  );
+}
+
+const CHART = { width: 240, height: 56 };
+
+/**
+ * The stake's latest prices (the card's, up to 30), the line filled lime as a price fill, with
+ * a dashed line at the average price paid: above it, the stake is worth more than it cost.
+ */
+function StakeChart({
+  prices,
+  paid,
+  name,
+}: {
+  prices: readonly string[];
+  paid: string | null | undefined;
+  name: string;
+}) {
+  const values = useMemo(
+    () => prices.map(decimal).filter((v): v is number => v !== null),
+    [prices],
+  );
+  const paidPrice = decimal(paid);
+  const chart = useMemo(
+    () => stakeChart(values, paidPrice, CHART),
+    [values, paidPrice],
+  );
+  if (!chart)
+    return (
+      <p className="text-xs text-muted-foreground lg:text-center">
+        Its stake price chart starts once it has a few prices.
+      </p>
+    );
+  const first = values[0]!;
+  const last = values[values.length - 1]!;
+  return (
+    <figure className="min-w-0">
+      <svg
+        viewBox={`0 0 ${CHART.width} ${CHART.height}`}
+        preserveAspectRatio="none"
+        className="block h-14 w-full overflow-visible"
+        role="img"
+        aria-label={`${name}: its latest ${values.length} prices, from ${unitPrice(first)} to ${unitPrice(last)} a unit${paidPrice === null ? "" : `; you paid ${unitPrice(paidPrice)} a unit`}.`}
+      >
+        <path d={chart.area} className="fill-lime/25" />
+        {chart.paidY !== null && (
+          <line
+            x1="0"
+            x2={CHART.width}
+            y1={chart.paidY}
+            y2={chart.paidY}
+            className="stroke-foreground/45"
+            strokeWidth="1"
+            strokeDasharray="3 3"
+            vectorEffect="non-scaling-stroke"
+          />
+        )}
+        <path
+          d={chart.line}
+          fill="none"
+          className="stroke-primary"
+          strokeWidth="1.75"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+      {chart.paidY !== null && (
+        <figcaption className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span
+            aria-hidden="true"
+            className="w-3 border-t border-dashed border-foreground/45"
+          />
+          What you paid, against its latest prices
+        </figcaption>
+      )}
+    </figure>
   );
 }
 
@@ -293,180 +583,91 @@ function showsMap(holdings: HoldingOut[], cards: Map<string, AssetCard>) {
   });
 }
 
-function SiteIcon({ card }: { card: AssetCard | undefined }) {
-  const icon = useMemo(() => siteIcon(card), [card]);
-  return icon ? (
-    <SiteThumb
-      siteKey={icon.siteKey}
-      src={icon.src}
-      outline={icon.outline}
-      alt=""
-      frame={ICON_FRAME}
-      credit={false}
-      className="size-10 shrink-0 rounded-xl"
-    />
-  ) : (
-    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-lichen">
-      <Leaf className="size-4 text-lime-ink" aria-hidden="true" />
-    </span>
-  );
+/** A share of land: hectares, or square metres below a tenth of one. */
+function area(hectares: number): string {
+  if (hectares >= 100) return ha(hectares);
+  return hectares >= 0.1
+    ? `${hectares.toFixed(2)} ha`
+    : `${int(Math.max(1, Math.round(hectares * 10_000)))} m²`;
 }
 
-function HoldingsTable({
-  holdings,
-  cards,
-  fresh,
-}: {
-  holdings: HoldingOut[];
-  cards: Map<string, AssetCard>;
-  fresh: Map<string, FreshFill>;
-}) {
-  return (
-    <Table scrollLabel="Your stakes, by site">
-      <TableHeader>
-        <TableRow>
-          <TableHead>Site</TableHead>
-          <TableHead>Grade</TableHead>
-          <TableHead className="text-right">Units</TableHead>
-          <TableHead className="text-right">Avg cost</TableHead>
-          <TableHead className="text-right">Price</TableHead>
-          <TableHead className="text-right">Value</TableHead>
-          <TableHead className="text-right">Change</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {holdings.map((h) => {
-          const card = cards.get(h.asset_id);
-          const grade = asGrade(card?.grade);
-          const pnlPct = decimal(h.unrealized_pnl_pct);
-          const fill = fillFor(h, fresh);
-          return (
-            <TableRow
-              key={h.asset_id}
-              className={cn(fill && "ww-wash")}
-              data-fresh={fill ? "" : undefined}
-            >
-              <TableCell>
-                <div className="flex items-center gap-3">
-                  <Link
-                    href={assetHref(h.asset_id)}
-                    className="flex items-center gap-3 font-medium hover:underline"
-                  >
-                    <SiteIcon card={card} />
-                    {h.asset_name}
-                  </Link>
-                  {fill && <FreshBadge fill={fill} />}
-                </div>
-              </TableCell>
-              <TableCell>
-                {grade ? (
-                  <GradeBadge grade={grade} size="sm" />
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </TableCell>
-              <TableCell className="tabular text-right">
-                <Units holding={h} fill={fill} />
-              </TableCell>
-              <TableCell className="tabular text-right">
-                {unitPriceText(h.avg_cost)}
-              </TableCell>
-              <TableCell className="tabular text-right">
-                {unitPriceText(h.mark_price)}
-              </TableCell>
-              <TableCell className="tabular text-right">
-                {moneyText(h.market_value)}
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="tabular">
-                  {signedMoneyText(h.unrealized_pnl)}
-                </div>
-                {pnlPct !== null && (
-                  <Delta value={pnlPct} className="text-xs" />
-                )}
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
-  );
-}
-
-function ImpactCard({ data }: { data: PortfolioOut }) {
+/**
+ * The holder's share of what their sites do: land, stored carbon and nature's services, by the
+ * units they hold (the API's ImpactSummary). Attribution only, never a credit.
+ */
+function Impact({ data }: { data: PortfolioOut }) {
   const hectares = decimal(data.impact.ha_protected) ?? 0;
   const carbon = decimal(data.impact.t_co2_stored) ?? 0;
   const services = decimal(data.impact.services_usd_yr) ?? 0;
-  const known = hectares > 0 || carbon > 0 || services > 0;
+  const none = hectares <= 0 && carbon <= 0 && services <= 0;
   return (
     <section
       aria-labelledby="impact-title"
-      className="relative self-start overflow-hidden rounded-3xl bg-machine p-6 text-machine-ink shadow-soft"
+      className="rounded-3xl bg-lichen p-6 sm:p-8"
     >
       <h2 id="impact-title" className="text-base font-semibold">
-        Your share of the impact
+        What your stakes keep alive
       </h2>
-      <p className="mt-1 text-sm text-machine-muted">
-        Your units as a share of each site&apos;s land, stored carbon and
-        nature&apos;s services.
-      </p>
-      {known ? (
-        <ul className="mt-5 space-y-4">
-          <ImpactLine
-            icon={<Trees className="size-5" aria-hidden="true" />}
-            tone="bg-lime"
-            value={`${hectares.toFixed(2)} ha`}
-            label="of living land supported"
-          />
-          <ImpactLine
-            icon={<Leaf className="size-5" aria-hidden="true" />}
-            tone="bg-lilac"
-            value={`${carbon.toFixed(1)} tCO₂`}
-            label="stored carbon, attributable share"
-          />
-          <ImpactLine
-            icon={<Sprout className="size-5" aria-hidden="true" />}
-            tone="bg-sky"
-            value={`${money(services)}/yr`}
-            label="of nature's services"
-          />
-        </ul>
-      ) : (
-        <p className="mt-5 text-sm text-machine-muted">
-          {data.holdings.length === 0
-            ? "Back a site to see the hectares, carbon and services your stake supports."
-            : "Impact figures for your stakes aren't available yet."}
+      {none ? (
+        <p className="mt-4 text-sm text-muted-foreground">
+          Impact figures for your stakes aren&apos;t available yet.
         </p>
+      ) : (
+        <>
+          <ul className="mt-5 space-y-5">
+            <ImpactFigure
+              icon={HabitatIcon}
+              value={area(hectares)}
+              label="of living land"
+              note="Your share of the sites' area"
+            />
+            <ImpactFigure
+              icon={CarbonIcon}
+              value={tonnesCo2(carbon)}
+              label="stored carbon"
+              note="Held in the land's plants and soil"
+            />
+            <ImpactFigure
+              icon={WorthRangeIcon}
+              value={`${money(services)} a year`}
+              label="of nature's services"
+              note="Water, flood protection, habitat and more"
+            />
+          </ul>
+          <p className="mt-6 text-xs text-muted-foreground">
+            Your share, by the units you hold. Attribution only, not a carbon
+            credit or offset.
+          </p>
+        </>
       )}
-      <p className="mt-5 text-xs text-machine-muted">
-        Attribution only. Not a carbon credit or offset.
-      </p>
     </section>
   );
 }
 
-function ImpactLine({
-  icon,
-  tone,
+function ImpactFigure({
+  icon: Icon,
   value,
   label,
+  note,
 }: {
-  icon: React.ReactNode;
-  tone: string;
+  icon: LucideIcon;
   value: string;
   label: string;
+  note: string;
 }) {
   return (
-    <li className="flex items-center gap-3">
-      <span
-        className={`grid size-10 place-items-center rounded-2xl text-machine ${tone}`}
-      >
-        {icon}
+    <li className="flex items-start gap-4">
+      {/* An icon tile is a rounded square (DESIGN.md, Shapes). */}
+      <span className="grid size-11 shrink-0 place-items-center rounded-[14px] bg-card text-foreground">
+        <Icon size={22} aria-hidden="true" />
       </span>
-      <div>
-        <div className="tabular text-2xl font-light">{value}</div>
-        <div className="text-xs text-machine-muted">{label}</div>
-      </div>
+      <span className="min-w-0">
+        <span className="tabular block text-2xl leading-tight font-light tracking-[-0.03em] text-foreground">
+          {value}
+        </span>{" "}
+        <span className="block text-sm text-foreground">{label}</span>{" "}
+        <span className="block text-xs text-muted-foreground">{note}</span>
+      </span>
     </li>
   );
 }

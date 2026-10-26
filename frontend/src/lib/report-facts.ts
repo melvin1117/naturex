@@ -1,7 +1,7 @@
 /**
  * The facts a report card shows, as plain numbers. `reportFacts()` reads them from the API's
- * `ReportOut` (its stored columns and deterministic `rating` snapshot); the prototype builds the
- * same shape from its scripted world. Nothing here computes a metric: every number is copied
+ * `ReportOut` (its stored columns and deterministic `rating` snapshot). Nothing here computes a
+ * metric: every number is copied
  * from the report, and a missing one stays `null` so the screen can say so.
  */
 import type { ReportOut } from "./api/types";
@@ -10,11 +10,11 @@ import {
   type Grade,
   type LandcoverKey,
   type ServiceKey,
-} from "./prototype/data";
-import { GRADE_ORDER } from "./prototype/format";
+} from "./site-data";
+import { GRADE_ORDER } from "./format";
 
 export type TrendLabel = "Improving" | "Stable" | "Declining";
-export type SummarySource = ReportOut["summary_source"] | "scripted";
+export type SummarySource = ReportOut["summary_source"];
 
 export type WeightedPart = {
   key: string;
@@ -42,8 +42,6 @@ export type ReportFacts = {
   /** The Auditor's bounded adjustment; null when the report doesn't record one. */
   adjustment: number | null;
   adjustmentReason: string | null;
-  /** Shown next to the adjustment, e.g. that the prototype's Auditor is scripted. */
-  adjustmentNote: string | null;
   components: WeightedPart[];
   confidenceParts: WeightedPart[];
   services: Partial<Record<ServiceKey, number>>;
@@ -191,7 +189,6 @@ export function reportFacts(report: ReportOut): ReportFacts | null {
       typeof score.adjustment_reason === "string" && score.adjustment_reason
         ? score.adjustment_reason
         : null,
-    adjustmentNote: null,
     components: weighted(
       numbers(obj(score.components)),
       numbers(obj(score.weights)),

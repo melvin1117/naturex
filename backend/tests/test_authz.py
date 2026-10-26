@@ -92,7 +92,8 @@ RESOURCES: dict[Action, Resource] = {
     Action.MANAGE_MEMBERS: COMMUNITY_REF,
     Action.EDIT_COMMUNITY: COMMUNITY_REF,
     Action.VIEW_COMMUNITY_DATA: COMMUNITY_REF,
-    Action.OPERATE: ASSET_REF,  # suspend or resume; the world-level Time Machine is below
+    Action.OPERATE: ASSET_REF,  # suspend or resume
+    Action.SIMULATE: WORLD_REF,  # the Time Machine; sandboxes are below
     Action.REVIEW_LISTING: ASSET_REF,
     Action.TAMPER_DEMO: DemoTarget(WORLD, demo_mode=True),  # the live world: sandbox only
     Action.CONTROL_DEMO: WORLD_REF,  # password sessions: demo sessions only
@@ -126,6 +127,7 @@ MATRIX: dict[Action, tuple[Decision, ...]] = {
     Action.EDIT_COMMUNITY: (AR, OO, OO, OO, A, OO, OO, NF, TRE, A, OO, A, OO),
     Action.VIEW_COMMUNITY_DATA: (AR, MO, A, MO, A, MO, A, NF, TRE, A, A, A, A),
     Action.OPERATE: (AR, AO, AO, AO, AO, AO, A, NF, TRE, COI, COI, AO, AO),
+    Action.SIMULATE: (AR, AO, AO, AO, AO, AO, A, NF, TRE, A, A, AO, AO),
     Action.REVIEW_LISTING: (AR, AO, AO, AO, AO, AO, A, NF, TRE, COI, COI, AO, AO),
     Action.TAMPER_DEMO: (AR, AO, AO, AO, AO, AO, SBX, NF, TRE, SBX, SBX, AO, AO),
     Action.CONTROL_DEMO: (AR, DSO, DSO, DSO, DSO, DSO, DSO, NF, TRE, DSO, DSO, DSO, DSO),
@@ -231,6 +233,25 @@ def test_a_demo_admin_is_admin_only_inside_its_sandbox() -> None:
     demo_admin = sandbox_actor(admin=True)
     assert authorize(demo_admin, Action.OPERATE, WorldRef(SANDBOX)) == A
     assert authorize(demo_admin, Action.OPERATE, WorldRef(LIVE_WORLD_ID)) == NF
+
+
+def test_anyone_in_a_sandbox_runs_its_time_machine_and_injects_its_events() -> None:
+    """The sandbox's own demo control (ADR-0008): not an operator's power there."""
+    own_asset = AssetRef(SANDBOX, ASSET, COMMUNITY, public=True)
+    for persona in (
+        sandbox_actor(),
+        sandbox_actor(roles={COMMUNITY: CommunityRole.OWNER}),
+        sandbox_actor(admin=True),
+    ):
+        assert authorize(persona, Action.SIMULATE, WorldRef(SANDBOX)) == A
+        assert authorize(persona, Action.SIMULATE, own_asset) == A
+        assert authorize(persona, Action.SIMULATE, WorldRef(OTHER_WORLD)) == NF
+    # Outside a sandbox it stays an impartial admin's action, as OPERATE.
+    assert authorize(actor(), Action.SIMULATE, WORLD_REF) == AO
+    assert authorize(actor(world=SANDBOX), Action.SIMULATE, WorldRef(SANDBOX)) == AO
+    assert authorize(ROLES["admin_owner_own"], Action.SIMULATE, ASSET_REF) == COI
+    # Operating an asset (suspend, re-rate) is still for admins only, sandbox or not.
+    assert authorize(sandbox_actor(), Action.OPERATE, own_asset) == AO
 
 
 def test_anonymous_visitors_browse_the_live_world_only() -> None:

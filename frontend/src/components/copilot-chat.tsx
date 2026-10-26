@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "@/components/app-link";
-import { useSearchParams } from "next/navigation";
-import { usePathname } from "@/lib/nav";
 import {
   Fragment,
   useEffect,
@@ -23,10 +21,8 @@ import {
   SOURCE_CHIP,
 } from "@/components/bea/chat-parts";
 import { SLOW_AFTER_MS } from "@/components/loading-region";
-import { Button } from "@/components/ui/button";
 import { isAbortError, toApiError } from "@/lib/api/errors";
 import type { CopilotSource } from "@/lib/api/types";
-import { loginHref } from "@/lib/auth";
 import {
   answerNodes,
   askCopilot,
@@ -94,7 +90,7 @@ type Layout = {
  * Record (reports and news), with every `[ref]` linking to its source. With `assetId` she
  * answers about that site, and greets it with its latest grade change; without it (the
  * portfolio page) she searches every site visible in the world, and each citation names its
- * site. Signed-out visitors are asked to sign in. `variant="sheet"` drops the card and its
+ * site. Before the sandbox has a person it renders nothing. `variant="sheet"` drops the card and its
  * heading for the header's Bea sheet (#213), whose scope can change between questions:
  * earlier answers stay. Bea's state follows the conversation (lib/bea.ts).
  */
@@ -112,8 +108,6 @@ export function CopilotChat(
   const onBeaStateChange = props.onBeaStateChange;
   const { api } = useDataLayer();
   const { world } = useWorld();
-  const pathname = usePathname();
-  const search = useSearchParams().toString();
   const [draft, setDraft] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const nextId = useRef(0);
@@ -153,17 +147,8 @@ export function CopilotChat(
     if (list) list.scrollTop = list.scrollHeight;
   }, [turns]);
 
-  if (!world?.me) {
-    return (
-      <Shell scope={scope} variant={variant}>
-        <Button asChild variant="outline" size="sm" className="mt-4">
-          <Link href={loginHref(search ? `${pathname}?${search}` : pathname)}>
-            Sign in to ask Bea
-          </Link>
-        </Button>
-      </Shell>
-    );
-  }
+  // Bea lives in the sandbox, whose gate opens a session first.
+  if (!world?.me) return <Shell scope={scope} variant={variant} />;
 
   function update(id: number, patch: (turn: Turn) => Partial<Turn>) {
     setTurns((all) =>
@@ -317,7 +302,7 @@ function Shell({
 }: {
   scope: Scope;
   variant: "card" | "sheet";
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   const titleId = useId();
   // The sheet has its own title and description.

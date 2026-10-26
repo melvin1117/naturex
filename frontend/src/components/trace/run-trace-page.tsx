@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "@/components/app-link";
 import { useEffect, useMemo } from "react";
 
-import { TraceError } from "@/components/agent-trace";
+import { TraceError } from "@/components/trace/trace-error";
 import { MachineRowsSkeleton } from "@/components/page-skeletons";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,7 +18,7 @@ import {
   useShowCost,
 } from "@/lib/hooks";
 import { beforeAfterViews, type BeforeAfterViews } from "@/lib/site-views";
-import { date } from "@/lib/prototype/format";
+import { date } from "@/lib/format";
 import {
   auditCase,
   auditChecks,
@@ -40,8 +40,10 @@ import { TraceFlow } from "./trace-flow";
 import { TraceStory } from "./trace-story";
 import { TraceTimeline } from "./trace-timeline";
 
+// The tabs sit on the machine layer: hover and focus need its colours too, or they fall back to
+// the light theme's dark ink and vanish.
 const TAB =
-  "text-machine-muted data-[state=active]:bg-machine-line data-[state=active]:text-machine-ink";
+  "text-machine-muted hover:bg-machine-line/50 hover:text-machine-ink focus-visible:border-lime focus-visible:ring-lime focus-visible:outline-lime data-[state=active]:bg-machine-line data-[state=active]:text-machine-ink";
 
 /** `/trace/[runId]`: one rating run, explained — who did what, why, what was checked, and what
  * it cost. Reads `GET /runs/{run_id}/trace`. */
@@ -169,7 +171,8 @@ function TraceShell({
   );
 }
 
-function TraceBody({
+/** One run, explained: the page's and the site drawer's body, on the machine layer. */
+export function TraceBody({
   trace,
   views,
   recordedOn,
@@ -238,12 +241,6 @@ function TraceBody({
               </>
             )}
           </span>
-          <Link
-            href="/ai"
-            className="text-sm font-medium text-lime underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-lime focus-visible:outline-none"
-          >
-            Every model at work
-          </Link>
         </div>
       </header>
 

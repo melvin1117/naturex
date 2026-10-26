@@ -1,2 +1,9 @@
-// The sandbox twin of `steward/list/page.tsx`: the same screen in the visitor's sandbox (lib/sandbox.ts).
-export { default, metadata } from "@/app/steward/list/page";
+import type { Metadata } from "next";
+
+import { ListingScreen } from "@/components/listing/listing-screen";
+
+export const metadata: Metadata = { title: "List your land" };
+
+export default function ListPage() {
+  return <ListingScreen />;
+}

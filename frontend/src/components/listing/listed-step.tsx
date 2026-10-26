@@ -17,9 +17,9 @@ import {
   type ListingAction,
 } from "@/lib/community";
 import { useCommunitySummary } from "@/lib/community-hooks";
-import { ipoHref, listingOutcome, stewardHomeHref } from "@/lib/listing";
+import { ipoHref, listingOutcome } from "@/lib/listing";
 import { DURATION, usePrefersReducedMotion } from "@/lib/motion";
-import { GRADE_LABEL, money } from "@/lib/prototype/format";
+import { GRADE_LABEL, money } from "@/lib/format";
 import { reportFacts, type ReportFacts } from "@/lib/report-facts";
 import { assetHref } from "@/lib/trade";
 
@@ -56,12 +56,15 @@ export function ListedStep({
   asset,
   reveal = false,
   onOpenTrace,
+  onContinue,
 }: {
   community: MyCommunity;
   asset: AssetDetail;
   reveal?: boolean;
   /** Opens the Agent Trace on a run: here, the one that produced this rating. */
   onOpenTrace: (runId: string) => void;
+  /** The listing flow's next step (Prove), once the site is rated. */
+  onContinue?: () => void;
 }) {
   // A listed site's run is its report's (`latest_run_id` is only set while under review).
   const runId = asset.latest_report?.run_id ?? asset.latest_run_id ?? null;
@@ -165,7 +168,13 @@ export function ListedStep({
         </p>
       )}
       <div className="mt-6 flex flex-wrap gap-2">
-        {outcome.kind === "listed" && !asset.trading && (
+        {outcome.kind === "listed" && !asset.trading && onContinue && (
+          <Button size="lg" onClick={onContinue}>
+            Continue: show it&apos;s yours
+            <ArrowRight aria-hidden="true" />
+          </Button>
+        )}
+        {outcome.kind === "listed" && !asset.trading && !onContinue && (
           <NextStep
             next={next}
             pending={
@@ -181,9 +190,6 @@ export function ListedStep({
             {asset.ipo_at ? "See the public page" : "Preview the site page"}
           </Link>
         </Button>
-        <Button asChild variant="ghost">
-          <Link href={stewardHomeHref(community.id)}>Community home</Link>
-        </Button>
         {runId && (
           <Button variant="ghost" onClick={() => onOpenTrace(runId)}>
             <Bot aria-hidden="true" />
@@ -191,10 +197,6 @@ export function ListedStep({
           </Button>
         )}
       </div>
-      <p className="mt-6 text-xs text-muted-foreground">
-        Sandbox: play money, not a real security. Supporters get a stake in the
-        rating&apos;s sandbox market, never the land.
-      </p>
     </StepCard>
   );
 }

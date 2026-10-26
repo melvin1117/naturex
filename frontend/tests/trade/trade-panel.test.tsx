@@ -90,30 +90,6 @@ beforeEach(() => {
 });
 
 describe("TradePanel", () => {
-  it("asks anonymous visitors to sign in and come back here", async () => {
-    const { backend } = renderPanel({}, WORLD);
-
-    const link = await screen.findByRole("link", { name: /sign in to trade/i });
-    expect(link).toHaveAttribute(
-      "href",
-      `/login?next=${encodeURIComponent(`/asset/${ASSET_ID}`)}`,
-    );
-    expect(screen.queryByLabelText("Units")).not.toBeInTheDocument();
-    expect(backend.calls("GET /portfolio")).toBe(0);
-    expect(backend.calls(QUOTE)).toBe(0);
-  });
-
-  it("keeps the query string in the sign-in link", async () => {
-    nav.search = "asset=abc&tab=trade";
-    renderPanel({}, WORLD);
-
-    const link = await screen.findByRole("link", { name: /sign in to trade/i });
-    expect(link).toHaveAttribute(
-      "href",
-      `/login?next=${encodeURIComponent(`/asset/${ASSET_ID}?asset=abc&tab=trade`)}`,
-    );
-  });
-
   it.each([
     [{ status: "suspended" as const }, /paused/],
     [{ price: null }, /opening offer/],
@@ -147,18 +123,49 @@ describe("TradePanel", () => {
     expect(screen.queryByText(/^of /)).not.toBeInTheDocument();
   });
 
-  it("tells admins they can't trade", async () => {
-    renderPanel(
-      {},
+  it("waits for the sandbox's person instead of offering a sign-in", async () => {
+    const { backend } = renderPanel({}, WORLD);
+    await waitFor(() => expect(backend.calls(ASSET)).toBe(1));
+    expect(
+      screen.queryByRole("button", { name: /^Buy/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /sign in/i })).toBeNull();
+    expect(backend.calls("GET /portfolio")).toBe(0);
+  });
+
+  it("tells the Reviewer they don't back sites, with one tap to back it as Arjun", async () => {
+    const { backend } = renderPanel(
+      {
+        "POST /demo/persona": () =>
+          json({
+            ...SIGNED_IN_WORLD,
+            me: { ...SIGNED_IN_WORLD.me!, persona: "arjun" },
+          }),
+      },
       {
         ...SIGNED_IN_WORLD,
-        me: { ...SIGNED_IN_WORLD.me!, is_admin: true },
+        me: { ...SIGNED_IN_WORLD.me!, is_admin: true, persona: "admin" },
       },
     );
 
     expect(
-      await screen.findByText(/Admin accounts can't trade/),
+      await screen.findByText(/The Reviewer doesn't back sites/),
     ).toBeInTheDocument();
+    const toArjun = screen.getByRole("button", {
+      name: "Switch to Arjun to back it",
+    });
+    toArjun.focus();
+    fireEvent.click(toArjun);
+
+    expect(
+      await screen.findByRole("button", { name: /^Buy .*units$/ }),
+    ).toBeInTheDocument();
+    expect(backend.calls("POST /demo/persona")).toBe(1);
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Back this site" }),
+      ).toHaveFocus(),
+    );
   });
 
   it("explains a quote's trade block and never offers the order", async () => {
@@ -192,6 +199,8 @@ describe("TradePanel", () => {
       "side=buy&qty=10",
     );
     expect(buyButton()).not.toHaveAttribute("aria-disabled");
+    // The sandbox line once, by the confirm button (ux-writing: never in the heading too).
+    expect(screen.getAllByText(/play money/i)).toHaveLength(1);
   });
 
   it("keeps units a positive whole number", async () => {
@@ -335,7 +344,7 @@ describe("TradePanel", () => {
     const status = await screen.findByRole("status");
     await waitFor(() =>
       expect(status).toHaveTextContent(
-        "Bought 10 units at $20.02 each. You paid $200.20. Play money now $9,799.80; 10 units held. You now hold a stake in this site.",
+        "Bought 10 units at $20.02 each. You paid $200.20. Balance now $9,799.80; 10 units held. You now hold a stake in this site.",
       ),
     );
     expect(backend.calls(ORDER)).toBe(1);
@@ -383,7 +392,7 @@ describe("TradePanel", () => {
     expect(submit).toHaveFocus();
     expect(receipt).not.toHaveAttribute("tabindex");
     expect(
-      within(receipt).getByText("Play money now").nextSibling,
+      within(receipt).getByText("Balance now").nextSibling,
     ).toHaveTextContent("$9,799.80");
     expect(
       within(receipt).getByText("Units held").nextSibling,
@@ -521,9 +530,9 @@ describe("TradePanel", () => {
   });
 
   it.each([
-    [401, "auth_required", /session has ended/, "Sign in again"],
+    [401, "auth_required", /sandbox has ended/, "Open a new sandbox"],
     [403, "insider_trading_blocked", /community can't trade its units/, null],
-    [403, "admins_cannot_trade", /Admin accounts can't trade/, null],
+    [403, "admins_cannot_trade", /Reviewer doesn't back sites/, null],
     [409, "not_trading", /isn't trading yet/, null],
     [409, "insufficient_cash", /enough play money/, null],
     [409, "insufficient_shares", /more units than you hold/, null],

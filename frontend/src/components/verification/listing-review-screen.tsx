@@ -24,7 +24,7 @@ import { boundaryLatLngs, isApiAssetId } from "@/lib/asset-detail";
 import { STATUS_LABEL } from "@/lib/community";
 import { useAsset, useAssetOutlines } from "@/lib/hooks";
 import { outlinePolygons } from "@/lib/listing/boundary";
-import { ha } from "@/lib/prototype/format";
+import { ha } from "@/lib/format";
 import { num } from "@/lib/report-facts";
 import { toApiError } from "@/lib/api/errors";
 import {
@@ -102,7 +102,7 @@ export function ListingReviewScreen({ assetId }: { assetId: string }) {
       <Button asChild variant="ghost" size="sm" className="mb-4 -ml-3">
         <Link href={backHref}>
           <ArrowLeft aria-hidden="true" />
-          Verified land
+          Reviews
         </Link>
       </Button>
       {body}

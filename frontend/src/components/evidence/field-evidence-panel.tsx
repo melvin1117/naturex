@@ -1,8 +1,8 @@
 "use client";
 
-import { Camera } from "lucide-react";
 import Link from "@/components/app-link";
 
+import { FieldEvidenceIcon } from "@/components/icons";
 import { LoadError } from "@/components/proto/load-error";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,10 @@ export function FieldEvidencePanel({
         id="field-evidence-heading"
         className="flex items-center gap-2 font-serif text-3xl"
       >
-        <Camera className="size-6 text-muted-foreground" aria-hidden="true" />
+        <FieldEvidenceIcon
+          className="size-6 text-muted-foreground"
+          aria-hidden="true"
+        />
         Field evidence
       </h2>
       <p className="mt-2 max-w-2xl text-sm text-pretty text-muted-foreground">
@@ -78,7 +81,7 @@ export function FieldEvidencePanel({
       {addHref && (
         <Button asChild variant="outline" size="sm" className="mt-5">
           <Link href={addHref}>
-            <Camera aria-hidden="true" />
+            <FieldEvidenceIcon aria-hidden="true" />
             Add field photos
           </Link>
         </Button>
@@ -92,7 +95,7 @@ function Summary({ summary }: { summary: FieldEvidencePublic }) {
     return (
       <p className="mt-4 text-sm">
         {summary.photos === 0
-          ? "No field photos yet. Members of the site's community add them from the Stewards app: photos taken on the land in the last year, with the phone's location on."
+          ? "No field photos yet. Members of the site's community add them from Communities: photos taken on the land in the last year, with the phone's location on."
           : "None of the community's field photos has passed the checks yet."}
       </p>
     );

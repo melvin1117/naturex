@@ -1,12 +1,12 @@
 /** Helpers for the asset page: the API's asset detail, prices and events as display values. */
 import type { AssetDetail, EventOut, PricePoint } from "./api/types";
 import { geojsonRings } from "./boundary-map";
-import type { LatLng } from "./prototype/data";
+import type { LatLng } from "./site-data";
 import { num } from "./report-facts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Real assets have UUIDs; the prototype's scripted sites use slugs like "xochimilco-wetland". */
+/** Asset ids are UUIDs; anything else in an `/asset/<id>` address is no site. */
 export function isApiAssetId(id: string): boolean {
   return UUID.test(id);
 }
@@ -32,6 +32,17 @@ export function chartPrices(
   });
 }
 
+/** Where an event came from: web news (Tavily), the Time Machine, or the community's evidence. */
+export type EventOrigin = "news" | "time_machine" | "evidence";
+
+function eventOrigin(source: string): EventOrigin {
+  return source === "admin"
+    ? "time_machine"
+    : source === "evidence"
+      ? "evidence"
+      : "news";
+}
+
 const SOURCE_LABEL: Record<string, string> = {
   tavily: "Found by News Scout",
   admin: "Injected by Time Machine",
@@ -54,6 +65,7 @@ export function newsItems(events: EventOut[] | undefined) {
       severity: e.severity ?? null,
       kind: e.impact_type ?? null,
       sourceLabel: SOURCE_LABEL[e.source] ?? e.source,
+      origin: eventOrigin(e.source),
       url: e.url ?? null,
     }));
 }

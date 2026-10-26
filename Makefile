@@ -1,4 +1,4 @@
-.PHONY: ci lint test migrate seed fe-check check-client eval e2e task-map board rerate-all news-sweep
+.PHONY: ci lint test migrate seed fe-check preview check-client eval e2e task-map board rerate-all news-sweep
 
 # Run before every PR: the same checks GitHub CI runs. Start Postgres first: docker compose up -d
 ci:
@@ -24,6 +24,11 @@ migrate:
 .PHONY: dev
 dev:
 	LIVE=$(or $(LIVE),$(live)) ./scripts/dev.sh
+
+# The production build on the same ports, for trying the app as visitors get it (every page built,
+# links prefetched). Stop `make dev` first.
+preview:
+	LIVE=$(or $(LIVE),$(live)) PREVIEW=1 ./scripts/dev.sh
 
 # T01: check your .env keys work (Token Factory, Tavily, Earth Engine); spends no credits
 .PHONY: check-keys
@@ -52,7 +57,7 @@ check-client:
 eval:
 	@echo "eval: harness lands in T47; to run the News Scout eval now, see evals/README.md" >&2; exit 1
 
-# T74 real-account E2E: Playwright starts the API and a production frontend build on their own
+# T74 sandbox E2E: Playwright starts the API and a production frontend build on their own
 # ports (8100, 3100) with a freshly recreated wildworth_e2e database, then stops them. Start
 # Postgres first: docker compose up -d. Override with E2E_API_PORT, E2E_WEB_PORT,
 # E2E_DATABASE_URL; E2E_SKIP_BUILD=1 reuses the last build. Report: frontend/playwright-report.

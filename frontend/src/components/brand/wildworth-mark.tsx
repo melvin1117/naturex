@@ -2,7 +2,7 @@ import type { CSSProperties, SVGProps } from "react";
 import { cn } from "cn";
 
 import { MASTER_SCORE, SINGLE_W_BELOW_PX, markGeometry } from "@/lib/brand";
-import type { Grade } from "@/lib/prototype/data";
+import type { Grade } from "@/lib/site-data";
 
 /**
  * What the reading (the last stroke and its dot) is drawn in. The guidelines: lime on dark

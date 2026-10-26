@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  agentLabel,
   answerState,
   beaState,
   bzzTurnId,
@@ -138,16 +137,5 @@ describe("greetingFor", () => {
     expect(
       greetingFor("Osa forest", { from: "A", to: "AA", direction: "up" }),
     ).toBe("Osa forest was raised A → AA. Ask me what changed.");
-  });
-});
-
-describe("agentLabel", () => {
-  it("names Bea with the model that ran her, and leaves other agents alone", () => {
-    expect(agentLabel("copilot", "Nemotron 3 Nano")).toBe(
-      "Bea (Nemotron 3 Nano)",
-    );
-    expect(agentLabel("auditor", "Nemotron 3 Super")).toBe("auditor");
-    expect(agentLabel(null, "Nemotron 3 Super")).toBeNull();
-    expect(agentLabel("copilot", null)).toBe("Bea");
   });
 });

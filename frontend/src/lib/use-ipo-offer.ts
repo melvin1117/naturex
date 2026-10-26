@@ -10,6 +10,7 @@ import {
   PREVIEW_DEBOUNCE_MS,
   previewMatches,
   retainedInput,
+  trimDecimal,
 } from "./ipo";
 import { unitsInput } from "./trade";
 import { useDebounced } from "./use-debounced";
@@ -43,11 +44,22 @@ export function useIpoOffer(
     enabled = true,
     launching = false,
     onEdit,
-  }: { enabled?: boolean; launching?: boolean; onEdit?: () => void } = {},
+    initial,
+  }: {
+    enabled?: boolean;
+    launching?: boolean;
+    onEdit?: () => void;
+    /** Terms to start from (an offer the Reviewer sent back), else the defaults. */
+    initial?: { totalShares: number; retainedPct: string } | null;
+  } = {},
 ): IpoOffer {
-  const [sharesText, setSharesText] = useState(String(DEFAULT_TOTAL_SHARES));
-  const [retainedText, setRetainedText] = useState(
-    String(DEFAULT_RETAINED_PCT),
+  const [sharesText, setSharesText] = useState(
+    String(initial?.totalShares ?? DEFAULT_TOTAL_SHARES),
+  );
+  const [retainedText, setRetainedText] = useState(() =>
+    initial
+      ? retainedInput(trimDecimal(initial.retainedPct))
+      : String(DEFAULT_RETAINED_PCT),
   );
   const totalShares = parseTotalShares(sharesText);
   const retainedPct = parseRetainedPct(retainedText);

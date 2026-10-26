@@ -16,9 +16,6 @@ import type { ToasterProps } from "sonner";
 /** The longest a routine toast stays (alerts, which carry news, may stay longer). */
 export const TOAST_MS = 4000;
 
-/** "Welcome back": confirms what the header already shows, so it goes quickly. */
-export const WELCOME_TOAST_MS = 2500;
-
 export const TOASTER_PROPS = {
   position: "bottom-left",
   offset: 24,

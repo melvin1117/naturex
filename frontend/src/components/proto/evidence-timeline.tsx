@@ -20,7 +20,7 @@ import { ChartTooltip, ndviSummary } from "@/components/proto/charts";
 import { Panel } from "@/components/proto/report-panels";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import type { RecordedRun } from "@/lib/api/types";
+import type { RecordedRun, RunTrace } from "@/lib/api/types";
 import {
   type EvidenceTimeline,
   type NewsItem,
@@ -29,9 +29,10 @@ import {
   mergeNews,
   traceNews,
 } from "@/lib/evidence-timeline";
-import { date } from "@/lib/prototype/format";
+import { date } from "@/lib/format";
 import { useRunTrace } from "@/lib/hooks";
 import type { ReportFacts } from "@/lib/report-facts";
+import { safeHref } from "@/lib/safe-href";
 import type { BeforeAfterViews } from "@/lib/site-views";
 import {
   type Vision,
@@ -199,15 +200,37 @@ function EntryMarker({ entry }: { entry: TimelineEntry }) {
   );
 }
 
-function Entry({ entry }: { entry: TimelineEntry }) {
+/** Where an article was published ("elsoldemexico.com.mx"), for http(s) links only. */
+function publisher(href: string | null): string | null {
+  if (!href) return null;
+  try {
+    return new URL(href).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+function Entry({
+  entry,
+  sharedSource,
+}: {
+  entry: TimelineEntry;
+  /** Said once above the list (the recorded run), so not on each entry. */
+  sharedSource: string | null;
+}) {
+  const href = entry.type === "news" ? safeHref(entry.url) : null;
+  const site = publisher(href);
+  // Web news leads with "News" (and its publisher, when linked), so it reads as news among the
+  // satellite's signals.
   const meta =
     entry.type === "signal"
       ? ["Satellite, found by code"]
       : [
-          entry.source,
+          entry.origin === "news" ? (site ? `News · ${site}` : "News") : null,
           entry.kind,
           entry.followUp ? "found by Super's follow-up search" : null,
           entry.read ? `article read: ${entry.read.verdict}` : null,
+          entry.source === sharedSource ? null : entry.source,
         ].filter(Boolean);
   return (
     <li className="grid grid-cols-[4.5rem_auto_minmax(0,1fr)] items-start gap-x-3 py-2">
@@ -216,9 +239,9 @@ function Entry({ entry }: { entry: TimelineEntry }) {
       </span>
       <EntryMarker entry={entry} />
       <span className="min-w-0 text-sm leading-snug">
-        {entry.type === "news" && entry.url ? (
+        {entry.type === "news" && href ? (
           <a
-            href={entry.url}
+            href={href}
             target="_blank"
             rel="noopener noreferrer nofollow"
             className="inline-flex items-start gap-1 underline decoration-border underline-offset-2 hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
@@ -241,162 +264,163 @@ function Entry({ entry }: { entry: TimelineEntry }) {
   );
 }
 
-const SHOWN = 8;
+const SHOWN = 5;
 
-/** Five years of greenness with the run's dated signals, news pins and follow-ups. */
-export function EvidenceTimelinePanel({
-  facts,
-  news,
-  runId,
-  views,
-  recorded,
-}: {
-  facts: ReportFacts;
-  news: NewsItem[];
-  runId: string | null | undefined;
-  /** The site's views five years apart (`beforeAfterViews`), if it has them. */
-  views: BeforeAfterViews | null;
-  /** A demo site's recorded run, used when this world has no run of its own. */
-  recorded?: RecordedRun | null;
-}) {
+export type SiteRun = {
+  /** The site's own run, else (only without one) its recording; undefined while loading. */
+  run: RunTrace | undefined;
+  /** When the run is the site's recording: its date. */
+  recordedOn: string | undefined;
+};
+
+/** The run behind a site's rating, read once for the whole page. */
+export function useSiteRun(
+  runId: string | null | undefined,
+  recorded: RecordedRun | null | undefined,
+): SiteRun {
   const live = useRunTrace(runId);
   const run = live.data ?? (runId ? undefined : recorded?.trace);
   const fromRecording = !live.data && Boolean(run);
+  return {
+    run,
+    recordedOn: fromRecording ? recorded?.recorded_on : undefined,
+  };
+}
+
+/** "News and satellite": five years of greenness with the run's dated signals, the news its
+ * agents found (Tavily web search) and their follow-ups. */
+export function EvidenceTimelinePanel({
+  facts,
+  news,
+  site,
+  ...rest
+}: {
+  facts: ReportFacts;
+  news: NewsItem[];
+  site: SiteRun;
+} & React.HTMLAttributes<HTMLElement>) {
+  const { run, recordedOn } = site;
+  const recorded =
+    run && recordedOn ? `Recorded run, ${date(recordedOn)}` : null;
   const timeline = useMemo(
     () =>
       evidenceTimeline(
         facts.ndvi,
         run ? runSignals(run) : [],
-        fromRecording && run && recorded
-          ? mergeNews(
-              news,
-              traceNews(run, `Recorded run, ${date(recorded.recorded_on)}`),
-            )
-          : news,
+        run && recorded ? mergeNews(news, traceNews(run, recorded)) : news,
         run ? runFollowUps(run) : [],
       ),
-    [facts.ndvi, news, run, fromRecording, recorded],
+    [facts.ndvi, news, run, recorded],
   );
-  const vision = run ? runVision(run) : null;
   const [all, setAll] = useState(false);
   const entries = all ? timeline.entries : timeline.entries.slice(-SHOWN);
+  // Said once above the list when it shows news from the recording, instead of on each entry.
+  const recordedNews = entries.some(
+    (e) => e.type === "news" && e.source === recorded,
+  );
   const label = facts.trendLabel;
 
   return (
-    <>
-      <Panel
-        title="Five years of greenness, and what explains it"
-        action={
-          label && (
-            <span
-              className={cn(
-                "rounded-full px-2.5 py-1 text-xs font-medium",
-                label === "Declining"
-                  ? "bg-clay/15 text-clay-ink"
-                  : "bg-lime/30 text-lime-ink",
-              )}
-            >
-              {label}
-            </span>
-          )
-        }
-      >
-        {facts.ndvi.length > 1 ? (
-          <>
-            <TimelineChart series={facts.ndvi} timeline={timeline} />
-            <Legend />
-          </>
-        ) : (
-          <p className="py-10 text-center text-sm text-muted-foreground">
-            No monthly NDVI series is stored with this report.
-          </p>
-        )}
-
-        {timeline.followUps.length > 0 && (
-          <div className="mt-5 rounded-2xl bg-muted/60 px-4 py-3">
-            <p className="text-sm font-medium">
-              Nemotron 3 Super followed up before the audit
-              {fromRecording && recorded && (
-                <span className="font-normal text-muted-foreground">
-                  {" "}
-                  (recorded run, {date(recorded.recorded_on)})
-                </span>
-              )}
-            </p>
-            <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
-              {timeline.followUps.map((note, i) => (
-                <li key={`${i}-${note}`}>{note}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {timeline.entries.length > 0 && (
-          <section className="mt-5" aria-labelledby="timeline-list">
-            <h4 id="timeline-list" className="text-sm font-medium">
-              On the timeline
-            </h4>
-            <ol className="mt-1 divide-y divide-border">
-              {entries.map((e) => (
-                <Entry key={`${e.type}-${e.id}`} entry={e} />
-              ))}
-            </ol>
-            {timeline.entries.length > SHOWN && (
-              <Button
-                type="button"
-                variant="link"
-                size="sm"
-                onClick={() => setAll((a) => !a)}
-                aria-expanded={all}
-                className="mt-2 h-auto px-0 text-lime-ink"
-              >
-                {all
-                  ? "Show the latest only"
-                  : `Show all ${timeline.entries.length}`}
-              </Button>
+    <Panel
+      title="News and satellite"
+      headingLevel="h2"
+      {...rest}
+      action={
+        label && (
+          <span
+            className={cn(
+              "rounded-full px-2.5 py-1 text-xs font-medium",
+              label === "Declining"
+                ? "bg-clay/15 text-clay-ink"
+                : "bg-lime/30 text-lime-ink",
             )}
-          </section>
-        )}
-
-        {facts.ndviTrend !== null && (
-          <p className="mt-4 text-xs text-muted-foreground">
-            Monthly Sentinel-2 NDVI, cloud-masked. Trend{" "}
-            {facts.ndviTrend >= 0 ? "+" : ""}
-            {facts.ndviTrend.toFixed(4)} a year (Sen&apos;s slope
-            {facts.ndviP !== null &&
-              `, Mann–Kendall p ${facts.ndviP < 0.01 ? "< 0.01" : `= ${facts.ndviP.toFixed(2)}`}`}
-            ). Each month is compared with the same month in the other years, so
-            a normal dry season is not marked.
-          </p>
-        )}
-      </Panel>
-      {views && (
-        <BeforeAfterPanel
-          views={views}
-          vision={vision}
-          recordedOn={fromRecording ? recorded?.recorded_on : undefined}
-        />
+          >
+            {label}
+          </span>
+        )
+      }
+    >
+      {facts.ndvi.length > 1 ? (
+        <>
+          <TimelineChart series={facts.ndvi} timeline={timeline} />
+          <Legend />
+        </>
+      ) : (
+        <p className="py-10 text-center text-sm text-muted-foreground">
+          No monthly NDVI series is stored with this report.
+        </p>
       )}
-    </>
+
+      {timeline.entries.length > 0 && (
+        <section className="mt-5" aria-labelledby="timeline-list">
+          <h3 id="timeline-list" className="text-sm font-medium">
+            Month by month
+          </h3>
+          {recordedNews && recordedOn && (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              The news the agents found in this site&apos;s recorded run,{" "}
+              {date(recordedOn)}.
+            </p>
+          )}
+          <ol className="mt-1 divide-y divide-border">
+            {entries.map((e) => (
+              <Entry
+                key={`${e.type}-${e.id}`}
+                entry={e}
+                sharedSource={recordedNews ? recorded : null}
+              />
+            ))}
+          </ol>
+          {timeline.entries.length > SHOWN && (
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              onClick={() => setAll((a) => !a)}
+              aria-expanded={all}
+              className="mt-2 h-auto px-0 text-lime-ink"
+            >
+              {all
+                ? "Show the latest only"
+                : `Show all ${timeline.entries.length}`}
+            </Button>
+          )}
+        </section>
+      )}
+
+      {facts.ndviTrend !== null && (
+        <p className="mt-4 text-xs text-muted-foreground">
+          Monthly Sentinel-2 NDVI, cloud-masked. Trend{" "}
+          {facts.ndviTrend >= 0 ? "+" : ""}
+          {facts.ndviTrend.toFixed(4)} a year (Sen&apos;s slope
+          {facts.ndviP !== null &&
+            `, Mann–Kendall p ${facts.ndviP < 0.01 ? "< 0.01" : `= ${facts.ndviP.toFixed(2)}`}`}
+          ). Each month is compared with the same month in the other years, so a
+          normal dry season is not marked.
+        </p>
+      )}
+    </Panel>
   );
 }
 
-/** The site's Sentinel-2 views five years apart, under one slider, with the vision reading. */
-function BeforeAfterPanel({
+/**
+ * The site's Sentinel-2 views five years apart, under one slider, with the vision reading of the
+ * run that compared them. Drawn inside the page's "Seen from above" panel.
+ */
+export function BeforeAfter({
   views,
-  vision,
-  recordedOn,
+  site,
 }: {
   views: BeforeAfterViews;
-  vision: Vision | null;
-  /** Set when the reading comes from the site's recorded run. */
-  recordedOn?: string;
+  site: SiteRun;
 }) {
   const [at, setAt] = useState(50);
+  const { run, recordedOn } = site;
+  const vision: Vision | null = run ? runVision(run) : null;
   const reading = vision && !vision.error ? vision : null;
   const changes = reading?.changes.filter((c) => c.kind !== "no_clear_change");
   return (
-    <Panel title="Five years apart, seen from above">
+    <>
       {/* At most the views' own 640 px, so 10 m Sentinel-2 pixels aren't stretched. */}
       <div className="relative aspect-[16/10] w-full max-w-[640px] overflow-hidden rounded-2xl bg-muted">
         {/* eslint-disable-next-line @next/next/no-img-element -- same-origin media proxy */}
@@ -462,6 +486,6 @@ function BeforeAfterPanel({
         Sentinel-2 true-colour composites with the site&apos;s outline. Contains
         modified Copernicus Sentinel data {views.years}.
       </p>
-    </Panel>
+    </>
   );
 }

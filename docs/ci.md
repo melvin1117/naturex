@@ -18,7 +18,7 @@ Until the app dirs exist, each component workflow runs a `*/ detect` job and **s
 | `frontend` | detect · lint · typecheck · test · build | every PR, push to `main`, manual |
 | `database` | detect · migrate (upgrade / downgrade / upgrade + seed) | every PR, push to `main`, manual |
 | `security` | gitleaks (always); dependency-review + CodeQL **public repos only** | every PR, push to `main`, manual |
-| `e2e` | real accounts (T74): Playwright drives both apps on the real stack, `USE_MOCKS=true`; uploads the report and traces on failure | PRs (not drafts) and pushes to `main` touching `frontend/`, `backend/` or the E2E harness, manual |
+| `e2e` | the sandbox journey (T74, ADR-0008): Playwright drives the welcome and the sandbox on the real stack, `USE_MOCKS=true`; uploads the report and traces on failure | PRs (not drafts) and pushes to `main` touching `frontend/`, `backend/` or the E2E harness, manual |
 | `task-map` | regenerate `tasks/task-map.{html,json}` from issues; commits to `main` only if changed (`[skip ci]`) | issue opened/closed/assigned/edited, push to `main` touching `tasks/todo.md`, daily, manual |
 | AI / evals | **not yet** — deferred until T09 (LLM client) | — |
 
@@ -59,20 +59,19 @@ make fe-check                # all of the above
 ./scripts/generate-client.sh
 make check-client
 
-# Real-account E2E (T74): needs Postgres (docker compose up -d), uv and Node 22
+# Sandbox E2E (T74): needs Postgres (docker compose up -d), uv and Node 22
 make e2e
 ```
 
 `make eval` is a stub until T47 — do not treat it as green CI.
 
-### Real-account E2E (`make e2e`, T74)
+### Sandbox E2E (`make e2e`, T74)
 
-One Playwright journey through both apps on the real stack (`frontend/e2e/real-accounts.spec.ts`): an owner registers, creates a community, draws a polygon by clicking the real map, lists it and waits for the rating, uploads documents; an admin approves them in the review queue; the owner launches the IPO; an anonymous visitor browses but can't trade; a second account registers, buys and sells; the portfolio and the community home reflect it; everyone signs out. It also checks that the investor is refused (403) on Steward and admin actions.
+One Playwright journey through the sandbox on the real stack (`frontend/e2e/sandbox-journey.spec.ts`, [ADR-0008](./adr/0008-one-sandbox-experience.md)): the welcome's "Try it yourself" opens a sandbox with no sign-up; Rosa lists a site for her community by clicking the real map, rates it, skips the optional documents and sends her offer; the Reviewer approves it; Arjun is refused (403) the community's and the Reviewer's actions, backs the site and finds it in Your stakes; Rosa's community shows it on the Marketplace. `frontend/e2e/a11y-sandbox.spec.ts` runs axe on every page of the experience, on desktop and at 390 px.
 
-- **Isolated and idempotent.** `frontend/playwright.config.ts` starts both servers through Playwright's `webServer` and stops them afterwards: the API on port 8100 via `scripts/e2e-backend.sh`, which drops and recreates the `wildworth_e2e` database (never `wildworth`: the name must contain `e2e`, and the host must be `localhost` or `127.0.0.1` unless you set `E2E_ALLOW_REMOTE_DB=1`), migrates, seeds and creates the E2E admin; and a production build of the frontend in `.next-e2e` (so your `.next` is untouched) on port 3100. Accounts and names are unique per run. Override with `E2E_API_PORT`, `E2E_WEB_PORT` and `E2E_DATABASE_URL`; `E2E_SKIP_BUILD=1` (exactly `1`) reuses the last build while iterating on the spec (only with the same `E2E_API_PORT`, which the build bakes into the `/api` proxy).
+- **Isolated and idempotent.** `frontend/playwright.config.ts` starts both servers through Playwright's `webServer` and stops them afterwards: the API on port 8100 via `scripts/e2e-backend.sh`, which drops and recreates the `wildworth_e2e` database (never `wildworth`: the name must contain `e2e`, and the host must be `localhost` or `127.0.0.1` unless you set `E2E_ALLOW_REMOTE_DB=1`), migrates and seeds; and a production build of the frontend in `.next-e2e` (so your `.next` is untouched) on port 3100. Site names are unique per run. Override with `E2E_API_PORT`, `E2E_WEB_PORT` and `E2E_DATABASE_URL`; `E2E_SKIP_BUILD=1` (exactly `1`) reuses the last build while iterating on the spec (only with the same `E2E_API_PORT`, which the build bakes into the `/api` proxy).
 - **No keys, no `.env`.** The script sets `WILDWORTH_ENV_FILE=none`, which makes the backend's settings skip every `.env` file (`backend/app/config.py`), so a developer's `.env` (real keys, `USE_MOCKS=false`, lower limits) can't leak in; every setting is then its default unless the script sets it. It also sets the ones the journey depends on explicitly (`USE_MOCKS=true`, `ENVIRONMENT=test`, live Earth Engine and the AI document check off, empty API keys, the LLM budget and the rating-run and upload limits), so a variable exported in your shell doesn't change them either. The browser refuses every request that leaves the machine (map tiles). Mock listing metrics stay fresh until about 2026-12-30 (dev-spec §6.2); after that the listing lands in `needs_evidence` and the journey fails until the mock's `data_version` moves.
-- **The admin.** There's no admin sign-up: the script runs the operator CLI, `python -m app.cli create-admin --password-stdin` (piped input only; it refuses a terminal), with a test-only password, in the throwaway database. That password is typed into the login form, so it appears in Playwright traces and reports: never reuse it, or a real one, anywhere else.
-- **Auth rate limits.** Every browser reaches the API through the Next.js `/api` proxy on `127.0.0.1` (and `TRUSTED_PROXY_HOPS=0`), so all the journey's accounts share one per-IP bucket: 5 registrations an hour and 10 sign-ins per 15 minutes (`backend/app/auth.py`). The database is recreated every run, which resets them; a spec that adds more registrations or sign-ins than that in one run gets `429`.
+- **Rate limits.** Every browser reaches the API through the Next.js `/api` proxy on `127.0.0.1` (and `TRUSTED_PROXY_HOPS=0`), so every sandbox the specs start shares one per-IP bucket: `DEMO_STARTS_PER_IP_PER_HOUR` (20 by default, `backend/app/config.py`). The database is recreated every run, which resets it; a run that starts more sandboxes than that gets `429`.
 - **Debugging.** The HTML report is in `frontend/playwright-report` (`pnpm exec playwright show-report`); a failure keeps a trace and screenshots in `frontend/test-results`. In CI both are uploaded as the `e2e-playwright-report` artifact, and the Chromium headless shell is cached per Playwright version.
 
 ## Runtime pins
@@ -136,7 +135,7 @@ Settings → Branches → Branch protection rule for `main`:
 12. `database / migrate` (includes `alembic check`: models must match migrations)
 13. `security / gitleaks`
 
-Do **not** require `security / dependency-review` or `security / codeql` unless the repo is public (or GHAS is enabled); otherwise they are skipped and would block merges if marked required. Don't require `e2e / real accounts` either: it's path-filtered, so a PR that doesn't touch the apps never reports it and would wait forever.
+Do **not** require `security / dependency-review` or `security / codeql` unless the repo is public (or GHAS is enabled); otherwise they are skipped and would block merges if marked required. Don't require `e2e / sandbox journey` either: it's path-filtered, so a PR that doesn't touch the apps never reports it and would wait forever.
 
 ## What CI cannot prove locally
 

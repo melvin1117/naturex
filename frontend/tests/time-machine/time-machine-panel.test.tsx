@@ -175,9 +175,10 @@ describe("TimeMachinePanel", () => {
     expect(
       await screen.findByText("The Time Machine runs in demo sandboxes only"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Go to the verification queue" }),
-    ).toHaveAttribute("href", "/admin/verifications");
+    expect(screen.getByRole("link", { name: "Go to Reviews" })).toHaveAttribute(
+      "href",
+      "/admin/verifications",
+    );
     expect(screen.getByText(/Real listings in the live world/)).toBeVisible();
     expect(screen.queryByRole("button", { name: /Next quarter/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Reset/ })).toBeNull();
@@ -773,17 +774,16 @@ describe("TimeMachinePanel", () => {
     expect(status.textContent).toMatch(/stake price \$/);
   });
 
-  it("tells a signed-in non-admin the panel is for admins", async () => {
+  it("lets anyone in the sandbox use it, not only the Reviewer (ADR-0008)", async () => {
     renderPanel(
       {},
-      { ...WORLD, me: { ...DEMO_ADMIN_WORLD.me!, is_admin: false } },
+      {
+        ...WORLD,
+        me: { ...DEMO_ADMIN_WORLD.me!, is_admin: false, persona: "arjun" },
+      },
     );
-    expect(await screen.findByText("Admins only")).toBeInTheDocument();
-    expect(
-      screen.getByText(/Only a platform admin can run the Time Machine/),
-    ).toBeVisible();
-    expect(screen.queryByRole("button", { name: /Next quarter/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Reset/ })).toBeNull();
+    expect(await nextQuarterButton()).toBeVisible();
+    expect(screen.queryByText("Admins only")).toBeNull();
   });
 
   describe("a quarter running as a job (#201)", () => {

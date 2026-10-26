@@ -7,9 +7,8 @@ import {
 } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { PrototypeHeaderTools } from "@/components/proto/header-tools";
+import { AlertsBell } from "@/components/shell/alerts-bell";
 import type { AlertList, AlertOut } from "@/lib/api/types";
-import { usePrototype } from "@/lib/prototype/store";
 
 import { renderExchange, stubBrowserApis } from "../exchange/render";
 import { FakeEventSource, json, SIGNED_IN_WORLD } from "../lib/helpers";
@@ -76,7 +75,7 @@ function list(alerts: AlertOut[]): AlertList {
 
 describe("Header bell, signed in (#199)", () => {
   it("shows the unread count from GET /alerts and opens the real alerts", async () => {
-    renderExchange(<PrototypeHeaderTools app="exchange" />, {
+    renderExchange(<AlertsBell />, {
       "GET /world": () => json(SIGNED_IN_WORLD),
       "GET /alerts": () => json(list([alert(), NEWS])),
     });
@@ -100,7 +99,7 @@ describe("Header bell, signed in (#199)", () => {
 
   it("marks one alert read and updates the count", async () => {
     let read = false;
-    const backend = renderExchange(<PrototypeHeaderTools app="exchange" />, {
+    const backend = renderExchange(<AlertsBell />, {
       "GET /world": () => json(SIGNED_IN_WORLD),
       "GET /alerts": () =>
         json(
@@ -132,7 +131,7 @@ describe("Header bell, signed in (#199)", () => {
 
   it("marks everything read", async () => {
     let read = false;
-    const { backend } = renderExchange(<PrototypeHeaderTools app="steward" />, {
+    const { backend } = renderExchange(<AlertsBell />, {
       "GET /world": () => json(SIGNED_IN_WORLD),
       "GET /alerts": () =>
         json(
@@ -163,7 +162,7 @@ describe("Header bell, signed in (#199)", () => {
 
   it("updates and announces the count on a live alert event", async () => {
     let alerts = [NEWS];
-    renderExchange(<PrototypeHeaderTools app="exchange" />, {
+    renderExchange(<AlertsBell />, {
       "GET /world": () => json(SIGNED_IN_WORLD),
       "GET /alerts": () => json(list(alerts)),
     });
@@ -199,7 +198,7 @@ describe("Header bell, signed in (#199)", () => {
 
   it("announces a count it announced before again", async () => {
     let alerts = [NEWS];
-    renderExchange(<PrototypeHeaderTools app="exchange" />, {
+    renderExchange(<AlertsBell />, {
       "GET /world": () => json(SIGNED_IN_WORLD),
       "GET /alerts": () => json(list(alerts)),
     });
@@ -249,7 +248,7 @@ describe("Header bell, signed in (#199)", () => {
       },
     };
     let alerts = [NEWS];
-    const { layer } = renderExchange(<PrototypeHeaderTools app="exchange" />, {
+    const { layer } = renderExchange(<AlertsBell />, {
       "GET /world": () => json(SIGNED_IN_WORLD),
       "GET /alerts": () => json(list(alerts)),
     });
@@ -270,15 +269,10 @@ describe("Header bell, signed in (#199)", () => {
   });
 
   it("shows a plain bell while the world loads", async () => {
-    const { backend } = renderExchange(
-      <>
-        <AddScriptedAlert />
-        <PrototypeHeaderTools app="exchange" />
-      </>,
-      { "GET /world": () => new Promise<Response>(() => {}) },
-    );
+    const { backend } = renderExchange(<AlertsBell />, {
+      "GET /world": () => new Promise<Response>(() => {}),
+    });
     await waitFor(() => expect(backend.calls("GET /world")).toBe(1));
-    fireEvent.click(screen.getByRole("button", { name: "Add scripted alert" }));
 
     const bell = screen.getByRole("button", { name: "Alerts" });
     expect(bell).toBeDisabled();
@@ -289,70 +283,13 @@ describe("Header bell, signed in (#199)", () => {
     expect(backend.calls("GET /alerts")).toBe(0);
   });
 
-  it("shows the bell in the admin app too", async () => {
-    renderExchange(<PrototypeHeaderTools app="admin" />, {
+  it("shows the Reviewer the bell too", async () => {
+    renderExchange(<AlertsBell />, {
       "GET /world": () => json(SIGNED_IN_WORLD),
       "GET /alerts": () => json(list([])),
     });
     expect(
       await screen.findByRole("button", { name: "Alerts, all read" }),
     ).toBeInTheDocument();
-  });
-});
-
-function AddScriptedAlert() {
-  const { act: change } = usePrototype();
-  return (
-    <button
-      type="button"
-      onClick={() =>
-        change((w) => ({
-          ...w,
-          alerts: [
-            {
-              id: "al-1",
-              siteId: "xochimilco-wetland",
-              persona: "investor",
-              severity: "critical",
-              title: "Scripted: Xochimilco downgraded",
-              message: "Encroachment reported.",
-              date: "2026-10-19T08:00:00Z",
-              read: false,
-            },
-            ...w.alerts,
-          ],
-        }))
-      }
-    >
-      Add scripted alert
-    </button>
-  );
-}
-
-describe("Header bell, anonymous prototype", () => {
-  it("keeps the scripted alerts and never asks the API", async () => {
-    const { backend } = renderExchange(
-      <>
-        <AddScriptedAlert />
-        <PrototypeHeaderTools app="exchange" />
-      </>,
-    );
-    await waitFor(() => expect(backend.calls("GET /world")).toBe(1));
-    // A plain bell until the world answers, then the scripted one.
-    await waitFor(() =>
-      expect(
-        document.querySelector("[data-tour='alerts-bell']"),
-      ).not.toBeDisabled(),
-    );
-    expect(screen.queryByRole("button", { name: "Agent Trace" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Add scripted alert" }));
-
-    // The scripted bell is unchanged (its visible badge adds to its name).
-    const bell = screen.getByRole("button", { name: /^Alerts, 1 unread/ });
-    fireEvent.click(bell);
-    expect(
-      await screen.findByText("Scripted: Xochimilco downgraded"),
-    ).toBeVisible();
-    expect(backend.calls("GET /alerts")).toBe(0);
   });
 });

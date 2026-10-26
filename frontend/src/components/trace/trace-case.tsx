@@ -1,5 +1,6 @@
 "use client";
 
+import { safeHref } from "@/lib/safe-href";
 import {
   Activity,
   CircleCheck,
@@ -43,6 +44,7 @@ function refIcon(ref: EvidenceRef): LucideIcon {
 
 /** One cited ID, resolved: a fact with its value, or a news report with its link. */
 export function EvidenceChip({ evidence }: { evidence: EvidenceRef }) {
+  const href = safeHref(evidence.url);
   const Icon = refIcon(evidence);
   const body = (
     <>
@@ -69,7 +71,7 @@ export function EvidenceChip({ evidence }: { evidence: EvidenceRef }) {
           </span>
         )}
       </span>
-      {evidence.url && (
+      {href && (
         <ExternalLink
           className="mt-0.5 size-3 shrink-0 text-machine-muted"
           aria-hidden="true"
@@ -82,9 +84,9 @@ export function EvidenceChip({ evidence }: { evidence: EvidenceRef }) {
     evidence.direction === -1 && "ring-1 ring-clay/50 ring-inset",
     evidence.direction === 1 && "ring-1 ring-lime/40 ring-inset",
   );
-  return evidence.url ? (
+  return href ? (
     <a
-      href={evidence.url}
+      href={href}
       target="_blank"
       rel="noopener noreferrer nofollow"
       className={cn(

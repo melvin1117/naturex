@@ -50,7 +50,8 @@ vi.mock("next/navigation", async () => {
   };
   return {
     useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
-    usePathname: () => "/admin/verifications",
+    usePathname: () =>
+      useSyncExternalStore(subscribe, () => window.location.pathname),
     useSearchParams: () =>
       new URLSearchParams(
         useSyncExternalStore(subscribe, () => window.location.search),
@@ -70,7 +71,8 @@ beforeAll(() => {
 });
 beforeEach(() => {
   FakeEventSource.reset();
-  window.history.replaceState(null, "", "/admin/verifications");
+  // These tests are about the documents queue; the page opens on the offers (ADR-0008 §5).
+  window.history.replaceState(null, "", "/admin/verifications?view=waiting");
 });
 
 const QUEUE = "GET /admin/verifications";
@@ -294,6 +296,24 @@ describe("ReviewQueueScreen decided views (#211)", () => {
     replace.mockRestore();
   });
 
+  it("keeps the sandbox's address when switching views", async () => {
+    window.history.replaceState(null, "", "/sandbox/admin/verifications");
+    renderAdmin(<ReviewQueueScreen />, {
+      "GET /admin/offers": () => json([]),
+      [QUEUE]: () => json([]),
+    });
+    await screen.findByText(/No offer is waiting/);
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Documents" }));
+
+    expect(
+      await screen.findByText("Nothing is waiting for review."),
+    ).toBeInTheDocument();
+    // A bare `/admin/...` would leave the sandbox, and its session, mid-page.
+    expect(window.location.pathname).toBe("/sandbox/admin/verifications");
+    expect(window.location.search).toBe("?view=waiting");
+  });
+
   it("starts on the view in the address and shows a revocation's reason", async () => {
     window.history.replaceState(null, "", "/admin/verifications?view=revoked");
     renderAdmin(<ReviewQueueScreen />, {
@@ -370,10 +390,11 @@ describe("ReviewQueueScreen decided views (#211)", () => {
     );
   });
 
-  it("knows only the four views", () => {
+  it("knows only its five views, and opens on the offers", () => {
     expect(reviewView("revoked")).toBe("revoked");
-    expect(reviewView("documents_submitted")).toBe("waiting");
-    expect(reviewView(null)).toBe("waiting");
+    expect(reviewView("waiting")).toBe("waiting");
+    expect(reviewView("documents_submitted")).toBe("offers");
+    expect(reviewView(null)).toBe("offers");
   });
 });
 
@@ -664,7 +685,7 @@ describe("ListingReviewScreen", () => {
     expect(
       within(history).getByText(/1 document: Land title/),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Verified land" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Reviews" })).toHaveAttribute(
       "href",
       "/admin/verifications?view=verified",
     );

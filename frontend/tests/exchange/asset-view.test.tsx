@@ -8,12 +8,12 @@ import {
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AssetView } from "@/components/proto/asset-view";
-import { TraceSheet } from "@/components/proto/trace-sheet";
 import type { AssetDetail } from "@/lib/api/types";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { NO_OVERLAY_NOTE } from "@/lib/land-cover-overlay";
 
 import { FakeEventSource, json, sequence } from "../lib/helpers";
+import celestun from "../trace/fixtures/run-celestun.json";
 import recorded from "../trace/fixtures/recorded-mangrove.json";
 import asset from "./fixtures/asset.json";
 import images from "./fixtures/images.json";
@@ -65,6 +65,19 @@ function routes(overrides: Parameters<typeof renderExchange>[1] = {}) {
       }),
     ...overrides,
   };
+}
+
+/** Opens the Proof of Life drawer on one of its tabs, from the row under the page. */
+async function openRecord(tab: string): Promise<HTMLElement> {
+  const more = await screen.findByRole("navigation", {
+    name: "More about this rating",
+  });
+  fireEvent.click(within(more).getByRole("button", { name: tab }));
+  const drawer = await screen.findByRole("dialog", {
+    name: "Xochimilco Wetland",
+  });
+  fireEvent.mouseDown(within(drawer).getByRole("tab", { name: tab }));
+  return drawer;
 }
 
 beforeAll(stubBrowserApis);
@@ -133,13 +146,6 @@ describe("AssetView", () => {
     ).toBeInTheDocument();
 
     expect(screen.getByText("8,828 tCO₂")).toBeInTheDocument();
-    expect(screen.getByText("Formula health").nextSibling).toHaveTextContent(
-      "76.2",
-    );
-    expect(screen.getByText("Water stability").parentElement).toHaveTextContent(
-      "weight 15%",
-    );
-    expect(screen.getByText("Trees").parentElement).toHaveTextContent("35.7%");
     expect(screen.getByText("Stable")).toBeInTheDocument();
     expect(
       screen.getByRole("img", {
@@ -147,68 +153,98 @@ describe("AssetView", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText(/Mann–Kendall p = 0.10/)).toBeInTheDocument();
+
+    // The curated site opens on its views five years apart; its land cover is one tap away.
+    fireEvent.mouseDown(screen.getByRole("radio", { name: "Land cover" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Land cover" }));
     expect(
       await screen.findByText(/Overlay: Dynamic World land-cover mode/),
     ).toBeInTheDocument();
+    expect(screen.getByText("Trees").parentElement).toHaveTextContent("35.7%");
 
-    const sources = screen.getByRole("region", {
+    // The real trade panel (T18) is on the page; it trades once the sandbox has a person.
+    expect(
+      screen.getByRole("region", { name: "Back this site" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /sign in/i })).toBeNull();
+    // No run, and the recording didn't load: no way into a trace that doesn't exist.
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /How it was rated/ }),
+      ).toBeNull(),
+    );
+    expect(
+      screen.queryByRole("region", { name: "How it was rated" }),
+    ).toBeNull();
+
+    // How the score is built and the data credits are in the Proof of Life drawer.
+    let drawer = await openRecord("Proof of Life");
+    expect(
+      within(drawer).getByText("Formula health").nextSibling,
+    ).toHaveTextContent("76.2");
+    expect(
+      within(drawer).getByText("Water stability").parentElement,
+    ).toHaveTextContent("weight 15%");
+    fireEvent.keyDown(drawer, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    drawer = await openRecord("Data sources");
+    const sources = within(drawer).getByRole("region", {
       name: "Data behind this page · Q3 2026 report",
     });
     expect(
       within(sources).getByText(/^Dynamic World: This dataset/),
     ).toBeInTheDocument();
     expect(within(sources).getByText(IMAGERY_ATTRIBUTION)).toBeInTheDocument();
+  }, 15_000);
 
-    // The real trade panel (T18): anonymous visitors are asked to sign in and come back here.
-    expect(
-      await screen.findByRole("link", { name: "Sign in to trade" }),
-    ).toHaveAttribute("href", "/login?next=%2Fasset%2Fx");
-    // The real Copilot (T39) asks anonymous visitors to sign in; the real trace opens (T34).
-    expect(
-      screen.getByRole("link", { name: "Sign in to ask Bea" }),
-    ).toHaveAttribute("href", "/login?next=%2Fasset%2Fx");
-    // No run, and the recording didn't load: once that's settled, the card says so.
-    const trace = screen.getByRole("region", { name: "How the AI rated it" });
-    expect(
-      await within(trace).findByText(
-        "Its trace appears here after its first rating.",
-      ),
-    ).toBeInTheDocument();
-    expect(within(trace).queryByRole("button")).toBeNull();
-    expect(within(trace).queryByRole("link", { name: /Open/ })).toBeNull();
-  });
-
-  it("leads from the site to its latest run's full Agent Trace", async () => {
-    const run = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b";
+  it("opens its latest run's Agent Trace over the page, not on another one", async () => {
+    const run = celestun.run_id;
     renderExchange(
-      <>
-        <AssetView id={ID} />
-        <TraceSheet />
-      </>,
+      <AssetView id={ID} />,
       routes({
         [`GET /assets/${ID}`]: () =>
           json({
             ...ASSET,
-            latest_report: { ...ASSET.latest_report, run_id: run },
+            latest_report: {
+              ...ASSET.latest_report,
+              run_id: run,
+              auditor: {
+                ...(ASSET.latest_report?.auditor ?? {}),
+                verdict: "Healthy wetland [metric:x].",
+                auditor_adjustment: 0,
+              },
+            },
           }),
+        [`GET /runs/${run}/trace`]: () => json({ ...celestun, asset_id: ID }),
       }),
     );
-    const trace = await screen.findByRole("region", {
-      name: "How the AI rated it",
+    const band = await screen.findByRole("region", {
+      name: "How it was rated",
     });
+    expect(within(band).getByText("Healthy wetland.")).toBeInTheDocument();
+    // Who worked on it comes from the run itself.
     expect(
-      within(trace).getByRole("link", { name: /Open the Agent Trace/ }),
-    ).toHaveAttribute("href", `/trace/${run}`);
+      await within(band).findByRole("list", { name: "Who worked on it" }),
+    ).toHaveTextContent(/Nemotron 3 Super/);
+    // "AI at work" is gone (ADR-0008): the trace is the way into the models.
     expect(
-      within(trace).getByRole("link", {
-        name: "Every model at work, with live costs",
-      }),
-    ).toHaveAttribute("href", "/ai");
-    fireEvent.click(within(trace).getByRole("button", { name: "Quick look" }));
+      screen.queryByRole("link", { name: /Every model at work/ }),
+    ).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /^How it was rated$/ }));
+    // The drawer loads lazily (next/dynamic): it can take more than findBy's default second.
+    const drawer = await screen.findByRole(
+      "dialog",
+      { name: "How Xochimilco Wetland was rated" },
+      { timeout: 5000 },
+    );
     expect(
-      await screen.findByRole("dialog", { name: "Agent Trace" }),
+      await within(drawer).findByRole("tab", { name: "Story" }),
     ).toBeInTheDocument();
-  });
+    expect(
+      within(drawer).getByText(/Judged by Nemotron 3 Ultra/),
+    ).toBeVisible();
+  }, 15_000);
 
   it("leads a demo site nobody has rated here to its recorded run", async () => {
     renderExchange(
@@ -218,14 +254,29 @@ describe("AssetView", () => {
           json({ ...recorded, site_key: "wetland_mx" }),
       }),
     );
-    const trace = await screen.findByRole("region", {
-      name: "How the AI rated it",
+    const band = await screen.findByRole("region", {
+      name: "How it was rated",
+    });
+    expect(within(band).getByText(/^A recorded run, /)).toBeInTheDocument();
+    // Its news is named once above the list, not on every article.
+    const news = screen.getByRole("region", { name: "News and satellite" });
+    expect(
+      await within(news).findByText(
+        /^The news the agents found in this site's recorded run, /,
+      ),
+    ).toBeInTheDocument();
+    expect(within(news).queryByText(/Recorded run, /)).toBeNull();
+    expect(within(news).getAllByText(/^News/).length).toBeGreaterThan(0);
+    fireEvent.click(
+      within(band).getByRole("button", { name: /Open the Agent Trace/ }),
+    );
+    const drawer = await screen.findByRole("dialog", {
+      name: "How Xochimilco Wetland was rated",
     });
     expect(
-      await within(trace).findByRole("link", { name: /Open the recorded run/ }),
-    ).toHaveAttribute("href", `/trace/recorded/${ID}`);
-    // The drawer has only this world's runs, none here: no quick look at nothing.
-    expect(within(trace).queryByRole("button")).toBeNull();
+      within(drawer).getByText(/^A real run of this site, recorded on /),
+    ).toBeInTheDocument();
+    expect(await within(drawer).findByText(/^Recorded /)).toBeInTheDocument();
   });
 
   it("compares a live listing's own views five years apart", async () => {
@@ -265,11 +316,9 @@ describe("AssetView", () => {
       screen.getByText(/Copernicus Sentinel data 2021–2026/),
     ).toBeInTheDocument();
     // The views' own credits are with the page's data sources.
-    const sources = screen.getByRole("region", {
-      name: /^Data behind this page/,
-    });
+    const drawer = await openRecord("Data sources");
     expect(
-      within(sources).getByText(
+      within(drawer).getByText(
         "Contains modified Copernicus Sentinel data 2021-2026.",
       ),
     ).toBeInTheDocument();
@@ -343,14 +392,6 @@ describe("AssetView", () => {
       screen.getByRole("switch", { name: "Dynamic World overlay" }),
     ).toBeChecked();
     expect(screen.queryByText(NO_OVERLAY_NOTE)).toBeNull();
-    const sources = screen.getByRole("region", {
-      name: /^Data behind this page/,
-    });
-    expect(
-      within(sources).getByText(
-        "Contains modified Copernicus Sentinel data 2025-2026.",
-      ),
-    ).toBeInTheDocument();
     await waitFor(() =>
       expect(
         container.querySelector(
@@ -361,6 +402,12 @@ describe("AssetView", () => {
         `/api/assets/${ID}/overlay.png?v=abc123-1792650000`,
       ),
     );
+    const drawer = await openRecord("Data sources");
+    expect(
+      within(drawer).getByText(
+        "Contains modified Copernicus Sentinel data 2025-2026.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("says why a listing without a live rating has no land-cover overlay (#231)", async () => {
@@ -472,10 +519,12 @@ describe("AssetView", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Mid estimate").nextSibling).toHaveTextContent("—");
-    expect(
-      screen.getByText("Auditor adjustment (±10 max)").nextSibling,
-    ).toHaveTextContent("—");
     expect(screen.queryByText("$0.00")).toBeNull();
+    const drawer = await openRecord("Proof of Life");
+    expect(
+      within(drawer).getByText("Auditor adjustment (±10 max)").nextSibling,
+    ).toHaveTextContent("—");
+    expect(within(drawer).queryByText("$0.00")).toBeNull();
   });
 
   it("labels a listed site awaiting its opening offer and shows no price", async () => {
@@ -679,29 +728,64 @@ describe("AssetView", () => {
                 severity: 4,
                 created_at: "2026-10-17T00:00:00Z",
               },
+              {
+                id: "e3",
+                asset_id: ID,
+                source: "admin",
+                title: "A road is cut through the meadows",
+                url: null,
+                direction: -1,
+                severity: 3,
+                impact_type: "encroachment",
+                created_at: "2026-10-16T00:00:00Z",
+              },
             ],
           }),
       }),
     );
 
+    // On "News and satellite": titles as plain text, and only an http(s) source becomes a link.
+    const happened = await screen.findByRole("region", {
+      name: "News and satellite",
+    });
     expect(
-      await screen.findByText("Canal <i>cleanup</i> starts"),
+      await within(happened).findByText("Canal <i>cleanup</i> starts"),
     ).toBeInTheDocument();
-    const links = screen.getAllByRole("link", { name: /Source/ });
-    expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAttribute("href", "https://example.org/fill");
-    expect(links[0]).toHaveAttribute("rel", "noopener noreferrer nofollow");
+    expect(within(happened).queryByRole("link", { name: /Canal/ })).toBeNull();
+    const link = within(happened).getByRole("link", {
+      name: /Fill on the northern edge/,
+    });
+    expect(link).toHaveAttribute("href", "https://example.org/fill");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer nofollow");
+    // Web news reads as news, naming where it was published when its link is safe; a Time
+    // Machine event says what it is instead.
+    expect(
+      within(happened).getByText(/^News · example\.org/),
+    ).toBeInTheDocument();
+    expect(
+      within(happened).getByText(/^News · restoration/),
+    ).toBeInTheDocument();
+    expect(
+      within(happened).getByText("encroachment · Injected by Time Machine"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Sample")).toBeNull();
   });
 
   it("shows the verification badge in the hero and the public panel", async () => {
     renderExchange(<AssetView id={ID} />, routes());
 
-    const hero = await screen.findByRole("link", {
-      name: /^Documents reviewed by WildWorth \(hackathon process\)/,
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /^Documents reviewed by WildWorth \(hackathon process\)/,
+      }),
+    );
+    const drawer = await screen.findByRole("dialog", {
+      name: "Xochimilco Wetland",
     });
-    expect(hero).toHaveAttribute("href", "#verification");
-    const panel = screen.getByRole("region", {
+    expect(
+      within(drawer).getByRole("tab", { name: "Verification" }),
+    ).toHaveAttribute("aria-selected", "true");
+    const panel = within(drawer).getByRole("region", {
       name: "How this listing was verified",
     });
     expect(
@@ -728,9 +812,9 @@ describe("AssetView", () => {
     window.history.replaceState(null, "", "/");
   });
 
-  it("follows the panel's ledger link while the ledger is already open", async () => {
-    nav.search = new URLSearchParams("tab=ledger");
-    window.history.replaceState(null, "", `/asset/${ID}?tab=ledger`);
+  it("follows the verification panel's ledger link to the entry, in the same drawer", async () => {
+    nav.search = new URLSearchParams("tab=verification");
+    window.history.replaceState(null, "", `/asset/${ID}?tab=verification`);
     renderExchange(
       <AssetView id={ID} />,
       routes({
@@ -745,13 +829,103 @@ describe("AssetView", () => {
           }),
       }),
     );
-    const entry = (await screen.findByText("#0")).closest("li")!;
-    expect(entry).not.toHaveFocus();
-
     fireEvent.click(await screen.findByRole("link", { name: /entry #0/ }));
+    const entry = (await screen.findByText("#0")).closest("li")!;
     await waitFor(() => expect(entry).toHaveFocus());
+    expect(screen.getByRole("tab", { name: "The Record" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(window.location.hash).toBe("#ledger-entry-0");
     window.history.replaceState(null, "", "/");
+  });
+
+  it("opens a drawer from `?tab=`, and closing it leaves the page's URL clean", async () => {
+    nav.search = new URLSearchParams("tab=report");
+    window.history.replaceState(null, "", `/asset/${ID}?tab=report`);
+    renderExchange(<AssetView id={ID} />, routes());
+
+    const drawer = await screen.findByRole("dialog", {
+      name: "Xochimilco Wetland",
+    });
+    expect(
+      within(drawer).getByRole("tab", { name: "Proof of Life" }),
+    ).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(drawer, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(window.location.search).toBe("");
+    // The page is still here underneath: nothing navigated.
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Xochimilco Wetland" }),
+    ).toBeInTheDocument();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("opens the Agent Trace from a `?tab=trace` link", async () => {
+    nav.search = new URLSearchParams("tab=trace");
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        "GET /media/demo-sites/wetland_mx/recorded-run.json": () =>
+          json({ ...recorded, site_key: "wetland_mx" }),
+      }),
+    );
+    const drawer = await screen.findByRole("dialog", {
+      name: "How Xochimilco Wetland was rated",
+    });
+    expect(
+      await within(drawer).findByRole("tab", { name: "Story" }),
+    ).toBeInTheDocument();
+  });
+
+  it("makes opening a drawer a step back can undo", async () => {
+    window.history.replaceState(null, "", `/asset/${ID}`);
+    renderExchange(<AssetView id={ID} />, routes());
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Proof of Life report" }),
+    );
+    await screen.findByRole("dialog", { name: "Xochimilco Wetland" });
+    expect(window.location.search).toBe("?tab=report");
+
+    // Back closes it, and the page is still the site.
+    window.history.back();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(window.location.search).toBe("");
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Xochimilco Wetland" }),
+    ).toBeInTheDocument();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("says a recorded run isn't what rated the page", async () => {
+    renderExchange(
+      <AssetView id={ID} />,
+      routes({
+        "GET /media/demo-sites/wetland_mx/recorded-run.json": () =>
+          json({ ...recorded, site_key: "wetland_mx" }),
+      }),
+    );
+    const band = await screen.findByRole("region", {
+      name: "How it was rated",
+    });
+    expect(
+      within(band).getByText(
+        /The rating on this page comes from the formula alone/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("leads a phone from the hero to Back this site", async () => {
+    renderExchange(<AssetView id={ID} />, routes());
+    const hero = await screen.findByRole("region", {
+      name: "Xochimilco Wetland",
+    });
+    expect(
+      within(hero).getByRole("link", { name: "Back this site" }),
+    ).toHaveAttribute("href", "#back-this-site");
+    expect(document.getElementById("back-this-site")).toContainElement(
+      await screen.findByRole("heading", { name: "Back this site" }),
+    );
   });
 
   it("loads the ledger in its own panel's shape, not a spinner (#219)", async () => {

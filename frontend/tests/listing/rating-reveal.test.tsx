@@ -30,7 +30,6 @@ import type {
 import { createDataLayer } from "@/lib/data-layer";
 import { PIPELINE_SETTLE_MS, PIPELINE_STEP_MS } from "@/lib/listing/pacing";
 import { DURATION } from "@/lib/motion";
-import { PrototypeProvider } from "@/lib/prototype/store";
 
 import {
   BASE,
@@ -180,11 +179,9 @@ async function rateInABurst({ finishedOnFirstRead = false } = {}) {
   });
   render(
     <WorldProvider dataLayer={layer}>
-      <PrototypeProvider>
-        <StewardCommunityProvider>
-          <ListingScreen />
-        </StewardCommunityProvider>
-      </PrototypeProvider>
+      <StewardCommunityProvider>
+        <ListingScreen />
+      </StewardCommunityProvider>
     </WorldProvider>,
   );
   fireEvent.click(
@@ -438,13 +435,13 @@ describe("ListedStep", () => {
     });
     expect(verify).toHaveAttribute(
       "href",
-      `/steward/assets/${ASSET_ID}/verify?community=${SELVA.id}`,
+      `/steward/list?community=${SELVA.id}&asset=${ASSET_ID}&step=prove`,
     );
     expect(
       screen.getByRole("link", { name: "Preview the opening offer" }),
     ).toHaveAttribute(
       "href",
-      `/steward/assets/${ASSET_ID}/ipo?community=${SELVA.id}`,
+      `/steward/list?community=${SELVA.id}&asset=${ASSET_ID}&step=offer`,
     );
     expect(screen.getByText("Not verified")).toBeVisible();
     expect(
@@ -480,10 +477,10 @@ describe("ListedStep", () => {
       ),
     );
     expect(
-      await screen.findByRole("link", { name: /Open to supporters/ }),
+      await screen.findByRole("link", { name: /Send your offer/ }),
     ).toHaveAttribute(
       "href",
-      `/steward/assets/${ASSET_ID}/ipo?community=${SELVA.id}`,
+      `/steward/list?community=${SELVA.id}&asset=${ASSET_ID}&step=offer`,
     );
     expect(screen.getByText("Verified land")).toBeVisible();
   });
@@ -497,7 +494,7 @@ describe("ListedStep", () => {
       await screen.findByRole("link", { name: /Set up the opening offer/ }),
     ).toHaveAttribute(
       "href",
-      `/steward/assets/${ASSET_ID}/ipo?community=${SELVA.id}`,
+      `/steward/list?community=${SELVA.id}&asset=${ASSET_ID}&step=offer`,
     );
   });
 

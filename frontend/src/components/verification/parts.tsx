@@ -2,13 +2,13 @@ import {
   CircleCheck,
   CircleX,
   FileClock,
-  ShieldCheck,
   ShieldQuestionMark,
   ShieldX,
   TriangleAlert,
 } from "lucide-react";
 import { cn } from "cn";
 
+import { StewardsIcon, VerifiedLandIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
 import type {
   CheckResult,
@@ -17,13 +17,23 @@ import type {
 } from "@/lib/api/types";
 import { CHECK_NOTE, checkLabel, RESULT_LABEL } from "@/lib/verification";
 
+// The brand's Verified land seal only where documents were reviewed; the other levels keep a
+// state icon ("In review", "Rejected"…), never a check.
 const LEVEL_ICON = {
-  verified: ShieldCheck,
+  verified: VerifiedLandIcon,
   revoked: ShieldX,
   documents_submitted: FileClock,
   rejected: ShieldQuestionMark,
   unverified: ShieldQuestionMark,
 } satisfies Record<VerificationLevel, unknown>;
+
+/** The public badge (`VerificationPublic.badge`) says "Self-attested by the community" for every
+ * level but verified and revoked: it shows the community vouching, never a check. */
+function publicIcon(level: VerificationLevel) {
+  return level === "verified" || level === "revoked"
+    ? LEVEL_ICON[level]
+    : StewardsIcon;
+}
 
 const LEVEL_TONE: Record<VerificationLevel, string> = {
   verified: "bg-lime/35 text-lime-ink",
@@ -35,27 +45,32 @@ const LEVEL_TONE: Record<VerificationLevel, string> = {
 
 /**
  * A verification chip. `children` is the API's exact badge text; the
- * level only picks the icon and tone, so the words never depend on colour.
+ * level only picks the icon and tone, so the words never depend on colour. `publicBadge`: the
+ * children are the public badge, whose icon matches its words.
  */
 export function VerificationBadge({
   level,
   children,
   tone = "light",
+  publicBadge = false,
   className,
 }: {
   level: VerificationLevel;
   children: string;
   tone?: "light" | "image";
+  publicBadge?: boolean;
   className?: string;
 }) {
-  const Icon = LEVEL_ICON[level];
+  const Icon = publicBadge ? publicIcon(level) : LEVEL_ICON[level];
   return (
     <Badge
       variant="secondary"
       data-level={level}
       className={cn(
         "max-w-full px-2.5 py-1 text-left leading-snug whitespace-normal [&>svg]:size-3.5",
-        tone === "image" ? "bg-white/15 text-white" : LEVEL_TONE[level],
+        tone === "image"
+          ? "bg-white/15 text-white [--ww-accent:var(--color-lime)]"
+          : LEVEL_TONE[level],
         className,
       )}
     >

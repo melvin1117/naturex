@@ -133,3 +133,32 @@ def test_service_account_keys_are_a_path_or_inline_json() -> None:
     assert eng.service_account_key(json.dumps(key)) == (key, None)
     with pytest.raises(ValueError, match="not set"):
         eng.service_account_key("  ")
+
+
+def test_the_current_observation_window_is_the_constants() -> None:
+    window = eng.CURRENT_WINDOW
+    assert (window.start_12m, window.start_5y, window.end) == (
+        eng.START_12M,
+        eng.START_5Y,
+        eng.END_DATE,
+    )
+    assert f"{window.loss_first_year}-{window.loss_last_year}" == eng.FOREST_LOSS_YEARS
+    assert window.data_version == eng.DATA_VERSION
+
+
+def test_an_earlier_window_observes_its_own_quarter_and_complete_loss_years() -> None:
+    from datetime import date
+
+    april = eng.ObservationWindow.ending(date(2026, 4, 1))
+    assert (april.start_12m, april.start_5y, april.data_version) == (
+        "2025-04-01",
+        "2021-04-01",
+        "2026Q1",
+    )
+    assert (april.loss_first_year, april.loss_last_year) == (2021, 2025)
+    october = eng.ObservationWindow.ending(date(2025, 10, 1))
+    assert (october.loss_first_year, october.loss_last_year, october.data_version) == (
+        2020,
+        2024,
+        "2025Q3",
+    )

@@ -7,7 +7,7 @@ import { GRADE_FILL } from "@/components/proto/grade";
 import { Button } from "@/components/ui/button";
 import { clampScore, SEAL, SEAL_RISE_MS, sealDots } from "@/lib/brand";
 import { useInSandbox } from "@/lib/nav";
-import type { Grade } from "@/lib/prototype/data";
+import type { Grade } from "@/lib/site-data";
 
 import { Lockup } from "./lockup";
 

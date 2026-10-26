@@ -120,7 +120,7 @@ The brand's source of truth is [docs/design/wildworth-brand-guidelines.html](doc
 
 Living land as a calm, credible instrument. The site's own Sentinel-2 image, blurred, is the ground of every key card, and numbers sit on it like readouts on a field instrument. The world is pinned by the team's references: a soft lichen-grey ground, off-white cards with generous radii and soft offset shadows, deep forest-green ink, lime for the reading and lilac as the second data colour. It refuses the trading-terminal default (dense red/green tickers on black) and the eco cliché (leaf icons on cream paper).
 
-Two layers share one palette. The **land layer** (Rated sites, site pages, the Stewards home) is light, because judges use it on laptops in daylight and it is recorded for video. The **machine layer** (rating pipeline, Agent Trace, The Record, impact card, Time Machine timeline) is a dark forest green with pale lime text, so the AI's work reads as a distinct, inspectable surface.
+Two layers share one palette. The **land layer** (the Marketplace, site pages, Communities) is light, because judges use it on laptops in daylight and it is recorded for video. The **machine layer** (rating pipeline, Agent Trace, The Record, impact card, Time Machine timeline) is a dark forest green with pale lime text, so the AI's work reads as a distinct, inspectable surface.
 
 Voice follows PRODUCT.md: sober on rating and market surfaces, warm on community and tour surfaces. Every value carries its range and confidence.
 
@@ -153,7 +153,7 @@ Three free (OFL) faces from Google Fonts, loaded with `next/font`: **Gloock** (d
 
 ### Hierarchy
 - **Display-xl** (Gloock 400, 88–104px, -0.025em): the judge story's opening title.
-- **Display** (Gloock 400, 3.75–4rem, -0.025em): page titles ("Rated sites", "Time Machine") and the wordmark's "Wild".
+- **Display** (Gloock 400, 3.75–4rem, -0.025em): page titles ("Marketplace", "Time Machine") and the wordmark's "Wild".
 - **Title** (Gloock 400, 2–2.5rem, 1.1): site names on feature cards and report cards, drawer titles, grade verdicts ("A · Strong health").
 - **Numeral** (Hanken Grotesk 300, tabular, -0.03em): prices, health scores, value ranges, stats, and the wordmark's "Worth". Big numbers are light, never bold.
 - **Body** (Hanken Grotesk 400, 1rem, 1.6): prose capped at 65ch.
@@ -179,7 +179,7 @@ Three free (OFL) faces from Google Fonts, loaded with `next/font`: **Gloock** (d
 
 ## Layout
 
-Max width 1280px with a 16px gutter on phones and 24px from `sm`. Pages open with a serif title row, a stat strip in one card, then a full-width feature card on a photographic ground. Detail pages use a two-column grid (content plus a 360px sticky aside for the trade panel) from `lg`. Headers wrap navigation onto a second row below 640px. No horizontal page scroll at 390px.
+Max width 1280px with a 16px gutter on phones and 24px from `sm`. Pages open with a serif title, then one sentence that carries their numbers inline (no stat strip, no boxed metrics), then their content: the Marketplace's feature card and site cards, a community's site tiles. **Your stakes** is the exception: it opens on its money panel (the total, then stakes and sandbox balance on one split bar) beside the impact band, then a row per stake, because a supporter's first question is what they paid and how it's doing. Lists of sites are grids of picture tiles (the site's satellite view first), three to a row from `lg`. Detail pages use a two-column grid (content plus a 360px sticky aside for the trade panel) from `lg`. Headers wrap navigation onto a second row below 640px. No horizontal page scroll at 390px.
 
 ## Elevation & Depth
 
@@ -200,7 +200,7 @@ Pills for every control (buttons, tabs, toggles, chips, selects). 12px for input
 Primary: forest pill, 40px. On a photograph or the machine layer: paper (`card`) pill with forest ink. Outline: card pill with input border. Ghost for tertiary actions. Pressed state nudges down 1px. Never lime (lime is the reading).
 
 ### Chips
-Ecosystem, verification and status chips are small pills; on images they are white at 15% with white text.
+Ecosystem and verification chips are small pills; on images they are white at 15% with white text. A site tile's state chip (top left of its picture) is solid and says where the site stands at a glance: forest for On the Marketplace, lime for Rated, sky for in progress (Being rated, Waiting for the Reviewer), clay for what needs the community (Sent back, Needs more evidence), card for a draft. The tile's link says the state too, so the chip is hidden from screen readers.
 
 ### Cards / Containers
 `panel`: card surface, 24px radius, soft shadow, 24px padding, a semibold 16px title row with an optional action. Never nested inside another panel; inner groupings use the `secondary` band with 16px radius.
@@ -209,15 +209,30 @@ Ecosystem, verification and status chips are small pills; on images they are whi
 44px, 12px radius, card fill, input border, forest caret, ring on focus. Errors in destructive text below the field, wired with `aria-describedby`.
 
 ### Navigation
-The app bar follows the guidelines' "In use" mock. Above it, a thin forest strip carries the sandbox line, "Sandbox · play money only", and, for anonymous visitors, the way into a sandbox of their own. Inside `/sandbox` the forest sandbox bar takes its place, with the persona switcher (each person over their role below `xl`), "What to try", the story and reset, and it says "play money only" too (ADR-0007). The sticky translucent bar holds, from left to right:
-- the WildWorth lockup;
-- a hairline, then the app's name, quiet and regular: **Exchange**, **Stewards** or **Control room**. When the account can open another app, the name is the switcher: a menu of its apps, plus "Create a community" when it has none;
-- the pill nav, with the active page raised on a card and, from `xl`, a WildWorth icon beside each label;
-- **Ask Bea**: a forest pill with Bea's avatar and an "AI" tag (its name is "Ask Bea AI assistant"). Her wings and antennae stir for about two seconds when it's hovered or focused, and a tooltip names the model she runs on;
+One bar for the whole sandbox (ADR-0008), sticky and translucent, holding from left to right:
+- the WildWorth lockup (it leads to the Marketplace);
+- the pill nav: **Marketplace · Communities · Your stakes** (the Reviewer: **Marketplace · Reviews**), the active page raised on a card. Below `md` the pills wrap onto their own row;
+- **Time Machine** (a ghost button with the brand pack's Time Machine icon) that opens a side sheet;
 - the alerts bell;
-- the account, shown as initials only.
+- **who you are**: a switcher, an outlined pill with everyone's round avatars stacked, the current person in front (Rosa lime, Arjun forest, the Reviewer on the machine layer with a check; phones show only the current one), "Viewing as Rosa" over her role, and up-and-down chevrons. Its menu opens on "Switch person": the three people as radio items, then start the sandbox over or leave it.
 
-Below `lg` the pages, apps and communities move into a menu sheet.
+**Ask Bea** floats bottom-right on every sandbox page: a forest pill with Bea's avatar, "Ask Bea" and an "AI" tag (its name is "Ask Bea AI assistant"); below `sm` only her avatar. Her wings and antennae stir for about two seconds when it's hovered or focused.
+
+The footer is one quiet line: the lockup, "A hackathon prototype. Values are screening estimates, not appraisals." and a "Data sources" dialog. The sandbox line is said once on the welcome and once in the trade panel.
+
+### Welcome (signature)
+`/` is full-bleed: Esri imagery of the hero wetland settles from 108% over 4.5 s, its boundary is drawn in lime (the "Draw" move), and Bea makes the page's one authored moment (`components/welcome/bea-intro.tsx`, once per page load): she flies in from the left as a solid ink silhouette with beating wings (still ink only, her stripe and face cut out), the display-xl title "Welcome to WildWorth." is written where she passes (a feathered mask that follows her), the sentence on what WildWorth does and the two buttons rise, **Show me how** (paper, primary) and **Try it yourself** (paper outline, `on-image-outline`), and she lands in **Ask Bea** at the bottom right, which grows out of her before she's her usual outline again and says "Hi, I'm Bea." for a few seconds. About 2.7 s; any key, click or scroll ends it at its last frame. Reduced motion shows the final frame, and if the script never runs everything shows at 3.5 s.
+
+### Site page (signature)
+One scroll that a judge reads top to bottom, with depth one tap away and never on another page (ADR-0008 §4):
+- **Hero** on the site's own satellite ground: place and verification badge, the name, one line on the land, the **Worth range** and the price a unit, the live health dial with its grade, and two ways in: **How it was rated** (paper, primary) and **Proof of Life report** (paper outline). On phones a third, **Back this site**, leads first and jumps to the trade panel.
+- **The verdict band** (machine layer): the Auditor's one-line verdict, the models that worked on the run (from its own receipt, busiest first, then the web searches) and **Open the Agent Trace**.
+- **Three sections**, each one panel: **What the land does each year**, **Seen from above** (the views five years apart, or the land cover, one at a time) and **News and satellite** (five years of greenness with what explains it, then the latest news). **Price a unit** follows once there are trades to chart.
+- **Back this site** is the sticky right column on wide screens.
+- **Everything else is in two drawers** over the page, named by `?tab=` so links still land: the **Agent Trace** (machine layer, `?tab=trace`) and the **Proof of Life drawer** (paper, tabs Proof of Life · The Record · Verification · Field photos · Data sources). A row of quiet buttons under the sections opens each tab.
+
+### Marketplace map (secondary view)
+**Cards · Map** beside the grade filter (`?view=map`); cards stay the default. Every site's drawn boundary on Esri imagery in its grade colour, with a paper pin (grade badge and name). A list beside the map (below it on phones) flies the map to a site and opens its card; the map takes the wheel only after a click, so the page scrolls past it.
 
 ### Health instrument (signature)
 A dotted radial dial (`DotRing`): 100 columns of dots in 5 rings, one column per point of health, lit up to the score (forest on light, lime on dark), with the light numeral in the centre. It reads literally, not decoratively, and stays wherever a live score is shown.
@@ -238,7 +253,7 @@ Her chat follows the character sheet's product mock (`components/bea/chat-parts.
 - **How the answer was made:** a mono footnote under the bubble: searched, written by, code checked.
 - **Working:** what she's doing, as a quiet line beside her avatar.
 - **Empty:** Bea, "Ask Bea about {site}", a sentence and question chips. The chips show only before the first question.
-- **Field:** paper, inset, with the send button inside it, and a mono footnote: "Runs on NVIDIA Nemotron 3 Nano · Play money only; not advice."
+- **Field:** paper, inset, with the send button inside it, and a mono footnote: "Runs on NVIDIA Nemotron 3 Nano · Not advice."
 
 ## Motion
 Every animation means something, plays once, ends on the real value, and is replaced by its final frame under `prefers-reduced-motion`. Four moves, all on `--ww-ease-out` (`cubic-bezier(.16,1,.3,1)`): **Draw** (something is being measured: the logo line, a boundary, a chart; 900–1100 ms), **Rise** (a reading arrived: the logo's last stroke, the seal's dots; 550 ms after the draw), **Count** (a number changed; 600–900 ms) and **Stamp** (a verdict was issued: grade reveal or change; 520 ms, once). Bea's idle motion settles within 5 seconds (her thinking and waking loops last only as long as the work), and stops for reduced motion too.

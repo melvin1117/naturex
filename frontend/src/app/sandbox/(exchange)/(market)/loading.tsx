@@ -1,2 +1,5 @@
-// The sandbox twin of `(exchange)/(market)/loading.tsx`: the same screen in the visitor's sandbox (lib/sandbox.ts).
-export { default } from "@/app/(exchange)/(market)/loading";
+import { MarketplaceSkeleton } from "@/components/page-skeletons";
+
+export default function Loading() {
+  return <MarketplaceSkeleton />;
+}

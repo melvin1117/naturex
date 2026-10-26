@@ -149,56 +149,6 @@ export interface Status {
   tone: Tone;
 }
 
-/** Where a listing stands, for its steward, from its current run (null: none yet). */
-export function stewardStatus(run: VerificationRun | null): Status {
-  if (!run) {
-    return {
-      title: "Not verified yet",
-      body: "Exchange visitors see this listing as self-attested by the community. Upload your land documents and submit them for review. On the live Exchange, the opening offer needs a verified listing.",
-      tone: "neutral",
-    };
-  }
-  if (!run.fingerprint_matches && run.level !== "revoked") {
-    return {
-      title: "The listing changed since its last review",
-      body: "Its name, area, boundary or community changed after these documents were submitted, so it counts as unverified again. Submit documents for a new review.",
-      tone: "neutral",
-    };
-  }
-  switch (run.level) {
-    case "documents_submitted":
-      return {
-        title: "Waiting for a reviewer",
-        body: "The automated checks have run. A WildWorth reviewer reads them with your documents and approves or rejects the listing; you'll see the decision here.",
-        tone: "pending",
-      };
-    case "verified":
-      return {
-        title: "Verified by a reviewer",
-        body: "A reviewer approved this listing after reading the checks. If its name, area, boundary or community changes, it needs a new review.",
-        tone: "positive",
-      };
-    case "rejected":
-      return {
-        title: "The reviewer rejected these documents",
-        body: "Read the reason below, then upload new documents and submit them for a new review. The documents you sent stay in this listing's record but can't be sent twice: to use one again, upload the file again.",
-        tone: "negative",
-      };
-    case "revoked":
-      return {
-        title: "Verification revoked",
-        body: "An approved verification was withdrawn, so trading is paused. Only a reviewer's approval of a new submission resumes it.",
-        tone: "negative",
-      };
-    default:
-      return {
-        title: "Not verified yet",
-        body: "Upload your land documents and submit them for review.",
-        tone: "neutral",
-      };
-  }
-}
-
 const waitText = (error: ApiError) =>
   error.retryAfterSeconds === null
     ? "a moment"
@@ -259,17 +209,15 @@ export function uploadFailure(error: ApiError): string {
 export function submitFailure(error: ApiError): string {
   switch (error.code) {
     case "document_not_found":
-      return "One of those documents isn't on this listing any more. Choose again.";
+      return "That document isn't on this listing any more. Upload it again.";
     case "document_already_submitted":
-      return "One of those documents was already submitted. Choose again.";
+      return "That document was already submitted. Upload another.";
     case "submission_full":
-      return `A submission holds at most ${MAX_RUN_DOCUMENTS} documents. Remove one from your submission to make room, or add fewer.`;
-    case "document_not_in_submission":
-      return "Your submission changed since you opened this page. Reload and choose again.";
+      return `A submission holds at most ${MAX_RUN_DOCUMENTS} documents.`;
     case "listing_closed":
       return "This listing is withdrawn or not eligible, so it can't be verified.";
     case "members_only":
-      return "Only this community's owner and stewards can submit documents.";
+      return "Only this community's owner and stewards can send documents.";
   }
   return error.message;
 }
@@ -308,8 +256,9 @@ export function ledgerEntryId(seq: number): string {
   return `ledger-entry-${seq}`;
 }
 
-/** The admin verification area's views (#211): the queue, then each decision. */
+/** The Reviewer's views: opening offers (ADR-0008 §5), the documents queue, then each decision. */
 export const REVIEW_VIEWS = [
+  "offers",
   "waiting",
   "verified",
   "rejected",
@@ -320,12 +269,12 @@ export type ReviewView = (typeof REVIEW_VIEWS)[number];
 export function reviewView(value: string | null | undefined): ReviewView {
   return (REVIEW_VIEWS as readonly string[]).includes(value ?? "")
     ? (value as ReviewView)
-    : "waiting";
+    : "offers";
 }
 
-/** The admin verifications page on one view: `/admin/verifications?view=…`. */
+/** The Reviews page on one view: `/admin/verifications?view=…`. */
 export function reviewViewHref(view: ReviewView): string {
-  return view === "waiting"
+  return view === "offers"
     ? "/admin/verifications"
     : `/admin/verifications?view=${view}`;
 }

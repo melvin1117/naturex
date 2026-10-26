@@ -1,2 +1,5 @@
-// The sandbox twin of `steward/community/loading.tsx`: the same screen in the visitor's sandbox (lib/sandbox.ts).
-export { default } from "@/app/steward/community/loading";
+import { CommunitySettingsSkeleton } from "@/components/page-skeletons";
+
+export default function Loading() {
+  return <CommunitySettingsSkeleton />;
+}

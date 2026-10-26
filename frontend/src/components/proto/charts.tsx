@@ -6,8 +6,6 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ReferenceDot,
   ResponsiveContainer,
   Tooltip,
@@ -18,7 +16,7 @@ import {
 
 import { LoadingRegion } from "@/components/loading-region";
 import { Skeleton } from "@/components/ui/skeleton";
-import { price as fmtPrice, shortDate } from "@/lib/prototype/format";
+import { price as fmtPrice, shortDate } from "@/lib/format";
 
 const AXIS = { fontSize: 11, fill: "var(--muted-foreground)" };
 
@@ -454,63 +452,6 @@ export function ndviSummary(series: [string, number][]) {
   if (series.length === 0) return "No NDVI series.";
   const values = series.map(([, v]) => v);
   return `Monthly NDVI, ${series.length} months from ${series[0]![0]} to ${series.at(-1)![0]}, between ${Math.min(...values).toFixed(2)} and ${Math.max(...values).toFixed(2)}.`;
-}
-
-export function NdviChart({
-  series,
-  height = 200,
-}: {
-  series: [string, number][];
-  height?: number;
-}) {
-  const data = series.map(([m, v]) => ({ m, v }));
-  return (
-    <div
-      style={{ height }}
-      className="w-full"
-      role="img"
-      aria-label={ndviSummary(series)}
-    >
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart
-          data={data}
-          margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
-        >
-          <CartesianGrid vertical={false} stroke="var(--border)" />
-          <XAxis
-            dataKey="m"
-            tick={AXIS}
-            tickLine={false}
-            axisLine={false}
-            minTickGap={36}
-            ticks={data.filter((d) => d.m.endsWith("-01")).map((d) => d.m)}
-            tickFormatter={(m: string) => m.slice(0, 4)}
-          />
-          <YAxis
-            tick={AXIS}
-            tickLine={false}
-            axisLine={false}
-            width={36}
-            domain={[
-              (min: number) => Math.min(0.3, Math.floor(min * 10) / 10),
-              1,
-            ]}
-          />
-          <Tooltip
-            content={<ChartTooltip format={(v) => `NDVI ${v.toFixed(3)}`} />}
-          />
-          <Line
-            type="monotone"
-            dataKey="v"
-            stroke="var(--grade-aa)"
-            strokeWidth={1.5}
-            dot={false}
-            isAnimationActive={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
 }
 
 /**

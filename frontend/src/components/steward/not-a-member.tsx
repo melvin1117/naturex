@@ -40,9 +40,8 @@ export function NotACommunityMember({
         You&apos;re not a member of the community that lists this site
       </h1>
       <p className="mt-4 max-w-prose text-pretty text-muted-foreground">
-        Only the owner and stewards of the community that lists {name} manage it
-        here. You can still follow it and back it on the Exchange with play
-        money.
+        Only the community that lists {name} manages it here. You can still
+        follow it and back it on the Marketplace.
       </p>
       <div className="mt-6 flex flex-wrap gap-2">
         {/* A long site name wraps instead of pushing the page wider than a phone. */}
@@ -51,7 +50,7 @@ export function NotACommunityMember({
           className="h-auto min-h-10 max-w-full shrink py-2 text-left whitespace-normal"
         >
           <Link href={assetHref(assetId)}>
-            See {name} on the Exchange
+            See {name} on the Marketplace
             <ArrowRight aria-hidden="true" />
           </Link>
         </Button>

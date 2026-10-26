@@ -3,7 +3,7 @@
  * Pure, so every gesture on the map (add, drag, insert, delete, finish) is tested here and the
  * map only translates clicks and drags into these actions.
  */
-import type { LatLng } from "../prototype/data";
+import type { LatLng } from "../site-data";
 
 /** `drawing`: map clicks add corners. `editing`: the shape is closed; drag corners to adjust. */
 export type DrawMode = "drawing" | "editing";
