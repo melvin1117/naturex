@@ -724,9 +724,9 @@ describe("AssetView", () => {
       }),
     );
 
-    // On "What happened": titles as plain text, and only an http(s) source becomes a link.
+    // On "News and satellite": titles as plain text, and only an http(s) source becomes a link.
     const happened = await screen.findByRole("region", {
-      name: "What happened",
+      name: "News and satellite",
     });
     expect(
       await within(happened).findByText("Canal <i>cleanup</i> starts"),
@@ -737,6 +737,10 @@ describe("AssetView", () => {
     });
     expect(link).toHaveAttribute("href", "https://example.org/fill");
     expect(link).toHaveAttribute("rel", "noopener noreferrer nofollow");
+    // An article reads as news: it names where it was published.
+    expect(
+      within(happened).getByText(/^News · example\.org/),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Sample")).toBeNull();
   });
 

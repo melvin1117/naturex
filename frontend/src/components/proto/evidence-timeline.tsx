@@ -200,17 +200,38 @@ function EntryMarker({ entry }: { entry: TimelineEntry }) {
   );
 }
 
-function Entry({ entry }: { entry: TimelineEntry }) {
+/** Where an article was published ("elsoldemexico.com.mx"), for http(s) links only. */
+function publisher(href: string | null): string | null {
+  if (!href) return null;
+  try {
+    return new URL(href).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+function Entry({
+  entry,
+  sharedSource,
+}: {
+  entry: TimelineEntry;
+  /** Said once above the list (the recorded run), so not on each entry. */
+  sharedSource: string | null;
+}) {
+  const href = entry.type === "news" ? safeHref(entry.url) : null;
+  const site = publisher(href);
+  // An article leads with "News" and its publisher, so the news reads as news among the
+  // satellite's signals.
   const meta =
     entry.type === "signal"
       ? ["Satellite, found by code"]
       : [
-          entry.source,
+          site ? `News · ${site}` : null,
           entry.kind,
           entry.followUp ? "found by Super's follow-up search" : null,
           entry.read ? `article read: ${entry.read.verdict}` : null,
+          entry.source === sharedSource ? null : entry.source,
         ].filter(Boolean);
-  const href = entry.type === "news" ? safeHref(entry.url) : null;
   return (
     <li className="grid grid-cols-[4.5rem_auto_minmax(0,1fr)] items-start gap-x-3 py-2">
       <span className="tabular pt-px text-xs text-muted-foreground">
@@ -266,7 +287,8 @@ export function useSiteRun(
   };
 }
 
-/** Five years of greenness with the run's dated signals, news pins and follow-ups. */
+/** "News and satellite": five years of greenness with the run's dated signals, the news its
+ * agents found (Tavily web search) and their follow-ups. */
 export function EvidenceTimelinePanel({
   facts,
   news,
@@ -278,17 +300,20 @@ export function EvidenceTimelinePanel({
   site: SiteRun;
 } & React.HTMLAttributes<HTMLElement>) {
   const { run, recordedOn } = site;
+  const recorded =
+    run && recordedOn ? `Recorded run, ${date(recordedOn)}` : null;
   const timeline = useMemo(
     () =>
       evidenceTimeline(
         facts.ndvi,
         run ? runSignals(run) : [],
-        run && recordedOn
-          ? mergeNews(news, traceNews(run, `Recorded run, ${date(recordedOn)}`))
-          : news,
+        run && recorded ? mergeNews(news, traceNews(run, recorded)) : news,
         run ? runFollowUps(run) : [],
       ),
-    [facts.ndvi, news, run, recordedOn],
+    [facts.ndvi, news, run, recorded],
+  );
+  const fromRecording = timeline.entries.some(
+    (e) => e.type === "news" && e.source === recorded,
   );
   const [all, setAll] = useState(false);
   const entries = all ? timeline.entries : timeline.entries.slice(-SHOWN);
@@ -296,7 +321,7 @@ export function EvidenceTimelinePanel({
 
   return (
     <Panel
-      title="What happened"
+      title="News and satellite"
       headingLevel="h2"
       {...rest}
       action={
@@ -328,11 +353,21 @@ export function EvidenceTimelinePanel({
       {timeline.entries.length > 0 && (
         <section className="mt-5" aria-labelledby="timeline-list">
           <h3 id="timeline-list" className="text-sm font-medium">
-            On the timeline
+            Month by month
           </h3>
+          {fromRecording && recordedOn && (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              The news the agents found in this site&apos;s recorded run,{" "}
+              {date(recordedOn)}.
+            </p>
+          )}
           <ol className="mt-1 divide-y divide-border">
             {entries.map((e) => (
-              <Entry key={`${e.type}-${e.id}`} entry={e} />
+              <Entry
+                key={`${e.type}-${e.id}`}
+                entry={e}
+                sharedSource={fromRecording ? recorded : null}
+              />
             ))}
           </ol>
           {timeline.entries.length > SHOWN && (
