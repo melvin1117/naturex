@@ -20,7 +20,8 @@ import json
 import math
 import threading
 from collections.abc import Callable, Mapping, Sequence
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
@@ -44,6 +45,39 @@ START_12M = "2025-10-01"
 START_5Y = "2021-10-01"
 FOREST_LOSS_YEARS = "2021-2025"
 FOREST_LOSS_LAST_12M_YEAR = "2025"
+HANSEN_LAST_YEAR = 2025
+"""The latest loss year in Hansen v1.13 (`lossyear` 1..25 for 2001..2025)."""
+
+
+@dataclass(frozen=True, slots=True)
+class ObservationWindow:
+    """The dates a metrics document observes: the latest 12 months and 5 years to `end`
+    (exclusive), and the latest five complete Hansen loss years before it. `CURRENT_WINDOW` is
+    the live default; an earlier one rates a site as it was observed then (a past quarter)."""
+
+    end: str
+    start_12m: str
+    start_5y: str
+    loss_first_year: int
+    loss_last_year: int
+    data_version: str
+
+    @classmethod
+    def ending(cls, end: date) -> ObservationWindow:
+        """The window ending on `end` (the first day after it): e.g. 2026-10-01 is 2026Q3."""
+        last_day = end - timedelta(days=1)
+        loss_last = min(HANSEN_LAST_YEAR, end.year - 1)
+        return cls(
+            end=end.isoformat(),
+            start_12m=end.replace(year=end.year - 1).isoformat(),
+            start_5y=end.replace(year=end.year - 5).isoformat(),
+            loss_first_year=loss_last - 4,
+            loss_last_year=loss_last,
+            data_version=f"{last_day.year}Q{(last_day.month - 1) // 3 + 1}",
+        )
+
+
+CURRENT_WINDOW = ObservationWindow.ending(date.fromisoformat(END_DATE))
 ESA_CCI_BIOMASS_YEAR_START = "2022-01-01"
 ESA_CCI_BIOMASS_YEAR_END = "2023-01-01"
 GMW_EPOCH = "2020"
@@ -52,6 +86,10 @@ CLOUD_SCORE_THRESHOLD = 0.60
 CLOUD_FREE_MIN_CLEAR_FRACTION = 0.50
 HANSEN_TREE_COVER_MIN_PERCENT = 30
 MIN_NDVI_MONTHS = 12
+NDVI_MONTHS = 60
+NDVI_MONTHS_PER_REQUEST = 12
+"""Months one request reduces. A large listing splits each month's reduction into many tiles,
+and all 60 months at once exceed Earth Engine's concurrent aggregation limit."""
 MAX_PIXELS: Any = 1e9
 
 CLASSES = [
@@ -278,7 +316,7 @@ def mann_kendall(tau: float, n: int) -> dict[str, float]:
 
 
 def ndvi_summary(out: Mapping[str, Any]) -> dict[str, Any]:
-    """The NDVI metrics from the one-round-trip dictionary `ndvi()` fetches: monthly rows,
+    """The NDVI metrics from what `ndvi()` fetches: monthly rows (in yearly batches),
     Sen's slope, Kendall's tau and the cloud-free scene count of the last 12 months."""
     rows = sorted((feature["properties"] for feature in out["rows"]), key=lambda row: row["t"])
     if len(rows) < MIN_NDVI_MONTHS:
@@ -365,6 +403,7 @@ def assemble_metrics(
     biomass: tuple[float, float | None],
     mangrove_fraction: float,
     soc_t_c_ha: float,
+    window: ObservationWindow = CURRENT_WINDOW,
 ) -> dict[str, Any]:
     """The cached-metrics JSON (`EarthObsMetrics`), rounded, with provenance and attributions."""
     forest_loss_5y, forest_loss_12m = forest_loss
@@ -377,7 +416,7 @@ def assemble_metrics(
     gedi_scale = {"gedi_biomass_scale_m": 1000}
     out: dict[str, Any] = {
         "site_key": site_key,
-        "data_version": DATA_VERSION,
+        "data_version": window.data_version,
         "computed_at_utc": computed_at_utc,
         "area_ha": area_ha,
         "centroid": {"lat": centroid_lat, "lon": centroid_lon},
@@ -393,12 +432,18 @@ def assemble_metrics(
         "mangrove_fraction": mangrove_fraction,
         "soc_t_c_ha": soc_t_c_ha,
         "date_windows": {
-            "land_cover": {"start": START_12M, "end": END_DATE},
-            "ndvi": {"start": START_5Y, "end": END_DATE},
-            "cloud_free_obs": {"start": START_12M, "end": END_DATE},
+            "land_cover": {"start": window.start_12m, "end": window.end},
+            "ndvi": {"start": window.start_5y, "end": window.end},
+            "cloud_free_obs": {"start": window.start_12m, "end": window.end},
             "jrc_water_change": {"start": "1984-03-16", "end": "2021-12-31"},
-            "hansen_forest_loss": {"start": "2021-01-01", "end": "2025-12-31"},
-            "hansen_forest_loss_last_12m": {"start": "2025-01-01", "end": "2025-12-31"},
+            "hansen_forest_loss": {
+                "start": f"{window.loss_first_year}-01-01",
+                "end": f"{window.loss_last_year}-12-31",
+            },
+            "hansen_forest_loss_last_12m": {
+                "start": f"{window.loss_last_year}-01-01",
+                "end": f"{window.loss_last_year}-12-31",
+            },
             "esa_cci_biomass": {"start": "2022-01-01", "end": "2022-12-31"},
             **(gedi_window if biomass_gedi is not None else {}),
             "gmw_mangrove_extent": {"start": f"{GMW_EPOCH}-01-01", "end": f"{GMW_EPOCH}-12-31"},
@@ -410,8 +455,8 @@ def assemble_metrics(
             "sentinel2_ndvi_scale_m": 10,
             "jrc_water_change_scale_m": 30,
             "hansen_forest_loss_scale_m": 30,
-            "hansen_forest_loss_years": FOREST_LOSS_YEARS,
-            "hansen_forest_loss_last_12m_year": FOREST_LOSS_LAST_12M_YEAR,
+            "hansen_forest_loss_years": f"{window.loss_first_year}-{window.loss_last_year}",
+            "hansen_forest_loss_last_12m_year": str(window.loss_last_year),
             "hansen_treecover2000_min_percent": HANSEN_TREE_COVER_MIN_PERCENT,
             "esa_cci_biomass_scale_m": 100,
             **(gedi_scale if biomass_gedi is not None else {}),
@@ -527,20 +572,23 @@ def ndvi(aoi: ee.Geometry, start_12m: ee.Date, start_5y: ee.Date, end: ee.Date) 
         )
         return feature
 
-    series = (
-        ee.FeatureCollection(ee.List.sequence(0, 59).map(monthly))
-        .filter(ee.Filter.notNull(["ndvi"]))
-        .sort("t")
-    )
+    rows: list[dict[str, Any]] = []
+    for first in range(0, NDVI_MONTHS, NDVI_MONTHS_PER_REQUEST):
+        months = ee.List.sequence(first, first + NDVI_MONTHS_PER_REQUEST - 1)
+        batch = ee.FeatureCollection(months.map(monthly)).filter(ee.Filter.notNull(["ndvi"]))
+        rows.extend(cast(list[dict[str, Any]], batch.toList(NDVI_MONTHS_PER_REQUEST).getInfo()))
+    if len(rows) < MIN_NDVI_MONTHS:
+        raise RuntimeError(f"Only {len(rows)} NDVI months returned; need at least 12.")
+    # The trend reducers run on the fetched monthly means: a small table, no image to reduce.
+    series = ee.FeatureCollection([ee.Feature(None, row["properties"]) for row in rows]).sort("t")
     out = ee.Dictionary(
         {
-            "rows": series.toList(60),
             "sens": series.reduceColumns(ee.Reducer.sensSlope(), ["t", "ndvi"]),
             "kendall": series.reduceColumns(ee.Reducer.kendallsCorrelation(2), ["t", "ndvi"]),
             "cloud_free_observations_last_12m": usable.filterDate(start_12m, end).size(),
         }
     ).getInfo()
-    return ndvi_summary(cast(dict[str, Any], out))
+    return ndvi_summary({**cast(dict[str, Any], out), "rows": rows})
 
 
 def water_change(aoi: ee.Geometry) -> float:
@@ -551,16 +599,19 @@ def water_change(aoi: ee.Geometry) -> float:
     )
 
 
-def forest_loss(aoi: ee.Geometry) -> tuple[float, float]:
-    """Hansen loss (ha) in the latest five complete years and in the latest year only."""
+def forest_loss(
+    aoi: ee.Geometry, window: ObservationWindow = CURRENT_WINDOW
+) -> tuple[float, float]:
+    """Hansen loss (ha) in the window's five complete years and in its latest year only."""
     # Hansen v1.13 lossyear encodes 1..25 for 2001..2025. We use the latest five complete
     # years available in the dataset: 2021..2025 -> lossyear 21..25; the "last 12 months"
     # metric for the listing gate is the latest complete year, 2025 -> lossyear 25.
     hansen = ee.Image("UMD/hansen/global_forest_change_2025_v1_13")
     loss_year = hansen.select("lossyear")
     forest_2000 = hansen.select("treecover2000").gte(HANSEN_TREE_COVER_MIN_PERCENT)
-    latest_five_years = loss_year.gte(21).And(loss_year.lte(25))
-    latest_year = loss_year.eq(25)
+    first, last = window.loss_first_year - 2000, window.loss_last_year - 2000
+    latest_five_years = loss_year.gte(first).And(loss_year.lte(last))
+    latest_year = loss_year.eq(last)
     pixel_area = ee.Image.pixelArea()
     areas = ee.Image.cat(
         [
@@ -634,8 +685,10 @@ def compute_polygon_metrics(
     site_key: str,
     computed_at_utc: str | None = None,
     checkpoint: Checkpoint = _no_checkpoint,
+    window: ObservationWindow = CURRENT_WINDOW,
 ) -> dict[str, Any]:
-    """Every T11/T13 metric for one polygon, as the cached-metrics JSON (`EarthObsMetrics`).
+    """Every T11/T13 metric for one polygon, as the cached-metrics JSON (`EarthObsMetrics`),
+    observed over `window` (the current one by default).
 
     Area and centroid come from T36's equal-area check (`validate_polygon`), never from
     Earth Engine. `checkpoint` runs before each Earth Engine step, so a caller with a deadline
@@ -651,9 +704,9 @@ def compute_polygon_metrics(
         problems = "; ".join(problem.message for problem in check.problems)
         raise ValueError(f"failed polygon validation: {problems}")
 
-    start_12m = ee.Date(START_12M)
-    start_5y = ee.Date(START_5Y)
-    end = ee.Date(END_DATE)
+    start_12m = ee.Date(window.start_12m)
+    start_5y = ee.Date(window.start_5y)
+    end = ee.Date(window.end)
     aoi = ee.Geometry(geometry_from_feature(geojson))
 
     checkpoint()
@@ -661,7 +714,7 @@ def compute_polygon_metrics(
     checkpoint()
     ndvi_metrics = ndvi(aoi, start_12m, start_5y, end)
     checkpoint()
-    loss = forest_loss(aoi)
+    loss = forest_loss(aoi, window)
     checkpoint()
     agb = biomass(aoi)
     checkpoint()
@@ -683,6 +736,7 @@ def compute_polygon_metrics(
         biomass=agb,
         mangrove_fraction=mangrove,
         soc_t_c_ha=soc,
+        window=window,
     )
 
 
