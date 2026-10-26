@@ -1,23 +1,22 @@
 import type { ReactNode } from "react";
 
 /**
- * The Marketplace's heading row. Shared by the page and its loading skeleton (#219), so the
- * real text is on screen from the first frame and nothing moves when the sites arrive. `stats`
- * sits beside the heading (the stat strip, or its blocks).
+ * The Marketplace's heading: the serif title and one line on what's here, then the board's
+ * figures (`figures`). Shared by the page and its loading skeleton (#219), so the title is on
+ * screen from the first frame.
  */
-export function MarketplaceHeading({ stats }: { stats?: ReactNode }) {
+export function MarketplaceHeading({ figures }: { figures?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-6">
-      <div>
+    <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-6">
+      <div className="max-w-xl">
         <h1 className="font-serif text-5xl leading-none tracking-tight sm:text-6xl">
           Marketplace
         </h1>
-        <p className="mt-3 max-w-xl text-muted-foreground">
-          Living land, rated by AI from satellite data and local news. Back a
-          site and follow its health every quarter.
+        <p className="mt-4 text-xl leading-snug text-pretty text-muted-foreground sm:text-2xl">
+          Rated from space and the local news. Back a site, watch it stay alive.
         </p>
       </div>
-      {stats}
+      {figures}
     </div>
   );
 }

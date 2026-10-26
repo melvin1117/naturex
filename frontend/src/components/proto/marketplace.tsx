@@ -1,15 +1,23 @@
 "use client";
 
-import { RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
+import {
+  type LucideIcon,
+  RefreshCwIcon,
+  TriangleAlertIcon,
+} from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { usePathname, useReplaceUrl } from "@/lib/nav";
 import { useMemo } from "react";
 
 import {
   MarketBoardSkeleton,
-  MarketStatsSkeleton,
+  MarketFiguresSkeleton,
 } from "@/components/page-skeletons";
-import { Stat } from "@/components/proto/bits";
+import {
+  HabitatIcon,
+  RatedSitesIcon,
+  WorthRangeIcon,
+} from "@/components/icons";
 import { MarketplaceHeading } from "@/components/proto/marketplace-heading";
 import { FeatureSiteCard, SiteCard } from "@/components/proto/site-card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -49,7 +57,7 @@ function useMarketCards() {
 export function Marketplace() {
   return (
     <div className="mx-auto max-w-7xl px-4 pt-10 sm:px-6">
-      <MarketplaceHeading stats={<MarketStats />} />
+      <MarketplaceHeading figures={<MarketFigures />} />
       <div className="mt-8">
         <WorldGate
           fallback={<MarketBoardSkeleton label="Opening your demo world…" />}
@@ -61,28 +69,66 @@ export function Marketplace() {
   );
 }
 
-function MarketStats() {
+/**
+ * The board in three figures, with the brand's icons: the sites rated, their living land, and
+ * what their nature is worth a year as a range (never a single value).
+ */
+function MarketFigures() {
   const { cards, error } = useMarketCards();
-  // Hold the strip's place while the sites load, so the heading row doesn't reflow.
-  if (!cards) return error ? null : <MarketStatsSkeleton />;
-  if (cards.length === 0) return null;
+  if (!cards) return error ? null : <MarketFiguresSkeleton />;
   const rated = cards.filter((c) => c.grade !== null);
-  const valued = rated.flatMap((c) =>
-    c.valueMid === null ? [] : [c.valueMid],
+  if (rated.length === 0) return null;
+  const valued = rated.filter(
+    (c) => c.valueLow !== null && c.valueHigh !== null,
   );
+  const low = valued.reduce((sum, c) => sum + (c.valueLow ?? 0), 0);
+  const high = valued.reduce((sum, c) => sum + (c.valueHigh ?? 0), 0);
   return (
-    <dl className="grid grid-cols-3 gap-6 rounded-3xl bg-card px-6 py-4 shadow-soft">
-      <Stat label="Sites listed" value={cards.length} />
-      <Stat
-        label="Land rated"
+    <dl className="flex flex-wrap gap-x-8 gap-y-4">
+      <Figure
+        icon={RatedSitesIcon}
+        value={String(rated.length)}
+        label={rated.length === 1 ? "site rated" : "sites rated"}
+      />
+      <Figure
+        icon={HabitatIcon}
         value={ha(rated.reduce((sum, c) => sum + c.areaHa, 0))}
+        label="of living land"
       />
-      <Stat
-        label="Nature's value"
-        value={valued.length ? money(valued.reduce((a, b) => a + b)) : "—"}
-        sub="a year, mid, rated sites"
-      />
+      {valued.length > 0 && (
+        <Figure
+          icon={WorthRangeIcon}
+          value={`${money(low)}–${money(high)}`}
+          label="a year in nature's services"
+        />
+      )}
     </dl>
+  );
+}
+
+function Figure({
+  icon: Icon,
+  value,
+  label,
+}: {
+  icon: LucideIcon;
+  value: string;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      {/* An icon tile is a rounded square (DESIGN.md, Shapes). */}
+      <span className="grid size-11 shrink-0 place-items-center rounded-[14px] bg-card text-foreground shadow-soft">
+        <Icon size={22} aria-hidden="true" />
+      </span>
+      {/* The label comes first for assistive tech; the number reads first on screen. */}
+      <div className="flex flex-col-reverse">
+        <dt className="text-sm text-muted-foreground">{label}</dt>
+        <dd className="tabular text-2xl leading-tight font-light tracking-[-0.03em]">
+          {value}
+        </dd>
+      </div>
+    </div>
   );
 }
 

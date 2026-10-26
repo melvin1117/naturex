@@ -36,23 +36,6 @@ function Line({ box, className }: { box: string; className: string }) {
   );
 }
 
-/** A `Stat` in a card's stat strip: label, value and the line under it, at their heights. */
-function StatBones() {
-  return (
-    <div>
-      <div className="flex h-4 items-center">
-        <Skeleton className="h-3 w-28" />
-      </div>
-      <div className="mt-1 flex h-8 items-center">
-        <Skeleton className="h-6 w-32" />
-      </div>
-      <div className="mt-0.5 flex h-4 items-center">
-        <Skeleton className="h-3 w-40 max-w-full" />
-      </div>
-    </div>
-  );
-}
-
 /** A panel: a still card (only its lines pulse), as `StewardPanel` and `IpoCard` draw it. */
 function Panel({
   className,
@@ -164,16 +147,22 @@ export function AssetPageSkeleton({ label }: { label?: string }) {
   );
 }
 
-/** The Marketplace's stat strip beside its heading, while the sites load. */
-export function MarketStatsSkeleton() {
+/** The Marketplace's figures while the sites load: three icon tiles and their numbers. */
+export function MarketFiguresSkeleton() {
   return (
     <div
-      className="grid grid-cols-3 gap-6 rounded-3xl bg-card px-6 py-4 shadow-soft"
       aria-hidden="true"
-      data-skeleton="market-stats"
+      data-skeleton="market-figures"
+      className="flex flex-wrap gap-x-8 gap-y-4"
     >
       {[0, 1, 2].map((i) => (
-        <StatBones key={i} />
+        <div key={i} className="flex items-center gap-3">
+          <Skeleton className="size-11 rounded-[14px]" />
+          <div className="space-y-1.5">
+            <Skeleton className="h-6 w-20" />
+            <Skeleton className="h-3.5 w-24" />
+          </div>
+        </div>
       ))}
     </div>
   );
@@ -265,7 +254,7 @@ export function MarketBoardSkeleton({
 export function MarketplaceSkeleton({ label }: { label?: string }) {
   return (
     <div className="mx-auto max-w-7xl px-4 pt-10 sm:px-6">
-      <MarketplaceHeading stats={<MarketStatsSkeleton />} />
+      <MarketplaceHeading figures={<MarketFiguresSkeleton />} />
       <div className="mt-8">
         <MarketBoardSkeleton label={label} />
       </div>
