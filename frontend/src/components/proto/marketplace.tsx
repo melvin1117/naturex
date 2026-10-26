@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  type LucideIcon,
-  RefreshCwIcon,
-  TriangleAlertIcon,
-} from "lucide-react";
+import { RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { usePathname, useReplaceUrl } from "@/lib/nav";
 import { useMemo } from "react";
@@ -13,6 +9,7 @@ import {
   MarketBoardSkeleton,
   MarketFiguresSkeleton,
 } from "@/components/page-skeletons";
+import { Figure, Figures } from "@/components/figures";
 import {
   HabitatIcon,
   RatedSitesIcon,
@@ -84,7 +81,7 @@ function MarketFigures() {
   const low = valued.reduce((sum, c) => sum + (c.valueLow ?? 0), 0);
   const high = valued.reduce((sum, c) => sum + (c.valueHigh ?? 0), 0);
   return (
-    <dl className="flex flex-wrap gap-x-8 gap-y-4">
+    <Figures>
       <Figure
         icon={RatedSitesIcon}
         value={String(rated.length)}
@@ -102,33 +99,7 @@ function MarketFigures() {
           label="a year in nature's services"
         />
       )}
-    </dl>
-  );
-}
-
-function Figure({
-  icon: Icon,
-  value,
-  label,
-}: {
-  icon: LucideIcon;
-  value: string;
-  label: string;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      {/* An icon tile is a rounded square (DESIGN.md, Shapes). */}
-      <span className="grid size-11 shrink-0 place-items-center rounded-[14px] bg-card text-foreground shadow-soft">
-        <Icon size={22} aria-hidden="true" />
-      </span>
-      {/* The label comes first for assistive tech; the number reads first on screen. */}
-      <div className="flex flex-col-reverse">
-        <dt className="text-sm text-muted-foreground">{label}</dt>
-        <dd className="tabular text-2xl leading-tight font-light tracking-[-0.03em]">
-          {value}
-        </dd>
-      </div>
-    </div>
+    </Figures>
   );
 }
 

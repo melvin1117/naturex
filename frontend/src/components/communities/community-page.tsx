@@ -2,10 +2,16 @@
 
 import { ArrowLeft, ArrowRight, Settings } from "lucide-react";
 import Link from "@/components/app-link";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef } from "react";
 import { cn } from "cn";
 
-import { ListLandIcon } from "@/components/icons";
+import { Figure, Figures } from "@/components/figures";
+import {
+  BackThisSiteIcon,
+  CommunityFundIcon,
+  ListLandIcon,
+  RatedSitesIcon,
+} from "@/components/icons";
 import { Delta, SiteThumb } from "@/components/proto/bits";
 import { GradeBadge } from "@/components/proto/grade";
 import { takeJustCreated } from "@/components/shell/steward-community";
@@ -79,10 +85,8 @@ export function CommunityPage({
           >
             {community.name}
           </h1>
-          <p className="mt-5 max-w-2xl text-lg text-pretty text-muted-foreground">
-            <Lede summary={summary} owner={role === "owner"} />
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">{meta}</p>
+          <p className="mt-3 text-sm text-muted-foreground">{meta}</p>
+          <Lede summary={summary} owner={role === "owner"} />
         </div>
         {role === "owner" && (
           <Button asChild variant="outline">
@@ -136,13 +140,11 @@ export function CommunityPage({
   );
 }
 
-function Num({ children }: { children: ReactNode }) {
-  return (
-    <span className="tabular font-medium text-foreground">{children}</span>
-  );
-}
-
 /** How the community's land is doing, in one sentence with its numbers in it. */
+/**
+ * Where the community stands. With sites on the Marketplace: its figures (sites, supporters, the
+ * community fund); before that, one line on what comes next.
+ */
 function Lede({
   summary,
   owner,
@@ -154,32 +156,37 @@ function Lede({
   const supporters = summary.holder_count;
   if (live > 0)
     return (
-      <>
-        <Num>
-          {live} {live === 1 ? "site" : "sites"}
-        </Num>{" "}
-        on the Marketplace,{" "}
-        {supporters > 0 ? (
-          <>
-            backed by{" "}
-            <Num>
-              {supporters} {supporters === 1 ? "supporter" : "supporters"}
-            </Num>
-          </>
-        ) : (
-          "waiting for its first supporter"
-        )}
-        . The community fund holds{" "}
-        <Num>{moneyText(summary.wallet.balance)}</Num>.
-      </>
+      <Figures className="mt-6">
+        <Figure
+          icon={RatedSitesIcon}
+          value={live}
+          label={
+            live === 1 ? "site on the Marketplace" : "sites on the Marketplace"
+          }
+        />
+        <Figure
+          icon={BackThisSiteIcon}
+          value={supporters}
+          label={supporters === 1 ? "supporter" : "supporters"}
+        />
+        <Figure
+          icon={CommunityFundIcon}
+          value={moneyText(summary.wallet.balance)}
+          label="in the community fund"
+        />
+      </Figures>
     );
-  if (summary.listings.some((l) => l.ipo_at && l.asset.status === "suspended"))
-    return "Trading is paused on its sites for now.";
-  if (summary.listings.some((l) => l.asset.status !== "withdrawn"))
-    return owner
-      ? "Nothing on the Marketplace yet. Finish a listing and send its offer to the Reviewer."
-      : "Nothing on the Marketplace yet. Finish a listing; the owner sends its offer to the Reviewer.";
-  return "No land listed yet.";
+  return (
+    <p className="mt-5 max-w-2xl text-lg text-pretty text-muted-foreground">
+      {summary.listings.some((l) => l.ipo_at && l.asset.status === "suspended")
+        ? "Trading is paused on its sites for now."
+        : summary.listings.some((l) => l.asset.status !== "withdrawn")
+          ? owner
+            ? "Nothing on the Marketplace yet. Finish a listing and send its offer to the Reviewer."
+            : "Nothing on the Marketplace yet. Finish a listing; the owner sends its offer to the Reviewer."
+          : "No land listed yet."}
+    </p>
+  );
 }
 
 function SiteTile({

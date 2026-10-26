@@ -216,14 +216,14 @@ describe("a community's page", () => {
         wallet: { ...WALLET, balance: "1234.50" },
       }),
     );
+    // Its figures, each named by what it counts.
     expect(
-      await screen.findByText((_, el) =>
-        el?.tagName === "P"
-          ? el.textContent ===
-            "1 site on the Marketplace, backed by 3 supporters. The community fund holds $1,234.50."
-          : false,
-      ),
-    ).toBeVisible();
+      (await screen.findByText("site on the Marketplace")).nextSibling,
+    ).toHaveTextContent("1");
+    expect(screen.getByText("supporters").nextSibling).toHaveTextContent("3");
+    expect(
+      screen.getByText("in the community fund").nextSibling,
+    ).toHaveTextContent("$1,234.50");
   });
 
   it("shows each site where it stands, leading to its next step", async () => {
