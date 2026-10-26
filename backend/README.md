@@ -25,6 +25,37 @@ Live-world admins are created only by an operator, with the password prompted fo
 command line): `make create-admin EMAIL=ops@example.org NAME="Ops"`, or
 `uv run python -m app.cli create-admin --email ... --name ...` from `backend/` (ADR-0005 §1).
 
+## Template showcase (`app.jobs.build_template_sites`)
+
+Gives the template world, which every sandbox copies, a year of history on real places, from
+`data/template_sites.json`: two fictional communities (Olympic Rainforest Keepers in Washington,
+Florida Keys Mangrove Keepers), six listings drawn on OpenStreetMap boundaries (ODbL: park and
+island outlines as mapped, river valleys as a buffer around the mapped river), and the
+supporters, Arjun and Rosa trading them. Rosa also stewards the Keys community.
+
+- **Ratings:** each listing is rated when it's listed and then every quarter (up to five
+  reports), each with Earth Engine observations for its own quarter (`ObservationWindow`),
+  News Scout (Tavily, once per listing; each rating sees only what was published by its date)
+  and the rating runner (Nemotron). Grades and prices move with the data.
+- **Offers:** launched through the Reviewer's approval (`app.services.offers`), with a round
+  number of units so one costs about $50 (old-growth forests are valued at hundreds of
+  millions); one was sent back with a note and sent again, one waits in Reviews, one isn't
+  sent yet.
+- **Trades:** the market engine fills each order as `POST /orders` does (seeded, so a rebuild
+  repeats them).
+- **Dates:** each step runs now and its rows are then moved to the step's date, so the history
+  reads as the year it describes (the ledger's hashes don't cover times).
+
+```bash
+make migrate && make seed   # the template with only the seed's content
+cd backend && USE_MOCKS=false EARTH_ENGINE_LIVE=true EARTH_ENGINE_TIMEOUT_S=400 \
+  uv run python -m app.jobs.build_template_sites ../brag-output/template-news.json
+```
+
+The optional path keeps News Scout's results, so a retried build spends no Tavily credits
+again (about 6 per listing). The job refuses to run twice on the same template. To deploy it,
+restore a dump of the whole database, as for the live world below.
+
 ## Live data (`app.jobs.seed_live`)
 
 Fills the live world with activity from `data/live_seed.json`. Ratings, reports, alerts, trades
