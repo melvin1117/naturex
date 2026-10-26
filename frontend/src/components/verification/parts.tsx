@@ -1,4 +1,11 @@
-import { CircleCheck, CircleX, ShieldX, TriangleAlert } from "lucide-react";
+import {
+  CircleCheck,
+  CircleX,
+  FileClock,
+  ShieldQuestionMark,
+  ShieldX,
+  TriangleAlert,
+} from "lucide-react";
 import { cn } from "cn";
 
 import { StewardsIcon, VerifiedLandIcon } from "@/components/icons";
@@ -10,15 +17,23 @@ import type {
 } from "@/lib/api/types";
 import { CHECK_NOTE, checkLabel, RESULT_LABEL } from "@/lib/verification";
 
-// The brand's Verified land seal only where documents were reviewed. Every other level's badge
-// reads "Self-attested by the community", so it shows the community, never a check.
+// The brand's Verified land seal only where documents were reviewed; the other levels keep a
+// state icon ("In review", "Rejected"…), never a check.
 const LEVEL_ICON = {
   verified: VerifiedLandIcon,
   revoked: ShieldX,
-  documents_submitted: StewardsIcon,
-  rejected: StewardsIcon,
-  unverified: StewardsIcon,
+  documents_submitted: FileClock,
+  rejected: ShieldQuestionMark,
+  unverified: ShieldQuestionMark,
 } satisfies Record<VerificationLevel, unknown>;
+
+/** The public badge (`VerificationPublic.badge`) says "Self-attested by the community" for every
+ * level but verified and revoked: it shows the community vouching, never a check. */
+function publicIcon(level: VerificationLevel) {
+  return level === "verified" || level === "revoked"
+    ? LEVEL_ICON[level]
+    : StewardsIcon;
+}
 
 const LEVEL_TONE: Record<VerificationLevel, string> = {
   verified: "bg-lime/35 text-lime-ink",
@@ -30,20 +45,23 @@ const LEVEL_TONE: Record<VerificationLevel, string> = {
 
 /**
  * A verification chip. `children` is the API's exact badge text; the
- * level only picks the icon and tone, so the words never depend on colour.
+ * level only picks the icon and tone, so the words never depend on colour. `publicBadge`: the
+ * children are the public badge, whose icon matches its words.
  */
 export function VerificationBadge({
   level,
   children,
   tone = "light",
+  publicBadge = false,
   className,
 }: {
   level: VerificationLevel;
   children: string;
   tone?: "light" | "image";
+  publicBadge?: boolean;
   className?: string;
 }) {
-  const Icon = LEVEL_ICON[level];
+  const Icon = publicBadge ? publicIcon(level) : LEVEL_ICON[level];
   return (
     <Badge
       variant="secondary"

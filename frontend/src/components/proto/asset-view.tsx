@@ -3,6 +3,8 @@
 import { ArrowLeft, type LucideIcon, MapPin } from "lucide-react";
 import Link from "@/components/app-link";
 import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 import {
   AgentTraceIcon,
@@ -13,9 +15,6 @@ import {
   SatelliteRecordIcon,
   VerifiedLandIcon,
 } from "@/components/icons";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
-
 import { AssetBodySkeleton } from "@/components/page-skeletons";
 import { Delta, SiteBackdrop, ValueRange } from "@/components/proto/bits";
 import { PriceChart, PriceChartSkeleton } from "@/components/proto/charts";

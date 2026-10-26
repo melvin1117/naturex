@@ -212,9 +212,9 @@ Ecosystem and verification chips are small pills; on images they are white at 15
 One bar for the whole sandbox (ADR-0008), sticky and translucent, holding from left to right:
 - the WildWorth lockup (it leads to the Marketplace);
 - the pill nav: **Marketplace · Communities · Your stakes** (the Reviewer: **Marketplace · Reviews**), the active page raised on a card. Below `md` the pills wrap onto their own row;
-- **Time Machine** (a ghost button with Lucide's history icon) that opens a side sheet;
+- **Time Machine** (a ghost button with the brand pack's Time Machine icon) that opens a side sheet;
 - the alerts bell;
-- **who you are**: the persona's round avatar (Rosa lime, Arjun forest, the Reviewer on the machine layer with a check), name and role, and a menu to be someone else, start the sandbox over or leave it.
+- **who you are**: a switcher, an outlined pill with everyone's round avatars stacked, the current person in front (Rosa lime, Arjun forest, the Reviewer on the machine layer with a check; phones show only the current one), "Viewing as Rosa" over her role, and up-and-down chevrons. Its menu opens on "Switch person": the three people as radio items, then start the sandbox over or leave it.
 
 **Ask Bea** floats bottom-right on every sandbox page: a forest pill with Bea's avatar, "Ask Bea" and an "AI" tag (its name is "Ask Bea AI assistant"); below `sm` only her avatar. Her wings and antennae stir for about two seconds when it's hovered or focused.
 

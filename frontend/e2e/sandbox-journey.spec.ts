@@ -33,7 +33,7 @@ test.afterEach(closeSessions);
 /** Be someone else in this sandbox, from the header's person menu. */
 async function become(page: Page, person: "Rosa" | "Arjun" | "Reviewer") {
   await page.getByRole("button", { name: /^Viewing as / }).click();
-  await page.getByRole("menuitem", { name: new RegExp(person) }).click();
+  await page.getByRole("menuitemradio", { name: new RegExp(person) }).click();
   await expect(
     page.getByRole("button", { name: new RegExp(`^Viewing as ${person}`) }),
   ).toBeVisible();

@@ -258,6 +258,15 @@ describe("AssetView", () => {
       name: "How it was rated",
     });
     expect(within(band).getByText(/^A recorded run, /)).toBeInTheDocument();
+    // Its news is named once above the list, not on every article.
+    const news = screen.getByRole("region", { name: "News and satellite" });
+    expect(
+      await within(news).findByText(
+        /^The news the agents found in this site's recorded run, /,
+      ),
+    ).toBeInTheDocument();
+    expect(within(news).queryByText(/Recorded run, /)).toBeNull();
+    expect(within(news).getAllByText(/^News/).length).toBeGreaterThan(0);
     fireEvent.click(
       within(band).getByRole("button", { name: /Open the Agent Trace/ }),
     );
@@ -719,6 +728,17 @@ describe("AssetView", () => {
                 severity: 4,
                 created_at: "2026-10-17T00:00:00Z",
               },
+              {
+                id: "e3",
+                asset_id: ID,
+                source: "admin",
+                title: "A road is cut through the meadows",
+                url: null,
+                direction: -1,
+                severity: 3,
+                impact_type: "encroachment",
+                created_at: "2026-10-16T00:00:00Z",
+              },
             ],
           }),
       }),
@@ -737,9 +757,16 @@ describe("AssetView", () => {
     });
     expect(link).toHaveAttribute("href", "https://example.org/fill");
     expect(link).toHaveAttribute("rel", "noopener noreferrer nofollow");
-    // An article reads as news: it names where it was published.
+    // Web news reads as news, naming where it was published when its link is safe; a Time
+    // Machine event says what it is instead.
     expect(
       within(happened).getByText(/^News · example\.org/),
+    ).toBeInTheDocument();
+    expect(
+      within(happened).getByText(/^News · restoration/),
+    ).toBeInTheDocument();
+    expect(
+      within(happened).getByText("encroachment · Injected by Time Machine"),
     ).toBeInTheDocument();
     expect(screen.queryByText("Sample")).toBeNull();
   });

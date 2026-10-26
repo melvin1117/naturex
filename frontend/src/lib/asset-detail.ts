@@ -32,6 +32,17 @@ export function chartPrices(
   });
 }
 
+/** Where an event came from: web news (Tavily), the Time Machine, or the community's evidence. */
+export type EventOrigin = "news" | "time_machine" | "evidence";
+
+function eventOrigin(source: string): EventOrigin {
+  return source === "admin"
+    ? "time_machine"
+    : source === "evidence"
+      ? "evidence"
+      : "news";
+}
+
 const SOURCE_LABEL: Record<string, string> = {
   tavily: "Found by News Scout",
   admin: "Injected by Time Machine",
@@ -54,6 +65,7 @@ export function newsItems(events: EventOut[] | undefined) {
       severity: e.severity ?? null,
       kind: e.impact_type ?? null,
       sourceLabel: SOURCE_LABEL[e.source] ?? e.source,
+      origin: eventOrigin(e.source),
       url: e.url ?? null,
     }));
 }

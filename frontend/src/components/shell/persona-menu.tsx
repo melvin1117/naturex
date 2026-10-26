@@ -28,6 +28,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -43,11 +45,9 @@ import {
 export function PersonaAvatar({
   persona,
   className,
-  ...rest
 }: {
   persona: SwitchablePersona;
   className?: string;
-  "data-current"?: string;
 }) {
   // The initial is drawn by CSS, not as text, so it never joins a button's visible name.
   const initial =
@@ -57,7 +57,6 @@ export function PersonaAvatar({
       aria-hidden="true"
       data-persona={persona}
       data-initial={initial}
-      {...rest}
       className={cn(
         "grid size-8 shrink-0 place-items-center rounded-full text-[13px] font-semibold",
         initial && "before:content-[attr(data-initial)]",
@@ -75,8 +74,9 @@ export function PersonaAvatar({
 }
 
 /**
- * Everyone in the sandbox, the current person in front: the switcher shows there are others to
- * become, not one account.
+ * Everyone in the sandbox, the current person in front (last): the switcher shows there are
+ * others to become, not one account. Phones show only the current person, to keep the bar on
+ * one row.
  */
 function PeopleStack({ current }: { current: SwitchablePersona }) {
   const others = SWITCHABLE.filter((key) => key !== current);
@@ -86,14 +86,10 @@ function PeopleStack({ current }: { current: SwitchablePersona }) {
         <PersonaAvatar
           key={key}
           persona={key}
-          className="-mr-1.5 size-6 text-[10px] opacity-80 ring-2 ring-card [&_svg]:size-3"
+          className="-mr-1.5 size-6 text-[10px] opacity-80 ring-2 ring-card max-sm:hidden [&_svg]:size-3"
         />
       ))}
-      <PersonaAvatar
-        persona={current}
-        data-current=""
-        className="relative ring-2 ring-card"
-      />
+      <PersonaAvatar persona={current} className="relative ring-2 ring-card" />
     </span>
   );
 }
@@ -134,7 +130,8 @@ export function PersonaMenu({ persona }: { persona: SwitchablePersona }) {
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            className="h-11 gap-2.5 rounded-full border-border bg-card py-1 pr-2.5 pl-1.5 shadow-none"
+            // `has-[>svg]:` so the Button's own `has-[>svg]:px-4` doesn't win.
+            className="h-11 gap-2.5 rounded-full border-border bg-card py-1 shadow-none has-[>svg]:pr-2.5 has-[>svg]:pl-1.5"
             disabled={switcher.isPending}
             // Starts with the visible words, so speech and axe's label-in-name agree.
             aria-label={`Viewing as ${me.name}, ${me.role}. Switch person or start the sandbox over`}
@@ -161,34 +158,40 @@ export function PersonaMenu({ persona }: { persona: SwitchablePersona }) {
           <DropdownMenuLabel className="px-2.5 pt-2 pb-1 text-xs font-medium text-muted-foreground">
             Switch person
           </DropdownMenuLabel>
-          {SWITCHABLE.map((key) => {
-            const p = SANDBOX_PERSONAS[key];
-            const current = key === persona;
-            return (
-              <DropdownMenuItem
-                key={key}
-                onSelect={() => void switchTo(key)}
-                className="gap-3 rounded-xl px-2.5 py-2"
-                aria-current={current ? "true" : undefined}
-              >
-                <PersonaAvatar persona={key} />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium">
-                    {p.name}{" "}
-                    <span className="font-normal text-muted-foreground">
-                      · {p.role}
+          {/* Radio items: a screen reader hears who's chosen ("Arjun … checked"). */}
+          <DropdownMenuRadioGroup
+            value={persona}
+            onValueChange={(key) => void switchTo(key as SwitchablePersona)}
+          >
+            {SWITCHABLE.map((key) => {
+              const p = SANDBOX_PERSONAS[key];
+              return (
+                <DropdownMenuRadioItem
+                  key={key}
+                  value={key}
+                  // The avatar takes the place of the radio dot; the check shows who's chosen.
+                  className="group gap-3 rounded-xl px-2.5 py-2 [&>span:first-child]:hidden"
+                >
+                  <PersonaAvatar persona={key} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium">
+                      {p.name}{" "}
+                      <span className="font-normal text-muted-foreground">
+                        · {p.role}
+                      </span>
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {p.blurb}
                     </span>
                   </span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {p.blurb}
-                  </span>
-                </span>
-                {current && (
-                  <Check aria-hidden="true" className="size-4 text-lime-ink" />
-                )}
-              </DropdownMenuItem>
-            );
-          })}
+                  <Check
+                    aria-hidden="true"
+                    className="hidden size-4 text-lime-ink group-data-[state=checked]:block"
+                  />
+                </DropdownMenuRadioItem>
+              );
+            })}
+          </DropdownMenuRadioGroup>
           <DropdownMenuSeparator className="my-1.5" />
           <DropdownMenuItem
             className="gap-3 rounded-xl px-2.5 py-2"

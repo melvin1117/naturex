@@ -101,7 +101,7 @@ async function firstAssetHref(page: Page): Promise<string> {
 /** Be someone else in this sandbox, from the header's person menu. */
 async function become(page: Page, person: "Rosa" | "Arjun" | "Reviewer") {
   await page.getByRole("button", { name: /^Viewing as / }).click();
-  await page.getByRole("menuitem", { name: new RegExp(person) }).click();
+  await page.getByRole("menuitemradio", { name: new RegExp(person) }).click();
   await expect(
     page.getByRole("button", { name: new RegExp(`^Viewing as ${person}`) }),
   ).toBeVisible();
@@ -146,6 +146,22 @@ test("the sandbox has no serious accessibility violations", async ({
         ).toBeVisible();
       },
     );
+  });
+
+  await test.step("the bar keeps one top row on a 360 px phone", async () => {
+    await page.setViewportSize({ width: 360, height: 780 });
+    await page.goto("/sandbox");
+    await marketplaceReady(page);
+    const logo = await page
+      .getByRole("link", { name: "WildWorth, Marketplace" })
+      .boundingBox();
+    const who = await page
+      .getByRole("button", { name: /^Viewing as / })
+      .boundingBox();
+    const middle = (box: { y: number; height: number }) =>
+      box.y + box.height / 2;
+    expect(Math.abs(middle(logo!) - middle(who!))).toBeLessThan(4);
+    await page.setViewportSize(DESKTOP);
   });
 
   await test.step("Your stakes, empty then after a buy", async () => {

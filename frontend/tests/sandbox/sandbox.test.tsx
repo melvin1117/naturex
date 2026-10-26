@@ -271,7 +271,7 @@ describe("the sandbox header", () => {
         el.getAttribute("data-persona"),
       ),
     ).toEqual(["rosa", "admin", "arjun"]);
-    const avatar = trigger.querySelector("[data-current]");
+    const avatar = trigger.querySelector("[data-persona]:last-child");
     expect(avatar).toHaveAttribute("data-initial", "A");
     expect(avatar).toHaveTextContent("");
   });
@@ -286,7 +286,14 @@ describe("the sandbox header", () => {
       name: /^Viewing as Arjun, Supporter/,
     });
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
-    fireEvent.click(await screen.findByRole("menuitem", { name: /Reviewer/ }));
+    // A switcher: everyone is a choice, and the current person is the checked one.
+    expect(
+      await screen.findByRole("menuitemradio", { name: /Arjun/ }),
+    ).toHaveAttribute("aria-checked", "true");
+    expect(
+      screen.getByRole("menuitemradio", { name: /Reviewer/ }),
+    ).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /Reviewer/ }));
 
     await waitFor(() =>
       expect(nav.push).toHaveBeenCalledWith(
@@ -339,7 +346,7 @@ describe("the persona menu, when something fails", () => {
       },
     );
     await openMenu(/^Viewing as Arjun/);
-    fireEvent.click(await screen.findByRole("menuitem", { name: /Rosa/ }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Rosa/ }));
 
     expect(
       await screen.findByText("Couldn't switch to Rosa just now"),

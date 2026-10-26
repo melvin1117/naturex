@@ -114,7 +114,7 @@ function PanelBody({ data }: { data: VerificationPublic }) {
   return (
     <div className="space-y-6">
       <div>
-        <VerificationBadge level={data.level} className="text-sm">
+        <VerificationBadge level={data.level} publicBadge className="text-sm">
           {data.badge}
         </VerificationBadge>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
@@ -222,7 +222,7 @@ export function VerificationHeroBadge({
       onClick={onOpen}
       className="max-w-full rounded-full text-left focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
     >
-      <VerificationBadge level={panel.data.level} tone="image">
+      <VerificationBadge level={panel.data.level} tone="image" publicBadge>
         {panel.data.badge}
       </VerificationBadge>
       <span className="sr-only">: how this listing was verified</span>

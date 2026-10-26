@@ -220,13 +220,13 @@ function Entry({
 }) {
   const href = entry.type === "news" ? safeHref(entry.url) : null;
   const site = publisher(href);
-  // An article leads with "News" and its publisher, so the news reads as news among the
+  // Web news leads with "News" (and its publisher, when linked), so it reads as news among the
   // satellite's signals.
   const meta =
     entry.type === "signal"
       ? ["Satellite, found by code"]
       : [
-          site ? `News · ${site}` : null,
+          entry.origin === "news" ? (site ? `News · ${site}` : "News") : null,
           entry.kind,
           entry.followUp ? "found by Super's follow-up search" : null,
           entry.read ? `article read: ${entry.read.verdict}` : null,
@@ -312,11 +312,12 @@ export function EvidenceTimelinePanel({
       ),
     [facts.ndvi, news, run, recorded],
   );
-  const fromRecording = timeline.entries.some(
-    (e) => e.type === "news" && e.source === recorded,
-  );
   const [all, setAll] = useState(false);
   const entries = all ? timeline.entries : timeline.entries.slice(-SHOWN);
+  // Said once above the list when it shows news from the recording, instead of on each entry.
+  const recordedNews = entries.some(
+    (e) => e.type === "news" && e.source === recorded,
+  );
   const label = facts.trendLabel;
 
   return (
@@ -355,7 +356,7 @@ export function EvidenceTimelinePanel({
           <h3 id="timeline-list" className="text-sm font-medium">
             Month by month
           </h3>
-          {fromRecording && recordedOn && (
+          {recordedNews && recordedOn && (
             <p className="mt-0.5 text-xs text-muted-foreground">
               The news the agents found in this site&apos;s recorded run,{" "}
               {date(recordedOn)}.
@@ -366,7 +367,7 @@ export function EvidenceTimelinePanel({
               <Entry
                 key={`${e.type}-${e.id}`}
                 entry={e}
-                sharedSource={fromRecording ? recorded : null}
+                sharedSource={recordedNews ? recorded : null}
               />
             ))}
           </ol>

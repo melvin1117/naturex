@@ -6,7 +6,7 @@
  * Pure, so it is easy to test; every value comes from the API.
  */
 import type { RunTrace } from "./api/types";
-import type { newsItems } from "./asset-detail";
+import type { EventOrigin, newsItems } from "./asset-detail";
 import {
   type FollowUp,
   type Signal,
@@ -44,6 +44,8 @@ export type TimelineNews = {
   direction: number;
   kind: string | null;
   source: string;
+  /** Web news reads as news; Time Machine events and field evidence say what they are. */
+  origin: EventOrigin;
   read: TimelineRead | null;
   /** Found by one of Super's follow-up searches, not the first search. */
   followUp: boolean;
@@ -108,6 +110,7 @@ export function traceNews(trace: RunTrace, sourceLabel: string): NewsItem[] {
       severity: null,
       kind: ref.value,
       sourceLabel,
+      origin: "news",
       url: ref.url,
     });
   }
@@ -125,6 +128,7 @@ export function traceNews(trace: RunTrace, sourceLabel: string): NewsItem[] {
         severity: item.severity,
         kind: item.impactType,
         sourceLabel,
+        origin: "news",
         url: item.url,
       });
     }
@@ -206,6 +210,7 @@ export function evidenceTimeline(
       direction: n.direction ?? 0,
       kind: n.kind,
       source: n.sourceLabel,
+      origin: n.origin,
       read: (n.url && reads.get(n.url)) || null,
       followUp: Boolean(n.url && found.has(n.url)),
     }));

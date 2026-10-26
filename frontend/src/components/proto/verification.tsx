@@ -2,6 +2,7 @@ import { FileClock } from "lucide-react";
 import { cn } from "cn";
 
 import { StewardsIcon, VerifiedLandIcon } from "@/components/icons";
+
 /** How far a demo site's land documents got (the scripted levels ADR-0006 §6 badges). */
 export type Verification = "verified" | "documents_submitted" | "unverified";
 

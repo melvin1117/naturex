@@ -33,6 +33,7 @@ function news(overrides: Partial<NewsItem>): NewsItem {
     severity: 3,
     kind: "encroachment",
     sourceLabel: "Found by News Scout",
+    origin: "news",
     url: "https://example.com/a",
     ...overrides,
   };

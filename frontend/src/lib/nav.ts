@@ -27,10 +27,12 @@ export function usePathname(): string {
   return pathname == null ? pathname : appPath(pathname);
 }
 
+const sameHref = (href: string) => href;
+
 /** An app href as this page should link to it (prefixed inside the sandbox). */
 export function useHref(): (href: string) => string {
   const sandbox = useInSandbox();
-  return sandbox ? sandboxHref : (href: string) => href;
+  return sandbox ? sandboxHref : sameHref;
 }
 
 /**
