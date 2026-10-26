@@ -14,7 +14,7 @@ Accepted (2026-10-25). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) 
 
 ## Decision
 ### 1. Three places, in order
-- **`/` is a welcome**, not an app page: Bea flies in over the hero wetland, one plain sentence says what WildWorth does, and two buttons lead on: **Show me how** (`/how`, the story; was `/judge`) and **Try it yourself** (`/sandbox`). The sandbox line appears once, at its foot.
+- **`/` is a welcome**, not an app page: Bea flies in over the hero wetland, writes the greeting as she passes and lands in **Ask Bea** (bottom right, where she is on every page; it opens the sandbox with her chat open), one plain sentence says what WildWorth does, and two buttons lead on: **Show me how** (`/how`, the story; was `/judge`) and **Try it yourself** (`/sandbox`). The sandbox line appears once, at its foot.
 - **`/sandbox/*` is the whole app.** Opening it without a sandbox starts one straight away (as Arjun), no intermediate screen. The real-app twins are gone: `app/(exchange)`, `app/steward` and `app/admin` moved under `app/sandbox`.
 - **Old addresses redirect** (`next.config.ts`): `/judge` → `/how`; `/login`, `/register`, `/ai` → `/sandbox`; `/asset/*`, `/trace/*`, `/portfolio`, `/steward/*`, `/admin/*` → their `/sandbox` twin.
 

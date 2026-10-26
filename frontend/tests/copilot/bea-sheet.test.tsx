@@ -136,6 +136,22 @@ async function requests(backend: ReturnType<typeof renderHeader>["backend"]) {
   );
 }
 
+describe("The Ask Bea button, from the welcome", () => {
+  it("opens straight away and takes the request off the address", async () => {
+    window.history.replaceState(null, "", "/sandbox?sort=grade&ask=bea#top");
+    try {
+      renderHeader(signedIn);
+      expect(
+        await screen.findByRole("dialog", { name: "Bea · your field guide" }),
+      ).toBeInTheDocument();
+      expect(window.location.search).toBe("?sort=grade");
+      expect(window.location.hash).toBe("#top");
+    } finally {
+      window.history.replaceState(null, "", "/");
+    }
+  });
+});
+
 describe("The Ask Bea button, signed in", () => {
   it("asks across every site by default, with sources named after their site", async () => {
     const { backend } = renderHeader(signedIn);

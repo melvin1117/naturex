@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AccountCopilot } from "@/components/account-copilot";
 import { AskBeaButton } from "@/components/bea/ask-bea-button";
@@ -11,11 +11,23 @@ import { traceAssetFromPath } from "@/lib/run-trace";
 /**
  * Bea, one tap from every page of the sandbox: a floating button that opens her sheet. Each
  * opening starts a fresh chat with starter questions for the page you're on (a site's page
- * asks about that site; anywhere else, about every site).
+ * asks about that site; anywhere else, about every site). The welcome's Ask Bea arrives with
+ * `?ask=bea`: she opens straight away, and the request leaves the address.
  */
 export function BeaFab() {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  // Only ever rendered in the browser (the sandbox gate waits for the session first).
+  const [open, setOpen] = useState(askedFromWelcome);
+  useEffect(() => {
+    if (!askedFromWelcome()) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete(ASK);
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  }, []);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <div className="pointer-events-none fixed right-4 bottom-4 z-40 sm:right-6 sm:bottom-6">
@@ -32,5 +44,14 @@ export function BeaFab() {
         />
       </SheetContent>
     </Sheet>
+  );
+}
+
+const ASK = "ask";
+
+function askedFromWelcome(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get(ASK) === "bea"
   );
 }

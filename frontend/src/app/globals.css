@@ -553,18 +553,12 @@
   }
 }
 
-/* The welcome (/): the view settles over the wetland (once, under 5 s), Bea flies in, the words
-   rise, and the boundary is drawn (the "Draw" move). Reduced motion: the final frame. */
+/* The welcome (/): the view settles over the wetland (once, under 5 s) and the boundary is
+   drawn (the "Draw" move), while Bea writes the greeting and lands in Ask Bea (below).
+   Reduced motion: the final frame. */
 .welcome-drift {
   transform-origin: 70% 55%;
   animation: welcome-settle 4.5s var(--ww-ease-out) both;
-}
-.welcome-bea {
-  display: inline-block;
-  animation: welcome-fly 1.3s var(--ww-ease-out) 0.1s both;
-}
-.welcome-rise {
-  animation: ww-rise 0.7s var(--ww-ease-out) both;
 }
 .welcome-boundary {
   stroke-dasharray: 1;
@@ -589,19 +583,121 @@
     transform: none;
   }
 }
-@keyframes welcome-fly {
+
+/* Bea's flight on the welcome (components/welcome/bea-intro.tsx): she enters from the left,
+   the headline is written where she passes (a feathered mask that follows her), what follows
+   rises, and she lands in Ask Bea, which grows out of her. If the script never runs, all of
+   it shows at 3.5 s; under reduced motion none of it is hidden. */
+@property --intro-reveal {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+[data-intro-hello] {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  :is([data-intro="pending"], [data-intro="writing"]) [data-intro-write] {
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      #000 calc(var(--intro-reveal) - 64px),
+      transparent var(--intro-reveal)
+    );
+    mask-image: linear-gradient(
+      90deg,
+      #000 calc(var(--intro-reveal) - 64px),
+      transparent var(--intro-reveal)
+    );
+  }
+  [data-intro="pending"] [data-intro-write] {
+    animation: intro-written 1ms linear 3.5s forwards;
+  }
+  [data-intro="pending"] :is([data-intro-rise], [data-intro-land]) {
+    animation: ww-rise 0.7s var(--ww-ease-out) 3.5s both;
+  }
+  [data-intro="writing"] [data-intro-rise],
+  :is([data-intro="writing"], [data-intro="flying"]) [data-intro-land] {
+    opacity: 0;
+    pointer-events: none;
+  }
+  :is([data-intro="flying"], [data-intro="landing"], [data-intro="hello"])
+    [data-intro-rise] {
+    animation: ww-rise 0.7s var(--ww-ease-out) both;
+  }
+  :is([data-intro="flying"], [data-intro="landing"], [data-intro="hello"])
+    [data-intro-rise="2"] {
+    animation-delay: 0.12s;
+  }
+  /* Landed: she stirs once in the button, as on hover. */
+  :is([data-intro="landing"], [data-intro="hello"]) .ask-bea .bea-anim .bea-wl {
+    animation: ask-bea-flap-l 0.32s ease-in-out 6 alternate;
+  }
+  :is([data-intro="landing"], [data-intro="hello"]) .ask-bea .bea-anim .bea-wr {
+    animation: ask-bea-flap-r 0.32s ease-in-out 6 alternate;
+  }
+  [data-intro="hello"] [data-intro-hello] {
+    animation: intro-hello 4.2s var(--ww-ease-out) both;
+  }
+}
+/* In flight her wings beat fast and her antennae sway; she's on screen under 3 s. */
+.fb-wl,
+.fb-wr,
+.fb-ant {
+  transform-box: fill-box;
+}
+.fb-wl {
+  transform-origin: 100% 100%;
+  animation: fb-flap-l 90ms ease-in-out infinite alternate;
+}
+.fb-wr {
+  transform-origin: 0% 100%;
+  animation: fb-flap-r 90ms ease-in-out infinite alternate;
+}
+.fb-ant {
+  transform-origin: 50% 100%;
+  animation: fb-sway 260ms ease-in-out infinite alternate;
+}
+@keyframes fb-flap-l {
+  from {
+    transform: rotate(10deg);
+  }
+  to {
+    transform: rotate(-32deg) scaleY(0.82);
+  }
+}
+@keyframes fb-flap-r {
+  from {
+    transform: rotate(-10deg);
+  }
+  to {
+    transform: rotate(32deg) scaleY(0.82);
+  }
+}
+@keyframes fb-sway {
+  from {
+    transform: rotate(-5deg);
+  }
+  to {
+    transform: rotate(6deg);
+  }
+}
+@keyframes intro-written {
+  to {
+    --intro-reveal: 300vw;
+  }
+}
+@keyframes intro-hello {
   0% {
     opacity: 0;
-    transform: translate(48vw, -30vh) rotate(-16deg) scale(0.5);
+    transform: translateY(6px) scale(0.96);
   }
-  25% {
+  10%,
+  85% {
     opacity: 1;
-  }
-  60% {
-    transform: translate(10vw, -9vh) rotate(-6deg) scale(0.85);
+    transform: none;
   }
   100% {
-    transform: none;
+    opacity: 0;
   }
 }
 @keyframes welcome-draw {
@@ -622,10 +718,11 @@
   .bea-react-down {
     animation: none !important;
   }
-  .welcome-drift,
-  .welcome-bea,
-  .welcome-rise {
+  .welcome-drift {
     animation: none;
+  }
+  [data-intro-overlay] {
+    display: none;
   }
   .welcome-boundary {
     animation: none;
