@@ -231,6 +231,9 @@ One scroll that a judge reads top to bottom, with depth one tap away and never o
 - **Back this site** is the sticky right column on wide screens.
 - **Everything else is in two drawers** over the page, named by `?tab=` so links still land: the **Agent Trace** (machine layer, `?tab=trace`) and the **Proof of Life drawer** (paper, tabs Proof of Life · The Record · Verification · Field photos · Data sources). A row of quiet buttons under the sections opens each tab.
 
+### Marketplace map (secondary view)
+**Cards · Map** beside the grade filter (`?view=map`); cards stay the default. Every site's drawn boundary on Esri imagery in its grade colour, with a paper pin (grade badge and name). A list beside the map (below it on phones) flies the map to a site and opens its card; the map takes the wheel only after a click, so the page scrolls past it.
+
 ### Health instrument (signature)
 A dotted radial dial (`DotRing`): 100 columns of dots in 5 rings, one column per point of health, lit up to the score (forest on light, lime on dark), with the light numeral in the centre. It reads literally, not decoratively, and stays wherever a live score is shown.
 

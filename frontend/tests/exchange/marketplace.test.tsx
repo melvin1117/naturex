@@ -38,6 +38,11 @@ vi.mock("next/navigation", async () => {
   };
 });
 
+// Leaflet draws the map; the list beside it and the switch are what's tested here.
+vi.mock("@/components/proto/sites-map-canvas", () => ({
+  default: () => <div role="region" aria-label="Map of the sites" />,
+}));
+
 const CARDS = cards as AssetCard[];
 const WETLAND = CARDS.find((c) => c.site_key === "wetland_mx")!;
 
@@ -200,6 +205,26 @@ describe("Marketplace", () => {
     ).toBeInTheDocument();
     expect(window.location.pathname).toBe("/sandbox");
     expect(window.location.search).toBe("?grade=b");
+  });
+
+  it("shows the sites on a map as a second view, kept in the address", async () => {
+    renderExchange(<Marketplace />, { "GET /assets": () => json(CARDS) });
+    await screen.findByRole("region", { name: "All sites" });
+    expect(screen.getByRole("radio", { name: "Cards" })).toBeChecked();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Map" }));
+
+    expect(
+      await screen.findByRole("region", { name: "Map of the sites" }),
+    ).toBeInTheDocument();
+    const list = screen.getByRole("list", { name: "Sites on the map" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(3);
+    expect(
+      within(list).getByRole("link", { name: "View Xochimilco Wetland" }),
+    ).toHaveAttribute("href", `/asset/${WETLAND.id}`);
+    expect(window.location.search).toBe("?view=map");
+    // Sorting is for the cards; the grade filter still applies.
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 
   it("reads the filter and sort from the URL", async () => {

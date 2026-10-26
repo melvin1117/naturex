@@ -1,6 +1,11 @@
 "use client";
 
-import { RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
+import {
+  LayoutGrid,
+  Map as MapIcon,
+  RefreshCwIcon,
+  TriangleAlertIcon,
+} from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { usePathname, useReplaceUrl } from "@/lib/nav";
 import { useMemo } from "react";
@@ -17,6 +22,7 @@ import {
 } from "@/components/icons";
 import { MarketplaceHeading } from "@/components/proto/marketplace-heading";
 import { FeatureSiteCard, SiteCard } from "@/components/proto/site-card";
+import { SitesMap } from "@/components/proto/sites-map";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -110,11 +116,16 @@ export function MarketBoard() {
   const replaceUrl = useReplaceUrl();
   const gradeParam = params.get("grade");
   const sortParam = params.get("sort");
+  const view: "cards" | "map" = params.get("view") === "map" ? "map" : "cards";
   const band: GradeBand = isBand(gradeParam) ? gradeParam : "all";
   const sort: SortKey = isSort(sortParam) ? sortParam : "grade";
   // Filters live in the URL (shareable, survive reload); the History API updates
   // useSearchParams without a server round trip.
-  const setParam = (key: "grade" | "sort", value: string, fallback: string) => {
+  const setParam = (
+    key: "grade" | "sort" | "view",
+    value: string,
+    fallback: string,
+  ) => {
     const next = new URLSearchParams(params.toString());
     if (value === fallback) next.delete(key);
     else next.set(key, value);
@@ -123,6 +134,8 @@ export function MarketBoard() {
   };
   const setBand = (v: GradeBand) => setParam("grade", v, "all");
   const setSort = (v: SortKey) => setParam("sort", v, "grade");
+  const setView = (v: string) =>
+    (v === "cards" || v === "map") && setParam("view", v, "cards");
   const shown = useMemo(
     () => (cards ? shownCards(cards, band, sort) : []),
     [cards, band, sort],
@@ -172,6 +185,29 @@ export function MarketBoard() {
             All sites
           </h2>
           <div className="flex flex-wrap items-center gap-3">
+            {/* The map is a second way to see the board; cards stay the default. */}
+            <ToggleGroup
+              type="single"
+              value={view}
+              onValueChange={setView}
+              className="rounded-full bg-card p-1 shadow-soft"
+              aria-label="Show sites as"
+            >
+              <ToggleGroupItem
+                value="cards"
+                className="gap-1.5 rounded-full px-3.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+              >
+                <LayoutGrid aria-hidden="true" />
+                Cards
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="map"
+                className="gap-1.5 rounded-full px-3.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+              >
+                <MapIcon aria-hidden="true" />
+                Map
+              </ToggleGroupItem>
+            </ToggleGroup>
             <ToggleGroup
               type="single"
               value={band}
@@ -189,22 +225,27 @@ export function MarketBoard() {
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
-            <Select value={sort} onValueChange={(v) => isSort(v) && setSort(v)}>
-              {/* Its name is what it shows, so speech and sight agree (axe: label in name). */}
-              <SelectTrigger
-                className="w-44"
-                aria-label={`Sort: ${SORTS[sort].label}`}
+            {view === "cards" && (
+              <Select
+                value={sort}
+                onValueChange={(v) => isSort(v) && setSort(v)}
               >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(SORTS) as SortKey[]).map((k) => (
-                  <SelectItem key={k} value={k}>
-                    Sort: {SORTS[k].label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                {/* Its name is what it shows, so speech and sight agree (axe: label in name). */}
+                <SelectTrigger
+                  className="w-44"
+                  aria-label={`Sort: ${SORTS[sort].label}`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(SORTS) as SortKey[]).map((k) => (
+                    <SelectItem key={k} value={k}>
+                      Sort: {SORTS[k].label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </div>
         <p className="sr-only" aria-live="polite">
@@ -214,6 +255,8 @@ export function MarketBoard() {
           <p className="mt-6 rounded-3xl bg-card px-6 py-10 text-center text-muted-foreground shadow-soft">
             No sites rated {GRADE_BANDS[band].label} yet.
           </p>
+        ) : view === "map" ? (
+          <SitesMap cards={shown} />
         ) : (
           <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {shown.map((c) => (
