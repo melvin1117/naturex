@@ -25,12 +25,13 @@ import { GradeBadge } from "@/components/proto/grade";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { AssetCard, HoldingOut, PortfolioOut } from "@/lib/api/types";
 import { useAssets, usePortfolio, useWorld } from "@/lib/hooks";
 import { IMAGERY_ATTRIBUTION } from "@/lib/imagery";
 import { siteIcon } from "@/lib/market-cards";
 import type { Grade } from "@/lib/site-data";
-import { GRADE_ORDER, int } from "@/lib/format";
+import { changePct, GRADE_ORDER, ha, int, tonnesCo2 } from "@/lib/format";
 import { stakeChart } from "@/lib/stake-chart";
 import {
   assetHref,
@@ -82,17 +83,8 @@ export function PortfolioView() {
   );
 }
 
-/** A change's size as a percentage: "2.9%", "0.03%" below 1%, "<0.01%" below that (never a
- * misleading "0.0%" beside a real change). */
-function percentText(pct: number): string {
-  const n = Math.abs(pct);
-  if (n >= 1) return `${n.toFixed(1)}%`;
-  if (n >= 0.01) return `${n.toFixed(2)}%`;
-  return "<0.01%";
-}
-
-/** "+$12.30 (+2.9%)" with an arrow, "−$4.50 (−1.1%)", or "Level": direction in words and an
- * icon, never colour alone (DESIGN.md). */
+/** "+$12.30 (+2.9%)" with an arrow, "−$4.50 (−1.1%)", or "No change": direction in a sign, an
+ * icon and (for screen readers) a word, never colour alone (DESIGN.md). */
 function Change({
   amount,
   pct = null,
@@ -103,7 +95,12 @@ function Change({
   className?: string;
 }) {
   const n = decimal(amount);
-  if (n === null) return <span className={cn("tabular", className)}>—</span>;
+  if (n === null)
+    return (
+      <span className={cn("tabular", className)}>
+        —<span className="sr-only">not priced yet</span>
+      </span>
+    );
   if (n === 0)
     return (
       <span
@@ -113,7 +110,7 @@ function Change({
         )}
       >
         <Minus className="size-3.5" aria-hidden="true" />
-        Level
+        No change
       </span>
     );
   const Arrow = n > 0 ? ArrowUpRight : ArrowDownRight;
@@ -127,12 +124,13 @@ function Change({
       )}
     >
       <Arrow className="size-3.5 shrink-0" aria-hidden="true" />
+      <span className="sr-only">{n > 0 ? "up" : "down"} </span>
       {signedMoneyText(amount)}
       {pct !== null && " "}
       {pct !== null && (
         <span>
           ({Math.abs(pct) < 0.01 ? "" : sign}
-          {percentText(pct)})
+          {changePct(pct)})
         </span>
       )}
     </span>
@@ -157,6 +155,13 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
           </span>{" "}
           to back living land.
         </p>
+        {/* Sold everything: how it went still matters. */}
+        {decimal(data.since_start) !== 0 && (
+          <p className="mt-2 flex flex-wrap items-center gap-x-1.5 text-muted-foreground">
+            <Change amount={data.since_start} className="font-medium" /> since
+            you started with {moneyText(data.starting_cash)}
+          </p>
+        )}
         <div className="mt-10 grid place-items-center rounded-3xl border border-dashed border-foreground/20 px-6 py-16 text-center">
           <YourStakesIcon size={32} aria-hidden="true" />
           <p className="mt-4 max-w-md text-pretty text-muted-foreground">
@@ -175,7 +180,12 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
         <MoneyPanel data={data} />
         <Impact data={data} />
       </div>
-      <Holdings holdings={data.holdings} cards={cards} fresh={fresh} />
+      <Holdings
+        holdings={data.holdings}
+        cards={cards}
+        cardsPending={!assets.data && !assets.error}
+        fresh={fresh}
+      />
     </>
   );
 }
@@ -187,11 +197,16 @@ function PortfolioBody({ data }: { data: PortfolioOut }) {
 function MoneyPanel({ data }: { data: PortfolioOut }) {
   const total = decimal(data.total_value) ?? 0;
   const inStakes = decimal(data.holdings_value) ?? 0;
+  const balance = decimal(data.cash_balance) ?? 0;
   // Each part's share of the total; a sliver of stakes still shows on the bar.
   const stakesPct =
     total > 0 && inStakes > 0
-      ? Math.min(98, Math.max(2, Math.round((inStakes / total) * 100)))
+      ? balance > 0
+        ? Math.min(98, Math.max(2, Math.round((inStakes / total) * 100)))
+        : 100
       : 0;
+  // The API's totals count priced stakes only: say so when one has no price yet.
+  const unpriced = data.holdings.filter((h) => h.market_value === null).length;
   return (
     <section
       aria-labelledby="money-title"
@@ -199,7 +214,7 @@ function MoneyPanel({ data }: { data: PortfolioOut }) {
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="money-title" className="text-base font-semibold">
-          Your money
+          Your play money
         </h2>
         <Button asChild variant="outline" size="sm">
           <Link href="/">
@@ -228,7 +243,9 @@ function MoneyPanel({ data }: { data: PortfolioOut }) {
             style={{ width: `${stakesPct}%` }}
           />
         )}
-        <span className="flex-1 rounded-full bg-lichen" />
+        {stakesPct < 100 && (
+          <span className="flex-1 rounded-full bg-lichen ring-1 ring-foreground/15 ring-inset" />
+        )}
       </div>
 
       <dl className="mt-5 grid gap-6 sm:grid-cols-2">
@@ -254,8 +271,14 @@ function MoneyPanel({ data }: { data: PortfolioOut }) {
               amount={data.unrealized_pnl}
               pct={decimal(data.unrealized_pnl_pct)}
             />{" "}
-            change in value
+            since you bought
           </dd>
+          {unpriced > 0 && (
+            <dd className="mt-1 text-xs text-muted-foreground">
+              Not counting {unpriced} {unpriced === 1 ? "stake" : "stakes"}{" "}
+              without a price yet.
+            </dd>
+          )}
         </div>
         <div>
           <dt className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -280,10 +303,13 @@ function MoneyPanel({ data }: { data: PortfolioOut }) {
 function Holdings({
   holdings,
   cards,
+  cardsPending,
   fresh,
 }: {
   holdings: HoldingOut[];
   cards: Map<string, AssetCard>;
+  /** The sites' cards (pictures, grades, prices) are still on their way. */
+  cardsPending: boolean;
   fresh: Map<string, FreshFill>;
 }) {
   return (
@@ -300,6 +326,7 @@ function Holdings({
             key={h.asset_id}
             holding={h}
             card={cards.get(h.asset_id)}
+            cardPending={cardsPending}
             fill={fillFor(h, fresh)}
           />
         ))}
@@ -358,10 +385,12 @@ function Units({
 function StakeRow({
   holding: h,
   card,
+  cardPending,
   fill,
 }: {
   holding: HoldingOut;
   card: AssetCard | undefined;
+  cardPending: boolean;
   fill?: FreshFill;
 }) {
   const icon = useMemo(() => siteIcon(card), [card]);
@@ -377,7 +406,7 @@ function StakeRow({
       data-fresh={fill ? "" : undefined}
     >
       <div className="flex min-w-0 items-center gap-4">
-        <div className="size-16 shrink-0 overflow-hidden rounded-[18px] sm:size-20">
+        <div className="size-16 shrink-0 overflow-hidden rounded-2xl sm:size-20">
           {icon ? (
             <SiteThumb
               siteKey={icon.siteKey}
@@ -395,7 +424,7 @@ function StakeRow({
         </div>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <h3 className="font-serif text-xl leading-[1.1] tracking-tight text-balance sm:text-2xl">
+            <h3 className="font-serif text-xl leading-[1.1] tracking-tight text-balance break-words sm:text-2xl">
               <Link
                 href={assetHref(h.asset_id)}
                 className="outline-none after:absolute after:inset-0 after:rounded-3xl focus-visible:after:ring-2 focus-visible:after:ring-ring"
@@ -422,11 +451,18 @@ function StakeRow({
         </div>
       </div>
 
-      <StakeChart
-        prices={card?.sparkline ?? []}
-        paid={h.avg_cost}
-        name={h.asset_name}
-      />
+      {card ? (
+        <StakeChart
+          prices={card.sparkline ?? []}
+          paid={h.avg_cost}
+          name={h.asset_name}
+        />
+      ) : cardPending ? (
+        <Skeleton className="h-14 w-full" />
+      ) : (
+        // No card for this site (its list failed): no chart, and no claim about why.
+        <span aria-hidden="true" />
+      )}
 
       <dl className="grid grid-cols-3 gap-3">
         <div>
@@ -442,6 +478,9 @@ function StakeRow({
           <dt className="text-xs text-muted-foreground">Worth now</dt>
           <dd className="tabular mt-1 text-lg font-light">
             {moneyText(h.market_value)}
+            {h.market_value === null && (
+              <span className="sr-only">not priced yet</span>
+            )}
           </dd>
         </div>
         <div>
@@ -486,7 +525,7 @@ function StakeChart({
   if (!chart)
     return (
       <p className="text-xs text-muted-foreground lg:text-center">
-        Its price chart starts after a few more trades.
+        Its stake price chart starts once it has a few prices.
       </p>
     );
   const first = values[0]!;
@@ -523,13 +562,15 @@ function StakeChart({
           vectorEffect="non-scaling-stroke"
         />
       </svg>
-      <figcaption className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <span
-          aria-hidden="true"
-          className="w-3 border-t border-dashed border-foreground/45"
-        />
-        What you paid, against its latest prices
-      </figcaption>
+      {chart.paidY !== null && (
+        <figcaption className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span
+            aria-hidden="true"
+            className="w-3 border-t border-dashed border-foreground/45"
+          />
+          What you paid, against its latest prices
+        </figcaption>
+      )}
     </figure>
   );
 }
@@ -544,6 +585,7 @@ function showsMap(holdings: HoldingOut[], cards: Map<string, AssetCard>) {
 
 /** A share of land: hectares, or square metres below a tenth of one. */
 function area(hectares: number): string {
+  if (hectares >= 100) return ha(hectares);
   return hectares >= 0.1
     ? `${hectares.toFixed(2)} ha`
     : `${int(Math.max(1, Math.round(hectares * 10_000)))} m²`;
@@ -581,7 +623,7 @@ function Impact({ data }: { data: PortfolioOut }) {
             />
             <ImpactFigure
               icon={CarbonIcon}
-              value={`${carbon.toFixed(1)} tCO₂`}
+              value={tonnesCo2(carbon)}
               label="stored carbon"
               note="Held in the land's plants and soil"
             />

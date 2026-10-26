@@ -14,18 +14,6 @@ export type StakeChartGeometry = {
   paidY: number | null;
 };
 
-const MAX_POINTS = 120;
-
-/** Evenly thinned to at most `max` values, always keeping the first and the last. */
-function thin(values: number[], max: number): number[] {
-  if (values.length <= max) return values;
-  const step = (values.length - 1) / (max - 1);
-  return Array.from(
-    { length: max },
-    (_, i) => values[Math.round(i * step)] as number,
-  );
-}
-
 const round = (n: number) => Math.round(n * 10) / 10;
 
 /** Null with fewer than two prices: one price isn't a line. */
@@ -34,7 +22,8 @@ export function stakeChart(
   paid: number | null,
   { width, height, pad = 3 }: { width: number; height: number; pad?: number },
 ): StakeChartGeometry | null {
-  const values = thin(prices, MAX_POINTS);
+  // The API sends a card's latest 30 prices at most, so every one is drawn.
+  const values = prices;
   if (values.length < 2) return null;
   let min = Math.min(...values, ...(paid === null ? [] : [paid]));
   let max = Math.max(...values, ...(paid === null ? [] : [paid]));

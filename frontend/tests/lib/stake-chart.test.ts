@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { changePct, tonnesCo2 } from "@/lib/format";
 import { stakeChart } from "@/lib/stake-chart";
 
 const BOX = { width: 100, height: 50, pad: 0 };
@@ -31,11 +32,31 @@ describe("stakeChart", () => {
     expect(chart.paidY).toBe(25);
   });
 
-  it("thins a long series, keeping the first and the last price", () => {
-    const prices = Array.from({ length: 500 }, (_, i) => i);
-    const chart = stakeChart(prices, null, BOX)!;
-    expect(chart.line.match(/[ML]/g)).toHaveLength(120);
-    expect(chart.line.startsWith("M0 50")).toBe(true);
-    expect(chart.last).toEqual({ x: 100, y: 0 });
+  it("keeps the paid line under every price when it cost less", () => {
+    const chart = stakeChart([20, 30], 10, BOX)!;
+    expect(chart.paidY).toBe(50);
+    expect(chart.last.y).toBe(0);
+  });
+});
+
+describe("changePct and tonnesCo2", () => {
+  it.each([
+    [0, "<0.01%"],
+    [0.004, "<0.01%"],
+    [-0.01, "0.01%"],
+    [0.99, "0.99%"],
+    [1, "1.0%"],
+    [-12.345, "12.3%"],
+  ])("changePct(%s) is %s", (value, text) => {
+    expect(changePct(value)).toBe(text);
+  });
+
+  it.each([
+    [0, "0.0 tCO₂"],
+    [0.03, "<0.1 tCO₂"],
+    [3.44, "3.4 tCO₂"],
+    [12345.67, "12,345.7 tCO₂"],
+  ])("tonnesCo2(%s) is %s", (value, text) => {
+    expect(tonnesCo2(value)).toBe(text);
   });
 });

@@ -90,7 +90,7 @@ const stakesReady = async (page: Page) => {
   await expect(
     page
       .getByText(/^You have /)
-      .or(page.getByRole("region", { name: "Your money" })),
+      .or(page.getByRole("region", { name: "Your play money" })),
   ).toBeVisible();
 };
 

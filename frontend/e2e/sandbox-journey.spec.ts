@@ -266,7 +266,7 @@ test("the sandbox: list, review, back and follow a site", async ({
     await expect(
       page.getByRole("heading", { level: 1, name: "Your stakes" }),
     ).toBeVisible();
-    const money = page.getByRole("region", { name: "Your money" });
+    const money = page.getByRole("region", { name: "Your play money" });
     await expect(money).toContainText("In stakes");
     await expect(money).toContainText("You paid");
     await expect(money).toContainText("Sandbox balance");

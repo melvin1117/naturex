@@ -32,6 +32,21 @@ export function ha(value: number) {
   return `${value.toLocaleString("en-US", { maximumFractionDigits: value < 100 ? 1 : 0 })} ha`;
 }
 
+/** A change's size as a percentage: "2.9%", "0.03%" below 1%, "<0.01%" below that, so a real
+ * change is never shown as "0.0%". */
+export function changePct(value: number): string {
+  const n = Math.abs(value);
+  if (n >= 1) return `${n.toFixed(1)}%`;
+  if (n >= 0.01) return `${n.toFixed(2)}%`;
+  return "<0.01%";
+}
+
+/** Tonnes of CO₂ with grouping: "1,234.5 tCO₂", "<0.1 tCO₂" for a real but tiny amount. */
+export function tonnesCo2(value: number): string {
+  if (value > 0 && value < 0.05) return "<0.1 tCO₂";
+  return `${value.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} tCO₂`;
+}
+
 export function pct(value: number, digits = 0) {
   return `${value.toFixed(digits)}%`;
 }
