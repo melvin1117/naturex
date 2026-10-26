@@ -32,13 +32,8 @@ import { useDebounced } from "@/lib/use-debounced";
 const PRESETS = [10, 50, 100] as const;
 const QUOTE_DELAY_MS = 250;
 
-/** The signed-in buy/sell form: validation, a backend quote, the order and its receipt. */
-export function TradeForm({
-  asset,
-}: {
-  asset: AssetDetail;
-  /** Sign-in that comes back to this page, query string included. */
-}) {
+/** The buy/sell form: validation, a backend quote, the order and its receipt. */
+export function TradeForm({ asset }: { asset: AssetDetail }) {
   const ids = useId();
   const { cache } = useDataLayer();
   const portfolio = usePortfolio();
@@ -288,7 +283,7 @@ export function TradeForm({
             {failure && (
               <div className="rounded-2xl bg-destructive/10 p-3 text-sm text-destructive">
                 <p id={failureId}>{failure.message}</p>
-                {failure.signIn && (
+                {failure.sessionEnded && (
                   // A full load, so the gate can open a new sandbox.
                   <a
                     href="/sandbox"

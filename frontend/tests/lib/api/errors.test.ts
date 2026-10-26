@@ -17,7 +17,9 @@ describe("apiErrorFromResponse", () => {
     expect(error).toBeInstanceOf(ApiError);
     expect(error.status).toBe(401);
     expect(error.code).toBe("auth_required");
-    expect(error.message).toBe("Sign in to do that.");
+    expect(error.message).toBe(
+      "Your sandbox has ended. Open a new one to keep going.",
+    );
   });
 
   it("keeps a reason code on 403 but shows a friendly message", () => {

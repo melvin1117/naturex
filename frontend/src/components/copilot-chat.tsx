@@ -90,7 +90,7 @@ type Layout = {
  * Record (reports and news), with every `[ref]` linking to its source. With `assetId` she
  * answers about that site, and greets it with its latest grade change; without it (the
  * portfolio page) she searches every site visible in the world, and each citation names its
- * site. Signed-out visitors are asked to sign in. `variant="sheet"` drops the card and its
+ * site. Before the sandbox has a person it renders nothing. `variant="sheet"` drops the card and its
  * heading for the header's Bea sheet (#213), whose scope can change between questions:
  * earlier answers stay. Bea's state follows the conversation (lib/bea.ts).
  */

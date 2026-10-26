@@ -158,6 +158,20 @@ describe("Communities: which community", () => {
   });
 });
 
+describe("Communities: before the sandbox has a person", () => {
+  it("says the sandbox is opening and shows nothing of anyone's", async () => {
+    // The sandbox gate opens a session first; a world without a person is that moment.
+    const backend = setup([SELVA], {
+      "GET /world": () => json({ ...SIGNED_IN_WORLD, me: null }),
+    }).backend;
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Opening your sandbox…",
+    );
+    expect(screen.queryByText(/Page content/)).not.toBeInTheDocument();
+    expect(backend.calls("GET /me/communities")).toBe(0);
+  });
+});
+
 describe("Communities: none yet, or a failed read", () => {
   it("shows someone without a community how to start one", async () => {
     setup();

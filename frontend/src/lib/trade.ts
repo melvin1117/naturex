@@ -5,6 +5,7 @@
  */
 import { formatWait, type ApiError } from "./api/errors";
 import type { OrderOut, QuoteOut } from "./api/types";
+import { SANDBOX_PERSONAS } from "./sandbox-personas";
 
 export type Side = "buy" | "sell";
 
@@ -181,8 +182,8 @@ export function orderProblem({
 
 export type OrderFailure = {
   message: string;
-  /** The session is gone: offer a sign-in link. */
-  signIn?: boolean;
+  /** The sandbox session is gone: offer a link to a new one. */
+  sessionEnded?: boolean;
   /** The order may have filled (no answer, or a server error): check before retrying. */
   uncertain?: boolean;
   /** Fewer units would do: the message describes the units field. */
@@ -194,8 +195,7 @@ type TradeBlockedReason = NonNullable<QuoteOut["trade_blocked_reason"]>;
 const TRADE_BLOCKED: Record<TradeBlockedReason, string> = {
   insider_trading_blocked:
     "Members of this site's community can't trade its units. Your community earns from its retained stake instead.",
-  admins_cannot_trade:
-    "The Reviewer doesn't back sites. Switch to Arjun to back this one.",
+  admins_cannot_trade: `The Reviewer doesn't back sites. Switch to ${SANDBOX_PERSONAS.arjun.name} to back this one.`,
   treasury_cannot_act: "Community treasury accounts can't trade.",
 };
 
@@ -216,7 +216,7 @@ export function orderFailure(
     case "auth_required":
       return {
         message: "Your sandbox has ended. Open a new one to keep going.",
-        signIn: true,
+        sessionEnded: true,
       };
     case "insider_trading_blocked":
     case "admins_cannot_trade":
@@ -267,7 +267,7 @@ export function orderFailure(
     case 401:
       return {
         message: "Your sandbox has ended. Open a new one to keep going.",
-        signIn: true,
+        sessionEnded: true,
       };
     case 403:
       // csrf_origin and other coded 403s already have a specific message.

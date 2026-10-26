@@ -9,10 +9,15 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { useShowCost } from "@/lib/hooks";
 import { MODELS } from "@/lib/site-data";
 
-/** Which model does what (ADR-0003), with what each costs on Nebius Token Factory. */
+/**
+ * Which model does what (ADR-0003). What each costs on Nebius Token Factory shows only outside a
+ * sandbox session, like every other price.
+ */
 function ModelRouting() {
+  const showCost = useShowCost();
   const roles = [
     [
       "Orchestrator and News Scout",
@@ -39,11 +44,13 @@ function ModelRouting() {
           <li key={role} className="rounded-2xl bg-machine-raised px-4 py-3">
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-sm font-medium">{role}</span>
-              <span className="tabular text-xs text-machine-muted">
-                ${model.price[0]} / ${model.price[1]} per 1M tokens
-              </span>
+              {showCost && (
+                <span className="tabular text-xs text-machine-muted">
+                  ${model.price[0]} / ${model.price[1]} per 1M tokens
+                </span>
+              )}
             </div>
-            <div className="mt-1 text-sm text-lime">{model.name}</div>
+            <div className="mt-1 text-sm text-machine-ink">{model.name}</div>
             <div className="font-mono text-[11px] text-machine-muted">
               {model.id}
             </div>
@@ -58,13 +65,15 @@ function ModelRouting() {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Collapsible className="border-t border-machine-line py-4">
-      <CollapsibleTrigger className="group flex w-full items-center justify-between gap-3 rounded-lg text-left font-medium outline-none focus-visible:ring-2 focus-visible:ring-lime">
-        {title}
-        <ChevronDown
-          aria-hidden="true"
-          className="size-4 text-machine-muted transition-transform group-data-[state=open]:rotate-180"
-        />
-      </CollapsibleTrigger>
+      <h3>
+        <CollapsibleTrigger className="group flex w-full items-center justify-between gap-3 rounded-lg text-left font-medium outline-none focus-visible:ring-2 focus-visible:ring-lime">
+          {title}
+          <ChevronDown
+            aria-hidden="true"
+            className="size-4 text-machine-muted transition-transform group-data-[state=open]:rotate-180"
+          />
+        </CollapsibleTrigger>
+      </h3>
       <CollapsibleContent className="pt-4">{children}</CollapsibleContent>
     </Collapsible>
   );

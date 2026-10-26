@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -13,6 +13,7 @@ import NotFound from "@/app/not-found";
 import ListPage from "@/app/sandbox/steward/list/page";
 import { WorldProvider } from "@/components/world-provider";
 import { createDataLayer } from "@/lib/data-layer";
+import { useWorld } from "@/lib/hooks";
 import story from "./story/story.json";
 
 import {
@@ -74,6 +75,11 @@ function Providers({ children }: { children: ReactNode }) {
   return <WorldProvider dataLayer={layer}>{children}</WorldProvider>;
 }
 
+/** Rendered next to a page: shows once the world has answered, so a test can wait for it. */
+function WorldLoaded() {
+  return useWorld().world ? <span data-testid="world-loaded" /> : null;
+}
+
 function StoryProviders({ children }: { children: ReactNode }) {
   const backend = fakeBackend({
     "GET /world": () => json(WORLD),
@@ -118,15 +124,20 @@ describe("routes", () => {
   });
 
   it("/steward/list waits for the sandbox's session, never a scripted flow", async () => {
-    render(<ListPage />, { wrapper: Providers });
+    render(
+      <>
+        <ListPage />
+        <WorldLoaded />
+      </>,
+      { wrapper: Providers },
+    );
     expect(screen.getByRole("status")).toHaveTextContent(
       "Loading the listing form…",
     );
     // The world answered without a person: still waiting for the sandbox gate.
-    await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent(
-        "Loading the listing form…",
-      ),
+    await screen.findByTestId("world-loaded");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Loading the listing form…",
     );
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
   });

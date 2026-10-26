@@ -136,7 +136,7 @@ async function requests(backend: ReturnType<typeof renderHeader>["backend"]) {
   );
 }
 
-describe("Header Bea, signed in", () => {
+describe("The Ask Bea button, signed in", () => {
   it("asks across every site by default, with sources named after their site", async () => {
     const { backend } = renderHeader(signedIn);
     await screen.findByRole("button", { name: /Alerts/ });
@@ -328,7 +328,7 @@ describe("Header Bea, signed in", () => {
   });
 });
 
-describe("Header Bea, while an answer streams", () => {
+describe("The Ask Bea button, while an answer streams", () => {
   it("locks the scope until the answer ends", async () => {
     nav.pathname = `/asset/${ASSET_ID}`;
     const signals: AbortSignal[] = [];
@@ -372,7 +372,7 @@ describe("Header Bea, while an answer streams", () => {
   });
 });
 
-describe("Header Bea, when the page changes under it", () => {
+describe("The Ask Bea button, when the page changes under it", () => {
   it("follows the page's site (browser Back) and keeps earlier answers", async () => {
     nav.pathname = `/asset/${ASSET_ID}`;
     const { backend } = renderHeader(signedIn);

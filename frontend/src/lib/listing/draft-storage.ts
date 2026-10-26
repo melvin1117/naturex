@@ -1,6 +1,6 @@
 /**
- * A new listing not saved yet, kept in this tab's `sessionStorage` so it survives a sign-in
- * (a 401 while saving) or a reload. Per account and community; the attestation is never kept,
+ * A new listing not saved yet, kept in this tab's `sessionStorage` so it survives a reload.
+ * Per account and community; the attestation is never kept,
  * so it's confirmed again. Cleared once the draft exists on the server.
  */
 import type { LatLng } from "../site-data";

@@ -1,12 +1,7 @@
 import { render, screen } from "@testing-library/react";
-import { beforeAll, describe, expect, it, vi } from "vitest";
-import { Slider } from "@/components/ui/slider";
+import { beforeAll, describe, expect, it } from "vitest";
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
-  usePathname: () => "/steward/list",
-  useSearchParams: () => new URLSearchParams(),
-}));
+import { Slider } from "@/components/ui/slider";
 
 beforeAll(() => {
   globalThis.ResizeObserver ??= class {

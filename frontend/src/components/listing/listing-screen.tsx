@@ -2,13 +2,13 @@
 
 import { ArrowLeft, Check, RefreshCwIcon, TriangleAlert } from "lucide-react";
 import Link from "@/components/app-link";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "@/lib/nav";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
 import { useStewardCommunity } from "@/components/shell/steward-community";
-import { TraceDrawer } from "@/components/trace/trace-drawer";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { isApiAssetId } from "@/lib/asset-detail";
@@ -35,6 +35,11 @@ import { OfferStep } from "./offer-step";
 import { ProveStep } from "./prove-step";
 import { RatingStep } from "./rating-step";
 import { Loading, Page } from "./shared";
+
+// The whole Agent Trace loads only when it opens, as on the site page.
+const TraceDrawer = dynamic(() =>
+  import("@/components/trace/trace-drawer").then((m) => m.TraceDrawer),
+);
 
 const STEPS = ["Name", "Draw", "Rate", "Prove", "Offer"];
 
@@ -260,10 +265,15 @@ function ListingWizard({
   onCreated: (asset: AssetDetail) => void;
 }) {
   const storageKey = unsavedListingKey(meId, community.id);
-  // The Agent Trace of a run watched here, over the flow (the site page's drawer).
+  // The Agent Trace of a run watched here, over the flow (the site page's drawer). The run stays
+  // set while the drawer closes, so its content doesn't change mid-animation.
   const [traceRun, setTraceRun] = useState<string | null>(null);
-  const openTrace = (runId: string) => setTraceRun(runId);
-  // A new listing picks up what was entered in this tab before (a sign-in, a reload).
+  const [traceOpen, setTraceOpen] = useState(false);
+  const openTrace = (runId: string) => {
+    setTraceRun(runId);
+    setTraceOpen(true);
+  };
+  // A new listing picks up what was entered in this tab before (a reload).
   const [restored] = useState(() =>
     asset ? null : readUnsavedListing(storageKey),
   );
@@ -480,8 +490,8 @@ function ListingWizard({
       </section>
       {asset && (
         <TraceDrawer
-          open={traceRun !== null}
-          onOpenChange={(open) => !open && setTraceRun(null)}
+          open={traceOpen}
+          onOpenChange={setTraceOpen}
           asset={asset}
           runId={traceRun}
           recorded={null}

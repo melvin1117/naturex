@@ -26,6 +26,7 @@ import {
   sequence,
   SIGNED_IN_WORLD,
 } from "../lib/helpers";
+import celestun from "../trace/fixtures/run-celestun.json";
 
 const nav = vi.hoisted(() => ({ search: "" }));
 const router = vi.hoisted(() => ({
@@ -539,6 +540,56 @@ describe("rating progress", () => {
       screen.getByRole("button", { name: /Try the rating again/ }),
     );
     expect(await screen.findByText("Still no satellite data")).toBeVisible();
+  });
+
+  it("opens a finished run's Agent Trace over the flow, and Esc comes back to it", async () => {
+    nav.search = `community=${SELVA.id}&asset=${ASSET_ID}`;
+    setup({
+      [ASSET]: () =>
+        json(
+          asset({
+            status: "rating",
+            status_reason: "no_satellite_metrics",
+            latest_run_id: RUN_ID,
+          }),
+        ),
+      [`GET /runs/${RUN_ID}`]: () =>
+        json(ratingRun({ status: "failed", error: "earth_obs_failed" })),
+      [`GET /runs/${RUN_ID}/trace`]: () =>
+        json({ ...celestun, run_id: RUN_ID, asset_id: ASSET_ID }),
+    });
+    const open = await screen.findByRole("button", {
+      name: "See every step in the Agent Trace",
+    });
+    open.focus();
+    fireEvent.click(open);
+
+    const drawer = await screen.findByRole("dialog", {
+      name: "How Laguna Verde was rated",
+    });
+    expect(
+      await within(drawer).findByText("Judged by Nemotron 3 Ultra"),
+    ).toBeInTheDocument();
+    for (const name of ["Which model does what", "How the agents are tested"])
+      expect(
+        within(drawer).getByRole("heading", { level: 3, name }),
+      ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(drawer).toContainElement(document.activeElement as HTMLElement),
+    );
+
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", {
+          name: "See every step in the Agent Trace",
+        }),
+      ).toHaveFocus(),
+    );
   });
 
   it("a stale run can be retried; 429 resubmit_cooldown shows the wait", async () => {

@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -11,14 +12,19 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Link from "@/components/app-link";
+import { LeftoverDemo } from "@/components/shell/leftover-demo";
 import { SandboxHeader } from "@/components/shell/sandbox-header";
 import { TimeMachineSheet } from "@/components/shell/time-machine-sheet";
 import { Toaster } from "@/components/ui/sonner";
 import { SandboxGate } from "@/components/sandbox/sandbox-gate";
 import { WorldProvider } from "@/components/world-provider";
 import type { WorldOut } from "@/lib/api/types";
-import { createDataLayer, type DataLayer } from "@/lib/data-layer";
-import { useApiBase } from "@/lib/hooks";
+import {
+  createDataLayer,
+  useDataLayer,
+  type DataLayer,
+} from "@/lib/data-layer";
+import { useApiBase, useWorld } from "@/lib/hooks";
 import { assetOverlayUrl } from "@/lib/land-cover-overlay";
 import { beforeAfterViews } from "@/lib/site-views";
 import { documentDownloadUrl } from "@/lib/verification";
@@ -29,6 +35,7 @@ import {
   BASE,
   createFakeEventSource,
   fakeBackend,
+  FakeEventSource,
   json,
   sequence,
   SIGNED_IN_WORLD,
@@ -433,5 +440,100 @@ describe("the sandbox gate", () => {
       { "GET /world": () => json(demoWorld("rosa")), "GET /alerts": NO_ALERTS },
     );
     expect(await screen.findByText("Inside")).toBeVisible();
+  });
+
+  it("opens a new sandbox when this one ends mid-session", async () => {
+    function Page() {
+      const { api } = useDataLayer();
+      const me = useWorld().world?.me;
+      return (
+        <>
+          <p>You are {me?.name}</p>
+          <button type="button" onClick={() => void api.GET("/portfolio")}>
+            Look at my stakes
+          </button>
+        </>
+      );
+    }
+    const { backend } = setup(
+      <SandboxGate>
+        <Page />
+      </SandboxGate>,
+      {
+        // The sandbox expired: the next request's 401 re-reads a world with nobody in it.
+        "GET /world": sequence(
+          () => json(demoWorld("rosa")),
+          () => json(demoWorld(null)),
+        ),
+        "GET /portfolio": () =>
+          json({ detail: "auth_required" }, { status: 401 }),
+        "POST /demo/start": () => json(demoWorld("arjun")),
+        "GET /alerts": NO_ALERTS,
+      },
+    );
+    expect(await screen.findByText("You are rosa")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Look at my stakes" }));
+
+    expect(await screen.findByText("You are arjun")).toBeVisible();
+    expect(backend.calls("POST /demo/start")).toBe(1);
+  });
+
+  it("gives every sandbox page its alert notifications", async () => {
+    FakeEventSource.reset();
+    setup(
+      <>
+        <SandboxGate>
+          <p>Inside</p>
+        </SandboxGate>
+        <Toaster />
+      </>,
+      { "GET /world": () => json(demoWorld("rosa")), "GET /alerts": NO_ALERTS },
+    );
+    expect(await screen.findByText("Inside")).toBeVisible();
+    await waitFor(() => expect(FakeEventSource.instances).not.toHaveLength(0));
+
+    act(() => {
+      for (const source of FakeEventSource.instances) {
+        source.open();
+        source.emit(
+          "alert",
+          1,
+          {
+            alert_id: "a1",
+            asset_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            asset_name: "Xochimilco Wetland",
+            kind: "news",
+            title: "Fire near the wetland",
+            message: "Smoke reported upstream.",
+            severity: 4,
+            report_id: null,
+            url: null,
+          },
+          new Date().toISOString(),
+        );
+      }
+    });
+
+    expect(await screen.findByText("Fire near the wetland")).toBeVisible();
+  });
+});
+
+describe("a browser coming back from before the redesign", () => {
+  it("drops what the old scripted prototype kept", async () => {
+    nav.pathname = "/";
+    window.localStorage.setItem("ww-prototype-world", "{}");
+    window.localStorage.setItem("ww-prototype-tour", "{}");
+    window.sessionStorage.setItem("ww-prototype-demo", "1");
+    window.localStorage.setItem("ww-steward-community:x", "kept");
+
+    setup(<LeftoverDemo />, { "GET /world": () => json(WORLD) });
+
+    await waitFor(() =>
+      expect(window.localStorage.getItem("ww-prototype-world")).toBeNull(),
+    );
+    expect(window.localStorage.getItem("ww-prototype-tour")).toBeNull();
+    expect(window.sessionStorage.getItem("ww-prototype-demo")).toBeNull();
+    expect(window.localStorage.getItem("ww-steward-community:x")).toBe("kept");
   });
 });

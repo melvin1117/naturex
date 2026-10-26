@@ -6,14 +6,16 @@ import type { ReactNode } from "react";
 import { TradeForm } from "@/components/trade-form";
 import { Button } from "@/components/ui/button";
 import type { AssetDetail } from "@/lib/api/types";
-import { useAsset, useWorld } from "@/lib/hooks";
+import { useAsset, useSwitchPersona, useWorld } from "@/lib/hooks";
+import { focusIfLost } from "@/lib/focus";
 import { int } from "@/lib/format";
+import { SANDBOX_PERSONAS } from "@/lib/sandbox-personas";
 import { decimal, unitPriceText } from "@/lib/trade";
 
 /**
  * Buy and sell one asset's units with play money (T18, story C2). Self-contained: give it the
- * asset's id and it reads the asset (`useAsset`), the account (`useWorld`), and, signed in,
- * the portfolio and a backend quote.
+ * asset's id and it reads the asset (`useAsset`), the account (`useWorld`), the portfolio and
+ * a backend quote.
  */
 export function TradePanel({ assetId }: { assetId: string }) {
   const asset = useAsset(assetId);
@@ -59,6 +61,13 @@ export function TradePanel({ assetId }: { assetId: string }) {
     if (lock === "no-session") {
       // The sandbox gate opens a session before any page shows: only a moment's gap.
       body = <PanelSkeleton />;
+    } else if (lock === "reviewer") {
+      body = (
+        <>
+          <PriceSummary asset={asset.data} />
+          <ReviewerLock />
+        </>
+      );
     } else if (lock) {
       body = (
         <>
@@ -77,7 +86,11 @@ export function TradePanel({ assetId }: { assetId: string }) {
       aria-labelledby="trade-title"
     >
       <div className="flex items-baseline justify-between gap-3">
-        <h2 id="trade-title" className="text-base font-semibold">
+        <h2
+          id="trade-title"
+          tabIndex={-1}
+          className="text-base font-semibold outline-none"
+        >
           Back this site
         </h2>
         <span className="text-xs text-muted-foreground">Play money only</span>
@@ -87,7 +100,8 @@ export function TradePanel({ assetId }: { assetId: string }) {
   );
 }
 
-/** Why this viewer can't trade this asset now ("no-session" before the sandbox opens), or null. */
+/** Why this viewer can't trade this asset now ("no-session" before the sandbox opens,
+ * "reviewer" for the Reviewer), or null. */
 function lockReason(
   asset: AssetDetail,
   me: { is_admin: boolean } | null | undefined,
@@ -101,9 +115,39 @@ function lockReason(
   )
     return "This site isn't trading yet. It opens for stakes once its community launches the opening offer.";
   if (!me) return "no-session";
-  if (me.is_admin)
-    return "The Reviewer doesn't back sites. Switch to Arjun to back this one.";
+  if (me.is_admin) return "reviewer";
   return null;
+}
+
+/** The Reviewer doesn't back sites: one tap to become the Supporter and back this one. */
+function ReviewerLock() {
+  const switcher = useSwitchPersona();
+  const supporter = SANDBOX_PERSONAS.arjun.name;
+  return (
+    <Notice icon>
+      <p>The Reviewer doesn&apos;t back sites.</p>
+      <Button
+        variant="outline"
+        size="sm"
+        className="mt-3"
+        disabled={switcher.isPending}
+        onClick={async () => {
+          // The trade form replaces this button: keep the keyboard on the panel.
+          if (await switcher.mutate("arjun"))
+            requestAnimationFrame(() =>
+              focusIfLost(document.getElementById("trade-title")),
+            );
+        }}
+      >
+        Switch to {supporter} to back it
+      </Button>
+      {switcher.error && (
+        <p role="alert" className="mt-2 text-destructive">
+          {switcher.error.message}
+        </p>
+      )}
+    </Notice>
+  );
 }
 
 function PriceSummary({ asset }: { asset: AssetDetail }) {

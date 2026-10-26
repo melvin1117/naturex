@@ -29,8 +29,8 @@ export interface ListingFailure {
   retryAfterSeconds: number | null;
   /** The community has too many listings in progress: point to its home. */
   limitReached?: boolean;
-  /** The session ended: offer to sign in again (the draft is kept in this tab). */
-  signIn?: boolean;
+  /** The sandbox session ended: offer a link to a new one. */
+  sessionEnded?: boolean;
 }
 
 const STATUS_LABEL: Record<AssetDetail["status"], string> = {
@@ -114,9 +114,8 @@ export function listingFailure(error: ApiError): ListingFailure {
     return {
       ...base,
       title: "Your sandbox has ended",
-      message:
-        "Open a new one to keep going. What you've entered stays in this tab meanwhile.",
-      signIn: true,
+      message: "Open a new one to keep going.",
+      sessionEnded: true,
     };
   switch (code) {
     case "listing_limit_reached":

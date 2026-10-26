@@ -42,7 +42,6 @@ export function LedgerPanel({
   entries,
   check,
   actions,
-  tamperedAt,
   highlightedAt,
   empty = "No entries in the Record yet.",
   loading = false,
@@ -50,7 +49,6 @@ export function LedgerPanel({
   entries: LedgerRow[];
   check: LedgerCheck | null;
   actions: React.ReactNode;
-  tamperedAt?: number;
   /** The entry a link pointed at (`#ledger-entry-<seq>`), outlined. */
   highlightedAt?: number | null;
   empty?: string;
@@ -116,7 +114,6 @@ export function LedgerPanel({
               tabIndex={-1}
               className={cn(
                 "scroll-mt-24 rounded-2xl bg-machine-raised px-4 py-3 outline-none",
-                tamperedAt === e.seq && "ring-2 ring-clay",
                 highlightedAt === e.seq && "ring-2 ring-lime",
               )}
             >
@@ -130,11 +127,6 @@ export function LedgerPanel({
                 <span className="text-xs text-machine-muted">
                   {date(e.date)}
                 </span>
-                {tamperedAt === e.seq && (
-                  <span className="rounded-full bg-clay px-2 py-0.5 text-[11px] font-semibold text-white">
-                    Edited
-                  </span>
-                )}
                 <span
                   className="ml-auto font-mono text-[11px] text-machine-muted"
                   title={e.hash}

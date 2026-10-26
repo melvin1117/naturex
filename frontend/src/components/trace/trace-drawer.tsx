@@ -15,6 +15,7 @@ import type { AssetDetail, RecordedRun } from "@/lib/api/types";
 import { useApiBase, useRunTrace } from "@/lib/hooks";
 import { date } from "@/lib/format";
 import { beforeAfterViews } from "@/lib/site-views";
+import { useReturnFocus } from "@/lib/use-return-focus";
 
 import { HowTheAgentsWork } from "./how-the-agents-work";
 import { TraceBody } from "./run-trace-page";
@@ -23,6 +24,9 @@ import { TraceBody } from "./run-trace-page";
  * The Agent Trace over the site's page (ADR-0008): every model call, search and check behind its
  * rating, without leaving the site. Its own rated run wins; a demo site nobody has rated in this
  * sandbox shows its recorded run, labelled with its date.
+ *
+ * It opens from app state (the URL, a button in the listing flow), not a Radix trigger, so it
+ * puts focus back on whatever opened it when it closes.
  */
 export function TraceDrawer({
   open,
@@ -37,10 +41,12 @@ export function TraceDrawer({
   runId: string | null;
   recorded: RecordedRun | null | undefined;
 }) {
+  const returnFocus = useReturnFocus(open);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
+        onCloseAutoFocus={returnFocus}
         className="w-full gap-0 overflow-y-auto overscroll-contain border-machine-line bg-machine p-0 text-machine-ink sm:max-w-5xl [&>[data-slot=sheet-close]]:text-machine-ink"
       >
         <SheetHeader className="gap-2 px-5 pt-7 pb-2 sm:px-8">

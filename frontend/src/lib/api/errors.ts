@@ -9,7 +9,7 @@ type ValidationIssue = { loc?: unknown[]; msg?: string };
 const CODE_PATTERN = /^[a-z][a-z0-9_]*$/;
 
 const CODE_MESSAGES: Record<string, string> = {
-  auth_required: "Sign in to do that.",
+  auth_required: "Your sandbox has ended. Open a new one to keep going.",
   admin_only: "Only a platform admin can do that.",
   sandbox_only: "That only works in a demo sandbox.",
   csrf_origin:

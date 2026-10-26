@@ -68,7 +68,7 @@ export function FailureAlert({
             </Link>
           </Button>
         )}
-        {failure.signIn && (
+        {failure.sessionEnded && (
           <Button asChild variant="outline" size="sm" className="mt-2">
             {/* A plain link, not the app's: a full load lets the gate open a new sandbox. */}
             <a href="/sandbox">

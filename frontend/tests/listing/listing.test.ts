@@ -782,7 +782,7 @@ describe("the form's fields", () => {
 describe("more error wording", () => {
   it("401 says the sandbox ended and offers a new one", () => {
     expect(listingFailure(err(401, "auth_required"))).toMatchObject({
-      signIn: true,
+      sessionEnded: true,
       title: "Your sandbox has ended",
     });
   });

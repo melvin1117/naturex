@@ -69,12 +69,20 @@ describe("ReviewerGate", () => {
   const Secret = () => <p>Your stakes</p>;
 
   it("waits for the sandbox's session rather than sending anyone to sign in", async () => {
+    function WorldLoaded() {
+      return useWorld().world ? <span data-testid="world-loaded" /> : null;
+    }
     setup(
-      <ReviewerGate>
-        <Secret />
-      </ReviewerGate>,
+      <>
+        <ReviewerGate>
+          <Secret />
+        </ReviewerGate>
+        <WorldLoaded />
+      </>,
     );
-    expect(await screen.findByRole("status")).toHaveTextContent(
+    // The world answered without a person: the gate still waits for the sandbox.
+    await screen.findByTestId("world-loaded");
+    expect(screen.getByRole("status")).toHaveTextContent(
       "Opening your sandbox…",
     );
     expect(screen.queryByText("Your stakes")).not.toBeInTheDocument();

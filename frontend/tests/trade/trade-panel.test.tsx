@@ -133,18 +133,39 @@ describe("TradePanel", () => {
     expect(backend.calls("GET /portfolio")).toBe(0);
   });
 
-  it("tells the Reviewer they don't back sites", async () => {
-    renderPanel(
-      {},
+  it("tells the Reviewer they don't back sites, with one tap to back it as Arjun", async () => {
+    const { backend } = renderPanel(
+      {
+        "POST /demo/persona": () =>
+          json({
+            ...SIGNED_IN_WORLD,
+            me: { ...SIGNED_IN_WORLD.me!, persona: "arjun" },
+          }),
+      },
       {
         ...SIGNED_IN_WORLD,
-        me: { ...SIGNED_IN_WORLD.me!, is_admin: true },
+        me: { ...SIGNED_IN_WORLD.me!, is_admin: true, persona: "admin" },
       },
     );
 
     expect(
       await screen.findByText(/The Reviewer doesn't back sites/),
     ).toBeInTheDocument();
+    const toArjun = screen.getByRole("button", {
+      name: "Switch to Arjun to back it",
+    });
+    toArjun.focus();
+    fireEvent.click(toArjun);
+
+    expect(
+      await screen.findByRole("button", { name: /^Buy .*units$/ }),
+    ).toBeInTheDocument();
+    expect(backend.calls("POST /demo/persona")).toBe(1);
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Back this site" }),
+      ).toHaveFocus(),
+    );
   });
 
   it("explains a quote's trade block and never offers the order", async () => {
