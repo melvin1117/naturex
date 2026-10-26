@@ -239,6 +239,21 @@ describe("the sandbox header", () => {
     expect(screen.getByRole("button", { name: "Time Machine" })).toBeVisible();
   });
 
+  it("shows the same WildWorth lockup as the welcome: the full mark, not the small W", async () => {
+    setup(<SandboxHeader />, {
+      "GET /world": () => json(demoWorld("arjun")),
+      "GET /alerts": NO_ALERTS,
+    });
+    const home = await screen.findByRole("link", {
+      name: "WildWorth, Marketplace",
+    });
+    const mark = home.querySelector("svg[data-variant]");
+    expect(mark).toHaveAttribute("data-variant", "double");
+    // The welcome and the story draw it at the same size (only the reading's colour follows
+    // the ground: lime on dark, lime-ink on light).
+    expect(mark).toHaveAttribute("width", "25");
+  });
+
   it("names the person button with what it shows, without the avatar's letter", async () => {
     setup(<SandboxHeader />, {
       "GET /world": () => json(demoWorld("arjun")),

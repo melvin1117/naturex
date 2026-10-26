@@ -37,7 +37,9 @@ export function SandboxHeader() {
           className="flex h-16 shrink-0 items-center rounded-md"
           aria-label="WildWorth, Marketplace"
         >
-          <Lockup size={22} />
+          {/* The welcome's and the story's lockup: at 24 px the mark stays the full double W
+              (below it, it's the single W). */}
+          <Lockup size={24} />
         </Link>
         {/* Phones: the pages wrap onto their own row under the bar. */}
         <SandboxNav
