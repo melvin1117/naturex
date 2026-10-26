@@ -58,6 +58,19 @@ describe("RunTracePage (a real run recorded on Oct 22)", () => {
     ).toBeVisible();
   });
 
+  it("keeps every tab readable on the dark layer when hovered or focused", async () => {
+    renderPage();
+    const tabs = await screen.findAllByRole("tab");
+    for (const tab of tabs) {
+      // Not the light theme's ink (`hover:text-foreground`), which vanishes on the machine layer.
+      expect(tab).toHaveClass(
+        "hover:text-machine-ink",
+        "focus-visible:ring-lime",
+      );
+      expect(tab).not.toHaveClass("hover:text-foreground");
+    }
+  });
+
   it("shows the weighed case with links to the news it cites", async () => {
     renderPage();
     const tab = await screen.findByRole("tab", { name: "Reasoning" });
