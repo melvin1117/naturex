@@ -37,7 +37,8 @@ export default function SitesMapCanvas({
   onOpen,
 }: {
   cards: MarketCard[];
-  focused: string | null;
+  /** The site to fly to; `n` changes on every request, so the same site can be asked again. */
+  focused: { id: string; n: number } | null;
   onFocus: (id: string) => void;
   /** The site page's address, for the card's link. */
   siteHref: (id: string) => string;
@@ -50,6 +51,8 @@ export default function SitesMapCanvas({
     map: Leaflet.Map;
   } | null>(null);
   const layers = useRef(new Map<string, Layers>());
+  // Which sites the view was last framed for: a refetch of the same sites keeps the view.
+  const framed = useRef("");
   // The latest callbacks, so the map's own listeners never go stale.
   const handlers = useRef({ onFocus, siteHref, onOpen });
   useEffect(() => {
@@ -132,7 +135,8 @@ export default function SitesMapCanvas({
     });
     layers.current = drawn;
     const bounds = sitesBounds(outlines);
-    if (bounds)
+    const ids = cards.map((c) => c.id).join(",");
+    if (bounds && ids !== framed.current)
       // Room for the pins' names, which extend right of their point.
       map.fitBounds(bounds, {
         paddingTopLeft: [48, 56],
@@ -140,6 +144,7 @@ export default function SitesMapCanvas({
         maxZoom: 13,
         animate: false,
       });
+    framed.current = ids;
     return () => {
       group.remove();
     };
@@ -148,7 +153,7 @@ export default function SitesMapCanvas({
   // Fly to the chosen site and show its card.
   useEffect(() => {
     if (!ready || !focused) return;
-    const site = layers.current.get(focused);
+    const site = layers.current.get(focused.id);
     if (!site) return;
     const target = site.outline?.getBounds();
     if (target)
@@ -158,7 +163,7 @@ export default function SitesMapCanvas({
         duration: 1.2,
       });
     site.pin.openPopup();
-  }, [ready, focused, cards]);
+  }, [ready, focused]);
 
   return (
     <div
@@ -219,7 +224,13 @@ function popupElement(
     "!mt-3 inline-flex rounded-full bg-primary px-4 py-1.5 text-sm font-medium !text-primary-foreground no-underline";
   link.textContent = "View site";
   link.addEventListener("click", (event) => {
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
+    if (
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      event.button !== 0
+    )
       return;
     event.preventDefault();
     onOpen();

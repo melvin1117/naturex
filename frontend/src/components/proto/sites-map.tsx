@@ -24,7 +24,10 @@ const SitesMapCanvas = dynamic(() => import("./sites-map-canvas"), {
  * listed beside it. A row flies the map to its site; its link (or the map's card) opens it.
  */
 export function SitesMap({ cards }: { cards: MarketCard[] }) {
-  const [focused, setFocused] = useState<string | null>(null);
+  const [focused, setFocused] = useState<{ id: string; n: number } | null>(
+    null,
+  );
+  const focus = (id: string) => setFocused((f) => ({ id, n: (f?.n ?? 0) + 1 }));
   const router = useRouter();
   const resolve = useHref();
   return (
@@ -34,7 +37,7 @@ export function SitesMap({ cards }: { cards: MarketCard[] }) {
         <SitesMapCanvas
           cards={cards}
           focused={focused}
-          onFocus={setFocused}
+          onFocus={focus}
           siteHref={(id) => resolve(assetHref(id))}
           onOpen={(id) => router.push(assetHref(id))}
         />
@@ -48,13 +51,13 @@ export function SitesMap({ cards }: { cards: MarketCard[] }) {
             key={card.id}
             className={cn(
               "flex items-center gap-3 rounded-2xl bg-card p-3 shadow-soft transition-shadow",
-              focused === card.id && "ring-2 ring-primary",
+              focused?.id === card.id && "ring-2 ring-primary",
             )}
           >
             <button
               type="button"
-              onClick={() => setFocused(card.id)}
-              aria-pressed={focused === card.id}
+              onClick={() => focus(card.id)}
+              aria-pressed={focused?.id === card.id}
               className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {card.grade ? (

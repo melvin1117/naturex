@@ -52,6 +52,11 @@ beforeEach(() => {
   window.history.replaceState(null, "", "/");
 });
 
+/** A figure under the heading, read whole ("3 sites rated"). */
+function figure(label: string) {
+  return screen.getByText(label).closest("li");
+}
+
 function grid() {
   return screen.getByRole("region", { name: "All sites" });
 }
@@ -119,13 +124,13 @@ describe("Marketplace", () => {
       screen.getByRole("heading", { level: 2, name: "Ría Celestún Mangrove" }),
     ).toBeInTheDocument();
     // The board in three figures; the worth is a range, never a single value.
-    expect(screen.getByText("sites rated").nextSibling).toHaveTextContent("3");
-    expect(screen.getByText("of living land").nextSibling).toHaveTextContent(
-      "1,065 ha",
+    expect(figure("sites rated")).toHaveTextContent("3 sites rated");
+    expect(figure("of living land")).toHaveTextContent(
+      "1,065 ha of living land",
     );
-    expect(
-      screen.getByText("a year in nature's services").nextSibling,
-    ).toHaveTextContent("$5.9M–$38.9M");
+    expect(figure("a year in nature's services")).toHaveTextContent(
+      "$5.9M–$38.9M a year in nature's services",
+    );
   });
 
   it("marks a listed site awaiting its opening offer as not trading yet", async () => {
@@ -173,9 +178,9 @@ describe("Marketplace", () => {
     expect(within(card).getByText("Awaiting rating")).toBeInTheDocument();
     expect(within(card).getByText("Not rated yet")).toBeInTheDocument();
     // 206.70 + 457.88 + 400.21 ha: the unrated site and its 1,000 ha aren't counted.
-    expect(screen.getByText("sites rated").nextSibling).toHaveTextContent("3");
-    expect(screen.getByText("of living land").nextSibling).toHaveTextContent(
-      "1,065 ha",
+    expect(figure("sites rated")).toHaveTextContent("3 sites rated");
+    expect(figure("of living land")).toHaveTextContent(
+      "1,065 ha of living land",
     );
   });
 

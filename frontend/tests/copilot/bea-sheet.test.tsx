@@ -46,7 +46,17 @@ vi.mock("next/navigation", async () => {
         },
         () => nav.pathname,
       ),
-    useSearchParams: () => new URLSearchParams(),
+    // Like Next: follows the address, re-read when the page changes (`nav.go`).
+    useSearchParams: () => {
+      useSyncExternalStore(
+        (listener) => {
+          nav.listeners.add(listener);
+          return () => nav.listeners.delete(listener);
+        },
+        () => nav.pathname,
+      );
+      return new URLSearchParams(window.location.search);
+    },
   };
 });
 
@@ -146,6 +156,26 @@ describe("The Ask Bea button, from the welcome", () => {
       ).toBeInTheDocument();
       expect(window.location.search).toBe("?sort=grade");
       expect(window.location.hash).toBe("#top");
+    } finally {
+      window.history.replaceState(null, "", "/");
+    }
+  });
+
+  it("opens when the sandbox was already showing before the address changed", async () => {
+    try {
+      renderHeader(signedIn);
+      // The world has loaded (the bell shows): nothing will remount the button now.
+      await screen.findByRole("button", { name: /Alerts/ });
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+      // Back from the welcome with a loaded sandbox: the shell is up, then Next moves.
+      window.history.replaceState(null, "", "/sandbox?ask=bea");
+      act(() => nav.go("/sandbox"));
+
+      expect(
+        await screen.findByRole("dialog", { name: "Bea · your field guide" }),
+      ).toBeInTheDocument();
+      expect(window.location.search).toBe("");
     } finally {
       window.history.replaceState(null, "", "/");
     }

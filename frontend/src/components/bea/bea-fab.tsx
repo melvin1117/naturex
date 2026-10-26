@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AccountCopilot } from "@/components/account-copilot";
@@ -16,10 +17,13 @@ import { traceAssetFromPath } from "@/lib/run-trace";
  */
 export function BeaFab() {
   const pathname = usePathname();
-  // Only ever rendered in the browser (the sandbox gate waits for the session first).
-  const [open, setOpen] = useState(askedFromWelcome);
+  const [open, setOpen] = useState(false);
+  // From the address Next is navigating to, not `window.location`: a visitor whose sandbox is
+  // already loaded gets the shell before the address changes.
+  const asked = useSearchParams()?.get(ASK) === "bea";
   useEffect(() => {
-    if (!askedFromWelcome()) return;
+    if (!asked) return;
+    setOpen(true);
     const url = new URL(window.location.href);
     url.searchParams.delete(ASK);
     window.history.replaceState(
@@ -27,7 +31,7 @@ export function BeaFab() {
       "",
       `${url.pathname}${url.search}${url.hash}`,
     );
-  }, []);
+  }, [asked]);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <div className="pointer-events-none fixed right-4 bottom-4 z-40 sm:right-6 sm:bottom-6">
@@ -48,10 +52,3 @@ export function BeaFab() {
 }
 
 const ASK = "ask";
-
-function askedFromWelcome(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get(ASK) === "bea"
-  );
-}

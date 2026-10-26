@@ -140,7 +140,6 @@ export function CommunityPage({
   );
 }
 
-/** How the community's land is doing, in one sentence with its numbers in it. */
 /**
  * Where the community stands. With sites on the Marketplace: its figures (sites, supporters, the
  * community fund); before that, one line on what comes next.

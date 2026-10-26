@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { AlertToaster } from "@/components/alert-toaster";
 import { BeaFab } from "@/components/bea/bea-fab";
@@ -15,7 +15,10 @@ export function SandboxShell({ children }: { children: ReactNode }) {
         {children}
       </main>
       <SandboxFooter />
-      <BeaFab />
+      {/* It reads the address (useSearchParams). */}
+      <Suspense fallback={null}>
+        <BeaFab />
+      </Suspense>
       <AlertToaster />
     </>
   );

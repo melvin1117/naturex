@@ -216,14 +216,16 @@ describe("a community's page", () => {
         wallet: { ...WALLET, balance: "1234.50" },
       }),
     );
-    // Its figures, each named by what it counts.
-    expect(
-      (await screen.findByText("site on the Marketplace")).nextSibling,
-    ).toHaveTextContent("1");
-    expect(screen.getByText("supporters").nextSibling).toHaveTextContent("3");
-    expect(
-      screen.getByText("in the community fund").nextSibling,
-    ).toHaveTextContent("$1,234.50");
+    // Its figures, each read whole.
+    const figure = async (label: string) =>
+      (await screen.findByText(label)).closest("li");
+    expect(await figure("site on the Marketplace")).toHaveTextContent(
+      "1 site on the Marketplace",
+    );
+    expect(await figure("supporters")).toHaveTextContent("3 supporters");
+    expect(await figure("in the community fund")).toHaveTextContent(
+      "$1,234.50 in the community fund",
+    );
   });
 
   it("shows each site where it stands, leading to its next step", async () => {
