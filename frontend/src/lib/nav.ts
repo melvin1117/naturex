@@ -11,7 +11,7 @@ import {
   usePathname as useNextPathname,
   useRouter as useNextRouter,
 } from "next/navigation";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
 import { appPath, isSandboxPath, sandboxHref } from "@/lib/sandbox";
 
@@ -31,6 +31,19 @@ export function usePathname(): string {
 export function useHref(): (href: string) => string {
   const sandbox = useInSandbox();
   return sandbox ? sandboxHref : (href: string) => href;
+}
+
+/**
+ * Rewrite the address to an app href without a navigation (filters, tabs: Next keeps
+ * `useSearchParams` in step). Inside the sandbox it keeps the `/sandbox` prefix: a bare app
+ * path would take the page out of the sandbox and its session.
+ */
+export function useReplaceUrl(): (href: string) => void {
+  const resolve = useHref();
+  return useCallback(
+    (href: string) => window.history.replaceState(null, "", resolve(href)),
+    [resolve],
+  );
 }
 
 type Router = ReturnType<typeof useNextRouter>;

@@ -29,7 +29,8 @@ vi.mock("next/navigation", async () => {
   };
   return {
     useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
-    usePathname: () => "/",
+    usePathname: () =>
+      useSyncExternalStore(subscribe, () => window.location.pathname),
     useSearchParams: () =>
       new URLSearchParams(
         useSyncExternalStore(subscribe, () => window.location.search),
@@ -181,6 +182,20 @@ describe("Marketplace", () => {
     expect(window.location.search).toBe("?grade=b");
     fireEvent.click(screen.getByRole("radio", { name: "AAA–A" }));
     expect(within(grid()).getAllByRole("link")).toHaveLength(3);
+  });
+
+  it("keeps the sandbox's address when filtering", async () => {
+    window.history.replaceState(null, "", "/sandbox");
+    renderExchange(<Marketplace />, { "GET /assets": () => json(CARDS) });
+    await screen.findByRole("region", { name: "All sites" });
+
+    fireEvent.click(screen.getByRole("radio", { name: "BBB–BB" }));
+
+    expect(
+      await screen.findByText("No sites rated BBB–BB yet."),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/sandbox");
+    expect(window.location.search).toBe("?grade=b");
   });
 
   it("reads the filter and sort from the URL", async () => {

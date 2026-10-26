@@ -2,7 +2,7 @@
 
 import { RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { usePathname } from "@/lib/nav";
+import { usePathname, useReplaceUrl } from "@/lib/nav";
 import { useMemo } from "react";
 
 import {
@@ -90,6 +90,7 @@ export function MarketBoard() {
   const { cards, error, refetch, isFetching } = useMarketCards();
   const params = useSearchParams();
   const pathname = usePathname();
+  const replaceUrl = useReplaceUrl();
   const gradeParam = params.get("grade");
   const sortParam = params.get("sort");
   const band: GradeBand = isBand(gradeParam) ? gradeParam : "all";
@@ -101,11 +102,7 @@ export function MarketBoard() {
     if (value === fallback) next.delete(key);
     else next.set(key, value);
     const query = next.toString();
-    window.history.replaceState(
-      null,
-      "",
-      query ? `${pathname}?${query}` : pathname,
-    );
+    replaceUrl(query ? `${pathname}?${query}` : pathname);
   };
   const setBand = (v: GradeBand) => setParam("grade", v, "all");
   const setSort = (v: SortKey) => setParam("sort", v, "grade");

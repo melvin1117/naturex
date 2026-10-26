@@ -50,7 +50,8 @@ vi.mock("next/navigation", async () => {
   };
   return {
     useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
-    usePathname: () => "/admin/verifications",
+    usePathname: () =>
+      useSyncExternalStore(subscribe, () => window.location.pathname),
     useSearchParams: () =>
       new URLSearchParams(
         useSyncExternalStore(subscribe, () => window.location.search),
@@ -293,6 +294,24 @@ describe("ReviewQueueScreen decided views (#211)", () => {
       "/admin/verifications?view=verified",
     );
     replace.mockRestore();
+  });
+
+  it("keeps the sandbox's address when switching views", async () => {
+    window.history.replaceState(null, "", "/sandbox/admin/verifications");
+    renderAdmin(<ReviewQueueScreen />, {
+      "GET /admin/offers": () => json([]),
+      [QUEUE]: () => json([]),
+    });
+    await screen.findByText(/No offer is waiting/);
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Documents" }));
+
+    expect(
+      await screen.findByText("Nothing is waiting for review."),
+    ).toBeInTheDocument();
+    // A bare `/admin/...` would leave the sandbox, and its session, mid-page.
+    expect(window.location.pathname).toBe("/sandbox/admin/verifications");
+    expect(window.location.search).toBe("?view=waiting");
   });
 
   it("starts on the view in the address and shows a revocation's reason", async () => {

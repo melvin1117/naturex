@@ -24,6 +24,7 @@ import type {
 import type { ApiError } from "@/lib/api/errors";
 import { STATUS_LABEL } from "@/lib/community";
 import { date } from "@/lib/format";
+import { useReplaceUrl } from "@/lib/nav";
 import {
   adminReviewHref,
   checkCounts,
@@ -60,6 +61,7 @@ export function ReviewQueueScreen() {
   // The address is the state: Back and Forward, a reload and a shared link all land on the
   // view in it. Next.js keeps useSearchParams in step with history.replaceState.
   const view = reviewView(useSearchParams().get("view"));
+  const replaceUrl = useReplaceUrl();
 
   return (
     <div className="mx-auto max-w-5xl px-4 pt-10 pb-16 sm:px-6">
@@ -68,9 +70,7 @@ export function ReviewQueueScreen() {
       <Tabs
         value={view}
         // The History API keeps the address shareable without a server round trip.
-        onValueChange={(v) =>
-          window.history.replaceState(null, "", reviewViewHref(reviewView(v)))
-        }
+        onValueChange={(v) => replaceUrl(reviewViewHref(reviewView(v)))}
         className="mt-8 gap-6"
       >
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
