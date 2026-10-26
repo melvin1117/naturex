@@ -227,7 +227,7 @@ The footer is one quiet line: the lockup, "A hackathon prototype. Values are scr
 One scroll that a judge reads top to bottom, with depth one tap away and never on another page (ADR-0008 §4):
 - **Hero** on the site's own satellite ground: place and verification badge, the name, one line on the land, the **Worth range** and the price a unit, the live health dial with its grade, and two ways in: **How it was rated** (paper, primary) and **Proof of Life report** (paper outline). On phones a third, **Back this site**, leads first and jumps to the trade panel.
 - **The verdict band** (machine layer): the Auditor's one-line verdict, the models that worked on the run (from its own receipt, busiest first, then the web searches) and **Open the Agent Trace**.
-- **Three sections**, each one panel: **What the land does each year**, **Seen from above** (the views five years apart, or the land cover, one at a time) and **What happened** (five years of greenness with what explains it, then the latest news). **Price a unit** follows once there are trades to chart.
+- **Three sections**, each one panel: **What the land does each year**, **Seen from above** (the views five years apart, or the land cover, one at a time) and **News and satellite** (five years of greenness with what explains it, then the latest news). **Price a unit** follows once there are trades to chart.
 - **Back this site** is the sticky right column on wide screens.
 - **Everything else is in two drawers** over the page, named by `?tab=` so links still land: the **Agent Trace** (machine layer, `?tab=trace`) and the **Proof of Life drawer** (paper, tabs Proof of Life · The Record · Verification · Field photos · Data sources). A row of quiet buttons under the sections opens each tab.
 

@@ -1353,7 +1353,7 @@ One experience with no sign-in ([ADR-0008](../adr/0008-one-sandbox-experience.md
 | Story `/how` | Four parts on one wetland (Measure, Fund, Watch, Trust), each ending on a question | Skip leaves to `/sandbox` |
 | Sandbox shell `/sandbox/*` | SandboxGate (starts the sandbox), the bar (Marketplace · Communities · Your stakes, or Marketplace · Reviews for the Reviewer), Time Machine sheet, alerts bell, person menu, Ask Bea, one-line footer | No sign-up |
 | Marketplace `/sandbox` | Feature site, site cards, grade filter and sort | Only launched sites |
-| Site `/sandbox/asset/[id]` | Hero, the verdict with the models that worked on it, What the land does, Seen from above, What happened, price chart, Back this site; the Agent Trace and the Proof of Life drawers open over it (`?tab=`) | ADR-0008 §4 |
+| Site `/sandbox/asset/[id]` | Hero, the verdict with the models that worked on it, What the land does, Seen from above, News and satellite, price chart, Back this site; the Agent Trace and the Proof of Life drawers open over it (`?tab=`) | ADR-0008 §4 |
 | Communities `/sandbox/steward` | Your communities as picture cards; Start a community (`?new=1`); a community's page (`?community=`): one sentence with its numbers, a tile per site with its state and next step, withdraw a draft | ADR-0008 §6 |
 | List land `/sandbox/steward/list` | One resumable flow: Name → Draw → Rate → Prove (optional) → Offer → Send for review | ADR-0008 §5 |
 | Community settings `/sandbox/steward/community` | Community form, members (owner) | From "Edit community" |

@@ -20,7 +20,7 @@ Accepted (2026-10-25). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) 
 
 ### 2. One shell for everyone
 - **One bar:** WildWorth, then **Marketplace · Communities · Your stakes** (the Reviewer gets **Marketplace · Reviews**), then the Time Machine, the alerts bell, and who you are. No app names, no app switcher.
-- **Who you are** is a menu on the avatar: Rosa (Community), Arjun (Supporter) or the Reviewer (WildWorth team), each with one line on what they do; plus "Start the sandbox over" and "Leave the sandbox".
+- **Who you are** is a switcher in the bar ("Viewing as Rosa", everyone's avatars stacked, the current person in front): Rosa (Community), Arjun (Supporter) or the Reviewer (WildWorth team), each with one line on what they do; plus "Start the sandbox over" and "Leave the sandbox".
 - **Ask Bea** is a floating button on every page. Each opening starts a fresh chat; on a site's page she starts on that site, elsewhere across every site. The per-page Bea panels (site page, Your stakes) are removed.
 - **The Time Machine** opens from the bar in a side sheet, for whoever you are (§3).
 - **The footer** is one line: the prototype note and "Data sources" (a dialog with the attributions).
@@ -31,7 +31,7 @@ Accepted (2026-10-25). Amends [ADR-0005](./0005-accounts-roles-and-two-apps.md) 
 - `OPERATE` keeps suspend, resume and operator re-rates; `REVIEW_LISTING` keeps verification decisions (the Reviewer).
 
 ### 4. A site's depth opens over it
-- A site page is one short scroll: the hero, the Auditor's verdict with the models that worked on it, then **What the land does**, **Seen from above** and **What happened**, with **Back this site** beside them.
+- A site page is one short scroll: the hero, the Auditor's verdict with the models that worked on it, then **What the land does**, **Seen from above** and **News and satellite**, with **Back this site** beside them.
 - **The Agent Trace and the Proof of Life drawer open over the page** instead of on their own pages, so the visitor never loses the site they were reading. The page's `?tab=` names the open drawer (`trace`, or `report` · `ledger` · `verification` · `photos` · `sources`), so links into a report, a ledger entry or the news keep working; `?tab=news` and `?tab=price` scroll to that part of the page.
 - `/trace/<run>` and `/trace/recorded/<site>` stay as pages for deep links; nothing on the site page links to them.
 
