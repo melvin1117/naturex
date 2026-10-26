@@ -3,7 +3,7 @@
 import {
   BadgeCheck,
   Check,
-  ChevronDown,
+  ChevronsUpDown,
   LogOut,
   RotateCcw,
 } from "lucide-react";
@@ -43,9 +43,11 @@ import {
 export function PersonaAvatar({
   persona,
   className,
+  ...rest
 }: {
   persona: SwitchablePersona;
   className?: string;
+  "data-current"?: string;
 }) {
   // The initial is drawn by CSS, not as text, so it never joins a button's visible name.
   const initial =
@@ -53,7 +55,9 @@ export function PersonaAvatar({
   return (
     <span
       aria-hidden="true"
+      data-persona={persona}
       data-initial={initial}
+      {...rest}
       className={cn(
         "grid size-8 shrink-0 place-items-center rounded-full text-[13px] font-semibold",
         initial && "before:content-[attr(data-initial)]",
@@ -66,6 +70,30 @@ export function PersonaAvatar({
       )}
     >
       {persona === "admin" && <BadgeCheck className="size-4" />}
+    </span>
+  );
+}
+
+/**
+ * Everyone in the sandbox, the current person in front: the switcher shows there are others to
+ * become, not one account.
+ */
+function PeopleStack({ current }: { current: SwitchablePersona }) {
+  const others = SWITCHABLE.filter((key) => key !== current);
+  return (
+    <span className="flex shrink-0 items-center">
+      {others.map((key) => (
+        <PersonaAvatar
+          key={key}
+          persona={key}
+          className="-mr-1.5 size-6 text-[10px] opacity-80 ring-2 ring-card [&_svg]:size-3"
+        />
+      ))}
+      <PersonaAvatar
+        persona={current}
+        data-current=""
+        className="relative ring-2 ring-card"
+      />
     </span>
   );
 }
@@ -105,19 +133,25 @@ export function PersonaMenu({ persona }: { persona: SwitchablePersona }) {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            variant="ghost"
-            className="h-11 gap-2 rounded-full py-1 pr-2.5 pl-1.5"
+            variant="outline"
+            className="h-11 gap-2.5 rounded-full border-border bg-card py-1 pr-2.5 pl-1.5 shadow-none"
             disabled={switcher.isPending}
-            aria-label={`You're ${me.name}, ${me.role}. Switch person or reset the sandbox`}
+            // Starts with the visible words, so speech and axe's label-in-name agree.
+            aria-label={`Viewing as ${me.name}, ${me.role}. Switch person or start the sandbox over`}
           >
-            <PersonaAvatar persona={persona} />
+            <PeopleStack current={persona} />
             <span className="hidden flex-col items-start leading-tight sm:flex">
-              <span className="text-[13.5px] font-semibold">{me.name}</span>{" "}
+              <span className="text-[13.5px]">
+                <span className="font-normal text-muted-foreground">
+                  Viewing as
+                </span>{" "}
+                <span className="font-semibold">{me.name}</span>
+              </span>{" "}
               <span className="text-[11.5px] font-normal text-muted-foreground">
                 {me.role}
               </span>
             </span>
-            <ChevronDown
+            <ChevronsUpDown
               aria-hidden="true"
               className="size-4 text-muted-foreground"
             />
@@ -125,7 +159,7 @@ export function PersonaMenu({ persona }: { persona: SwitchablePersona }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72 rounded-2xl p-1.5">
           <DropdownMenuLabel className="px-2.5 pt-2 pb-1 text-xs font-medium text-muted-foreground">
-            Be someone else
+            Switch person
           </DropdownMenuLabel>
           {SWITCHABLE.map((key) => {
             const p = SANDBOX_PERSONAS[key];

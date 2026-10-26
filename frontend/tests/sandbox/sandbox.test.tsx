@@ -260,12 +260,18 @@ describe("the sandbox header", () => {
       "GET /alerts": NO_ALERTS,
     });
     const trigger = await screen.findByRole("button", {
-      name: /You're Arjun, Supporter/,
+      name: /^Viewing as Arjun, Supporter/,
     });
-    // axe's label-in-name: the visible "Arjun Supporter" is in the name, words apart, and
-    // the avatar draws its initial with CSS, so no stray "A" joins the visible text.
-    expect(trigger).toHaveTextContent(/^Arjun Supporter$/);
-    const avatar = trigger.querySelector("[data-initial]");
+    // axe's label-in-name: the visible "Viewing as Arjun Supporter" starts the name, words
+    // apart, and avatars draw their initials with CSS, so no stray letter joins the text.
+    expect(trigger).toHaveTextContent(/^Viewing as Arjun Supporter$/);
+    // It shows everyone you can be, the current person in front.
+    expect(
+      Array.from(trigger.querySelectorAll("[data-persona]")).map((el) =>
+        el.getAttribute("data-persona"),
+      ),
+    ).toEqual(["rosa", "admin", "arjun"]);
+    const avatar = trigger.querySelector("[data-current]");
     expect(avatar).toHaveAttribute("data-initial", "A");
     expect(avatar).toHaveTextContent("");
   });
@@ -277,7 +283,7 @@ describe("the sandbox header", () => {
       "POST /demo/persona": () => json(demoWorld("admin")),
     });
     const trigger = await screen.findByRole("button", {
-      name: /You're Arjun, Supporter/,
+      name: /^Viewing as Arjun, Supporter/,
     });
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
     fireEvent.click(await screen.findByRole("menuitem", { name: /Reviewer/ }));
@@ -297,7 +303,9 @@ describe("the sandbox header", () => {
       "GET /alerts": NO_ALERTS,
     });
     fireEvent.pointerDown(
-      await screen.findByRole("button", { name: /You're Rosa, Community/ }),
+      await screen.findByRole("button", {
+        name: /^Viewing as Rosa, Community/,
+      }),
       { button: 0, ctrlKey: false },
     );
     expect(
@@ -330,7 +338,7 @@ describe("the persona menu, when something fails", () => {
           json({ detail: "demo_busy" }, { status: 503 }),
       },
     );
-    await openMenu(/You're Arjun/);
+    await openMenu(/^Viewing as Arjun/);
     fireEvent.click(await screen.findByRole("menuitem", { name: /Rosa/ }));
 
     expect(
@@ -355,7 +363,7 @@ describe("the persona menu, when something fails", () => {
         ),
       },
     );
-    await openMenu(/You're Rosa/);
+    await openMenu(/^Viewing as Rosa/);
     fireEvent.click(
       await screen.findByRole("menuitem", { name: /Start the sandbox over/ }),
     );
@@ -370,7 +378,7 @@ describe("the persona menu, when something fails", () => {
 
     // A failed reset says so and goes nowhere.
     nav.push.mockReset();
-    await openMenu(/You're Rosa/);
+    await openMenu(/^Viewing as Rosa/);
     fireEvent.click(
       await screen.findByRole("menuitem", { name: /Start the sandbox over/ }),
     );
