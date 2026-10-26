@@ -47,9 +47,8 @@ export const AskBeaButton = forwardRef<
             <span className="sr-only">assistant</span>
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="max-w-64 text-center">
-          Your AI field guide. She answers only from the Record, with sources.
-          Runs on NVIDIA {modelLabel(BEA_MODEL)}.
+        <TooltipContent side="bottom" className="text-center">
+          Answers from the Record · NVIDIA {modelLabel(BEA_MODEL)}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
