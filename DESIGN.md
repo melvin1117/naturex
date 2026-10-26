@@ -179,7 +179,7 @@ Three free (OFL) faces from Google Fonts, loaded with `next/font`: **Gloock** (d
 
 ## Layout
 
-Max width 1280px with a 16px gutter on phones and 24px from `sm`. Pages open with a serif title, then one sentence that carries their numbers inline (no stat strip, no boxed metrics), then their content: the Marketplace's feature card and site cards, a community's site tiles, the stakes' tiles. Lists of sites are grids of picture tiles (the site's satellite view first), three to a row from `lg`. Detail pages use a two-column grid (content plus a 360px sticky aside for the trade panel) from `lg`. Headers wrap navigation onto a second row below 640px. No horizontal page scroll at 390px.
+Max width 1280px with a 16px gutter on phones and 24px from `sm`. Pages open with a serif title, then one sentence that carries their numbers inline (no stat strip, no boxed metrics), then their content: the Marketplace's feature card and site cards, a community's site tiles. **Your stakes** is the exception: it opens on its money panel (the total, then stakes and sandbox balance on one split bar) beside the impact band, then a row per stake, because a supporter's first question is what they paid and how it's doing. Lists of sites are grids of picture tiles (the site's satellite view first), three to a row from `lg`. Detail pages use a two-column grid (content plus a 360px sticky aside for the trade panel) from `lg`. Headers wrap navigation onto a second row below 640px. No horizontal page scroll at 390px.
 
 ## Elevation & Depth
 

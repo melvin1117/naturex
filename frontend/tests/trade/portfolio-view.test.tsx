@@ -163,35 +163,81 @@ describe("PortfolioView", () => {
     expect(await tableRow()).not.toHaveClass("ww-wash");
   });
 
-  it("says in one sentence what's held, how it's doing and what's left", async () => {
+  it("shows where the money stands: the total, the stakes and the sandbox balance", async () => {
     renderPortfolio({ "GET /portfolio": () => json(HELD) });
 
+    const money = await screen.findByRole("region", { name: "Your money" });
+    expect(within(money).getByText("Total now").nextSibling).toHaveTextContent(
+      "$9,998.50",
+    );
+    expect(money).toHaveTextContent("−$1.50 since you started with $10,000.00");
+    const inStakes = within(money).getByText("In stakes").closest("div")!;
+    expect(inStakes).toHaveTextContent("$198.70");
+    expect(inStakes).toHaveTextContent("You paid $200.20");
+    expect(inStakes).toHaveTextContent("−$1.50 (−0.75%) change in value");
+    const balance = within(money).getByText("Sandbox balance").closest("div")!;
+    expect(balance).toHaveTextContent("$9,799.80");
+    // No market words: never "invested", "wallet" or "profit" (ux-writing.md).
+    expect(document.body).not.toHaveTextContent(/invest|wallet|profit/i);
+  });
+
+  it("shows how each stake is doing: paid, worth now and the change", async () => {
+    renderPortfolio({
+      "GET /portfolio": () => json(HELD),
+      "GET /assets": () => json([{ ...cards[0], health_score: "61.4" }]),
+    });
+
     const row = await tableRow();
-    expect(
-      screen.getByText((_, el) =>
-        el?.tagName === "P"
-          ? el.textContent ===
-            "You back 1 site with stakes worth $198.70, down $1.50 (0.8%) since you bought. $9,799.80 is left to back more."
-          : false,
-      ),
-    ).toBeVisible();
     expect(row).toHaveTextContent("10 units · $20.00 a unit");
-    expect(within(row).getByText("Value").nextSibling).toHaveTextContent(
+    expect(within(row).getByText("You paid").nextSibling).toHaveTextContent(
+      "$95.00",
+    );
+    expect(within(row).getByText("Worth now").nextSibling).toHaveTextContent(
       "$100.00",
     );
     expect(
-      within(row).getByText("Change since you bought").nextSibling,
-    ).toHaveTextContent("−$1.50");
+      within(row).getByText("Change in value").nextSibling,
+    ).toHaveTextContent("−$1.50 (−0.75%)");
     expect(within(row).getByRole("link")).toHaveAttribute(
       "href",
       `/asset/${ASSET_ID}`,
     );
-    await waitFor(() =>
-      expect(within(row).getByText("BBB")).toBeInTheDocument(),
-    );
+    // The grade on first mention: letter, health score and label.
+    expect(
+      await within(row).findByRole("img", {
+        name: "Grade BBB, health 61.4, Good health",
+      }),
+    ).toBeInTheDocument();
   });
 
-  it("says a gain as up, in the trend's colour", async () => {
+  it("charts a stake's latest prices against what was paid", async () => {
+    renderPortfolio({
+      "GET /portfolio": () => json(HELD),
+      "GET /assets": () =>
+        json([{ ...cards[0], sparkline: ["18.5000", "19.2000", "20.0000"] }]),
+    });
+    const row = await tableRow();
+    expect(
+      await within(row).findByRole("img", {
+        name: "Xochimilco Wetland: its latest 3 prices, from $18.50 to $20.00 a unit; you paid $19.00 a unit.",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("says a stake with one price has no chart yet", async () => {
+    renderPortfolio({
+      "GET /portfolio": () => json(HELD),
+      "GET /assets": () => json([{ ...cards[0], sparkline: ["20.0000"] }]),
+    });
+    const row = await tableRow();
+    expect(
+      await within(row).findByText(
+        "Its price chart starts after a few more trades.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("says a gain with a sign and an arrow, in the trend's colour", async () => {
     renderPortfolio({
       "GET /portfolio": () =>
         json({
@@ -201,8 +247,40 @@ describe("PortfolioView", () => {
           unrealized_pnl_pct: "2.94",
         }),
     });
-    const up = await screen.findByText("up $12.30 (2.9%)");
+    const money = await screen.findByRole("region", { name: "Your money" });
+    const up = within(money).getByText((_, el) =>
+      el?.tagName === "SPAN" ? el.textContent === "+$12.30 (+2.9%)" : false,
+    );
     expect(up).toHaveClass("text-lime-ink");
+    expect(up.querySelector("svg")).not.toBeNull();
+  });
+
+  it("never rounds a small change to 0.0%", async () => {
+    renderPortfolio({
+      "GET /portfolio": () =>
+        json({
+          ...HELD,
+          holdings: [
+            holding({ unrealized_pnl: "0.07", unrealized_pnl_pct: "0.03" }),
+          ],
+        }),
+    });
+    const row = await tableRow();
+    expect(row).toHaveTextContent("+$0.07 (+0.03%)");
+  });
+
+  it("says a change under 0.01% as such, without a second sign", async () => {
+    renderPortfolio({
+      "GET /portfolio": () =>
+        json({
+          ...HELD,
+          holdings: [
+            holding({ unrealized_pnl: "-0.07", unrealized_pnl_pct: "-0.004" }),
+          ],
+        }),
+    });
+    const row = await tableRow();
+    expect(row).toHaveTextContent("\u2212$0.07 (<0.01%)");
   });
 
   it("says a stake that hasn't moved is level", async () => {
@@ -219,7 +297,6 @@ describe("PortfolioView", () => {
     });
     const row = await tableRow();
     expect(within(row).getByText("Level")).toBeVisible();
-    expect(screen.getByText(/level/, { selector: "span" })).toBeVisible();
   });
 
   it("writes losses with a true minus sign", async () => {
@@ -234,7 +311,6 @@ describe("PortfolioView", () => {
 
     const row = await tableRow();
     expect(row).toHaveTextContent("\u2212$1,234.50");
-    expect(screen.getByText(/^down \$1,234\.50/)).toBeVisible();
   });
 
   it("shows per-unit prices to 4 decimals", async () => {
@@ -347,9 +423,15 @@ describe("PortfolioView", () => {
         }),
     });
 
-    expect(await screen.findByText("0.12 ha")).toBeInTheDocument();
-    expect(screen.getByText("3.4 tCO₂")).toBeInTheDocument();
-    expect(screen.getByText("$56.78/yr")).toBeInTheDocument();
+    const impact = await screen.findByRole("region", {
+      name: "What your stakes keep alive",
+    });
+    expect(within(impact).getByText("0.12 ha")).toBeInTheDocument();
+    expect(within(impact).getByText("3.4 tCO₂")).toBeInTheDocument();
+    expect(within(impact).getByText("$56.78 a year")).toBeInTheDocument();
+    expect(impact).toHaveTextContent(
+      "Attribution only, not a carbon credit or offset.",
+    );
   });
 
   it("explains a failure and retries", async () => {

@@ -86,7 +86,12 @@ const stakesReady = async (page: Page) => {
   await expect(
     page.getByRole("heading", { level: 1, name: "Your stakes" }),
   ).toBeVisible();
-  await expect(page.getByText(/^You (have|back) /)).toBeVisible();
+  // Empty: one sentence and an invitation; with stakes: the money panel.
+  await expect(
+    page
+      .getByText(/^You have /)
+      .or(page.getByRole("region", { name: "Your money" })),
+  ).toBeVisible();
 };
 
 async function firstAssetHref(page: Page): Promise<string> {

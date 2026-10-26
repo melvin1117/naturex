@@ -266,14 +266,16 @@ test("the sandbox: list, review, back and follow a site", async ({
     await expect(
       page.getByRole("heading", { level: 1, name: "Your stakes" }),
     ).toBeVisible();
-    await expect(
-      page.getByText(/^You back 1 site with stakes worth/),
-    ).toBeVisible();
+    const money = page.getByRole("region", { name: "Your money" });
+    await expect(money).toContainText("In stakes");
+    await expect(money).toContainText("You paid");
+    await expect(money).toContainText("Sandbox balance");
     const stake = page
       .getByRole("list", { name: "Stakes" })
       .getByRole("listitem")
       .filter({ hasText: SITE });
     await expect(stake).toContainText("100 units");
+    await expect(stake).toContainText("Worth now");
     await expect(stake.getByRole("link", { name: SITE })).toHaveAttribute(
       "href",
       `/sandbox/asset/${assetId}`,

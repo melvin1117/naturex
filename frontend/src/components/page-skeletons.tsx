@@ -298,17 +298,46 @@ function TileGrid() {
   );
 }
 
-/** Below the portfolio's heading: its sentence, then the stakes' tiles. */
+/** Below the portfolio's heading: the money panel and the impact band, then the stakes' rows. */
 export function PortfolioBodySkeleton({
   label = "Loading your stakes…",
 }: {
   label?: string;
 }) {
   return (
-    <LoadingRegion name="portfolio" label={label} className="mt-5">
-      <Line box="h-8 sm:h-9" className="h-6 w-full max-w-2xl" />
-      <Line box="h-8 sm:h-9" className="h-6 w-2/3 max-w-xl" />
-      <TileGrid />
+    <LoadingRegion name="portfolio" label={label} className="mt-8">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+        <div className="rounded-3xl bg-card p-6 shadow-soft sm:p-8">
+          <Skeleton className="h-5 w-28" />
+          <Skeleton className="mt-6 h-12 w-56" />
+          <Skeleton className="mt-7 h-3 w-full rounded-full" />
+          <div className="mt-5 grid gap-6 sm:grid-cols-2">
+            <Skeleton className="h-16 w-40" />
+            <Skeleton className="h-16 w-40" />
+          </div>
+        </div>
+        <div className="rounded-3xl bg-lichen p-6 sm:p-8">
+          <Skeleton className="h-5 w-52 bg-card" />
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="mt-5 flex items-center gap-4">
+              <Skeleton className="size-11 rounded-[14px] bg-card" />
+              <Skeleton className="h-6 w-40 bg-card" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <Line box="mt-12 h-10" className="h-8 w-72" />
+      <div className="mt-5 space-y-3">
+        {[0, 1].map((i) => (
+          <div
+            key={i}
+            className="flex items-center gap-4 rounded-3xl bg-card p-4 shadow-soft sm:p-5"
+          >
+            <Skeleton className="size-16 rounded-[18px] sm:size-20" />
+            <Skeleton className="h-6 w-48" />
+          </div>
+        ))}
+      </div>
     </LoadingRegion>
   );
 }
