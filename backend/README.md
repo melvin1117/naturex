@@ -32,6 +32,7 @@ Gives the template world, which every sandbox copies, a year of history on real 
 Florida Keys Mangrove Keepers), six listings drawn on OpenStreetMap boundaries (ODbL: park and
 island outlines as mapped, river valleys as a buffer around the mapped river), and the
 supporters, Arjun and Rosa trading them. Rosa owns the Keys community (Marisol and Darnell steward it).
+Arjun takes some profit late in October, so a visitor playing him has about $5.8k to back a new listing.
 
 - **Ratings:** each listing is rated when it's listed and then every quarter (up to five
   reports), each with Earth Engine observations for its own quarter (`ObservationWindow`),
