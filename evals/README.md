@@ -201,7 +201,7 @@ Per agent, the report gives schema-valid attempts out of all replies (target ≥
 - Bea sticking to the Record;
 - every agent's schema reliability.
 
-`backend/tests/test_evals_published.py` fails when the copy drifts from the results. `make eval` runs `report.py` and `publish.py` last.
+`backend/tests/test_evals_published.py` fails when the copy drifts from the results. `make eval` runs `report.py` and `publish.py` last, then Prettier on the copy (the frontend lint checks it).
 
 ## Baseline (T25, Nano, 2026-10-07)
 

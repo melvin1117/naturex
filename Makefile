@@ -69,6 +69,7 @@ eval:
 	@case " $(EVALS) " in *" schema "*) $(PY) evals/schema_reliability.py;; esac
 	$(PY) evals/report.py
 	$(PY) evals/publish.py
+	cd frontend && pnpm exec prettier --write --log-level warn src/lib/evals.json
 
 # T74 sandbox E2E: Playwright starts the API and a production frontend build on their own
 # ports (8100, 3100) with a freshly recreated wildworth_e2e database, then stops them. Start

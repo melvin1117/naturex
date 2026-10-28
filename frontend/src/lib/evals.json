@@ -97,9 +97,7 @@
       {
         "case": "restoration_forest/baseline",
         "what": "Ultra's first answer was refused",
-        "refused": [
-          "flags[2].detail uses numbers not in the bundle: 0.33"
-        ],
+        "refused": ["flags[2].detail uses numbers not in the bundle: 0.33"],
         "recovered": true
       },
       {
