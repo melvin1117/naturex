@@ -1,10 +1,18 @@
 # WildWorth
 
+![WildWorth: the AI rating agency for living nature](docs/presentation/readme-banner.jpg)
+
 *Worth more wild.*
 
 **The AI rating agency for living nature, with a sandbox exchange.** WildWorth uses NVIDIA Nemotron agents on Nebius Token Factory to rate land from satellite data and local news, turn it into a graded site that supporters can back with play money, and keep watching it, so keeping nature alive pays more than destroying it. Every quarter, WildWorth issues a Proof of Life for each site.
 
 Built for the **Nebius × NVIDIA Global AI Hackathon**, *Best Apps & Agents* track. Sandbox only: play money, nothing here is a real security.
+
+## A look inside
+| | |
+|---|---|
+| ![The Agent Trace: every step of a rating with the model or tool that ran it](docs/presentation/trace.jpg) | ![Boot Key Mangroves from space: five years apart, Dynamic World land cover, greenness beside the local news](docs/presentation/evidence.jpg) |
+| ![The Time Machine: an encroachment re-rates the site, health 84.4 to 63.6, AA to BBB](docs/presentation/timemachine.jpg) | ![How it works: satellite, news and community inputs, tested code for every number, Nemotron agents to explain and audit](docs/presentation/architecture.jpg) |
 
 ## How a rating works
 Every number (areas, values, scores, prices) comes from deterministic, tested code. The models plan, read, investigate and judge; code checks everything they say before it counts.
