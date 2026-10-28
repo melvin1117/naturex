@@ -1552,7 +1552,7 @@ Policy: use the planned stack, and switch to the free alternative wherever a pai
 
 **Development is local-only:** Docker Compose (Postgres + pgvector) on each laptop, with no cloud accounts needed beyond the AI and data APIs.
 
-**Hosting for the demo is decided in T20**, in this order:
+**Decided in T20 ([ADR-0009](../adr/0009-one-vm-on-azure.md)): one Azure VM with Docker Compose, on approved personal credits ([docs/deploy.md](../deploy.md)).** The options it was chosen from, in order:
 | Rank | Backend + DB | When | Notes |
 |---|---|---|---|
 | 1 | **Nebius Serverless Endpoint** (+ Serverless Jobs) | If Nebius AI Cloud credits are unlocked (e.g. a Builders & Brews event) | Encouraged by the track; Postgres on Supabase or Azure |

@@ -33,3 +33,8 @@ evals/output/
 
 # Database dumps (may hold accounts and sessions)
 *.dump
+
+# Deployment secrets and state on the VM (docs/deploy.md)
+deploy/secrets/
+deploy/.pinned
+deploy/.failed

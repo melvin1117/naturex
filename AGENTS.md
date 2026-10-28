@@ -35,7 +35,7 @@ If code and docs disagree, stop and ask; don't silently pick one.
 - **Tests with every change:** unit tests for formulas, market invariants and the ledger; contract tests for agent outputs.
 - **Never push to `main`.** Branch, run `make ci` (with `docker compose up -d`), get an independent agent review, open a PR, get 1 teammate approval, squash-merge only when CI is green. GitHub doesn't enforce this on the private repo, so it's on us (`docs/ci.md`).
 - **Small PRs** (~100–300 lines), one concern each, **Conventional Commit** titles (`feat:`, `fix:`, `docs:`…). Update the docs when behaviour changes.
-- **Local development uses no cloud:** Docker Compose for Postgres; cloud hosting is chosen later (T20).
+- **Local development uses no cloud:** Docker Compose for Postgres. The demo runs on one Azure VM ([ADR-0009](./docs/adr/0009-one-vm-on-azure.md), [docs/deploy.md](./docs/deploy.md)).
 - **Mocks behind interfaces** (`USE_MOCKS=true`) so work can proceed in parallel and CI runs without keys.
 
 ## Picking a task

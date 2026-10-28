@@ -17,6 +17,7 @@ from sqlalchemy import create_engine, func, text
 from sqlalchemy.exc import DBAPIError
 from sqlmodel import Session, col, select
 
+from app import cli
 from app.config import get_settings
 from app.db import get_session
 from app.ledger import append, entries_for, verify
@@ -422,6 +423,21 @@ def test_prune_removes_only_stale_visitor_worlds(session: Session) -> None:
     assert session.get(World, fresh_id) is not None
     assert session.get(World, WORLD_ID) is not None, "the template is never pruned"
     assert session.get(World, LIVE_WORLD_ID) is not None, "the live world is never pruned"
+
+
+@requires_db
+def test_cli_prune_sandboxes_deletes_every_visitor_world_only(
+    session: Session, capsys: pytest.CaptureFixture[str]
+) -> None:
+    just_seen = [create_world(session).id for _ in range(3)]
+    live = ensure_live_world(session)
+
+    assert cli.main(["prune-sandboxes"], session=session) == 0
+
+    assert "Deleted 3 sandboxes." in capsys.readouterr().out
+    assert all(session.get(World, world_id) is None for world_id in just_seen)
+    assert session.get(World, WORLD_ID) is not None, "the template is never pruned"
+    assert session.get(World, live.id) is not None, "the live world is never pruned"
 
 
 # --- API -------------------------------------------------------------------------------------

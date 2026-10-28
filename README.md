@@ -67,7 +67,10 @@ cd backend && USE_MOCKS=false EARTH_ENGINE_LIVE=true uv run python -m app.jobs.r
 
 It rates every listed site of the live world with the live models (about $0.03 a site), stores audited reports with their Agent Traces, saves the news it found and pays the quarter's play-money revenue. It runs once per quarter per site; a site that fails or hits the hourly cap is picked up by the next run. The daily `news_sweep` keeps news coming after that. Until a site has its own run, its page shows the recorded one, labelled "Recorded".
 
-To deploy a live world you seeded locally (`app.jobs.seed_live`), restore a dump of the **whole** database instead ([backend/README.md](backend/README.md#live-data-appjobsseed_live)): every ID comes along, so the ledger still verifies.
+To deploy a live world you seeded locally (`app.jobs.seed_live`), restore a dump of the database instead ([backend/README.md](backend/README.md#live-data-appjobsseed_live)): every ID comes along, so the ledger still verifies. `deploy/export-db.sh` writes one without visitor sandboxes.
+
+## Deploying
+The demo runs on one Azure VM with Docker Compose (Postgres, the API, the web app and Caddy for HTTPS), and picks up `main` by itself within about 10 minutes of a merge: [docs/deploy.md](docs/deploy.md), [ADR-0009](docs/adr/0009-one-vm-on-azure.md).
 
 ## Limitations
 - The three demo sites use precomputed satellite metrics and images; live Earth Engine runs only for new polygons when `EARTH_ENGINE_LIVE` is on, and the before/after vision runs only for the demo sites.
