@@ -2,7 +2,7 @@
 
 Usage (repo root, after an eval run): backend/.venv/bin/python evals/publish.py
 
-The AI control room and the README show these numbers, failures included. The frontend keeps
+The Agent Trace drawer's eval section shows these numbers, failures included. The frontend keeps
 its own small copy because its build context doesn't include `evals/`;
 `backend/tests/test_evals_published.py` fails when the copy drifts from the results.
 """
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "evals" / "results"
@@ -60,10 +60,39 @@ def auditor(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def copilot(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "run_on": data["run_on"],
+        "summary": {k: v for k, v in data["summary"].items() if k != "grounded_pct"},
+        "failures": [
+            {"id": i["id"], "question": i["question"], "what": "; ".join(i["failures"])}
+            for i in data["items"]
+            if i["failures"]
+        ],
+    }
+
+
+def schema(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "run_on": data["run_on"],
+        "agents": [
+            {k: r[k] for k in ("agent", "attempts", "schema_valid_pct", "refused_pct")}
+            for r in data["agents"]
+        ],
+        "total": {k: data["total"][k] for k in ("attempts", "schema_valid_pct", "refused_pct")},
+    }
+
+
+def _read(name: str) -> dict[str, Any]:
+    return cast(dict[str, Any], json.loads((RESULTS / f"{name}.json").read_text(encoding="utf-8")))
+
+
 def build() -> dict[str, Any]:
     return {
-        "news": news(json.loads((RESULTS / "news_routing.json").read_text(encoding="utf-8"))),
-        "auditor": auditor(json.loads((RESULTS / "auditor.json").read_text(encoding="utf-8"))),
+        "news": news(_read("news_routing")),
+        "auditor": auditor(_read("auditor")),
+        "copilot": copilot(_read("copilot")),
+        "schema": schema(_read("schema")),
     }
 
 

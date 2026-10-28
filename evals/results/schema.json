@@ -1,0 +1,87 @@
+{
+  "eval": "schema",
+  "run_on": "2026-10-28",
+  "agents": [
+    {
+      "agent": "article_reader",
+      "attempts": 12,
+      "schema_valid": 12,
+      "schema_valid_pct": 100.0,
+      "refused_by_code": 0,
+      "refused_pct": 0.0,
+      "errors": 0
+    },
+    {
+      "agent": "auditor",
+      "attempts": 61,
+      "schema_valid": 60,
+      "schema_valid_pct": 98.4,
+      "refused_by_code": 12,
+      "refused_pct": 20.0,
+      "errors": 0
+    },
+    {
+      "agent": "copilot",
+      "attempts": 21,
+      "schema_valid": 21,
+      "schema_valid_pct": 100.0,
+      "refused_by_code": 1,
+      "refused_pct": 4.8,
+      "errors": 0
+    },
+    {
+      "agent": "copilot_embed",
+      "attempts": 11,
+      "schema_valid": 11,
+      "schema_valid_pct": 100.0,
+      "refused_by_code": 0,
+      "refused_pct": 0.0,
+      "errors": 0
+    },
+    {
+      "agent": "news_scout",
+      "attempts": 52,
+      "schema_valid": 52,
+      "schema_valid_pct": 100.0,
+      "refused_by_code": 0,
+      "refused_pct": 0.0,
+      "errors": 0
+    },
+    {
+      "agent": "orchestrator",
+      "attempts": 229,
+      "schema_valid": 229,
+      "schema_valid_pct": 100.0,
+      "refused_by_code": 0,
+      "refused_pct": 0.0,
+      "errors": 0
+    },
+    {
+      "agent": "report_summary",
+      "attempts": 1,
+      "schema_valid": 1,
+      "schema_valid_pct": 100.0,
+      "refused_by_code": 0,
+      "refused_pct": 0.0,
+      "errors": 0
+    },
+    {
+      "agent": "site_vision",
+      "attempts": 20,
+      "schema_valid": 20,
+      "schema_valid_pct": 100.0,
+      "refused_by_code": 0,
+      "refused_pct": 0.0,
+      "errors": 0
+    }
+  ],
+  "total": {
+    "attempts": 407,
+    "schema_valid": 406,
+    "refused_by_code": 13,
+    "errors": 0,
+    "schema_valid_pct": 99.8,
+    "refused_pct": 3.2
+  },
+  "target_pct": 95.0
+}

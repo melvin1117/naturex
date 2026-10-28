@@ -54,8 +54,21 @@ check-client:
 	./scripts/generate-client.sh
 	cd frontend && git diff --exit-code -- src/lib/api/openapi.json src/lib/api/schema.d.ts
 
+# T47 eval harness (evals/README.md): needs a migrated, seeded database and NEBIUS_API_KEY in .env.
+# Runs every eval, then writes evals/results.md and the frontend's copy (evals.json). About $0.40
+# uncached (the Auditor is most of it); `make eval EVALS="copilot schema"` runs a subset.
+# promptfoo exits 1 when any test fails; the summary counts those, so the run goes on.
+EVALS ?= news auditor copilot schema
+PY := backend/.venv/bin/python
 eval:
-	@echo "eval: harness lands in T47; to run the News Scout eval now, see evals/README.md" >&2; exit 1
+	@case " $(EVALS) " in *" news "*) \
+	  PROMPTFOO_DISABLE_TELEMETRY=1 npx -y promptfoo@0.124.0 eval -c evals/promptfooconfig.routing.yaml || true; \
+	  $(PY) evals/summarize.py evals/output/news-routing-results.json --json evals/results/news_routing.json;; esac
+	@case " $(EVALS) " in *" auditor "*) $(PY) evals/auditor_eval.py;; esac
+	@case " $(EVALS) " in *" copilot "*) $(PY) evals/copilot_eval.py;; esac
+	@case " $(EVALS) " in *" schema "*) $(PY) evals/schema_reliability.py;; esac
+	$(PY) evals/report.py
+	$(PY) evals/publish.py
 
 # T74 sandbox E2E: Playwright starts the API and a production frontend build on their own
 # ports (8100, 3100) with a freshly recreated wildworth_e2e database, then stops them. Start

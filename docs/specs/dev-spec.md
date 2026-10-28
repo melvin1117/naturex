@@ -1519,10 +1519,15 @@ Implementation: plain pytest + a small runner that writes `evals/results.md` (co
 - **Cost and caching:** spend is logged to `llm_calls` as `news_scout_eval`. The provider caches at the transport level, keyed on the exact request payload, because promptfoo's Python-provider cache misses across runs.
 - **Baseline (Nano):** relevance 72% (target 85%), impact_type 79%, first-try schema 100%, injection resistance 0/3. One run costs about $0.002. See `evals/README.md`. T72 (#123) added the labelling guide to the prompt and the injection guards (§7.5 step 5); the scores after T72 are recorded here once the eval is re-run with a Token Factory key.
 - **Routing run and Auditor eval (Oct 22):** the News Scout eval on all three tiers (`evals/promptfooconfig.routing.yaml`): Nano 33/40, **Super 39/40**, Ultra 40/40, all 3/3 on injections; production now sorts the news with Super (§3). The Auditor eval (`evals/auditor_eval.py`, 15 cases: 3 sites' real records × no news, fire, encroachment, restoration, injection): first answer accepted 11/15, finished by Ultra 15/15, cites the news 12/12, never against the evidence 15/15, injection ignored 3/3, p50 14 s, $0.019 per audit; every refusal (2 planted numbers, 1 priced-only negative adjustment, 1 computed number) is listed in `evals/results/auditor.json` and shown in the AI control room. `evals/publish.py` copies both summaries to the frontend.
-- **Left for T47:** `make eval`, macro-F1, Copilot grounding and schema reliability across all agents.
+- **As built (T47, Oct 28):**
+  - `make eval` runs every eval (or `EVALS="copilot schema"`), then `evals/report.py` writes `evals/results.md` and `evals/publish.py` the frontend copy shown in the Agent Trace drawer.
+  - **Bea's grounding** (`evals/copilot_eval.py`, 15 questions through the production answer path on Nano, with each question's Record passages given): 15/15 grounded (right behaviour, cites the expected source, every number from a cited source, no planted text or market talk); first draft accepted 12/13.
+  - **Schema reliability** (`evals/schema_reliability.py`, every attempt logged in `llm_calls`): 99.8% of 407 schema-valid on the development database.
+  - **The GitHub Action** (`.github/workflows/eval.yml`) runs on demand only, not nightly: an uncached run costs about $0.40 of the shared credit.
+  - **Not done:** macro-F1 for the news labels (the per-field accuracy table stands in), and retrieval in Bea's eval.
 
 ## 19. Engineering quality bar
-- **CI (GitHub Actions):** lint (ruff, eslint), type-check (mypy on `tools/`, `market/` and `ledger.py`; `tsc`), unit and contract tests on every PR. The eval job runs nightly and on demand, so it doesn't burn credits on every push.
+- **CI (GitHub Actions):** lint (ruff, eslint), type-check (mypy on `tools/`, `market/` and `ledger.py`; `tsc`), unit and contract tests on every PR. The eval job runs on demand (`eval` workflow), so it doesn't burn credits on every push.
 - **One-command local run:** `cp .env.example .env && docker compose up`. Seed script loads the 3 demo sites plus cached metrics.
 - **Reproducible data:** `scripts/precompute_sites.py` regenerates the cached satellite JSON from Earth Engine, with the dataset versions pinned in the output.
 - **Mocks behind interfaces:** `USE_MOCKS=true` lets the frontend team work offline, and CI runs without API keys.

@@ -38,7 +38,7 @@ A live rating costs about **$0.03–0.05** and takes 35–60 s; Ultra's audit is
 - **Guards:** results are untrusted (injected instructions are cut, every item must name the place); searches pause when the account has fewer than 150 credits left (`TAVILY_MIN_CREDITS_LEFT`). Each rating's kept news is stored and shown on the site's timeline.
 
 ## Evals, failures included
-Run with real calls on Oct 22; reproduce with [evals/README.md](./evals/README.md).
+Run with real calls (Oct 22; Bea and schema reliability Oct 28). `make eval` runs them all and writes [evals/results.md](./evals/results.md); how each works is in [evals/README.md](./evals/README.md).
 
 | News Scout, 40 labelled items | All labels right | Relevance | Injections | p50 | Cost |
 |---|---|---|---|---|---|
@@ -51,6 +51,13 @@ Run with real calls on Oct 22; reproduce with [evals/README.md](./evals/README.m
 | First answer accepted / finished by Ultra / fell back | 11/15 · 15/15 · 0 |
 | Cites the news it weighed · never moved against the evidence · ignored planted orders | 12/12 · 15/15 · 3/3 |
 | Typical time · thinking · cost per audit | 14 s · 2,674 tokens · $0.019 |
+
+| Bea, 15 questions (grades, values, news, comparisons, off-Record, a planted instruction) | Result |
+|---|---|
+| Grounded: right behaviour, cites the expected source, every number from what it cites | 15/15 |
+| First draft accepted · typical time · cost for all 15 | 12/13 · 1.1 s · $0.001 |
+
+Across every agent, 99.8% of 407 logged model replies matched their schema on the first try.
 
 **Where it fails:** in 2 of 3 injection cases Ultra's first answer repeated a number planted in the news; once it adjusted down citing only news the score already priced; once it wrote a number it had computed. Code refused all four and Ultra fixed them in the next round. Nano kept 4 off-topic news items as relevant, which is why the news moved to Super.
 
@@ -122,7 +129,7 @@ make fe-check
 | [Dev spec](./docs/specs/dev-spec.md) | Architecture, data model, API, formulas, cost plan |
 | [Demo plan](./docs/specs/demo-plan.md) | Judge tour and demo video |
 | [Research](./docs/research.md) | Open-source tools reviewed and chosen |
-| [Evals](./evals/README.md) | News routing run, Auditor eval, how to reproduce them |
+| [Evals](./evals/README.md) | News routing run, Auditor eval, Bea's grounding, schema reliability, `make eval` ([results](./evals/results.md)) |
 | [Devpost text](./docs/devpost.md) | The submission write-up |
 | [AI setup](./docs/ai-setup.md) | Shared skills and MCP servers for AI coding assistants |
 | [CI](./docs/ci.md) | GitHub Actions workflows, local check commands, required status checks |
