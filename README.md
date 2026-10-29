@@ -76,28 +76,21 @@ Open **[wildworth.westus2.cloudapp.azure.com](https://wildworth.westus2.cloudapp
 
 ```mermaid
 flowchart TB
-  draw(["A community draws its land"]) --> sat
-  subgraph code["Code, deterministic and tested"]
-    direction TB
-    sat["Five years of Sentinel-2, Dynamic World,<br/>JRC water and Hansen forest data"]
-    sig["Dated signals: months far from<br/>their seasonal normal"]
-    val["Worth range from published<br/>ecosystem-service coefficients"]
+  subgraph code["Code: deterministic and tested"]
+    sat["Five years of satellite data<br/>Sentinel-2 · Dynamic World · JRC · Hansen"]
+    sig["Dated signals<br/>months far from their seasonal normal"]
+    val["Worth range<br/>published ecosystem-service coefficients"]
     sat --> sig
     sat --> val
   end
+  news["Tavily Search<br/>local news, in the local language too"] --> sup
+  sig --> sup["Nemotron 3 Super<br/>sorts the news, plans follow-ups"]
   sat --> vl["Nemotron 3.5 Super VL<br/>compares views five years apart"]
-  news["Tavily Search: local news,<br/>in the local language too"] --> sup
-  sig --> sup["Nemotron 3 Super<br/>sorts the news and plans follow-ups"]
-  sup -->|"dated search, or read one article"| nano["Tavily Extract + Nemotron 3 Nano<br/>answers Super's question"]
-  sup --> ultra
-  nano --> ultra
-  vl --> ultra
-  val --> ultra
-  ultra["Nemotron 3 Ultra audits, thinking on<br/>weighs explanations; may move health by ±10, citing evidence"] --> check[["Code checks every claim, ID and number"]]
+  sup -->|"dated search, or one article"| nano["Tavily Extract + Nemotron 3 Nano<br/>answers Super's question"]
+  sup & nano & vl & val --> ultra["Nemotron 3 Ultra audits, thinking on<br/>may move health ±10, citing evidence"]
+  ultra --> check[["Code checks every claim, ID and number"]]
   check -->|"refused: one more round"| ultra
-  check -->|accepted| pol["Proof of Life<br/>grade AAA–D · Health score · worth range"]
-  pol --> rec[("The Record<br/>hash-chained")]
-  pol --> mkt["Price, alerts and the Agent Trace"]
+  check -->|accepted| pol["Proof of Life: grade AAA–D, Health score, worth range<br/>sealed in The Record · price, alerts, Agent Trace"]
 ```
 
 1. **Satellite record (code).** Five years of Sentinel-2, Dynamic World, JRC surface water and Hansen forest data. Code finds dated signals (months whose greenness is far from the same month in other years, by leave-one-out median and MAD), the latest 12 months against earlier years, and cloud gaps.
@@ -120,21 +113,20 @@ flowchart TB
     api["API<br/>FastAPI · agents · market · ledger"]
     db[("Postgres + pgvector<br/>sandboxes, reports, The Record")]
   end
-  subgraph tf["Nebius Token Factory"]
+  subgraph ext["Called by the API"]
     direction LR
-    super["Nemotron 3 Super"] ~~~ ultra["Nemotron 3 Ultra"] ~~~ nano["Nemotron 3 Nano"]
-    vlm["Nemotron 3.5 Super VL"] ~~~ emb["Qwen3-Embedding-8B"]
+    tf["Nebius Token Factory<br/>Nemotron 3 Super · Ultra · Nano<br/>Nemotron 3.5 Super VL<br/>Qwen3-Embedding-8B"]
+    tavily["Tavily<br/>Search · Extract"]
+    ee["Google Earth Engine<br/>Sentinel-2 · Dynamic World<br/>JRC · Hansen"]
+    tf ~~~ tavily ~~~ ee
   end
-  tavily["Tavily<br/>Search · Extract"]
-  ee["Google Earth Engine<br/>Sentinel-2 · Dynamic World · JRC · Hansen"]
   user -->|HTTPS| caddy
   caddy -->|"/"| web
   caddy -->|"/api"| api
   web --> api
   api --> db
-  api -->|"one client: spend cap, logging, retries"| tf
-  api --> tavily
-  api --> ee
+  api -->|"one client for the models:<br/>spend cap, logging, retries"| ext
+  db ~~~ ext
 ```
 
 - **Backend:** Python 3.12, FastAPI, SQLModel and Pydantic v2. Agents live in `backend/app/agents`; the formulas (signals, valuation, scoring) are pure functions in `backend/app/tools`, with the market and the ledger beside them.
