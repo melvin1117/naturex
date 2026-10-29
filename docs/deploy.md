@@ -27,7 +27,7 @@ With the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) on
 ```bash
 az login
 az account set --subscription "<your subscription>"
-az group create --name wildworth --location eastus
+az group create --name wildworth --location westus2
 az vm create --resource-group wildworth --name wildworth --image Ubuntu2404 --size Standard_B2s \
   --admin-username azureuser --generate-ssh-keys --os-disk-size-gb 64 \
   --public-ip-sku Standard --public-ip-address-allocation static \
@@ -38,14 +38,14 @@ az network nsg rule update --resource-group wildworth --nsg-name wildworthNSG \
   --name default-allow-ssh --source-address-prefixes "$(curl -s https://ifconfig.me)/32"
 ```
 
-- **Address:** the VM gets `wildworth.eastus.cloudapp.azure.com` for free. For your own domain, add an A record for the VM's IP (`az vm show -d -g wildworth -n wildworth --query publicIps -o tsv`); with Cloudflare, keep it "DNS only", because its proxy cuts requests at 100 s and hides visitors' addresses from the rate limits.
+- **Address:** the VM gets `wildworth.westus2.cloudapp.azure.com` for free. For your own domain, add an A record for the VM's IP (`az vm show -d -g wildworth -n wildworth --query publicIps -o tsv`); with Cloudflare, keep it "DNS only", because its proxy cuts requests at 100 s and hides visitors' addresses from the rate limits.
 - **Budget alert:** Cost Management → Budgets → $100 a month, with an email alert.
 - **If a policy blocks SSH from the internet,** run each command below with `az vm run-command invoke --resource-group wildworth --name wildworth --command-id RunShellScript --scripts "<command>"`.
 
 ## 2. Prepare the VM (once)
 
 ```bash
-ssh azureuser@wildworth.eastus.cloudapp.azure.com
+ssh azureuser@wildworth.westus2.cloudapp.azure.com
 curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker "$USER"
 # 2 GB of swap: building the web app needs more than the B2s's 4 GB at peak
@@ -64,8 +64,8 @@ mkdir -m 700 deploy/secrets
 From your laptop, copy the Earth Engine service-account key, then let the API's container user read it (the folder stays private):
 
 ```bash
-scp ee-key.json azureuser@wildworth.eastus.cloudapp.azure.com:~/wildworth/deploy/secrets/ee-service-account.json
-ssh azureuser@wildworth.eastus.cloudapp.azure.com chmod 644 wildworth/deploy/secrets/ee-service-account.json
+scp ee-key.json azureuser@wildworth.westus2.cloudapp.azure.com:~/wildworth/deploy/secrets/ee-service-account.json
+ssh azureuser@wildworth.westus2.cloudapp.azure.com chmod 644 wildworth/deploy/secrets/ee-service-account.json
 ```
 
 Keys live only in `deploy/.env` and `deploy/secrets/` on the VM: never in git, never in an image, never sent to the browser.
@@ -77,7 +77,7 @@ The showcase (communities, listings, ratings, trades, history and their logged m
 ```bash
 docker compose up -d
 deploy/export-db.sh wildworth.dump          # the template and live worlds; visitor sandboxes left out
-scp wildworth.dump azureuser@wildworth.eastus.cloudapp.azure.com:~/
+scp wildworth.dump azureuser@wildworth.westus2.cloudapp.azure.com:~/
 ```
 
 On the VM (it replaces the deployed database, visitors' sandboxes included):
