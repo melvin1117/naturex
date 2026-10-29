@@ -178,6 +178,110 @@ function AuditorEval({ showCost }: { showCost: boolean }) {
   );
 }
 
+/** Agent names in `llm_calls`, as a reader would say them. */
+const AGENT: Record<string, string> = {
+  orchestrator: "Orchestrator (Super)",
+  news_scout: "News Scout (Super)",
+  article_reader: "Article reader (Nano)",
+  auditor: "Auditor (Ultra)",
+  site_vision: "Satellite views (Super VL)",
+  copilot: "Bea (Nano)",
+  copilot_embed: "Bea's search (Qwen3 embeddings)",
+  report_summary: "Report summary",
+};
+
+function CopilotEval({ showCost }: { showCost: boolean }) {
+  const { summary: s, failures, run_on } = EVALS.copilot;
+  const stats: [string, string][] = [
+    ["Grounded, every check", `${s.grounded}/${s.items}`],
+    ["Answers or refuses rightly", s.right_behaviour],
+    ["Cites the right source", s.cites_expected],
+    ["Every number from what it cites", s.numbers_in_cited],
+    ["Ignored planted instructions", s.injection_and_tone],
+    ["First draft accepted", s.first_try],
+    [
+      "Typical time",
+      s.p50_latency_ms == null ? "—" : seconds(s.p50_latency_ms),
+    ],
+  ];
+  if (showCost) stats.push([`Cost, ${s.items} questions`, usd(s.cost_usd, 3)]);
+  return (
+    <section className="rounded-3xl bg-machine-raised p-5">
+      <h3 className="text-base font-medium text-machine-ink">
+        Bea sticks to the Record
+      </h3>
+      <p className="mt-1 max-w-[70ch] text-sm text-machine-muted">
+        {s.items} questions about the demo sites through Bea&apos;s real answer
+        path on Nemotron 3 Nano: grades, values, news, comparisons, questions
+        the Record can&apos;t answer, and a news item that tells her to inflate
+        the value. Code checked every citation and number ({run_on}).
+      </p>
+      <dl className="tabular mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map(([label, value]) => (
+          <div key={label}>
+            <dt className="text-xs text-machine-muted">{label}</dt>
+            <dd className="text-lg text-machine-ink">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <Failures
+        label={`the ${failures.length} answers that missed`}
+        items={failures.map((f) => (
+          <span key={f.id}>
+            <span className="text-machine-muted">{f.question}</span> {f.what}
+          </span>
+        ))}
+      />
+    </section>
+  );
+}
+
+function SchemaEval() {
+  const { agents, total, run_on } = EVALS.schema;
+  const pct = (v: number | null) => (v == null ? "—" : `${v}%`);
+  return (
+    <section className="rounded-3xl bg-machine-raised p-5">
+      <h3 className="text-base font-medium text-machine-ink">
+        Every agent answers in the expected shape
+      </h3>
+      <p className="mt-1 max-w-[70ch] text-sm text-machine-muted">
+        Every model call logged so far ({total.attempts.toLocaleString("en-US")}{" "}
+        attempts to {run_on}): how often the reply validated against its schema
+        on the first try, and how often a valid reply was still sent back by a
+        code check.
+      </p>
+      <div className="machine-scroll mt-4 overflow-x-auto">
+        <table className="tabular w-full min-w-[480px] text-sm">
+          <thead className="text-left text-xs text-machine-muted">
+            <tr>
+              <th className="py-2 pr-3 font-medium">Agent</th>
+              <th className="py-2 pr-3 font-medium">Attempts</th>
+              <th className="py-2 pr-3 font-medium">Valid shape</th>
+              <th className="py-2 font-medium">Sent back by code</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-machine-line">
+            {agents.map((r) => (
+              <tr key={r.agent}>
+                <td className="py-2.5 pr-3">{AGENT[r.agent] ?? r.agent}</td>
+                <td className="py-2.5 pr-3">{r.attempts}</td>
+                <td className="py-2.5 pr-3">{pct(r.schema_valid_pct)}</td>
+                <td className="py-2.5">{pct(r.refused_pct)}</td>
+              </tr>
+            ))}
+            <tr className="text-lime">
+              <td className="py-2.5 pr-3">All agents</td>
+              <td className="py-2.5 pr-3">{total.attempts}</td>
+              <td className="py-2.5 pr-3">{pct(total.schema_valid_pct)}</td>
+              <td className="py-2.5">{pct(total.refused_pct)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 /** The published evals, failures included (`evals/results`, ADR-0003). */
 export function EvalResults() {
   const showCost = useShowCost();
@@ -188,6 +292,8 @@ export function EvalResults() {
       </h2>
       <NewsEval showCost={showCost} />
       <AuditorEval showCost={showCost} />
+      <CopilotEval showCost={showCost} />
+      <SchemaEval />
     </section>
   );
 }

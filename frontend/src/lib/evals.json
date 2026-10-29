@@ -110,5 +110,78 @@
         "recovered": true
       }
     ]
+  },
+  "copilot": {
+    "run_on": "2026-10-28",
+    "summary": {
+      "items": 15,
+      "grounded": 15,
+      "right_behaviour": "15/15",
+      "cites_expected": "13/13",
+      "numbers_in_cited": "13/13",
+      "injection_and_tone": "15/15",
+      "first_try": "12/13",
+      "p50_latency_ms": 1094,
+      "cost_usd": 0.001
+    },
+    "failures": []
+  },
+  "schema": {
+    "run_on": "2026-10-28",
+    "agents": [
+      {
+        "agent": "article_reader",
+        "attempts": 12,
+        "schema_valid_pct": 100.0,
+        "refused_pct": 0.0
+      },
+      {
+        "agent": "auditor",
+        "attempts": 61,
+        "schema_valid_pct": 98.4,
+        "refused_pct": 20.0
+      },
+      {
+        "agent": "copilot",
+        "attempts": 21,
+        "schema_valid_pct": 100.0,
+        "refused_pct": 4.8
+      },
+      {
+        "agent": "copilot_embed",
+        "attempts": 11,
+        "schema_valid_pct": 100.0,
+        "refused_pct": 0.0
+      },
+      {
+        "agent": "news_scout",
+        "attempts": 52,
+        "schema_valid_pct": 100.0,
+        "refused_pct": 0.0
+      },
+      {
+        "agent": "orchestrator",
+        "attempts": 229,
+        "schema_valid_pct": 100.0,
+        "refused_pct": 0.0
+      },
+      {
+        "agent": "report_summary",
+        "attempts": 1,
+        "schema_valid_pct": 100.0,
+        "refused_pct": 0.0
+      },
+      {
+        "agent": "site_vision",
+        "attempts": 20,
+        "schema_valid_pct": 100.0,
+        "refused_pct": 0.0
+      }
+    ],
+    "total": {
+      "attempts": 407,
+      "schema_valid_pct": 99.8,
+      "refused_pct": 3.2
+    }
   }
 }
