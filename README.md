@@ -173,7 +173,7 @@ Evals run with real calls; `make eval` runs them all and writes [evals/results.m
 
 ## Built with
 
-| | |
+| Area | Tools |
 |---|---|
 | **AI** | NVIDIA Nemotron 3 Super, Ultra and Nano · Nemotron 3.5 Super VL · Qwen3-Embedding-8B, all on Nebius Token Factory |
 | **Search** | Tavily Search and Extract |
@@ -238,7 +238,7 @@ scripts/    Local dev, site precompute and demo-recording helpers
 
 ## Team
 
-| | |
+| Name | GitHub |
 |---|---|
 | **Aatisha Cyrill** | [@Aatisha](https://github.com/Aatisha) |
 | **Shubham Melvin Felix** | [@melvin1117](https://github.com/melvin1117) |
