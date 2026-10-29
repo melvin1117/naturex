@@ -40,7 +40,8 @@ main() {
 
   echo "$(date -u +%FT%TZ) deploying ${target:0:12} (was ${current:0:12})"
   git checkout --quiet --detach "$target"
-  if "${compose[@]}" up -d --build --remove-orphans && healthy "${compose[@]}"; then
+  if "${compose[@]}" up -d --build --remove-orphans && reload_proxy "$current" "$target" &&
+    healthy "${compose[@]}"; then
     rm -f "$failed"
     docker image prune -f >/dev/null
     echo "$(date -u +%FT%TZ) deployed ${target:0:12}"
@@ -49,8 +50,17 @@ main() {
     echo "$(date -u +%FT%TZ) ${target:0:12} isn't healthy; back to ${current:0:12}" >&2
     git checkout --quiet --detach "$current"
     "${compose[@]}" up -d --build --remove-orphans
+    reload_proxy "$target" "$current"
     return 1
   fi
+}
+
+# Caddy's config is a single-file mount, which a checkout replaces with a new file: the running
+# container keeps the old one, and compose doesn't recreate it for a file change. So when the
+# Caddyfile differs between the two commits, start Caddy afresh (certificates stay in caddy_data).
+reload_proxy() {
+  git diff --quiet "$1" "$2" -- deploy/Caddyfile ||
+    docker compose -f deploy/compose.yml up -d --force-recreate --no-deps caddy
 }
 
 # Both services answer within 5 minutes (the API runs its migrations first).
