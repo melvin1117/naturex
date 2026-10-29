@@ -6,6 +6,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 
 import { Bea } from "@/components/bea/bea";
 import { Lockup } from "@/components/brand";
+import { OutlineLoader } from "@/components/sandbox/outline-loader";
 import { SandboxShell } from "@/components/shell/sandbox-shell";
 import { MAIN_ID } from "@/components/shell/skip-link";
 import { Button } from "@/components/ui/button";
@@ -78,8 +79,8 @@ function Frame({ children }: { children: ReactNode }) {
 function Opening() {
   return (
     <Frame>
-      <Bea size={88} state="thinking" label="" />
-      <p role="status" className="mt-6 font-serif text-3xl tracking-tight">
+      <OutlineLoader />
+      <p role="status" className="mt-8 font-serif text-3xl tracking-tight">
         Opening your sandbox…
       </p>
       <p className="mt-2 text-sm text-machine-muted">

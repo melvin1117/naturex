@@ -16,7 +16,12 @@ const nextConfig: NextConfig = {
   },
   // shadcn components import the `radix-ui` barrel; without this, a client component that
   // uses <Button> ships every Radix primitive (~75 kB gzipped) on every page.
-  experimental: { optimizePackageImports: ["radix-ui"] },
+  // The /api rewrite's proxy gives up after 30 s by default; a live Time Machine re-rate waits
+  // for a full rating run (about 40-60 s), so allow 5 minutes.
+  experimental: {
+    optimizePackageImports: ["radix-ui"],
+    proxyTimeout: 300_000,
+  },
   async redirects() {
     // WildWorth runs in the visitor's sandbox (no sign-up): the welcome is `/`, the story
     // `/how`, and every app page lives under `/sandbox`. Old addresses still land somewhere.

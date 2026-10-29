@@ -553,6 +553,51 @@
   }
 }
 
+/* The sandbox opening (components/sandbox/outline-loader.tsx): real listings' boundaries draw
+   in turn, each named, three turns to a loop. Not the mark: the mark draws only when a rating
+   lands. Reduced motion: the first outline, drawn. */
+.outline-loop path {
+  stroke-dasharray: 100;
+  animation: outline-turn 7.8s var(--ww-ease-out) infinite both;
+}
+.outline-loop .outline-name {
+  animation: outline-name 7.8s ease-in-out infinite both;
+}
+@keyframes outline-turn {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 0;
+  }
+  3% {
+    opacity: 1;
+  }
+  22% {
+    stroke-dashoffset: 0;
+  }
+  29% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  33.3%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+@keyframes outline-name {
+  0% {
+    opacity: 0;
+  }
+  6%,
+  28% {
+    opacity: 1;
+  }
+  33.3%,
+  100% {
+    opacity: 0;
+  }
+}
+
 /* The welcome (/): the view settles over the wetland (once, under 5 s) and the boundary is
    drawn (the "Draw" move), while Bea writes the greeting and lands in Ask Bea (below).
    Reduced motion: the final frame. */
@@ -728,6 +773,16 @@
     animation: none;
     stroke-dashoffset: 0;
     fill-opacity: 0.07;
+  }
+  .outline-loop path,
+  .outline-loop .outline-name {
+    animation: none;
+    opacity: 0;
+  }
+  .outline-loop path:first-child,
+  .outline-loop .outline-name:first-child {
+    opacity: 1;
+    stroke-dashoffset: 0;
   }
   .ww-play .ww-ink,
   .ww-play .ww-read,

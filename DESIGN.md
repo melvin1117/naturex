@@ -261,6 +261,9 @@ Every animation means something, plays once, ends on the real value, and is repl
 ### Rating pipeline (signature)
 Machine-layer list of agent steps that light up in order with a running line, model name and Live badge, used in the listing flow and mirrored by the Agent Trace drawer.
 
+### Sandbox opening
+While a sandbox opens, the showcase sites' real boundaries **Draw** in turn on the machine ground (lime line, `outline-loop`), each named in mono below: Hoh Rain Forest, Curry Hammock Mangroves, Quinault Rain Forest. It loops only while the sandbox is opening, the one loop besides Bea's working states, because the wait has no fixed end. It is never the logo, which draws only when a rating lands. Reduced motion: the first outline, drawn.
+
 ## Do's and Don'ts
 
 ### Do:

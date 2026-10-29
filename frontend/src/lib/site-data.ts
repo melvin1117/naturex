@@ -179,6 +179,7 @@ export const DATA_ATTRIBUTIONS = [
   "Biomass: ESA CCI Biomass v6.0; GEDI L4B",
   "Mangroves: Global Mangrove Watch v3.0 (CC BY 4.0)",
   "Soil carbon: SoilGrids 2.0 (CC BY 4.0)",
+  "Showcase site boundaries and place search: © OpenStreetMap contributors (ODbL)",
 ];
 
 export const MODELS = {
