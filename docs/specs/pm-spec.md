@@ -10,7 +10,7 @@
 | **Deadline** | **Fri Oct 30, 2026, 10:00 AM PT** (target internal submit: Thu Oct 29) |
 | **Status** | Draft v1 |
 
-> Related docs: [one-pager.md](../one-pager.md) · [dev-spec.md](./dev-spec.md) · [demo-plan.md](./demo-plan.md) · [research.md](../research.md) · [diagrams.html](../diagrams.html)
+> Related docs: [one-pager.md](../one-pager.md) · [dev-spec.md](./dev-spec.md) · [demo-plan.md](./demo-plan.md) · [research.md](../research.md) · [planning diagrams](../archive/planning-diagrams.html)
 
 ---
 
