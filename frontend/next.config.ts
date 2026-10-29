@@ -6,6 +6,9 @@ const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8000";
 const e2eBuild = process.env.NEXT_E2E_BUILD === "1";
 
 const nextConfig: NextConfig = {
+  // The Docker image (frontend/Dockerfile) sets NEXT_OUTPUT=standalone: a self-contained server
+  // with only the files it needs. Local `next start` (make preview) keeps the default output.
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
   // The E2E build (T74, playwright.config.ts) proxies to its own API port, which is baked in
   // at build time; its own directory keeps it from replacing a developer's `.next`, and its
   // own tsconfig (which already includes that directory's types) stops the build rewriting

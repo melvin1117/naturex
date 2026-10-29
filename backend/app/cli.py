@@ -1,5 +1,8 @@
 """Operator commands (ADR-0005 §1). Run from backend/: `uv run python -m app.cli --help`.
 
+`prune-sandboxes` deletes every visitor sandbox (never the template or the live world), so a
+database copied to a deployment carries only those two (docs/deploy.md).
+
 `create-admin` is the only way to create a live-world admin: never through the API, and never
 by promoting an existing account whose email matches. The password is read with `getpass`, or
 from the first line of piped stdin with `--password-stdin` for scripts (T74's E2E setup), never
@@ -12,6 +15,7 @@ import argparse
 import getpass
 import sys
 from collections.abc import Callable, Sequence
+from datetime import timedelta
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
@@ -26,7 +30,7 @@ from app.auth import (
 )
 from app.db import engine
 from app.models import User, UserKind, UserRole
-from app.sandbox import ensure_live_world
+from app.sandbox import ensure_live_world, prune_stale_worlds
 
 
 class CliError(Exception):
@@ -96,6 +100,14 @@ def create_admin(
     return user
 
 
+def prune_sandboxes(session: Session) -> int:
+    """Delete every visitor sandbox, however recently seen; returns how many."""
+    removed = 0
+    while pruned := prune_stale_worlds(session, older_than=timedelta(0)):
+        removed += pruned
+    return removed
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m app.cli", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -108,6 +120,10 @@ def _parser() -> argparse.ArgumentParser:
         "--password-stdin",
         action="store_true",
         help="Read the password from the first line of stdin (for scripts) instead of prompting.",
+    )
+    commands.add_parser(
+        "prune-sandboxes",
+        help="Delete every visitor sandbox (never the template or the live world).",
     )
     return parser
 
@@ -123,6 +139,13 @@ def main(argv: Sequence[str] | None = None, session: Session | None = None) -> i
                 with Session(engine) as own:
                     user = create_admin(own, args.email, args.name, read_password=reader)
             print(f"Created live-world admin {user.id}.")
+        elif args.command == "prune-sandboxes":
+            if session is not None:
+                removed = prune_sandboxes(session)
+            else:
+                with Session(engine) as own:
+                    removed = prune_sandboxes(own)
+            print(f"Deleted {removed} sandbox{'' if removed == 1 else 'es'}.")
     except CliError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
