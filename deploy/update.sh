@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # On the VM: deploy main (or one commit), then wait until the API and the web app are healthy; if
-# they aren't, go back to the commit that ran before (docs/deploy.md). Cron runs it every few
-# minutes, so a merge to main is live within about 10 minutes.
+# they aren't, go back to the commit that ran before (docs/deploy.md). Run it after a merge to
+# main (or from cron, to deploy automatically).
 #
 #   deploy/update.sh            # the latest main; does nothing if it's already running
-#   deploy/update.sh <sha>      # that commit, pinned: cron keeps it until `deploy/update.sh --unpin`
+#   deploy/update.sh <sha>      # that commit, pinned: later runs keep it until `deploy/update.sh --unpin`
 #   deploy/update.sh --unpin    # follow main again
 #   FORCE=1 deploy/update.sh    # rebuild and restart even if nothing changed
 set -euo pipefail
