@@ -2,6 +2,10 @@
 
 Draft for the Devpost form (Nebius × NVIDIA Global AI Hackathon, Best Apps & Agents). Every number here comes from a live run or an eval on Oct 22, 2026; update them if you re-run.
 
+**Links for the form**
+- Video demo link: https://youtu.be/S383ruVMhRs
+- Try it out: https://wildworth.westus2.cloudapp.azure.com · https://wildworth.westus2.cloudapp.azure.com/how · https://github.com/melvin1117/wildworth
+
 ## Inspiration
 A mangrove is worth more alive than cleared, but nobody prices that. Rating agencies and exchanges made other assets legible to investors; nature has no rating that updates as it heals or is damaged. We wanted an agent that reads the evidence the way a careful analyst would: the satellite record, the local news, and what each says about the other.
 
