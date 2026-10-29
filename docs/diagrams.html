@@ -5,7 +5,7 @@
   exported (1600 px wide). Re-export the README images at 2x with Playwright:
     page.goto("file://…/docs/diagrams.html?d=pipeline"); page.locator("#c").screenshot(…)
   Boards: banner → docs/readme/banner.jpg · pipeline → docs/readme/rating-pipeline.jpg ·
-  architecture → docs/readme/architecture.jpg · design → docs/readme/design.jpg.
+  architecture → docs/readme/architecture.jpg · look1–3 → docs/readme/look-*.jpg · design → docs/readme/design.jpg · system → docs/readme/design-system.jpg.
   Arrows are drawn from the boxes' positions, so moving a box moves its arrows.
   The planning-era explainer that used to live here is docs/archive/planning-diagrams.html.
 -->
@@ -92,12 +92,51 @@
   .beas figure { display: flex; flex-direction: column; align-items: center; gap: 6px; font: 500 14px/1 "Geist Mono"; color: var(--muted) }
   .beas svg { width: 104px; height: 108px; overflow: visible }
   .bea-ground { fill: var(--raised) }
+
+  /* Design boards */
+  .dpanel { position: absolute; border-radius: 24px; background: var(--raised); box-shadow: 0 0 0 1px oklch(0.86 0.135 126 / .14); padding: 28px 30px }
+  .dpanel.paper { background: var(--card); color: var(--forest-ink); box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .6) }
+  .dpanel h3 { font-size: 32px; margin-bottom: 8px }
+  .dpanel .lede { font-size: 17px; color: var(--muted); line-height: 1.45 }
+  .dpanel.paper .lede { color: oklch(0.47 0.035 145) }
+  .kicker { font: 500 14px/1 "Geist Mono"; letter-spacing: .14em; text-transform: uppercase; color: var(--lime); margin-bottom: 12px }
+  .dpanel.paper .kicker { color: var(--lime-ink) }
+  .name-big { font-size: 64px; line-height: 1; margin: 18px 0 14px }
+  .name-big .w1 { font-family: Gloock; letter-spacing: -.025em }
+  .name-big .w2 { font: 300 .9em "Hanken Grotesk"; letter-spacing: -.045em }
+  .etym { display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; margin-top: 18px; font-size: 17px; align-items: baseline }
+  .etym b { font: 500 15px "Geist Mono"; color: var(--lime); font-weight: 500 }
+  .dial { position: relative; display: grid; place-items: center }
+  .dial .num { position: absolute; text-align: center }
+  .dial .num b { display: block; font: 300 54px/1 "Hanken Grotesk"; letter-spacing: -.03em; font-weight: 300 }
+  .dial .num span { font: 500 14px/1 "Hanken Grotesk"; color: var(--muted) }
+  .gl { fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round }
+  .gl .as { stroke: var(--lime-ink) } .gl .af { fill: var(--lime); stroke: currentColor; stroke-width: 1.4 } .gl .f { fill: currentColor; stroke: none }
+  .icongrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px 8px; margin-top: 20px }
+  .icongrid figure { display: flex; flex-direction: column; align-items: center; gap: 9px; font: 500 13px/1.2 "Hanken Grotesk"; text-align: center; color: oklch(0.47 0.035 145) }
+  .icongrid svg { width: 34px; height: 34px }
+  .motion { display: grid; grid-template-columns: 1fr; gap: 0; margin-top: 14px }
+  .motion div { display: grid; grid-template-columns: 90px 1fr auto; gap: 14px; align-items: baseline; padding: 13px 0; border-top: 1px solid var(--line); font-size: 17px }
+  .motion b { font: 600 18px "Hanken Grotesk"; color: var(--ink) }
+  .motion span { color: var(--muted) }
+  .motion i { font: 500 14px "Geist Mono"; font-style: normal; color: var(--lime) }
+
+  /* A look inside */
+  .shot { position: absolute; overflow: hidden; border-radius: 18px; background: var(--card); box-shadow: 0 0 0 1px oklch(1 0 0 / .08), 0 36px 70px -30px rgba(0, 0, 0, .75) }
+  .shot img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top left }
+  .cap { position: absolute; font: 500 26px/1.2 "Hanken Grotesk"; color: var(--ink) }
+  .cap b { display: block; font: 600 21px/1.25 "Hanken Grotesk"; color: var(--ink); margin-bottom: 4px }
+  .lookhead { position: absolute; left: 70px; top: 52px }
+  .lookhead h2 { font-size: 56px }
+  .lookhead p { color: var(--muted); font-size: 19px; margin-top: 8px; width: 900px }
 </style>
 </head>
 <body>
 <script>
 // Lucide icons (ISC licence, https://lucide.dev), as SVG children for a 24x24 viewBox.
 const ICONS = {"globe": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20\"/><path d=\"M2 12h20\"/>", "shield-check": "<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"/><path d=\"m9 12 2 2 4-4\"/>", "app-window": "<rect x=\"2\" y=\"4\" width=\"20\" height=\"16\" rx=\"2\"/><path d=\"M10 4v4\"/><path d=\"M2 8h20\"/><path d=\"M6 4v4\"/>", "server": "<rect width=\"20\" height=\"8\" x=\"2\" y=\"2\" rx=\"2\" ry=\"2\"/><rect width=\"20\" height=\"8\" x=\"2\" y=\"14\" rx=\"2\" ry=\"2\"/><line x1=\"6\" x2=\"6.01\" y1=\"6\" y2=\"6\"/><line x1=\"6\" x2=\"6.01\" y1=\"18\" y2=\"18\"/>", "database": "<ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"/><path d=\"M3 5V19A9 3 0 0 0 21 19V5\"/><path d=\"M3 12A9 3 0 0 0 21 12\"/>", "sparkles": "<path d=\"M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z\"/><path d=\"M20 2v4\"/><path d=\"M22 4h-4\"/><circle cx=\"4\" cy=\"20\" r=\"2\"/>", "search": "<path d=\"m21 21-4.34-4.34\"/><circle cx=\"11\" cy=\"11\" r=\"8\"/>", "satellite": "<path d=\"m13.5 6.5-3.148-3.148a1.205 1.205 0 0 0-1.704 0L6.352 5.648a1.205 1.205 0 0 0 0 1.704L9.5 10.5\"/><path d=\"M16.5 7.5 19 5\"/><path d=\"m17.5 10.5 3.148 3.148a1.205 1.205 0 0 1 0 1.704l-2.296 2.296a1.205 1.205 0 0 1-1.704 0L13.5 14.5\"/><path d=\"M9 21a6 6 0 0 0-6-6\"/><path d=\"M9.352 10.648a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l4.296-4.296a1.205 1.205 0 0 0 0-1.704l-2.296-2.296a1.205 1.205 0 0 0-1.704 0z\"/>"};
+// The WildWorth icon pack (docs/design/wildworth-brand-guidelines.html), 24x24, Lucide metrics.
+const GL = {"proof": "<circle cx=\"12\" cy=\"12\" r=\"8.6\" stroke-dasharray=\"0.1 3.05\"/><path class=\"as\" d=\"M8.6 12.3l2.3 2.3 4.6-4.8\" stroke-width=\"2\"/>", "health": "<path d=\"M3.8 16.5a8.2 8.2 0 0 1 16.4 0\"/><path d=\"M6.3 10.6l1 .9M12 8.3v1.3M17.7 10.6l-1 .9\" stroke-width=\"1.5\"/><path class=\"as\" d=\"M12 16.5l3.6-4.6\" stroke-width=\"2.2\"/><circle class=\"f\" cx=\"12\" cy=\"16.5\" r=\"1.6\"/>", "worth": "<path d=\"M3 12h18\" opacity=\".4\"/><path d=\"M8 8v8M16 8v8\" stroke-width=\"1.5\"/><path class=\"as\" d=\"M8 12h8\" stroke-width=\"3.4\"/><circle class=\"f\" cx=\"12\" cy=\"12\" r=\"1.2\"/>", "wildwatch": "<path d=\"M2.6 12S6 5.8 12 5.8 21.4 12 21.4 12 18 18.2 12 18.2 2.6 12 2.6 12z\"/><circle class=\"af\" cx=\"12\" cy=\"12\" r=\"3\"/>", "record": "<rect x=\"2.5\" y=\"8.5\" width=\"5.4\" height=\"7\" rx=\"1.2\"/><rect x=\"9.3\" y=\"8.5\" width=\"5.4\" height=\"7\" rx=\"1.2\"/><rect class=\"af\" x=\"16.1\" y=\"8.5\" width=\"5.4\" height=\"7\" rx=\"1.2\"/><path d=\"M7.9 12h1.4M14.7 12h1.4\"/>", "trace": "<circle cx=\"5\" cy=\"5.5\" r=\"2\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/><circle class=\"af\" cx=\"19\" cy=\"18.5\" r=\"2\"/><path d=\"M6.5 6.9l4 3.7M13.5 13.4l4 3.7\"/><path d=\"M5 9.5V20h6\" opacity=\".45\"/>", "auditor": "<circle cx=\"10.5\" cy=\"10.5\" r=\"6.6\"/><path d=\"M15.5 15.5 21 21\"/><path class=\"as\" d=\"M7.8 10.7l1.9 1.9 3.6-3.7\" stroke-width=\"2\"/>", "news": "<path d=\"M4 5h11v14H6a2 2 0 0 1-2-2z\"/><path d=\"M15 9h4v8a2 2 0 0 1-2 2h-2\"/><path d=\"M7 9h5M7 12h5M7 15h3\"/><circle class=\"af\" cx=\"19\" cy=\"5\" r=\"2.3\"/>", "satellite": "<g transform=\"rotate(-45 13 11)\"><rect x=\"10.5\" y=\"8\" width=\"5\" height=\"6\" rx=\"1\"/><rect x=\"3.5\" y=\"9.2\" width=\"5\" height=\"3.6\" rx=\".6\"/><rect x=\"17.5\" y=\"9.2\" width=\"5\" height=\"3.6\" rx=\".6\"/><path d=\"M8.5 11h2M15.5 11h2\"/></g><path class=\"as\" d=\"M3.5 15.5a5 5 0 0 0 5 5M3.5 19a1.6 1.6 0 0 0 1.5 1.5\" stroke-width=\"1.9\"/>", "live": "<path d=\"M4.4 7.5a9.5 9.5 0 0 0 0 9M19.6 7.5a9.5 9.5 0 0 1 0 9\" opacity=\".5\"/><circle cx=\"12\" cy=\"12\" r=\"5.6\"/><circle class=\"af\" cx=\"12\" cy=\"12\" r=\"2.6\"/>", "time": "<path d=\"M4.6 12a7.4 7.4 0 1 0 2.2-5.3\"/><path class=\"as\" d=\"M4 4.2v3.6h3.6\" stroke-width=\"2\"/><path d=\"M12 8.2V12l2.8 1.7\"/>", "list": "<path d=\"M4 9.2 9 4.6l8 2 3 6-3.4 6.8-8-1-4.6-4.5z\"/><circle class=\"af\" cx=\"9\" cy=\"4.6\" r=\"2.4\"/>", "evidence": "<path d=\"M3 8.5h3.5L8 6h8l1.5 2.5H21V19H3z\"/><circle class=\"af\" cx=\"12\" cy=\"13.5\" r=\"3.3\"/>", "verify": "<path d=\"M12 2.8l2.3 1.7 2.9-.1.9 2.7 2.3 1.8-.9 2.7.9 2.7-2.3 1.8-.9 2.7-2.9-.1L12 21.2l-2.3-1.7-2.9.1-.9-2.7-2.3-1.8.9-2.7-.9-2.7 2.3-1.8.9-2.7 2.9.1z\"/><path class=\"as\" d=\"M8.7 12.2l2.2 2.2 4.4-4.5\" stroke-width=\"2\"/>", "offer": "<rect x=\"3.5\" y=\"10\" width=\"10.5\" height=\"10\" rx=\"1.6\"/><path class=\"as\" d=\"M10 14 20 4M14.2 4H20v5.8\" stroke-width=\"2\"/>", "back": "<path d=\"M5 21h14\"/><path d=\"M12 21V5\"/><path class=\"af\" d=\"M12 4.5h6.8l-1.6 2.6 1.6 2.6H12z\"/>", "stakes": "<path d=\"M12 3.2 20.8 8 12 12.8 3.2 8z\"/><path d=\"M3.2 12.2 12 17l8.8-4.8\"/><path class=\"as\" d=\"M3.2 16.2 12 21l8.8-4.8\" stroke-width=\"2\"/>", "fund": "<circle class=\"af\" cx=\"12\" cy=\"7\" r=\"2.7\"/><circle cx=\"5.3\" cy=\"10.2\" r=\"2\"/><circle cx=\"18.7\" cy=\"10.2\" r=\"2\"/><path d=\"M3 20c.5-3.6 4.5-5.6 9-5.6s8.5 2 9 5.6\"/>", "exchange": "<path d=\"M4 8.5h14.5\"/><path d=\"M15 5l3.5 3.5L15 12\"/><path class=\"as\" d=\"M20 15.5H5.5\" stroke-width=\"2\"/><path class=\"as\" d=\"M9 12l-3.5 3.5L9 19\" stroke-width=\"2\"/>", "stewards": "<path d=\"M5.5 19.5v-7.3L12 7l6.5 5.2v7.3\"/><path d=\"M10 19.5v-4.2h4v4.2\"/><path class=\"as\" d=\"M2.5 19.5h19\" stroke-width=\"2\"/>", "control": "<path d=\"M5.5 3.5v3.3M5.5 11.2v9.3M12 3.5v9.3M12 17.2v3.3M18.5 3.5v1.3M18.5 9.2v11.3\"/><circle cx=\"5.5\" cy=\"9\" r=\"2.2\"/><circle class=\"af\" cx=\"12\" cy=\"15\" r=\"2.2\"/><circle cx=\"18.5\" cy=\"7\" r=\"2.2\"/>", "bea": "<ellipse cx=\"7.8\" cy=\"7.2\" rx=\"3.6\" ry=\"2.3\" transform=\"rotate(-28 7.8 7.2)\"/><ellipse cx=\"16.2\" cy=\"7.2\" rx=\"3.6\" ry=\"2.3\" transform=\"rotate(28 16.2 7.2)\"/><circle cx=\"12\" cy=\"14\" r=\"6.4\"/><path d=\"M7.4 17.2 9.7 14.9 12 17.2 14.3 14.9 16.6 17.2\" stroke-width=\"1.5\"/><circle class=\"f\" cx=\"10\" cy=\"11.1\" r=\".95\"/><circle class=\"f\" cx=\"14\" cy=\"11.1\" r=\".95\"/><path d=\"M10.7 12.8q1.3 1 2.6 0\" stroke-width=\"1.3\"/><path d=\"M10.7 20.5 12 22.5l1.3-2\"/>", "ask": "<path d=\"M4 4.6h16v10.6h-8.6L7 19.2v-4H4z\"/><path d=\"M8 8.6h7M8 11.6h4.5\"/><circle class=\"af\" cx=\"17\" cy=\"11.7\" r=\"1.7\"/>", "alerts": "<path d=\"M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14z\"/><path d=\"M10 20.6a2 2 0 0 0 4 0\"/><circle class=\"af\" cx=\"18.4\" cy=\"5.6\" r=\"2.6\"/>", "recovery": "<path d=\"M3 19.5h4.2v-4h4.2v-4h4.2v-4H20\"/><path class=\"as\" d=\"M15.6 3.8H20v4.4\" stroke-width=\"2\"/>", "tour": "<circle cx=\"12\" cy=\"12\" r=\"8.6\"/><path class=\"af\" d=\"M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z\"/>", "sites": "<rect x=\"3.5\" y=\"3.5\" width=\"7.5\" height=\"7.5\" rx=\"1.8\"/><rect x=\"13\" y=\"3.5\" width=\"7.5\" height=\"7.5\" rx=\"1.8\"/><rect x=\"3.5\" y=\"13\" width=\"7.5\" height=\"7.5\" rx=\"1.8\"/><rect class=\"af\" x=\"13\" y=\"13\" width=\"7.5\" height=\"7.5\" rx=\"1.8\"/>", "sandbox": "<rect x=\"3.5\" y=\"3.5\" width=\"17\" height=\"17\" rx=\"3.2\" stroke-dasharray=\"2.6 2.6\"/><circle class=\"af\" cx=\"12\" cy=\"12\" r=\"3.2\"/>", "carbon": "<circle cx=\"5\" cy=\"12\" r=\"2.3\"/><circle cx=\"19\" cy=\"12\" r=\"2.3\"/><circle class=\"af\" cx=\"12\" cy=\"12\" r=\"3.5\"/><path d=\"M7.3 12h1.2M15.5 12h1.2\"/>", "water": "<path d=\"M12 3s6.5 7 6.5 11.5a6.5 6.5 0 0 1-13 0C5.5 10 12 3 12 3z\"/><path class=\"as\" d=\"M9 15a3 3 0 0 0 3 3\" stroke-width=\"2\"/>", "flood": "<path d=\"M3 8.5c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0M3 13.5c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0\"/><path class=\"as\" d=\"M3 19.5h18\" stroke-width=\"2.6\"/>", "habitat": "<path d=\"M3.5 12.5c1 5 4.5 7.5 8.5 7.5s7.5-2.5 8.5-7.5z\"/><path d=\"M6 15.5h12\" opacity=\".45\"/><ellipse class=\"af\" cx=\"12\" cy=\"9\" rx=\"2.7\" ry=\"3.3\"/>", "recreation": "<path d=\"M3 14.5h18l-2.4 4H5.4z\"/><path d=\"M6.5 14.5V9h11v5.5\"/><path d=\"M5 9h14\"/><path class=\"as\" d=\"M2.5 21.5c2-1 4-1 6 0s4 1 6 0 4-1 6 0\" stroke-width=\"1.9\"/>"};
 // Bea, the field guide, in five moods (from the brand kit; viewBox 0 0 120 124).
 const BEA = {"neutral": "<g class=\"bea-ant\"><path d=\"M52 38 Q47 24 41 19M68 38 Q73 24 79 19\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><circle cx=\"41\" cy=\"19\" r=\"4.2\" fill=\"currentColor\"></circle><circle cx=\"79\" cy=\"19\" r=\"4.2\" fill=\"currentColor\"></circle></g><g class=\"bea-wl\"><ellipse cx=\"37\" cy=\"44\" rx=\"16\" ry=\"10.5\" transform=\"rotate(-28 37 44)\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></ellipse></g><g class=\"bea-wr\"><ellipse cx=\"83\" cy=\"44\" rx=\"16\" ry=\"10.5\" transform=\"rotate(28 83 44)\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></ellipse></g><path d=\"M55 104 L60 111 L65 104\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><defs ><clipPath id=\"CLIP\"><circle cx=\"60\" cy=\"70\" r=\"30\"></circle></clipPath></defs><circle cx=\"60\" cy=\"70\" r=\"33\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></circle><g clip-path=\"url(#CLIP)\"><path d=\"M36 96 L48 84 L60 96 L72 84 L84 96\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></g><g class=\"eyes\"><circle cx=\"48\" cy=\"62\" r=\"4.3\" fill=\"currentColor\"></circle><circle cx=\"72\" cy=\"62\" r=\"4.3\" fill=\"currentColor\"></circle></g><path d=\"M53.5 72 Q60 77.5 66.5 72\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path>", "think": "<g class=\"bea-ant\"><path d=\"M52 38 Q47 24 41 19M68 38 Q73 24 79 19\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><circle cx=\"41\" cy=\"19\" r=\"4.2\" fill=\"currentColor\"></circle><circle cx=\"79\" cy=\"19\" r=\"4.2\" fill=\"currentColor\"></circle></g><g class=\"bea-wl\"><ellipse cx=\"37\" cy=\"44\" rx=\"16\" ry=\"10.5\" transform=\"rotate(-28 37 44)\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></ellipse></g><g class=\"bea-wr\"><ellipse cx=\"83\" cy=\"44\" rx=\"16\" ry=\"10.5\" transform=\"rotate(28 83 44)\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></ellipse></g><path d=\"M55 104 L60 111 L65 104\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><defs ><clipPath id=\"CLIP\"><circle cx=\"60\" cy=\"70\" r=\"30\"></circle></clipPath></defs><circle cx=\"60\" cy=\"70\" r=\"33\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></circle><g clip-path=\"url(#CLIP)\"><path d=\"M36 96 L48 84 L60 96 L72 84 L84 96\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></g><g class=\"eyes\"><circle cx=\"50.4\" cy=\"59.6\" r=\"4.3\" fill=\"currentColor\"></circle><circle cx=\"74.4\" cy=\"59.6\" r=\"4.3\" fill=\"currentColor\"></circle></g><path d=\"M57 74.5 L64.5 73.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><g class=\"bea-dots\"><circle cx=\"96\" cy=\"58\" r=\"3\" fill=\"currentColor\"></circle><circle cx=\"104\" cy=\"50\" r=\"3.6\" fill=\"currentColor\"></circle><circle cx=\"112\" cy=\"40\" r=\"4.2\" fill=\"currentColor\"></circle></g>", "happy": "<g class=\"bea-ant\"><path d=\"M52 38 Q47 24 41 19M68 38 Q73 24 79 19\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><circle cx=\"41\" cy=\"19\" r=\"4.2\" fill=\"currentColor\"></circle><circle cx=\"79\" cy=\"19\" r=\"4.2\" fill=\"currentColor\"></circle></g><g class=\"bea-wl\"><ellipse cx=\"37\" cy=\"44\" rx=\"16\" ry=\"10.5\" transform=\"rotate(-28 37 44)\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></ellipse></g><g class=\"bea-wr\"><ellipse cx=\"83\" cy=\"44\" rx=\"16\" ry=\"10.5\" transform=\"rotate(28 83 44)\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></ellipse></g><path d=\"M55 104 L60 111 L65 104\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><defs ><clipPath id=\"CLIP\"><circle cx=\"60\" cy=\"70\" r=\"30\"></circle></clipPath></defs><circle cx=\"60\" cy=\"70\" r=\"33\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></circle><g clip-path=\"url(#CLIP)\"><path d=\"M36 96 L48 84 L60 96 L72 84 L84 96\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></g><g class=\"eyes\"><path d=\"M43.4 63.6 Q48 57.4 52.6 63.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><path d=\"M67.4 63.6 Q72 57.4 76.6 63.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></g><path d=\"M52 71 Q60 81 68 71\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path>", "alert": "<g class=\"bea-ant\"><path d=\"M51 38 L45 14M69 38 L75 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><circle cx=\"45\" cy=\"14\" r=\"4.2\" fill=\"currentColor\"></circle><circle cx=\"75\" cy=\"14\" r=\"4.2\" fill=\"currentColor\"></circle></g><g class=\"bea-wl\"><ellipse cx=\"37\" cy=\"44\" rx=\"16\" ry=\"10.5\" transform=\"rotate(-28 37 44)\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></ellipse></g><g class=\"bea-wr\"><ellipse cx=\"83\" cy=\"44\" rx=\"16\" ry=\"10.5\" transform=\"rotate(28 83 44)\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></ellipse></g><path d=\"M55 104 L60 111 L65 104\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><defs ><clipPath id=\"CLIP\"><circle cx=\"60\" cy=\"70\" r=\"30\"></circle></clipPath></defs><circle cx=\"60\" cy=\"70\" r=\"33\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></circle><g clip-path=\"url(#CLIP)\"><path d=\"M36 96 L48 84 L60 96 L72 84 L84 96\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></g><g class=\"eyes\"><circle cx=\"48\" cy=\"62\" r=\"5.4\" fill=\"currentColor\"></circle><circle cx=\"72\" cy=\"62\" r=\"5.4\" fill=\"currentColor\"></circle></g><path d=\"M43.5 53 L52.5 50\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><path d=\"M67.5 50 L76.5 53\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><circle cx=\"60\" cy=\"75\" r=\"3.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></circle>", "sleep": "<g class=\"bea-ant\"><path d=\"M52 38 Q45 30 37 33M68 38 Q75 30 83 33\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><circle cx=\"37\" cy=\"33\" r=\"4.2\" fill=\"currentColor\"></circle><circle cx=\"83\" cy=\"33\" r=\"4.2\" fill=\"currentColor\"></circle></g><g class=\"bea-wl\"><ellipse cx=\"37\" cy=\"44\" rx=\"16\" ry=\"10.5\" transform=\"rotate(-28 37 44)\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></ellipse></g><g class=\"bea-wr\"><ellipse cx=\"83\" cy=\"44\" rx=\"16\" ry=\"10.5\" transform=\"rotate(28 83 44)\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></ellipse></g><path d=\"M55 104 L60 111 L65 104\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><defs ><clipPath id=\"CLIP\"><circle cx=\"60\" cy=\"70\" r=\"30\"></circle></clipPath></defs><circle cx=\"60\" cy=\"70\" r=\"33\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></circle><g clip-path=\"url(#CLIP)\"><path d=\"M36 96 L48 84 L60 96 L72 84 L84 96\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></g><g class=\"eyes\"><path d=\"M43.4 62 Q48 65.6 52.6 62\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><path d=\"M67.4 62 Q72 65.6 76.6 62\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></g><circle cx=\"60\" cy=\"74\" r=\"2.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></circle><path class=\"bea-z\" d=\"M90 30 h8 l-8 8 h8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><path class=\"bea-z\" d=\"M100 16 h6 l-6 6 h6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path>", "sad": "<g class=\"bea-ant\"><path d=\"M52 38 Q47 24 41 19M68 38 Q73 24 79 19\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><circle cx=\"41\" cy=\"19\" r=\"4.2\" fill=\"currentColor\"></circle><circle cx=\"79\" cy=\"19\" r=\"4.2\" fill=\"currentColor\"></circle></g><g class=\"bea-wl\"><ellipse cx=\"37\" cy=\"44\" rx=\"16\" ry=\"10.5\" transform=\"rotate(-28 37 44)\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></ellipse></g><g class=\"bea-wr\"><ellipse cx=\"83\" cy=\"44\" rx=\"16\" ry=\"10.5\" transform=\"rotate(28 83 44)\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></ellipse></g><path d=\"M55 104 L60 111 L65 104\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><defs ><clipPath id=\"CLIP\"><circle cx=\"60\" cy=\"70\" r=\"30\"></circle></clipPath></defs><circle cx=\"60\" cy=\"70\" r=\"33\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bea-ground\"></circle><g clip-path=\"url(#CLIP)\"><path d=\"M36 96 L48 84 L60 96 L72 84 L84 96\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></g><g class=\"eyes\"><circle cx=\"48\" cy=\"63.2\" r=\"4.3\" fill=\"currentColor\"></circle><circle cx=\"72\" cy=\"63.2\" r=\"4.3\" fill=\"currentColor\"></circle></g><path d=\"M43.5 51 L52.5 54\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><path d=\"M67.5 54 L76.5 51\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path><path d=\"M53.5 77 Q60 71.5 66.5 77\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path>"};
 const MARK = (score = 77.6, reading = "oklch(0.86 0.135 126)", line = "oklch(0.94 0.045 122)", dot = true) => {
@@ -111,6 +150,32 @@ const box = (id, x, y, w, h, title, body, kind = "", lead = "") =>
 const chip = (n, model) => `<span class="chip ${model ? "m" : ""}">${n}</span>`;
 const bea = (mood, size) => `<svg viewBox="0 0 120 124" style="width:${size}px;height:${size * 1.033}px">${BEA[mood]}</svg>`;
 
+
+const dial = (score, size, lit = "oklch(0.86 0.135 126)", unlit = "oklch(0.34 0.04 152)") => {
+  const cx = size / 2, outer = size / 2 - 4, inner = outer * 0.72, n = Math.round(score);
+  let out = "";
+  for (let c = 0; c < 100; c++) {
+    const a = (c / 100) * Math.PI * 2 - Math.PI / 2;
+    for (let r = 0; r < 5; r++) {
+      if ((c * 7 + r * 13) % 11 === 0 && r > 2) continue;
+      const rad = inner + ((outer - inner) * r) / 4;
+      out += `<circle cx="${(cx + Math.cos(a) * rad).toFixed(2)}" cy="${(cx + Math.sin(a) * rad).toFixed(2)}" r="${(size / 210 + (r === 2 ? 0.25 : 0)).toFixed(2)}" fill="${c < n ? lit : unlit}"/>`;
+    }
+  }
+  return `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">${out}</svg>`;
+};
+const seal = (score, grade, q, lit = "oklch(0.86 0.135 126)") => {
+  let dots = "";
+  for (let i = 0; i < 100; i++) {
+    const a = (i / 100) * 2 * Math.PI - Math.PI / 2, x = 50 + 42 * Math.cos(a), y = 50 + 42 * Math.sin(a);
+    dots += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.9" fill="${i < Math.round(score) ? lit : "currentColor"}"${i < Math.round(score) ? "" : ' opacity=".2"'}/>`;
+  }
+  return `<svg viewBox="0 0 100 100">${dots}<text x="50" y="35" text-anchor="middle" font-family="Geist Mono" font-size="5.6" letter-spacing=".9" fill="currentColor" opacity=".75">PROOF OF LIFE</text><text x="50" y="72" text-anchor="middle" font-family="Geist Mono" font-size="6.4" letter-spacing=".5" fill="currentColor" opacity=".85">${q}</text><text x="50" y="59" text-anchor="middle" font-family="Gloock" font-size="24" fill="currentColor">${grade}</text></svg>`;
+};
+const gl = (k) => `<svg class="gl" viewBox="0 0 24 24">${GL[k]}</svg>`;
+
+const shot = (img, x, y, w, h, pos = 'top left', fit = "cover") => `<div class="shot" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px"><img src="readme/shots/${img}.jpg" style="object-position:${pos};object-fit:${fit}"></div>`;
+const cap = (x, y, w, t) => `<div class="cap" style="left:${x}px;top:${y}px;width:${w}px">${t}</div>`;
 const BOARDS = {
   banner: {
     h: 600,
@@ -168,26 +233,92 @@ const BOARDS = {
       ${lockup(30, "right:60px;bottom:50px")}`,
     wires: [["h", "visitor", "caddy", "HTTPS"], ["d", "caddy", "web", "/", 0.5], ["d", "caddy", "api", "/api", 0.5], ["h", "web", "api"], ["d", "api", "db"], ["hg", "api", 1160]],
   },
-  design: {
-    h: 680,
+  look1: {
+    h: 1060,
     html: `
-      <div class="panel" style="left:60px;top:60px;width:470px;height:560px">
-        <h3>The logo is a reading</h3>
-        <p class="lede">Two Ws in one line; the last stroke rises to a site's Health score. On a site, it shows that site's score in its grade colour.</p>
-        <div style="display:grid;place-items:center;height:170px;margin-top:6px"><div style="width:150px;height:150px">${MARK()}</div></div>
+      <div class="lookhead"><h2>The rating</h2></div>
+      ${shot("market", 70, 150, 900, 470)}
+      ${cap(70, 636, 900, "Marketplace")}
+      ${shot("trace-timeline", 70, 706, 900, 260, "top left")}
+      ${cap(70, 982, 900, "Agent Trace: every call on one timeline")}
+      ${shot("proof-of-life", 1010, 150, 520, 816, "top left")}
+      ${cap(1010, 982, 520, "Proof of Life")}`,
+    wires: [],
+  },
+  look2: {
+    h: 1220,
+    html: `
+      <div class="lookhead"><h2>The evidence</h2></div>
+      ${shot("five-years", 70, 150, 700, 490)}
+      ${cap(70, 656, 700, "The land five years apart")}
+      ${shot("land-cover", 830, 150, 700, 490, "top center")}
+      ${cap(830, 656, 700, "Dynamic World land cover")}
+      ${shot("news", 70, 726, 700, 410, "top left")}
+      ${cap(70, 1152, 700, "Greenness and the news")}
+      ${shot("worth", 830, 726, 700, 410, "center", "contain")}
+      ${cap(830, 1152, 700, "What the land does each year")}`,
+    wires: [],
+  },
+  look3: {
+    h: 1150,
+    html: `
+      <div class="lookhead"><h2>The people</h2></div>
+      ${shot("communities", 70, 150, 700, 364)}
+      ${cap(70, 530, 700, "Communities")}
+      ${shot("stakes", 830, 150, 700, 364)}
+      ${cap(830, 530, 700, "Your stakes")}
+      ${shot("list-land", 70, 600, 700, 437)}
+      ${cap(70, 1053, 700, "List your land")}
+      ${shot("time-machine", 830, 600, 340, 437)}
+      ${cap(830, 1053, 340, "Time Machine")}
+      ${shot("bea", 1190, 600, 340, 437, "top center")}
+      ${cap(1190, 1053, 340, "Ask Bea")}`,
+    wires: [],
+  },
+  design: {
+    h: 660,
+    html: `
+      <div class="dpanel" style="left:60px;top:60px;width:470px;height:540px">
+        <div class="kicker">The name</div>
+        <div class="name-big"><span class="w1">Wild</span><span class="w2">Worth</span></div>
+        <p class="lede" style="font-size:19px;color:var(--ink)">Wild land has worth: the argument in two words.</p>
+        <div class="etym">
+          <b>-worth</b><span class="muted">In old English place names, an enclosed homestead: Tamworth, Kenilworth. A WildWorth site is wild, and it is someone's home.</span>
+          <b>Bea</b><span class="muted">The bee who never sent an invoice, finally speaking up.</span>
+          <b>Proof of Life</b><span class="muted">Not a valuation report: evidence, each quarter, that the land is still alive.</span>
+        </div>
+      </div>
+      <div class="dpanel" style="left:560px;top:60px;width:480px;height:540px">
+        <div class="kicker">The logo is a reading</div>
+        <p class="lede">Two Ws drawn as one line; the last stroke rises to a site's Health score.</p>
+        <div style="display:grid;place-items:center;height:200px;margin-top:6px"><div style="width:160px;height:160px">${MARK()}</div></div>
         <div style="display:flex;gap:12px;justify-content:space-between">
           <div class="tile">${MARK(97.8, "var(--g-aaa)", "var(--forest)")}<span class="s">97.8</span><span class="g" style="background:var(--g-aaa)">AAA</span></div>
           <div class="tile">${MARK(82.8, "var(--g-aa)", "var(--forest)")}<span class="s">82.8</span><span class="g" style="background:var(--g-aa)">AA</span></div>
           <div class="tile">${MARK(48, "var(--g-b)", "var(--forest)")}<span class="s">48.0</span><span class="g" style="background:var(--g-b)">B</span></div>
         </div>
       </div>
-      <div class="panel" style="left:560px;top:60px;width:500px;height:560px">
-        <h3>Type and colour</h3>
+      <div class="dpanel" style="left:1070px;top:60px;width:470px;height:540px">
+        <div class="kicker">The Health dial and the seal</div>
+        <p class="lede">100 columns of dots, one per point of health, lit up to the score. The dial is the live reading; the seal is the verdict issued each quarter.</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:26px">
+          <div class="dial">${dial(97.8, 210)}<div class="num"><b>97.8</b><span>Health / 100</span></div></div>
+          <div style="width:170px;height:170px;color:var(--ink)">${seal(76.2, "A", "Q3 2026")}</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:16px;font-size:15px" class="muted"><span>Quinault Rain Forest, live</span><span>Xochimilco Wetland, Q3 2026</span></div>
+      </div>`,
+    wires: [],
+  },
+  system: {
+    h: 760,
+    html: `
+      <div class="dpanel" style="left:60px;top:60px;width:470px;height:640px">
+        <div class="kicker">Type and colour</div>
         <p class="lede">Serif for names, sans for numbers, mono for the machine. Lime only for the reading.</p>
-        <div style="margin-top:16px">
-          <div class="spec"><span style="font:400 34px/1 Gloock">Quinault Rain Forest</span><span class="k">Gloock</span></div>
-          <div class="spec"><span style="font:300 34px/1 'Hanken Grotesk';letter-spacing:-.03em">$26.4M–$57.6M</span><span class="k">Hanken Grotesk</span></div>
-          <div class="spec"><span class="mono" style="font-size:18px">run b94c0464 · 3,492 tokens</span><span class="k">Geist Mono</span></div>
+        <div style="margin-top:12px">
+          <div class="spec"><span style="font:400 30px/1 Gloock">Quinault Rain Forest</span><span class="k">Gloock</span></div>
+          <div class="spec"><span style="font:300 30px/1 'Hanken Grotesk';letter-spacing:-.03em">$26.4M–$57.6M</span><span class="k">Hanken</span></div>
+          <div class="spec"><span class="mono" style="font-size:16px">run b94c0464 · 3,492 tokens</span><span class="k">Geist Mono</span></div>
         </div>
         <div class="swatches">
           <div class="sw" style="background:var(--forest)"><span style="color:var(--ink)">Forest</span></div>
@@ -201,17 +332,32 @@ const BOARDS = {
           <div class="dark" style="background:var(--g-bbb)">BBB</div><div class="dark" style="background:var(--g-bb)">BB</div><div class="dark" style="background:var(--g-b)">B</div>
           <div style="background:var(--g-c)">C</div><div style="background:var(--g-d)">D</div>
         </div>
-        <p class="lede" style="margin-top:10px;font-size:16px">Grades are a ramp, never a traffic light.</p>
+        <p class="lede" style="margin-top:10px;font-size:15px">Grades are a ramp, never a traffic light.</p>
       </div>
-      <div class="panel" style="left:1090px;top:60px;width:450px;height:560px">
-        <h3>Bea, the field guide</h3>
-        <p class="lede">A bee drawn in the logo's line. She answers only from a site's Record, shows her sources and never gives advice.</p>
-        <div class="beas">
-          <figure>${bea("neutral", 104)}hello</figure><figure>${bea("think", 104)}reading</figure><figure>${bea("happy", 104)}found it</figure>
-          <figure>${bea("alert", 104)}harm</figure><figure>${bea("sad", 104)}a loss</figure><figure>${bea("sleep", 104)}quiet</figure>
+      <div class="dpanel paper" style="left:560px;top:60px;width:560px;height:640px">
+        <div class="kicker">The icon set</div>
+        <p class="lede">One family for every feature and ecosystem service, on Lucide's grid. Each icon lights one part: what it reads or confirms.</p>
+        <div class="icongrid">
+          ${[["proof","Proof of Life"],["health","Health score"],["worth","Worth range"],["wildwatch","WildWatch"],["record","The Record"],["verify","Verified land"],
+             ["trace","Agent Trace"],["auditor","Auditor"],["news","News Scout"],["satellite","Satellite"],["time","Time Machine"],["list","List land"],
+             ["back","Back a site"],["stakes","Your stakes"],["fund","Community fund"],["recovery","Recovery plan"],["alerts","Alerts"],["sites","Rated sites"],
+             ["carbon","Carbon"],["water","Water"],["flood","Flood"],["habitat","Habitat"],["recreation","Recreation"],["evidence","Field evidence"]]
+            .map(([k, t]) => `<figure>${gl(k)}${t}</figure>`).join("")}
         </div>
       </div>
-      `,
+      <div class="dpanel" style="left:1150px;top:60px;width:390px;height:640px">
+        <div class="kicker">Bea and motion</div>
+        <div class="beas" style="margin:12px 0 4px">
+          <figure>${bea("neutral", 84)}hello</figure><figure>${bea("think", 84)}reading</figure><figure>${bea("happy", 84)}found it</figure>
+          <figure>${bea("alert", 84)}harm</figure><figure>${bea("sad", 84)}a loss</figure><figure>${bea("sleep", 84)}quiet</figure>
+        </div>
+        <div class="motion">
+          <div><b>Draw</b><span>being measured</span><i>1.1 s</i></div>
+          <div><b>Rise</b><span>a reading arrived</span><i>0.55 s</i></div>
+          <div><b>Count</b><span>a number changed</span><i>0.6–0.9 s</i></div>
+          <div><b>Stamp</b><span>a verdict issued</span><i>0.52 s</i></div>
+        </div>
+      </div>`,
     wires: [],
   },
 };

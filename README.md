@@ -10,6 +10,7 @@
 
 <p align="center">
   <a href="https://wildworth.westus2.cloudapp.azure.com"><b>Try it live</b></a> ·
+  <a href="https://wildworth.westus2.cloudapp.azure.com/how"><b>See how it works in two minutes</b></a> ·
   <!-- Demo video: add the YouTube link here once it's published. -->
   <a href="#how-a-rating-works">How a rating works</a> ·
   <a href="#architecture">Architecture</a> ·
@@ -44,9 +45,18 @@ WildWorth is the missing rating. A community draws its land on a map; Nemotron a
 - **Supporters and funds** get comparable, explained ratings that update as the land changes.
 - **Anyone** can check the work: every grade links to its evidence, its model calls and a tamper-evident record.
 
+### Where it started
+
+It started with a short documentary about valuing living nature. In a town in Mexico, a community's wetland draws down carbon and filters their water, while ten industrial parks and two hundred factories press in for its land and water. *"The bees in China never sent an invoice,"* one voice says; another, Douglas Eger of Intrinsic Exchange Group, proposes [natural asset companies](https://www.wri.org/insights/natural-asset-companies-nac-explained) whose share price rises as the land heals, and the film puts wetlands like theirs at $25,000–50,000 an acre a year in services nobody pays for.
+
+Wall Street tried it: the NYSE filed a rule to list natural asset companies in 2023 and [withdrew it in January 2024](https://www.sec.gov/rules-regulations/self-regulatory-organization-rulemaking/sr-nyse-2023-09) amid doubts about who controls the land and whether the values could be trusted. That was the gap we took on: a rating that is cheap, continuous, checkable and owned by the community. A wetland like theirs, [Xochimilco](https://wildworth.westus2.cloudapp.azure.com/how) in Mexico City, became our hero site. Our engine is more cautious than the film: its worth ranges come from published coefficients, with a confidence, and the method says so.
+<!-- Documentary link: add the YouTube URL here once confirmed. -->
+
 ## Try it (no sign-up)
 
-Open **[wildworth.westus2.cloudapp.azure.com](https://wildworth.westus2.cloudapp.azure.com)** and choose *Try it yourself*. You get your own copy of a world of seven rated sites and can switch between three people at any time: **Rosa** (a community), **Arjun** (a supporter) and a **Reviewer**.
+Short on time? **[See how it works](https://wildworth.westus2.cloudapp.azure.com/how)**: a two-minute guided story of one wetland, from rating to backing to a harm, using a real recorded run (it spends no model credits).
+
+To explore everything, open **[wildworth.westus2.cloudapp.azure.com](https://wildworth.westus2.cloudapp.azure.com)** and choose *Try it yourself*. You get your own copy of a world of seven rated sites and can switch between three people at any time: **Rosa** (a community), **Arjun** (a supporter) and a **Reviewer**.
 
 1. **Marketplace.** Every site with its grade, Health score, worth range and price.
 2. **A site.** Nemotron 3 Ultra's verdict, the land five years apart under one slider, Dynamic World land cover, and the news pinned to five years of greenness.
@@ -60,27 +70,18 @@ Open **[wildworth.westus2.cloudapp.azure.com](https://wildworth.westus2.cloudapp
 
 | Criterion | Where to look |
 |---|---|
-| Technological implementation | An Agent Trace on any site · [How a rating works](#how-a-rating-works) · [Measured, not claimed](#measured-not-claimed) · [Guardrails](#guardrails) |
-| Design | The live site, end to end without instructions · [Design](#design) · [A look inside](#a-look-inside) |
-| Potential impact | [Why WildWorth](#why-wildworth) · listing land as Rosa · the Time Machine |
-| Quality of the idea | A rating agency for living land, where Nemotron weighs the satellite record against the local news and code keeps it honest |
+| Technological implementation | An Agent Trace on any site (Flow, Reasoning, Checks) · [How a rating works](#how-a-rating-works) · [Measured, not claimed](#measured-not-claimed) · [Guardrails](#guardrails) |
+| Design | [See how it works](https://wildworth.westus2.cloudapp.azure.com/how), then the live site end to end, without instructions · [Design](#design) · [A look inside](#a-look-inside) |
+| Potential impact | [Where it started](#where-it-started) · listing land as Rosa · the Time Machine's fire, encroachment and restoration |
+| Quality of the idea | Nature finance stalled on trust: the NYSE withdrew its natural-asset listing rule in 2024. WildWorth supplies the missing piece, a rating, and uses Nemotron as the analyst rather than the calculator: Super VL compares the land five years apart, Super reconciles dated satellite signals with local news (in the local language) and decides what to investigate, Ultra weighs competing explanations, and tested code owns every number. See the Reasoning tab of any Agent Trace. |
 
 ## A look inside
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/readme/marketplace.jpg" alt="The Marketplace: seven rated sites, with the top-rated site's grade, Health score, worth range and price"><br><sub><b>Marketplace.</b> Rated from space and the local news.</sub></td>
-    <td width="50%"><img src="docs/readme/agent-trace.jpg" alt="The Agent Trace for Quinault Rain Forest: the story of the run, model by model"><br><sub><b>Agent Trace.</b> Each model's job, its reasoning, the searches and the checks code ran.</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/readme/seen-from-above.jpg" alt="Seen from above: Sentinel-2 views five years apart under one slider, with the site's outline"><br><sub><b>Seen from above.</b> Sentinel-2 views five years apart, compared by Nemotron 3.5 Super VL.</sub></td>
-    <td><img src="docs/readme/news-and-satellite.jpg" alt="News and satellite: monthly greenness with the months code flagged and the news found by the News Scout"><br><sub><b>News and satellite.</b> Dated changes found by code, next to the news that may explain them.</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/readme/time-machine.jpg" alt="The Time Machine: move a quarter forward or inject a fire, an encroachment or a restoration"><br><sub><b>Time Machine.</b> Move time forward or harm a site, and watch the rating respond.</sub></td>
-    <td><img src="docs/readme/bea.jpg" alt="Bea, the field guide, ready to answer questions about Quinault Rain Forest"><br><sub><b>Bea, your field guide.</b> Grounded answers from the site's Record, on Nemotron 3 Nano.</sub></td>
-  </tr>
-</table>
+<img src="docs/readme/look-rating.jpg" alt="The rating: the Marketplace with Quinault Rain Forest's live Health dial at 97.8 and grade AAA; the Agent Trace's timeline of every Nemotron, code and Tavily call in a 17-second run; and the Proof of Life report with its AAA seal and what changed since the last quarter." width="100%">
+
+<img src="docs/readme/look-evidence.jpg" alt="The evidence for Xochimilco Wetland: Sentinel-2 views five years apart under a slider with Nemotron 3.5 Super VL's reading; Dynamic World land cover over the site with its class shares; monthly greenness with the months code flagged and the news the agents found; and what the land does each year, from flood control to climate regulation." width="100%">
+
+<img src="docs/readme/look-people.jpg" alt="The people: Communities with their sites; Your stakes, showing what a supporter backs and the land, carbon and services it keeps alive; listing land in five steps; the Time Machine with its next quarter and injected events; and Bea answering why the greenness dipped, citing the Proof of Life." width="100%">
 
 ## How a rating works
 
@@ -185,14 +186,19 @@ The seven showcase sites (rainforests in Washington, mangroves in the Florida Ke
 
 ## Design
 
-<img src="docs/readme/design.jpg" alt="The design board: the logo, two Ws drawn as one line whose last stroke rises to a Health score, shown at 97.8 AAA, 82.8 AA and 48.0 B; the type (Gloock for names, Hanken Grotesk for numbers, Geist Mono for the machine), the colours (forest, lichen, lime, clay, machine) and the grade ramp from AAA to D; and Bea, the field guide, a bee drawn in the logo's line, in six moods." width="100%">
+<img src="docs/readme/design.jpg" alt="Brand identity: the name WildWorth, where -worth is the old English for an enclosed homestead; the logo, two Ws drawn as one line whose last stroke rises to a Health score, shown at 97.8 AAA, 82.8 AA and 48.0 B; and the Health dial of 100 dotted columns at 97.8 next to the Proof of Life seal for an A grade." width="100%">
 
+<img src="docs/readme/design-system.jpg" alt="Design system: type (Gloock for names, Hanken Grotesk for numbers, Geist Mono for the machine), the five colours and the grade ramp from AAA to D; the WildWorth icon set of 24 icons for features and ecosystem services; and Bea in six moods with the four motion moves, draw, rise, count and stamp." width="100%">
+
+- **A name that makes the argument.** *WildWorth*: wild land has worth. In old English place names, *-worth* meant an enclosed homestead (Tamworth, Kenilworth), so a WildWorth site is wild and it is someone's home. *Proof of Life* names the quarterly report: evidence that the land is still alive, not a valuation.
 - **The logo is a reading.** Two Ws drawn as one line; the last stroke rises to a Health score, so on a site the mark shows that site's own reading in its grade colour.
-- **Bea, the field guide.** A bee drawn in the same line. She answers only from a site's Record, cites her sources and never gives investment advice.
-- **Two voices.** Ratings, reports and the trace speak like a careful rating agency; listing and community screens are warmer and plain-spoken.
-- **Made to be read.** Grades are a colour ramp, never a traffic light; a change always carries an arrow, not just a colour; numbers are tabular; the logo animates only when a rating lands.
+- **The score is round.** The Health dial is 100 dotted columns, one per point, lit up to the score; the Proof of Life seal is a single ring of 100 dots, sealed each quarter. The dial is the live reading, the seal the verdict.
+- **Bea, the field guide.** A bee drawn in the logo's line, ink only: the bee who never sent an invoice, finally speaking up. She answers only from a site's Record, cites her sources and never gives investment advice.
+- **One icon family.** 33 icons for every feature and ecosystem service, on Lucide's grid so they sit beside the app's generic icons; each lights exactly one part, what it reads or confirms.
+- **Motion that means something.** Four moves: *draw* (being measured), *rise* (a reading arrived), *count* (a number changed) and *stamp* (a verdict issued). Each plays once and ends on the real value; the logo animates only when a rating lands.
+- **Two voices, made to be read.** Ratings and the trace speak like a careful rating agency; listing and community screens are warmer. Grades are a colour ramp, never a traffic light, and a change always carries an arrow, not just a colour.
 
-The system is in [DESIGN.md](DESIGN.md), the voice in [PRODUCT.md](PRODUCT.md), and the brand in the [guidelines](docs/design/wildworth-brand-guidelines.html).
+**Go deeper:** the [brand guidelines](https://melvin1117.github.io/wildworth/design/wildworth-brand-guidelines.html) (story, name, logo, Proof of Life, colour, type, icons, voice, motion), [Bea's character sheet](https://melvin1117.github.io/wildworth/design/bea-character.html), the [design system](DESIGN.md), the [product and voice](PRODUCT.md), and [UX writing](docs/design/ux-writing.md).
 
 ## How we built it with AI
 
@@ -258,7 +264,7 @@ backend/    FastAPI API: agents, formulas (tools), market, ledger, sandboxes, jo
 frontend/   Next.js app and the generated API client
 evals/      News Scout, Auditor, Bea and schema-reliability evals, and their results
 deploy/     Docker Compose, Caddy and the update, backup and database scripts for the VM
-docs/       Specs, ADRs, design and brand, the deploy guide, and diagrams.html (this README's images)
+docs/       Specs, ADRs, design and brand, the deploy guide, and diagrams.html (this README's images, on GitHub Pages)
 scripts/    Local dev, site precompute and demo-recording helpers
 ```
 
@@ -295,7 +301,8 @@ What we ran into while building, what it cost, and what would fix it. Each findi
 
 | Doc | What's in it |
 |---|---|
-| [Diagrams](docs/diagrams.html) | The banner, the rating pipeline, the architecture and the design board (the source of this README's images) |
+| [Diagrams](https://melvin1117.github.io/wildworth/diagrams.html) | Every image in this README, drawn in the brand ([source](docs/diagrams.html)) |
+| [Brand guidelines](https://melvin1117.github.io/wildworth/design/wildworth-brand-guidelines.html) | The story, name, logo, Proof of Life, colour, type, icons, voice and motion |
 | [One-pager](docs/one-pager.md) | The problem, the idea and the pitch |
 | [Devpost write-up](docs/devpost.md) | Inspiration, how we built it, challenges and what we learned |
 | [Dev spec](docs/specs/dev-spec.md) | Architecture, data model, API, formulas and cost plan |
