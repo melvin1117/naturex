@@ -27,14 +27,14 @@ Accepted (2026-10-28). Decides the hosting left open in [dev-spec](../specs/dev-
   - Caddy.
 - **Caddy** gets a Let's Encrypt certificate for the address and routes `/api/*` straight to the API. Long requests and the event stream skip the Next.js proxy, and the API sees each visitor's address with `TRUSTED_PROXY_HOPS=1`.
 - **The address** is the VM's free Azure DNS name (`wildworth.<region>.cloudapp.azure.com`) unless the team buys a domain; either way it's just `SITE_ADDRESS`.
-- **Deploys are pulled, not pushed:** cron runs `deploy/update.sh` every 5 minutes. It deploys `main` when it moves, waits for both health checks, and rolls back to the previous commit if they fail. GitHub needs no secrets, and nothing outside needs SSH access to the VM.
+- **Deploys are pulled, not pushed, and on demand:** after a merge, `deploy/update.sh` on the VM deploys `main`, waits for both health checks, and rolls back to the previous commit if they fail (cron can run it instead). GitHub needs no secrets and no access to the VM.
 - **Data comes from a laptop's database:** `deploy/export-db.sh` prunes visitor sandboxes from a scratch copy (`python -m app.cli prune-sandboxes`) and dumps the template and live worlds, so every ID and the ledgers come along. `deploy/backup.sh` keeps nightly dumps on the VM.
 
 ## Consequences
 - **Good:**
   - Always on and no cold starts, with no request-length limits beyond ours.
   - One place to look, and about $40 a month, well inside the credit.
-  - A merge is live in minutes with an automatic rollback.
+  - A merge goes live with one command, with an automatic rollback.
   - Secrets stay on the VM, in `deploy/.env` and `deploy/secrets/`.
 - **Bad:**
   - One VM is a single point of failure.

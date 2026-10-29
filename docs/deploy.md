@@ -1,6 +1,6 @@
 # Deploying WildWorth
 
-The demo runs on **one Azure VM** with Docker Compose ([ADR-0009](adr/0009-one-vm-on-azure.md)): Postgres with pgvector, the API, the web app and Caddy, which serves HTTPS and routes `/api` straight to the API. The VM checks `main` every 5 minutes, so a merge is live within about 10 minutes, and it goes back by itself if a new version isn't healthy.
+The demo runs on **one Azure VM** with Docker Compose ([ADR-0009](adr/0009-one-vm-on-azure.md)): Postgres with pgvector, the API, the web app and Caddy, which serves HTTPS and routes `/api` straight to the API. After a merge, one command on the VM (`deploy/update.sh`) deploys `main`, and it goes back by itself if the new version isn't healthy.
 
 ```
 visitor ──HTTPS──▶ Caddy ─┬─ /api/* ─▶ API (FastAPI, uvicorn) ─▶ Postgres + pgvector
@@ -96,26 +96,58 @@ cd ~/wildworth && FORCE=1 deploy/update.sh    # the first build takes 5–10 min
 
 Then open the address: the welcome page loads, **Try it yourself** opens a sandbox, and `https://<address>/api/healthz` answers `{"status": "ok"}`.
 
-## 5. Keep it updated and backed up
+## 5. Backups, and updating after a merge
 
-`crontab -e` on the VM:
+Nightly backups: `crontab -e` on the VM, then add
 
 ```
-*/5 * * * * cd ~/wildworth && deploy/update.sh >> ~/deploy.log 2>&1
 30 3 * * * cd ~/wildworth && deploy/backup.sh >> ~/backup.log 2>&1
 ```
 
-- **Updates:** `main` only changes through reviewed PRs with green CI, and the VM pulls it; nothing outside can reach into the VM.
+To deploy after a merge to `main`, from your laptop:
+
+```bash
+ssh azureuser@wildworth.westus2.cloudapp.azure.com 'cd ~/wildworth && deploy/update.sh'
+```
+
+- **Updates:** on demand. `main` only changes through reviewed PRs with green CI, and the VM pulls it; nothing outside can push into the VM. It takes a minute, or a few when an image rebuilds. To have it automatic instead, add `*/30 * * * * cd ~/wildworth && deploy/update.sh >> ~/deploy.log 2>&1` to the crontab (a run that finds nothing new only fetches).
 - **A bad version:** if the API or the web app isn't healthy within 5 minutes, `update.sh` goes back to the commit that ran before and skips the bad one until `main` moves on.
-- **Roll back on purpose:** `deploy/update.sh <commit sha>` pins that commit (cron keeps it); `deploy/update.sh --unpin` follows `main` again.
+- **Roll back on purpose:** `deploy/update.sh <commit sha>` pins that commit (later runs keep it); `deploy/update.sh --unpin` follows `main` again.
 - **Settings change:** edit `deploy/.env`, then `FORCE=1 deploy/update.sh`.
 - **Restore a backup:** `deploy/import-db.sh ~/backups/<file>.dump`.
+
+## Security
+
+- **Secrets stay on the VM.**
+  - `deploy/.env` (API keys, generated secrets, the database password) is readable only by its owner (`chmod 600`).
+  - The Earth Engine key sits in `deploy/secrets/`, a folder only its owner can enter (`chmod 700`).
+  - Both are git-ignored and never baked into an image.
+  - The API reads the key through a read-only mount, so the container can't change it.
+  - The file itself is `644` only so the API's non-root container user can read it; the private folder keeps everyone else out.
+- **Nothing secret reaches the browser.** Only the API uses the Nebius, Tavily and Earth Engine keys; the web app gets just the API's internal address.
+- **What's reachable:**
+  - Only ports 80 and 443 are open to everyone, and port 80 only redirects to HTTPS.
+  - SSH is open to your own address only, with a key; Azure turns off password login for key-based VMs.
+  - Postgres isn't reachable from outside the VM.
+- **On the machine:**
+  - The API and the web app run as non-root users.
+  - Azure encrypts the disk at rest.
+  - Ubuntu installs security updates by itself.
+- **The app's own guards:**
+  - secure, HTTP-only cookies;
+  - writes accepted only from the site's own origin;
+  - per-visitor rate limits;
+  - hard caps on model and search spend.
+- **Least privilege:**
+  - Give the Earth Engine service account only the Earth Engine roles it needs (Earth Engine Resource Viewer, and Service Usage Consumer).
+  - Use separate keys for the deployment, not the ones on laptops.
+- **After setup:** delete the local copies once the VM has them (the bundle on your laptop, and `~/wildworth.dump` on the VM once loaded).
+- **After judging ends (Dec 15):** rotate or revoke every key, then delete the resource group.
 
 ## Operating it
 
 - **Logs:** `docker compose -f deploy/compose.yml logs -f backend` (also `web`, `caddy`); each service keeps 50 MB.
 - **Spend:** `LLM_BUDGET_USD` caps model spend logged in the database, with `LLM_RESERVE_USD` kept for judging; each sandbox gets `SANDBOX_LLM_BUDGET_USD` and live ratings are capped per sandbox and per day. Past a cap, a rating still comes out with the tested formulas' numbers, without the AI write-up. News Scout pauses below `TAVILY_MIN_CREDITS_LEFT`. Check the Token Factory and Tavily consoles too.
 - **Earth Engine:** live computations run one at a time and only for newly drawn boundaries (every boundary is cached); the non-commercial Community tier allows 150 EECU-hours a month (see the quota page in Google Cloud).
-- **Security:** only ports 80 and 443 are open to everyone, SSH to your address only; Postgres isn't reachable from outside; Ubuntu installs security updates by itself. Rotate the keys after judging ends.
 - **Try it locally first:** in `deploy/.env` set `SITE_ADDRESS=http://localhost:8088`, `SITE_URL` and `ALLOWED_ORIGINS` to the same, `HTTP_PORT=8088` and `HTTPS_PORT=8443`, then steps 3 and 4 on your laptop (`docker compose -f deploy/compose.yml down -v` removes it).
 - **After judging (Dec 15):** `az group delete --name wildworth` removes everything.
