@@ -65,7 +65,7 @@ Rating-as-a-service for funds & corporates · listing/verification fee per asset
 > Rules: a project can win **one Overall OR one Track award, plus one Bonus award**.
 
 ## Where to read more
-[diagrams.html](./diagrams.html) (the rating pipeline, architecture and design board) · [planning diagrams](./archive/planning-diagrams.html) (the original explainer) · [pm-spec.md](./specs/pm-spec.md) (scope & plan) · [dev-spec.md](./specs/dev-spec.md) (technical design) · [demo-plan.md](./specs/demo-plan.md) (judge tour & video).
+[diagrams.html](./diagrams.html) (the rating pipeline, architecture and design board) · [pm-spec.md](./specs/pm-spec.md) (scope & plan) · [dev-spec.md](./specs/dev-spec.md) (technical design) · [demo-plan.md](./specs/demo-plan.md) (judge tour & video).
 
 ## Honest limits
 Sandbox with play money — **not** a securities offering. Valuations are screening estimates using published benefit-transfer coefficients (Brander et al. 2024 biome means in 2020 Int$ as the central and upper value, with an indicative low from the published median/mean ratios in Costanza et al. 2014; never raw ESVD data), not certified appraisals. Real-money trading would require licensed partners and regulation.

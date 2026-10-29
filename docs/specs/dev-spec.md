@@ -2,7 +2,7 @@
 
 > **Renamed WildWorth (23 Oct 2026).** In the UI the Nature Ledger is **The Record**, a quarterly report is a **Proof of Life**, the value range is the **Worth range**, the Copilot is **Bea** and the Steward app is **Stewards**; routes, API, database and code names are unchanged ([brand guidelines](../design/wildworth-brand-guidelines.html)).
 
-> Companion to [pm-spec.md](./pm-spec.md), [one-pager.md](../one-pager.md), [demo-plan.md](./demo-plan.md), [research.md](../research.md) and [planning diagrams](../archive/planning-diagrams.html) (its *Rating Engine* tab mirrors §7). Anything marked **(verify)** should be checked against current Nebius / NVIDIA docs before implementation.
+> Companion to [pm-spec.md](./pm-spec.md), [one-pager.md](../one-pager.md), [demo-plan.md](./demo-plan.md), [research.md](../research.md) and [diagrams.html](../diagrams.html) (its rating pipeline board summarises §7). Anything marked **(verify)** should be checked against current Nebius / NVIDIA docs before implementation.
 
 > **Decisions:** stack, versions and design choices are recorded in [ADR-0001](../adr/0001-stack-and-versions.md) (stack and versions) and [ADR-0002](../adr/0002-repo-layout.md) (repo layout). Where this spec and an ADR disagree, **the ADR wins**; update this spec when you add an ADR.
 

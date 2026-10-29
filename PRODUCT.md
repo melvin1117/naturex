@@ -75,7 +75,7 @@ The source of truth for the brand is [docs/design/wildworth-brand-guidelines.htm
 
 ## Evidence on Hand
 
-- Specs and pitch: [docs/one-pager.md](docs/one-pager.md), [docs/specs/pm-spec.md](docs/specs/pm-spec.md), [docs/specs/dev-spec.md](docs/specs/dev-spec.md), [docs/specs/demo-plan.md](docs/specs/demo-plan.md), [docs/diagrams.html](docs/diagrams.html) (the planning-era explainer is [docs/archive/planning-diagrams.html](docs/archive/planning-diagrams.html)).
+- Specs and pitch: [docs/one-pager.md](docs/one-pager.md), [docs/specs/pm-spec.md](docs/specs/pm-spec.md), [docs/specs/dev-spec.md](docs/specs/dev-spec.md), [docs/specs/demo-plan.md](docs/specs/demo-plan.md), [docs/diagrams.html](docs/diagrams.html).
 - Demo numbers in the pitch (Health 77.6, grade A, ~$11.7M/yr, 87% confidence) are targets from the spec, not yet produced by the engine; the UI must show whatever the API returns.
 - The backend currently serves typed mock data for every route (`backend/app/mocks.py`).
 - **Absent, must not be fabricated:** real users, testimonials, partner organisations, press, certifications, real site photos, satellite imagery (until D2 precomputes it), and any real-money or regulatory claims.
