@@ -74,60 +74,21 @@ Open **[wildworth.westus2.cloudapp.azure.com](https://wildworth.westus2.cloudapp
 
 **Models plan, read, investigate and judge; code computes every number and checks everything they say before it counts.**
 
-```mermaid
-flowchart TB
-  subgraph code["Code: deterministic and tested"]
-    sat["Five years of satellite data<br/>Sentinel-2 · Dynamic World · JRC · Hansen"]
-    sig["Dated signals<br/>months far from their seasonal normal"]
-    val["Worth range<br/>published ecosystem-service coefficients"]
-    sat --> sig
-    sat --> val
-  end
-  news["Tavily Search<br/>local news, in the local language too"] --> sup
-  sig --> sup["Nemotron 3 Super<br/>sorts the news, plans follow-ups"]
-  sat --> vl["Nemotron 3.5 Super VL<br/>compares views five years apart"]
-  sup -->|"dated search, or one article"| nano["Tavily Extract + Nemotron 3 Nano<br/>answers Super's question"]
-  sup & nano & vl & val --> ultra["Nemotron 3 Ultra audits, thinking on<br/>may move health ±10, citing evidence"]
-  ultra --> check[["Code checks every claim, ID and number"]]
-  check -->|"refused: one more round"| ultra
-  check -->|accepted| pol["Proof of Life: grade AAA–D, Health score, worth range<br/>sealed in The Record · price, alerts, Agent Trace"]
-```
+<img src="docs/readme/rating-pipeline.jpg" alt="How a rating works, in seven steps alternating between code and Nemotron: 1 code reads five years of satellite data and computes the worth range and Health score; 2 Nemotron 3.5 Super VL compares the views; 3 code runs the Tavily news searches; 4 Nemotron 3 Super sorts the news and plans follow-ups; 5 code turns everything into facts with IDs; 6 Nemotron 3 Ultra audits, moving health by at most 10 with cited facts; 7 code checks every claim, refuses bad answers for one more round, and seals the Proof of Life." width="100%">
 
-1. **Satellite record (code).** Five years of Sentinel-2, Dynamic World, JRC surface water and Hansen forest data. Code finds dated signals (months whose greenness is far from the same month in other years, by leave-one-out median and MAD), the latest 12 months against earlier years, and cloud gaps.
+1. **Satellite and numbers (code).** Five years of Sentinel-2, Dynamic World, JRC surface water and Hansen forest data. Code finds dated signals (months whose greenness is far from the same month in other years, by leave-one-out median and MAD), compares the latest 12 months with earlier years, and computes the worth range from published coefficients and the formula's Health score.
 2. **Five years apart (Nemotron 3.5 Super VL).** Compares the site's views from 2021–22 and the last 12 months; code checks each change it describes against the measured metrics.
-3. **Local news (Tavily + Nemotron 3 Super).** Code writes the queries from the site's name, region and ecosystem, in English and the local language; Super sorts the results, and a place check drops items about somewhere else.
-4. **Investigation (Nemotron 3 Super, thinking once).** Super compares the signals with the news and decides what to check: a dated news search for a change nothing explains, or reading the most serious article (Nemotron 3 Nano answers; code verifies the quote and the place).
-5. **Audit (Nemotron 3 Ultra, thinking on).** Ultra weighs competing explanations against every cited fact, writes the verdict and may move health by up to ±10. It writes `{fact-id}` placeholders that code fills, and code refuses any uncited claim, unknown ID or number not in the facts.
-6. **Sealed.** The Proof of Life, its evidence and the run's record go into The Record, a hash-chained ledger anyone can verify.
+3. **Local news (code + Tavily).** Code writes the searches from the site's name, region and ecosystem, in English and the local language, and a place check drops items about somewhere else.
+4. **Investigation (Nemotron 3 Super, thinking once).** Super sorts the news, compares the signals with it and decides what to check: a dated news search for a change nothing explains, or reading the most serious article (Nemotron 3 Nano answers; code verifies the quote and the place).
+5. **The facts (code).** Every signal, value, view and kept news item becomes a fact with an ID: the only numbers a model may quote.
+6. **Audit (Nemotron 3 Ultra, thinking on).** Ultra weighs competing explanations against the facts, writes the verdict and may move health by up to ±10, writing `{fact-id}` placeholders that code fills.
+7. **Check and seal (code).** Code refuses any uncited claim, unknown ID or number not in the facts and sends the answer back once; the accepted Proof of Life, its evidence and the run's record go into The Record, a hash-chained ledger anyone can verify.
 
 A live rating takes 35–60 seconds and costs about **$0.03–0.05**; Ultra's audit is 80–90% of that. Every run keeps an **Agent Trace**, and each showcase site also carries a real run recorded with the live models, so visitors can read one without spending anything.
 
 ## Architecture
 
-```mermaid
-flowchart TB
-  user(["Visitor's browser: a private sandbox, no sign-up"])
-  subgraph vm["Azure VM · Docker Compose"]
-    caddy["Caddy<br/>TLS and security headers"]
-    web["Web app<br/>Next.js · TypeScript · shadcn/ui"]
-    api["API<br/>FastAPI · agents · market · ledger"]
-    db[("Postgres + pgvector<br/>sandboxes, reports, The Record")]
-  end
-  subgraph ext["Called by the API"]
-    direction LR
-    tf["Nebius Token Factory<br/>Nemotron 3 Super · Ultra · Nano<br/>Nemotron 3.5 Super VL<br/>Qwen3-Embedding-8B"]
-    tavily["Tavily<br/>Search · Extract"]
-    ee["Google Earth Engine<br/>Sentinel-2 · Dynamic World<br/>JRC · Hansen"]
-    tf ~~~ tavily ~~~ ee
-  end
-  user -->|HTTPS| caddy
-  caddy -->|"/"| web
-  caddy -->|"/api"| api
-  web --> api
-  api --> db
-  api -->|"one client for the models:<br/>spend cap, logging, retries"| ext
-  db ~~~ ext
-```
+<img src="docs/readme/architecture.jpg" alt="Architecture: a visitor's browser reaches Caddy over HTTPS on one Azure VM running Docker Compose; Caddy routes to the Next.js web app and the FastAPI API; the API uses Postgres with pgvector and calls Nebius Token Factory (Nemotron 3 Super, Ultra, Nano, Nemotron 3.5 Super VL and Qwen3-Embedding-8B), Tavily and Google Earth Engine." width="100%">
 
 - **Backend:** Python 3.12, FastAPI, SQLModel and Pydantic v2. Agents live in `backend/app/agents`; the formulas (signals, valuation, scoring) are pure functions in `backend/app/tools`, with the market and the ledger beside them.
 - **Frontend:** Next.js (App Router), TypeScript, Tailwind and shadcn/ui, with a client generated from the API's OpenAPI schema, Leaflet maps and Recharts.
@@ -297,6 +258,8 @@ scripts/    Local dev, site precompute and demo-recording helpers
 | [Deploy guide](docs/deploy.md) | One Azure VM with Docker Compose: setup, updates, backups, security |
 | [CI](docs/ci.md) | Workflows, local checks and required status checks |
 | [AGENTS.md](AGENTS.md) | Shared rules for AI coding assistants on this repo |
+
+Diagrams: [docs/readme/diagrams.html](docs/readme/diagrams.html) (the source of both images).
 
 ## Licence and data credits
 

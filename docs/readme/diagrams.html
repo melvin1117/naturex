@@ -1,0 +1,179 @@
+<!doctype html>
+<!--
+  The README's two diagrams, in the brand (docs/design/wildworth-brand-guidelines.html).
+  Open with ?d=pipeline or ?d=architecture; the README's PNGs are screenshots of #c at 2x
+  (1600 px wide, deviceScaleFactor 2), e.g. with Playwright:
+    await page.goto("file://…/docs/readme/diagrams.html?d=pipeline");
+    await page.locator("#c").screenshot({ path: "docs/readme/rating-pipeline.png" });
+  Arrows are drawn from the boxes' positions, so moving a box moves its arrows.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WildWorth diagrams</title>
+<link href="https://fonts.googleapis.com/css2?family=Gloock&family=Hanken+Grotesk:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=block" rel="stylesheet">
+<style>
+  :root {
+    --lime: oklch(0.86 0.135 126); --clay: oklch(0.7 0.13 48);
+    --machine: oklch(0.215 0.035 158); --raised: oklch(0.26 0.038 156); --line: oklch(0.34 0.04 152);
+    --ink: oklch(0.94 0.045 122); --muted: oklch(0.74 0.045 135);
+  }
+  * { box-sizing: border-box; margin: 0 }
+  body { background: var(--machine); font: 400 18px/1.4 "Hanken Grotesk", sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased }
+  #c { position: relative; width: 1600px; overflow: hidden; background: radial-gradient(120% 90% at 85% 15%, oklch(0.27 0.045 152) 0%, var(--machine) 60%) }
+  .eyebrow { position: absolute; font: 500 15px/1 "Geist Mono", monospace; letter-spacing: .16em; text-transform: uppercase; color: var(--lime) }
+  h2 { position: absolute; font: 400 54px/1.04 Gloock, serif; letter-spacing: -.02em }
+  .sub { position: absolute; color: var(--muted); font-size: 21px; line-height: 1.4 }
+  .col { position: absolute; font: 500 13px/1 "Geist Mono"; letter-spacing: .14em; text-transform: uppercase; color: var(--muted) }
+  .box { position: absolute; border-radius: 18px; background: var(--raised); box-shadow: 0 0 0 1px oklch(0.86 0.135 126 / .16); padding: 18px 20px }
+  .box h4 { display: flex; align-items: center; gap: 10px; font: 500 13px/1.2 "Geist Mono"; letter-spacing: .12em; text-transform: uppercase; color: var(--lime); margin-bottom: 9px }
+  .box p { font-size: 17px; line-height: 1.38 }
+  .box p span { color: var(--muted) }
+  .box.code { background: oklch(0.235 0.03 158); box-shadow: 0 0 0 1px oklch(0.94 0.045 122 / .14) }
+  .box.code h4 { color: var(--ink) }
+  .box.key { box-shadow: 0 0 0 1.5px var(--lime), 0 24px 50px -24px rgba(0, 0, 0, .6) }
+  .chip { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; font: 600 11px/1 "Geist Mono"; letter-spacing: 0 }
+  .chip.m { background: var(--lime); color: var(--machine) }
+  .chip.c { background: oklch(0.94 0.045 122 / .12); color: var(--ink) }
+  .chip.e { background: oklch(0.7 0.13 230 / .25); color: oklch(0.85 0.08 230) }
+  .lane { position: absolute; border-radius: 28px; background: oklch(0.86 0.135 126 / .05); box-shadow: inset 0 0 0 1px oklch(0.86 0.135 126 / .14) }
+  .lane.code { background: oklch(0.94 0.045 122 / .03); box-shadow: inset 0 0 0 1px oklch(0.94 0.045 122 / .1) }
+  .lanelabel { position: absolute; font: 500 13px/1.3 "Geist Mono"; letter-spacing: .14em; text-transform: uppercase; color: var(--lime) }
+  .lanelabel span { display: block; margin-top: 6px; font: 400 15px/1.35 "Hanken Grotesk"; letter-spacing: 0; text-transform: none; color: var(--muted) }
+  .lanelabel.code { color: var(--ink) }
+  .group { position: absolute; border-radius: 26px; border: 1.5px dashed oklch(0.86 0.135 126 / .35) }
+  .group > .label { position: absolute; left: 22px; top: -9px; padding: 0 10px; background: var(--machine); font: 500 13px/1.3 "Geist Mono"; letter-spacing: .14em; text-transform: uppercase; color: var(--lime) }
+  .models { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; margin-top: 4px; font-size: 16px }
+  .models b { font-weight: 500 }
+  .models span { color: var(--muted) }
+  svg.wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none }
+  svg.wires path { fill: none; stroke: var(--lime); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }
+  svg.wires path.soft { stroke: oklch(0.86 0.135 126 / .55); stroke-dasharray: 6 6 }
+  svg.wires text { font: 500 13px "Geist Mono"; letter-spacing: .06em; fill: var(--muted) }
+  svg.wires rect.tag { fill: var(--machine) }
+  .foot { position: absolute; font: 500 14px/1 "Geist Mono", monospace; letter-spacing: .12em; color: var(--muted); text-transform: uppercase }
+  .foot b { color: var(--lime); font-weight: 500 }
+  .lockup { position: absolute; display: inline-flex; align-items: center; gap: .28em; line-height: 1; white-space: nowrap; font-size: 30px }
+  .lockup svg { display: block; width: 1.05em; height: 1.05em }
+  .wm .w1 { font-family: Gloock; letter-spacing: -.025em }
+  .wm .w2 { margin-left: .02em; font: 300 .9em "Hanken Grotesk"; letter-spacing: -.045em }
+</style>
+</head>
+<body>
+<div id="c"></div>
+<script>
+const MARK = `<svg viewBox="0 0 100 100" fill="none"><path d="M6 24 L17 76 L28 42 L39 76 L50 24 L61 76 L72 42 L83 76" stroke="oklch(0.94 0.045 122)" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M83 76 L94 30.34" stroke="oklch(0.86 0.135 126)" stroke-width="7.5" stroke-linecap="round"/><circle cx="94" cy="30.34" r="6" fill="oklch(0.86 0.135 126)"/></svg>`;
+const lockup = (left, bottom) => `<div class="lockup" style="left:${left}px;bottom:${bottom}px">${MARK}<span class="wm"><span class="w1">Wild</span><span class="w2">Worth</span></span></div>`;
+const box = (id, x, y, w, h, title, body, kind = "", chip = "") =>
+  `<div class="box ${kind}" id="${id}" style="left:${x}px;top:${y}px;width:${w}px;${h ? `height:${h}px` : ""}"><h4>${chip}${title}</h4>${body}</div>`;
+const M = `<span class="chip m">N</span>`, C = `<span class="chip c">{ }</span>`, E = `<span class="chip e">↗</span>`;
+
+const DIAGRAMS = {
+  pipeline: {
+    h: 880,
+    html: `
+      <div class="eyebrow" style="left:80px;top:72px">How a rating works</div>
+      <h2 style="left:80px;top:104px">Models explain. Code does the numbers.</h2>
+      <p class="sub" style="left:80px;top:178px;width:1300px">Seven steps, 35–60 seconds, about $0.03–0.05. Nemotron reads, compares and judges; every number it may quote comes from tested code, which checks each answer before it counts.</p>
+      <div class="lane" style="left:60px;top:286px;width:1480px;height:170px"></div>
+      <div class="lane code" style="left:60px;top:536px;width:1480px;height:170px"></div>
+      <div class="lanelabel" style="left:80px;top:304px;width:170px">Models explain<span>Nemotron on Nebius Token Factory</span></div>
+      ${box("s1", 80, 551, 300, 140, "Satellite and numbers", `<p>Five years of satellite data; code finds dated changes, the worth range and Health score</p>`, "code", `<span class="chip c">1</span>`)}
+      ${box("s2", 270, 301, 300, 140, "Nemotron 3.5 Super VL", `<p>Compares the views five years apart <span>· code checks each change</span></p>`, "", `<span class="chip m">2</span>`)}
+      ${box("s3", 460, 551, 300, 140, "Local news", `<p>Code writes the Tavily searches, in the local language too <span>· a place check drops other places</span></p>`, "code", `<span class="chip c">3</span>`)}
+      ${box("s4", 650, 301, 300, 140, "Nemotron 3 Super", `<p>Sorts the news and plans follow-ups <span>· Nemotron 3 Nano reads one article for it</span></p>`, "", `<span class="chip m">4</span>`)}
+      ${box("s5", 840, 551, 300, 140, "The facts", `<p>Every signal, value, view and news item gets an ID <span>· the only numbers a model may quote</span></p>`, "code", `<span class="chip c">5</span>`)}
+      ${box("s6", 1030, 301, 300, 140, "Nemotron 3 Ultra", `<p>Audits, thinking on; may move health ±10 <span>citing facts by ID</span></p>`, "key", `<span class="chip m">6</span>`)}
+      ${box("s7", 1220, 551, 300, 140, "Check and seal", `<p>Refuses uncited claims and unknown numbers <span>· seals the Proof of Life</span></p>`, "key", `<span class="chip c">7</span>`)}
+      <div class="lanelabel code" style="left:80px;top:726px;width:600px">Code does the numbers<span>Deterministic and tested, on Google Earth Engine and Tavily data</span></div>
+      <svg class="wires"></svg>
+      ${lockup(80, 56)}
+      <div class="foot" style="right:80px;bottom:64px">Every step in the Agent Trace · <b>all AI through Nebius Token Factory</b></div>`,
+    wires: [
+      ["s1", "s2", "v"], ["s2", "s3", "v"], ["s3", "s4", "v"], ["s4", "s5", "v"], ["s5", "s6", "v"],
+      ["s6", "s7", "v1"], ["s7", "s6", "v2", "", "", "refused: one more round"],
+    ],
+  },
+  architecture: {
+    h: 920,
+    html: `
+      <div class="eyebrow" style="left:80px;top:72px">Architecture</div>
+      <h2 style="left:80px;top:104px">One VM, one model gateway.</h2>
+      <p class="sub" style="left:80px;top:178px;width:1300px">Everything runs in Docker Compose on one Azure VM; every model call goes through Nebius Token Factory, with a spend cap, logging and schema checks.</p>
+      ${box("visitor", 80, 420, 250, 150, "Visitor", `<p>A browser with a private sandbox <span>· no sign-up, a secure cookie</span></p>`)}
+      <div class="group" style="left:395px;top:275px;width:650px;height:520px"><div class="label">Azure VM · Docker Compose</div></div>
+      ${box("caddy", 425, 310, 280, 120, "Caddy", `<p>HTTPS, security headers and routing</p>`, "code")}
+      ${box("web", 735, 310, 280, 120, "Web app", `<p>Next.js, TypeScript, shadcn/ui <span>· generated API client</span></p>`, "code")}
+      ${box("api", 425, 475, 590, 140, "API · FastAPI", `<p>Agents, the market, The Record and sandboxes <span>· one model client with a spend cap, logging and retries; every reply schema-validated</span></p>`, "key")}
+      ${box("db", 425, 660, 590, 105, "Postgres + pgvector", `<p>Sandboxes, reports, news and The Record <span>· nightly backups</span></p>`, "code")}
+      ${box("tf", 1130, 275, 390, 215, "Nebius Token Factory", `<div class="models">
+          <b>Nemotron 3 Super</b><span>runs the rating</span>
+          <b>Nemotron 3 Ultra</b><span>audits</span>
+          <b>Nemotron 3 Nano</b><span>reads · Bea</span>
+          <b>Nemotron 3.5 Super VL</b><span>vision</span>
+          <b>Qwen3-Embedding-8B</b><span>Bea's search</span></div>`, "key", M)}
+      ${box("tavily", 1130, 515, 390, 0, "Tavily", `<p>Search and Extract <span>· local news</span></p>`, "", E)}
+      ${box("ee", 1130, 640, 390, 0, "Google Earth Engine", `<p>Sentinel-2, Dynamic World, JRC water, Hansen forest</p>`, "", E)}
+      <svg class="wires"></svg>
+      ${lockup(80, 64)}
+      <div class="foot" style="right:80px;bottom:72px">No local models · <b>all AI through Nebius Token Factory</b></div>`,
+    wires: [
+      ["visitor", "caddy", "r", "l", "", "HTTPS"], ["caddy", "web", "r", "l", "", "/"], ["caddy", "api", "b", "t", "", "/api"], ["web", "api", "b", "t"],
+      ["api", "db", "b", "t"], ["api", "tf", "r", "l"], ["api", "tavily", "r", "l"], ["api", "ee", "r", "l"],
+    ],
+  },
+};
+
+const d = DIAGRAMS[new URLSearchParams(location.search).get("d") || "pipeline"];
+const c = document.getElementById("c");
+c.style.height = d.h + "px";
+c.innerHTML = d.html;
+
+document.fonts.ready.then(() => {
+  const svg = c.querySelector("svg.wires");
+  const base = c.getBoundingClientRect();
+  const r = (id) => { const b = document.getElementById(id).getBoundingClientRect(); return { l: b.left - base.left, t: b.top - base.top, r: b.right - base.left, b: b.bottom - base.top, cx: (b.left + b.right) / 2 - base.left, cy: (b.top + b.bottom) / 2 - base.top }; };
+  // An anchor on a side; "left"/"right" shift it off-centre so a pair of opposite wires sits side by side.
+  const at = (b, side, shift) => {
+    const dx = shift === "left" ? -34 : shift === "right" ? 34 : 0, dy = shift === "under" ? 30 : 0;
+    return { l: [b.l, b.cy + dy], r: [b.r, b.cy + dy], t: [b.cx + dx, b.t], b: [b.cx + dx, b.b] }[side];
+  };
+  let out = `<defs><marker id="a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 L9 5 L0 9 z" fill="oklch(0.86 0.135 126)" stroke="none"/></marker></defs>`;
+  for (const [from, to, s1, s2, cls = "", label = "", shift = ""] of d.wires) {
+    if (s1 === "v" || s1 === "v1" || s1 === "v2") {
+      const A = r(from), B = r(to);
+      const lo = Math.max(A.l, B.l), hi = Math.min(A.r, B.r);
+      const x = s1 === "v" ? (lo + hi) / 2 : lo + (hi - lo) * (s1 === "v1" ? 0.3 : 0.7);
+      const down = B.t > A.b;
+      const y1 = down ? A.b + 4 : A.t - 4, y2 = down ? B.t - 6 : B.b + 6;
+      out += `<path d="M${x} ${y1} L${x} ${y2}" marker-end="url(#a)"/>`;
+      if (label) {
+        const ly = (y1 + y2) / 2 + 5, w = label.length * 8.6 + 14;
+        out += `<rect class="tag" x="${x + 10}" y="${ly - 14}" width="${w}" height="20" rx="4"/><text x="${x + 17}" y="${ly}">${label}</text>`;
+      }
+      continue;
+    }
+    const a = at(r(from), s1, shift), b = at(r(to), s2, shift);
+    let p;
+    if (s1 === "r" && s2 === "l") {
+      const mx = (a[0] + b[0]) / 2;
+      p = Math.abs(a[1] - b[1]) < 1 ? `M${a[0] + 4} ${a[1]} L${b[0] - 6} ${b[1]}` : `M${a[0] + 4} ${a[1]} C${mx} ${a[1]} ${mx} ${b[1]} ${b[0] - 6} ${b[1]}`;
+    } else {
+      const dir = b[1] > a[1] ? 1 : -1, my = (a[1] + b[1]) / 2;
+      p = Math.abs(a[0] - b[0]) < 1 ? `M${a[0]} ${a[1] + 4 * dir} L${b[0]} ${b[1] - 6 * dir}` : `M${a[0]} ${a[1] + 4 * dir} C${a[0]} ${my} ${b[0]} ${my} ${b[0]} ${b[1] - 6 * dir}`;
+    }
+    out += `<path class="${cls}" d="${p}" marker-end="url(#a)"/>`;
+    if (label) {
+      const lx = (a[0] + b[0]) / 2 + (s1 === "t" || s1 === "b" ? 12 : 0), ly = (a[1] + b[1]) / 2 + (s1 === "r" ? -12 : 4);
+      const w = label.length * 8.6 + 14;
+      const anchorLeft = s1 === "t" || s1 === "b";
+      out += `<rect class="tag" x="${anchorLeft ? lx - 4 : lx - w / 2}" y="${ly - 14}" width="${w}" height="20" rx="4"/>`;
+      out += `<text x="${anchorLeft ? lx + 3 : lx}" y="${ly}" text-anchor="${anchorLeft ? "start" : "middle"}">${label}</text>`;
+    }
+  }
+  svg.innerHTML = out;
+  document.body.dataset.ready = "1";
+});
+</script>
+</body>
+</html>
