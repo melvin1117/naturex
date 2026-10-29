@@ -202,10 +202,28 @@ The seven showcase sites (rainforests in Washington, mangroves in the Florida Ke
 
 ## How we built it with AI
 
-- **One rulebook for every assistant.** [AGENTS.md](AGENTS.md) sets the non-negotiables (numbers from code, every model call through Token Factory, schema-validated outputs) for GitHub Copilot, Claude Code, Codex and Cursor alike, with 31 shared skills in `.agents/skills`, from test-driven development to security review.
-- **Tools in the loop.** MCP servers for GitHub (issues, PRs and the board), Context7 (current library docs), shadcn (components), and Playwright and Chrome DevTools (testing in a real browser).
+We worked **spec first, in small reviewed steps**: spec, plan, build, review, ship.
+
+- **Specs before code (spec-driven development).** The first week, from Sep 26, produced no app code, only specs:
+  - a [product spec](docs/specs/pm-spec.md) with user stories and acceptance criteria;
+  - a [technical spec](docs/specs/dev-spec.md) covering the architecture, data model, API, formulas and cost plan;
+  - a [demo plan](docs/specs/demo-plan.md);
+  - a [research review](docs/research.md) of open-source options.
+
+  Each significant decision since has its own [architecture decision record](docs/adr/), nine in all, from model routing to hosting. Code started on Oct 4.
+- **A plan broken into tasks.** The specs became [82 tasks](tasks/todo.md), each a GitHub issue with acceptance criteria, its dependencies, an owner, and a weekly demo gate on the team board. An agent could pick up any ready task and know when it was done.
+- **Contracts and evals decide.** The API's OpenAPI schema is the contract: the frontend's client is generated from it, never hand-written. Model choices were made by evals, not taste (the news moved from Nano to Super on a 40-item eval). Formulas, the market and the ledger were built test first.
+- **One rulebook for every assistant.** [AGENTS.md](AGENTS.md) sets the non-negotiables for GitHub Copilot, Claude Code, Codex and Cursor alike: numbers from code, every model call through Token Factory, schema-validated outputs. Behind it sit 31 shared skills in `.agents/skills`, from spec-driven development and task breakdown to test-driven development and security review.
+- **Tools in the loop.** MCP servers for:
+  - GitHub (issues, PRs and the board);
+  - Context7 (current library docs);
+  - shadcn (components);
+  - Playwright and Chrome DevTools (testing in a real browser).
 - **A second agent reviews every change.** Before each PR, a fresh-context agent reviews only the diff; the author decides what to fix and records it in the PR. CI (lint, types, tests, CodeQL, gitleaks) gates every merge.
-- **Design, media and deployment.** The brand, voice and design system were shaped with the impeccable skill; the demo video was scripted, recorded from the live app with Playwright and edited by an agent; the deploy kit was written by an agent and run by a person.
+- **Design, media and deployment.**
+  - The brand, voice and design system were shaped with the impeccable skill.
+  - The demo video was scripted, recorded from the live app with Playwright and edited by an agent.
+  - The deploy kit was written by an agent and run by a person.
 - **In numbers:** 126 merged PRs and 254 commits in five weeks, with about 70 backend and 95 frontend test files.
 
 ## What we learned
