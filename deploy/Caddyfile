@@ -1,0 +1,22 @@
+# Caddy in front of the stack (docs/deploy.md). A domain in SITE_ADDRESS gets a Let's Encrypt
+# certificate and an HTTP → HTTPS redirect automatically; "http://localhost:8088" serves plain
+# HTTP for a local try.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# The API directly, without the Next.js proxy: a live rating or Time Machine re-rate holds its
+	# request open for a minute, and the event stream stays open. Caddy sets X-Forwarded-For to
+	# the visitor's address (ignoring any the client sent), so the API runs with
+	# TRUSTED_PROXY_HOPS=1.
+	handle_path /api/* {
+		reverse_proxy backend:8000 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	header -Server
+}
