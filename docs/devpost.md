@@ -7,6 +7,8 @@ Draft for the Devpost form (Nebius × NVIDIA Global AI Hackathon, Best Apps & Ag
 - Try it out: https://wildworth.westus2.cloudapp.azure.com · https://wildworth.westus2.cloudapp.azure.com/how · https://github.com/melvin1117/wildworth
 
 ## Inspiration
+It started with Open Planet's documentary [*How to Live on Earth*](https://www.youtube.com/watch?v=h3mRsvFmWi0&t=3360s). At 56:00 it asks what living nature is worth (*"The bees in China never sent an invoice"*) and follows a community in Mexico whose wetland is squeezed by factories, and the idea of natural asset companies whose shares rise as the land heals. The NYSE tried to list such companies and withdrew the rule in 2024, amid doubts about who controls the land and whether the values could be trusted. We built the missing piece: a rating.
+
 A mangrove is worth more alive than cleared, but nobody prices that. Rating agencies and exchanges made other assets legible to investors; nature has no rating that updates as it heals or is damaged. We wanted an agent that reads the evidence the way a careful analyst would: the satellite record, the local news, and what each says about the other.
 
 ## What it does

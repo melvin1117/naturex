@@ -48,10 +48,9 @@ WildWorth is the missing rating. A community draws its land on a map; Nemotron a
 
 ### Where it started
 
-It started with a short documentary about valuing living nature. In a town in Mexico, a community's wetland draws down carbon and filters their water, while ten industrial parks and two hundred factories press in for its land and water. *"The bees in China never sent an invoice,"* one voice says; another, Douglas Eger of Intrinsic Exchange Group, proposes [natural asset companies](https://www.wri.org/insights/natural-asset-companies-nac-explained) whose share price rises as the land heals, and the film puts wetlands like theirs at $25,000–50,000 an acre a year in services nobody pays for.
+It started with a documentary, Open Planet's [*How to Live on Earth*](https://www.youtube.com/watch?v=h3mRsvFmWi0), presented by Benedict Cumberbatch. [At 56:00](https://www.youtube.com/watch?v=h3mRsvFmWi0&t=3360s) it turns to what living nature is worth: *"In today's world economy, nature does its work for free. The bees in China never sent an invoice."* Douglas Eger of Intrinsic Exchange Group proposes [natural asset companies](https://www.wri.org/insights/natural-asset-companies-nac-explained), whose shares rise in value as the land heals. In a town in Mexico, a community's wetland draws down carbon and filters their water, while ten industrial parks and two hundred factories press in for its land and water, and the film puts wetlands like theirs at $25,000–50,000 an acre a year in services nobody pays for.
 
 Wall Street tried it: the NYSE filed a rule to list natural asset companies in 2023 and [withdrew it in January 2024](https://www.sec.gov/rules-regulations/self-regulatory-organization-rulemaking/sr-nyse-2023-09) amid doubts about who controls the land and whether the values could be trusted. That was the gap we took on: a rating that is cheap, continuous, checkable and owned by the community. A wetland like theirs, [Xochimilco](https://wildworth.westus2.cloudapp.azure.com/how) in Mexico City, became our hero site. Our engine is more cautious than the film: its worth ranges come from published coefficients, with a confidence, and the method says so.
-<!-- Documentary link: add the YouTube URL here once confirmed. -->
 
 ## Try it (no sign-up)
 
