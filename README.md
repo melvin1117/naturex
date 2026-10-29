@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://wildworth.westus2.cloudapp.azure.com"><b>Try it live</b></a> ·
   <a href="https://youtu.be/S383ruVMhRs"><b>Watch the 3-minute demo</b></a> ·
-  <a href="https://wildworth.westus2.cloudapp.azure.com/how"><b>See how it works in two minutes</b></a> ·
+  <a href="https://wildworth.westus2.cloudapp.azure.com/how"><b>See how it works</b></a> ·
   <a href="#how-a-rating-works">How a rating works</a> ·
   <a href="#architecture">Architecture</a> ·
   <a href="#design">Design</a> ·
