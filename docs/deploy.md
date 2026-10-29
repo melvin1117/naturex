@@ -137,7 +137,8 @@ ssh azureuser@wildworth.westus2.cloudapp.azure.com 'cd ~/wildworth && deploy/upd
   - secure, HTTP-only cookies;
   - writes accepted only from the site's own origin;
   - per-visitor rate limits;
-  - hard caps on model and search spend.
+  - hard caps on model and search spend;
+  - browser hardening headers from Caddy (HSTS, `nosniff`, no framing, a strict referrer policy), and no `Server` or `X-Powered-By` headers.
 - **Least privilege:**
   - Give the Earth Engine service account only the Earth Engine roles it needs (Earth Engine Resource Viewer, and Service Usage Consumer).
   - Use separate keys for the deployment, not the ones on laptops.

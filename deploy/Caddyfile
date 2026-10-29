@@ -18,5 +18,16 @@
 		reverse_proxy web:3000
 	}
 
-	header -Server
+	# Browser hardening on every response. HSTS only takes effect over HTTPS (no subdomains: the
+	# parent domain isn't ours); the listing map's "locate me" needs geolocation on our own origin.
+	header {
+		-Server
+		-Via
+		-X-Powered-By
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(self)"
+	}
 }
