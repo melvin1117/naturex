@@ -112,6 +112,7 @@ ssh azureuser@wildworth.westus2.cloudapp.azure.com 'cd ~/wildworth && deploy/upd
 
 - **Updates:** on demand. `main` only changes through reviewed PRs with green CI, and the VM pulls it; nothing outside can push into the VM. It takes a minute, or a few when an image rebuilds. To have it automatic instead, add `*/30 * * * * cd ~/wildworth && deploy/update.sh >> ~/deploy.log 2>&1` to the crontab (a run that finds nothing new only fetches).
 - **A bad version:** if the API or the web app isn't healthy within 5 minutes, `update.sh` goes back to the commit that ran before and skips the bad one until `main` moves on.
+- **Caddyfile changes:** `update.sh` starts Caddy afresh when the Caddyfile changed between the two commits; a running container keeps reading the old file otherwise. Certificates are kept.
 - **Roll back on purpose:** `deploy/update.sh <commit sha>` pins that commit (later runs keep it); `deploy/update.sh --unpin` follows `main` again.
 - **Settings change:** edit `deploy/.env`, then `FORCE=1 deploy/update.sh`.
 - **Restore a backup:** `deploy/import-db.sh ~/backups/<file>.dump`.
@@ -137,7 +138,8 @@ ssh azureuser@wildworth.westus2.cloudapp.azure.com 'cd ~/wildworth && deploy/upd
   - secure, HTTP-only cookies;
   - writes accepted only from the site's own origin;
   - per-visitor rate limits;
-  - hard caps on model and search spend.
+  - hard caps on model and search spend;
+  - browser hardening headers from Caddy (HSTS, `nosniff`, no framing, a strict referrer policy), and no `Server` or `X-Powered-By` headers.
 - **Least privilege:**
   - Give the Earth Engine service account only the Earth Engine roles it needs (Earth Engine Resource Viewer, and Service Usage Consumer).
   - Use separate keys for the deployment, not the ones on laptops.
