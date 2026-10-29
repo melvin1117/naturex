@@ -2,7 +2,7 @@
 
 > **Renamed WildWorth (23 Oct 2026).** In the UI the Nature Ledger is **The Record**, a quarterly report is a **Proof of Life**, the value range is the **Worth range**, the Copilot is **Bea** and the Steward app is **Stewards**; routes, API, database and code names are unchanged ([brand guidelines](../design/wildworth-brand-guidelines.html)).
 
-> Related: [pm-spec.md](./pm-spec.md) · [dev-spec.md](./dev-spec.md) · [one-pager.md](../one-pager.md) · [diagrams.html](../diagrams.html). The judge story (§3) is built; the video (§4) is not yet.
+> Related: [pm-spec.md](./pm-spec.md) · [dev-spec.md](./dev-spec.md) · [one-pager.md](../one-pager.md) · [planning diagrams](../archive/planning-diagrams.html). The judge story (§3) is built; the video (§4) is not yet.
 
 **Core idea: build the guided tour once, use it twice.** Judges click through it live, and the YouTube video is a recording of the same tour, so the two never drift apart.
 

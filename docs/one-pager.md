@@ -1,6 +1,6 @@
 # WildWorth — The AI rating agency for living nature
 
-*Worth more wild.* (Brand: [wildworth-brand-guidelines.html](design/wildworth-brand-guidelines.html).)
+Live: [wildworth.westus2.cloudapp.azure.com](https://wildworth.westus2.cloudapp.azure.com) · Brand: [guidelines](https://melvin1117.github.io/wildworth/design/wildworth-brand-guidelines.html)
 
 **Nebius × NVIDIA Global AI Hackathon** · Track: **Best Apps & Agents** · Built on **NVIDIA Nemotron via Nebius Token Factory** + **Tavily**
 
@@ -29,15 +29,15 @@ Nature delivers ~$100T/yr of services — clean water, flood protection, carbon 
 | 🏭 Companies (next phase) | Must disclose nature risk (TNFD) | Verified data on the ecosystems they depend on |
 
 ## Why AI — and why Nemotron on Nebius
-| Agent | NVIDIA model (Token Factory) | Job |
+| Agent | Model (Token Factory) | Job |
 |---|---|---|
-| Rating Orchestrator | **Nemotron 3 Super** | Plans the rating run, calls tools |
-| Auditor / Rating Analyst | **Nemotron 3 Ultra** | Deep reasoning: cross-checks evidence, flags greenwashing, grades, writes report |
-| News Scout | **Nemotron Nano** + **Tavily** | Finds & classifies real-world events near the asset |
-| Field Evidence | **MiniCPM-V** (perception) + **Nemotron 3 Ultra** (judgement) | Reads community photos (audio after the hackathon) |
-| Bea, the field guide (was Copilot) | **Nemotron Nano** + RAG | Fast grounded Q&A |
+| Rating Orchestrator | **Nemotron 3 Super** | Runs the rating with tool calls, sorts the news, plans follow-ups |
+| Auditor | **Nemotron 3 Ultra** (thinking on) | Weighs competing explanations against cited facts; may move health ±10 |
+| Site vision | **Nemotron 3.5 Super VL** | Compares the satellite views five years apart; reads photos and documents |
+| Article reader, Bea the field guide | **Nemotron 3 Nano** | Reads one article for Super; grounded answers from a site's Record |
+| Bea's retrieval | Qwen3-Embedding-8B | Token Factory serves no NVIDIA embedding model |
 
-The frontend runs on Vercel; the backend and database run on **Nebius Serverless** if event credits arrive, otherwise on team-approved Azure credits or free tiers (Hugging Face Spaces / Render + Supabase). All AI runs on Token Factory; re-rating and news sweeps run as scheduled jobs.
+Everything runs on one Azure VM with Docker Compose ([deploy guide](./deploy.md)); every model call goes through Token Factory, with Tavily for the local news.
 
 ## What makes it different
 - **Honest numbers** – every $ value has a low/mid/high range and a confidence score.
@@ -48,7 +48,7 @@ The frontend runs on Vercel; the backend and database run on **Nebius Serverless
 - **Measured, not claimed** – an eval harness scores news classification, Auditor faithfulness and model routing (Nano vs Super vs Ultra); results published in the repo.
 
 ## Demo (3 min)
-Xochimilco-style 500 ha wetland near Mexico City → AI rates it (Health 77.6, grade A, ~$11.7M/yr in services, 87% confidence) → IPO → judges buy shares → *Time Machine: +1 quarter* → restoration detected, price ↑ → *inject encroachment* → alert, grade A → BBB, price ↓ → Copilot explains why → portfolio shows impact (ha protected, t CO₂).
+Xochimilco-style 500 ha wetland near Mexico City → AI rates it (Health 77.6, grade A, ~$11.7M/yr in services, 87% confidence) → IPO → judges buy shares → *Time Machine: +1 quarter* → restoration detected, price ↑ → *inject encroachment* → alert, grade A → BBB, price ↓ → Bea explains why → portfolio shows impact (ha protected, t CO₂).
 
 ## Business model (post-hackathon)
 Rating-as-a-service for funds & corporates · listing/verification fee per asset · data feed/API for investors & exchanges · TNFD disclosure add-on.
@@ -65,7 +65,7 @@ Rating-as-a-service for funds & corporates · listing/verification fee per asset
 > Rules: a project can win **one Overall OR one Track award, plus one Bonus award**.
 
 ## Where to read more
-[diagrams.html](./diagrams.html) (overview, rating engine, architecture, flows) · [pm-spec.md](./specs/pm-spec.md) (scope & plan) · [dev-spec.md](./specs/dev-spec.md) (technical design) · [demo-plan.md](./specs/demo-plan.md) (judge tour & video).
+[diagrams.html](./diagrams.html) (the rating pipeline, architecture and design board) · [planning diagrams](./archive/planning-diagrams.html) (the original explainer) · [pm-spec.md](./specs/pm-spec.md) (scope & plan) · [dev-spec.md](./specs/dev-spec.md) (technical design) · [demo-plan.md](./specs/demo-plan.md) (judge tour & video).
 
 ## Honest limits
 Sandbox with play money — **not** a securities offering. Valuations are screening estimates using published benefit-transfer coefficients (Brander et al. 2024 biome means in 2020 Int$ as the central and upper value, with an indicative low from the published median/mean ratios in Costanza et al. 2014; never raw ESVD data), not certified appraisals. Real-money trading would require licensed partners and regulation.

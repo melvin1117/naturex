@@ -13,7 +13,7 @@ Every rating is explained. The Agent Trace shows each model's job, its reasoning
 ## How we built it
 - **Nemotron 3 Super** runs each rating with tool calls. On one turn it thinks: it compares the dated satellite signals with the news and decides what to check, a dated news search for a change nothing explains, or reading the most serious article. It also sorts the news (39/40 on our 40-item eval, against Nano's 33/40, at the same speed).
 - **Nemotron 3 Ultra** audits with thinking on: it weighs two or three competing explanations against cited facts, writes a verdict, and may move health by up to ±10. Numbers come only from code: it writes `{fact-id}` placeholders that code fills.
-- **Nemotron 3 Nano** answers Super's question about one article and the Copilot's questions.
+- **Nemotron 3 Nano** answers Super's question about one article, and powers Bea, the field guide, who answers only from a site's Record.
 - **Nemotron 3.5 Super VL** compares the site's Sentinel-2 views from 2021–22 and the last 12 months; code checks each change against the metrics before Ultra sees it.
 - **Tavily Search** with local-language queries and `start_date`/`end_date` windows taken from the satellite signals; **Tavily Extract** with chunks ranked by Super's question.
 - **Nebius Token Factory** serves every model through one OpenAI-compatible client with a hard spend cap, per-call logging and retries.
