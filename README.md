@@ -36,6 +36,15 @@
 
 <a href="https://wildworth.westus2.cloudapp.azure.com"><img src="docs/readme/site.jpg" alt="A WildWorth site page: Quinault Rain Forest, Health 97.8, grade AAA, a worth range of $26.4M to $57.6M a year, and Nemotron 3 Ultra's verdict" width="100%"></a>
 
+## Contents
+
+| Section | Jump to |
+|---|---|
+| **The story** | [Why WildWorth](#why-wildworth) · [Where it started](#where-it-started) · [Design](#design) · [Team](#team) |
+| **Try it** | [Try it (no sign-up)](#try-it-no-sign-up) · [A look inside](#a-look-inside) · [Run it locally](#run-it-locally) · [Limits and what's next](#limits-and-whats-next) |
+| **How it works** | [How a rating works](#how-a-rating-works) · [Nemotron on Token Factory](#nemotron-on-nebius-token-factory) · [Tavily](#tavily-the-local-news) · [Measured, not claimed](#measured-not-claimed) · [Guardrails](#guardrails) · [Architecture](#architecture) · [Data](#data) |
+| **How we built it** | [With AI](#how-we-built-it-with-ai) · [What we learned](#what-we-learned) · [Tech stack](#tech-stack) · [Repository layout](#repository-layout) · [Feedback on Token Factory](#feedback-on-token-factory-and-nemotron) · [Documentation](#documentation) · [Licence and credits](#licence-and-credits) |
+
 ## Why WildWorth
 
 A wetland that filters a city's water, holds back its floods and stores carbon earns the people who protect it nothing, until it's drained and sold. Markets price nature only once it's gone, and the money that wants to protect it has no trusted way to compare sites or to see whether protection worked.
