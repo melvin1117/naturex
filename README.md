@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://wildworth.westus2.cloudapp.azure.com"><b>Try it live</b></a> ·
-  <a href="https://youtu.be/OmLcyAajjA8"><b>Watch the 3-minute demo</b></a> ·
+  <a href="https://www.youtube.com/watch?v=OmLcyAajjA8"><b>Watch the 3-minute demo</b></a> ·
   <a href="https://wildworth.westus2.cloudapp.azure.com/how"><b>See how it works</b></a> ·
   <a href="#how-a-rating-works">How a rating works</a> ·
   <a href="#architecture">Architecture</a> ·
@@ -20,7 +20,7 @@
 
 <p align="center">
   <a href="https://wildworth.westus2.cloudapp.azure.com"><img alt="Live demo: try it, no sign-up" src="https://img.shields.io/badge/live_demo-try_it,_no_sign--up-c4e58a?style=flat-square&labelColor=0b1f14"></a>
-  <a href="https://youtu.be/OmLcyAajjA8"><img alt="Demo video on YouTube, 3 minutes" src="https://img.shields.io/badge/demo_video-3_min-c4e58a?style=flat-square&logo=youtube&logoColor=c4e58a&labelColor=0b1f14"></a>
+  <a href="https://www.youtube.com/watch?v=OmLcyAajjA8"><img alt="Demo video on YouTube, 3 minutes" src="https://img.shields.io/badge/demo_video-3_min-c4e58a?style=flat-square&logo=youtube&logoColor=c4e58a&labelColor=0b1f14"></a>
   <img alt="NVIDIA Nemotron 3" src="https://img.shields.io/badge/NVIDIA-Nemotron_3-c4e58a?style=flat-square&labelColor=0b1f14">
   <img alt="Nebius Token Factory" src="https://img.shields.io/badge/Nebius-Token_Factory-c4e58a?style=flat-square&labelColor=0b1f14">
   <img alt="Tavily Search and Extract" src="https://img.shields.io/badge/Tavily-Search_%2B_Extract-c4e58a?style=flat-square&labelColor=0b1f14">
