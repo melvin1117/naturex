@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  Built in five weeks by a team of four for the <b>Nebius × NVIDIA Global AI Hackathon</b>, Best Apps &amp; Agents track.<br>
+  Built for the <b>Nebius × NVIDIA Global AI Hackathon</b>, Best Apps &amp; Agents track.<br>
   Every rating, investigation and answer runs on NVIDIA Nemotron through Nebius Token Factory.
 </p>
 
@@ -82,7 +82,7 @@ To explore everything, open **[wildworth.westus2.cloudapp.azure.com](https://wil
 6. **Time Machine.** Move a quarter forward, or bring a fire, an encroachment or a restoration: ratings, prices and alerts follow.
 7. **Ask Bea.** The field guide answers only from the site's Record and shows her sources.
 
-**Where to look, by judging criterion**
+**Where to look**
 
 | Criterion | Where to look |
 |---|---|
