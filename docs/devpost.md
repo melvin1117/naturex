@@ -3,7 +3,7 @@
 Draft for the Devpost form (Nebius × NVIDIA Global AI Hackathon, Best Apps & Agents). Every number here comes from a live run or an eval on Oct 22, 2026; update them if you re-run.
 
 **Links for the form**
-- Video demo link: https://youtu.be/S383ruVMhRs
+- Video demo link: https://youtu.be/OmLcyAajjA8
 - Try it out: https://wildworth.westus2.cloudapp.azure.com · https://wildworth.westus2.cloudapp.azure.com/how · https://github.com/melvin1117/wildworth
 
 ## Inspiration
