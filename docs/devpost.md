@@ -2,8 +2,17 @@
 
 Draft for the Devpost form (Nebius × NVIDIA Global AI Hackathon, Best Apps & Agents). Every number here comes from a live run or an eval on Oct 22, 2026; update them if you re-run.
 
+**Links for the form**
+- Devpost project: https://devpost.com/software/wildworth
+- Video demo link: https://www.youtube.com/watch?v=OmLcyAajjA8
+- Try it out: https://wildworth.westus2.cloudapp.azure.com · https://wildworth.westus2.cloudapp.azure.com/how · https://github.com/melvin1117/wildworth
+
 ## Inspiration
-A mangrove is worth more alive than cleared, but nobody prices that. Rating agencies and exchanges made other assets legible to investors; nature has no rating that updates as it heals or is damaged. We wanted an agent that reads the evidence the way a careful analyst would: the satellite record, the local news, and what each says about the other.
+It started with Open Planet's documentary [*How to Live on Earth*](https://www.youtube.com/watch?v=h3mRsvFmWi0) and one line in it: *"The bees in China never sent an invoice."* In Hanyuan County, Sichuan, pesticides and lost habitat wiped out the bees that pollinated the pear orchards, so since the 1980s farmers have pollinated every blossom by hand with feather-tipped sticks. The bees' work was free, so no market saw it until it was gone.
+
+The film's answer is Douglas Eger's natural asset companies: value what living land does each year, and sell shares that rise as it heals, so a community earns more by keeping its land than by selling it. The NYSE filed a rule to list them in 2023 and withdrew it in January 2024, amid doubts about who controls the land and whether the values could be trusted. WildWorth is built on that idea and supplies what it was missing: a rating you can check, which follows the land as it heals or is harmed.
+
+We wanted an agent that reads the evidence the way a careful analyst would: the satellite record, the local news, and what each says about the other.
 
 ## What it does
 A community lists its land. Nemotron agents rate it from five years of satellite data and local news, the rating becomes a play-money asset on a sandbox exchange, and it is re-rated as things change: a fire, an encroachment, a restoration.

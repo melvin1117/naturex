@@ -10,8 +10,8 @@
 
 <p align="center">
   <a href="https://wildworth.westus2.cloudapp.azure.com"><b>Try it live</b></a> ·
-  <a href="https://wildworth.westus2.cloudapp.azure.com/how"><b>See how it works in two minutes</b></a> ·
-  <!-- Demo video: add the YouTube link here once it's published. -->
+  <a href="https://www.youtube.com/watch?v=OmLcyAajjA8"><b>Watch the 3-minute demo</b></a> ·
+  <a href="https://wildworth.westus2.cloudapp.azure.com/how"><b>See how it works</b></a> ·
   <a href="#how-a-rating-works">How a rating works</a> ·
   <a href="#architecture">Architecture</a> ·
   <a href="#design">Design</a> ·
@@ -20,6 +20,8 @@
 
 <p align="center">
   <a href="https://wildworth.westus2.cloudapp.azure.com"><img alt="Live demo: try it, no sign-up" src="https://img.shields.io/badge/live_demo-try_it,_no_sign--up-c4e58a?style=flat-square&labelColor=0b1f14"></a>
+  <a href="https://devpost.com/software/wildworth"><img alt="Devpost submission" src="https://img.shields.io/badge/devpost-submission-c4e58a?style=flat-square&logo=devpost&logoColor=c4e58a&labelColor=0b1f14"></a>
+  <a href="https://www.youtube.com/watch?v=OmLcyAajjA8"><img alt="Demo video on YouTube, 3 minutes" src="https://img.shields.io/badge/demo_video-3_min-c4e58a?style=flat-square&logo=youtube&logoColor=c4e58a&labelColor=0b1f14"></a>
   <img alt="NVIDIA Nemotron 3" src="https://img.shields.io/badge/NVIDIA-Nemotron_3-c4e58a?style=flat-square&labelColor=0b1f14">
   <img alt="Nebius Token Factory" src="https://img.shields.io/badge/Nebius-Token_Factory-c4e58a?style=flat-square&labelColor=0b1f14">
   <img alt="Tavily Search and Extract" src="https://img.shields.io/badge/Tavily-Search_%2B_Extract-c4e58a?style=flat-square&labelColor=0b1f14">
@@ -29,11 +31,20 @@
 </p>
 
 <p align="center">
-  Built in five weeks by a team of four for the <b>Nebius × NVIDIA Global AI Hackathon</b>, Best Apps &amp; Agents track.<br>
+  Built for the <b>Nebius × NVIDIA Global AI Hackathon</b>, Best Apps &amp; Agents track.<br>
   Every rating, investigation and answer runs on NVIDIA Nemotron through Nebius Token Factory.
 </p>
 
 <a href="https://wildworth.westus2.cloudapp.azure.com"><img src="docs/readme/site.jpg" alt="A WildWorth site page: Quinault Rain Forest, Health 97.8, grade AAA, a worth range of $26.4M to $57.6M a year, and Nemotron 3 Ultra's verdict" width="100%"></a>
+
+## Contents
+
+| Section | Jump to |
+|---|---|
+| **The story** | [Why WildWorth](#why-wildworth) · [Where it started](#where-it-started) · [Design](#design) · [Team](#team) |
+| **Try it** | [Try it (no sign-up)](#try-it-no-sign-up) · [A look inside](#a-look-inside) · [Run it locally](#run-it-locally) · [Limits and what's next](#limits-and-whats-next) |
+| **How it works** | [How a rating works](#how-a-rating-works) · [Nemotron on Token Factory](#nemotron-on-nebius-token-factory) · [Tavily](#tavily-the-local-news) · [Measured, not claimed](#measured-not-claimed) · [Guardrails](#guardrails) · [Architecture](#architecture) · [Data](#data) |
+| **How we built it** | [With AI](#how-we-built-it-with-ai) · [What we learned](#what-we-learned) · [Tech stack](#tech-stack) · [Repository layout](#repository-layout) · [Feedback on Token Factory](#feedback-on-token-factory-and-nemotron) · [Documentation](#documentation) · [Licence and credits](#licence-and-credits) |
 
 ## Why WildWorth
 
@@ -47,10 +58,16 @@ WildWorth is the missing rating. A community draws its land on a map; Nemotron a
 
 ### Where it started
 
-It started with a short documentary about valuing living nature. In a town in Mexico, a community's wetland draws down carbon and filters their water, while ten industrial parks and two hundred factories press in for its land and water. *"The bees in China never sent an invoice,"* one voice says; another, Douglas Eger of Intrinsic Exchange Group, proposes [natural asset companies](https://www.wri.org/insights/natural-asset-companies-nac-explained) whose share price rises as the land heals, and the film puts wetlands like theirs at $25,000–50,000 an acre a year in services nobody pays for.
+It started with a documentary, Open Planet's [*How to Live on Earth*](https://www.youtube.com/watch?v=h3mRsvFmWi0), presented by Benedict Cumberbatch, and one line in it: *"In today's world economy, nature does its work for free. The bees in China never sent an invoice."*
 
-Wall Street tried it: the NYSE filed a rule to list natural asset companies in 2023 and [withdrew it in January 2024](https://www.sec.gov/rules-regulations/self-regulatory-organization-rulemaking/sr-nyse-2023-09) amid doubts about who controls the land and whether the values could be trusted. That was the gap we took on: a rating that is cheap, continuous, checkable and owned by the community. A wetland like theirs, [Xochimilco](https://wildworth.westus2.cloudapp.azure.com/how) in Mexico City, became our hero site. Our engine is more cautious than the film: its worth ranges come from published coefficients, with a confidence, and the method says so.
-<!-- Documentary link: add the YouTube URL here once confirmed. -->
+<img src="docs/readme/story.jpg" alt="The opening of the demo video in four frames: 1, Hanyuan County, Sichuan: the bees are gone, and a pear branch is pollinated by hand, blossom by blossom; 2, the quote 'The bees in China never sent an invoice' beside an invoice from the bees of Sichuan to the world economy, total $0, stamped Never sent, and the fact that 3 in 4 leading food crops benefit from animal pollination (IPBES 2016); 3, Douglas Eger's natural asset companies over the Xochimilco wetland, with the NYSE rule filed in September 2023 and stamped Withdrawn January 2024; 4, What was missing: a rating you can trust, with an empty Health dial around the wetland marked Not yet rated." width="100%">
+
+- **The bees.** In Hanyuan County, Sichuan, pesticides and lost habitat wiped out the wild bees that pollinated the pear orchards. Since the 1980s, farmers have done the bees' work by hand: every spring they climb the trees and touch each blossom with a "pollination stick", a bamboo pole tipped with chicken feathers and dipped in pollen ([FoodUnfolded](https://www.foodunfolded.com/article/pollinating-orchards-by-hand-lessons-from-sichuan-china)). More than three in four of the world's leading food crops benefit from animal pollination ([IPBES](https://www.ipbes.net/assessment-reports/pollinators)).
+- **The problem.** That work was free, so no market saw it until it was gone. As the film puts it, a tree has a price as timber but none while it's alive. In a town in Mexico, a community's wetland draws down carbon and filters their water while ten industrial parks and two hundred factories press in for its land; the film puts wetlands like theirs at $25,000–50,000 an acre a year in services nobody pays for.
+- **The idea.** Douglas Eger of Intrinsic Exchange Group proposes [natural asset companies](https://www.wri.org/insights/natural-asset-companies-nac-explained): value what the land does each year, and sell shares that rise as it heals, so a community earns more by keeping its land alive than by selling it.
+- **The gap.** The NYSE filed a rule to list natural asset companies in 2023 and [withdrew it in January 2024](https://www.sec.gov/rules-regulations/self-regulatory-organization-rulemaking/sr-nyse-2023-09), amid doubts about who controls the land and whether the values could be trusted.
+
+WildWorth is built on that idea and supplies the piece it was missing: a rating that is cheap, continuous, checkable and owned by the community. NVIDIA Nemotron agents read five years of satellite data and the local news, tested code computes every number, and the grade follows the land as it heals or is harmed. A wetland like the film's, [Xochimilco](https://wildworth.westus2.cloudapp.azure.com/how) in Mexico City, became our hero site. Our engine is more cautious than the film: its worth ranges come from published coefficients, with a confidence, and the method says so.
 
 ## Try it (no sign-up)
 
@@ -66,7 +83,7 @@ To explore everything, open **[wildworth.westus2.cloudapp.azure.com](https://wil
 6. **Time Machine.** Move a quarter forward, or bring a fire, an encroachment or a restoration: ratings, prices and alerts follow.
 7. **Ask Bea.** The field guide answers only from the site's Record and shows her sources.
 
-**Where to look, by judging criterion**
+**Where to look**
 
 | Criterion | Where to look |
 |---|---|
