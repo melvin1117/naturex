@@ -5,7 +5,7 @@
   exported (1600 px wide). Re-export the README images at 2x with Playwright:
     page.goto("file://…/docs/diagrams.html?d=pipeline"); page.locator("#c").screenshot(…)
   Boards: banner → docs/readme/banner.jpg · pipeline → docs/readme/rating-pipeline.jpg ·
-  architecture → docs/readme/architecture.jpg · look1–3 → docs/readme/look-*.jpg · design → docs/readme/design.jpg · system → docs/readme/design-system.jpg.
+  architecture → docs/readme/architecture.jpg · story → docs/readme/story.jpg · look1–3 → docs/readme/look-*.jpg · design → docs/readme/design.jpg · system → docs/readme/design-system.jpg.
   Arrows are drawn from the boxes' positions, so moving a box moves its arrows.
   The planning-era explainer that used to live here is in git history (before PR #260).
 -->
@@ -232,6 +232,20 @@ const BOARDS = {
       <p class="abs muted" style="left:60px;bottom:52px;width:1100px;font-size:19px">Only the API holds the keys and calls models: one client, with a spend cap, logs and a schema check on every reply.</p>
       ${lockup(30, "right:60px;bottom:50px")}`,
     wires: [["h", "visitor", "caddy", "HTTPS"], ["d", "caddy", "web", "/", 0.5], ["d", "caddy", "api", "/api", 0.5], ["h", "web", "api"], ["d", "api", "db"], ["hg", "api", 1160]],
+  },
+  story: {
+    h: 1150,
+    html: `
+      <div class="lookhead"><h2>From the bees to the missing rating</h2><p>The opening of the demo video, from the documentary that inspired WildWorth.</p></div>
+      ${shot("story-bees", 70, 180, 700, 394)}
+      ${cap(70, 590, 700, "1 · The bees are gone, so farmers pollinate by hand")}
+      ${shot("story-invoice", 830, 180, 700, 394)}
+      ${cap(830, 590, 700, "2 · Nature works for free")}
+      ${shot("story-idea", 70, 660, 700, 394)}
+      ${cap(70, 1070, 700, "3 · The idea, and why it stalled")}
+      ${shot("story-missing", 830, 660, 700, 394)}
+      ${cap(830, 1070, 700, "4 · The missing piece WildWorth supplies")}`,
+    wires: [],
   },
   look1: {
     h: 1060,

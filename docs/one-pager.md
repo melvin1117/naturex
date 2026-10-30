@@ -7,7 +7,9 @@ Live: [wildworth.westus2.cloudapp.azure.com](https://wildworth.westus2.cloudapp.
 ---
 
 ## The problem
-> "The bees never sent an invoice."
+> "The bees in China never sent an invoice." — [*How to Live on Earth*](https://www.youtube.com/watch?v=h3mRsvFmWi0), Open Planet
+
+In Sichuan, pesticides and lost habitat wiped out the bees that pollinated the pear orchards; since the 1980s, farmers have pollinated every blossom by hand. Nature's work is free, so no market sees it until it's gone.
 
 Nature delivers ~$100T/yr of services — clean water, flood protection, carbon storage, pollination — but markets only see **dead** nature (timber, minerals, land for factories). Communities protecting wetlands and forests get one tempting offer: *sell once*. Meanwhile, trillions in investor capital is earmarked for nature but has **no trusted way to see, compare or track** living ecosystems. Valuing a site today takes consultants, field surveys and months — and carbon-credit scandals made investors wary of unverifiable claims.
 
